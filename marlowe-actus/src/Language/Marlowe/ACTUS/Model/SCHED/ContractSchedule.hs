@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {-| = ACTUS contract schedules
@@ -30,7 +31,7 @@ import           Language.Marlowe.ACTUS.Model.Utility.YearFraction        (yearF
 import           Language.Marlowe.ACTUS.Ops                               (YearFractionOps (_y))
 
 schedule :: EventType -> ContractTerms -> [ShiftedDay]
-schedule ev c = schedule' ev c { ct_MD = maturity c }
+schedule ev c = schedule' ev c { maturityDate = maturity c }
   where
 
     schedule' :: EventType -> ContractTerms -> [ShiftedDay]
@@ -79,13 +80,13 @@ schedule ev c = schedule' ev c { ct_MD = maturity c }
 
     schedule' IED  ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_IED_PAM ct
     schedule' PR   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_PR_LAM ct
-    schedule' MD   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_MD_PAM c { ct_MD = ct_MD c <|> ct_MD ct }
+    schedule' MD   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct }
     schedule' PP   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_PP_PAM ct
     schedule' PY   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_PY_PAM ct
     schedule' FP   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_FP_PAM ct
     schedule' PRD  ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_PRD_PAM ct
     schedule' TD   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_TD_PAM ct
-    schedule' IP   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_IP_NAM c { ct_MD = ct_MD c <|> ct_MD ct }
+    schedule' IP   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_IP_NAM c { maturityDate = maturityDate c <|> maturityDate ct }
     schedule' IPCI ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_IPCI_PAM ct
     schedule' IPCB ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_IPCB_LAM ct
     schedule' RR   ct@ContractTermsPoly{ contractType = ANN }   = _SCHED_RR_PAM ct
@@ -99,107 +100,107 @@ schedule ev c = schedule' ev c { ct_MD = maturity c }
 
     schedule' PRD  ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_PRD_PAM ct
     schedule' TD   ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_TD_PAM ct
-    schedule' MD   ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_MD_PAM c { ct_MD = ct_MD c <|> ct_MD ct } -- TODO
-    schedule' XD   ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_XD_OPTNS c { ct_MD = ct_MD c <|> ct_MD ct }
-    schedule' STD  ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_STD_OPTNS c { ct_MD = ct_MD c <|> ct_MD ct }
+    schedule' MD   ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' XD   ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_XD_OPTNS c { maturityDate = maturityDate c <|> maturityDate ct }
+    schedule' STD  ct@ContractTermsPoly{ contractType = OPTNS } = _SCHED_STD_OPTNS c { maturityDate = maturityDate c <|> maturityDate ct }
 
     schedule' PRD  ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_PRD_PAM ct
     schedule' TD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_TD_PAM ct
-    schedule' MD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_MD_PAM c { ct_MD = ct_MD c <|> ct_MD ct } -- TODO
-    schedule' XD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_XD_OPTNS ct { ct_MD = ct_MD c <|> ct_MD ct }
-    schedule' STD  ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_STD_OPTNS c { ct_MD = ct_MD c <|> ct_MD ct }
+    schedule' MD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' XD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_XD_OPTNS ct { maturityDate = maturityDate c <|> maturityDate ct }
+    schedule' STD  ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_STD_OPTNS c { maturityDate = maturityDate c <|> maturityDate ct }
 
     schedule' _ _                                               = []
 
 maturity :: ContractTerms -> Maybe LocalTime
-maturity ContractTermsPoly {contractType = PAM, ..} = ct_MD
-maturity ContractTermsPoly {contractType = LAM, ct_MD = md@(Just _)} = md
+maturity ContractTermsPoly {contractType = PAM, ..} = maturityDate
+maturity ContractTermsPoly {contractType = LAM, maturityDate = md@(Just _)} = md
 maturity
   ContractTermsPoly
     { contractType = LAM,
-      ct_MD = Nothing,
-      ct_PRANX = Just principalRedemptionAnchor,
-      ct_IPCL = Just interestPaymentCycle,
-      ct_PRCL = Just principalRedemptionCycle,
-      ct_PRNXT = Just nextPrincipalRedemptionPayment,
-      ct_NT = Just notionalPrincipal,
-      ct_SD = statusDate,
-      scfg = scheduleConfig
+      maturityDate = Nothing,
+      cycleAnchorDateOfPrincipalRedemption = Just pranx,
+      cycleOfInterestPayment = Just ipcl,
+      cycleOfPrincipalRedemption = Just prcl,
+      nextPrincipalRedemptionPayment = Just prnxt,
+      notionalPrincipal = Just nt,
+      statusDate,
+      scheduleConfig
     } =
     let (lastEvent, remainingPeriods)
-          | principalRedemptionAnchor < statusDate =
-            let previousEvents = generateRecurrentScheduleWithCorrections principalRedemptionAnchor principalRedemptionCycle statusDate scheduleConfig
-                f1 = (\ShiftedDay {..} -> calculationDay > statusDate <-> interestPaymentCycle)
+          | pranx < statusDate =
+            let previousEvents = generateRecurrentScheduleWithCorrections pranx prcl statusDate scheduleConfig
+                f1 = (\ShiftedDay {..} -> calculationDay > statusDate <-> ipcl)
                 f2 = (\ShiftedDay {..} -> calculationDay == statusDate)
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f2 . filter f1 $ previousEvents
-             in (lastEventCalcDay, notionalPrincipal / nextPrincipalRedemptionPayment)
-          | otherwise = (principalRedemptionAnchor, notionalPrincipal / nextPrincipalRedemptionPayment - 1)
-        m = lastEvent <+> (principalRedemptionCycle {n = n principalRedemptionCycle * round remainingPeriods :: Integer})
-     in eomc scheduleConfig >>= \d -> return $ applyEOMC lastEvent principalRedemptionCycle d m
-maturity ContractTermsPoly {contractType = NAM, ct_MD = md@(Just _)} = md
+             in (lastEventCalcDay, nt / prnxt)
+          | otherwise = (pranx, nt / prnxt - 1)
+        m = lastEvent <+> (prcl {n = n prcl * round remainingPeriods :: Integer})
+     in eomc scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
+maturity ContractTermsPoly {contractType = NAM, maturityDate = md@(Just _)} = md
 maturity
   ContractTermsPoly
     { contractType = NAM,
-      ct_MD = Nothing,
-      ct_PRANX = Just principalRedemptionAnchor,
-      ct_PRNXT = Just nextPrincipalRedemptionPayment,
-      ct_IED = Just initialExchangeDate,
-      ct_PRCL = Just principalRedemptionCycle,
-      ct_NT = Just notionalPrincipal,
-      ct_IPNR = Just nominalInterestRate,
-      ct_DCC = Just dayCountConvention,
-      ct_SD = statusDate,
-      scfg = scheduleConfig
+      maturityDate = Nothing,
+      cycleAnchorDateOfPrincipalRedemption = Just pranx,
+      nextPrincipalRedemptionPayment = Just prnxt,
+      initialExchangeDate = Just ied,
+      cycleOfPrincipalRedemption = Just prcl,
+      notionalPrincipal = Just nt,
+      nominalInterestRate = Just ipnr,
+      dayCountConvention = Just dcc,
+      statusDate,
+      scheduleConfig
     } =
     let lastEvent
-          | principalRedemptionAnchor >= statusDate = principalRedemptionAnchor
-          | initialExchangeDate <+> principalRedemptionCycle >= statusDate = initialExchangeDate <+> principalRedemptionCycle
+          | pranx >= statusDate = pranx
+          | ied <+> prcl >= statusDate = ied <+> prcl
           | otherwise =
-            let previousEvents = generateRecurrentScheduleWithCorrections principalRedemptionAnchor principalRedemptionCycle statusDate scheduleConfig
+            let previousEvents = generateRecurrentScheduleWithCorrections pranx prcl statusDate scheduleConfig
                 f = (\ShiftedDay {..} -> calculationDay == statusDate)
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f $ previousEvents
              in lastEventCalcDay
 
-        yLastEventPlusPRCL = yearFraction dayCountConvention lastEvent (lastEvent <+> principalRedemptionCycle) Nothing
-        redemptionPerCycle = nextPrincipalRedemptionPayment - (yLastEventPlusPRCL * nominalInterestRate * notionalPrincipal)
-        remainingPeriods = ceiling (notionalPrincipal / redemptionPerCycle) - 1
-        m = lastEvent <+> principalRedemptionCycle {n = n principalRedemptionCycle * remainingPeriods}
-     in eomc scheduleConfig >>= \d -> return $ applyEOMC lastEvent principalRedemptionCycle d m
+        yLastEventPlusPRCL = yearFraction dcc lastEvent (lastEvent <+> prcl) Nothing
+        redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
+        remainingPeriods = ceiling (nt / redemptionPerCycle) - 1
+        m = lastEvent <+> prcl {n = n prcl * remainingPeriods}
+     in eomc scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity
   ContractTermsPoly
     { contractType = ANN,
-      ct_AD = Nothing,
-      ct_MD = Nothing,
-      ct_PRANX = Just principalRedemptionAnchor,
-      ct_PRNXT = Just nextPrincipalRedemptionPayment,
-      ct_IED = Just initialExchangeDate,
-      ct_PRCL = Just principalRedemptionCycle,
-      ct_NT = Just notionalPrincipal,
-      ct_IPNR = Just nominalInterestRate,
-      ct_DCC = Just dayCountConvention,
-      ct_SD = t0,
-      scfg = scheduleConfig
+      amortizationDate = Nothing,
+      maturityDate = Nothing,
+      cycleAnchorDateOfPrincipalRedemption = Just pranx,
+      nextPrincipalRedemptionPayment = Just prnxt,
+      initialExchangeDate = Just ied,
+      cycleOfPrincipalRedemption = Just prcl,
+      notionalPrincipal = Just nt,
+      nominalInterestRate = Just ipnr,
+      dayCountConvention = Just dcc,
+      statusDate,
+      scheduleConfig
     } =
-    let tplus = initialExchangeDate <+> principalRedemptionCycle
+    let tplus = ied <+> prcl
         lastEvent
-          | principalRedemptionAnchor >= t0 = principalRedemptionAnchor
-          | tplus >= t0 = tplus
+          | pranx >= statusDate = pranx
+          | tplus >= statusDate = tplus
           | otherwise =
-            let previousEvents = generateRecurrentScheduleWithCorrections t0 principalRedemptionCycle principalRedemptionAnchor scheduleConfig
-             in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > t0) $ previousEvents
-        timeFromLastEventPlusOneCycle = _y dayCountConvention lastEvent (lastEvent <+> principalRedemptionCycle) Nothing
-        redemptionPerCycle = nextPrincipalRedemptionPayment - timeFromLastEventPlusOneCycle * nominalInterestRate * notionalPrincipal
-        remainingPeriods = (ceiling (notionalPrincipal / redemptionPerCycle) - 1) :: Integer
-    in Just . calculationDay . applyBDCWithCfg scheduleConfig $ lastEvent <+> principalRedemptionCycle { n = remainingPeriods }
+            let previousEvents = generateRecurrentScheduleWithCorrections statusDate prcl pranx scheduleConfig
+             in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > statusDate) $ previousEvents
+        timeFromLastEventPlusOneCycle = _y dcc lastEvent (lastEvent <+> prcl) Nothing
+        redemptionPerCycle = prnxt - timeFromLastEventPlusOneCycle * ipnr * nt
+        remainingPeriods = (ceiling (nt / redemptionPerCycle) - 1) :: Integer
+    in Just . calculationDay . applyBDCWithCfg scheduleConfig $ lastEvent <+> prcl { n = remainingPeriods }
 maturity
   ContractTermsPoly
     { contractType = ANN,
-      ct_AD = ad@(Just _)
+      amortizationDate = ad@(Just _)
     } = ad
 maturity
   ContractTermsPoly
     { contractType = ANN,
-      ct_AD = Nothing,
-      ct_MD = md@(Just _)
+      amortizationDate = Nothing,
+      maturityDate = md@(Just _)
     } = md
 maturity _ = Nothing

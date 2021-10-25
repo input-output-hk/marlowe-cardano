@@ -69,32 +69,32 @@ prop_non_empty (ContractTermsQC ct) =
 
 prop_purchase :: ContractTermsQC -> Property
 prop_purchase (ContractTermsQC ct) =
-  validContract ct && isJust (ct_PRD ct)
+  validContract ct && isJust (purchaseDate ct)
     ==> let cf = genProjectedCashflows defaultRiskFactors ct
          in PRD `elem` map cashEvent cf
 
 prop_principal_payment :: ContractTermsPAM -> Property
 prop_principal_payment (ContractTermsPAM ct) =
-  validContract ct && isJust (ct_IPANX ct)
+  validContract ct && isJust (cycleAnchorDateOfInterestPayment ct)
     ==> let cf =
               genProjectedCashflows
                 defaultRiskFactors
                 ct
-                  { ct_PRD = Nothing,
-                    ct_TD = Nothing,
-                    ct_SCNT = Just 1.0,
-                    ct_SCIP = Just 1.0,
-                    ct_FER = Just 0.0,
-                    ct_PDIED = Just 0.0,
-                    ct_IPAC = Just 0.0,
-                    ct_IPCBA = Just 0.0,
-                    ct_IPCB = Nothing,
-                    ct_SCANX = Nothing,
-                    ct_IPCED = Nothing,
-                    ct_SCEF = Nothing,
-                    ct_FEAC = Nothing,
-                    ct_SCCL = Nothing,
-                    ct_RRCL = Nothing
+                  { purchaseDate = Nothing,
+                    terminationDate = Nothing,
+                    notionalScalingMultiplier = Just 1.0,
+                    interestScalingMultiplier = Just 1.0,
+                    feeRate = Just 0.0,
+                    premiumDiscountAtIED = Just 0.0,
+                    accruedInterest = Just 0.0,
+                    interestCalculationBaseA = Just 0.0,
+                    interestCalculationBase = Nothing,
+                    cycleAnchorDateOfScalingIndex = Nothing,
+                    capitalizationEndDate = Nothing,
+                    scalingEffect = Nothing,
+                    feeAccrued = Nothing,
+                    cycleOfScalingIndex = Nothing,
+                    cycleOfRateReset = Nothing
                   }
             ied = sum $ map amount $ filter (\c -> cashEvent c == IED) cf
             md = sum $ map amount $ filter (\c -> cashEvent c == MD) cf

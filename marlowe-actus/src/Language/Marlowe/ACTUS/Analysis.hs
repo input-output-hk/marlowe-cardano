@@ -51,7 +51,7 @@ genProjectedCashflows getRiskFactors ct =
             cashCalculationDay = calculationDay t,
             cashEvent = ev,
             amount = am,
-            currency = fromMaybe "unknown" (ct_CURS ct)
+            currency = fromMaybe "unknown" (settlementCurrency ct)
           }
    in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs getRiskFactors $ ct
 
@@ -75,7 +75,7 @@ genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
         filter filtersStates . tail $
           runReader (sequence $ scanl applyStateTransition initialState schedules) context
         where
-          initialState = initializeState <&> (,AD,ShiftedDay ct_SD ct_SD)
+          initialState = initializeState <&> (,AD,ShiftedDay statusDate statusDate)
 
           applyStateTransition x (ev', t') = do
             (st, ev, d) <- x
@@ -102,25 +102,25 @@ genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
     mat = S.maturity ct
 
     filtersSchedules :: (EventType, ShiftedDay) -> Bool
-    filtersSchedules (_, ShiftedDay {..}) | contractType == OPTNS = calculationDay > ct_SD
-    filtersSchedules (_, ShiftedDay {..}) | contractType == FUTUR = calculationDay > ct_SD
-    filtersSchedules (_, ShiftedDay {..}) = isNothing ct_TD || Just calculationDay <= ct_TD
+    filtersSchedules (_, ShiftedDay {..}) | contractType == OPTNS = calculationDay > statusDate
+    filtersSchedules (_, ShiftedDay {..}) | contractType == FUTUR = calculationDay > statusDate
+    filtersSchedules (_, ShiftedDay {..}) = isNothing terminationDate || Just calculationDay <= terminationDate
 
     filtersStates :: (ContractState, EventType, ShiftedDay) -> Bool
     filtersStates (_, ev, ShiftedDay {..}) =
       case contractType of
-        PAM -> isNothing ct_PRD || Just calculationDay >= ct_PRD
-        LAM -> isNothing ct_PRD || ev == PRD || Just calculationDay > ct_PRD
-        NAM -> isNothing ct_PRD || ev == PRD || Just calculationDay > ct_PRD
+        PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+        LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+        NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
         ANN ->
-          let b1 = isNothing ct_PRD || ev == PRD || Just calculationDay > ct_PRD
-              b2 = let m = ct_MD <|> ct_AD <|> mat in isNothing m || Just calculationDay <= m
+          let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+              b2 = let m = maturityDate <|> amortizationDate <|> mat in isNothing m || Just calculationDay <= m
            in b1 && b2
         _ -> True
 
     postProcessSchedule :: [(EventType, ShiftedDay)] -> [(EventType, ShiftedDay)]
     postProcessSchedule =
-      let trim = dropWhile (\(_, d) -> calculationDay d < ct_SD)
+      let trim = dropWhile (\(_, d) -> calculationDay d < statusDate)
 
           priority :: (EventType, ShiftedDay) -> Int
           priority (event, _) = fromEnum event

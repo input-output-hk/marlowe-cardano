@@ -358,106 +358,106 @@ instance FromJSON ContractStructure where
 -}
 data ContractTermsPoly a b = ContractTermsPoly
   { -- General
-    contractId        :: String
-  , contractType      :: CT
-  , contractStructure :: [ContractStructure]
-  , ct_CNTRL          :: CR
-  , ct_CURS           :: Maybe String
+    contractId                               :: String
+  , contractType                             :: CT
+  , contractStructure                        :: [ContractStructure]
+  , contractRole                             :: CR
+  , settlementCurrency                       :: Maybe String
 
   -- Calendar
-  , ct_IED            :: Maybe b         -- ^ Initial Exchange Date
-  , ct_DCC            :: Maybe DCC       -- ^ Day Count Convention
-  , scfg              :: ScheduleConfig
+  , initialExchangeDate                      :: Maybe b         -- ^ Initial Exchange Date
+  , dayCountConvention                       :: Maybe DCC       -- ^ Day Count Convention
+  , scheduleConfig                           :: ScheduleConfig
 
   -- Contract Identification
-  , ct_SD             :: b               -- ^ Status Date
+  , statusDate                               :: b               -- ^ Status Date
 
   -- Counterparty
-  , ct_PRF            :: Maybe PRF       -- ^ Contract Performance
+  , contractPerformance                      :: Maybe PRF       -- ^ Contract Performance
 
   -- Fees
-  , ct_FECL           :: Maybe Cycle     -- ^ Cycle Of Fee
-  , ct_FEANX          :: Maybe b         -- ^ Cycle Anchor Date Of Fee
-  , ct_FEAC           :: Maybe a         -- ^ Fee Accrued
-  , ct_FEB            :: Maybe FEB       -- ^ Fee Basis
-  , ct_FER            :: Maybe a         -- ^ Fee Rate
+  , cycleOfFee                               :: Maybe Cycle     -- ^ Cycle Of Fee
+  , cycleAnchorDateOfFee                     :: Maybe b         -- ^ Cycle Anchor Date Of Fee
+  , feeAccrued                               :: Maybe a         -- ^ Fee Accrued
+  , feeBasis                                 :: Maybe FEB       -- ^ Fee Basis
+  , feeRate                                  :: Maybe a         -- ^ Fee Rate
 
   -- Interest
-  , ct_IPANX          :: Maybe b         -- ^ Cycle Anchor Date Of Interest Payment
-  , ct_IPCL           :: Maybe Cycle     -- ^ Cycle Of Interest Payment
-  , ct_IPAC           :: Maybe a         -- ^ Accrued Interest
-  , ct_IPCED          :: Maybe b         -- ^ Capitalization End Date
-  , ct_IPCBANX        :: Maybe b         -- ^ Cycle Anchor Date Of Interest Calculation Base
-  , ct_IPCBCL         :: Maybe Cycle     -- ^ Cycle Of Interest Calculation Base
-  , ct_IPCB           :: Maybe IPCB      -- ^ Interest Calculation Base
-  , ct_IPCBA          :: Maybe a         -- ^ Interest Calculation Base Amount
-  , ct_IPNR           :: Maybe a         -- ^ Nominal Interest Rate
-  , ct_SCIP           :: Maybe a         -- ^ Interest Scaling Multiplier
+  , cycleAnchorDateOfInterestPayment         :: Maybe b         -- ^ Cycle Anchor Date Of Interest Payment
+  , cycleOfInterestPayment                   :: Maybe Cycle     -- ^ Cycle Of Interest Payment
+  , accruedInterest                          :: Maybe a         -- ^ Accrued Interest
+  , capitalizationEndDate                    :: Maybe b         -- ^ Capitalization End Date
+  , cycleAnchorDateOfInterestCalculationBase :: Maybe b         -- ^ Cycle Anchor Date Of Interest Calculation Base
+  , cycleOfInterestCalculationBase           :: Maybe Cycle     -- ^ Cycle Of Interest Calculation Base
+  , interestCalculationBase                  :: Maybe IPCB      -- ^ Interest Calculation Base
+  , interestCalculationBaseA                 :: Maybe a         -- ^ Interest Calculation Base Amount
+  , nominalInterestRate                      :: Maybe a         -- ^ Nominal Interest Rate
+  , interestScalingMultiplier                :: Maybe a         -- ^ Interest Scaling Multiplier
 
   -- Dates
-  , ct_MD             :: Maybe b         -- ^ Maturity Date
-  , ct_AD             :: Maybe b         -- ^ Amortization Date
-  , ct_XD             :: Maybe b         -- ^ Exercise Date
+  , maturityDate                             :: Maybe b         -- ^ Maturity Date
+  , amortizationDate                         :: Maybe b         -- ^ Amortization Date
+  , exerciseDate                             :: Maybe b         -- ^ Exercise Date
 
   -- Notional Principal
-  , ct_NT             :: Maybe a         -- ^ Notional Principal
-  , ct_PDIED          :: Maybe a         -- ^ Premium Discount At IED
-  , ct_PRANX          :: Maybe b         -- ^ Cycle Anchor Date Of Principal Redemption
-  , ct_PRCL           :: Maybe Cycle     -- ^ Cycle Of Principal Redemption
-  , ct_PRNXT          :: Maybe a         -- ^ Next Principal Redemption Payment
-  , ct_PRD            :: Maybe b         -- ^ Purchase Date
-  , ct_PPRD           :: Maybe a         -- ^ Price At Purchase Date
-  , ct_TD             :: Maybe b         -- ^ Termination Date
-  , ct_PTD            :: Maybe a         -- ^ Price At Termination Date
+  , notionalPrincipal                        :: Maybe a         -- ^ Notional Principal
+  , premiumDiscountAtIED                     :: Maybe a         -- ^ Premium Discount At IED
+  , cycleAnchorDateOfPrincipalRedemption     :: Maybe b         -- ^ Cycle Anchor Date Of Principal Redemption
+  , cycleOfPrincipalRedemption               :: Maybe Cycle     -- ^ Cycle Of Principal Redemption
+  , nextPrincipalRedemptionPayment           :: Maybe a         -- ^ Next Principal Redemption Payment
+  , purchaseDate                             :: Maybe b         -- ^ Purchase Date
+  , priceAtPurchaseDate                      :: Maybe a         -- ^ Price At Purchase Date
+  , terminationDate                          :: Maybe b         -- ^ Termination Date
+  , priceAtTerminationDate                   :: Maybe a         -- ^ Price At Termination Date
 
   -- Scaling Index
-  , ct_SCIED          :: Maybe a         -- ^ Scaling Index At Status Date
-  , ct_SCANX          :: Maybe b         -- ^ Cycle Anchor Date Of Scaling Index
-  , ct_SCCL           :: Maybe Cycle     -- ^ Cycle Of Scaling Index
-  , ct_SCEF           :: Maybe SCEF      -- ^ Scaling Effect
-  , ct_SCCDD          :: Maybe a         -- ^ Scaling Index At Contract Deal Date
-  , ct_SCMO           :: Maybe String    -- ^ Market Object Code Of Scaling Index
-  , ct_SCNT           :: Maybe a         -- ^ Notional Scaling Multiplier
+  , scalingIndexAtStatusDate                 :: Maybe a         -- ^ Scaling Index At Status Date
+  , cycleAnchorDateOfScalingIndex            :: Maybe b         -- ^ Cycle Anchor Date Of Scaling Index
+  , cycleOfScalingIndex                      :: Maybe Cycle     -- ^ Cycle Of Scaling Index
+  , scalingEffect                            :: Maybe SCEF      -- ^ Scaling Effect
+  , scalingIndexAtContractDealDate           :: Maybe a         -- ^ Scaling Index At Contract Deal Date
+  , marketObjectCodeOfScalingIndex           :: Maybe String    -- ^ Market Object Code Of Scaling Index
+  , notionalScalingMultiplier                :: Maybe a         -- ^ Notional Scaling Multiplier
 
   -- Optionality
-  , ct_OPCL           :: Maybe Cycle     -- ^ Cycle Of Optionality
-  , ct_OPANX          :: Maybe b         -- ^ Cycle Anchor Date Of Optionality
-  , ct_OPTP           :: Maybe OPTP      -- ^ Option Type
-  , ct_OPS1           :: Maybe a         -- ^ Option Strike 1
-  , ct_OPXT           :: Maybe OPXT      -- ^ Option Exercise Type
+  , cycleOfOptionality                       :: Maybe Cycle     -- ^ Cycle Of Optionality
+  , cycleAnchorDateOfOptionality             :: Maybe b         -- ^ Cycle Anchor Date Of Optionality
+  , optionType                               :: Maybe OPTP      -- ^ Option Type
+  , optionStrike1                            :: Maybe a         -- ^ Option Strike 1
+  , optionExerciseType                       :: Maybe OPXT      -- ^ Option Exercise Type
 
   -- Settlement
-  , ct_STP            :: Maybe Cycle     -- ^ Settlement Period
-  , ct_DS             :: Maybe DS        -- ^ Delivery Settlement
-  , ct_XA             :: Maybe a         -- ^ Exercise Amount
-  , ct_PFUT           :: Maybe a         -- ^ Futures Price
+  , settlementPeriod                         :: Maybe Cycle     -- ^ Settlement Period
+  , deliverySettlement                       :: Maybe DS        -- ^ Delivery Settlement
+  , exerciseAmount                           :: Maybe a         -- ^ Exercise Amount
+  , futuresPrice                             :: Maybe a         -- ^ Futures Price
 
   -- Penalty
-  , ct_PYRT           :: Maybe a         -- ^ Penalty Rate
-  , ct_PYTP           :: Maybe PYTP      -- ^ Penalty Type
-  , ct_PPEF           :: Maybe PPEF      -- ^ Prepayment Effect
+  , penaltyRate                              :: Maybe a         -- ^ Penalty Rate
+  , penaltyType                              :: Maybe PYTP      -- ^ Penalty Type
+  , prepaymentEffect                         :: Maybe PPEF      -- ^ Prepayment Effect
 
   -- Rate Reset
-  , ct_RRCL           :: Maybe Cycle     -- ^ Cycle Of Rate Reset
-  , ct_RRANX          :: Maybe b         -- ^ Cycle Anchor Date Of Rate Reset
-  , ct_RRNXT          :: Maybe a         -- ^ Next Reset Rate
-  , ct_RRSP           :: Maybe a         -- ^ Rate Spread
-  , ct_RRMLT          :: Maybe a         -- ^ Rate Multiplier
-  , ct_RRPF           :: Maybe a         -- ^ Period Floor
-  , ct_RRPC           :: Maybe a         -- ^ Period Cap
-  , ct_RRLC           :: Maybe a         -- ^ Life Cap
-  , ct_RRLF           :: Maybe a         -- ^ Life Floor
-  , ct_RRMO           :: Maybe String    -- ^ Market Object Code Of Rate Reset
+  , cycleOfRateReset                         :: Maybe Cycle     -- ^ Cycle Of Rate Reset
+  , cycleAnchorDateOfRateReset               :: Maybe b         -- ^ Cycle Anchor Date Of Rate Reset
+  , nextResetRate                            :: Maybe a         -- ^ Next Reset Rate
+  , rateSpread                               :: Maybe a         -- ^ Rate Spread
+  , rateMultiplier                           :: Maybe a         -- ^ Rate Multiplier
+  , periodFloor                              :: Maybe a         -- ^ Period Floor
+  , periodCap                                :: Maybe a         -- ^ Period Cap
+  , lifeCap                                  :: Maybe a         -- ^ Life Cap
+  , lifeFloor                                :: Maybe a         -- ^ Life Floor
+  , marketObjectCodeOfRateReset              :: Maybe String    -- ^ Market Object Code Of Rate Reset
 
   -- Dividend
-  , ct_DVCL           :: Maybe Cycle     -- ^ Cycle Of Dividend
-  , ct_DVANX          :: Maybe b         -- ^ Cycle Anchor Date Of Dividend
-  , ct_DVNP           :: Maybe a         -- ^ Next Dividend Payment Amount
+  , cycleOfDividend                          :: Maybe Cycle     -- ^ Cycle Of Dividend
+  , cycleAnchorDateOfDividend                :: Maybe b         -- ^ Cycle Anchor Date Of Dividend
+  , nextDividendPaymentAmount                :: Maybe a         -- ^ Next Dividend Payment Amount
 
   -- enable settlement currency
-  , enableSettlement  :: Bool
-  , constraints       :: Maybe Assertions
-  , collateralAmount  :: Integer
+  , enableSettlement                         :: Bool
+  , constraints                              :: Maybe Assertions
+  , collateralAmount                         :: Integer
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -467,34 +467,34 @@ type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation
 
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues ct@ContractTermsPoly{..} =
-  let ScheduleConfig{..} = scfg in
+  let ScheduleConfig{..} = scheduleConfig in
     ct {
-      scfg     = scfg
+      scheduleConfig     = scheduleConfig
         { eomc = applyDefault EOMC_SD eomc
         , bdc = applyDefault BDC_NULL bdc
         , calendar = applyDefault CLDR_NC calendar
         }
-    , ct_PRF   = applyDefault PRF_PF ct_PRF
-    , ct_IPCB  = applyDefault IPCB_NT ct_IPCB
-    , ct_PDIED = applyDefault 0.0 ct_PDIED
-    , ct_SCEF  = applyDefault SE_000 ct_SCEF
-    , ct_PYRT  = applyDefault 0.0 ct_PYRT
-    , ct_PYTP  = applyDefault PYTP_O ct_PYTP
-    , ct_PPEF  = applyDefault PPEF_N ct_PPEF
-    , ct_RRSP  = applyDefault 0.0 ct_RRSP
-    , ct_RRMLT = applyDefault 1.0 ct_RRMLT
-    , ct_FEAC  = applyDefault 0.0 ct_FEAC
-    , ct_FER   = applyDefault 0.0 ct_FER
-    , ct_IPAC  = applyDefault 0.0 ct_IPAC
-    , ct_IPNR  = applyDefault 0.0 ct_IPNR
-    , ct_PPRD  = applyDefault 0.0 ct_PPRD
-    , ct_PTD   = applyDefault 0.0 ct_PTD
-    , ct_SCCDD = applyDefault 0.0 ct_SCCDD
-    , ct_RRPF  = applyDefault (-infinity) ct_RRPF
-    , ct_RRPC  = applyDefault infinity ct_RRPC
-    , ct_RRLC  = applyDefault infinity ct_RRLC
-    , ct_RRLF  = applyDefault (-infinity) ct_RRLF
-    , ct_IPCBA = applyDefault 0.0 ct_IPCBA
+    , contractPerformance   = applyDefault PRF_PF contractPerformance
+    , interestCalculationBase  = applyDefault IPCB_NT interestCalculationBase
+    , premiumDiscountAtIED = applyDefault 0.0 premiumDiscountAtIED
+    , scalingEffect  = applyDefault SE_000 scalingEffect
+    , penaltyRate  = applyDefault 0.0 penaltyRate
+    , penaltyType  = applyDefault PYTP_O penaltyType
+    , prepaymentEffect  = applyDefault PPEF_N prepaymentEffect
+    , rateSpread  = applyDefault 0.0 rateSpread
+    , rateMultiplier = applyDefault 1.0 rateMultiplier
+    , feeAccrued  = applyDefault 0.0 feeAccrued
+    , feeRate   = applyDefault 0.0 feeRate
+    , accruedInterest  = applyDefault 0.0 accruedInterest
+    , nominalInterestRate  = applyDefault 0.0 nominalInterestRate
+    , priceAtPurchaseDate  = applyDefault 0.0 priceAtPurchaseDate
+    , priceAtTerminationDate   = applyDefault 0.0 priceAtTerminationDate
+    , scalingIndexAtContractDealDate = applyDefault 0.0 scalingIndexAtContractDealDate
+    , periodFloor  = applyDefault (-infinity) periodFloor
+    , periodCap  = applyDefault infinity periodCap
+    , lifeCap  = applyDefault infinity lifeCap
+    , lifeFloor  = applyDefault (-infinity) lifeFloor
+    , interestCalculationBaseA = applyDefault 0.0 interestCalculationBaseA
     }
   where
     infinity :: Double

@@ -53,17 +53,17 @@ runTest tc@TestCase {..} =
                   pp_payoff = 0.0
                 }
 
-            observedKey RR = ct_RRMO contract
-            observedKey SC = ct_SCMO contract
+            observedKey RR = marketObjectCodeOfRateReset contract
+            observedKey SC = marketObjectCodeOfScalingIndex contract
             observedKey DV = Just (fmap toUpper identifier ++ "_DV")
             observedKey XD = let c = Prelude.head (contractStructure contract) in Just $ marketObjectCode c
-            observedKey _  = ct_CURS contract
+            observedKey _  = settlementCurrency contract
 
             value = fromMaybe 1.0 $ do
               k <- observedKey ev
               DataObserved {values = values} <- Map.lookup k dataObserved
               ValueObserved {value = valueObserved} <- L.find (\ValueObserved {timestamp = timestamp} ->
-                getFollowingBusinessDay timestamp (fromJust $ calendar $ scfg contract) == date) values
+                getFollowingBusinessDay timestamp (fromJust $ calendar $ scheduleConfig contract) == date) values
               return valueObserved
          in case ev of
               RR -> riskFactors {o_rf_RRMO = value}
@@ -177,87 +177,87 @@ data TestCase = TestCase
 
 -- TODO: refactor JSON parsing of ContractTerms (see: SCP-2881)
 testToContractTerms :: TestCase -> ContractTerms
-testToContractTerms TestCase{terms = t} =
+testToContractTerms TestCase {terms = t} =
   let terms' = termsToString t
-  in ContractTermsPoly
-     {
-       contractId        = terms' Map.! "contractID"
-     , contractType      = handleResult . fromJSON $ t Map.! "contractType" :: CT
-     , contractStructure = maybeToList $ toContractStructure <$> Map.lookup "contractStructure" t
-     , ct_CNTRL          = handleResult . fromJSON $ t Map.! "contractRole" :: CR
-     , ct_CURS           = handleResult . fromJSON <$> Map.lookup "currency" t
-     , ct_IED            = parseDate =<< Map.lookup "initialExchangeDate" terms'
-     , ct_DCC            = handleResult . fromJSON <$> Map.lookup "dayCountConvention" t
-     , scfg              = ScheduleConfig {
-                              calendar = handleResult . fromJSON <$> Map.lookup "calendar" t :: Maybe Calendar
-                            , eomc = handleResult . fromJSON <$> Map.lookup "endOfMonthConvention" t :: Maybe EOMC
-                            , bdc = handleResult . fromJSON <$> Map.lookup "businessDayConvention" t :: Maybe BDC
-                           }
-     , ct_SD             = fromJust $ parseDate (terms' Map.! "statusDate")
-     , ct_PRF            = handleResult . fromJSON <$> Map.lookup "contractPerformance" t :: Maybe PRF
-     , ct_FECL           = handleResult . fromJSON <$> Map.lookup "cycleOfFee" t
-     , ct_FEANX          = parseDate =<< Map.lookup "cycleAnchorDateOfFee" terms'
-     , ct_FEAC           = handleResult . fromJSON <$> Map.lookup "feeAccrued" t :: Maybe Double
-     , ct_FEB            = handleResult . fromJSON <$> Map.lookup "feeBasis" t :: Maybe FEB
-     , ct_FER            = read <$> Map.lookup "feeRate" terms' :: Maybe Double
-     , ct_IPANX          = parseDate =<< Map.lookup "cycleAnchorDateOfInterestPayment" terms'
-     , ct_IPCL           = handleResult . fromJSON <$> Map.lookup "cycleOfInterestPayment" t
-     , ct_IPAC           = read <$> Map.lookup "accruedInterest" terms' :: Maybe Double
-     , ct_IPCED          = parseDate =<< Map.lookup "capitalizationEndDate" terms'
-     , ct_IPCBANX        = parseDate =<< Map.lookup "cycleAnchorDateOfInterestCalculationBase" terms'
-     , ct_IPCBCL         = handleResult . fromJSON <$> Map.lookup "cycleOfInterestCalculationBase" t
-     , ct_IPCB           = handleResult . fromJSON <$> Map.lookup "interestCalculationBase" t :: Maybe IPCB
-     , ct_IPCBA          = read <$> Map.lookup "interestCalculationBaseAmount" terms' :: Maybe Double
-     , ct_IPNR           = read <$> Map.lookup "nominalInterestRate" terms' :: Maybe Double
-     , ct_SCIP           = read <$> Map.lookup "interestScalingMultiplier" terms' :: Maybe Double
-     , ct_NT             = read <$> Map.lookup "notionalPrincipal" terms' :: Maybe Double
-     , ct_PDIED          = read <$> Map.lookup "premiumDiscountAtIED" terms' :: Maybe Double
-     , ct_MD             = parseDate =<< Map.lookup "maturityDate" terms'
-     , ct_AD             = parseDate =<< Map.lookup "amortizationDate" terms'
-     , ct_PRANX          = parseDate =<< Map.lookup "cycleAnchorDateOfPrincipalRedemption" terms'
-     , ct_PRCL           = handleResult . fromJSON <$> Map.lookup "cycleOfPrincipalRedemption" t
-     , ct_PRNXT          = read <$> Map.lookup "nextPrincipalRedemptionPayment" terms' :: Maybe Double
-     , ct_PRD            = parseDate =<< Map.lookup "purchaseDate" terms'
-     , ct_PPRD           = read <$> Map.lookup "priceAtPurchaseDate" terms' :: Maybe Double
-     , ct_TD             = parseDate =<< Map.lookup "terminationDate" terms'
-     , ct_PTD            = read <$> Map.lookup "priceAtTerminationDate" terms' :: Maybe Double
-     , ct_SCIED          = read <$> Map.lookup "scalingIndexAtStatusDate" terms' :: Maybe Double
-     , ct_SCANX          = parseDate =<< Map.lookup "cycleAnchorDateOfScalingIndex" terms'
-     , ct_SCCL           = handleResult . fromJSON <$> Map.lookup "cycleOfScalingIndex" t
-     , ct_SCEF           = read <$> (replace "O" "0" . ("SE_" ++) <$> Map.lookup "scalingEffect" terms') :: Maybe SCEF
-     , ct_SCCDD          = read <$> Map.lookup "scalingIndexAtContractDealDate" terms' :: Maybe Double
-     , ct_SCMO           = Map.lookup "marketObjectCodeOfScalingIndex" terms'
-     , ct_SCNT           = read <$> Map.lookup "notionalScalingMultiplier" terms' :: Maybe Double
-     , ct_OPCL           = handleResult . fromJSON <$> Map.lookup "cycleOfOptionality" t
-     , ct_OPANX          = parseDate =<< Map.lookup "cycleAnchorDateOfOptionality" terms'
-     , ct_PYRT           = read <$> Map.lookup "penaltyRate" terms' :: Maybe Double
-     , ct_PYTP           = handleResult . fromJSON <$> Map.lookup "penaltyType" t :: Maybe PYTP
-     , ct_PPEF           = handleResult . fromJSON <$> Map.lookup "prepaymentEffect" t :: Maybe PPEF
-     , ct_RRCL           = handleResult . fromJSON <$> Map.lookup "cycleOfRateReset" t
-     , ct_RRANX          = parseDate =<< Map.lookup "cycleAnchorDateOfRateReset" terms'
-     , ct_RRNXT          = read <$> Map.lookup "nextResetRate" terms' :: Maybe Double
-     , ct_RRSP           = read <$> Map.lookup "rateSpread" terms' :: Maybe Double
-     , ct_RRMLT          = read <$> Map.lookup "rateMultiplier" terms' :: Maybe Double
-     , ct_RRPF           = read <$> Map.lookup "periodFloor" terms' :: Maybe Double
-     , ct_RRPC           = read <$> Map.lookup "periodCap" terms' :: Maybe Double
-     , ct_RRLC           = read <$> Map.lookup "lifeCap" terms' :: Maybe Double
-     , ct_RRLF           = read <$> Map.lookup "lifeFloor" terms' :: Maybe Double
-     , ct_RRMO           = Map.lookup "marketObjectCodeOfRateReset" terms'
-     , ct_DVANX          = parseDate =<< Map.lookup "cycleAnchorDateOfDividendPayment" terms'
-     , ct_DVCL           = handleResult . fromJSON <$> Map.lookup "cycleOfDividendPayment" t
-     , ct_DVNP           = read <$> Map.lookup "nextDividendPaymentAmount" terms' :: Maybe Double
-     , ct_OPTP           = handleResult . fromJSON <$> Map.lookup "optionType" t :: Maybe OPTP
-     , ct_OPS1           = read <$> Map.lookup "optionStrike1" terms' :: Maybe Double
-     , ct_OPXT           = handleResult . fromJSON <$> Map.lookup "optionExerciseType" t :: Maybe OPXT
-     , ct_STP            = handleResult . fromJSON <$> Map.lookup "settlementPeriod" t
-     , ct_XA             = read <$> Map.lookup "exerciseAmount" terms' :: Maybe Double
-     , ct_DS             = handleResult . fromJSON <$> Map.lookup "deliverySettlement" t :: Maybe DS
-     , ct_XD             = parseDate =<< Map.lookup "exerciseDate" terms'
-     , ct_PFUT           = read <$> Map.lookup "futuresPrice" terms' :: Maybe Double
-     , enableSettlement  = False
-     , constraints       = Nothing
-     , collateralAmount  = 0
-     }
+   in ContractTermsPoly
+        { contractId = terms' Map.! "contractID",
+          contractType = handleResult . fromJSON $ t Map.! "contractType" :: CT,
+          contractStructure = maybeToList $ toContractStructure <$> Map.lookup "contractStructure" t,
+          contractRole = handleResult . fromJSON $ t Map.! "contractRole" :: CR,
+          settlementCurrency = handleResult . fromJSON <$> Map.lookup "currency" t,
+          initialExchangeDate = parseDate =<< Map.lookup "initialExchangeDate" terms',
+          dayCountConvention = handleResult . fromJSON <$> Map.lookup "dayCountConvention" t,
+          scheduleConfig =
+            ScheduleConfig
+              { calendar = handleResult . fromJSON <$> Map.lookup "calendar" t :: Maybe Calendar,
+                eomc = handleResult . fromJSON <$> Map.lookup "endOfMonthConvention" t :: Maybe EOMC,
+                bdc = handleResult . fromJSON <$> Map.lookup "businessDayConvention" t :: Maybe BDC
+              },
+          statusDate = fromJust $ parseDate (terms' Map.! "statusDate"),
+          contractPerformance = handleResult . fromJSON <$> Map.lookup "contractPerformance" t :: Maybe PRF,
+          cycleOfFee = handleResult . fromJSON <$> Map.lookup "cycleOfFee" t,
+          cycleAnchorDateOfFee = parseDate =<< Map.lookup "cycleAnchorDateOfFee" terms',
+          feeAccrued = handleResult . fromJSON <$> Map.lookup "feeAccrued" t :: Maybe Double,
+          feeBasis = handleResult . fromJSON <$> Map.lookup "feeBasis" t :: Maybe FEB,
+          feeRate = read <$> Map.lookup "feeRate" terms' :: Maybe Double,
+          cycleAnchorDateOfInterestPayment = parseDate =<< Map.lookup "cycleAnchorDateOfInterestPayment" terms',
+          cycleOfInterestPayment = handleResult . fromJSON <$> Map.lookup "cycleOfInterestPayment" t,
+          accruedInterest = read <$> Map.lookup "accruedInterest" terms' :: Maybe Double,
+          capitalizationEndDate = parseDate =<< Map.lookup "capitalizationEndDate" terms',
+          cycleAnchorDateOfInterestCalculationBase = parseDate =<< Map.lookup "cycleAnchorDateOfInterestCalculationBase" terms',
+          cycleOfInterestCalculationBase = handleResult . fromJSON <$> Map.lookup "cycleOfInterestCalculationBase" t,
+          interestCalculationBase = handleResult . fromJSON <$> Map.lookup "interestCalculationBase" t :: Maybe IPCB,
+          interestCalculationBaseA = read <$> Map.lookup "interestCalculationBaseAmount" terms' :: Maybe Double,
+          nominalInterestRate = read <$> Map.lookup "nominalInterestRate" terms' :: Maybe Double,
+          interestScalingMultiplier = read <$> Map.lookup "interestScalingMultiplier" terms' :: Maybe Double,
+          notionalPrincipal = read <$> Map.lookup "notionalPrincipal" terms' :: Maybe Double,
+          premiumDiscountAtIED = read <$> Map.lookup "premiumDiscountAtIED" terms' :: Maybe Double,
+          maturityDate = parseDate =<< Map.lookup "maturityDate" terms',
+          amortizationDate = parseDate =<< Map.lookup "amortizationDate" terms',
+          cycleAnchorDateOfPrincipalRedemption = parseDate =<< Map.lookup "cycleAnchorDateOfPrincipalRedemption" terms',
+          cycleOfPrincipalRedemption = handleResult . fromJSON <$> Map.lookup "cycleOfPrincipalRedemption" t,
+          nextPrincipalRedemptionPayment = read <$> Map.lookup "nextPrincipalRedemptionPayment" terms' :: Maybe Double,
+          purchaseDate = parseDate =<< Map.lookup "purchaseDate" terms',
+          priceAtPurchaseDate = read <$> Map.lookup "priceAtPurchaseDate" terms' :: Maybe Double,
+          terminationDate = parseDate =<< Map.lookup "terminationDate" terms',
+          priceAtTerminationDate = read <$> Map.lookup "priceAtTerminationDate" terms' :: Maybe Double,
+          scalingIndexAtStatusDate = read <$> Map.lookup "scalingIndexAtStatusDate" terms' :: Maybe Double,
+          cycleAnchorDateOfScalingIndex = parseDate =<< Map.lookup "cycleAnchorDateOfScalingIndex" terms',
+          cycleOfScalingIndex = handleResult . fromJSON <$> Map.lookup "cycleOfScalingIndex" t,
+          scalingEffect = read <$> (replace "O" "0" . ("SE_" ++) <$> Map.lookup "scalingEffect" terms') :: Maybe SCEF,
+          scalingIndexAtContractDealDate = read <$> Map.lookup "scalingIndexAtContractDealDate" terms' :: Maybe Double,
+          marketObjectCodeOfScalingIndex = Map.lookup "marketObjectCodeOfScalingIndex" terms',
+          notionalScalingMultiplier = read <$> Map.lookup "notionalScalingMultiplier" terms' :: Maybe Double,
+          cycleOfOptionality = handleResult . fromJSON <$> Map.lookup "cycleOfOptionality" t,
+          cycleAnchorDateOfOptionality = parseDate =<< Map.lookup "cycleAnchorDateOfOptionality" terms',
+          penaltyRate = read <$> Map.lookup "penaltyRate" terms' :: Maybe Double,
+          penaltyType = handleResult . fromJSON <$> Map.lookup "penaltyType" t :: Maybe PYTP,
+          prepaymentEffect = handleResult . fromJSON <$> Map.lookup "prepaymentEffect" t :: Maybe PPEF,
+          cycleOfRateReset = handleResult . fromJSON <$> Map.lookup "cycleOfRateReset" t,
+          cycleAnchorDateOfRateReset = parseDate =<< Map.lookup "cycleAnchorDateOfRateReset" terms',
+          nextResetRate = read <$> Map.lookup "nextResetRate" terms' :: Maybe Double,
+          rateSpread = read <$> Map.lookup "rateSpread" terms' :: Maybe Double,
+          rateMultiplier = read <$> Map.lookup "rateMultiplier" terms' :: Maybe Double,
+          periodFloor = read <$> Map.lookup "periodFloor" terms' :: Maybe Double,
+          periodCap = read <$> Map.lookup "periodCap" terms' :: Maybe Double,
+          lifeCap = read <$> Map.lookup "lifeCap" terms' :: Maybe Double,
+          lifeFloor = read <$> Map.lookup "lifeFloor" terms' :: Maybe Double,
+          marketObjectCodeOfRateReset = Map.lookup "marketObjectCodeOfRateReset" terms',
+          cycleAnchorDateOfDividend = parseDate =<< Map.lookup "cycleAnchorDateOfDividendPayment" terms',
+          cycleOfDividend = handleResult . fromJSON <$> Map.lookup "cycleOfDividendPayment" t,
+          nextDividendPaymentAmount = read <$> Map.lookup "nextDividendPaymentAmount" terms' :: Maybe Double,
+          optionType = handleResult . fromJSON <$> Map.lookup "optionType" t :: Maybe OPTP,
+          optionStrike1 = read <$> Map.lookup "optionStrike1" terms' :: Maybe Double,
+          optionExerciseType = handleResult . fromJSON <$> Map.lookup "optionExerciseType" t :: Maybe OPXT,
+          settlementPeriod = handleResult . fromJSON <$> Map.lookup "settlementPeriod" t,
+          exerciseAmount = read <$> Map.lookup "exerciseAmount" terms' :: Maybe Double,
+          deliverySettlement = handleResult . fromJSON <$> Map.lookup "deliverySettlement" t :: Maybe DS,
+          exerciseDate = parseDate =<< Map.lookup "exerciseDate" terms',
+          futuresPrice = read <$> Map.lookup "futuresPrice" terms' :: Maybe Double,
+          enableSettlement = False,
+          constraints = Nothing,
+          collateralAmount = 0
+        }
   where
     termsToString :: Map String Value -> Map String String
     termsToString = Map.mapMaybe valueToString
@@ -274,7 +274,6 @@ testToContractTerms TestCase{terms = t} =
     handleResult :: Result a -> a
     handleResult (Success s) = s
     handleResult (Error err) = error err
-
 parseDate :: String -> Maybe LocalTime
 parseDate date =
   let format

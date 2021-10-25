@@ -122,7 +122,7 @@ genFsContract' ct =
   let projectedCashflows = genProjectedCashflows defaultRiskFactors ct
       eventTypesOfCashflows = cashEvent <$> projectedCashflows
       paymentDayCashflows = Slot . timeToSlotNumber . cashPaymentDay <$> projectedCashflows
-      previousDates = ct_SD ct : (cashCalculationDay <$> projectedCashflows)
+      previousDates = statusDate ct : (cashCalculationDay <$> projectedCashflows)
 
       gen :: (CashFlow, LocalTime, EventType, Slot, Integer) -> Contract -> Reader (CtxSTF Double LocalTime) Contract
       gen (cf, prevDate, ev, date, i) cont =
@@ -303,11 +303,11 @@ genFsContract' ct =
     maxPseudoDecimalValue = 100000000000000
 
     genZeroRiskAssertions :: ContractTerms -> Assertion -> Contract -> Contract
-    genZeroRiskAssertions terms@ContractTermsPoly {ct_DCC = Just dcc, ..} NpvAssertionAgainstZeroRiskBond {..} continue =
+    genZeroRiskAssertions terms@ContractTermsPoly {dayCountConvention = Just dcc, ..} NpvAssertionAgainstZeroRiskBond {..} continue =
       let cfs = genProjectedCashflows defaultRiskFactors terms
 
           dateToYearFraction :: LocalTime -> Double
-          dateToYearFraction dt = _y dcc ct_SD dt ct_MD
+          dateToYearFraction dt = _y dcc statusDate dt maturityDate
 
           dateToDiscountFactor dt = (1 O.- zeroRiskInterest) ** dateToYearFraction dt
 

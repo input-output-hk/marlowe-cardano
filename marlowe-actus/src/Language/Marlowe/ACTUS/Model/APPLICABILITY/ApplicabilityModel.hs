@@ -33,7 +33,7 @@ _X_I_2 Nothing _ ct _ _ = Success ct
 
 -- |At least one of the CAs with c=4 in this group has to be defined provided that CA IPCB of the group takes the value NTL
 _X_I_4 :: [Bool] -> ContractTerms -> [String] -> Validation [TermValidationError] ContractTerms
-_X_I_4 cond ct@ContractTermsPoly {ct_IPCB = Just IPCB_NTL, ..} condNames =
+_X_I_4 cond ct@ContractTermsPoly {interestCalculationBase = Just IPCB_NTL, ..} condNames =
   if or cond
     then Success ct
     else Failure [Required $ "At least one of the conditional terms in group " ++ show condNames ++ " must be defined when interest calculation base is NTL for contract type '" ++ show contractType ++ "'"]
@@ -58,5 +58,5 @@ _NN_I_1 _cts ct@ContractTermsPoly{..} ns
 
 -- |Not nullable if CA IPCB of the group takes the value NTIED
 _NN_I_3 :: Maybe a -> ContractTerms -> [Char] -> Validation [TermValidationError] ContractTerms
-_NN_I_3 Nothing ContractTermsPoly {ct_IPCB = Just IPCB_NTIED} n = Failure [Required $ "Contract term " ++ n ++ " must be defined when interest calculation base is NTIED"]
+_NN_I_3 Nothing ContractTermsPoly {interestCalculationBase = Just IPCB_NTIED} n = Failure [Required $ "Contract term " ++ n ++ " must be defined when interest calculation base is NTIED"]
 _NN_I_3 _ ct _ = Success ct
