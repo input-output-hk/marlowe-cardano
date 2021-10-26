@@ -122,11 +122,9 @@ haskell.project.shellFor {
   + lib.optionalString stdenv.isLinux ''
     ${utillinux}/bin/taskset -pc 0-1000 $$
   ''
-  # It's handy to have an environment variable for the project root (assuming people
-  # normally start the shell from there.
-  # We also use it in a deployment hack.
-  # We have a local passwords store that we use for deployments etc.
+  # Point to some source dependencies
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
+    export WEB_COMMON_SRC="${webCommon.cleanSrc}"
   '';
 }

@@ -30,21 +30,25 @@ let
     githubSourceHashMap = { };
   };
 
-  client = buildPursPackage {
-    inherit pkgs nodeModules;
-    src = cleanSrc;
-    checkPhase = ''
-      node -e 'require("./output/Test.Main").main()'
-    '';
-    name = "marlowe-dashboard-client";
-    extraSrcs = {
-      web-common = webCommon.cleanSrc;
-      web-common-marlowe = webCommonMarlowe;
-      generated = generated-purescript;
-    };
-    packages = pkgs.callPackage ./packages.nix { };
-    spagoPackages = pkgs.callPackage ./spago-packages.nix { };
-  };
+  client = pkgs.lib.overrideDerivation
+    (buildPursPackage {
+      inherit pkgs nodeModules;
+      src = cleanSrc;
+      checkPhase = ''
+        node -e 'require("./output/Test.Main").main()'
+      '';
+      name = "marlowe-dashboard-client";
+      extraSrcs = {
+        web-common = webCommon.cleanSrc;
+        web-common-marlowe = webCommonMarlowe;
+        generated = generated-purescript;
+      };
+      packages = pkgs.callPackage ./packages.nix { };
+      spagoPackages = pkgs.callPackage ./spago-packages.nix { };
+    })
+    (_: {
+      WEB_COMMON_SRC = webCommon.cleanSrc;
+    });
 in
 {
   inherit (plutus-pab) server-setup-invoker;

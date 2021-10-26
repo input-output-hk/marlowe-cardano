@@ -3,7 +3,7 @@
 module.exports = {
   purge: [
     "src/**/*.purs",
-    "web-common/**/*.purs",
+    process.env.WEB_COMMON_SRC + "/**/*.purs",
     "web-common-marlowe/**/*.purs",
   ],
   darkMode: false, // or 'media' or 'class'

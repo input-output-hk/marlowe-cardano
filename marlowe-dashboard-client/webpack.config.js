@@ -65,7 +65,7 @@ module.exports = {
                                 "generated/**/*.purs",
                                 ".spago/*/*/src/**/*.purs",
                                 "web-common-marlowe/**/*.purs",
-                                "web-common/**/*.purs",
+                                process.env.WEB_COMMON_SRC + "/**/*.purs",
                             ],
                             psc: "psa",
                             bundle: !isDevelopment,
@@ -111,7 +111,7 @@ module.exports = {
     },
     plugins: [
         new HtmlWebpackPlugin({
-            template: "web-common/static/index.html",
+            template: process.env.WEB_COMMON_SRC + "/static/index.html",
             favicon: "static/favicon.ico",
             title: "Marlowe Run",
             productName: "marlowe-dashboard",

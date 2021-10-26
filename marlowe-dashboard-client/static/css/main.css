@@ -1,9 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,600;0,700;1,400&display=swap");
 
 @import "./utilities.css";
-@import "../../web-common/static/icons.css";
-@import "../../web-common/static/popover.css";
-@import "../../web-common/static/progress-circular.css";
+@import "@WEB_COMMON_SRC@/static/icons.css";
+@import "@WEB_COMMON_SRC@/static/popover.css";
+@import "@WEB_COMMON_SRC@/static/progress-circular.css";
 
 @tailwind base;
 @tailwind components;

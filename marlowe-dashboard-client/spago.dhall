@@ -32,7 +32,7 @@ You can edit this file as you like.
   [ "src/**/*.purs"
   , "test/**/*.purs"
   , "generated/**/*.purs"
-  , "web-common/**/*.purs"
+  , "${env:WEB_COMMON_SRC as Text}/**/*.purs"
   , "web-common-marlowe/**/*.purs"
   ]
 }

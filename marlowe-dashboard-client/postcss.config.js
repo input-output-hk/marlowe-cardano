@@ -18,7 +18,9 @@ const extraPlugins =
 
 module.exports = {
   plugins: [
-    require("postcss-import"),
+    require("postcss-import")({
+      resolve: path => path.replace("@WEB_COMMON_SRC@", process.env.WEB_COMMON_SRC)
+    }),
     require("tailwindcss"),
     require("autoprefixer"),
     ...extraPlugins
