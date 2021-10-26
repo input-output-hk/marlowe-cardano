@@ -134,13 +134,13 @@ data IPCB = IPCB_NT    -- ^ Calculation base always equals to NT
 $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''IPCB)
 
 -- |ScalingEffect
-data SCEF = SE_000 -- ^ No scaling
-          | SE_I00 -- ^ Only interest payments scaled
-          | SE_0N0 -- ^ Only nominal payments scaled
-          | SE_00M -- ^ Only maximum deferred amount scaled
-          | SE_IN0 -- ^ Interest and nominal payments scaled
-          | SE_0NM -- ^ Nominal and maximum deferred amount scaled
-          | SE_I0M -- ^ Interest and maximum deferred amount scaled
+data SCEF = SE_OOO -- ^ No scaling
+          | SE_IOO -- ^ Only interest payments scaled
+          | SE_ONO -- ^ Only nominal payments scaled
+          | SE_OOM -- ^ Only maximum deferred amount scaled
+          | SE_INO -- ^ Interest and nominal payments scaled
+          | SE_ONM -- ^ Nominal and maximum deferred amount scaled
+          | SE_IOM -- ^ Interest and maximum deferred amount scaled
           | SE_INM -- ^ Interest, nominal and maximum deferred amount scaled
           deriving stock (Show, Read, Eq, Generic)
 
@@ -466,39 +466,39 @@ type ContractTerms = ContractTermsPoly Double LocalTime
 type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation) (Marlowe.Value Marlowe.Observation)
 
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
-setDefaultContractTermValues ct@ContractTermsPoly{..} =
-  let ScheduleConfig{..} = scheduleConfig in
-    ct {
-      scheduleConfig     = scheduleConfig
-        { eomc = applyDefault EOMC_SD eomc
-        , bdc = applyDefault BDC_NULL bdc
-        , calendar = applyDefault CLDR_NC calendar
-        }
-    , contractPerformance   = applyDefault PRF_PF contractPerformance
-    , interestCalculationBase  = applyDefault IPCB_NT interestCalculationBase
-    , premiumDiscountAtIED = applyDefault 0.0 premiumDiscountAtIED
-    , scalingEffect  = applyDefault SE_000 scalingEffect
-    , penaltyRate  = applyDefault 0.0 penaltyRate
-    , penaltyType  = applyDefault PYTP_O penaltyType
-    , prepaymentEffect  = applyDefault PPEF_N prepaymentEffect
-    , rateSpread  = applyDefault 0.0 rateSpread
-    , rateMultiplier = applyDefault 1.0 rateMultiplier
-    , feeAccrued  = applyDefault 0.0 feeAccrued
-    , feeRate   = applyDefault 0.0 feeRate
-    , accruedInterest  = applyDefault 0.0 accruedInterest
-    , nominalInterestRate  = applyDefault 0.0 nominalInterestRate
-    , priceAtPurchaseDate  = applyDefault 0.0 priceAtPurchaseDate
-    , priceAtTerminationDate   = applyDefault 0.0 priceAtTerminationDate
-    , scalingIndexAtContractDealDate = applyDefault 0.0 scalingIndexAtContractDealDate
-    , periodFloor  = applyDefault (-infinity) periodFloor
-    , periodCap  = applyDefault infinity periodCap
-    , lifeCap  = applyDefault infinity lifeCap
-    , lifeFloor  = applyDefault (-infinity) lifeFloor
-    , interestCalculationBaseA = applyDefault 0.0 interestCalculationBaseA
+setDefaultContractTermValues ct@ContractTermsPoly {..} =
+  ct
+    { scheduleConfig                 =
+        scheduleConfig
+          { eomc = applyDefault EOMC_SD (eomc scheduleConfig),
+            bdc = applyDefault BDC_NULL (bdc scheduleConfig),
+            calendar = applyDefault CLDR_NC (calendar scheduleConfig)
+          },
+      contractPerformance            = applyDefault PRF_PF contractPerformance,
+      interestCalculationBase        = applyDefault IPCB_NT interestCalculationBase,
+      premiumDiscountAtIED           = applyDefault 0.0 premiumDiscountAtIED,
+      scalingEffect                  = applyDefault SE_OOO scalingEffect,
+      penaltyRate                    = applyDefault 0.0 penaltyRate,
+      penaltyType                    = applyDefault PYTP_O penaltyType,
+      prepaymentEffect               = applyDefault PPEF_N prepaymentEffect,
+      rateSpread                     = applyDefault 0.0 rateSpread,
+      rateMultiplier                 = applyDefault 1.0 rateMultiplier,
+      feeAccrued                     = applyDefault 0.0 feeAccrued,
+      feeRate                        = applyDefault 0.0 feeRate,
+      accruedInterest                = applyDefault 0.0 accruedInterest,
+      nominalInterestRate            = applyDefault 0.0 nominalInterestRate,
+      priceAtPurchaseDate            = applyDefault 0.0 priceAtPurchaseDate,
+      priceAtTerminationDate         = applyDefault 0.0 priceAtTerminationDate,
+      scalingIndexAtContractDealDate = applyDefault 0.0 scalingIndexAtContractDealDate,
+      periodFloor                    = applyDefault (- infinity) periodFloor,
+      periodCap                      = applyDefault infinity periodCap,
+      lifeCap                        = applyDefault infinity lifeCap,
+      lifeFloor                      = applyDefault (- infinity) lifeFloor,
+      interestCalculationBaseA       = applyDefault 0.0 interestCalculationBaseA
     }
   where
     infinity :: Double
-    infinity = 1/0 :: Double
+    infinity = 1 / 0 :: Double
 
     applyDefault :: a -> Maybe a -> Maybe a
     applyDefault v = Just . fromMaybe v

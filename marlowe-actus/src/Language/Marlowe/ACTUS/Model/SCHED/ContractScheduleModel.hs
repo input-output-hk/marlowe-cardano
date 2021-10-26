@@ -212,7 +212,7 @@ _SCHED_RRF_PAM
 _SCHED_RRF_PAM _ = []
 
 _SCHED_SC_PAM :: ContractTerms -> [ShiftedDay]
-_SCHED_SC_PAM ContractTermsPoly {scalingEffect = Just SE_000} = []
+_SCHED_SC_PAM ContractTermsPoly {scalingEffect = Just SE_OOO} = []
 _SCHED_SC_PAM
   ContractTermsPoly
     { cycleAnchorDateOfScalingIndex = Just scanx,

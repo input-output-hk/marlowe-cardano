@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {-| = ACTUS contract state initialization per t0
@@ -58,17 +59,17 @@ initializeState = reader initializeState'
         tMinusIP = fromMaybe t0 (sup' ipSchedule t0)
 
         scalingEffect_xNx :: SCEF -> Bool
-        scalingEffect_xNx SE_0N0 = True
-        scalingEffect_xNx SE_0NM = True
-        scalingEffect_xNx SE_IN0 = True
+        scalingEffect_xNx SE_ONO = True
+        scalingEffect_xNx SE_ONM = True
+        scalingEffect_xNx SE_INO = True
         scalingEffect_xNx SE_INM = True
         scalingEffect_xNx _      = False
 
         scalingEffect_Ixx :: SCEF -> Bool
-        scalingEffect_Ixx SE_IN0 = True
+        scalingEffect_Ixx SE_INO = True
         scalingEffect_Ixx SE_INM = True
-        scalingEffect_Ixx SE_I00 = True
-        scalingEffect_Ixx SE_I0M = True
+        scalingEffect_Ixx SE_IOO = True
+        scalingEffect_Ixx SE_IOM = True
         scalingEffect_Ixx _      = False
 
         interestScaling :: ContractTerms -> Double
@@ -139,7 +140,7 @@ initializeState = reader initializeState'
               notionalPrincipal = Just nt,
               cycleOfPrincipalRedemption = Just prcl,
               cycleAnchorDateOfPrincipalRedemption = Just pranx,
-              scheduleConfig = scheduleConfig
+              scheduleConfig
             } = nt / fromIntegral (length $ generateRecurrentScheduleWithCorrections pranx (prcl {includeEndDay = True}) md scheduleConfig)
         nextPrincipalRedemptionPayment
           ContractTermsPoly

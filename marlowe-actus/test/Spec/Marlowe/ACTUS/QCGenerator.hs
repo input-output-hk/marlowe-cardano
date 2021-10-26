@@ -106,7 +106,7 @@ contractTermsGen' ct = do
   ppef <- elements [PPEF_N, PPEF_A, PPEF_M]
   contractRole <- elements [CR_BUY, CR_SEL]
 
-  scef <- elements [SE_000, SE_0N0, SE_00M, SE_0NM, SE_I00, SE_IN0, SE_I0M, SE_INM]
+  scef <- elements [SE_OOO, SE_ONO, SE_OOM, SE_ONM, SE_IOO, SE_INO, SE_IOM, SE_INM]
   sccdd <- oneOr scalingFactor
   scied <- oneOr scalingFactor
   scip <- oneOr scalingFactor

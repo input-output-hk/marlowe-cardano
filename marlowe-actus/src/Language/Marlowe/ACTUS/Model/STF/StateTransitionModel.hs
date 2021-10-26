@@ -255,14 +255,14 @@ _STF_SC_PAM
     let st' = _STF_PY_PAM ct st t y_sd_t y_tfpminus_t y_tfpminus_tfpplus
 
         nsc' = case scef of
-          SE_00M -> nsc
-          SE_I00 -> nsc
+          SE_OOM -> nsc
+          SE_IOO -> nsc
           _      -> (o_rf_SCMO - scied) / scied
 
         isc' = case scef of
-          SE_0N0 -> isc
-          SE_00M -> isc
-          SE_0NM -> isc
+          SE_ONO -> isc
+          SE_OOM -> isc
+          SE_ONM -> isc
           _      -> (o_rf_SCMO - scied) / scied
      in st'
           { nsc = nsc',
