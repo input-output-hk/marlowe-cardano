@@ -189,8 +189,8 @@ contractTermsGen' ct = do
         scheduleConfig =
           ScheduleConfig
             { calendar = Just calendar,
-              eomc = Just eomc,
-              bdc = Just bdc
+              endOfMonthConvention = Just eomc,
+              businessDayConvention = Just bdc
             },
         -- Penalties
         penaltyRate = Just penaltyrate,

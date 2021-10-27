@@ -16,8 +16,8 @@ validateTerms ct@ContractTermsPoly {contractType = PAM, ..} =
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
     <* _X (calendar scheduleConfig) ct "calendar"
-    <* _X (bdc scheduleConfig) ct "business day convention"
-    <* _X (eomc scheduleConfig) ct "end of month convention"
+    <* _X (businessDayConvention scheduleConfig) ct "business day convention"
+    <* _X (endOfMonthConvention scheduleConfig) ct "end of month convention"
     <* _X_I_2 feeRate [isJust cycleAnchorDateOfFee, isJust cycleOfFee] ct "fee rate" ["cycle anchor date of fee", "cycle of fee"]
     <* _X feeAccrued ct "fee accrued"
     <* _NN_I_1 [isJust feeBasis, isJust feeRate] ct ["fee basis", "fee rate"]
@@ -44,8 +44,8 @@ validateTerms ct@ContractTermsPoly {contractType = LAM, ..} =
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
     <* _X (calendar scheduleConfig) ct "calendar"
-    <* _X (bdc scheduleConfig) ct "business day convention"
-    <* _X (eomc scheduleConfig) ct "end of month convention"
+    <* _X (businessDayConvention scheduleConfig) ct "business day convention"
+    <* _X (endOfMonthConvention scheduleConfig) ct "end of month convention"
     <* _X_I_4 [isJust cycleOfInterestCalculationBase, isJust cycleAnchorDateOfInterestCalculationBase] ct ["cycle of interest calculation base", "cycle anchor date of interest calculation base"]
     <* _X feeAccrued ct "fee accrued"
     <* _NN_I_1 [isJust feeBasis, isJust feeRate] ct ["fee basis", "fee rate"]
@@ -74,8 +74,8 @@ validateTerms ct@ContractTermsPoly {contractType = NAM, ..} =
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
     <* _X (calendar scheduleConfig) ct "calendar"
-    <* _X (bdc scheduleConfig) ct "business day convention"
-    <* _X (eomc scheduleConfig) ct "end of month convention"
+    <* _X (businessDayConvention scheduleConfig) ct "business day convention"
+    <* _X (endOfMonthConvention scheduleConfig) ct "end of month convention"
     <* _X_I_4 [isJust cycleOfInterestCalculationBase, isJust cycleAnchorDateOfInterestCalculationBase] ct ["cycle of interest calculation base", "cycle anchor date of interest calculation base"]
     <* _X feeAccrued ct "fee accrued"
     <* _NN_I_1 [isJust feeBasis, isJust feeRate] ct ["fee basis", "fee rate"]
@@ -106,8 +106,8 @@ validateTerms ct@ContractTermsPoly {contractType = ANN, ..} =
     <$ _NN initialExchangeDate ct "initial exchange date"
     <* _NN dayCountConvention ct "day count convention"
     <* _X (calendar scheduleConfig) ct "calendar"
-    <* _X (bdc scheduleConfig) ct "business day convention"
-    <* _X (eomc scheduleConfig) ct "end of month convention"
+    <* _X (businessDayConvention scheduleConfig) ct "business day convention"
+    <* _X (endOfMonthConvention scheduleConfig) ct "end of month convention"
     <* _X_I_4 [isJust cycleOfInterestCalculationBase, isJust cycleAnchorDateOfInterestCalculationBase] ct ["cycle of interest calculation base", "cycle anchor date of interest calculation base"]
     <* _X feeAccrued ct "fee accrued"
     <* _NN_I_1 [isJust feeBasis, isJust feeRate] ct ["fee basis", "fee rate"]

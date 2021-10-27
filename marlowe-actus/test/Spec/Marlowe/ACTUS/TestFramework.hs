@@ -5,6 +5,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeApplications      #-}
@@ -37,40 +38,43 @@ tests n t = testGroup n $ [ testCase (getField @"identifier" tc) (runTest tc) | 
 
 runTest :: TestCase -> Assertion
 runTest TestCase {..} =
-  let (TC testcase) = terms
-      contract = setDefaultContractTermValues testcase
+    let ct = setDefaultContractTermValues terms
 
-      getRiskFactors ev date =
-        let riskFactors =
-              RiskFactorsPoly
-                { o_rf_CURS = 1.0,
-                  o_rf_RRMO = 1.0,
-                  o_rf_SCMO = 1.0,
-                  pp_payoff = 0.0
-                }
+        getRiskFactors ev date =
+          let riskFactors =
+                RiskFactorsPoly
+                  { o_rf_CURS = 1.0,
+                    o_rf_RRMO = 1.0,
+                    o_rf_SCMO = 1.0,
+                    pp_payoff = 0.0
+                  }
 
-            observedKey RR = marketObjectCodeOfRateReset contract
-            observedKey SC = marketObjectCodeOfScalingIndex contract
-            observedKey DV = Just (fmap toUpper identifier ++ "_DV")
-            observedKey XD = Just . marketObjectCode . Prelude.head $ contractStructure contract
-            observedKey _  = settlementCurrency contract
+              observedKey RR = marketObjectCodeOfRateReset ct
+              observedKey SC = marketObjectCodeOfScalingIndex ct
+              observedKey DV = Just (fmap toUpper identifier ++ "_DV")
+              observedKey XD = Just . marketObjectCode . Prelude.head $ contractStructure ct
+              observedKey _  = settlementCurrency ct
 
-            value = fromMaybe 1.0 $ do
-              k <- observedKey ev
-              DataObserved {values = values} <- Map.lookup k dataObserved
-              ValueObserved {value = valueObserved} <- L.find (\ValueObserved {timestamp = timestamp} ->
-                getFollowingBusinessDay timestamp (fromJust . calendar $ scheduleConfig contract) == date) values
-              return valueObserved
-         in case ev of
-              RR -> riskFactors {o_rf_RRMO = value}
-              SC -> riskFactors {o_rf_SCMO = value}
-              DV -> riskFactors {pp_payoff = value}
-              XD -> riskFactors {pp_payoff = value}
-              _  -> riskFactors {o_rf_CURS = value}
+              v = fromMaybe 1.0 $ do
+                k <- observedKey ev
+                DataObserved {values} <- Map.lookup k dataObserved
+                ValueObserved {value} <-
+                  L.find
+                    ( \ValueObserved {timestamp} ->
+                        getFollowingBusinessDay timestamp (fromJust . calendar $ scheduleConfig ct) == date
+                    )
+                    values
+                return value
+           in case ev of
+                RR -> riskFactors {o_rf_RRMO = v}
+                SC -> riskFactors {o_rf_SCMO = v}
+                DV -> riskFactors {pp_payoff = v}
+                XD -> riskFactors {pp_payoff = v}
+                _  -> riskFactors {o_rf_CURS = v}
 
-      cashFlows = genProjectedCashflows getRiskFactors contract
-      cashFlowsTo = maybe cashFlows (\d -> filter (\cf -> cashCalculationDay cf <= d) cashFlows) (parseDate to)
-   in assertTestResults cashFlowsTo results identifier
+        cashFlows = genProjectedCashflows getRiskFactors ct
+        cashFlowsTo = maybe cashFlows (\d -> filter ((<= d) . cashCalculationDay) cashFlows) (parseDate to)
+     in assertTestResults cashFlowsTo results identifier
 
 testCasesFromFile :: [String] -> FilePath -> IO [TestCase]
 testCasesFromFile excludedTestCases fileName = do
@@ -169,7 +173,7 @@ instance FromJSON TestResult where
 
 data TestCase = TestCase
   { identifier     :: String,
-    terms          :: ContractTermsTC Double LocalTime,
+    terms          :: ContractTerms,
     to             :: String,
     dataObserved   :: Map String DataObserved,
     eventsObserved :: Value,
@@ -177,85 +181,3 @@ data TestCase = TestCase
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON)
-
-newtype ContractTermsTC a b = TC (ContractTermsPoly a b) deriving (Show, Generic)
-
-instance (Read a, Read b, FromJSON a, FromJSON b) => FromJSON (ContractTermsTC a b) where
-  parseJSON (Object v) =
-    let sc = ScheduleConfig <$> v .:? "calendar" <*> v .:? "endOfMonthConvention" <*> v .:? "businessDayConvention"
-        ct = ContractTermsPoly
-                <$> v .: "contractID"
-                <*> v .: "contractType"
-                <*> (v .: "contractStructure" <|> return [])
-                <*> v .: "contractRole"
-                <*> v .:? "settlementCurrency"
-                <*> v .:? "initialExchangeDate"
-                <*> v .:? "dayCountConvention"
-                <*> sc
-                <*> v .: "statusDate"
-                <*> v .:? "contractPerformance"
-                <*> v .:? "cycleOfFee"
-                <*> v .:? "cycleAnchorDateOfFee"
-                <*> v .:? "feeAccrued"
-                <*> v .:? "feeBasis"
-                <*> v .:? "feeRate"
-                <*> v .:? "cycleAnchorDateOfInterestPayment"
-                <*> v .:? "cycleOfInterestPayment"
-                <*> (v .:? "accruedInterest" <|> (fmap read <$> v .:? "accruedInterest"))
-                <*> v .:? "capitalizationEndDate"
-                <*> v .:? "cycleAnchorDateOfInterestCalculationBase"
-                <*> v .:? "cycleOfInterestCalculationBase"
-                <*> v .:? "interestCalculationBase"
-                <*> (v .:? "interestCalculationBaseAmount" <|> (fmap read <$> v .:? "interestCalculationBaseAmount"))
-                <*> (v .:? "nominalInterestRate" <|> (fmap read <$> v .:? "nominalInterestRate"))
-                <*> (v .:? "interestScalingMultiplier" <|> (fmap read <$> v .:? "interestScalingMultiplier"))
-                <*> v .:? "maturityDate"
-                <*> v .:? "amortizationDate"
-                <*> v .:? "exerciseDate"
-                <*> (v .:? "notionalPrincipal" <|> (fmap read <$> v .:? "notionalPrincipal"))
-                <*> (v .:? "premiumDiscountAtIED" <|> (fmap read <$> v .:? "premiumDiscountAtIED"))
-                <*> v .:? "cycleAnchorDateOfPrincipalRedemption"
-                <*> v .:? "cycleOfPrincipalRedemption"
-                <*> (v .:? "nextPrincipalRedemptionPayment" <|> (fmap read <$> v .:? "nextPrincipalRedemptionPayment"))
-                <*> v .:? "purchaseDate"
-                <*> (v .:? "priceAtPurchaseDate" <|> (fmap read <$> v .:? "priceAtPurchaseDate"))
-                <*> v .:? "terminationDate"
-                <*> (v .:? "priceAtTerminationDate" <|> (fmap read <$> v .:? "priceAtTerminationDate"))
-                <*> v .:? "scalingIndexAtStatusDate"
-                <*> v .:? "cycleAnchorDateOfScalingIndex"
-                <*> v .:? "cycleOfScalingIndex"
-                <*> v .:? "scalingEffect"
-                <*> (v .:? "scalingIndexAtContractDealDate" <|> (fmap read <$> v .:? "scalingIndexAtContractDealDate"))
-                <*> v .:? "marketObjectCodeOfScalingIndex"
-                <*> (v .:? "notionalScalingMultiplier" <|> (fmap read <$> v .:? "notionalScalingMultiplier"))
-                <*> v .:? "cycleOfOptionality"
-                <*> v .:? "cycleAnchorDateOfOptionality"
-                <*> v .:? "optionType"
-                <*> (v .:? "optionStrike1" <|> (fmap read <$> v .:? "optionStrike1"))
-                <*> v .:? "optionExerciseType"
-                <*> v .:? "settlementPeriod"
-                <*> v .:? "deliverySettlement"
-                <*> (v .:? "exerciseAmount" <|> (fmap read <$> v .:? "exerciseAmount"))
-                <*> (v .:? "futuresPrice" <|> (fmap read <$> v .:? "futuresPrice"))
-                <*> v .:? "penaltyRate"
-                <*> v .:? "penaltyType"
-                <*> v .:? "prepaymentEffect"
-                <*> v .:? "cycleOfRateReset"
-                <*> v .:? "cycleAnchorDateOfRateReset"
-                <*> (v .:? "nextResetRate" <|> (fmap read <$> v.:? "nextResetRate"))
-                <*> (v .:? "rateSpread" <|> (fmap read <$> v.:? "rateSpread"))
-                <*> (v .:? "rateMultiplier" <|> (fmap read <$> v.:? "rateMultiplier"))
-                <*> v .:? "periodFloor"
-                <*> v .:? "periodCap"
-                <*> v .:? "lifeCap"
-                <*> v .:? "lifeFloor"
-                <*> v .:? "marketObjectCodeOfRateReset"
-                <*> v .:? "cycleOfDividendPayment"
-                <*> v .:? "cycleAnchorDateOfDividendPayment"
-                <*> v .:? "nextDividendPaymentAmount"
-                <*> (fromMaybe False <$> (v .:? "enableSettlement"))
-                <*> v .:? "constraints"
-                <*> (fromMaybe 0 <$> (v .:? "collateralAmount"))
-    in TC <$> ct
-  parseJSON _ = mzero
-

@@ -18,10 +18,10 @@ import           Language.Marlowe.ACTUS.Definitions.Schedule      (ShiftedDay (.
 applyBDCWithCfg :: ScheduleConfig -> LocalTime -> ShiftedDay
 applyBDCWithCfg
   ScheduleConfig
-    { bdc = Just bdc',
-      calendar = Just calendar'
+    { businessDayConvention = Just bdc,
+      calendar = Just cal
     }
-  d = applyBDC bdc' calendar' d
+  d = applyBDC bdc cal d
 applyBDCWithCfg _ date = ShiftedDay {paymentDay = date, calculationDay = date}
 
 applyBDC :: BDC -> Calendar -> LocalTime -> ShiftedDay

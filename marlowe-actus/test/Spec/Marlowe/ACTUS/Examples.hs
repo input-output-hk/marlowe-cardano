@@ -67,8 +67,8 @@ example01 =
             scheduleConfig =
               ScheduleConfig
                 { calendar = Just CLDR_NC,
-                  eomc = Just EOMC_EOM,
-                  bdc = Just BDC_NULL
+                  endOfMonthConvention = Just EOMC_EOM,
+                  businessDayConvention = Just BDC_NULL
                 },
             -- Penalties
             penaltyRate = Nothing,
@@ -212,8 +212,8 @@ example02 =
             scheduleConfig =
               ScheduleConfig
                 { calendar = Just CLDR_NC,
-                  eomc = Just EOMC_EOM,
-                  bdc = Just BDC_NULL
+                  endOfMonthConvention = Just EOMC_EOM,
+                  businessDayConvention = Just BDC_NULL
                 },
             -- Penalties
             penaltyRate = Nothing,
@@ -357,8 +357,8 @@ example03 =
             scheduleConfig =
               ScheduleConfig
                 { calendar = Just CLDR_NC,
-                  eomc = Just EOMC_EOM,
-                  bdc = Just BDC_NULL
+                  endOfMonthConvention = Just EOMC_EOM,
+                  businessDayConvention = Just BDC_NULL
                 },
             -- Penalties
             penaltyRate = Nothing,
@@ -502,8 +502,8 @@ example04 =
             scheduleConfig =
               ScheduleConfig
                 { calendar = Just CLDR_NC,
-                  eomc = Just EOMC_EOM,
-                  bdc = Just BDC_NULL
+                  endOfMonthConvention = Just EOMC_EOM,
+                  businessDayConvention = Just BDC_NULL
                 },
             -- Penalties
             penaltyRate = Nothing,

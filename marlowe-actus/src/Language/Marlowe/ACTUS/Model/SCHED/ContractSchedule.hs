@@ -136,7 +136,7 @@ maturity
              in (lastEventCalcDay, nt / prnxt)
           | otherwise = (pranx, nt / prnxt - 1)
         m = lastEvent <+> (prcl {n = n prcl * round remainingPeriods :: Integer})
-     in eomc scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
+     in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity ContractTermsPoly {contractType = NAM, maturityDate = md@(Just _)} = md
 maturity
   ContractTermsPoly
@@ -165,7 +165,7 @@ maturity
         redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
         remainingPeriods = ceiling (nt / redemptionPerCycle) - 1
         m = lastEvent <+> prcl {n = n prcl * remainingPeriods}
-     in eomc scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
+     in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity
   ContractTermsPoly
     { contractType = ANN,

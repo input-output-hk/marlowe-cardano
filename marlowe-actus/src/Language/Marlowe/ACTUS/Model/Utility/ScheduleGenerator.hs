@@ -92,13 +92,13 @@ generateRecurrentScheduleWithCorrections
   cycle
   endDate
   ScheduleConfig
-    { eomc = Just eomc',
-      calendar = Just calendar',
-      bdc = Just bdc'
+    { endOfMonthConvention = Just eomc,
+      calendar = Just cal,
+      businessDayConvention = Just bdc
     } =
       let s = generateRecurrentSchedule cycle anchorDate endDate
           c = correction cycle anchorDate endDate s
-        in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc' calendar' . applyEOMC anchorDate cycle eomc') c
+        in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc cal . applyEOMC anchorDate cycle eomc) c
 generateRecurrentScheduleWithCorrections _ _ _ _ = []
 
 plusCycle :: LocalTime -> Cycle -> LocalTime

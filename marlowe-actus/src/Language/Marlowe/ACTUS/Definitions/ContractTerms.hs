@@ -8,16 +8,17 @@
 
 module Language.Marlowe.ACTUS.Definitions.ContractTerms where
 
-import           Control.Monad    (guard, mzero)
-import           Data.Aeson.TH    (deriveJSON)
-import           Data.Aeson.Types (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String), defaultOptions,
-                                   object, parseJSON, toJSON, (.:), (.=))
-import           Data.Maybe       (fromMaybe)
-import           Data.Text        as T hiding (reverse, takeWhile)
-import           Data.Text.Read   as T
-import           Data.Time        (Day, LocalTime)
-import           GHC.Generics     (Generic)
-import qualified Language.Marlowe as Marlowe (Observation, Value)
+import           Control.Applicative ((<|>))
+import           Control.Monad       (guard, mzero)
+import           Data.Aeson.TH       (deriveJSON)
+import           Data.Aeson.Types    (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String),
+                                      defaultOptions, object, parseJSON, toJSON, (.:), (.:?), (.=))
+import           Data.Maybe          (fromMaybe)
+import           Data.Text           as T hiding (reverse, takeWhile)
+import           Data.Text.Read      as T
+import           Data.Time           (Day, LocalTime)
+import           GHC.Generics        (Generic)
+import qualified Language.Marlowe    as Marlowe (Observation, Value)
 
 -- |ContractType
 data CT = PAM   -- ^ Principal at maturity
@@ -102,9 +103,9 @@ data Calendar = CLDR_MF -- ^ Monday to Friday
 $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''Calendar)
 
 data ScheduleConfig = ScheduleConfig
-  { calendar :: Maybe Calendar
-  , eomc     :: Maybe EOMC
-  , bdc      :: Maybe BDC
+  { calendar              :: Maybe Calendar
+  , endOfMonthConvention  :: Maybe EOMC
+  , businessDayConvention :: Maybe BDC
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -335,11 +336,11 @@ data ContractStructure = ContractStructure
   deriving stock (Show, Generic)
 
 instance ToJSON ContractStructure where
-  toJSON (ContractStructure m t r) =
+  toJSON ContractStructure{..} =
     object
-      [ "object" .= object [ "marketObjectCode" .= toJSON m]
-      , "referenceType" .= toJSON t
-      , "referenceRole" .= toJSON r
+      [ "object" .= object [ "marketObjectCode" .= toJSON marketObjectCode ]
+      , "referenceType" .= toJSON referenceType
+      , "referenceRole" .= toJSON referenceRole
       ]
 
 instance FromJSON ContractStructure where
@@ -365,102 +366,184 @@ data ContractTermsPoly a b = ContractTermsPoly
   , settlementCurrency                       :: Maybe String
 
   -- Calendar
-  , initialExchangeDate                      :: Maybe b         -- ^ Initial Exchange Date
-  , dayCountConvention                       :: Maybe DCC       -- ^ Day Count Convention
+  , initialExchangeDate                      :: Maybe b          -- ^ Initial Exchange Date
+  , dayCountConvention                       :: Maybe DCC        -- ^ Day Count Convention
   , scheduleConfig                           :: ScheduleConfig
 
   -- Contract Identification
-  , statusDate                               :: b               -- ^ Status Date
+  , statusDate                               :: b                -- ^ Status Date
 
   -- Counterparty
-  , contractPerformance                      :: Maybe PRF       -- ^ Contract Performance
+  , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
 
   -- Fees
-  , cycleOfFee                               :: Maybe Cycle     -- ^ Cycle Of Fee
-  , cycleAnchorDateOfFee                     :: Maybe b         -- ^ Cycle Anchor Date Of Fee
-  , feeAccrued                               :: Maybe a         -- ^ Fee Accrued
-  , feeBasis                                 :: Maybe FEB       -- ^ Fee Basis
-  , feeRate                                  :: Maybe a         -- ^ Fee Rate
+  , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
+  , cycleAnchorDateOfFee                     :: Maybe b          -- ^ Cycle Anchor Date Of Fee
+  , feeAccrued                               :: Maybe a          -- ^ Fee Accrued
+  , feeBasis                                 :: Maybe FEB        -- ^ Fee Basis
+  , feeRate                                  :: Maybe a          -- ^ Fee Rate
 
   -- Interest
-  , cycleAnchorDateOfInterestPayment         :: Maybe b         -- ^ Cycle Anchor Date Of Interest Payment
-  , cycleOfInterestPayment                   :: Maybe Cycle     -- ^ Cycle Of Interest Payment
-  , accruedInterest                          :: Maybe a         -- ^ Accrued Interest
-  , capitalizationEndDate                    :: Maybe b         -- ^ Capitalization End Date
-  , cycleAnchorDateOfInterestCalculationBase :: Maybe b         -- ^ Cycle Anchor Date Of Interest Calculation Base
-  , cycleOfInterestCalculationBase           :: Maybe Cycle     -- ^ Cycle Of Interest Calculation Base
-  , interestCalculationBase                  :: Maybe IPCB      -- ^ Interest Calculation Base
-  , interestCalculationBaseA                 :: Maybe a         -- ^ Interest Calculation Base Amount
-  , nominalInterestRate                      :: Maybe a         -- ^ Nominal Interest Rate
-  , interestScalingMultiplier                :: Maybe a         -- ^ Interest Scaling Multiplier
+  , cycleAnchorDateOfInterestPayment         :: Maybe b          -- ^ Cycle Anchor Date Of Interest Payment
+  , cycleOfInterestPayment                   :: Maybe Cycle      -- ^ Cycle Of Interest Payment
+  , accruedInterest                          :: Maybe a          -- ^ Accrued Interest
+  , capitalizationEndDate                    :: Maybe b          -- ^ Capitalization End Date
+  , cycleAnchorDateOfInterestCalculationBase :: Maybe b          -- ^ Cycle Anchor Date Of Interest Calculation Base
+  , cycleOfInterestCalculationBase           :: Maybe Cycle      -- ^ Cycle Of Interest Calculation Base
+  , interestCalculationBase                  :: Maybe IPCB       -- ^ Interest Calculation Base
+  , interestCalculationBaseA                 :: Maybe a          -- ^ Interest Calculation Base Amount
+  , nominalInterestRate                      :: Maybe a          -- ^ Nominal Interest Rate
+  , interestScalingMultiplier                :: Maybe a          -- ^ Interest Scaling Multiplier
 
   -- Dates
-  , maturityDate                             :: Maybe b         -- ^ Maturity Date
-  , amortizationDate                         :: Maybe b         -- ^ Amortization Date
-  , exerciseDate                             :: Maybe b         -- ^ Exercise Date
+  , maturityDate                             :: Maybe b          -- ^ Maturity Date
+  , amortizationDate                         :: Maybe b          -- ^ Amortization Date
+  , exerciseDate                             :: Maybe b          -- ^ Exercise Date
 
   -- Notional Principal
-  , notionalPrincipal                        :: Maybe a         -- ^ Notional Principal
-  , premiumDiscountAtIED                     :: Maybe a         -- ^ Premium Discount At IED
-  , cycleAnchorDateOfPrincipalRedemption     :: Maybe b         -- ^ Cycle Anchor Date Of Principal Redemption
-  , cycleOfPrincipalRedemption               :: Maybe Cycle     -- ^ Cycle Of Principal Redemption
-  , nextPrincipalRedemptionPayment           :: Maybe a         -- ^ Next Principal Redemption Payment
-  , purchaseDate                             :: Maybe b         -- ^ Purchase Date
-  , priceAtPurchaseDate                      :: Maybe a         -- ^ Price At Purchase Date
-  , terminationDate                          :: Maybe b         -- ^ Termination Date
-  , priceAtTerminationDate                   :: Maybe a         -- ^ Price At Termination Date
+  , notionalPrincipal                        :: Maybe a          -- ^ Notional Principal
+  , premiumDiscountAtIED                     :: Maybe a          -- ^ Premium Discount At IED
+  , cycleAnchorDateOfPrincipalRedemption     :: Maybe b          -- ^ Cycle Anchor Date Of Principal Redemption
+  , cycleOfPrincipalRedemption               :: Maybe Cycle      -- ^ Cycle Of Principal Redemption
+  , nextPrincipalRedemptionPayment           :: Maybe a          -- ^ Next Principal Redemption Payment
+  , purchaseDate                             :: Maybe b          -- ^ Purchase Date
+  , priceAtPurchaseDate                      :: Maybe a          -- ^ Price At Purchase Date
+  , terminationDate                          :: Maybe b          -- ^ Termination Date
+  , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
 
   -- Scaling Index
-  , scalingIndexAtStatusDate                 :: Maybe a         -- ^ Scaling Index At Status Date
-  , cycleAnchorDateOfScalingIndex            :: Maybe b         -- ^ Cycle Anchor Date Of Scaling Index
-  , cycleOfScalingIndex                      :: Maybe Cycle     -- ^ Cycle Of Scaling Index
-  , scalingEffect                            :: Maybe SCEF      -- ^ Scaling Effect
-  , scalingIndexAtContractDealDate           :: Maybe a         -- ^ Scaling Index At Contract Deal Date
-  , marketObjectCodeOfScalingIndex           :: Maybe String    -- ^ Market Object Code Of Scaling Index
-  , notionalScalingMultiplier                :: Maybe a         -- ^ Notional Scaling Multiplier
+  , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
+  , cycleAnchorDateOfScalingIndex            :: Maybe b          -- ^ Cycle Anchor Date Of Scaling Index
+  , cycleOfScalingIndex                      :: Maybe Cycle      -- ^ Cycle Of Scaling Index
+  , scalingEffect                            :: Maybe SCEF       -- ^ Scaling Effect
+  , scalingIndexAtContractDealDate           :: Maybe a          -- ^ Scaling Index At Contract Deal Date
+  , marketObjectCodeOfScalingIndex           :: Maybe String     -- ^ Market Object Code Of Scaling Index
+  , notionalScalingMultiplier                :: Maybe a          -- ^ Notional Scaling Multiplier
 
   -- Optionality
-  , cycleOfOptionality                       :: Maybe Cycle     -- ^ Cycle Of Optionality
-  , cycleAnchorDateOfOptionality             :: Maybe b         -- ^ Cycle Anchor Date Of Optionality
-  , optionType                               :: Maybe OPTP      -- ^ Option Type
-  , optionStrike1                            :: Maybe a         -- ^ Option Strike 1
-  , optionExerciseType                       :: Maybe OPXT      -- ^ Option Exercise Type
+  , cycleOfOptionality                       :: Maybe Cycle      -- ^ Cycle Of Optionality
+  , cycleAnchorDateOfOptionality             :: Maybe b          -- ^ Cycle Anchor Date Of Optionality
+  , optionType                               :: Maybe OPTP       -- ^ Option Type
+  , optionStrike1                            :: Maybe a          -- ^ Option Strike 1
+  , optionExerciseType                       :: Maybe OPXT       -- ^ Option Exercise Type
 
   -- Settlement
-  , settlementPeriod                         :: Maybe Cycle     -- ^ Settlement Period
-  , deliverySettlement                       :: Maybe DS        -- ^ Delivery Settlement
-  , exerciseAmount                           :: Maybe a         -- ^ Exercise Amount
-  , futuresPrice                             :: Maybe a         -- ^ Futures Price
+  , settlementPeriod                         :: Maybe Cycle      -- ^ Settlement Period
+  , deliverySettlement                       :: Maybe DS         -- ^ Delivery Settlement
+  , exerciseAmount                           :: Maybe a          -- ^ Exercise Amount
+  , futuresPrice                             :: Maybe a          -- ^ Futures Price
 
   -- Penalty
-  , penaltyRate                              :: Maybe a         -- ^ Penalty Rate
-  , penaltyType                              :: Maybe PYTP      -- ^ Penalty Type
-  , prepaymentEffect                         :: Maybe PPEF      -- ^ Prepayment Effect
+  , penaltyRate                              :: Maybe a          -- ^ Penalty Rate
+  , penaltyType                              :: Maybe PYTP       -- ^ Penalty Type
+  , prepaymentEffect                         :: Maybe PPEF       -- ^ Prepayment Effect
 
   -- Rate Reset
-  , cycleOfRateReset                         :: Maybe Cycle     -- ^ Cycle Of Rate Reset
-  , cycleAnchorDateOfRateReset               :: Maybe b         -- ^ Cycle Anchor Date Of Rate Reset
-  , nextResetRate                            :: Maybe a         -- ^ Next Reset Rate
-  , rateSpread                               :: Maybe a         -- ^ Rate Spread
-  , rateMultiplier                           :: Maybe a         -- ^ Rate Multiplier
-  , periodFloor                              :: Maybe a         -- ^ Period Floor
-  , periodCap                                :: Maybe a         -- ^ Period Cap
-  , lifeCap                                  :: Maybe a         -- ^ Life Cap
-  , lifeFloor                                :: Maybe a         -- ^ Life Floor
-  , marketObjectCodeOfRateReset              :: Maybe String    -- ^ Market Object Code Of Rate Reset
+  , cycleOfRateReset                         :: Maybe Cycle      -- ^ Cycle Of Rate Reset
+  , cycleAnchorDateOfRateReset               :: Maybe b          -- ^ Cycle Anchor Date Of Rate Reset
+  , nextResetRate                            :: Maybe a          -- ^ Next Reset Rate
+  , rateSpread                               :: Maybe a          -- ^ Rate Spread
+  , rateMultiplier                           :: Maybe a          -- ^ Rate Multiplier
+  , periodFloor                              :: Maybe a          -- ^ Period Floor
+  , periodCap                                :: Maybe a          -- ^ Period Cap
+  , lifeCap                                  :: Maybe a          -- ^ Life Cap
+  , lifeFloor                                :: Maybe a          -- ^ Life Floor
+  , marketObjectCodeOfRateReset              :: Maybe String     -- ^ Market Object Code Of Rate Reset
 
   -- Dividend
-  , cycleOfDividend                          :: Maybe Cycle     -- ^ Cycle Of Dividend
-  , cycleAnchorDateOfDividend                :: Maybe b         -- ^ Cycle Anchor Date Of Dividend
-  , nextDividendPaymentAmount                :: Maybe a         -- ^ Next Dividend Payment Amount
+  , cycleOfDividend                          :: Maybe Cycle      -- ^ Cycle Of Dividend
+  , cycleAnchorDateOfDividend                :: Maybe b          -- ^ Cycle Anchor Date Of Dividend
+  , nextDividendPaymentAmount                :: Maybe a          -- ^ Next Dividend Payment Amount
 
-  -- enable settlement currency
-  , enableSettlement                         :: Bool
-  , constraints                              :: Maybe Assertions
-  , collateralAmount                         :: Integer
+  , enableSettlement                         :: Bool             -- ^ Enable settlement currency
+  , constraints                              :: Maybe Assertions -- ^ Assertions
+  , collateralAmount                         :: Integer          -- ^ Collateral Amount
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (ToJSON)
+
+instance FromJSON ContractTerms where
+  parseJSON (Object v) =
+    ContractTermsPoly
+      <$> (v .:  "contractID" <|> v .: "contractId")
+      <*> v .:  "contractType"
+      <*> (v .: "contractStructure" <|> return [])
+      <*> v .:  "contractRole"
+      <*> v .:? "settlementCurrency"
+      <*> v .:? "initialExchangeDate"
+      <*> v .:? "dayCountConvention"
+      <*> ( ScheduleConfig
+              <$> v .:? "calendar"
+              <*> v .:? "endOfMonthConvention"
+              <*> v .:? "businessDayConvention"
+           <|> v .: "scheduleConfig")
+      <*> v .:  "statusDate"
+      <*> v .:? "contractPerformance"
+      <*> v .:? "cycleOfFee"
+      <*> v .:? "cycleAnchorDateOfFee"
+      <*> v .:? "feeAccrued"
+      <*> v .:? "feeBasis"
+      <*> v .:? "feeRate"
+      <*> v .:? "cycleAnchorDateOfInterestPayment"
+      <*> v .:? "cycleOfInterestPayment"
+      <*> v .!? "accruedInterest"
+      <*> v .:? "capitalizationEndDate"
+      <*> v .:? "cycleAnchorDateOfInterestCalculationBase"
+      <*> v .:? "cycleOfInterestCalculationBase"
+      <*> v .:? "interestCalculationBase"
+      <*> v .!? "interestCalculationBaseAmount"
+      <*> v .!? "nominalInterestRate"
+      <*> v .!? "interestScalingMultiplier"
+      <*> v .:? "maturityDate"
+      <*> v .:? "amortizationDate"
+      <*> v .:? "exerciseDate"
+      <*> v .!? "notionalPrincipal"
+      <*> v .!? "premiumDiscountAtIED"
+      <*> v .:? "cycleAnchorDateOfPrincipalRedemption"
+      <*> v .:? "cycleOfPrincipalRedemption"
+      <*> v .!? "nextPrincipalRedemptionPayment"
+      <*> v .:? "purchaseDate"
+      <*> v .!? "priceAtPurchaseDate"
+      <*> v .:? "terminationDate"
+      <*> v .!? "priceAtTerminationDate"
+      <*> v .:? "scalingIndexAtStatusDate"
+      <*> v .:? "cycleAnchorDateOfScalingIndex"
+      <*> v .:? "cycleOfScalingIndex"
+      <*> v .:? "scalingEffect"
+      <*> v .!? "scalingIndexAtContractDealDate"
+      <*> v .:? "marketObjectCodeOfScalingIndex"
+      <*> v .!? "notionalScalingMultiplier"
+      <*> v .:? "cycleOfOptionality"
+      <*> v .:? "cycleAnchorDateOfOptionality"
+      <*> v .:? "optionType"
+      <*> v .!? "optionStrike1"
+      <*> v .:? "optionExerciseType"
+      <*> v .:? "settlementPeriod"
+      <*> v .:? "deliverySettlement"
+      <*> v .!? "exerciseAmount"
+      <*> v .!? "futuresPrice"
+      <*> v .:? "penaltyRate"
+      <*> v .:? "penaltyType"
+      <*> v .:? "prepaymentEffect"
+      <*> v .:? "cycleOfRateReset"
+      <*> v .:? "cycleAnchorDateOfRateReset"
+      <*> v .!? "nextResetRate"
+      <*> v .!? "rateSpread"
+      <*> v .!? "rateMultiplier"
+      <*> v .:? "periodFloor"
+      <*> v .:? "periodCap"
+      <*> v .:? "lifeCap"
+      <*> v .:? "lifeFloor"
+      <*> v .:? "marketObjectCodeOfRateReset"
+      <*> v .:? "cycleOfDividendPayment"
+      <*> v .:? "cycleAnchorDateOfDividendPayment"
+      <*> v .:? "nextDividendPaymentAmount"
+      <*> (fromMaybe False <$> (v .:? "enableSettlement"))
+      <*> v .:? "constraints"
+      <*> (fromMaybe 0 <$> (v .:? "collateralAmount"))
+    where
+      (.!?) w s = w .:? s <|> (fmap read <$> w .:? s)
+  parseJSON _ = mzero
 
 type ContractTerms = ContractTermsPoly Double LocalTime
 type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation) (Marlowe.Value Marlowe.Observation)
@@ -468,10 +551,10 @@ type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues ct@ContractTermsPoly {..} =
   ct
-    { scheduleConfig                 =
+    { scheduleConfig =
         scheduleConfig
-          { eomc = applyDefault EOMC_SD (eomc scheduleConfig),
-            bdc = applyDefault BDC_NULL (bdc scheduleConfig),
+          { endOfMonthConvention = applyDefault EOMC_SD (endOfMonthConvention scheduleConfig),
+            businessDayConvention = applyDefault BDC_NULL (businessDayConvention scheduleConfig),
             calendar = applyDefault CLDR_NC (calendar scheduleConfig)
           },
       contractPerformance            = applyDefault PRF_PF contractPerformance,
