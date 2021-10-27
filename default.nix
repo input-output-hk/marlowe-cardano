@@ -63,8 +63,6 @@ rec {
     }) client server-setup-invoker marlowe-invoker generated-purescript generate-purescript start-backend;
   };
 
-  marlowe-web = pkgs.callPackage ./marlowe-website { inherit (marlowe.lib) npmlock2nix gitignore-nix; };
-
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
     inherit (marlowe.lib) gitignore-nix;
@@ -79,5 +77,5 @@ rec {
   inherit (sources) actus-tests;
 
   # Packages needed for the bitte deployment
-  bitte-packages = import ./bitte { inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard marlowe-web docs pkgs; };
+  bitte-packages = import ./bitte { inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs; };
 }
