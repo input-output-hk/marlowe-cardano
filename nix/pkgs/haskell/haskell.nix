@@ -43,8 +43,8 @@ let
     inherit checkMaterialization;
     sha256map = {
       "https://github.com/Quid2/flat.git"."ee59880f47ab835dbd73bea0847dab7869fc20d8" = "1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm";
-      "https://github.com/input-output-hk/purescript-bridge.git"."6a92d7853ea514be8b70bab5e72077bf5a510596" = "13j64vv116in3c204qsl1v0ajphac9fqvsjp7x3zzfr7n7g61drb";
-      "https://github.com/input-output-hk/servant-purescript.git"."a0c7c7e37c95564061247461aef4be505a853538" = "177na04jf6wf18kandzsah40lw3xswmmccpr3hkb8wb4hypcffnf";
+      "https://github.com/input-output-hk/purescript-bridge.git"."366fc70b341e2633f3ad0158a577d52e1cd2b138" = "18j0rysfccbmfpbw2d1rsjkpd5h84alpsn6b5rwzdxw9h5vqi9m5";
+      "https://github.com/input-output-hk/servant-purescript.git"."bc74e3e258764d62c836a0c53d61830ec0de2c79" = "06pfyd9flfwx90mvcqxls65bb6lfrpzxszg33lkbs7dkxf0fdpki";
       "https://github.com/input-output-hk/cardano-base"."592aa61d657ad5935a33bace1243abce3728b643" = "1bgq3a2wfdz24jqfwylcc6jjg5aji8dpy5gjkhpnmkkvgcr2rkyb";
       "https://github.com/input-output-hk/cardano-crypto.git"."07397f0e50da97eaa0575d93bee7ac4b2b2576ec" = "06sdx5ndn2g722jhpicmg96vsrys89fl81k8290b3lr6b1b0w4m3";
       "https://github.com/raduom/cardano-ledger-specs"."ef6bb99782d61316da55470620c7da994cc352b2" = "0z2818kwiwv7smz0ff8wr4zb405pymgd12zm32asas0mp5bqxkin";
