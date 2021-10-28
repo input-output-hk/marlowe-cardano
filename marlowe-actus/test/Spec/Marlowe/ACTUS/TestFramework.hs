@@ -95,15 +95,25 @@ tests n t = testGroup n [testCase (getField @"identifier" tc) (runTest tc) | tc 
         err a b = printf "Mismatch: actual %s, expected %s" (show a) (show b)
 
 testCasesFromFile :: [String] -> FilePath -> IO [TestCase]
-testCasesFromFile excluded f = B.readFile f >>= \l -> case eitherDecode l :: Either String (Map String TestCase) of
-    Right tst -> return $ filter (\TestCase {..} -> notElem identifier excluded) $ elems tst
-    Left err  -> assertFailure ("Cannot parse test specification from file: " ++ f ++ "\nError: " ++ err) :: IO [TestCase]
+testCasesFromFile excluded testfile =
+  load testfile
+    >>= either
+      msg
+      ( return
+          . filter (\TestCase {..} -> notElem identifier excluded)
+          . elems
+      )
+  where
+    load :: FilePath -> IO (Either String (Map String TestCase))
+    load f = eitherDecode <$> B.readFile f
+    msg err = putStr ("Cannot parse test specification from file: " ++ testfile ++ "\nError: " ++ err) >> return []
 
 data DataObserved = DataObserved
   { identifier :: String
   , values     :: [ValueObserved]
   }
   deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON DataObserved where
   parseJSON (Object v) =
@@ -117,6 +127,7 @@ data ValueObserved = ValueObserved
   , value     :: Double
   }
   deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON ValueObserved where
   parseJSON (Object v) =
@@ -136,6 +147,7 @@ data TestResult = TestResult
     accruedInterest     :: Maybe Double
   }
   deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 -- types are inconsistent in json files for NAM and ANN
 -- test cases in https://github.com/actusfrf/actus-tests/tree/master/tests
@@ -161,6 +173,7 @@ data TestCase = TestCase
     results        :: [TestResult]
   }
   deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 instance FromJSON TestCase where
   parseJSON (Object v) =

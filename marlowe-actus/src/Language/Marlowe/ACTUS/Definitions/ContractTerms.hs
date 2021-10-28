@@ -472,11 +472,12 @@ instance FromJSON ContractTerms where
       <*> v .:? "settlementCurrency"
       <*> v .:? "initialExchangeDate"
       <*> v .:? "dayCountConvention"
-      <*> ( ScheduleConfig
-              <$> v .:? "calendar"
-              <*> v .:? "endOfMonthConvention"
-              <*> v .:? "businessDayConvention"
-           <|> v .: "scheduleConfig")
+      <*> (v .: "scheduleConfig"
+           <|> ScheduleConfig
+               <$> v .:? "calendar"
+               <*> v .:? "endOfMonthConvention"
+               <*> v .:? "businessDayConvention"
+           )
       <*> v .:  "statusDate"
       <*> v .:? "contractPerformance"
       <*> v .:? "cycleOfFee"
@@ -584,4 +585,4 @@ setDefaultContractTermValues ct@ContractTermsPoly {..} =
     infinity = 1 / 0 :: Double
 
     applyDefault :: a -> Maybe a -> Maybe a
-    applyDefault v = Just . fromMaybe v
+    applyDefault v o = o <|> Just v
