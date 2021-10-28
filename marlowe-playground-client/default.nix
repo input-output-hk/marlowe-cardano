@@ -1,4 +1,4 @@
-{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, webCommonPlayground, buildPursPackage, buildNodeModules, filterNpm }:
+{ pkgs, gitignore-nix, haskell, webCommonMarlowe, webCommonPlayground, buildPursPackage, buildNodeModules, filterNpm }:
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
@@ -51,7 +51,6 @@ let
     '';
     name = "marlowe-playground-client";
     extraSrcs = {
-      web-common = webCommon.cleanSrc;
       web-common-marlowe = webCommonMarlowe;
       web-common-playground = webCommonPlayground;
       generated = generated-purescript;

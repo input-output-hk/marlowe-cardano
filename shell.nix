@@ -3,7 +3,7 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs webCommon;
+  inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) purty-pre-commit;

@@ -43,13 +43,11 @@ import           Language.Marlowe.ACTUS.Domain.Schedule       as SC (CashFlow)
 import           Language.Marlowe.Extended
 import           Language.Marlowe.SemanticsTypes              (State (..))
 import           Language.PureScript.Bridge                   (BridgePart, Language (Haskell), PSType, SumType,
-                                                               TypeInfo (TypeInfo), buildBridge, genericShow, mkSumType,
-                                                               psTypeParameters, typeModule, typeName, writePSTypesWith,
-                                                               (^==))
+                                                               TypeInfo (TypeInfo), argonaut, buildBridge, genericShow,
+                                                               mkSumType, psTypeParameters, typeModule, typeName,
+                                                               writePSTypes, (^==))
 import           Language.PureScript.Bridge.Builder           (BridgeData)
-import           Language.PureScript.Bridge.CodeGenSwitches   (ForeignOptions (ForeignOptions), defaultSwitch,
-                                                               genForeign)
-import           Language.PureScript.Bridge.PSTypes           (psNumber, psString)
+import           Language.PureScript.Bridge.PSTypes           (psString)
 import           Language.PureScript.Bridge.TypeParameters    (A, B)
 import           Marlowe.Contracts                            (contractForDifferences, contractForDifferencesWithOracle,
                                                                couponBondGuaranteed, escrow, escrowWithCollateral,
@@ -60,9 +58,9 @@ import qualified Marlowe.Symbolic.Types.Response              as MSRes
 import qualified PSGenerator.Common
 import qualified PlutusTx.AssocMap                            as Map
 import           Servant                                      ((:<|>), (:>))
-import           Servant.PureScript                           (HasBridge, Settings, _generateSubscriberAPI,
-                                                               apiModuleName, defaultBridge, defaultSettings,
-                                                               languageBridge, writeAPIModuleWithSettings)
+import           Servant.PureScript                           (HasBridge, Settings, apiModuleName, defaultBridge,
+                                                               defaultSettings, languageBridge,
+                                                               writeAPIModuleWithSettings)
 import qualified Swap
 import           System.Directory                             (createDirectoryIfMissing)
 import           System.FilePath                              ((</>))
@@ -114,9 +112,6 @@ transactionWarningBridge = do
     typeModule ^== "Language.Marlowe.Semantics"
     psTransactionWarning
 
-doubleBridge :: BridgePart
-doubleBridge = typeName ^== "Double" >> return psNumber
-
 dayBridge :: BridgePart
 dayBridge = typeName ^== "Day" >> return psString
 
@@ -130,7 +125,6 @@ myBridge =
     PSGenerator.Common.ledgerBridge <|>
     PSGenerator.Common.servantBridge <|>
     PSGenerator.Common.miscBridge <|>
-    doubleBridge <|>
     dayBridge <|>
     timeBridge <|>
     contractBridge <|>
@@ -152,49 +146,48 @@ myTypes =
     PSGenerator.Common.ledgerTypes <>
     PSGenerator.Common.walletTypes <>
     PSGenerator.Common.playgroundTypes <>
-    [ mkSumType (Proxy @SourceCode)
-    , mkSumType (Proxy @CompilationError)
-    , mkSumType (Proxy @InterpreterError)
-    , mkSumType (Proxy @Warning)
-    , mkSumType (Proxy @(InterpreterResult A))
-    , (genericShow <*> mkSumType) (Proxy @MSRes.Response)
-    , (genericShow <*> mkSumType) (Proxy @MSRes.Result)
-    , mkSumType (Proxy @MSReq.Request)
-    , mkSumType (Proxy :: Proxy (CT.ContractTermsPoly A B))
-    , mkSumType (Proxy @CT.PYTP)
-    , mkSumType (Proxy @CT.PPEF)
-    , mkSumType (Proxy @CT.SCEF)
-    , mkSumType (Proxy @CT.OPTP)
-    , mkSumType (Proxy @CT.OPXT)
-    , mkSumType (Proxy @CT.DS)
-    , mkSumType (Proxy @CT.Cycle)
-    , mkSumType (Proxy @CT.Period)
-    , mkSumType (Proxy @CT.Stub)
-    , mkSumType (Proxy @CT.ScheduleConfig)
-    , mkSumType (Proxy @CT.ContractStructure)
-    , mkSumType (Proxy @CT.ReferenceType)
-    , mkSumType (Proxy @CT.ReferenceRole)
-    , mkSumType (Proxy @CT.DCC)
-    , mkSumType (Proxy @CT.BDC)
-    , mkSumType (Proxy @CT.EOMC)
-    , mkSumType (Proxy @CT.PRF)
-    , mkSumType (Proxy @CT.FEB)
-    , mkSumType (Proxy @CT.IPCB)
-    , mkSumType (Proxy @CT.CR)
-    , mkSumType (Proxy @CT.CT)
-    , mkSumType (Proxy @CT.Calendar)
-    , mkSumType (Proxy @CT.Assertion)
-    , mkSumType (Proxy @CT.Assertions)
-    , mkSumType (Proxy @CT.AssertionContext)
-    , mkSumType (Proxy @SC.CashFlow)
-    , mkSumType (Proxy @BV.EventType)
-    , mkSumType (Proxy @Webghc.CompileRequest)
+    [ argonaut $ mkSumType @SourceCode
+    , argonaut $ mkSumType @CompilationError
+    , argonaut $ mkSumType @InterpreterError
+    , argonaut $ mkSumType @Warning
+    , argonaut $ mkSumType @(InterpreterResult A)
+    , genericShow . argonaut $ mkSumType @MSRes.Response
+    , genericShow . argonaut $ mkSumType @MSRes.Result
+    , argonaut $ mkSumType @MSReq.Request
+    , argonaut $ mkSumType @(CT.ContractTermsPoly A B)
+    , argonaut $ mkSumType @CT.PYTP
+    , argonaut $ mkSumType @CT.PPEF
+    , argonaut $ mkSumType @CT.SCEF
+    , argonaut $ mkSumType @CT.OPTP
+    , argonaut $ mkSumType @CT.OPXT
+    , argonaut $ mkSumType @CT.DS
+    , argonaut $ mkSumType @CT.Cycle
+    , argonaut $ mkSumType @CT.Period
+    , argonaut $ mkSumType @CT.Stub
+    , argonaut $ mkSumType @CT.ScheduleConfig
+    , argonaut $ mkSumType @CT.ContractStructure
+    , argonaut $ mkSumType @CT.ReferenceType
+    , argonaut $ mkSumType @CT.ReferenceRole
+    , argonaut $ mkSumType @CT.DCC
+    , argonaut $ mkSumType @CT.BDC
+    , argonaut $ mkSumType @CT.EOMC
+    , argonaut $ mkSumType @CT.PRF
+    , argonaut $ mkSumType @CT.FEB
+    , argonaut $ mkSumType @CT.IPCB
+    , argonaut $ mkSumType @CT.CR
+    , argonaut $ mkSumType @CT.CT
+    , argonaut $ mkSumType @CT.Calendar
+    , argonaut $ mkSumType @CT.Assertion
+    , argonaut $ mkSumType @CT.Assertions
+    , argonaut $ mkSumType @CT.AssertionContext
+    , argonaut $ mkSumType @Webghc.CompileRequest
+    , argonaut $ mkSumType @SC.CashFlow
+    , argonaut $ mkSumType @BV.EventType
     ]
 
 mySettings :: Settings
 mySettings =
-    (defaultSettings & set apiModuleName "Marlowe")
-        {_generateSubscriberAPI = False}
+    defaultSettings & set apiModuleName "Marlowe"
 
 multilineString :: BS.ByteString -> BS.ByteString -> BS.ByteString
 multilineString name value =
@@ -288,6 +281,6 @@ generate outputDir = do
         outputDir
         myBridgeProxy
         (Proxy @Web)
-    writePSTypesWith (defaultSwitch <> genForeign (ForeignOptions True)) outputDir (buildBridge myBridge) myTypes
+    writePSTypes outputDir (buildBridge myBridge) myTypes
     writeUsecases outputDir
     writePangramJson outputDir

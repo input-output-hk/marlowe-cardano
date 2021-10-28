@@ -13,10 +13,11 @@ You can edit this file as you like.
   , "filterable"
   , "formatters"
   , "halogen"
+  , "json-helpers"
   , "markdown"
   , "node-fs"
-  , "numerics"
   , "now"
+  , "numerics"
   , "prelude"
   , "psci-support"
   , "remotedata"
@@ -25,9 +26,10 @@ You can edit this file as you like.
   , "undefinable"
   , "unfoldable"
   , "uuid"
+  , "web-common"
   , "web-socket"
   ]
-, packages = ./packages.dhall
+, packages = ../packages.dhall
 , sources =
   [ "src/**/*.purs"
   , "test/**/*.purs"

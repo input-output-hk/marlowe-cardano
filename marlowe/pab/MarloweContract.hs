@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
 module MarloweContract(MarloweContract(..), handlers) where
 
@@ -45,7 +46,7 @@ instance HasDefinitions MarloweContract where
         MarloweFollower -> SomeBuiltin Marlowe.marloweFollowContract
 
 instance HasPSTypes MarloweContract where
-    psTypes p = [ (equal <*> (genericShow <*> mkSumType)) p ]
+    psTypes = [ equal . genericShow $ mkSumType @MarloweContract ]
 
 handlers :: SimulatorEffectHandlers (Builtin MarloweContract)
 handlers =

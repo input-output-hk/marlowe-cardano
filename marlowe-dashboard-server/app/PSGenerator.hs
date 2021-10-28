@@ -15,24 +15,23 @@ module PSGenerator
   )
 where
 
-import           API                                        (HTTPAPI)
-import           Control.Applicative                        ((<|>))
-import           Control.Lens                               (set, (&))
-import           Data.Monoid                                ()
-import           Data.Proxy                                 (Proxy (Proxy))
-import qualified Data.Text.Encoding                         as T ()
-import qualified Data.Text.IO                               as T ()
-import           Language.PureScript.Bridge                 (BridgePart, Language (Haskell), SumType, buildBridge,
-                                                             typeName, writePSTypesWith, (^==))
-import           Language.PureScript.Bridge.CodeGenSwitches (ForeignOptions (ForeignOptions), defaultSwitch, genForeign)
-import           Language.PureScript.Bridge.PSTypes         (psNumber, psString)
-import           Language.PureScript.Bridge.SumType         (equal, genericShow, mkSumType, order)
+import           API                                (HTTPAPI)
+import           Control.Applicative                ((<|>))
+import           Control.Lens                       (set, (&))
+import           Data.Monoid                        ()
+import           Data.Proxy                         (Proxy (Proxy))
+import qualified Data.Text.Encoding                 as T ()
+import qualified Data.Text.IO                       as T ()
+import           Language.PureScript.Bridge         (BridgePart, Language (Haskell), SumType, buildBridge, typeName,
+                                                     writePSTypes, (^==))
+import           Language.PureScript.Bridge.PSTypes (psNumber, psString)
+import           Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import qualified PSGenerator.Common
-import           Plutus.V1.Ledger.Api                       (PubKeyHash)
-import           Servant.PureScript                         (HasBridge, Settings, _generateSubscriberAPI, apiModuleName,
-                                                             defaultBridge, defaultSettings, languageBridge,
-                                                             writeAPIModuleWithSettings)
-import           WebSocket                                  (StreamToClient, StreamToServer)
+import           Plutus.V1.Ledger.Api               (PubKeyHash)
+import           Servant.PureScript                 (HasBridge, Settings, _generateSubscriberAPI, apiModuleName,
+                                                     argonaut, defaultBridge, defaultSettings, languageBridge,
+                                                     writeAPIModuleWithSettings)
+import           WebSocket                          (StreamToClient, StreamToServer)
 
 doubleBridge :: BridgePart
 doubleBridge = typeName ^== "Double" >> return psNumber
@@ -60,9 +59,9 @@ instance HasBridge MyBridge where
 
 myTypes :: [SumType 'Haskell]
 myTypes =
-  [ (equal <*> (genericShow <*> mkSumType)) (Proxy @StreamToServer),
-    (equal <*> (genericShow <*> mkSumType)) (Proxy @StreamToClient),
-    (order <*> (genericShow <*> mkSumType)) (Proxy @PubKeyHash)
+  [ equal . genericShow . argonaut $ mkSumType @StreamToServer,
+    equal . genericShow . argonaut $ mkSumType @StreamToClient,
+    order . genericShow . argonaut $ mkSumType @PubKeyHash
   ]
 
 mySettings :: Settings
@@ -78,4 +77,4 @@ generate outputDir = do
     outputDir
     myBridgeProxy
     (Proxy @HTTPAPI)
-  writePSTypesWith (defaultSwitch <> genForeign (ForeignOptions True)) outputDir (buildBridge myBridge) myTypes
+  writePSTypes outputDir (buildBridge myBridge) myTypes

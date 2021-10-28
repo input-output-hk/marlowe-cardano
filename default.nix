@@ -38,12 +38,11 @@ rec {
 
   # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
   # we switch to flakes.
-  webCommon = pkgs.callPackage (sources.plutus-apps + "/web-common") { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlutus = pkgs.callPackage (sources.plutus-apps + "/web-common-plutus") { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
   plutus-pab = pkgs.recurseIntoAttrs (pkgs.callPackage (sources.plutus-apps + "/plutus-pab-client") {
     inherit (marlowe.lib) buildPursPackage buildNodeModules gitignore-nix filterNpm;
-    inherit haskell webCommon webCommonPlutus;
+    inherit haskell webCommonPlutus;
   });
 
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (marlowe.lib) gitignore-nix; };
@@ -51,7 +50,7 @@ rec {
   marlowe-playground = pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
-      inherit haskell webCommon webCommonMarlowe webCommonPlayground;
+      inherit haskell webCommonMarlowe webCommonPlayground;
     }) client server generate-purescript start-backend;
   };
 
@@ -59,7 +58,7 @@ rec {
     inherit (pkgs.callPackage ./marlowe-dashboard-client {
       inherit haskell plutus-pab;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
-      inherit webCommon webCommonMarlowe;
+      inherit webCommonMarlowe;
     }) client server-setup-invoker marlowe-invoker generated-purescript generate-purescript start-backend;
   };
 

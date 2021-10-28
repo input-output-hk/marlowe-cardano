@@ -39,7 +39,6 @@ let
       '';
       name = "marlowe-dashboard-client";
       extraSrcs = {
-        web-common = webCommon.cleanSrc;
         web-common-marlowe = webCommonMarlowe;
         generated = generated-purescript;
       };
