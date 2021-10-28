@@ -113,6 +113,11 @@ useWalletBox state =
           , onClick_ GenerateWallet
           ]
           [ text "Generate demo wallet" ]
+      , button
+          [ classNames $ Css.primaryButton <> [ "w-full", "text-center" ]
+          , onClick_ ConnectNamiWallet
+          ]
+          [ text "Connect Nami wallet" ]
       , a
           [ classNames [ "block", "text-purple", "text-center", "font-semibold" ]
           , onClick_ $ OpenCard GenerateWalletHelpCard

@@ -57,7 +57,8 @@ derive instance eqCard :: Eq Card
 data Action
   = OpenCard Card
   | CloseCard
-  | GenerateWallet
+  | GenerateWallet -- FIXME: remove
+  | ConnectNamiWallet
   | WalletNicknameOrIdInputAction (InputField.Action WalletNicknameOrIdError)
   | OpenUseWalletCardWithDetails WalletDetails
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
@@ -70,6 +71,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenCard _) = Nothing
   toEvent CloseCard = Nothing
   toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
+  toEvent ConnectNamiWallet = Just $ defaultEvent "ConnectNamiWallet"
   toEvent (WalletNicknameOrIdInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (OpenUseWalletCardWithDetails _) = Nothing
   toEvent (WalletNicknameInputAction inputFieldAction) = toEvent inputFieldAction

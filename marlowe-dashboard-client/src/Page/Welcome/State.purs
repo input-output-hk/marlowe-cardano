@@ -21,7 +21,8 @@ import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, view, (^.))
 import Data.Map (filter, findMin, insert, lookup)
 import Data.UUID (emptyUUID) as UUID
-import Effect.Aff.Class (class MonadAff)
+import Debug.Trace (traceM)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_)
 import Halogen.Extra (mapSubmodule)
@@ -34,6 +35,8 @@ import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWa
 import Page.Welcome.Types (Action(..), Card(..), State, WalletNicknameOrIdError(..))
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 import Types (WebData)
+import Wallet.Nami (WalletConnectionError(..))
+import Wallet.Nami as Nami
 import Web.HTML (window)
 import Web.HTML.Location (reload)
 import Web.HTML.Window (location)
@@ -103,6 +106,13 @@ handleAction GenerateWallet = do
       handleAction $ WalletNicknameInputAction $ InputField.SetValidator $ walletNicknameError walletLibrary
       assign _walletId $ walletDetails ^. _companionAppId
       handleAction $ OpenCard UseNewWalletCard
+
+handleAction ConnectNamiWallet = do
+  mNamiAPI <- liftAff $ Nami.connect
+  case mNamiAPI of
+    Left WalletNotInjected -> addToast $ errorToast "The wallet extension is not available." $ Just "Please make sure you have the wallet installed as a browser extension."
+    Left AccessDenied -> addToast $ errorToast "Wallet access denied." $ Just "Please grant access to Marlowe Run in order to use the Nami wallet."
+    Right namiAPI -> traceM namiAPI
 
 {- [Workflow 2][0] Connect a wallet
 The app lets you connect a wallet using an "omnibox" input, into which you can either enter a
