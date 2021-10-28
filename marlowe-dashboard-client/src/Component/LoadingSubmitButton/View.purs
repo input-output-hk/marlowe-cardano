@@ -1,9 +1,11 @@
 module Component.LoadingSubmitButton.View (render) where
 
 import Prologue hiding (div)
+
 import Component.Icons as Icon
 import Component.LoadingSubmitButton.Types (Action(..), State, buttonRef)
 import Css as Css
+import Data.Compactable (compact)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, text, button)
 import Halogen.HTML.Events (onClick)
@@ -29,8 +31,8 @@ render { caption, styles, status, enabled } =
         , "focus:outline-none"
         ]
           <> withWidthAnimation
-      Success msg -> resultClasses <> [ "border-green", "text-green" ]
-      Failure msg -> resultClasses <> [ "border-red", "text-red" ]
+      Success _ -> resultClasses <> [ "border-green", "text-green" ]
+      Failure _ -> resultClasses <> [ "border-red", "text-red" ]
 
     content = case status of
       NotAsked -> [ text caption ]
@@ -41,12 +43,14 @@ render { caption, styles, status, enabled } =
     div
       [ classNames $ styles <> [ "flex", "justify-center" ] ]
       [ button
-          [ classNames classes
-          , ref buttonRef
-          , disabled $ not enabled
-          , onClick \_ -> case status of
-              NotAsked -> Just Submit
-              _ -> Nothing
-          ]
+          ( compact
+              [ Just $ classNames classes
+              , Just $ ref buttonRef
+              , Just $ disabled $ not enabled
+              , onClick <<< const <$> case status of
+                  NotAsked -> Just Submit
+                  _ -> Nothing
+              ]
+          )
           content
       ]

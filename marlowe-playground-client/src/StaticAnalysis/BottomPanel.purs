@@ -5,7 +5,7 @@ module StaticAnalysis.BottomPanel
   ) where
 
 import Prologue hiding (div)
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Lens ((^.))
 import Data.List (List, null, toUnfoldable)
 import Data.List as List
@@ -58,7 +58,7 @@ analysisResultPane ::
   forall action m state.
   MonadAff m =>
   MetaData ->
-  (IntegerTemplateType -> String -> BigInteger -> action) ->
+  (IntegerTemplateType -> String -> BigInt -> action) ->
   { analysisState :: AnalysisState | state } ->
   ComponentHTML action ChildSlots m
 analysisResultPane metadata actionGen state =

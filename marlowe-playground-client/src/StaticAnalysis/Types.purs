@@ -2,7 +2,7 @@ module StaticAnalysis.Types where
 
 import Prologue
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)

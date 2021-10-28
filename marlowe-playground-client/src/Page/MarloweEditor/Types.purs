@@ -6,9 +6,9 @@ import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.Array as Array
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', to, view)
 import Data.Lens.Record (prop)
 import Data.Symbol (SProxy(..))
@@ -36,7 +36,7 @@ data Action
   | InitMarloweProject String
   | SelectHole (Maybe String)
   | MetadataAction MetadataAction
-  | SetIntegerTemplateParam IntegerTemplateType String BigInteger
+  | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund

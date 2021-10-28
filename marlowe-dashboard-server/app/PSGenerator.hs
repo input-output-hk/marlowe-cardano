@@ -22,15 +22,14 @@ import           Data.Monoid                        ()
 import           Data.Proxy                         (Proxy (Proxy))
 import qualified Data.Text.Encoding                 as T ()
 import qualified Data.Text.IO                       as T ()
-import           Language.PureScript.Bridge         (BridgePart, Language (Haskell), SumType, buildBridge, typeName,
-                                                     writePSTypes, (^==))
+import           Language.PureScript.Bridge         (BridgePart, Language (Haskell), SumType, argonaut, buildBridge,
+                                                     typeName, writePSTypes, (^==))
 import           Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import           Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import qualified PSGenerator.Common
 import           Plutus.V1.Ledger.Api               (PubKeyHash)
-import           Servant.PureScript                 (HasBridge, Settings, _generateSubscriberAPI, apiModuleName,
-                                                     argonaut, defaultBridge, defaultSettings, languageBridge,
-                                                     writeAPIModuleWithSettings)
+import           Servant.PureScript                 (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings,
+                                                     languageBridge, writeAPIModuleWithSettings)
 import           WebSocket                          (StreamToClient, StreamToServer)
 
 doubleBridge :: BridgePart
@@ -65,10 +64,7 @@ myTypes =
   ]
 
 mySettings :: Settings
-mySettings =
-  (defaultSettings & set apiModuleName "Marlowe")
-    { _generateSubscriberAPI = False
-    }
+mySettings = defaultSettings & set apiModuleName "Marlowe"
 
 generate :: FilePath -> IO ()
 generate outputDir = do

@@ -1,22 +1,28 @@
 module Marlowe.Extended where
 
 import Prelude
-import Decode.Helpers ((<|>))
-import Data.BigInteger (BigInteger)
+
+import Control.Alt ((<|>))
+import Data.Argonaut.Decode (class DecodeJson)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode.Aeson as E
+import Data.BigInt.Argonaut (BigInt)
+import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Enum (class Enum)
+import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
+import Data.Show.Generic (genericShow)
 import Data.Traversable (foldMap, traverse)
-import Foreign (ForeignError(..), fail)
-import Foreign.Class (class Encode, class Decode, encode, decode)
-import Foreign.Index (hasProperty)
-import Marlowe.Semantics (decodeProp)
+import Marlowe.Semantics (decodeProp, exactValue)
 import Marlowe.Semantics as S
 import Marlowe.Template (class Fillable, class Template, Placeholders(..), TemplateContent, fillTemplate, getPlaceholderIds)
+import PlutusTx.Ratio (denominator, numerator, reduce)
 import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, pretty)
 
 data ContractType
@@ -31,6 +37,16 @@ data ContractType
 derive instance genericContractType :: Generic ContractType _
 
 derive instance eqContractType :: Eq ContractType
+
+derive instance ordContractType :: Ord ContractType
+
+instance enumContractType :: Enum ContractType where
+  succ = genericSucc
+  pred = genericPred
+
+instance boundedContractType :: Bounded ContractType where
+  bottom = genericBottom
+  top = genericTop
 
 instance showContractType :: Show ContractType where
   show v = genericShow v
@@ -83,11 +99,11 @@ initialsToContractType "CD" = ContractForDifferences
 
 initialsToContractType _ = Other
 
-instance encodeJsonContractType :: Encode ContractType where
-  encode = encode <<< contractTypeInitials
+instance encodeJsonContractType :: EncodeJson ContractType where
+  encodeJson = E.encode E.enum
 
-instance decodeJsonContractType :: Decode ContractType where
-  decode ct = decode ct >>= pure <<< initialsToContractType
+instance decodeJsonContractType :: DecodeJson ContractType where
+  decodeJson = D.decode D.enum
 
 class ToCore a b where
   toCore :: a -> Maybe b
@@ -104,7 +120,7 @@ instance sChoiceIdHasChoices :: HasChoices S.ChoiceId where
 
 data Timeout
   = SlotParam String
-  | Slot BigInteger
+  | Slot BigInt
 
 derive instance genericTimeout :: Generic Timeout _
 
@@ -112,17 +128,15 @@ derive instance eqTimeout :: Eq Timeout
 
 derive instance ordTimeout :: Ord Timeout
 
-instance encodeJsonTimeout :: Encode Timeout where
-  encode (SlotParam str) = encode { slot_param: str }
-  encode (Slot val) = encode val
+instance encodeJsonTimeout :: EncodeJson Timeout where
+  encodeJson (SlotParam str) = encodeJson { slot_param: str }
+  encodeJson (Slot val) = encodeJson val
 
-instance decodeJsonTimeout :: Decode Timeout where
-  decode a =
-    ( SlotParam <$> decodeProp "slot_param" a
-        <|> ( \_ ->
-              Slot <$> decode a
-          )
-    )
+instance decodeJsonTimeout :: DecodeJson Timeout where
+  decodeJson =
+    D.decode
+      $ (SlotParam <$> decodeProp "slot_param")
+      <|> (Slot <$> D.value)
 
 instance showTimeout :: Show Timeout where
   show (Slot x) = show x
@@ -144,7 +158,7 @@ instance toCoreTimeout :: ToCore Timeout S.Slot where
 
 instance templateTimeout :: Template Timeout Placeholders where
   getPlaceholderIds (SlotParam slotParamId) = Placeholders (unwrap (mempty :: Placeholders)) { slotPlaceholderIds = Set.singleton slotParamId }
-  getPlaceholderIds (Slot x) = mempty
+  getPlaceholderIds (Slot _) = mempty
 
 instance fillableTimeout :: Fillable Timeout TemplateContent where
   fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $ Map.lookup slotParamId (unwrap placeholders).slotContent
@@ -152,7 +166,7 @@ instance fillableTimeout :: Fillable Timeout TemplateContent where
 
 data Value
   = AvailableMoney S.AccountId S.Token
-  | Constant BigInteger
+  | Constant BigInt
   | ConstantParam String
   | NegValue Value
   | AddValue Value Value
@@ -172,120 +186,84 @@ derive instance eqValue :: Eq Value
 
 derive instance ordValue :: Ord Value
 
-instance encodeJsonValue :: Encode Value where
-  encode (AvailableMoney accId tok) =
-    encode
+instance encodeJsonValue :: EncodeJson Value where
+  encodeJson (AvailableMoney accId tok) =
+    encodeJson
       { amount_of_token: tok
       , in_account: accId
       }
-  encode (Constant val) = encode val
-  encode (ConstantParam str) = encode { constant_param: str }
-  encode (NegValue val) =
-    encode
+  encodeJson (Constant val) = encodeJson val
+  encodeJson (ConstantParam str) = encodeJson { constant_param: str }
+  encodeJson (NegValue val) =
+    encodeJson
       { negate: val
       }
-  encode (AddValue lhs rhs) =
-    encode
+  encodeJson (AddValue lhs rhs) =
+    encodeJson
       { add: lhs
       , and: rhs
       }
-  encode (SubValue lhs rhs) =
-    encode
+  encodeJson (SubValue lhs rhs) =
+    encodeJson
       { value: lhs
       , minus: rhs
       }
-  encode (MulValue lhs rhs) =
-    encode
+  encodeJson (MulValue lhs rhs) =
+    encodeJson
       { multiply: lhs
       , times: rhs
       }
-  encode (DivValue lhs rhs) =
-    encode
+  encodeJson (DivValue lhs rhs) =
+    encodeJson
       { divide: lhs
       , by: rhs
       }
-  encode (Scale (S.Rational num den) val) =
-    encode
+  encodeJson (Scale r val) =
+    encodeJson
       { multiply: val
-      , times: num
-      , divide_by: den
+      , times: numerator r
+      , divide_by: denominator r
       }
-  encode (ChoiceValue choiceId) =
-    encode
+  encodeJson (ChoiceValue choiceId) =
+    encodeJson
       { value_of_choice: choiceId
       }
-  encode SlotIntervalStart = encode "slot_interval_start"
-  encode SlotIntervalEnd = encode "slot_interval_end"
-  encode (UseValue valueId) =
-    encode
+  encodeJson SlotIntervalStart = encodeJson "slot_interval_start"
+  encodeJson SlotIntervalEnd = encodeJson "slot_interval_end"
+  encodeJson (UseValue valueId) =
+    encodeJson
       { use_value: valueId
       }
-  encode (Cond cond thenValue elseValue) =
-    encode
+  encodeJson (Cond cond thenValue elseValue) =
+    encodeJson
       { if: cond
       , then: thenValue
       , else: elseValue
       }
 
-instance decodeJsonValue :: Decode Value where
-  decode a =
-    ( ifM ((\x -> x == "slot_interval_start") <$> decode a)
-        (pure SlotIntervalStart)
-        (fail (ForeignError "Not \"slot_interval_start\" string"))
-    )
-      <|> ( \_ ->
-            ifM ((\x -> x == "slot_interval_end") <$> decode a)
-              (pure SlotIntervalEnd)
-              (fail (ForeignError "Not \"slot_interval_end\" string"))
+instance decodeJsonValue :: DecodeJson Value where
+  decodeJson j =
+    flip D.decode j
+      $ (SlotIntervalStart <$ exactValue "slot_interval_start")
+      <|> (SlotIntervalStart <$ exactValue "slot_interval_end")
+      <|> ( AvailableMoney
+            <$> decodeProp "in_account"
+            <*> decodeProp "amount_of_token"
         )
-      <|> ( \_ ->
-            AvailableMoney <$> decodeProp "in_account" a
-              <*> decodeProp "amount_of_token" a
+      <|> (Constant <$> D.value)
+      <|> (ConstantParam <$> decodeProp "constant_param")
+      <|> (NegValue <$> decodeProp "negate")
+      <|> (AddValue <$> decodeProp "add" <*> decodeProp "and")
+      <|> (SubValue <$> decodeProp "value" <*> decodeProp "minus")
+      <|> (DivValue <$> decodeProp "divide" <*> decodeProp "by")
+      <|> ( Scale
+            <$> (reduce <$> decodeProp "times" <*> decodeProp "divide_by")
+            <*> decodeProp "multiply"
         )
-      <|> ( \_ ->
-            Constant <$> decode a
-        )
-      <|> ( \_ -> ConstantParam <$> decodeProp "constant_param" a
-        )
-      <|> ( \_ ->
-            NegValue <$> decodeProp "negate" a
-        )
-      <|> ( \_ ->
-            AddValue <$> decodeProp "add" a
-              <*> decodeProp "and" a
-        )
-      <|> ( \_ ->
-            SubValue <$> decodeProp "value" a
-              <*> decodeProp "minus" a
-        )
-      <|> ( \_ ->
-            DivValue <$> decodeProp "divide" a
-              <*> decodeProp "by" a
-        )
-      <|> ( \_ ->
-            if (hasProperty "divide_by" a) then
-              ( Scale
-                  <$> ( S.Rational <$> decodeProp "times" a
-                        <*> decodeProp "divide_by" a
-                    )
-                  <*> decodeProp "multiply" a
-              )
-            else
-              ( MulValue <$> decodeProp "multiply" a
-                  <*> decodeProp "times" a
-              )
-        )
-      <|> ( \_ ->
-            ChoiceValue <$> decodeProp "value_of_choice" a
-        )
-      <|> ( \_ ->
-            UseValue <$> decodeProp "use_value" a
-        )
-      <|> ( \_ ->
-            Cond <$> decodeProp "if" a
-              <*> decodeProp "then" a
-              <*> decodeProp "else" a
-        )
+      <|> (MulValue <$> decodeProp "multiply" <*> decodeProp "times")
+      <|> (ChoiceValue <$> decodeProp "value_of_choice")
+      <|> (UseValue <$> decodeProp "use_value")
+      <|> (Cond <$> decodeProp "if" <*> decodeProp "then" <*> decodeProp "else")
 
 instance showValue :: Show Value where
   show v = genericShow v
@@ -350,7 +328,7 @@ instance fillableValue :: Fillable Value TemplateContent where
     go = fillTemplate placeholders
 
 instance valueHasChoices :: HasChoices Value where
-  getChoiceNames (AvailableMoney accId _) = Set.empty
+  getChoiceNames (AvailableMoney _ _) = Set.empty
   getChoiceNames (Constant _) = Set.empty
   getChoiceNames (ConstantParam _) = Set.empty
   getChoiceNames (NegValue val) = getChoiceNames val
@@ -384,98 +362,67 @@ derive instance eqObservation :: Eq Observation
 
 derive instance ordObservation :: Ord Observation
 
-instance encodeJsonObservation :: Encode Observation where
-  encode (AndObs lhs rhs) =
-    encode
+instance encodeJsonObservation :: EncodeJson Observation where
+  encodeJson (AndObs lhs rhs) =
+    encodeJson
       { both: lhs
       , and: rhs
       }
-  encode (OrObs lhs rhs) =
-    encode
+  encodeJson (OrObs lhs rhs) =
+    encodeJson
       { either: lhs
       , or: rhs
       }
-  encode (NotObs obs) =
-    encode
+  encodeJson (NotObs obs) =
+    encodeJson
       { not: obs
       }
-  encode (ChoseSomething choiceId) =
-    encode
+  encodeJson (ChoseSomething choiceId) =
+    encodeJson
       { chose_something_for: choiceId
       }
-  encode (ValueGE lhs rhs) =
-    encode
+  encodeJson (ValueGE lhs rhs) =
+    encodeJson
       { value: lhs
       , ge_than: rhs
       }
-  encode (ValueGT lhs rhs) =
-    encode
+  encodeJson (ValueGT lhs rhs) =
+    encodeJson
       { value: lhs
       , gt: rhs
       }
-  encode (ValueLT lhs rhs) =
-    encode
+  encodeJson (ValueLT lhs rhs) =
+    encodeJson
       { value: lhs
       , lt: rhs
       }
-  encode (ValueLE lhs rhs) =
-    encode
+  encodeJson (ValueLE lhs rhs) =
+    encodeJson
       { value: lhs
       , le_than: rhs
       }
-  encode (ValueEQ lhs rhs) =
-    encode
+  encodeJson (ValueEQ lhs rhs) =
+    encodeJson
       { value: lhs
       , equal_to: rhs
       }
-  encode TrueObs = encode true
-  encode FalseObs = encode false
+  encodeJson TrueObs = encodeJson true
+  encodeJson FalseObs = encodeJson false
 
-instance decodeJsonObservation :: Decode Observation where
-  decode a =
-    ( ifM (decode a)
-        (pure TrueObs)
-        (fail (ForeignError "Not a boolean"))
-    )
-      <|> ( \_ ->
-            ifM (not <$> decode a)
-              (pure FalseObs)
-              (fail (ForeignError "Not a boolean"))
-        )
-      <|> ( \_ ->
-            AndObs <$> decodeProp "both" a
-              <*> decodeProp "and" a
-        )
-      <|> ( \_ ->
-            OrObs <$> decodeProp "either" a
-              <*> decodeProp "or" a
-        )
-      <|> ( \_ ->
-            NotObs <$> decodeProp "not" a
-        )
-      <|> ( \_ ->
-            ChoseSomething <$> decodeProp "chose_something_for" a
-        )
-      <|> ( \_ ->
-            ValueGE <$> decodeProp "value" a
-              <*> decodeProp "ge_than" a
-        )
-      <|> ( \_ ->
-            ValueGT <$> decodeProp "value" a
-              <*> decodeProp "gt" a
-        )
-      <|> ( \_ ->
-            ValueLT <$> decodeProp "value" a
-              <*> decodeProp "lt" a
-        )
-      <|> ( \_ ->
-            ValueLE <$> decodeProp "value" a
-              <*> decodeProp "le_than" a
-        )
-      <|> ( \_ ->
-            ValueEQ <$> decodeProp "value" a
-              <*> decodeProp "equal_to" a
-        )
+instance decodeJsonObservation :: DecodeJson Observation where
+  decodeJson j =
+    flip D.decode j
+      $ (TrueObs <$ exactValue true)
+      <|> (FalseObs <$ exactValue false)
+      <|> (AndObs <$> decodeProp "both" <*> decodeProp "and")
+      <|> (OrObs <$> decodeProp "either" <*> decodeProp "or")
+      <|> (NotObs <$> decodeProp "not")
+      <|> (ChoseSomething <$> decodeProp "chose_something_for")
+      <|> (ValueGE <$> decodeProp "value" <*> decodeProp "ge_than")
+      <|> (ValueGT <$> decodeProp "value" <*> decodeProp "gt")
+      <|> (ValueLT <$> decodeProp "value" <*> decodeProp "lt")
+      <|> (ValueLE <$> decodeProp "value" <*> decodeProp "le_than")
+      <|> (ValueEQ <$> decodeProp "value" <*> decodeProp "equal_to")
 
 instance showObservation :: Show Observation where
   show o = genericShow o
@@ -554,38 +501,35 @@ derive instance eqAction :: Eq Action
 
 derive instance ordAction :: Ord Action
 
-instance encodeJsonAction :: Encode Action where
-  encode (Deposit accountId party token value) =
-    encode
+instance encodeJsonAction :: EncodeJson Action where
+  encodeJson (Deposit accountId party token value) =
+    encodeJson
       { party: party
       , deposits: value
       , of_token: token
       , into_account: accountId
       }
-  encode (Choice choiceId boundArray) =
-    encode
+  encodeJson (Choice choiceId boundArray) =
+    encodeJson
       { choose_between: boundArray
       , for_choice: choiceId
       }
-  encode (Notify obs) =
-    encode
+  encodeJson (Notify obs) =
+    encodeJson
       { notify_if: obs
       }
 
-instance decodeJsonAction :: Decode Action where
-  decode a =
-    ( Deposit <$> decodeProp "into_account" a
-        <*> decodeProp "party" a
-        <*> decodeProp "of_token" a
-        <*> decodeProp "deposits" a
-    )
-      <|> ( \_ ->
-            Choice <$> decodeProp "for_choice" a
-              <*> decodeProp "choose_between" a
+instance decodeJsonAction :: DecodeJson Action where
+  decodeJson =
+    D.decode
+      $ ( Deposit
+            <$> decodeProp "into_account"
+            <*> decodeProp "party"
+            <*> decodeProp "of_token"
+            <*> decodeProp "deposits"
         )
-      <|> ( \_ ->
-            Notify <$> decodeProp "notify_if" a
-        )
+      <|> (Choice <$> decodeProp "for_choice" <*> decodeProp "choose_between")
+      <|> (Notify <$> decodeProp "notify_if")
 
 instance showAction :: Show Action where
   show (Choice cid bounds) = "(Choice " <> show cid <> " " <> show bounds <> ")"
@@ -604,8 +548,8 @@ instance toCoreAction :: ToCore Action S.Action where
   toCore (Notify obs) = S.Notify <$> toCore obs
 
 instance templateAction :: Template Action Placeholders where
-  getPlaceholderIds (Deposit accId party tok val) = getPlaceholderIds val
-  getPlaceholderIds (Choice choId bounds) = mempty
+  getPlaceholderIds (Deposit _ _ _ val) = getPlaceholderIds val
+  getPlaceholderIds (Choice _ _) = mempty
   getPlaceholderIds (Notify obs) = getPlaceholderIds obs
 
 instance fillableAction :: Fillable Action TemplateContent where
@@ -632,16 +576,15 @@ derive instance eqPayee :: Eq Payee
 
 derive instance ordPayee :: Ord Payee
 
-instance encodeJsonPayee :: Encode Payee where
-  encode (Account accountId) = encode { account: accountId }
-  encode (Party party) = encode { party: party }
+instance encodeJsonPayee :: EncodeJson Payee where
+  encodeJson (Account accountId) = encodeJson { account: accountId }
+  encodeJson (Party party) = encodeJson { party: party }
 
-instance decodeJsonPayee :: Decode Payee where
-  decode a =
-    (Account <$> decodeProp "account" a)
-      <|> ( \_ ->
-            Party <$> decodeProp "party" a
-        )
+instance decodeJsonPayee :: DecodeJson Payee where
+  decodeJson =
+    D.decode
+      $ (Account <$> decodeProp "")
+      <|> (Party <$> decodeProp "party")
 
 instance showPayee :: Show Payee where
   show v = genericShow v
@@ -666,18 +609,15 @@ derive instance eqCase :: Eq Case
 
 derive instance ordCase :: Ord Case
 
-instance encodeJsonCase :: Encode Case where
-  encode (Case action cont) =
-    encode
+instance encodeJsonCase :: EncodeJson Case where
+  encodeJson (Case action cont) =
+    encodeJson
       { case: action
       , then: cont
       }
 
-instance decodeJsonCase :: Decode Case where
-  decode a =
-    ( Case <$> decodeProp "case" a
-        <*> decodeProp "then" a
-    )
+instance decodeJsonCase :: DecodeJson Case where
+  decodeJson j = flip D.decode j $ Case <$> decodeProp "case" <*> decodeProp "then"
 
 instance showCase :: Show Case where
   show (Case action contract) = "Case " <> show action <> " " <> show contract
@@ -718,73 +658,66 @@ derive instance eqContract :: Eq Contract
 
 derive instance ordContract :: Ord Contract
 
-instance encodeJsonContract :: Encode Contract where
-  encode Close = encode "close"
-  encode (Pay accId payee token val cont) =
-    encode
+instance encodeJsonContract :: EncodeJson Contract where
+  encodeJson Close = encodeJson "close"
+  encodeJson (Pay accId payee token val cont) =
+    encodeJson
       { pay: val
       , token: token
       , from_account: accId
       , to: payee
       , then: cont
       }
-  encode (If obs contTrue contFalse) =
-    encode
+  encodeJson (If obs contTrue contFalse) =
+    encodeJson
       { if: obs
       , then: contTrue
       , else: contFalse
       }
-  encode (When cases timeout cont) =
-    encode
+  encodeJson (When cases timeout cont) =
+    encodeJson
       { when: cases
       , timeout: timeout
       , timeout_continuation: cont
       }
-  encode (Let valId val cont) =
-    encode
+  encodeJson (Let valId val cont) =
+    encodeJson
       { let: valId
       , be: val
       , then: cont
       }
-  encode (Assert obs cont) =
-    encode
+  encodeJson (Assert obs cont) =
+    encodeJson
       { assert: obs
       , then: cont
       }
 
-instance decodeJsonContract :: Decode Contract where
-  decode a =
-    ( ( ifM ((\x -> x == "close") <$> decode a)
-          (pure Close)
-          (fail (ForeignError "Not \"close\" string"))
-      )
-        <|> ( \_ ->
-              Pay <$> decodeProp "from_account" a
-                <*> decodeProp "to" a
-                <*> decodeProp "token" a
-                <*> decodeProp "pay" a
-                <*> decodeProp "then" a
-          )
-        <|> ( \_ ->
-              If <$> decodeProp "if" a
-                <*> decodeProp "then" a
-                <*> decodeProp "else" a
-          )
-        <|> ( \_ ->
-              When <$> decodeProp "when" a
-                <*> decodeProp "timeout" a
-                <*> decodeProp "timeout_continuation" a
-          )
-        <|> ( \_ ->
-              Let <$> decodeProp "let" a
-                <*> decodeProp "be" a
-                <*> decodeProp "then" a
-          )
-        <|> ( \_ ->
-              Assert <$> decodeProp "assert" a
-                <*> decodeProp "then" a
-          )
-    )
+instance decodeJsonContract :: DecodeJson Contract where
+  decodeJson j =
+    flip D.decode j
+      $ (Close <$ exactValue "close")
+      <|> ( Pay
+            <$> decodeProp "from_account"
+            <*> decodeProp "to"
+            <*> decodeProp "token"
+            <*> decodeProp "pay"
+            <*> decodeProp "then"
+        )
+      <|> (If <$> decodeProp "if" <*> decodeProp "then" <*> decodeProp "else")
+      <|> ( When
+            <$> decodeProp "when"
+            <*> decodeProp "timeout"
+            <*> decodeProp "timeout_continuation"
+        )
+      <|> ( Let
+            <$> decodeProp "let"
+            <*> decodeProp "be"
+            <*> decodeProp "then"
+        )
+      <|> ( Assert
+            <$> decodeProp "assert"
+            <*> decodeProp "then"
+        )
 
 instance showContract :: Show Contract where
   show v = genericShow v
@@ -806,10 +739,10 @@ instance toCoreContract :: ToCore Contract S.Contract where
 
 instance templateContract :: Template Contract Placeholders where
   getPlaceholderIds Close = mempty
-  getPlaceholderIds (Pay accId payee tok val cont) = getPlaceholderIds val <> getPlaceholderIds cont
+  getPlaceholderIds (Pay _ _ _ val cont) = getPlaceholderIds val <> getPlaceholderIds cont
   getPlaceholderIds (If obs cont1 cont2) = getPlaceholderIds obs <> getPlaceholderIds cont1 <> getPlaceholderIds cont2
   getPlaceholderIds (When cases tim cont) = foldMap getPlaceholderIds cases <> getPlaceholderIds tim <> getPlaceholderIds cont
-  getPlaceholderIds (Let varId val cont) = getPlaceholderIds val <> getPlaceholderIds cont
+  getPlaceholderIds (Let _ val cont) = getPlaceholderIds val <> getPlaceholderIds cont
   getPlaceholderIds (Assert obs cont) = getPlaceholderIds obs <> getPlaceholderIds cont
 
 instance fillableContract :: Fillable Contract TemplateContent where
@@ -826,7 +759,7 @@ instance fillableContract :: Fillable Contract TemplateContent where
 
 instance contractHasChoices :: HasChoices Contract where
   getChoiceNames Close = Set.empty
-  getChoiceNames (Pay accId payee _ val cont) = getChoiceNames val <> getChoiceNames cont
+  getChoiceNames (Pay _ _ _ val cont) = getChoiceNames val <> getChoiceNames cont
   getChoiceNames (If obs cont1 cont2) = getChoiceNames obs <> getChoiceNames cont1 <> getChoiceNames cont2
   getChoiceNames (When cases _ cont) = getChoiceNames cases <> getChoiceNames cont
   getChoiceNames (Let _ val cont) = getChoiceNames val <> getChoiceNames cont

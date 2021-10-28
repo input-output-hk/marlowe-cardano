@@ -1,6 +1,7 @@
 module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
+
 import Bridge (toFront)
 import Capability.Marlowe (class ManageMarlowe, getFollowerApps, subscribeToPlutusApp, subscribeToWallet, unsubscribeFromPlutusApp, unsubscribeFromWallet)
 import Capability.MarloweStorage (class ManageMarloweStorage, getContractNicknames, getWalletLibrary)
@@ -8,10 +9,10 @@ import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.PlutusApps.MarloweApp.Types (LastResult(..))
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
-import Component.Contacts.Lenses (_assets, _companionAppId, _marloweAppId, _previousCompanionAppState, _wallet, _walletInfo)
-import Control.Monad.Except (runExcept)
+import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _previousCompanionAppState, _wallet, _walletInfo)
 import Control.Monad.Reader (class MonadAsk)
 import Control.Monad.Reader.Class (ask)
+import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Foldable (for_)
 import Data.Lens (assign, set, use, view)
 import Data.Lens.Extra (peruse)
@@ -22,10 +23,8 @@ import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
 import Env (DataProvider(..), Env)
-import Foreign.Generic (decodeJSON)
 import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_, subscribe)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
-import Halogen.HTML (HTML)
 import Halogen.LocalStorage (localStorageEvents)
 import Humanize (getTimezoneOffset)
 import MainFrame.Lenses (_currentSlot, _dashboardState, _subState, _toast, _tzOffset, _webSocketStatus, _welcomeState)
@@ -72,7 +71,7 @@ mkMainFrame ::
   ManageMarlowe m =>
   Toast m =>
   MonadClipboard m =>
-  Component HTML Query Action Msg m
+  Component Query Action Msg m
 mkMainFrame =
   mkComponent
     { initialState: const initialState
@@ -129,15 +128,16 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       SlotChange slot -> do
         assign _currentSlot $ toFront slot
         handleAction $ DashboardAction Dashboard.AdvanceTimedoutSteps
+      -- TODO We need to rewrite this to query the funds periodically instead, see https://github.com/input-output-hk/plutus-apps/pull/50
       -- update the wallet funds (if the change is to the current wallet)
       -- note: we should only ever be notified of changes to the current wallet, since we subscribe to
       -- this update when we pick it up, and unsubscribe when we put it down - but we check here
       -- anyway in case
-      WalletFundsChange wallet value -> do
-        mCurrentWallet <- peruse (_dashboardState <<< _walletDetails <<< _walletInfo <<< _wallet)
-        for_ mCurrentWallet \currentWallet -> do
-          when (currentWallet == toFront wallet)
-            $ assign (_dashboardState <<< _walletDetails <<< _assets) (toFront value)
+      -- WalletFundsChange wallet value -> do
+      --   mCurrentWallet <- peruse (_dashboardState <<< _walletDetails <<< _walletInfo <<< _wallet)
+      --   for_ mCurrentWallet \currentWallet -> do
+      --     when (currentWallet == toFront wallet)
+      --       $ assign (_dashboardState <<< _walletDetails <<< _assets) (toFront value)
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract
       -- instances, including its wallet companion contract
@@ -160,7 +160,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
               marloweAppId = view (_walletDetails <<< _marloweAppId) dashboardState
             in
               -- if this is the wallet's WalletCompanion app...
-              if (plutusAppId == walletCompanionAppId) then case runExcept $ decodeJSON $ unwrap rawJson of
+              if (plutusAppId == walletCompanionAppId) then case parseDecodeJson $ unwrap rawJson of
                 Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
                 Right companionAppState -> do
                   -- this check shouldn't be necessary, but at the moment we are getting too many update notifications
@@ -178,7 +178,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                     handleAction $ DashboardAction $ Dashboard.UpdateFollowerApps companionAppState
               else do
                 -- if this is the wallet's MarloweApp...
-                if (plutusAppId == marloweAppId) then case runExcept $ decodeJSON $ unwrap rawJson of
+                if (plutusAppId == marloweAppId) then case parseDecodeJson $ unwrap rawJson of
                   Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
                   Right lastResult -> do
                     -- The MarloweApp capability keeps track of the requests it makes to see if this
@@ -192,11 +192,11 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                     case mLastResult of
                       Just (OK _ "create") -> addToast $ successToast "Contract initialised."
                       Just (OK _ "apply-inputs") -> addToast $ successToast "Contract update applied."
-                      Just (SomeError _ "create" marloweError) -> addToast $ errorToast "Failed to initialise contract." Nothing
-                      Just (SomeError _ "apply-inputs" marloweError) -> addToast $ errorToast "Failed to update contract." Nothing
+                      Just (SomeError _ "create" _) -> addToast $ errorToast "Failed to initialise contract." Nothing
+                      Just (SomeError _ "apply-inputs" _) -> addToast $ errorToast "Failed to update contract." Nothing
                       _ -> pure unit
                 -- otherwise this should be one of the wallet's `MarloweFollower` apps
-                else case runExcept $ decodeJSON $ unwrap rawJson of
+                else case parseDecodeJson $ unwrap rawJson of
                   Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
                   Right contractHistory -> do
                     {- [Workflow 2][7] Connect a wallet -}

@@ -9,7 +9,7 @@ import Component.Popper (Placement(..))
 import Data.Array (concatMap, intercalate, length, reverse, sortWith)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Enum (fromEnum)
 import Data.Lens (has, only, previewOn, to, view, (^.))
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -272,9 +272,9 @@ integerTemplateParameters ::
   forall a action m.
   MonadAff m =>
   MetaData ->
-  (IntegerTemplateType -> String -> BigInteger -> action) ->
+  (IntegerTemplateType -> String -> BigInt -> action) ->
   TemplateFormDisplayInfo a action ->
-  Map String BigInteger ->
+  Map String BigInt ->
   Array (ComponentHTML action ChildSlots m)
 integerTemplateParameters metadata actionGen { lookupFormat, lookupDefinition, typeName, title, prefix, orderedMetadataSet } content =
   let
@@ -529,7 +529,7 @@ inputItem metadata _ person (ChoiceInput choiceId@(ChoiceId choiceName choiceOwn
 
   boundError (Bound from to) = showPretty from <> " and " <> showPretty to
 
-  showPretty :: BigInteger -> String
+  showPretty :: BigInt -> String
   showPretty = showPrettyChoice (getChoiceFormat metadata choiceName)
 
 inputItem _ _ person NotifyInput =
@@ -573,13 +573,13 @@ inputItem _ state person (MoveToSlot slot) =
 
   boundsError = "The slot must be more than the current slot " <> (state ^. (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _slot <<< to show))
 
-marloweCurrencyInput :: forall p action. Array String -> (BigInteger -> action) -> String -> Int -> BigInteger -> HTML p action
+marloweCurrencyInput :: forall p action. Array String -> (BigInt -> action) -> String -> Int -> BigInt -> HTML p action
 marloweCurrencyInput classes f currencyLabel numDecimals current = currencyInput classes current currencyLabel numDecimals (Just <<< f <<< fromMaybe zero)
 
-marloweActionInput :: forall p action. Array String -> (BigInteger -> action) -> BigInteger -> HTML p action
+marloweActionInput :: forall p action. Array String -> (BigInt -> action) -> BigInt -> HTML p action
 marloweActionInput classes f current = marloweCurrencyInput classes f "" 0 current
 
-renderDeposit :: forall p. MetaData -> AccountId -> Party -> Token -> BigInteger -> HTML p Action
+renderDeposit :: forall p. MetaData -> AccountId -> Party -> Token -> BigInt -> HTML p Action
 renderDeposit metadata accountOwner party tok money =
   span [ classes [ ClassName "break-word-span" ] ]
     [ text "Deposit "
@@ -659,7 +659,7 @@ inputToLine _ (SlotInterval start end) INotify =
 paymentToLines :: forall p a. MetaData -> SlotInterval -> Payment -> Array (HTML p a)
 paymentToLines metadata slotInterval (Payment accountId payee money) = join $ unfoldAssets money (paymentToLine metadata slotInterval accountId payee)
 
-paymentToLine :: forall p a. MetaData -> SlotInterval -> AccountId -> Payee -> Token -> BigInteger -> Array (HTML p a)
+paymentToLine :: forall p a. MetaData -> SlotInterval -> AccountId -> Payee -> Token -> BigInt -> Array (HTML p a)
 paymentToLine metadata (SlotInterval start end) accountId payee token money =
   [ span_
       [ text "The contract pays "
@@ -681,7 +681,7 @@ showSlotRange start end =
   else
     (show start) <> " - " <> (show end)
 
-unfoldAssets :: forall a. Assets -> (Token -> BigInteger -> a) -> Array a
+unfoldAssets :: forall a. Assets -> (Token -> BigInt -> a) -> Array a
 unfoldAssets (Assets mon) f =
   concatMap
     ( \(Tuple currencySymbol tokenMap) ->

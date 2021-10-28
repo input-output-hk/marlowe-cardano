@@ -1,7 +1,7 @@
 module Marlowe.DeinstantiatorTests where
 
 import Prologue
-import Data.BigInteger (fromInt)
+import Data.BigInt.Argonaut (fromInt)
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.Tuple.Nested ((/\))

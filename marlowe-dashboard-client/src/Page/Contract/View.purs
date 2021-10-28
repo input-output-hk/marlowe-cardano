@@ -4,6 +4,7 @@ module Page.Contract.View
   ) where
 
 import Prologue hiding (div)
+
 import Component.Contacts.State (adaToken)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
@@ -15,13 +16,15 @@ import Component.Tooltip.Types (ReferenceId(..))
 import Component.Transfer.Types (Termini(..))
 import Component.Transfer.View (transfer)
 import Css as Css
-import Data.Array (foldr, fromFoldable, intercalate, length)
+import Data.Array (fromFoldable, intercalate, length)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.BigInteger (BigInteger, fromString)
+import Data.BigInt.Argonaut (BigInt, fromString)
+import Data.Compactable (compact)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
+import Data.List.NonEmpty (foldr)
 import Data.Map (intersectionWith, keys, lookup, toUnfoldable) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.Set as Set
@@ -36,7 +39,7 @@ import Halogen.Extra (lifeCycleSlot, LifecycleEvent(..))
 import Halogen.HTML (HTML, a, button, div, div_, h3, h4, h4_, input, p, p_, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
-import Halogen.HTML.Properties (IProp, InputType(..), enabled, id_, placeholder, ref, type_, value)
+import Halogen.HTML.Properties (IProp, InputType(..), enabled, id, placeholder, ref, type_, value)
 import Humanize (contractIcon, formatDate, formatTime, humanizeDuration, humanizeOffset, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.Lenses (_contract, _mNextTimeout, _semanticState)
@@ -167,8 +170,8 @@ contractScreen viewInput state =
     div
       [ classNames [ "flex", "flex-col", "items-center", "pt-3", "h-full", "w-screen", "relative" ] ]
       [ lifeCycleSlot "carousel-lifecycle" case _ of
-          OnInit -> Just CarouselOpened
-          OnFinalize -> Just CarouselClosed
+          OnInit -> CarouselOpened
+          OnFinalize -> CarouselClosed
       -- NOTE: The card is allowed to grow in an h-full container and the navigation buttons are absolute positioned
       --       because the cards x-scrolling can't coexist with a visible y-overflow. To avoid clipping the cards shadow
       --       we need the cards container to grow (hence the flex-grow).
@@ -211,17 +214,16 @@ statusIndicatorMessage (Started state) =
   in
     if contract == Close then
       "Contract completed"
+    else if Set.isEmpty (Set.intersection userParties participantsWithAction) then
+      "Waiting for "
+        <> if Set.size participantsWithAction > 1 then
+            "multiple participants"
+          else case Set.findMin participantsWithAction of
+            Just (Role roleName) -> roleName
+            Just (PK pubKey) -> take 4 pubKey
+            Nothing -> " a timeout"
     else
-      if Set.isEmpty (Set.intersection userParties participantsWithAction) then
-        "Waiting for "
-          <> if Set.size participantsWithAction > 1 then
-              "multiple participants"
-            else case Set.findMin participantsWithAction of
-              Just (Role roleName) -> roleName
-              Just (PK pubKey) -> take 4 pubKey
-              Nothing -> " a timeout"
-      else
-        "Your turn…"
+      "Your turn…"
 
 cardNavigationButtons :: forall m. MonadAff m => State -> ComponentHTML Action ChildSlots m
 cardNavigationButtons (Starting _) = div [] []
@@ -232,8 +234,6 @@ cardNavigationButtons (Started state) =
 
     selectedStep = state ^. _selectedStep
 
-    contractIsClosed = isContractClosed (Started state)
-
     hasLeftStep = selectedStep > 0
 
     hasRightStep = selectedStep < lastStep
@@ -242,22 +242,26 @@ cardNavigationButtons (Started state) =
 
     leftButton =
       [ button
-          [ classNames $ buttonClasses hasLeftStep
-          , onClick \_ -> if hasLeftStep then (Just $ MoveToStep $ selectedStep - 1) else Nothing
-          , enabled hasLeftStep
-          , id_ "previousStepButton"
-          ]
+          ( compact
+              [ Just $ classNames $ buttonClasses hasLeftStep
+              , if hasLeftStep then Just $ onClick $ const $ MoveToStep $ selectedStep - 1 else Nothing
+              , Just $ enabled hasLeftStep
+              , Just $ id "previousStepButton"
+              ]
+          )
           [ icon_ Icon.ArrowLeft ]
       , tooltip "Previous step" (RefId "previousStepButton") Bottom
       ]
 
     rightButton =
       [ button
-          [ classNames $ buttonClasses hasRightStep
-          , onClick \_ -> if hasRightStep then (Just $ MoveToStep $ selectedStep + 1) else Nothing
-          , enabled hasRightStep
-          , id_ "nextStepButton"
-          ]
+          ( compact
+              [ Just $ classNames $ buttonClasses hasRightStep
+              , if hasRightStep then Just $ onClick $ const $ MoveToStep $ selectedStep + 1 else Nothing
+              , Just $ enabled hasRightStep
+              , Just $ id "nextStepButton"
+              ]
+          )
           [ icon_ Icon.ArrowRight ]
       , tooltip "Next step" (RefId "nextStepButton") Bottom
       ]
@@ -456,7 +460,7 @@ renderPartyPastActions { tzOffset } state { inputs, interval, party } =
       ]
 
 renderTimeout :: forall p a. Input -> StartedState -> Int -> TimeoutInfo -> HTML p a
-renderTimeout { tzOffset } state stepNumber timeoutInfo =
+renderTimeout { tzOffset } state _ timeoutInfo =
   let
     mTimeoutDateTime = slotToDateTime timeoutInfo.slot
 
@@ -530,8 +534,6 @@ renderCurrentStep viewInput state =
     pendingTransaction = state ^. _pendingTransaction
 
     contractIsClosed = isContractClosed (Started state)
-
-    mNextTimeout = state ^. (_executionState <<< _mNextTimeout)
   in
     [ tabBar state.tab $ Just (SelectTab stepNumber)
     , cardBody []
@@ -582,7 +584,7 @@ startingStepActions =
   placeholderContent = div [ classNames [ "bg-gray", "rounded-full", "w-full", "h-12" ] ] []
 
 currentStepActions :: forall m. MonadAff m => Int -> StartedState -> ComponentHTML Action ChildSlots m
-currentStepActions stepNumber state = case isContractClosed (Started state), isJust state.pendingTransaction, state.namedActions of
+currentStepActions _ state = case isContractClosed (Started state), isJust state.pendingTransaction, state.namedActions of
   true, _, _ ->
     div [ classNames [ "h-full", "flex", "flex-col", "justify-center", "items-center" ] ]
       [ icon Icon.TaskAlt [ "text-green", "text-big-icon" ]
@@ -710,12 +712,11 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
     toDescription =
       if Set.member intoAccountOf userParties then
         "your"
-      else
-        if by == intoAccountOf then
-          "their"
-        else case intoAccountOf of
-          PK publicKey -> publicKey <> " public key"
-          Role roleName -> roleName <> "'s"
+      else if by == intoAccountOf then
+        "their"
+      else case intoAccountOf of
+        PK publicKey -> publicKey <> " public key"
+        Role roleName -> roleName <> "'s"
 
     description = fromDescription <> " a deposit into " <> toDescription <> " account"
   in
@@ -846,7 +847,7 @@ renderBalances stepNumber state stepBalance =
     -- NOTE: This transformation assumes that the balances at start and at end (if available) are
     --       expanded to all participants, because intersectionWith only produces values for duplicated
     --       keys. If a key is in one of the map but not the other, it won't be shown.
-    accounts' :: Array (Tuple (Tuple Party Token) { atStart :: BigInteger, atEnd :: Maybe BigInteger })
+    accounts' :: Array (Tuple (Tuple Party Token) { atStart :: BigInt, atEnd :: Maybe BigInt })
     accounts' =
       Map.toUnfoldable
         $ maybe'

@@ -11,7 +11,7 @@ import Component.Projects.Types (Lang(..))
 import Component.Projects.Types as Projects
 import Component.Tooltip.Types (ReferenceId)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has, (^.))
 import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype)

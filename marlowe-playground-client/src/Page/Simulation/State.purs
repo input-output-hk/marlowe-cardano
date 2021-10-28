@@ -12,7 +12,7 @@ import Control.Monad.Except (ExceptT, lift, runExcept, runExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, asks, runReaderT)
 import Data.Array as Array
-import Data.BigInteger (BigInteger, fromString)
+import Data.BigInt.Argonaut (BigInt, fromString)
 import Data.Decimal (truncated, fromNumber)
 import Data.Decimal as Decimal
 import Data.Either (hush)
@@ -205,7 +205,7 @@ getPrice ::
   Boolean ->
   String ->
   String ->
-  HalogenM State Action ChildSlots Void m BigInteger
+  HalogenM State Action ChildSlots Void m BigInt
 getPrice inverse exchange pair = do
   settings <- asks _.ajaxSettings
   result <- runAjax (runReaderT (Server.getApiOracleByExchangeByPair exchange pair) settings)

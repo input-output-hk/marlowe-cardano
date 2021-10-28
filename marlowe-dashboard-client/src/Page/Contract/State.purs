@@ -14,6 +14,7 @@ module Page.Contract.State
   ) where
 
 import Prologue
+
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
 import Capability.MarloweStorage (class ManageMarloweStorage, insertIntoContractNicknames)
@@ -52,9 +53,8 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (DataProvider(..), Env)
-import Halogen (HalogenM, getHTMLElementRef, liftEffect, put, query, subscribe, tell, unsubscribe)
-import Halogen.Query.EventSource (EventSource)
-import Halogen.Query.EventSource as EventSource
+import Halogen (HalogenM, getHTMLElementRef, liftEffect, put, subscribe, tell, unsubscribe)
+import Halogen.Subscription as HS
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
@@ -66,7 +66,7 @@ import Marlowe.Execution.Types (NamedAction(..), PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (MetaData, emptyContractMetadata)
 import Marlowe.HasParties (getParties)
-import Marlowe.Semantics (Contract, MarloweData, MarloweParams, Party(..), Slot, SlotInterval(..), TransactionInput(..), _accounts, _marloweContract, _marloweState, _minSlot, _rolesCurrency)
+import Marlowe.Semantics (Contract, MarloweData, MarloweParams, Party(..), Slot, TransactionInput, _accounts, _marloweContract, _marloweState, _minSlot, _rolesCurrency)
 import Marlowe.Semantics (Input(..)) as Semantic
 import Marlowe.Semantics as Semantics
 import Page.Contract.Lenses (_Started, _executionState, _expandPayments, _namedActions, _participants, _pendingTransaction, _previousSteps, _selectedStep, _userParties)
@@ -86,7 +86,7 @@ dummyState =
   Starting
     { nickname: mempty
     , metadata: emptyContractMetadata
-    , participants: mempty
+    , participants: Map.empty
     }
 
 -- this is for making a placeholder state for the user who created the contract, used for displaying
@@ -245,7 +245,7 @@ handleAction { followerAppId } (SetNickname nickname) =
     insertIntoContractNicknames followerAppId nickname
 
 {- [Workflow 5][0] Move a contract forward -}
-handleAction input@{ currentSlot, walletDetails } (ConfirmAction namedAction) =
+handleAction { currentSlot, walletDetails } (ConfirmAction namedAction) =
   withStarted \started@{ executionState, marloweParams } -> do
     let
       contractInput = toInput namedAction
@@ -254,11 +254,11 @@ handleAction input@{ currentSlot, walletDetails } (ConfirmAction namedAction) =
     ajaxApplyInputs <- applyTransactionInput walletDetails marloweParams txInput
     case ajaxApplyInputs of
       Left ajaxError -> do
-        void $ query _submitButtonSlot "action-confirm-button" $ tell $ SubmitResult (Milliseconds 600.0) (Left "Error")
+        void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult (Milliseconds 600.0) (Left "Error")
         addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
       Right _ -> do
         put $ Started started { pendingTransaction = Just txInput }
-        void $ query _submitButtonSlot "action-confirm-button" $ tell $ SubmitResult (Milliseconds 600.0) (Right "")
+        void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult (Milliseconds 600.0) (Right "")
         addToast $ successToast "Transaction submitted, awating confirmation."
         { dataProvider } <- ask
         when (dataProvider == LocalStorage) (callMainFrameAction $ MainFrame.DashboardAction $ Dashboard.UpdateFromStorage)
@@ -279,7 +279,7 @@ handleAction _ (SelectTab stepNumber tab) =
 
 handleAction _ (ToggleExpandPayment stepNumber) = modifying (_Started <<< _previousSteps <<< ix stepNumber <<< _expandPayments) not
 
-handleAction _ (AskConfirmation action) = pure unit -- Managed by Dashboard.State
+handleAction _ (AskConfirmation _) = pure unit -- Managed by Dashboard.State
 
 handleAction _ CancelConfirmation = pure unit -- Managed by Dashboard.State
 
@@ -357,8 +357,6 @@ toInput _ = Nothing
 transactionsToStep :: StartedState -> Execution.PastState -> PreviousStep
 transactionsToStep state { balancesAtStart, balancesAtEnd, txInput, resultingPayments, action } =
   let
-    TransactionInput { interval: SlotInterval minSlot maxSlot, inputs } = txInput
-
     participants = state ^. _participants
 
     -- TODO: When we add support for multiple tokens we should extract the possible tokens from the
@@ -537,13 +535,9 @@ scrollStepToCenter behavior stepNumber parentElement = do
 
 -- This EventSource is responsible for selecting the step closest to the center of the scroll container
 -- when scrolling
-selectCenteredStepEventSource ::
-  forall m.
-  MonadAff m =>
-  HTMLElement ->
-  EventSource m Action
+selectCenteredStepEventSource :: HTMLElement -> HS.Emitter Action
 selectCenteredStepEventSource scrollContainer =
-  EventSource.effectEventSource \emitter -> do
+  HS.makeEmitter \push -> do
     -- Calculate where the left coordinate of the center step should be
     -- (relative to the visible part of the scroll container)
     parentWidth <- _.width <$> getBoundingClientRect scrollContainer
@@ -576,7 +570,7 @@ selectCenteredStepEventSource scrollContainer =
       throttledOnScroll
         50.0
         (HTMLElement.toElement scrollContainer)
-        (calculateClosestStep >>> \index -> EventSource.emit emitter $ SelectStep index)
+        (push <<< SelectStep <<< calculateClosestStep)
     -- * The second one is responsible for snapping the card to the center position. Initially this was
     --   handled by CSS using the `scroll-snap-type` and `scroll-snap-align` properties. But I found a bug
     --   in chrome when those properties were used at the same time of a `smooth` scrollTo, so I ended up
@@ -591,11 +585,10 @@ selectCenteredStepEventSource scrollContainer =
             let
               index = calculateClosestStep scrollPos
             scrollStepToCenter Smooth index scrollContainer
-            EventSource.emit emitter $ SelectStep index
-    pure $ EventSource.Finalizer
-      $ do
-          unsubscribeSelectEventListener
-          unsubscribeSnapEventListener
+            push $ SelectStep index
+    pure do
+      unsubscribeSelectEventListener
+      unsubscribeSnapEventListener
 
 paymentToTransfer :: StartedState -> Semantics.Payment -> Transfer
 paymentToTransfer state (Semantics.Payment sender payee money) = case payee of

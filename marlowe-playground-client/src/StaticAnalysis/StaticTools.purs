@@ -13,7 +13,7 @@ import Analytics (class IsEvent, analyticsTracking)
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Reader (class MonadAsk, asks, runReaderT)
 import Data.Bifunctor (lmap)
-import Data.BigInteger (BigInteger, toNumber)
+import Data.BigInt.Argonaut (BigInt, toNumber)
 import Data.Lens (assign, use)
 import Data.List (List(..), foldl, fromFoldable, length, snoc, toUnfoldable)
 import Data.List.Types (NonEmptyList(..))
@@ -192,7 +192,7 @@ getNextSubproblem f (Cons (zipper /\ contract) rest) Nil =
 getNextSubproblem f acc newChildren = getNextSubproblem f (acc <> newChildren) Nil
 
 data StaticAnalysisEvent
-  = StaticAnalysisTimingEvent BigInteger
+  = StaticAnalysisTimingEvent BigInt
 
 instance isEventStaticAnalysisEvent :: IsEvent StaticAnalysisEvent where
   toEvent (StaticAnalysisTimingEvent durationMs) =

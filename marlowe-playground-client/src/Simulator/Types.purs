@@ -1,7 +1,7 @@
 module Simulator.Types where
 
 import Prologue
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
@@ -14,7 +14,7 @@ import Marlowe.Semantics as S
 import Monaco (IMarker)
 
 data ActionInputId
-  = DepositInputId AccountId Party Token BigInteger
+  = DepositInputId AccountId Party Token BigInt
   | ChoiceInputId ChoiceId
   | NotifyInputId
   | MoveToSlotId
@@ -34,7 +34,7 @@ instance decodeActionInputId :: Decode ActionInputId where
 -- | On the front end we need Actions however we also need to keep track of the current
 -- | choice that has been set for Choices
 data ActionInput
-  = DepositInput AccountId Party Token BigInteger
+  = DepositInput AccountId Party Token BigInt
   | ChoiceInput ChoiceId (Array Bound) ChosenNum
   | NotifyInput
   | MoveToSlot Slot

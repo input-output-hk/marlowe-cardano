@@ -6,7 +6,7 @@ module Examples.PureScript.ContractForDifferences
   ) where
 
 import Prelude
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested ((/\))
@@ -21,7 +21,7 @@ contractTemplate = { metaData, extendedContract }
 metaData :: MetaData
 metaData = Metadata.contractForDifferences
 
-defaultSlotContent :: Map String BigInteger
+defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
     [ "Party deposit deadline" /\ fromInt 300
@@ -49,9 +49,6 @@ partyDeposit = ConstantParam "Amount paid by party"
 
 counterpartyDeposit :: Value
 counterpartyDeposit = ConstantParam "Amount paid by counterparty"
-
-bothDeposits :: Value
-bothDeposits = AddValue partyDeposit counterpartyDeposit
 
 priceBeginning :: ChoiceId
 priceBeginning = ChoiceId "Price in first window" oracle

@@ -1,25 +1,31 @@
 module Marlowe.Extended.Metadata where
 
-import Prelude
+import Prologue
+
+import Data.Argonaut.Decode (class DecodeJson)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode (class EncodeJson)
+import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Set (Set)
-import Data.Set as Set
-import Data.Symbol (SProxy(..))
-import Foreign.Generic (class Decode, class Encode, defaultOptions, genericDecode, genericEncode)
-import Marlowe.Extended (Contract, ContractType(..), getChoiceNames)
 import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
+import Data.Maybe (fromMaybe, maybe)
+import Data.Set (Set)
+import Data.Set as Set
 import Data.Set.Ordered.OSet (OSet)
 import Data.Set.Ordered.OSet as OSet
+import Data.Show.Generic (genericShow)
+import Data.Tuple (uncurry)
+import Data.Tuple.Nested ((/\))
+import Marlowe.Extended (Contract, ContractType(..), getChoiceNames)
 import Marlowe.HasParties (getParties)
 import Marlowe.Semantics as S
 import Marlowe.Template (Placeholders(..), getPlaceholderIds)
+import Type.Proxy (Proxy(..))
 
 data NumberFormat
   = DefaultFormat
@@ -30,11 +36,21 @@ derive instance eqNumberFormat :: Eq NumberFormat
 
 derive instance genericNumberFormat :: Generic NumberFormat _
 
-instance encodeNumberFormat :: Encode NumberFormat where
-  encode value = genericEncode defaultOptions value
+instance encodeJsonNumberFormat :: EncodeJson NumberFormat where
+  encodeJson = case _ of
+    DefaultFormat -> E.encodeTagged "DefaultFormat" unit E.null
+    DecimalFormat a b -> E.encodeTagged "DecimalFormat" (Tuple a b) E.value
+    TimeFormat -> E.encodeTagged "TimeFormat" unit E.null
 
-instance decodeNumberFormat :: Decode NumberFormat where
-  decode value = genericDecode defaultOptions value
+instance decodeJsonNumberFormat :: DecodeJson NumberFormat where
+  decodeJson =
+    D.decode
+      $ D.sumType "NumberFormat"
+      $ Map.fromFoldable
+        [ "DefaultFormat" /\ D.content (DefaultFormat <$ D.null)
+        , "DecimalFormat" /\ D.content (uncurry DecimalFormat <$> D.value)
+        , "TimeFormat" /\ D.content (TimeFormat <$ D.null)
+        ]
 
 instance showNumberFormat :: Show NumberFormat where
   show = genericShow
@@ -99,10 +115,10 @@ type ValueParameterInfo
     }
 
 _valueParameterFormat :: Lens' ValueParameterInfo NumberFormat
-_valueParameterFormat = prop (SProxy :: SProxy "valueParameterFormat")
+_valueParameterFormat = prop (Proxy :: _ "valueParameterFormat")
 
 _valueParameterDescription :: Lens' ValueParameterInfo String
-_valueParameterDescription = prop (SProxy :: SProxy "valueParameterDescription")
+_valueParameterDescription = prop (Proxy :: _ "valueParameterDescription")
 
 emptyValueParameterInfo :: ValueParameterInfo
 emptyValueParameterInfo =
@@ -125,10 +141,10 @@ type ChoiceInfo
     }
 
 _choiceFormat :: Lens' ChoiceInfo NumberFormat
-_choiceFormat = prop (SProxy :: SProxy "choiceFormat")
+_choiceFormat = prop (Proxy :: _ "choiceFormat")
 
 _choiceDescription :: Lens' ChoiceInfo String
-_choiceDescription = prop (SProxy :: SProxy "choiceDescription")
+_choiceDescription = prop (Proxy :: _ "choiceDescription")
 
 emptyChoiceInfo :: ChoiceInfo
 emptyChoiceInfo =
@@ -157,28 +173,28 @@ type MetaData
     }
 
 _contractName :: Lens' MetaData String
-_contractName = prop (SProxy :: SProxy "contractName")
+_contractName = prop (Proxy :: _ "contractName")
 
 _contractType :: Lens' MetaData ContractType
-_contractType = prop (SProxy :: SProxy "contractType")
+_contractType = prop (Proxy :: _ "contractType")
 
 _contractShortDescription :: Lens' MetaData String
-_contractShortDescription = prop (SProxy :: SProxy "contractShortDescription")
+_contractShortDescription = prop (Proxy :: _ "contractShortDescription")
 
 _contractLongDescription :: Lens' MetaData String
-_contractLongDescription = prop (SProxy :: SProxy "contractLongDescription")
+_contractLongDescription = prop (Proxy :: _ "contractLongDescription")
 
 _roleDescriptions :: Lens' MetaData (Map S.TokenName String)
-_roleDescriptions = prop (SProxy :: SProxy "roleDescriptions")
+_roleDescriptions = prop (Proxy :: _ "roleDescriptions")
 
 _slotParameterDescriptions :: Lens' MetaData (OMap String String)
-_slotParameterDescriptions = prop (SProxy :: SProxy "slotParameterDescriptions")
+_slotParameterDescriptions = prop (Proxy :: _ "slotParameterDescriptions")
 
 _valueParameterInfo :: Lens' MetaData (OMap String ValueParameterInfo)
-_valueParameterInfo = prop (SProxy :: SProxy "valueParameterInfo")
+_valueParameterInfo = prop (Proxy :: _ "valueParameterInfo")
 
 _choiceInfo :: Lens' MetaData (Map String ChoiceInfo)
-_choiceInfo = prop (SProxy :: SProxy "choiceInfo")
+_choiceInfo = prop (Proxy :: _ "choiceInfo")
 
 emptyContractMetadata :: MetaData
 emptyContractMetadata =
@@ -186,10 +202,10 @@ emptyContractMetadata =
   , contractName: ""
   , contractShortDescription: ""
   , contractLongDescription: ""
-  , roleDescriptions: mempty
+  , roleDescriptions: Map.empty
   , slotParameterDescriptions: mempty
   , valueParameterInfo: mempty
-  , choiceInfo: mempty
+  , choiceInfo: Map.empty
   }
 
 getChoiceFormat :: MetaData -> String -> NumberFormat
@@ -203,16 +219,16 @@ type MetadataHintInfo
     }
 
 _roles :: Lens' MetadataHintInfo (Set S.TokenName)
-_roles = prop (SProxy :: SProxy "roles")
+_roles = prop (Proxy :: _ "roles")
 
 _slotParameters :: Lens' MetadataHintInfo (OSet String)
-_slotParameters = prop (SProxy :: SProxy "slotParameters")
+_slotParameters = prop (Proxy :: _ "slotParameters")
 
 _valueParameters :: Lens' MetadataHintInfo (OSet String)
-_valueParameters = prop (SProxy :: SProxy "valueParameters")
+_valueParameters = prop (Proxy :: _ "valueParameters")
 
 _choiceNames :: Lens' MetadataHintInfo (Set String)
-_choiceNames = prop (SProxy :: SProxy "choiceNames")
+_choiceNames = prop (Proxy :: _ "choiceNames")
 
 getMetadataHintInfo :: Contract -> MetadataHintInfo
 getMetadataHintInfo contract =
@@ -249,7 +265,7 @@ type ContractTemplate
     }
 
 _metaData :: Lens' ContractTemplate MetaData
-_metaData = prop (SProxy :: SProxy "metaData")
+_metaData = prop (Proxy :: _ "metaData")
 
 _extendedContract :: Lens' ContractTemplate Contract
-_extendedContract = prop (SProxy :: SProxy "extendedContract")
+_extendedContract = prop (Proxy :: _ "extendedContract")

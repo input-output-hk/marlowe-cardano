@@ -10,7 +10,7 @@ import Component.Input.View as Input
 import Component.Label.View as Label
 import Component.WalletId.Types (Input)
 import Data.Newtype (unwrap)
-import Data.UUID (emptyUUID, toString) as UUID
+import Data.UUID.Argonaut (emptyUUID, toString) as UUID
 import Halogen.Css (classNames)
 import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)

@@ -3,7 +3,7 @@ module Component.Projects.Types where
 import Prologue
 import Analytics (class IsEvent, Event)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has)
 import Data.Lens.Record (prop)
 import Data.Symbol (SProxy(..))

@@ -5,18 +5,17 @@ module Env
   ) where
 
 import Prologue
+
 import Capability.PlutusApps.MarloweApp.Types as MarloweApp
 import Effect.AVar (AVar)
 import Halogen (SubscriptionId)
-import Plutus.PAB.Webserver (SPParams_)
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
-import Servant.PureScript.Settings (SPSettings_)
-import Types (CombinedWSStreamToServer)
+import Plutus.PAB.Webserver (SPSettings_)
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient, CombinedWSStreamToServer)
 import WebSocket.Support (WebSocketManager) as WS
 
 -- Application enviroment configuration
 type Env
-  = { ajaxSettings :: SPSettings_ SPParams_
+  = { ajaxSettings :: SPSettings_
     -- This AVar helps to solve a concurrency problem in the contract carousel subscriptions.
     -- See notes in [Contract.State(unsubscribeFromSelectCenteredStep)]
     -- There are two reasons why this is stored in the `Env` rather than the Contract.State:

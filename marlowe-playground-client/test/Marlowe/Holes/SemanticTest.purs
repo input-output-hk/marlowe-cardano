@@ -1,7 +1,7 @@
 module Marlowe.Holes.SemanticTest where
 
 import Prologue
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Either (hush)
 import Data.List (List(..), (:))
 import Data.List as List
@@ -37,7 +37,7 @@ multipleInputs inputs =
     , inputs: inputs
     }
 
-timeout :: BigInteger -> TransactionInput
+timeout :: BigInt -> TransactionInput
 timeout slot =
   S.TransactionInput
     { interval: (S.SlotInterval (Slot slot) (Slot slot))
@@ -60,7 +60,7 @@ arbiter = Role "Mediator"
 ada :: Token
 ada = Token "" ""
 
-escrowPrice :: BigInteger
+escrowPrice :: BigInt
 escrowPrice = fromInt 1500
 
 escrowContract :: EM.Contract
@@ -147,7 +147,7 @@ counterparty = Role "Counterparty"
 oracle :: Party
 oracle = Role "Oracle"
 
-cfdPrice :: BigInteger
+cfdPrice :: BigInt
 cfdPrice = fromInt 100000000
 
 contractForDifferences :: EM.Contract

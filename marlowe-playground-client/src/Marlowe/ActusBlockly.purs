@@ -8,18 +8,18 @@ import Blockly.Types (Block, Blockly)
 import Control.Alternative ((<|>))
 import Control.Monad.Except (runExcept)
 import Data.Bifunctor (lmap, rmap)
-import Data.BigInteger (BigInteger)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Date (exactDate)
 import Data.Either as Either
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding, toEnum)
 import Data.FloatParser (parseFloat)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Bounded (genericBottom, genericTop)
-import Data.Generic.Rep.Enum (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
-import Data.Generic.Rep.Eq (genericEq)
-import Data.Generic.Rep.Ord (genericCompare)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
+import Data.Eq.Generic (genericEq)
+import Data.Ord.Generic (genericCompare)
+import Data.Show.Generic (genericShow)
 import Data.Int (fromString)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Newtype (class Newtype, unwrap)
@@ -592,9 +592,9 @@ instance decodeJsonActusContract :: Decode ActusContract where
 
 data ActusValue
   = DateValue String String String
-  | CycleValue ActusValue BigInteger ActusPeriodType
+  | CycleValue ActusValue BigInt ActusPeriodType
   | DecimalValue Number
-  | IntegerValue BigInteger
+  | IntegerValue BigInt
   | ActusAssertionCtx Number Number
   | ActusAssertionNpv Number Number
   | NoActusValue
@@ -791,7 +791,7 @@ instance hasBlockDefinitionValue :: HasBlockDefinition ActusValueType ActusValue
           ActusError $ "Incorrect date: " <> yyyy <> "-" <> mm <> "-" <> dd
   blockDefinition ActusCycleType g block = do
     valueString <- getFieldValue block "value"
-    value <- fromMaybe (Either.Left "can't parse bigint") $ Either.Right <$> BigInteger.fromString valueString
+    value <- fromMaybe (Either.Left "can't parse bigint") $ Either.Right <$> BigInt.fromString valueString
     let
       anchor = parseFieldActusValueJson g block "anchor"
     let
@@ -803,7 +803,7 @@ instance hasBlockDefinitionValue :: HasBlockDefinition ActusValueType ActusValue
     pure $ DecimalValue value
   blockDefinition ActusIntegerType g block = do
     valueString <- getFieldValue block "value"
-    value <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> BigInteger.fromString valueString
+    value <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> BigInt.fromString valueString
     pure $ IntegerValue value
   blockDefinition ActusAssertionContextType g block = do
     minValueString <- getFieldValue block "min_rrmo"
@@ -839,7 +839,7 @@ actusDecimalToNumber NoActusValue = Either.Right Nothing
 
 actusDecimalToNumber x = Either.Left $ "Unexpected: " <> show x
 
-actusIntegerToNumber :: ActusValue -> Either String (Maybe BigInteger)
+actusIntegerToNumber :: ActusValue -> Either String (Maybe BigInt)
 actusIntegerToNumber (IntegerValue n) = Either.Right $ Just $ n
 
 actusIntegerToNumber (ActusError msg) = Either.Left msg
@@ -1033,8 +1033,8 @@ actusContractToTerms raw = do
         , enableSettlement: false
         , constraints: constraint <$> assertionCtx
         -- Any collateral-related code is commented out, until implemented properly
-        -- , collateralAmount: fromMaybe (BigInteger.fromInt 0) collateral
-        , collateralAmount: BigInteger.fromInt 0
+        -- , collateralAmount: fromMaybe (BigInt.fromInt 0) collateral
+        , collateralAmount: BigInt.fromInt 0
         }
 
 aesonCompatibleOptions :: Options

@@ -5,6 +5,7 @@ module Page.Dashboard.State
   ) where
 
 import Prologue
+
 import Capability.Contract (class ManageContract)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, createContract, createPendingFollowerApp, followContract, followContractWithPendingFollowerApp, getFollowerApps, getRoleContracts, redeem, subscribeToPlutusApp)
@@ -12,6 +13,11 @@ import Capability.MarloweStorage (class ManageMarloweStorage, getWalletLibrary, 
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
+import Component.Contacts.Lenses (_assets, _cardSection, _pubKeyHash, _walletInfo, _walletLibrary, _walletNickname)
+import Component.Contacts.State (defaultWalletDetails, getAda)
+import Component.Contacts.State (handleAction, mkInitialState) as Contacts
+import Component.Contacts.Types (Action(..), State) as Contacts
+import Component.Contacts.Types (CardSection(..), WalletDetails, WalletLibrary)
 import Component.InputField.Lenses (_value)
 import Component.InputField.Types (Action(..)) as InputField
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
@@ -20,15 +26,8 @@ import Component.Template.State (dummyState, handleAction, initialState) as Temp
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State) as Template
 import Component.Template.Types (ContractSetupStage(..))
-import Component.Contacts.Lenses (_assets, _cardSection, _pubKeyHash, _walletInfo, _walletLibrary, _walletNickname)
-import Component.Contacts.State (defaultWalletDetails, getAda)
-import Component.Contacts.State (handleAction, mkInitialState) as Contacts
-import Component.Contacts.Types (Action(..), State) as Contacts
-import Component.Contacts.Types (CardSection(..), WalletDetails, WalletLibrary)
 import Control.Monad.Reader (class MonadAsk)
 import Control.Monad.Reader.Class (ask)
-import Page.Dashboard.Lenses (_card, _cardOpen, _contractFilter, _contract, _contracts, _menuOpen, _selectedContract, _selectedContractFollowerAppId, _templateState, _walletCompanionStatus, _contactsState, _walletDetails)
-import Page.Dashboard.Types (Action(..), Card(..), ContractFilter(..), Input, State, WalletCompanionStatus(..))
 import Data.Array (null)
 import Data.Foldable (for_)
 import Data.Lens (_Just, assign, elemOf, filtered, modifying, set, use, view, (^.))
@@ -38,6 +37,7 @@ import Data.Lens.Index (ix)
 import Data.Lens.Traversal (traversed)
 import Data.List (filter, fromFoldable) as List
 import Data.Map (Map, delete, filterKeys, findMin, insert, lookup, mapMaybe, mapMaybeWithKey, toUnfoldable)
+import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (delete, fromFoldable, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
@@ -45,7 +45,7 @@ import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Env (DataProvider(..), Env)
-import Halogen (HalogenM, modify_, query, tell)
+import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
@@ -59,11 +59,13 @@ import Page.Contract.Lenses (_Started, _Starting, _marloweParams, _nickname, _se
 import Page.Contract.State (applyTimeout)
 import Page.Contract.State (dummyState, handleAction, mkInitialState, mkPlaceholderState, updateState) as Contract
 import Page.Contract.Types (Action(..), State(..), StartingState) as Contract
+import Page.Dashboard.Lenses (_card, _cardOpen, _contractFilter, _contract, _contracts, _menuOpen, _selectedContract, _selectedContractFollowerAppId, _templateState, _walletCompanionStatus, _contactsState, _walletDetails)
+import Page.Dashboard.Types (Action(..), Card(..), ContractFilter(..), Input, State, WalletCompanionStatus(..))
 import Toast.Types (ajaxErrorToast, decodedAjaxErrorToast, errorToast, successToast)
 
 -- see note [dummyState] in MainFrame.State
 dummyState :: State
-dummyState = mkInitialState mempty defaultWalletDetails mempty mempty (Slot zero)
+dummyState = mkInitialState Map.empty defaultWalletDetails Map.empty Map.empty (Slot zero)
 
 {- [Workflow 2][4] Connect a wallet
 When we connect a wallet, it has this initial state. Notable is the walletCompanionStatus of
@@ -118,7 +120,7 @@ handleAction _ (ClipboardAction action) = do
   Clipboard.handleAction action
   addToast $ successToast "Copied to clipboard"
 
-handleAction input (OpenCard card) = do
+handleAction _ (OpenCard card) = do
   -- first we set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
@@ -135,12 +137,12 @@ handleAction _ CloseCard = assign _cardOpen false
 
 handleAction _ (SetContractFilter contractFilter) = assign _contractFilter contractFilter
 
-handleAction input (SelectContract mFollowerAppId) = assign _selectedContractFollowerAppId mFollowerAppId
+handleAction _ (SelectContract mFollowerAppId) = assign _selectedContractFollowerAppId mFollowerAppId
 
 -- Until everything is working in the PAB, we are simulating persistent and shared data using localStorage; this
 -- action updates the state to match the localStorage, and should be called whenever the stored data changes.
 -- It's not very subtle or efficient - it just updates everything in one go.
-handleAction input@{ currentSlot } UpdateFromStorage = do
+handleAction input UpdateFromStorage = do
   { dataProvider } <- ask
   when (dataProvider == LocalStorage) do
     walletDetails <- use _walletDetails
@@ -250,7 +252,7 @@ handleAction input (UpdateFollowerApps companionAppState) = do
               Nothing -> followContract walletDetails marloweParams
             case ajaxFollowerApp of
               Left decodedAjaxError -> addToast $ decodedAjaxErrorToast "Failed to load new contract." decodedAjaxError
-              Right (followerAppId /\ contractHistory) -> subscribeToPlutusApp followerAppId
+              Right (followerAppId /\ _) -> subscribeToPlutusApp followerAppId
           LocalStorage -> do
             ajaxFollowerApp <- followContract walletDetails marloweParams
             case ajaxFollowerApp of
@@ -321,7 +323,7 @@ we thought it would be more user-friendly for now to trigger this automatically 
 integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
 manually (and sign the transaction). So this will almost certainly have to change.
 -}
-handleAction input (RedeemPayments followerAppId) = do
+handleAction _ (RedeemPayments followerAppId) = do
   walletDetails <- use _walletDetails
   mStartedContract <- peruse $ _contracts <<< ix followerAppId <<< _Started
   for_ mStartedContract \{ executionState, marloweParams, userParties } ->
@@ -341,7 +343,6 @@ handleAction input (RedeemPayments followerAppId) = do
             _ -> pure unit
 
 handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
-  walletDetails <- use _walletDetails
   selectedStep <- peruse $ _selectedContract <<< _Started <<< _selectedStep
   modifying
     ( _contracts
@@ -375,7 +376,7 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) = case templa
     templateState <- use _templateState
     case instantiateExtendedContract currentSlot templateState of
       Nothing -> do
-        void $ query _submitButtonSlot "action-pay-and-start" $ tell $ SubmitResult (Milliseconds 600.0) (Left "Error")
+        void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult (Milliseconds 600.0) (Left "Error")
         addToast $ errorToast "Failed to instantiate contract." $ Just "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
       Just contract -> do
         -- the user enters wallet nicknames for roles; here we convert these into pubKeyHashes
@@ -390,7 +391,7 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) = case templa
         case ajaxCreateContract of
           -- TODO: make this error message more informative
           Left ajaxError -> do
-            void $ query _submitButtonSlot "action-pay-and-start" $ tell $ SubmitResult (Milliseconds 600.0) (Left "Error")
+            void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult (Milliseconds 600.0) (Left "Error")
             addToast $ ajaxErrorToast "Failed to initialise contract." ajaxError
           _ -> do
             -- Here we create a `MarloweFollower` app with no `MarloweParams`; when the next status
@@ -400,7 +401,7 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) = case templa
             ajaxPendingFollowerApp <- createPendingFollowerApp walletDetails
             case ajaxPendingFollowerApp of
               Left ajaxError -> do
-                void $ query _submitButtonSlot "action-pay-and-start" $ tell $ SubmitResult (Milliseconds 600.0) (Left "Error")
+                void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult (Milliseconds 600.0) (Left "Error")
                 addToast $ ajaxErrorToast "Failed to initialise contract." ajaxError
               Right followerAppId -> do
                 contractNickname <- use (_templateState <<< _contractNicknameInput <<< _value)
@@ -408,7 +409,7 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) = case templa
                 metaData <- use (_templateState <<< _contractTemplate <<< _metaData)
                 modifying _contracts $ insert followerAppId $ Contract.mkPlaceholderState contractNickname metaData contract
                 handleAction input CloseCard
-                void $ query _submitButtonSlot "action-pay-and-start" $ tell $ SubmitResult (Milliseconds 600.0) (Right "")
+                void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult (Milliseconds 600.0) (Right "")
                 addToast $ successToast "The request to initialise this contract has been submitted."
                 { dataProvider } <- ask
                 when (dataProvider == LocalStorage) (handleAction input UpdateFromStorage)
@@ -445,7 +446,7 @@ handleAction input@{ currentSlot, tzOffset } (ContractAction followerAppId contr
               , userNickname: walletDetails ^. _walletNickname
               , walletBalance: getAda $ walletDetails ^. _assets
               }
-    Contract.ConfirmAction action -> do
+    Contract.ConfirmAction _ -> do
       void $ toContract followerAppId $ Contract.handleAction contractInput contractAction
       handleAction input CloseCard
     Contract.CancelConfirmation -> handleAction input CloseCard

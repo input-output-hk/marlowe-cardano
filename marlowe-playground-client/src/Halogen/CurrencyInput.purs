@@ -2,7 +2,7 @@ module Halogen.CurrencyInput where
 
 import Prologue hiding (div)
 import Data.Array (filter)
-import Data.BigInteger (BigInteger, fromString)
+import Data.BigInt.Argonaut (BigInt, fromString)
 import Data.Maybe (maybe)
 import Data.Monoid (guard)
 import Data.String (trim)
@@ -15,7 +15,7 @@ import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, input, text)
 import Halogen.HTML.Events (onChange, onFocus, onInput, onKeyDown)
 import Halogen.HTML.Properties (InputType(..), type_, value)
-import Pretty (showBigIntegerAsCurrency)
+import Pretty (showBigIntAsCurrency)
 import Web.Event.Event (currentTarget)
 import Web.Event.Internal.Types (EventTarget)
 import Web.UIEvent.FocusEvent as FocusEvent
@@ -45,7 +45,7 @@ setValue = runEffectFn2 setValue_
 onChangeHandler :: EventTarget -> Int -> Effect String
 onChangeHandler = runEffectFn2 onChangeHandler_
 
-currencyInput :: forall p a. Array String -> BigInteger -> String -> Int -> (Maybe BigInteger -> Maybe a) -> HTML p a
+currencyInput :: forall p a. Array String -> BigInt -> String -> Int -> (Maybe BigInt -> Maybe a) -> HTML p a
 currencyInput classList number prefix rawNumDecimals onValueChangeHandler =
   div [ classNames ([ "bg-gray-light", "flex", "items-center", "border-solid", "border", "rounded-sm", "overflow-hidden", "box-border", "focus-within:ring-1", "focus-within:ring-black" ] <> classList) ]
     ( ( guard hasPrefix
@@ -86,7 +86,7 @@ currencyInput classList number prefix rawNumDecimals onValueChangeHandler =
                                   res <- onChangeHandler target numDecimals
                                   let
                                     mObtainedBigNumStr = fromString $ filterPoint res
-                                  void $ for mObtainedBigNumStr (\x -> setValue target $ showBigIntegerAsCurrency x numDecimals)
+                                  void $ for mObtainedBigNumStr (\x -> setValue target $ showBigIntAsCurrency x numDecimals)
                                   pure $ onValueChangeHandler $ mObtainedBigNumStr
                         )
                         (currentTarget ev)
@@ -103,7 +103,7 @@ currencyInput classList number prefix rawNumDecimals onValueChangeHandler =
                         (currentTarget ev)
                   )
               , type_ InputText
-              , value (showBigIntegerAsCurrency number numDecimals)
+              , value (showBigIntAsCurrency number numDecimals)
               ]
           ]
     )

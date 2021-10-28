@@ -13,7 +13,6 @@ import Component.InputField.Types (State) as InputField
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
-import Component.LoadingSubmitButton.Types (Message(..))
 import Component.Popper (Placement(..))
 import Component.Template.Lenses (_contractNicknameInput, _contractSetupStage, _contractTemplate, _roleWalletInputs, _slotContentInputs, _valueContentInputs)
 import Component.Template.State (templateSetupIsValid)
@@ -30,7 +29,7 @@ import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML (ComponentHTML, HTML, PlainHTML, a, button, div, div_, h2, h3, h4, h4_, label, li, p, p_, span, span_, text, ul, ul_)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (enabled, for, id_)
+import Halogen.HTML.Properties (enabled, for, id)
 import Humanize (contractIcon, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (ContractTemplate, MetaData, NumberFormat(..), _contractName, _metaData, _slotParameterDescriptions, _valueParameterDescription, _valueParameterFormat, _valueParameterInfo)
@@ -274,10 +273,7 @@ contractReview assets state =
                       , caption: "Pay and start"
                       , styles: [ "flex-1" ]
                       , enabled: true
-                      , handler:
-                          \msg -> case msg of
-                            OnSubmit -> Just $ StartContract
-                            _ -> Nothing
+                      , handler: StartContract
                       }
                   ]
               , div
@@ -359,7 +355,7 @@ roleInputs walletLibrary metaData roleWalletInputs =
             , button
                 [ classNames [ "absolute", "top-4", "right-4" ]
                 , onClick_ $ OpenCreateWalletCard tokenName
-                , id_ $ "newContactForRole" <> tokenName
+                , id $ "newContactForRole" <> tokenName
                 ]
                 [ icon Icon.NewContact [ "text-purple" ] ]
             , tooltip "Create a new contact for this role" (RefId $ "newContactForRole" <> tokenName) Left
@@ -438,21 +434,21 @@ templateInputsSection icon' heading content =
     <> content
 
 templateInputItem :: forall m. MonadAff m => String -> String -> Array (ComponentHTML Action ChildSlots m) -> ComponentHTML Action ChildSlots m
-templateInputItem id_ description content =
+templateInputItem id description content =
   li
     [ classNames [ "mb-2", "last:mb-0" ] ]
     $ [ label
           [ classNames [ "block", "mb-2" ]
-          , for id_
+          , for id
           ]
           [ span
               [ classNames [ "text-sm", "font-semibold" ] ]
-              [ text id_ ]
+              [ text id ]
           , hint
               [ "ml-2" ]
-              ("template-parameter-input-" <> id_)
+              ("template-parameter-input-" <> id)
               Auto
-              (markdownHintWithTitle id_ description)
+              (markdownHintWithTitle id description)
           ]
       ]
     <> content

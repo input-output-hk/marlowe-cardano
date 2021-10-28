@@ -8,7 +8,7 @@ import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Gen (genBigInteger, genContract, GenerationOptions(..))
+import Marlowe.Gen (genBigInt, genContract, GenerationOptions(..))
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (fromTerm)
 import Marlowe.Semantics as S
@@ -56,13 +56,13 @@ sameFillTemplate = do
   slotContent <-
     Map.fromFoldable
       <$> ( for slotPlaceholderArray \slotId -> do
-            slotValue <- genBigInteger
+            slotValue <- genBigInt
             pure (slotId /\ slotValue)
         )
   valueContent <-
     Map.fromFoldable
       <$> ( for valuePlaceholderArray \slotId -> do
-            slotValue <- genBigInteger
+            slotValue <- genBigInt
             pure (slotId /\ slotValue)
         )
   -- And check that once we fill the contract, the semantic version for both of them

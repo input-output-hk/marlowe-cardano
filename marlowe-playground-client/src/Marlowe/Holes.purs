@@ -4,14 +4,14 @@ module Marlowe.Holes where
 import Prologue
 import Data.Array (foldMap, mapMaybe)
 import Data.Array as Array
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
 import Data.Foldable (intercalate)
 import Data.Function (on)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Bounded (genericBottom, genericTop)
-import Data.Generic.Rep.Enum (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', over, to, view)
 import Data.Lens.Record (prop)
 import Data.List (List(..), fromFoldable, (:))
@@ -118,7 +118,7 @@ data Argument
   | NamedDataArg String
   | DataArgIndexed Int MarloweType
   | DefaultString String
-  | DefaultNumber BigInteger
+  | DefaultNumber BigInt
   | DefaultRational Rational
   | NewtypeArg
   | GenArg MarloweType
@@ -512,7 +512,7 @@ instance arrayHasContractData :: HasContractData a => HasContractData (Array a) 
   gatherContractData as s = foldMap (\a -> gatherContractData a s) as
 
 data Bound
-  = Bound BigInteger BigInteger
+  = Bound BigInt BigInt
 
 derive instance genericBound :: Generic Bound _
 
@@ -538,7 +538,7 @@ instance boundHasMarloweHoles :: HasMarloweHoles Bound where
   getHoles (Bound a b) m = m
 
 data Timeout
-  = Slot BigInteger
+  = Slot BigInt
   | SlotParam String
 
 derive instance genericTimeout :: Generic Timeout _
@@ -811,7 +811,7 @@ instance caseHasContractData :: HasContractData Case where
 
 data Value
   = AvailableMoney AccountId (Term Token)
-  | Constant BigInteger
+  | Constant BigInt
   | ConstantParam String
   | NegValue (Term Value)
   | AddValue (Term Value) (Term Value)

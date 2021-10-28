@@ -12,17 +12,17 @@ import Control.Monad.Except.Trans (class MonadThrow)
 import Data.Array (catMaybes, filter, head, uncons)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
-import Data.BigInteger (BigInteger)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Either (note')
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
 import Data.Foldable (for_)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Bounded (genericBottom, genericTop)
-import Data.Generic.Rep.Enum (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
-import Data.Generic.Rep.Eq (genericEq)
-import Data.Generic.Rep.Ord (genericCompare)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
+import Data.Eq.Generic (genericEq)
+import Data.Ord.Generic (genericCompare)
+import Data.Show.Generic (genericShow)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (maybe)
@@ -1158,8 +1158,8 @@ asField child = case child of
   BDom.Field text -> pure text
   _ -> throwError $ InvalidChildType "Field"
 
-asBigInteger :: forall m. MonadThrow ParseTermError m => String -> m BigInteger
-asBigInteger str = toMonadThrow $ note' (\_ -> InvalidFieldCast str "BigInteger") (BigInteger.fromString str)
+asBigInt :: forall m. MonadThrow ParseTermError m => String -> m BigInt
+asBigInt str = toMonadThrow $ note' (\_ -> InvalidFieldCast str "BigInt") (BigInt.fromString str)
 
 mkTermFromChild ::
   forall m a.
@@ -1231,15 +1231,15 @@ fieldAsString attr block =
     (asField =<< getRequiredAttribute attr block)
     (\err -> throwError $ ErrorInChild block attr err)
 
-fieldAsBigInteger ::
+fieldAsBigInt ::
   forall m.
   MonadError ParseTermError m =>
   String ->
   BDom.Block ->
-  m BigInteger
-fieldAsBigInteger attr block =
+  m BigInt
+fieldAsBigInt attr block =
   catchError
-    (asBigInteger =<< asField =<< getRequiredAttribute attr block)
+    (asBigInt =<< asField =<< getRequiredAttribute attr block)
     (\err -> throwError $ ErrorInChild block attr err)
 
 instance blockToTermContract :: BlockToTerm Contract where
@@ -1266,7 +1266,7 @@ instance blockToTermContract :: BlockToTerm Contract where
       location = (BlockId id)
     timeout <- case timeoutType of
       "slot" -> do
-        slot <- fieldAsBigInteger "timeout" b
+        slot <- fieldAsBigInt "timeout" b
         pure $ Term (Slot slot) location
       "slot_param" -> do
         slotParam <- fieldAsString "timeout" b
@@ -1337,7 +1337,7 @@ instance blockToTermValue :: BlockToTerm Value where
     token <- valueToTerm "token" b
     pure $ Term (AvailableMoney party token) (BlockId id)
   blockToTerm b@({ type: "ConstantValueType", id }) = do
-    constant <- fieldAsBigInteger "constant" b
+    constant <- fieldAsBigInt "constant" b
     pure $ Term (Constant constant) (BlockId id)
   blockToTerm b@({ type: "ConstantParamValueType", id }) = do
     paramName <- fieldAsString "paramName" b
@@ -1362,8 +1362,8 @@ instance blockToTermValue :: BlockToTerm Value where
     value2 <- valueToTerm "value2" b
     pure $ Term (DivValue value1 value2) (BlockId id)
   blockToTerm b@({ type: "ScaleValueType", id }) = do
-    numerator <- fieldAsBigInteger "numerator" b
-    denominator <- fieldAsBigInteger "denominator" b
+    numerator <- fieldAsBigInt "numerator" b
+    denominator <- fieldAsBigInt "denominator" b
     value <- valueToTerm "value" b
     let
       location = (BlockId id)
@@ -1452,8 +1452,8 @@ instance blockToTermToken :: BlockToTerm Token where
 
 instance blockToTermBound :: BlockToTerm Bound where
   blockToTerm b@({ type: "BoundsType", id }) = do
-    from <- fieldAsBigInteger "from" b
-    to <- fieldAsBigInteger "to" b
+    from <- fieldAsBigInt "from" b
+    to <- fieldAsBigInt "to" b
     pure $ Term (Bound from to) (BlockId id)
   blockToTerm block = throwError $ InvalidBlock block "Bound"
 

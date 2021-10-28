@@ -2,7 +2,7 @@ module Pretty where
 
 import Prologue
 import Data.Array (concat, drop, dropWhile, length, replicate, take)
-import Data.BigInteger (BigInteger, format)
+import Data.BigInt.Argonaut (BigInt, format)
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.String as String
@@ -36,7 +36,7 @@ showPrettyParty (PK pkh) = "PubKey " <> pkh
 
 showPrettyParty (Role role) = show role
 
-showPrettyMoney :: BigInteger -> String
+showPrettyMoney :: BigInt -> String
 showPrettyMoney i = format i
 
 renderPrettyPayee :: forall p i. MetaData -> Payee -> Array (HTML p i)
@@ -44,8 +44,8 @@ renderPrettyPayee metadata (Account owner2) = [ text "account of ", renderPretty
 
 renderPrettyPayee metadata (Party dest) = [ text "party ", renderPrettyParty metadata dest ]
 
-showBigIntegerAsCurrency :: BigInteger -> Int -> String
-showBigIntegerAsCurrency number numDecimals = fromCharArray numberStr
+showBigIntAsCurrency :: BigInt -> Int -> String
+showBigIntAsCurrency number numDecimals = fromCharArray numberStr
   where
   absValStr = replicate (numDecimals + 1) '0' <> toCharArray (show (if number < zero then -number else number))
 
@@ -63,9 +63,9 @@ showBigIntegerAsCurrency number numDecimals = fromCharArray numberStr
 
   numberStr = concat ([ prefixStr, digitsBeforeSeparator ] <> if digitsAfterSeparator /= [] then [ [ '.' ], digitsAfterSeparator ] else [])
 
-showPrettyChoice :: NumberFormat -> BigInteger -> String
-showPrettyChoice DefaultFormat num = showBigIntegerAsCurrency num 0
+showPrettyChoice :: NumberFormat -> BigInt -> String
+showPrettyChoice DefaultFormat num = showBigIntAsCurrency num 0
 
-showPrettyChoice (DecimalFormat numDecimals strLabel) num = strLabel <> " " <> showBigIntegerAsCurrency num numDecimals
+showPrettyChoice (DecimalFormat numDecimals strLabel) num = strLabel <> " " <> showBigIntAsCurrency num numDecimals
 
 showPrettyChoice TimeFormat num = show num

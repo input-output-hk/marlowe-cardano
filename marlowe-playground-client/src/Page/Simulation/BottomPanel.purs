@@ -1,7 +1,7 @@
 module Page.Simulation.BottomPanel (panelContents) where
 
 import Prologue hiding (div)
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (foldMap)
 import Data.Lens (preview, previewOn, to, view, (^.))
 import Data.Lens.NonEmptyList (_Head)
@@ -70,7 +70,7 @@ currentStateView metadata state =
 
   accountsData =
     let
-      (accounts :: Array (Tuple (Tuple Party Token) BigInteger)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _accounts <<< to Map.toUnfoldable)
+      (accounts :: Array (Tuple (Tuple Party Token) BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _accounts <<< to Map.toUnfoldable)
 
       asTuple (Tuple (Tuple accountOwner tok) value) = renderPrettyParty metadata accountOwner /\ renderPrettyToken tok /\ text (showPrettyMoney value)
     in
@@ -78,7 +78,7 @@ currentStateView metadata state =
 
   choicesData =
     let
-      (choices :: Array (Tuple ChoiceId BigInteger)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _choices <<< to Map.toUnfoldable)
+      (choices :: Array (Tuple ChoiceId BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _choices <<< to Map.toUnfoldable)
 
       asTuple (Tuple (ChoiceId choiceName choiceOwner) value) = text (show choiceName) /\ renderPrettyParty metadata choiceOwner /\ text (showPrettyMoney value)
     in
@@ -86,7 +86,7 @@ currentStateView metadata state =
 
   bindingsData =
     let
-      (bindings :: Array (Tuple ValueId BigInteger)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _boundValues <<< to Map.toUnfoldable)
+      (bindings :: Array (Tuple ValueId BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _boundValues <<< to Map.toUnfoldable)
 
       asTuple (Tuple (ValueId valueId) value) = text (show valueId) /\ text (showPrettyMoney value) /\ text ""
     in

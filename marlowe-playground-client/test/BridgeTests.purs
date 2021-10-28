@@ -4,7 +4,7 @@ module BridgeTests
 
 import Prologue
 import Control.Monad.Except (runExcept)
-import Data.BigInteger (fromInt)
+import Data.BigInt.Argonaut (fromInt)
 import Data.Map as Map
 import Data.String.Regex (replace)
 import Data.String.Regex.Flags (RegexFlags(..))

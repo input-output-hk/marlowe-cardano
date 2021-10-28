@@ -5,11 +5,13 @@ module Examples.PureScript.ContractForDifferencesWithOracle
   ) where
 
 import Prelude
-import Data.BigInteger (fromInt)
+
+import Data.BigInt.Argonaut (fromInt)
 import Examples.Metadata as Metadata
 import Marlowe.Extended (Action(..), Case(..), Contract(..), Observation(..), Payee(..), Timeout(..), Value(..))
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), Rational(..), Token(..), ValueId(..))
+import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), Token(..), ValueId(..))
+import PlutusTx.Ratio (reduce)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract }
@@ -34,9 +36,6 @@ partyDeposit = ConstantParam "Amount paid by party"
 
 counterpartyDeposit :: Value
 counterpartyDeposit = ConstantParam "Amount paid by counterparty"
-
-bothDeposits :: Value
-bothDeposits = AddValue partyDeposit counterpartyDeposit
 
 priceBeginning :: Value
 priceBeginning = ConstantParam "Amount of Ada to use as asset"
@@ -78,7 +77,7 @@ gtLtEq value1 value2 gtContinuation ltContinuation eqContinuation =
         eqContinuation
 
 recordEndPrice :: ValueId -> ChoiceId -> ChoiceId -> Contract -> Contract
-recordEndPrice name choiceId1 choiceId2 = Let name (Scale (Rational one ((fromInt 100000000) * (fromInt 100000000))) (MulValue priceBeginning (MulValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))))
+recordEndPrice name choiceId1 choiceId2 = Let name (Scale (reduce one ((fromInt 100000000) * (fromInt 100000000))) (MulValue priceBeginning (MulValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))))
 
 recordDifference :: ValueId -> Value -> Value -> Contract -> Contract
 recordDifference name val1 val2 = Let name (SubValue val1 val2)

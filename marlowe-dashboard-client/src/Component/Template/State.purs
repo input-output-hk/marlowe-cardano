@@ -7,17 +7,18 @@ module Component.Template.State
   ) where
 
 import Prologue
+
 import Component.Contacts.Types (WalletLibrary)
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (dummyState, handleAction, mkInitialState) as InputField
-import Component.InputField.State (formatBigIntegerValue, getBigIntegerValue, validate)
+import Component.InputField.State (formatBigIntValue, getBigIntValue, validate)
 import Component.InputField.Types (Action(..), State) as InputField
 import Component.InputField.Types (class InputFieldError)
 import Component.Template.Lenses (_contractNicknameInput, _contractSetupStage, _contractTemplate, _roleWalletInput, _roleWalletInputs, _slotContentInput, _slotContentInputs, _valueContentInput, _valueContentInputs)
 import Component.Template.Types (Action(..), ContractNicknameError(..), ContractSetupStage(..), Input, RoleError(..), SlotError(..), State, ValueError(..))
 import Control.Monad.Reader (class MonadAsk)
 import Data.Array (mapMaybe) as Array
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Lens (Lens', assign, set, use, view)
 import Data.Map (Map)
 import Data.Map as Map
@@ -51,15 +52,12 @@ dummyState = initialState
 
 initialState :: State
 initialState =
-  let
-    templateContent = initializeTemplateContent $ getPlaceholderIds Escrow.contractTemplate.extendedContract
-  in
     { contractSetupStage: Start
     , contractTemplate: Escrow.contractTemplate
     , contractNicknameInput: InputField.mkInitialState Nothing
-    , roleWalletInputs: mempty
-    , slotContentInputs: mempty
-    , valueContentInputs: mempty
+    , roleWalletInputs: Map.empty
+    , slotContentInputs: Map.empty
+    , valueContentInputs: Map.empty
     }
 
 -- Some actions are handled in `Dashboard.State` because they involve
@@ -75,7 +73,7 @@ handleAction _ (SetContractSetupStage contractSetupStage) = do
     element <- getHTMLElementRef $ RefLabel "contractNickname"
     liftEffect $ void $ traverse focus element
 
-handleAction input@{ currentSlot } (SetTemplate contractTemplate) = do
+handleAction input (SetTemplate contractTemplate) = do
   let
     templateContent = initializeTemplateContent $ getPlaceholderIds contractTemplate.extendedContract
 
@@ -100,7 +98,7 @@ handleAction input@{ currentSlot } (SetTemplate contractTemplate) = do
   setInputValidators input _valueContentInputs ValueContentInputAction valueError
   setInputValidators input _slotContentInputs SlotContentInputAction slotError
 
-handleAction _ (OpenCreateWalletCard tokenName) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
+handleAction _ (OpenCreateWalletCard _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
 handleAction _ (ContractNicknameInputAction inputFieldAction) = toContractNicknameInput $ InputField.handleAction inputFieldAction
 
@@ -137,11 +135,11 @@ mkRoleWalletInputs :: Extended.Contract -> Map TokenName (InputField.State RoleE
 mkRoleWalletInputs contract = Map.fromFoldable $ Array.mapMaybe getRoleInput (Set.toUnfoldable $ getParties contract)
   where
   getRoleInput :: Party -> Maybe (Tuple TokenName (InputField.State RoleError))
-  getRoleInput (PK pubKey) = Nothing
+  getRoleInput (PK _) = Nothing
 
   getRoleInput (Role tokenName) = Just (Tuple tokenName $ InputField.mkInitialState Nothing)
 
-mkSlotContentInputs :: MetaData -> Map String BigInteger -> Map String (InputField.State SlotError)
+mkSlotContentInputs :: MetaData -> Map String BigInt -> Map String (InputField.State SlotError)
 mkSlotContentInputs metaData slotContent =
   let
     defaultSlotContent = case metaData.contractType of
@@ -150,22 +148,22 @@ mkSlotContentInputs metaData slotContent =
       Swap -> Swap.defaultSlotContent
       ZeroCouponBond -> ZeroCouponBond.defaultSlotContent
       ContractForDifferences -> ContractForDifferences.defaultSlotContent
-      _ -> mempty
+      _ -> Map.empty
 
     mkSlotContentInput key _ =
       let
         inputFieldInitialState = InputField.mkInitialState $ Just DefaultFormat
       in
         case Map.lookup key defaultSlotContent of
-          Just value -> Just $ set _value (formatBigIntegerValue TimeFormat value) inputFieldInitialState
+          Just value -> Just $ set _value (formatBigIntValue TimeFormat value) inputFieldInitialState
           Nothing -> Just inputFieldInitialState
   in
     Map.mapMaybeWithKey mkSlotContentInput slotContent
 
-mkValueContentInputs :: MetaData -> Map String BigInteger -> Map String (InputField.State ValueError)
+mkValueContentInputs :: MetaData -> Map String BigInt -> Map String (InputField.State ValueError)
 mkValueContentInputs metaData valueContent = Map.mapMaybeWithKey valueToInput valueContent
   where
-  valueToInput key value = case OMap.lookup key $ map (view _valueParameterFormat) (view _valueParameterInfo metaData) of
+  valueToInput key _ = case OMap.lookup key $ map (view _valueParameterFormat) (view _valueParameterInfo metaData) of
     Just numberFormat -> Just $ InputField.mkInitialState $ Just numberFormat
     _ -> Just $ InputField.mkInitialState Nothing
 
@@ -178,15 +176,15 @@ instantiateExtendedContract currentSlot state =
 
     valueContentInputs = view _valueContentInputs state
 
-    slotContent = map (getBigIntegerValue TimeFormat <<< view _value) slotContentInputs
+    slotContent = map (getBigIntValue TimeFormat <<< view _value) slotContentInputs
 
     valueParameterFormats = map (view _valueParameterFormat) (view (_contractTemplate <<< _metaData <<< _valueParameterInfo) state)
 
-    getBigIntegerValueWithDecimals key valueContentInput = case OMap.lookup key valueParameterFormats of
-      Just numberFormat -> Just $ getBigIntegerValue numberFormat $ view _value valueContentInput
-      _ -> Just $ getBigIntegerValue DefaultFormat $ view _value valueContentInput
+    getBigIntValueWithDecimals key valueContentInput = case OMap.lookup key valueParameterFormats of
+      Just numberFormat -> Just $ getBigIntValue numberFormat $ view _value valueContentInput
+      _ -> Just $ getBigIntValue DefaultFormat $ view _value valueContentInput
 
-    valueContent = Map.mapMaybeWithKey getBigIntegerValueWithDecimals valueContentInputs
+    valueContent = Map.mapMaybeWithKey getBigIntValueWithDecimals valueContentInputs
 
     templateContent = TemplateContent { slotContent, valueContent }
 

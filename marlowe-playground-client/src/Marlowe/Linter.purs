@@ -14,12 +14,12 @@ module Marlowe.Linter
 import Prologue
 import Control.Monad.State as CMS
 import Data.Bifunctor (bimap)
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (foldM)
 import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Eq (genericEq)
-import Data.Generic.Rep.Ord (genericCompare)
+import Data.Eq.Generic (genericEq)
+import Data.Ord.Generic (genericCompare)
 import Data.Lens (Lens', modifying, over, set, view)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
@@ -92,7 +92,7 @@ data WarningDetail
   | SimplifiableValue (Term Value) (Term Value)
   | SimplifiableObservation (Term Observation) (Term Observation)
   | PayBeforeDeposit S.AccountId
-  | PartialPayment S.AccountId S.Token BigInteger BigInteger
+  | PartialPayment S.AccountId S.Token BigInt BigInt
 
 instance showWarningDetail :: Show WarningDetail where
   show NegativePayment = "The contract can make a non-positive payment"
@@ -188,7 +188,7 @@ addChoiceName choiceName = modifying (_metadataHints <<< _choiceNames) $ Set.ins
 newtype LintEnv
   = LintEnv
   { choicesMade :: Set S.ChoiceId
-  , deposits :: Map (S.AccountId /\ S.Token) (Maybe BigInteger)
+  , deposits :: Map (S.AccountId /\ S.Token) (Maybe BigInt)
   , letBindings :: Set S.ValueId
   , maxTimeout :: MaxTimeout
   , isReachable :: Boolean
@@ -206,7 +206,7 @@ _letBindings = _Newtype <<< prop (SProxy :: SProxy "letBindings")
 _maxTimeout :: Lens' LintEnv Slot
 _maxTimeout = _Newtype <<< prop (SProxy :: SProxy "maxTimeout") <<< _Newtype
 
-_deposits :: Lens' LintEnv (Map (S.AccountId /\ S.Token) (Maybe BigInteger))
+_deposits :: Lens' LintEnv (Map (S.AccountId /\ S.Token) (Maybe BigInt))
 _deposits = _Newtype <<< prop (SProxy :: SProxy "deposits")
 
 _isReachable :: Lens' LintEnv Boolean
@@ -311,13 +311,13 @@ constToObs true = Term TrueObs NoLocation
 
 constToObs false = Term FalseObs NoLocation
 
-constToVal :: BigInteger -> Term Value
+constToVal :: BigInt -> Term Value
 constToVal x = Term (Constant x) NoLocation
 
-addMoneyToEnvAccount :: BigInteger -> S.AccountId -> S.Token -> LintEnv -> LintEnv
+addMoneyToEnvAccount :: BigInt -> S.AccountId -> S.Token -> LintEnv -> LintEnv
 addMoneyToEnvAccount amountToAdd accTerm tokenTerm = over _deposits (Map.alter (addMoney amountToAdd) (accTerm /\ tokenTerm))
   where
-  addMoney :: BigInteger -> Maybe (Maybe BigInteger) -> Maybe (Maybe BigInteger)
+  addMoney :: BigInt -> Maybe (Maybe BigInt) -> Maybe (Maybe BigInt)
   addMoney amount Nothing = Just (Just amount)
 
   addMoney amount (Just prevVal) = Just (maybe Nothing (Just <<< (\prev -> prev + amount)) prevVal)
@@ -569,7 +569,7 @@ lintObservation env hole@(Hole _ _ pos) = do
   modifying _holes (insertHole hole)
   pure (ValueSimp pos false hole)
 
-lintValue :: LintEnv -> Term Value -> CMS.State State (TemporarySimplification BigInteger Value)
+lintValue :: LintEnv -> Term Value -> CMS.State State (TemporarySimplification BigInt Value)
 lintValue env t@(Term (AvailableMoney acc token) pos) = do
   addRoleFromPartyTerm acc
   let
@@ -728,7 +728,7 @@ lintValue env t@(Term (Cond c a b) pos) = do
       pure (ValueSimp pos false t)
 
 data Effect
-  = ConstantDeposit S.AccountId S.Token BigInteger
+  = ConstantDeposit S.AccountId S.Token BigInt
   | UnknownDeposit S.AccountId S.Token
   | ChoiceMade S.ChoiceId
   | NoEffect
