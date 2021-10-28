@@ -6,7 +6,7 @@ let
   inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs webCommon;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purty purty-pre-commit purs spargo;
+  inherit (marlowe) purty-pre-commit;
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
@@ -70,7 +70,6 @@ let
     yq
     z3
     zlib
-    nodePackages.purescript-language-server
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
   # local build inputs ( -> ./nix/pkgs/default.nix )
@@ -96,12 +95,13 @@ let
     purs
     purty
     spago
+    psa
+    purescript-language-server
     spago2nix
     stylish-haskell
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
-    webCommon.newComponent
   ]);
 
 in
