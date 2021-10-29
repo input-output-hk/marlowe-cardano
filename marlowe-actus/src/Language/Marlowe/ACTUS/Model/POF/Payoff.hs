@@ -12,11 +12,11 @@ import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
 import           Language.Marlowe.ACTUS.Ops                        (ActusOps (..), RoleSignOps (..),
                                                                     YearFractionOps (_y))
 
--- |'payoff' function for ACTUS contracts
+-- |Generic payoff function for ACTUS contracts
 payoff :: (RoleSignOps a, YearFractionOps b a) =>
      EventType             -- ^ Event type
   -> RiskFactorsPoly a     -- ^ Risk factors
-  -> ContractTermsPoly a b -- ^ Contract terms (constant)
+  -> ContractTermsPoly a b -- ^ Contract terms
   -> ContractStatePoly a b -- ^ Contract state
   -> b                     -- ^ Time
   -> a                     -- ^ Payoff amount
@@ -66,7 +66,7 @@ payoff
     { o_rf_CURS
     }
   ContractTermsPoly
-    { contractType = NAM,
+    { contractType,
       dayCountConvention = Just dcc,
       maturityDate,
       contractRole
@@ -80,30 +80,7 @@ payoff
       ipnr,
       sd
     }
-  t =
-    let y_sd_t = _y dcc sd t maturityDate
-     in _POF_PR_NAM o_rf_CURS contractRole nsc prnxt ipac y_sd_t ipnr ipcb nt
-payoff
-  PR
-  RiskFactorsPoly
-    { o_rf_CURS
-    }
-  ContractTermsPoly
-    { contractType = ANN,
-      dayCountConvention = Just dcc,
-      maturityDate,
-      contractRole
-    }
-  ContractStatePoly
-    { nt,
-      nsc,
-      ipnr,
-      ipac,
-      ipcb,
-      prnxt,
-      sd
-    }
-  t =
+  t | contractType `elem` [NAM, ANN] =
     let y_sd_t = _y dcc sd t maturityDate
      in _POF_PR_NAM o_rf_CURS contractRole nsc prnxt ipac y_sd_t ipnr ipcb nt
 -- MD
@@ -205,41 +182,12 @@ payoff
      in _POF_PRD_PAM o_rf_CURS contractRole pprd ipac ipnr nt y_sd_t
 payoff
   PRD
-  _
-  ContractTermsPoly
-    { contractType = STK,
-      priceAtPurchaseDate = Just pprd,
-      contractRole
-    }
-  _
-  _ = _POF_PRD_STK contractRole pprd
-payoff
-  PRD
-  _
-  ContractTermsPoly
-    { contractType = OPTNS,
-      priceAtPurchaseDate = Just pprd,
-      contractRole
-    }
-  _
-  _ = _POF_PRD_STK contractRole pprd
-payoff
-  PRD
-  _
-  ContractTermsPoly
-    { contractType = FUTUR,
-      priceAtPurchaseDate = Just pprd,
-      contractRole
-    }
-  _
-  _ = _POF_PRD_STK contractRole pprd
-payoff
-  PRD
   RiskFactorsPoly
     { o_rf_CURS
     }
   ContractTermsPoly
-    { dayCountConvention = Just dcc,
+    { contractType,
+      dayCountConvention = Just dcc,
       priceAtPurchaseDate = Just pprd,
       maturityDate,
       contractRole
@@ -250,9 +198,19 @@ payoff
       ipnr,
       sd
     }
-  t =
+  t | contractType `elem` [LAM, NAM, ANN] =
     let y_sd_t = _y dcc sd t maturityDate
      in _POF_PRD_LAM o_rf_CURS contractRole pprd ipac ipnr ipcb y_sd_t
+payoff
+  PRD
+  _
+  ContractTermsPoly
+    { contractType,
+      priceAtPurchaseDate = Just pprd,
+      contractRole
+    }
+  _
+  _ | contractType `elem` [STK, OPTNS, FUTUR] = _POF_PRD_STK contractRole pprd
 -- TD
 payoff
   TD
@@ -365,22 +323,10 @@ payoff
     { o_rf_CURS
     }
   ContractTermsPoly
-    { contractType = OPTNS,
+    { contractType,
       contractRole
     }
   ContractStatePoly
     { xa = Just exerciseAmount}
-  _ = _POF_STD_OPTNS contractRole o_rf_CURS exerciseAmount
-payoff
-  STD
-  RiskFactorsPoly
-    { o_rf_CURS
-    }
-  ContractTermsPoly
-    { contractType = FUTUR,
-      contractRole
-    }
-  ContractStatePoly
-    { xa = Just exerciseAmount}
-  _ = _POF_STD_OPTNS contractRole o_rf_CURS exerciseAmount
+  _ | contractType `elem` [OPTNS, FUTUR] = _POF_STD_OPTNS contractRole o_rf_CURS exerciseAmount
 payoff _ _ _ _ _ = _zero
