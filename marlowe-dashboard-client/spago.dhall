@@ -34,7 +34,6 @@ You can edit this file as you like.
   , "prelude"
   , "profunctor-lenses"
   , "psci-support"
-  , "quickcheck"
   , "remotedata"
   , "servant-support"
   , "strings"

@@ -1,5 +1,5 @@
 let upstream =
-      https://raw.githubusercontent.com/input-output-hk/plutus-apps/36eed44347266ac8762d344ba15116013523fe0d/packages.dhall sha256:dd0321dc883d589df013b9a985c662d4c0982ab24772086b509005530c91414f
+      https://github.com/input-output-hk/purescript-web-common/releases/download/v1.0.1/packages.dhall sha256:f4ca6c359c375f3267b72696d9ed429a663d0a5a9adbe540d58e1451455df368
 
 let overrides = {=}
 
