@@ -5,13 +5,17 @@ module Spec.Marlowe.ACTUS.Examples
     (tests)
 where
 
-import           Data.Aeson                                       (eitherDecode)
-import           Data.ByteString.Lazy                             as B (readFile)
-import           Data.Validation                                  (Validation (..))
+import           Data.Aeson                                        (eitherDecode)
+import           Data.ByteString.Lazy                              as B (readFile)
+import           Data.Maybe                                        (fromJust)
+import           Data.Time.LocalTime
+import           Data.Validation                                   (Validation (..))
 import           Language.Marlowe
+import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (EventType (..), RiskFactors, RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms
-import           Language.Marlowe.ACTUS.Generator
-import qualified Ledger.Value                                     as Val
+import           Language.Marlowe.ACTUS.Generator.GeneratorFs
+import           Language.Marlowe.ACTUS.Generator.GeneratorStatic
+import qualified Ledger.Value                                      as Val
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -21,6 +25,7 @@ tests = testGroup "Marlowe represenation of sample ACTUS contracts"
   , testCase "LAM examples" ex_lam1
   , testCase "NAM examples" ex_nam1
   , testCase "ANN examples" ex_ann1
+  , testCase "OPTNS examples" ex_optns1
   ]
 
 -- |ex_pam1 defines a contract of type PAM
@@ -47,7 +52,7 @@ ex_pam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_pam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract ct of
+      ( \ct -> case genFsContract defaultRiskFactors ct of
           Failure _ -> assertFailure "Terms validation should not fail"
           Success contract ->
             let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -108,7 +113,7 @@ ex_lam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_lam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract ct of
+      ( \ct -> case genFsContract defaultRiskFactors ct of
           Failure _ -> assertFailure "Terms validation should not fail"
           Success contract -> do
             let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -169,7 +174,7 @@ ex_nam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_nam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract ct of
+      ( \ct -> case genFsContract defaultRiskFactors ct of
         Failure _ -> assertFailure "Terms validation should not fail"
         Success contract -> do
           let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -230,7 +235,7 @@ ex_ann1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_ann1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract ct of
+      ( \ct -> case genFsContract defaultRiskFactors ct of
         Failure _ -> assertFailure "Terms validation should not fail"
         Success contract -> do
           let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -267,8 +272,67 @@ ex_ann1 =
                   assertBool ("total payments to counterparty: " ++ show tc) (tc == 11240)
       )
 
+-- |ex_optns1 defines a contract of type OPTNS
+ex_optns1 :: IO ()
+ex_optns1 =
+  contractFromFile "test/Spec/Marlowe/ACTUS/ex_optns1.json"
+    >>= either msg run
+  where
+    msg err = putStr err
+    run ct = case genStaticContract rf ct of
+      Failure _ -> assertFailure "Terms validation should not fail"
+      Success contract -> -- Prelude.writeFile "option2.marlowe" (show $ pretty contract)
+          let principal = IDeposit (Role "counterparty") "counterparty" ada
+              ex = IDeposit (Role "party") "party" ada
+              out =
+                computeTransaction
+                  ( TransactionInput
+                      (0, 0)
+                      [ principal 10,
+                        ex 40
+                      ]
+                  )
+                  (emptyState 0)
+                  contract
+           in case out of
+                Error _ -> assertFailure "Transactions are not expected to fail"
+                TransactionOutput txWarn txPay _ con -> do
+                  assertBool "Contract is in Close" $ con == Close
+                  assertBool "No warnings" $ null txWarn
+
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10)
+                  let tc = totalPayments (Party "counterparty") txPay
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
+
+      where
+        rf :: EventType -> LocalTime -> RiskFactors
+        rf XD d
+          | d == (fromJust $ maturityDate ct) =
+            RiskFactorsPoly
+              { o_rf_CURS = 1.0,
+                o_rf_RRMO = 1.0,
+                o_rf_SCMO = 1.0,
+                pp_payoff = 120.0
+              }
+        rf _ _ =
+          RiskFactorsPoly
+            { o_rf_CURS = 1.0,
+              o_rf_RRMO = 1.0,
+              o_rf_SCMO = 1.0,
+              pp_payoff = 0.0
+            }
+
 contractFromFile :: FilePath -> IO (Either String ContractTerms)
 contractFromFile f = eitherDecode <$> B.readFile f
+
+defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
+defaultRiskFactors _ _ =
+  RiskFactorsPoly
+    { o_rf_CURS = 1.0,
+      o_rf_RRMO = 1.0,
+      o_rf_SCMO = 1.0,
+      pp_payoff = 0.0
+    }
 
 -- |totalPayments calculates the sum of the payments provided as argument
 totalPayments :: Payee -> [Payment] -> Integer

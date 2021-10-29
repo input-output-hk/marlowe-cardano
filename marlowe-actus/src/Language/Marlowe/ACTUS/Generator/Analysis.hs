@@ -8,7 +8,7 @@ The cash flows can be used to generate the payments in a Marlowe contract.
 
 -}
 
-module Language.Marlowe.ACTUS.Analysis
+module Language.Marlowe.ACTUS.Generator.Analysis
   ( genProjectedCashflows
   , genProjectedPayoffs
   )

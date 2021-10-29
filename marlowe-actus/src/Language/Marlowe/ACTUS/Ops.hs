@@ -7,7 +7,7 @@ import           Data.Time                                         (LocalTime)
 import           Language.Marlowe                                  (Observation (ValueGT, ValueLT),
                                                                     Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
                                                                     (%))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (CR (..), DCC)
+import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (CR (..), DCC (..))
 import           Language.Marlowe.ACTUS.Model.Utility.YearFraction (yearFraction)
 
 marloweFixedPoint :: Integer
@@ -72,6 +72,11 @@ instance DateOps LocalTime Double where
 
 instance YearFractionOps LocalTime Double where
     _y = yearFraction
+
+instance YearFractionOps (Value Observation) (Value Observation) where
+    _y DCC_A_360 _ _ _ = undefined
+    _y DCC_A_365 _ _ _ = undefined
+    _y _ _ _ _         = error "not available"
 
 instance ActusOps (Value Observation) where
     _min a b = Cond (ValueLT a b) a b

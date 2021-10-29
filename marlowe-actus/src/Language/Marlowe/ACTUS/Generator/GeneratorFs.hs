@@ -2,24 +2,20 @@
 
 {-| = ACTUS Generator
 
-Given ACTUS contract terms a Marlowe contract is generated. There are two different functions
-for generating the contracts:
+Given ACTUS contract terms a Marlowe contract is generated.
 
-* For 'genStaticContract' the risk factors are all known at contract creation
-* In 'genFsContract' risk factors are added to the Marlowe contract, i.e. will
-  be observed during the life time of the contract
+In 'genFsContract' risk factors are added to the Marlowe contract, i.e. will
+be observed during the life time of the contract
 
 -}
 
-module Language.Marlowe.ACTUS.Generator
-  (   genStaticContract
-    , genFsContract
-  )
+module Language.Marlowe.ACTUS.Generator.GeneratorFs
+  ( genFsContract )
 where
 
 import           Control.Monad.Reader
 import           Data.Foldable                                              (foldrM)
-import qualified Data.List                                                  as L (foldl', zip5)
+import qualified Data.List                                                  as L (zip5)
 import           Data.Maybe                                                 (maybeToList)
 import           Data.Monoid                                                (Endo (Endo, appEndo))
 import           Data.String                                                (IsString (fromString))
@@ -27,20 +23,20 @@ import           Data.Time                                                  (Loc
 import           Data.Validation                                            (Validation (..))
 import           Language.Marlowe                                           (Action (..), Bound (..), Case (..),
                                                                              ChoiceId (..), Contract (..),
-                                                                             Observation (..), Party (..), Payee (..),
-                                                                             Slot (..), Value (..), ValueId (ValueId),
-                                                                             ada)
-import           Language.Marlowe.ACTUS.Analysis                            (genProjectedCashflows)
+                                                                             Observation (..), Party (..), Slot (..),
+                                                                             Value (..), ValueId (ValueId))
 import           Language.Marlowe.ACTUS.Definitions.BusinessEvents          (EventType (..), RiskFactors,
                                                                              RiskFactorsMarlowe, RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractState           (ContractState, ContractStateMarlowe,
                                                                              ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms           (Assertion (..), AssertionContext (..),
                                                                              Assertions (..), ContractTerms,
-                                                                             ContractTermsPoly (..),
+                                                                             ContractTermsPoly (..), PRF (..),
                                                                              TermValidationError (..))
 import           Language.Marlowe.ACTUS.Definitions.Schedule                (CashFlow (..), ShiftedDay (..),
                                                                              calculationDay)
+import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
+import           Language.Marlowe.ACTUS.Generator.Generator                 (invoice)
 import           Language.Marlowe.ACTUS.MarloweCompat                       (constnt, letval, letval', marloweTime,
                                                                              timeToSlotNumber, toMarloweFixedPoint,
                                                                              useval)
@@ -55,71 +51,21 @@ import           Language.Marlowe.ACTUS.Ops                                 as O
 import           Ledger.Value                                               (TokenName (TokenName))
 import           Prelude                                                    as P hiding (Fractional, Num, (*), (+), (/))
 
--- |'genStaticContract' validates the contract terms in order to generate a
--- Marlowe contract with risk factors known in advance. The contract therefore
--- only consists of transactions, i.e. 'Deposit' and 'Pay'
-genStaticContract ::
-     ContractTerms                             -- ^ ACTUS contract terms
-  -> Validation [TermValidationError] Contract -- ^ Marlowe contract or applicability errors
-genStaticContract = fmap genStaticContract' . validateTerms
-
-genStaticContract' :: ContractTerms -> Contract
-genStaticContract' ct =
-  let cfs = genProjectedCashflows defaultRiskFactors ct
-      gen CashFlow {..}
-        | amount == 0.0 = id
-        | amount > 0.0 =
-          invoice
-            "party"
-            "counterparty"
-            (Constant $ round amount)
-            (Slot $ timeToSlotNumber cashPaymentDay)
-        | otherwise =
-          invoice
-            "counterparty"
-            "party"
-            (Constant $ round $ - amount)
-            (Slot $ timeToSlotNumber cashPaymentDay)
-   in L.foldl' (flip gen) Close $ reverse cfs
-
-invoice :: String -> String -> Value Observation -> Slot -> Contract -> Contract
-invoice from to amount timeout continue =
-  let party = Role $ TokenName $ fromString from
-      counterparty = Role $ TokenName $ fromString to
-   in When
-        [ Case
-            (Deposit party party ada amount)
-            ( Pay
-                party
-                (Party counterparty)
-                ada
-                amount
-                continue
-            )
-        ]
-        timeout
-        Close
-
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
-defaultRiskFactors _ _ =
-  RiskFactorsPoly
-    { o_rf_CURS = 1.0,
-      o_rf_RRMO = 1.0,
-      o_rf_SCMO = 1.0,
-      pp_payoff = 0.0
-    }
-
 -- |'genFsContract' validatate the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
 -- in time
 genFsContract ::
-     ContractTerms                             -- ^ ACTUS contract terms
+     (EventType -> LocalTime -> RiskFactors)   -- ^ Risk factors per event and time
+  -> ContractTerms                             -- ^ ACTUS contract terms
   -> Validation [TermValidationError] Contract -- ^ Marlowe contract or applicabilty errors
-genFsContract = fmap genFsContract' . validateTerms
+genFsContract rf = fmap (genFsContract' rf) . validateTerms
 
-genFsContract' :: ContractTerms -> Contract
-genFsContract' ct =
-  let projectedCashflows = genProjectedCashflows defaultRiskFactors ct
+genFsContract' ::
+     (EventType -> LocalTime -> RiskFactors)
+  -> ContractTerms
+  -> Contract
+genFsContract' rf ct =
+  let projectedCashflows = genProjectedCashflows rf ct
       eventTypesOfCashflows = cashEvent <$> projectedCashflows
       paymentDayCashflows = Slot . timeToSlotNumber . cashPaymentDay <$> projectedCashflows
       previousDates = statusDate ct : (cashCalculationDay <$> projectedCashflows)
@@ -173,13 +119,13 @@ genFsContract' ct =
                   xd = Just $ useval "xd" $ i P.- 1,
                   prnxt = useval "prnxt" $ i P.- 1,
                   tmd = Just $ useval "tmd" i,
-                  prf = undefined,
+                  prf = PRF_DF,
                   sd = useval "sd" (timeToSlotNumber prevDate)
                 }
 
             -- current risk factors
-            rf :: RiskFactorsMarlowe
-            rf =
+            mf :: RiskFactorsMarlowe
+            mf =
               RiskFactorsPoly
                 { o_rf_CURS = useval "o_rf_CURS" i,
                   o_rf_RRMO = useval "o_rf_RRMO" i,
@@ -188,11 +134,11 @@ genFsContract' ct =
                 }
 
             -- state transformation to current state
-            stf = stateToContract <$> stateTransition ev rf prevDate calcDate st
+            stf = stateToContract <$> stateTransition ev mf prevDate calcDate st
 
             -- payoff
             pof =
-              case payoffFs ev rf ct st prevDate calcDate of
+              case payoffFs ev mf ct st prevDate calcDate of
                 Nothing -> cont
                 Just payoff ->
                   Let (payoffAt i) payoff $
@@ -261,7 +207,7 @@ genFsContract' ct =
        in compose toAssert cont
 
     inquiryFs :: EventType -> String -> Slot -> String -> Maybe AssertionContext -> Contract -> Contract
-    inquiryFs ev timePosfix date oracle context continue =
+    inquiryFs ev timePostfix date oracle context continue =
       let oracleRole = Role $ TokenName $ fromString oracle
 
           letTemplate inputChoiceId inputOwner cont =
@@ -285,18 +231,19 @@ genFsContract' ct =
 
           riskFactorInquiry name =
             inputTemplate
-              (fromString (name ++ timePosfix))
+              (fromString (name ++ timePostfix))
               oracleRole
               (inferBounds name context)
 
-          riskFactorsInquiryEv AD = id
-          riskFactorsInquiryEv SC = riskFactorInquiry "o_rf_SCMO"
-          riskFactorsInquiryEv RR = riskFactorInquiry "o_rf_RRMO"
-          riskFactorsInquiryEv PP = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
-          riskFactorsInquiryEv _ =
+          riskFactorsInquiryEv AD  = id
+          riskFactorsInquiryEv SC  = riskFactorInquiry "o_rf_SCMO"
+          riskFactorsInquiryEv RR  = riskFactorInquiry "o_rf_RRMO"
+          riskFactorsInquiryEv PP  = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
+          riskFactorsInquiryEv STD = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
+          riskFactorsInquiryEv _   =
             if enableSettlement ct
               then riskFactorInquiry "o_rf_CURS"
-              else Let (ValueId (fromString ("o_rf_CURS" ++ timePosfix))) (constnt 1.0)
+              else Let (ValueId (fromString ("o_rf_CURS" ++ timePostfix))) (constnt 1.0)
        in riskFactorsInquiryEv ev continue
 
     maxPseudoDecimalValue :: Integer
@@ -304,7 +251,7 @@ genFsContract' ct =
 
     genZeroRiskAssertions :: ContractTerms -> Assertion -> Contract -> Contract
     genZeroRiskAssertions terms@ContractTermsPoly {dayCountConvention = Just dcc, ..} NpvAssertionAgainstZeroRiskBond {..} continue =
-      let cfs = genProjectedCashflows defaultRiskFactors terms
+      let cfs = genProjectedCashflows rf terms
 
           dateToYearFraction :: LocalTime -> Double
           dateToYearFraction dt = _y dcc statusDate dt maturityDate

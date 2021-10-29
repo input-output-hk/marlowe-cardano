@@ -14,10 +14,10 @@ import           Data.Maybe                                        (catMaybes)
 import           Data.Time
 import           Data.Time.Clock.POSIX                             (posixSecondsToUTCTime)
 import           Data.Time.Clock.System                            (SystemTime (MkSystemTime), utcToSystemTime)
-import           Language.Marlowe.ACTUS.Analysis
 import           Language.Marlowe.ACTUS.Definitions.BusinessEvents
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms
 import           Language.Marlowe.ACTUS.Definitions.Schedule
+import           Language.Marlowe.ACTUS.Generator.Analysis
 import           Test.QuickCheck
 
 largeamount :: Gen Double
