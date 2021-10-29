@@ -12,9 +12,9 @@ import           Data.Maybe                                            (fromMayb
 import           Language.Marlowe.ACTUS.Definitions.BusinessEvents     (EventType (..), RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractState      (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms      (CT (..), ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
-import           Language.Marlowe.ACTUS.Ops                            (DateOps (..), RoleSignOps (..),
+import           Language.Marlowe.ACTUS.Definitions.Ops                (DateOps (..), RoleSignOps (..),
                                                                         YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator      (inf', sup')
 
 data CtxSTF a b = CtxSTF

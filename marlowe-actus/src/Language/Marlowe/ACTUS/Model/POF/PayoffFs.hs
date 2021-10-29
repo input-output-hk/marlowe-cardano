@@ -11,10 +11,10 @@ import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (EventType (.
                                                                     RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractState  (ContractStateMarlowe, ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (CT (..), ContractTerms, ContractTermsPoly (..))
+import           Language.Marlowe.ACTUS.Definitions.Ops            (ActusNum (..), ActusOps (..), YearFractionOps (_y),
+                                                                    marloweFixedPoint)
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat    (constnt)
 import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
-import           Language.Marlowe.ACTUS.Ops                        (ActusNum (..), ActusOps (..), YearFractionOps (_y),
-                                                                    marloweFixedPoint)
 import           Prelude                                           hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |Payoff function for ACTUS contracts with /fixed schedules/

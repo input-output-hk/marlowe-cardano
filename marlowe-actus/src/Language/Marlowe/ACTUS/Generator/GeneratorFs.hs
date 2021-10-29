@@ -33,6 +33,7 @@ import           Language.Marlowe.ACTUS.Definitions.ContractTerms           (Ass
                                                                              Assertions (..), ContractTerms,
                                                                              ContractTermsPoly (..), PRF (..),
                                                                              TermValidationError (..))
+import           Language.Marlowe.ACTUS.Definitions.Ops                     as O (ActusNum (..), YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Definitions.Schedule                (CashFlow (..), ShiftedDay (..),
                                                                              calculationDay)
 import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
@@ -47,7 +48,6 @@ import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        (sch
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        as S (maturity)
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionFs         (stateTransition)
-import           Language.Marlowe.ACTUS.Ops                                 as O (ActusNum (..), YearFractionOps (_y))
 import           Ledger.Value                                               (TokenName (TokenName))
 import           Prelude                                                    as P hiding (Fractional, Num, (*), (+), (/))
 

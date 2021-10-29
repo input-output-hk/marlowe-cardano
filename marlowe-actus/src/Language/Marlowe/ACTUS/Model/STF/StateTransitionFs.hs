@@ -13,10 +13,10 @@ import           Language.Marlowe.ACTUS.Definitions.BusinessEvents     (EventTyp
 import           Language.Marlowe.ACTUS.Definitions.ContractState      (ContractStateMarlowe)
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms      (CT (..), ContractTerms, ContractTermsMarlowe,
                                                                         ContractTermsPoly (..))
+import           Language.Marlowe.ACTUS.Definitions.Ops                (YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat        (constnt, marloweTime)
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition      (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
-import           Language.Marlowe.ACTUS.Ops                            (YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator      (inf', sup')
 
 stateTransition :: EventType -> RiskFactorsMarlowe -> LocalTime -> LocalTime -> ContractStateMarlowe -> Reader (CtxSTF Double LocalTime) ContractStateMarlowe

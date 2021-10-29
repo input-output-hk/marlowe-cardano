@@ -8,7 +8,7 @@ import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (RiskFactorsP
 import           Language.Marlowe.ACTUS.Definitions.ContractState  (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..),
                                                                     OPTP (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Ops                        (ActusNum (..), ActusOps (..), DateOps (_lt),
+import           Language.Marlowe.ACTUS.Definitions.Ops            (ActusNum (..), ActusOps (..), DateOps (_lt),
                                                                     RoleSignOps (_r))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity        (annuity)
 import           Prelude                                           hiding (Fractional, Num, (*), (+), (-), (/))

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Marlowe.ACTUS.Ops where
+module Language.Marlowe.ACTUS.Definitions.Ops where
 
 import           Data.Time                                        (LocalTime)
 import           Language.Marlowe                                 (Observation (ValueGT, ValueLT),
@@ -33,7 +33,7 @@ class DateOps a b where
     _lt :: a -> a -> b --returns pseudo-boolean
 
 _minusOne :: (ActusNum a, ActusOps a) => a
-_minusOne = _zero Language.Marlowe.ACTUS.Ops.- _one
+_minusOne = _zero Language.Marlowe.ACTUS.Definitions.Ops.- _one
 
 class (ActusNum a, ActusOps a) => RoleSignOps a where
     _r :: CR -> a
