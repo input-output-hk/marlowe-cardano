@@ -21,7 +21,7 @@ import MainFrame.Types (ChildSlots)
 import Marlowe (getApiGists)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Servant.PureScript.Ajax (errorToString)
+import Servant.PureScript (errorToString)
 import Text.Parsing.Parser (runParser)
 
 handleAction ::

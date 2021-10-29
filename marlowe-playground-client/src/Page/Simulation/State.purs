@@ -49,7 +49,7 @@ import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.Simulation.Lenses (_bottomPanelState, _decorationIds, _helpContext, _showRightPanel)
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
-import Servant.PureScript.Ajax (AjaxError, errorToString)
+import Servant.PureScript (AjaxError, errorToString)
 import SessionStorage as SessionStorage
 import Simulator.Lenses (_SimulationNotStarted, _SimulationRunning, _currentContract, _currentMarloweState, _executionState, _initialSlot, _marloweState, _moveToAction, _possibleActions, _templateContent, _termContract)
 import Simulator.State (applyInput, emptyMarloweState, inFuture, moveToSlot, startSimulation, updateChoice)

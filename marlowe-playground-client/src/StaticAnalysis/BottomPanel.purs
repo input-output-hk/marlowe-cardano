@@ -30,7 +30,7 @@ import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
 import Page.Simulation.View (integerTemplateParameters)
 import Pretty (showPrettyToken)
-import Servant.PureScript.Ajax (AjaxError(..), ErrorDescription(..))
+import Servant.PureScript (AjaxError(..), ErrorDescription(..))
 import StaticAnalysis.Types (AnalysisExecutionState(..), AnalysisState, MultiStageAnalysisData(..), _analysisExecutionState, _analysisState, _templateContent)
 import Types (WarningAnalysisError(..))
 

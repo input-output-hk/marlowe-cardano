@@ -3,7 +3,7 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs;
+  inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs webCommon webCommonPlayground;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) purty-pre-commit;
@@ -125,6 +125,7 @@ haskell.project.shellFor {
   # Point to some source dependencies
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-    export WEB_COMMON_SRC="${webCommon.cleanSrc}"
+    export WEB_COMMON_SRC="${webCommon}"
+    export WEB_COMMON_PLAYGROUND_SRC="${webCommonPlayground}"
   '';
 }

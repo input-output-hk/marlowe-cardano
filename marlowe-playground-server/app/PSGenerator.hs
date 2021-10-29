@@ -186,8 +186,7 @@ myTypes =
     ]
 
 mySettings :: Settings
-mySettings =
-    defaultSettings & set apiModuleName "Marlowe"
+mySettings = defaultSettings & set apiModuleName "Marlowe"
 
 multilineString :: BS.ByteString -> BS.ByteString -> BS.ByteString
 multilineString name value =
@@ -276,11 +275,11 @@ type Web = ("api" :> (API.API :<|> Auth.FrontendAPI)) :<|> MS.API :<|> Webghc.Fr
 
 generate :: FilePath -> IO ()
 generate outputDir = do
+    writePSTypes outputDir (buildBridge myBridge) myTypes
     writeAPIModuleWithSettings
         mySettings
         outputDir
         myBridgeProxy
         (Proxy @Web)
-    writePSTypes outputDir (buildBridge myBridge) myTypes
     writeUsecases outputDir
     writePangramJson outputDir

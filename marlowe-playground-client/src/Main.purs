@@ -14,24 +14,15 @@ import Halogen.HTML as HH
 import Halogen.VDom.Driver (runUI)
 import MainFrame.State (component) as MainFrame
 import MainFrame.Types (Query(..)) as MainFrame
-import Marlowe (SPParams_(SPParams_))
+import Marlowe (SPSettings_)
 import Router as Router
 import Routing.Duplex as Routing
 import Routing.Hash (matchesWith)
-import Servant.PureScript.Settings (SPSettingsDecodeJson_(..), SPSettingsEncodeJson_(..), SPSettings_(..), defaultSettings)
 
 environment :: Env
 environment =
-  { ajaxSettings: SPSettings_ (settings { decodeJson = decodeJson, encodeJson = encodeJson })
+  { ajaxSettings: settings
   }
-  where
-  SPSettings_ settings = defaultSettings $ SPParams_ { baseURL: "/" }
-
-  jsonOptions = defaultOptions { unwrapSingleConstructors = true }
-
-  decodeJson = SPSettingsDecodeJson_ jsonOptions
-
-  encodeJson = SPSettingsEncodeJson_ jsonOptions
 
 main ::
   Effect Unit

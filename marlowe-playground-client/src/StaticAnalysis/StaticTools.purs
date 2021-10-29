@@ -33,7 +33,7 @@ import Marlowe.Symbolic.Types.Request as MSReq
 import Marlowe.Symbolic.Types.Response (Response(..), Result(..))
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Servant.PureScript.Ajax (AjaxError(..))
+import Servant.PureScript (AjaxError(..))
 import StaticAnalysis.Types (AnalysisExecutionState(..), AnalysisInProgressRecord, AnalysisState, ContractPath, ContractPathStep(..), ContractZipper(..), MultiStageAnalysisData(..), MultiStageAnalysisProblemDef, RemainingSubProblemInfo, _analysisExecutionState, _analysisState, _templateContent)
 import Types (WarningAnalysisError(..), WebData)
 

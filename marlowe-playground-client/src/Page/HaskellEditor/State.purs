@@ -35,7 +35,7 @@ import Monaco (IMarkerData, markerSeverity)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.HaskellEditor.Types (Action(..), BottomPanelView(..), State, _bottomPanelState, _compilationResult, _editorReady, _haskellEditorKeybindings, _metadataHintInfo)
-import Servant.PureScript.Ajax (AjaxError)
+import Servant.PureScript (AjaxError)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability)
 import StaticAnalysis.StaticTools (analyseContract)

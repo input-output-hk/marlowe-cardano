@@ -22,8 +22,6 @@ import Effect.Ref as Ref
 import Effect.Timer (clearTimeout, setTimeout)
 import Halogen (HalogenM, SubscriptionId)
 import Halogen as H
-import Halogen.Query.EventSource (EventSource)
-import Halogen.Query.EventSource as EventSource
 import Web.Event.EventTarget (EventListener, eventListener)
 
 blocklyEvents ::

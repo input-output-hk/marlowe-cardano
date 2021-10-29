@@ -18,10 +18,10 @@ You can edit this file as you like.
   , "formatters"
   , "functions"
   , "halogen"
+  , "markdown"
   , "matryoshka"
   , "node-fs"
   , "numerics"
-  , "markdown"
   , "prelude"
   , "psci-support"
   , "remotedata"
@@ -33,6 +33,7 @@ You can edit this file as you like.
   , "test-unit"
   , "undefinable"
   , "uuid"
+  , "web-common"
   , "web-socket"
   ]
 , packages = ./packages.dhall
@@ -40,8 +41,7 @@ You can edit this file as you like.
   [ "src/**/*.purs"
   , "test/**/*.purs"
   , "generated/**/*.purs"
-  , "web-common/**/*.purs"
-  , "web-common-marlowe/**/*.purs"
-  , "web-common-playground/**/*.purs"
+  , "../web-common-marlowe/src/**/*.purs"
+  , "${env:WEB_COMMON_PLAYGROUND_SRC as Text}/src/**/*.purs"
   ]
 }

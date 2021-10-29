@@ -40,7 +40,7 @@ import Halogen.HTML (HTML)
 import Halogen.Monaco (KeyBindings(DefaultBindings))
 import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
-import Halogen.Query.EventSource (eventListenerEventSource)
+import Halogen.Query.Event (eventListener)
 import LoginPopup (openLoginPopup, informParentAndClose)
 import MainFrame.Types (Action(..), ChildSlots, ModalView(..), Query(..), State, View(..), _actusBlocklySlot, _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _loadGistResult, _marloweEditorState, _newProject, _projectName, _projects, _rename, _saveAs, _showBottomPanel, _showModal, _simulationState, _view, _workflow, sessionToState, stateToSession)
 import MainFrame.View (render)
@@ -73,7 +73,7 @@ import Routing.Duplex as RD
 import Routing.Hash as Routing
 import SaveAs.State (handleAction) as SaveAs
 import SaveAs.Types (Action(..), State, _status, _projectName, emptyState) as SaveAs
-import Servant.PureScript.Ajax (AjaxError, ErrorDescription(..), errorToString, runAjaxError)
+import Servant.PureScript (AjaxError, ErrorDescription(..), errorToString, runAjaxError)
 import SessionStorage as SessionStorage
 import StaticData (gistIdLocalStorageKey)
 import StaticData as StaticData
@@ -293,7 +293,7 @@ handleAction Init = do
     Left _ -> handleRoute { subroute: Router.Home, gistId: Nothing }
   document <- liftEffect $ Web.document =<< Web.window
   subscribe' \sid ->
-    eventListenerEventSource keyup (toEventTarget document) (map (HandleKey sid) <<< KE.fromEvent)
+    eventListener keyup (toEventTarget document) (map (HandleKey sid) <<< KE.fromEvent)
   checkAuthStatus
   -- Load session data if available
   void

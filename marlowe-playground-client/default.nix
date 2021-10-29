@@ -1,4 +1,4 @@
-{ pkgs, gitignore-nix, haskell, webCommonMarlowe, webCommonPlayground, buildPursPackage, buildNodeModules, filterNpm }:
+{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, webCommonPlayground, buildPursPackage, buildNodeModules, filterNpm }:
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
@@ -43,21 +43,25 @@ let
     };
   };
 
-  client = buildPursPackage {
-    inherit pkgs nodeModules;
-    src = cleanSrc;
-    checkPhase = ''
-      ${pkgs.nodejs}/bin/npm run test
-    '';
-    name = "marlowe-playground-client";
-    extraSrcs = {
-      web-common-marlowe = webCommonMarlowe;
-      web-common-playground = webCommonPlayground;
-      generated = generated-purescript;
-    };
-    packages = pkgs.callPackage ./packages.nix { };
-    spagoPackages = pkgs.callPackage ./spago-packages.nix { };
-  };
+  client = pkgs.lib.overrideDerivation
+    (buildPursPackage {
+      inherit pkgs nodeModules;
+      src = cleanSrc;
+      checkPhase = ''
+        node -e 'require("./output/Test.Main").main()'
+      '';
+      name = "marlowe-playground-client";
+      extraSrcs = {
+        web-common-marlowe = webCommonMarlowe;
+        web-common-playground = webCommonPlayground;
+        generated = generated-purescript;
+      };
+      packages = pkgs.callPackage ./packages.nix { };
+      spagoPackages = pkgs.callPackage ./spago-packages.nix { };
+    })
+    (_: {
+      WEB_COMMON_SRC = webCommon;
+    });
 in
 {
   inherit client generate-purescript start-backend;

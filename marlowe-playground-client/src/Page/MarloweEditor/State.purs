@@ -40,7 +40,7 @@ import Marlowe.Template as Template
 import Monaco (isError, isWarning)
 import Network.RemoteData as RemoteData
 import Page.MarloweEditor.Types (Action(..), BottomPanelView, State, _bottomPanelState, _editorErrors, _editorReady, _editorWarnings, _hasHoles, _keybindings, _metadataHintInfo, _selectedHole, _showErrorDetail)
-import Servant.PureScript.Ajax (AjaxError)
+import Servant.PureScript (AjaxError)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability, getUnreachableContracts)
 import StaticAnalysis.StaticTools (analyseContract)
