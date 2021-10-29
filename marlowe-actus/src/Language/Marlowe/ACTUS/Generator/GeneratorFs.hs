@@ -40,7 +40,7 @@ import           Language.Marlowe.ACTUS.Generator.Generator                 (inv
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, letval, letval', marloweTime,
                                                                              timeToSlotNumber, toMarloweFixedPoint,
                                                                              useval)
-import           Language.Marlowe.ACTUS.Model.APPLICABILITY.Applicability   (validateTerms)
+import           Language.Marlowe.ACTUS.Model.APPL.Applicability            (validateTerms)
 import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
 import           Language.Marlowe.ACTUS.Model.POF.PayoffFs                  (payoffFs)
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        (schedule)

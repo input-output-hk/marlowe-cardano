@@ -32,7 +32,7 @@ import           Language.Marlowe.ACTUS.Definitions.BusinessEvents
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms  hiding (Assertion)
 import           Language.Marlowe.ACTUS.Definitions.Schedule
 import           Language.Marlowe.ACTUS.Generator.Analysis
-import           Language.Marlowe.ACTUS.Model.Utility.DateShift    (getFollowingBusinessDay)
+import           Language.Marlowe.ACTUS.Utility.DateShift          (getFollowingBusinessDay)
 import           Test.Tasty
 import           Test.Tasty.HUnit                                  (Assertion, assertBool, assertFailure, testCase)
 import           Text.Printf                                       (printf)

@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.Utility.YearFraction where
+module Language.Marlowe.ACTUS.Utility.YearFraction where
 
 import           Data.Time                                        (Day, LocalTime (..), TimeOfDay (..), addLocalTime,
                                                                    diffDays, fromGregorian, gregorianMonthLength,

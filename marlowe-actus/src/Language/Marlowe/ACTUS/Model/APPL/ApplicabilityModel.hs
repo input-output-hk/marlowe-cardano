@@ -6,7 +6,7 @@ https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-applic
 
 -}
 
-module Language.Marlowe.ACTUS.Model.APPLICABILITY.ApplicabilityModel
+module Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
 where
 
 import           Data.Validation                                  (Validation (..))

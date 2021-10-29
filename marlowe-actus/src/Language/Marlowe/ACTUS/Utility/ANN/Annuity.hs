@@ -1,5 +1,5 @@
 
-module Language.Marlowe.ACTUS.Model.Utility.ANN.Annuity
+module Language.Marlowe.ACTUS.Utility.ANN.Annuity
   (annuity)
 where
 

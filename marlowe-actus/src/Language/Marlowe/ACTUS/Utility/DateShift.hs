@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.Utility.DateShift
+module Language.Marlowe.ACTUS.Utility.DateShift
   ( applyBDC
   , applyBDCWithCfg
   , getPreceedingBusinessDay

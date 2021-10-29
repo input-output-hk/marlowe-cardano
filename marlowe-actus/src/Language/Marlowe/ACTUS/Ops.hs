@@ -3,12 +3,12 @@
 
 module Language.Marlowe.ACTUS.Ops where
 
-import           Data.Time                                         (LocalTime)
-import           Language.Marlowe                                  (Observation (ValueGT, ValueLT),
-                                                                    Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
-                                                                    (%))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (CR (..), DCC (..))
-import           Language.Marlowe.ACTUS.Model.Utility.YearFraction (yearFraction)
+import           Data.Time                                        (LocalTime)
+import           Language.Marlowe                                 (Observation (ValueGT, ValueLT),
+                                                                   Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
+                                                                   (%))
+import           Language.Marlowe.ACTUS.Definitions.ContractTerms (CR (..), DCC (..))
+import           Language.Marlowe.ACTUS.Utility.YearFraction      (yearFraction)
 
 marloweFixedPoint :: Integer
 marloweFixedPoint = 1000

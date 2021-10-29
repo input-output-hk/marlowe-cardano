@@ -70,12 +70,12 @@ library
     Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel
     Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule
     Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel
-    Language.Marlowe.ACTUS.Model.APPLICABILITY.Applicability
-    Language.Marlowe.ACTUS.Model.APPLICABILITY.ApplicabilityModel
-    Language.Marlowe.ACTUS.Model.Utility.ANN.Annuity
-    Language.Marlowe.ACTUS.Model.Utility.DateShift
-    Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator
-    Language.Marlowe.ACTUS.Model.Utility.YearFraction
+    Language.Marlowe.ACTUS.Model.APPL.Applicability
+    Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
+    Language.Marlowe.ACTUS.Utility.ANN.Annuity
+    Language.Marlowe.ACTUS.Utility.DateShift
+    Language.Marlowe.ACTUS.Utility.ScheduleGenerator
+    Language.Marlowe.ACTUS.Utility.YearFraction
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates

@@ -23,12 +23,12 @@ import           Language.Marlowe.ACTUS.Definitions.ContractTerms         (CT (.
                                                                            ScheduleConfig (..))
 import           Language.Marlowe.ACTUS.Definitions.Schedule              (ShiftedDay (..))
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel
-import           Language.Marlowe.ACTUS.Model.Utility.DateShift           (applyBDCWithCfg)
-import           Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator   (applyEOMC,
+import           Language.Marlowe.ACTUS.Ops                               (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Utility.DateShift                 (applyBDCWithCfg)
+import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator         (applyEOMC,
                                                                            generateRecurrentScheduleWithCorrections,
                                                                            (<+>), (<->))
-import           Language.Marlowe.ACTUS.Model.Utility.YearFraction        (yearFraction)
-import           Language.Marlowe.ACTUS.Ops                               (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Utility.YearFraction              (yearFraction)
 
 schedule :: EventType -> ContractTerms -> [ShiftedDay]
 schedule ev c = schedule' ev c { maturityDate = maturity c }

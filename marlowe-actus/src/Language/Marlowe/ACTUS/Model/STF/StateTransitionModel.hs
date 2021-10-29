@@ -8,9 +8,9 @@ import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (RiskFactorsP
 import           Language.Marlowe.ACTUS.Definitions.ContractState  (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..),
                                                                     OPTP (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Model.Utility.ANN.Annuity  (annuity)
 import           Language.Marlowe.ACTUS.Ops                        (ActusNum (..), ActusOps (..), DateOps (_lt),
                                                                     RoleSignOps (_r))
+import           Language.Marlowe.ACTUS.Utility.ANN.Annuity        (annuity)
 import           Prelude                                           hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- Principal at Maturity (PAM)

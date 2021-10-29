@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator
+module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
   ( generateRecurrentScheduleWithCorrections
   , (<+>)
   , (<->)
@@ -23,7 +23,7 @@ import           Data.Time.Calendar                               (addDays, addG
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..),
                                                                    ScheduleConfig (..), Stub (LongStub))
 import           Language.Marlowe.ACTUS.Definitions.Schedule      (ShiftedDay (..), ShiftedSchedule)
-import           Language.Marlowe.ACTUS.Model.Utility.DateShift   (applyBDC)
+import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDC)
 
 maximumMaybe :: Ord a => [a] -> Maybe a
 maximumMaybe [] = Nothing
