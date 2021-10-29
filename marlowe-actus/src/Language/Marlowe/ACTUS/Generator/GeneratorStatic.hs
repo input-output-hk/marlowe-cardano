@@ -20,7 +20,7 @@ import           Language.Marlowe.ACTUS.Definitions.ContractTerms         (Contr
 import           Language.Marlowe.ACTUS.Definitions.Schedule              (CashFlow (..))
 import           Language.Marlowe.ACTUS.Generator.Analysis                (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator               (invoice)
-import           Language.Marlowe.ACTUS.MarloweCompat                     (timeToSlotNumber)
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat           (timeToSlotNumber)
 import           Language.Marlowe.ACTUS.Model.APPLICABILITY.Applicability (validateTerms)
 
 -- |'genStaticContract' validates the contract terms in order to generate a

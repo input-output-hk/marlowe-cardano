@@ -2,7 +2,7 @@
 
 {- This module provides compatibility to Marlowe DSL -}
 
-module Language.Marlowe.ACTUS.MarloweCompat where
+module Language.Marlowe.ACTUS.Generator.MarloweCompat where
 
 import           Data.String                (IsString (fromString))
 import           Data.Time                  (Day, LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)

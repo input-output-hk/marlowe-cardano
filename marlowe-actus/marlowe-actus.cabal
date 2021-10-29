@@ -51,16 +51,16 @@ library
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   exposed-modules:
-    Language.Marlowe.ACTUS.MarloweCompat
     Language.Marlowe.ACTUS.Ops
     Language.Marlowe.ACTUS.Definitions.BusinessEvents
     Language.Marlowe.ACTUS.Definitions.ContractTerms
     Language.Marlowe.ACTUS.Definitions.ContractState
     Language.Marlowe.ACTUS.Definitions.Schedule
-    Language.Marlowe.ACTUS.Generator.GeneratorStatic
-    Language.Marlowe.ACTUS.Generator.GeneratorFs
-    Language.Marlowe.ACTUS.Generator.Generator
     Language.Marlowe.ACTUS.Generator.Analysis
+    Language.Marlowe.ACTUS.Generator.Generator
+    Language.Marlowe.ACTUS.Generator.GeneratorFs
+    Language.Marlowe.ACTUS.Generator.GeneratorStatic
+    Language.Marlowe.ACTUS.Generator.MarloweCompat
     Language.Marlowe.ACTUS.Model.POF.PayoffModel
     Language.Marlowe.ACTUS.Model.POF.Payoff
     Language.Marlowe.ACTUS.Model.POF.PayoffFs

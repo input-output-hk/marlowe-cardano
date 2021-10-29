@@ -13,7 +13,7 @@ import           Language.Marlowe.ACTUS.Definitions.BusinessEvents      (EventTy
 import           Language.Marlowe.ACTUS.Definitions.ContractState       (ContractStateMarlowe)
 import           Language.Marlowe.ACTUS.Definitions.ContractTerms       (CT (..), ContractTerms, ContractTermsMarlowe,
                                                                          ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.MarloweCompat                   (constnt, marloweTime)
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat         (constnt, marloweTime)
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition       (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
 import           Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator (inf', sup')

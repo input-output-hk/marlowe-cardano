@@ -37,7 +37,7 @@ import           Language.Marlowe.ACTUS.Definitions.Schedule                (Cas
                                                                              calculationDay)
 import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator                 (invoice)
-import           Language.Marlowe.ACTUS.MarloweCompat                       (constnt, letval, letval', marloweTime,
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, letval, letval', marloweTime,
                                                                              timeToSlotNumber, toMarloweFixedPoint,
                                                                              useval)
 import           Language.Marlowe.ACTUS.Model.APPLICABILITY.Applicability   (validateTerms)
