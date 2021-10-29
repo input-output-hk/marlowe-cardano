@@ -151,7 +151,7 @@ extra-deps:
     - prettyprinter-configurable
     - stubs/plutus-ghc-stub
 - git: https://github.com/input-output-hk/plutus-apps
-  commit: 055c214d744a57eb77f263c88f27376aa9efba86
+  commit: 2c214f9ab81abd48376a057605de0055eb4f0a02
   subdirs:
     - freer-extras
     - playground-common

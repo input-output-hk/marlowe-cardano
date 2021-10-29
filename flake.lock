@@ -180,17 +180,17 @@
     "plutus-apps": {
       "flake": false,
       "locked": {
-        "lastModified": 1635446873,
-        "narHash": "sha256-yDya/jE0/OwtQ/OavxQK9RSzypcb/IRQbI3cRRYCrg8=",
+        "lastModified": 1635531330,
+        "narHash": "sha256-Uts1Z/wezZaHdCfEXGUYuxLw8bNa4w9uWQm2JQbmApg=",
         "owner": "input-output-hk",
         "repo": "plutus-apps",
-        "rev": "36eed44347266ac8762d344ba15116013523fe0d",
+        "rev": "2c214f9ab81abd48376a057605de0055eb4f0a02",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
         "repo": "plutus-apps",
-        "rev": "36eed44347266ac8762d344ba15116013523fe0d",
+        "rev": "2c214f9ab81abd48376a057605de0055eb4f0a02",
         "type": "github"
       }
     },
