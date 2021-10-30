@@ -8,10 +8,10 @@ module Language.Marlowe.ACTUS.Utility.DateShift
   )
 where
 
-import           Data.Time                                        (LocalTime (..), addDays, toGregorian)
-import           Data.Time.Calendar.WeekDate                      (toWeekDate)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (BDC (..), Calendar (..), ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Definitions.Schedule      (ShiftedDay (..))
+import           Data.Time                                   (LocalTime (..), addDays, toGregorian)
+import           Data.Time.Calendar.WeekDate                 (toWeekDate)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (BDC (..), Calendar (..), ScheduleConfig (..))
+import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedDay (..))
 
 {- Business Day Convention -}
 

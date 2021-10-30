@@ -25,16 +25,16 @@ import           Language.Marlowe                                           (Act
                                                                              ChoiceId (..), Contract (..),
                                                                              Observation (..), Party (..), Slot (..),
                                                                              Value (..), ValueId (ValueId))
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents          (EventType (..), RiskFactors,
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactors,
                                                                              RiskFactorsMarlowe, RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractState           (ContractState, ContractStateMarlowe,
+import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState, ContractStateMarlowe,
                                                                              ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms           (Assertion (..), AssertionContext (..),
+import           Language.Marlowe.ACTUS.Domain.ContractTerms                (Assertion (..), AssertionContext (..),
                                                                              Assertions (..), ContractTerms,
                                                                              ContractTermsPoly (..), PRF (..),
                                                                              TermValidationError (..))
-import           Language.Marlowe.ACTUS.Definitions.Ops                     as O (ActusNum (..), YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Definitions.Schedule                (CashFlow (..), ShiftedDay (..),
+import           Language.Marlowe.ACTUS.Domain.Ops                          as O (ActusNum (..), YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
                                                                              calculationDay)
 import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator                 (invoice)

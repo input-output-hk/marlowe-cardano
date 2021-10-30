@@ -1,9 +1,9 @@
 {-# LANGUAGE DerivingStrategies #-}
-module Language.Marlowe.ACTUS.Definitions.ContractState where
+module Language.Marlowe.ACTUS.Domain.ContractState where
 
-import           Data.Time                                        (LocalTime)
-import           Language.Marlowe                                 (Observation, Value)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (PRF)
+import           Data.Time                                   (LocalTime)
+import           Language.Marlowe                            (Observation, Value)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (PRF)
 
 {-| ACTUS contract states are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-states.json

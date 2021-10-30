@@ -17,10 +17,10 @@ import           Control.Applicative                              ((<|>))
 import           Control.Monad.Reader                             (Reader, reader)
 import           Data.Maybe                                       (fromMaybe, maybeToList)
 import           Data.Time.LocalTime                              (LocalTime)
-import           Language.Marlowe.ACTUS.Definitions.ContractState (ContractState, ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (CT (..), ContractTerms, ContractTermsPoly (..),
+import           Language.Marlowe.ACTUS.Domain.ContractState      (ContractState, ContractStatePoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTerms, ContractTermsPoly (..),
                                                                    Cycle (..), FEB (..), IPCB (..), PRF, SCEF (..))
-import           Language.Marlowe.ACTUS.Definitions.Ops           (RoleSignOps (_r), YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Ops                (RoleSignOps (_r), YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf', sup')

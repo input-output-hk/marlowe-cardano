@@ -1,12 +1,12 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
-module Language.Marlowe.ACTUS.Definitions.Schedule where
+module Language.Marlowe.ACTUS.Domain.Schedule where
 
-import           Data.Aeson.Types                                  (FromJSON, ToJSON)
-import           Data.Time                                         (LocalTime)
-import           GHC.Generics                                      (Generic)
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (EventType)
+import           Data.Aeson.Types                             (FromJSON, ToJSON)
+import           Data.Time                                    (LocalTime)
+import           GHC.Generics                                 (Generic)
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType)
 
 data ShiftedDay = ShiftedDay
   { paymentDay     :: LocalTime,

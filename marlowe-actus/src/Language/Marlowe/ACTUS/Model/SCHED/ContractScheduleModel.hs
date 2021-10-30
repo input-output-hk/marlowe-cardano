@@ -9,9 +9,9 @@ import           Data.List                                        as L (find, nu
 import           Data.Maybe                                       (fromMaybe, isJust, isNothing, maybeToList)
 import           Data.Time.Calendar                               (addDays)
 import           Data.Time.LocalTime                              (LocalTime (..), addLocalTime)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (ContractTerms, ContractTermsPoly (..), Cycle (..),
+import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms, ContractTermsPoly (..), Cycle (..),
                                                                    IPCB (IPCB_NTL), PPEF (..), PYTP (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Definitions.Schedule      (ShiftedDay (..))
+import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..))
 import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf,
                                                                    remove, (<+>), (<->))

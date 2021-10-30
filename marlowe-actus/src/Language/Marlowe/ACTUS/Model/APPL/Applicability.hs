@@ -4,7 +4,7 @@ module Language.Marlowe.ACTUS.Model.APPL.Applicability where
 
 import           Data.Maybe                                           (isJust)
 import           Data.Validation
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms     (CT (..), ContractTerms, ContractTermsPoly (..),
+import           Language.Marlowe.ACTUS.Domain.ContractTerms          (CT (..), ContractTerms, ContractTermsPoly (..),
                                                                        ScheduleConfig (..), TermValidationError (..))
 import           Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
 

@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
 
-module Language.Marlowe.ACTUS.Definitions.BusinessEvents where
+module Language.Marlowe.ACTUS.Domain.BusinessEvents where
 
 import           Data.Aeson.Types (FromJSON, ToJSON)
 import           GHC.Generics     (Generic)

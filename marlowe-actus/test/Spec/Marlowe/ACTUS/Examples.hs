@@ -5,17 +5,17 @@ module Spec.Marlowe.ACTUS.Examples
     (tests)
 where
 
-import           Data.Aeson                                        (eitherDecode)
-import           Data.ByteString.Lazy                              as B (readFile)
-import           Data.Maybe                                        (fromJust)
+import           Data.Aeson                                       (eitherDecode)
+import           Data.ByteString.Lazy                             as B (readFile)
+import           Data.Maybe                                       (fromJust)
 import           Data.Time.LocalTime
-import           Data.Validation                                   (Validation (..))
+import           Data.Validation                                  (Validation (..))
 import           Language.Marlowe
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (EventType (..), RiskFactors, RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..), RiskFactors, RiskFactorsPoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms
 import           Language.Marlowe.ACTUS.Generator.GeneratorFs
 import           Language.Marlowe.ACTUS.Generator.GeneratorStatic
-import qualified Ledger.Value                                      as Val
+import qualified Ledger.Value                                     as Val
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

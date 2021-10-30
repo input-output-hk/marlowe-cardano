@@ -17,12 +17,12 @@ import           Control.Applicative                                      (Alter
 import           Data.Ord                                                 (Down (..))
 import           Data.Sort                                                (sortOn)
 import           Data.Time                                                (LocalTime)
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents        (EventType (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms         (CT (..), ContractTerms,
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents             (EventType (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms              (CT (..), ContractTerms,
                                                                            ContractTermsPoly (..), Cycle (..),
                                                                            ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Definitions.Ops                   (YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Definitions.Schedule              (ShiftedDay (..))
+import           Language.Marlowe.ACTUS.Domain.Ops                        (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Schedule                   (ShiftedDay (..))
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel
 import           Language.Marlowe.ACTUS.Utility.DateShift                 (applyBDCWithCfg)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator         (applyEOMC,

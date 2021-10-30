@@ -6,7 +6,7 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TemplateHaskell    #-}
 
-module Language.Marlowe.ACTUS.Definitions.ContractTerms where
+module Language.Marlowe.ACTUS.Domain.ContractTerms where
 
 import           Control.Applicative ((<|>))
 import           Control.Monad       (guard, mzero)

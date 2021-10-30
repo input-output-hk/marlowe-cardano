@@ -9,11 +9,11 @@ where
 import           Control.Monad.Reader
 import           Data.Maybe                                            (fromMaybe, maybeToList)
 import           Data.Time                                             (LocalTime)
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents     (EventType (..), RiskFactorsMarlowe)
-import           Language.Marlowe.ACTUS.Definitions.ContractState      (ContractStateMarlowe)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms      (CT (..), ContractTerms, ContractTermsMarlowe,
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents          (EventType (..), RiskFactorsMarlowe)
+import           Language.Marlowe.ACTUS.Domain.ContractState           (ContractStateMarlowe)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms           (CT (..), ContractTerms, ContractTermsMarlowe,
                                                                         ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Definitions.Ops                (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Ops                     (YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat        (constnt, marloweTime)
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition      (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel

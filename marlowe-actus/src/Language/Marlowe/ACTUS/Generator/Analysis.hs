@@ -21,11 +21,11 @@ import qualified Data.List                                                  as L
 import           Data.Maybe                                                 (fromMaybe, isNothing)
 import           Data.Sort                                                  (sortOn)
 import           Data.Time                                                  (LocalTime)
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents          (EventType (..), RiskFactors)
-import           Language.Marlowe.ACTUS.Definitions.ContractState           (ContractState)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms           (CT (..), ContractTerms,
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactors)
+import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms                (CT (..), ContractTerms,
                                                                              ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Definitions.Schedule                (CashFlow (..), ShiftedDay (..),
+import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
                                                                              calculationDay, paymentDay)
 import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
 import           Language.Marlowe.ACTUS.Model.POF.Payoff                    (payoff)

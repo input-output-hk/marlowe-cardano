@@ -1,14 +1,14 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Marlowe.ACTUS.Definitions.Ops where
+module Language.Marlowe.ACTUS.Domain.Ops where
 
-import           Data.Time                                        (LocalTime)
-import           Language.Marlowe                                 (Observation (ValueGT, ValueLT),
-                                                                   Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
-                                                                   (%))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (CR (..), DCC (..))
-import           Language.Marlowe.ACTUS.Utility.YearFraction      (yearFraction)
+import           Data.Time                                   (LocalTime)
+import           Language.Marlowe                            (Observation (ValueGT, ValueLT),
+                                                              Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
+                                                              (%))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), DCC (..))
+import           Language.Marlowe.ACTUS.Utility.YearFraction (yearFraction)
 
 marloweFixedPoint :: Integer
 marloweFixedPoint = 1000
@@ -33,7 +33,7 @@ class DateOps a b where
     _lt :: a -> a -> b --returns pseudo-boolean
 
 _minusOne :: (ActusNum a, ActusOps a) => a
-_minusOne = _zero Language.Marlowe.ACTUS.Definitions.Ops.- _one
+_minusOne = _zero Language.Marlowe.ACTUS.Domain.Ops.- _one
 
 class (ActusNum a, ActusOps a) => RoleSignOps a where
     _r :: CR -> a
