@@ -2,10 +2,8 @@ name: "Deploy"
 on:
   push:
     branches:
-      # Commented out until plutus-ops is updated for the repo split
-      # - main # staging
-      # - production
-      - fake-branch-which-will-not-exist-prior-to-ops-update
+      - main # staging
+      - production
 jobs:
   deploy:
     runs-on: ubuntu-latest
