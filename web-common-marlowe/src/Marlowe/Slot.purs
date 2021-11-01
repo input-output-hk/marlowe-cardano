@@ -38,8 +38,8 @@ shelleyInitialSlot = Slot $ fromInt 0
 -- Note [Datetime to slot]: The `plutus-pab.yaml` config file can specify
 -- the datetime of slot zero. To synchronise with the frontend, this should
 -- be set to `shelleyLaunchDate - (shelleyInitialSlot * 1000)` (because there
--- is 1 slot per second). On the current estimates this comes to 1591566291000,
--- which is 2020-06-07 21:44:51 UTC.
+-- is 1 slot per second). On the current estimates this comes to 1596059091000,
+-- which is 2020-07-29 21:44:51 UTC.
 shelleyLaunchDate :: DateTime
 shelleyLaunchDate =
   let
