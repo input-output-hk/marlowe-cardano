@@ -138,8 +138,10 @@ purchase date: 2.1.2020
 maturity date: 30.3.2020
 ```
 
-|Price of underlying at maturity|120|
-|Payoff|40|
+|Date|Asset|Value|
+|----|-----|-----|
+|Maturity|Underlying|120|
+|Maturity|Option|40|
 
 [ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_optns1.json)
 
