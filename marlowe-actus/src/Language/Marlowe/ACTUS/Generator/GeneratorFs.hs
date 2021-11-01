@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 {-| = ACTUS Generator
 
@@ -47,7 +48,7 @@ import           Language.Marlowe.ACTUS.Model.POF.PayoffFs                  (pay
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        (schedule)
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        as S (maturity)
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (CtxSTF (..))
-import           Language.Marlowe.ACTUS.Model.STF.StateTransitionFs         (stateTransition)
+import           Language.Marlowe.ACTUS.Model.STF.StateTransitionFs         as FS (stateTransition)
 import           Ledger.Value                                               (TokenName (TokenName))
 import           Prelude                                                    as P hiding (Fractional, Num, (*), (+), (/))
 
@@ -61,121 +62,41 @@ genFsContract ::
 genFsContract rf = fmap (genFsContract' rf) . validateTerms
 
 genFsContract' ::
-     (EventType -> LocalTime -> RiskFactors)
-  -> ContractTerms
-  -> Contract
+  (EventType -> LocalTime -> RiskFactors) ->
+  ContractTerms ->
+  Contract
 genFsContract' rf ct =
-  let projectedCashflows = genProjectedCashflows rf ct
-      eventTypesOfCashflows = cashEvent <$> projectedCashflows
-      paymentDayCashflows = Slot . timeToSlotNumber . cashPaymentDay <$> projectedCashflows
-      previousDates = statusDate ct : (cashCalculationDay <$> projectedCashflows)
-
-      gen :: (CashFlow, LocalTime, EventType, Slot, Integer) -> Contract -> Reader (CtxSTF Double LocalTime) Contract
-      gen (cf, prevDate, ev, date, i) cont =
-        let payoffAt :: Show a => a -> ValueId
-            payoffAt t = ValueId $ fromString $ "payoff_" ++ show t
-
-            calcDate :: LocalTime
-            calcDate = cashCalculationDay cf
-
-            stateToContract :: ContractStateMarlowe -> Contract -> Contract
-            stateToContract ContractStatePoly {..} =
-              letval' "tmd" i tmd
-                . letval "nt" i nt
-                . letval "ipnr" i ipnr
-                . letval "ipac" i ipac
-                . letval "feac" i feac
-                . letval "nsc" i nsc
-                . letval "isc" i isc
-                . letval "sd" i sd
-                . letval "prnxt" i prnxt
-                . letval "ipcb" i ipcb
-                . letval' "xa" i xa
-                . letval' "xd" i xd
+  let gen :: (CashFlow, LocalTime, EventType, Slot, Integer) -> Contract -> Reader (CtxSTF Double LocalTime) Contract
+      gen (cf, sd, ev, date, i) cont =
+        let t :: LocalTime
+            t = cashCalculationDay cf
 
             comment :: EventType -> Contract -> Contract
             comment IED = letval "IED" i (constnt 0)
             comment MD  = letval "MD" i (constnt 0)
-            comment IP  = letval ("IP:" ++ show calcDate ++ show prevDate) i (constnt 0)
-            comment RR  = letval ("RR:" ++ show calcDate) i (constnt 0)
-            comment FP  = letval ("FP:" ++ show calcDate) i (constnt 0)
+            comment IP  = letval ("IP:" ++ show t ++ show sd) i (constnt 0)
+            comment RR  = letval ("RR:" ++ show t) i (constnt 0)
+            comment FP  = letval ("FP:" ++ show t) i (constnt 0)
             comment _   = id
 
-            -- getting current risk factors from oracle
-            oracle = let ac = context <$> constraints ct in inquiryFs ev ("_" ++ show i) date "oracle" ac
-
-            -- previous state
-            st :: ContractStateMarlowe
-            st =
-              ContractStatePoly
-                { nsc = useval "nsc" $ i P.- 1,
-                  nt = useval "nt" $ i P.- 1,
-                  isc = useval "isc" $ i P.- 1,
-                  ipac = useval "ipac" $ i P.- 1,
-                  feac = useval "feac" $ i P.- 1,
-                  ipnr = useval "ipnr" $ i P.- 1,
-                  ipcb = useval "ipcb" $ i P.- 1,
-                  xa = Just $ useval "xa" $ i P.- 1,
-                  xd = Just $ useval "xd" $ i P.- 1,
-                  prnxt = useval "prnxt" $ i P.- 1,
-                  tmd = Just $ useval "tmd" i,
-                  prf = PRF_DF,
-                  sd = useval "sd" (timeToSlotNumber prevDate)
-                }
-
-            -- current risk factors
-            mf :: RiskFactorsMarlowe
-            mf =
-              RiskFactorsPoly
-                { o_rf_CURS = useval "o_rf_CURS" i,
-                  o_rf_RRMO = useval "o_rf_RRMO" i,
-                  o_rf_SCMO = useval "o_rf_SCMO" i,
-                  pp_payoff = useval "pp_payoff" i,
-                  xd_payoff = useval "xd_payoff" i,
-                  dv_payoff = useval "dv_payoff" i
-                }
-
-            -- state transformation to current state
-            stf = stateToContract <$> stateTransition ev mf prevDate calcDate st
-
-            -- payoff
-            pof =
-              case payoffFs ev mf ct st prevDate calcDate of
-                Nothing -> cont
-                Just payoff ->
-                  Let (payoffAt i) payoff $
-                    -- TODO: should be done with Let constructor based on the actual
-                    -- payoff that is derived from the observed risk factors.
-                    --
-                    -- But this would introduce exponential growth of the contract, since
-                    -- the continuation is put into both branches of the If construct.
-                    --
-                    -- Using Cond allows to flip the sign of the payoff amount, but
-                    -- not party and counterparty.
-                    if amount cf > 0.0
-                      then
-                        invoice
-                          "party"
-                          "counterparty"
-                          (UseValue $ payoffAt i)
-                          date
-                          cont
-                      else
-                        if amount cf < 0.0
-                          then
-                            invoice
-                              "counterparty"
-                              "party"
-                              (NegValue $ UseValue $ payoffAt i)
-                              date
-                              cont
-                          else cont
-          in stf >>= \stf' -> return $ oracle . comment ev . stf' $ pof
+            oracle_i = let ac = context <$> constraints ct in inquiryFs ev ("_" ++ show i) date "oracle" ac
+            st_i = stateAt i sd
+            rf_i = riskFactorAt i
+            stf_i = stateToContract i <$> FS.stateTransition ev rf_i sd t st_i
+            pof_i c =
+              case payoffFs ev rf_i ct st_i sd t of
+                Nothing -> c
+                Just p  -> payoff i cf date c p
+         in stf_i >>= \stf -> let f = return . oracle_i . comment ev . stf . pof_i in f cont
 
       scheduleAcc :: Reader (CtxSTF Double LocalTime) Contract
       scheduleAcc =
-        foldrM gen (postProcess Close) $
-          L.zip5 projectedCashflows previousDates eventTypesOfCashflows paymentDayCashflows [1 ..]
+        let projectedCashflows = genProjectedCashflows rf ct
+            eventTypesOfCashflows = cashEvent <$> projectedCashflows
+            paymentDayCashflows = Slot . timeToSlotNumber . cashPaymentDay <$> projectedCashflows
+            previousDates = statusDate ct : (cashCalculationDay <$> projectedCashflows)
+         in foldrM gen (postProcess Close) $
+              L.zip5 projectedCashflows previousDates eventTypesOfCashflows paymentDayCashflows [1 ..]
    in runReader (stateInitialisation <$> initializeState <*> scheduleAcc) initCtx
   where
     fpSchedule, prSchedule, ipSchedule :: [LocalTime]
@@ -185,6 +106,21 @@ genFsContract' rf ct =
 
     initCtx :: CtxSTF Double LocalTime
     initCtx = CtxSTF ct fpSchedule prSchedule ipSchedule (S.maturity ct)
+
+    stateToContract :: Integer -> ContractStateMarlowe -> Contract -> Contract
+    stateToContract i ContractStatePoly {..} =
+      letval' "tmd" i tmd
+        . letval "nt" i nt
+        . letval "ipnr" i ipnr
+        . letval "ipac" i ipac
+        . letval "feac" i feac
+        . letval "nsc" i nsc
+        . letval "isc" i isc
+        . letval "sd" i sd
+        . letval "prnxt" i prnxt
+        . letval "ipcb" i ipcb
+        . letval' "xa" i xa
+        . letval' "xd" i xd
 
     stateInitialisation :: ContractState -> Contract -> Contract
     stateInitialisation ContractStatePoly {..} =
@@ -201,12 +137,65 @@ genFsContract' rf ct =
         . letval' "xa" 0 (constnt <$> xa)
         . letval' "xd" 0 (marloweTime <$> xd)
 
+    stateAt :: Integer -> LocalTime -> ContractStateMarlowe
+    stateAt i sd =
+      ContractStatePoly
+        { nsc = useval "nsc" $ i P.- 1,
+          nt = useval "nt" $ i P.- 1,
+          isc = useval "isc" $ i P.- 1,
+          ipac = useval "ipac" $ i P.- 1,
+          feac = useval "feac" $ i P.- 1,
+          ipnr = useval "ipnr" $ i P.- 1,
+          ipcb = useval "ipcb" $ i P.- 1,
+          xa = Just $ useval "xa" $ i P.- 1,
+          xd = Just $ useval "xd" $ i P.- 1,
+          prnxt = useval "prnxt" $ i P.- 1,
+          tmd = Just $ useval "tmd" i,
+          prf = PRF_DF,
+          sd = useval "sd" (timeToSlotNumber sd)
+        }
+
+    riskFactorAt :: Integer -> RiskFactorsMarlowe
+    riskFactorAt i =
+      RiskFactorsPoly
+        { o_rf_CURS = useval "o_rf_CURS" i,
+          o_rf_RRMO = useval "o_rf_RRMO" i,
+          o_rf_SCMO = useval "o_rf_SCMO" i,
+          pp_payoff = useval "pp_payoff" i,
+          xd_payoff = useval "xd_payoff" i,
+          dv_payoff = useval "dv_payoff" i
+        }
+
+    payoffAt :: Show a => a -> ValueId
+    payoffAt t = ValueId $ fromString $ "payoff_" ++ show t
+
     postProcess :: Contract -> Contract
     postProcess cont =
       let ctr = constraints ct
           toAssert = genZeroRiskAssertions ct <$> (assertions =<< maybeToList ctr)
           compose = appEndo . mconcat . map Endo
        in compose toAssert cont
+
+    payoff i cf date cont p =
+      Let (payoffAt i) p $
+        if amount cf > 0.0
+          then
+            invoice
+              "party"
+              "counterparty"
+              (UseValue $ payoffAt i)
+              date
+              cont
+          else
+            if amount cf < 0.0
+              then
+                invoice
+                  "counterparty"
+                  "party"
+                  (NegValue $ UseValue $ payoffAt i)
+                  date
+                  cont
+              else cont
 
     inquiryFs :: EventType -> String -> Slot -> String -> Maybe AssertionContext -> Contract -> Contract
     inquiryFs ev timePostfix date oracle context continue =
@@ -237,13 +226,13 @@ genFsContract' rf ct =
               oracleRole
               (inferBounds name context)
 
-          riskFactorsInquiryEv AD  = id
-          riskFactorsInquiryEv SC  = riskFactorInquiry "o_rf_SCMO"
-          riskFactorsInquiryEv RR  = riskFactorInquiry "o_rf_RRMO"
-          riskFactorsInquiryEv DV  = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "dv_payoff"
-          riskFactorsInquiryEv PP  = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
+          riskFactorsInquiryEv AD = id
+          riskFactorsInquiryEv SC = riskFactorInquiry "o_rf_SCMO"
+          riskFactorsInquiryEv RR = riskFactorInquiry "o_rf_RRMO"
+          riskFactorsInquiryEv DV = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "dv_payoff"
+          riskFactorsInquiryEv PP = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
           riskFactorsInquiryEv STD = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "xd_payoff"
-          riskFactorsInquiryEv _   =
+          riskFactorsInquiryEv _ =
             if enableSettlement ct
               then riskFactorInquiry "o_rf_CURS"
               else Let (ValueId (fromString ("o_rf_CURS" ++ timePostfix))) (constnt 1.0)
