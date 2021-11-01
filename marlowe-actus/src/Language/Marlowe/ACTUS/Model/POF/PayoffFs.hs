@@ -324,14 +324,14 @@ payoffFs'
   DV
   RiskFactorsPoly
     { o_rf_CURS,
-      pp_payoff
+      dv_payoff
     }
   ContractTermsPoly
     { contractType = STK,
       contractRole
     }
   _
-  _ _ = Just $ _POF_DV_STK contractRole o_rf_CURS pp_payoff
+  _ _ = Just $ _POF_DV_STK contractRole o_rf_CURS dv_payoff
 -- STD
 payoffFs'
   STD

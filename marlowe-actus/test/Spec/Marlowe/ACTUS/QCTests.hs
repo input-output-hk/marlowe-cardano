@@ -58,7 +58,9 @@ defaultRiskFactors _ _ =
     { o_rf_CURS = 1.0,
       o_rf_RRMO = 1.0,
       o_rf_SCMO = 1.0,
-      pp_payoff = 0.0
+      pp_payoff = 0.0,
+      xd_payoff = 0.0,
+      dv_payoff = 0.0
     }
 
 prop_non_empty :: ContractTermsQC -> Property

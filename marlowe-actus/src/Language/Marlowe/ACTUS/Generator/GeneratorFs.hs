@@ -130,7 +130,9 @@ genFsContract' rf ct =
                 { o_rf_CURS = useval "o_rf_CURS" i,
                   o_rf_RRMO = useval "o_rf_RRMO" i,
                   o_rf_SCMO = useval "o_rf_SCMO" i,
-                  pp_payoff = useval "pp_payoff" i
+                  pp_payoff = useval "pp_payoff" i,
+                  xd_payoff = useval "xd_payoff" i,
+                  dv_payoff = useval "dv_payoff" i
                 }
 
             -- state transformation to current state
@@ -238,8 +240,9 @@ genFsContract' rf ct =
           riskFactorsInquiryEv AD  = id
           riskFactorsInquiryEv SC  = riskFactorInquiry "o_rf_SCMO"
           riskFactorsInquiryEv RR  = riskFactorInquiry "o_rf_RRMO"
+          riskFactorsInquiryEv DV  = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "dv_payoff"
           riskFactorsInquiryEv PP  = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
-          riskFactorsInquiryEv STD = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "pp_payoff"
+          riskFactorsInquiryEv STD = riskFactorInquiry "o_rf_CURS" . riskFactorInquiry "xd_payoff"
           riskFactorsInquiryEv _   =
             if enableSettlement ct
               then riskFactorInquiry "o_rf_CURS"

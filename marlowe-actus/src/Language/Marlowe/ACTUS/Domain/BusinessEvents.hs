@@ -45,6 +45,8 @@ data RiskFactorsPoly a = RiskFactorsPoly
     , o_rf_RRMO :: a
     , o_rf_SCMO :: a
     , pp_payoff :: a
+    , xd_payoff :: a
+    , dv_payoff :: a
     }
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON)

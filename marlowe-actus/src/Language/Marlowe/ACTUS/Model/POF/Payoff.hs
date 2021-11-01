@@ -109,11 +109,11 @@ payoff
   PP
   RiskFactorsPoly
     { o_rf_CURS,
-      pp_payoff
+      dv_payoff
     }
   _
   _
-  _ = _POF_PP_PAM o_rf_CURS pp_payoff
+  _ = _POF_PP_PAM o_rf_CURS dv_payoff
 -- PY
 payoff
   PY
@@ -307,14 +307,14 @@ payoff
   DV
   RiskFactorsPoly
     { o_rf_CURS,
-      pp_payoff
+      dv_payoff
     }
   ContractTermsPoly
     { contractType = STK,
       contractRole
     }
   _
-  _ = _POF_DV_STK contractRole o_rf_CURS pp_payoff
+  _ = _POF_DV_STK contractRole o_rf_CURS dv_payoff
 -- STD
 payoff
   STD
@@ -326,6 +326,7 @@ payoff
       contractRole
     }
   ContractStatePoly
-    { xa = Just exerciseAmount}
+    { xa = Just exerciseAmount
+    }
   _ | contractType `elem` [OPTNS, FUTUR] = _POF_STD_OPTNS contractRole o_rf_CURS exerciseAmount
 payoff _ _ _ _ _ = _zero

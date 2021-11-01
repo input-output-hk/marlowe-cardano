@@ -259,7 +259,13 @@ contractTermsGen' ct = do
       }
 
 riskAtTGen :: Gen RiskFactors
-riskAtTGen = RiskFactorsPoly <$> percentage <*> percentage <*> percentage <*> smallamount
+riskAtTGen = RiskFactorsPoly
+    <$> percentage
+    <*> percentage
+    <*> percentage
+    <*> smallamount
+    <*> smallamount
+    <*> smallamount
 
 riskFactorsGen :: ContractTerms -> Gen (M.Map LocalTime RiskFactors)
 riskFactorsGen ct = do
@@ -268,7 +274,9 @@ riskFactorsGen ct = do
             { o_rf_CURS = 1.0,
               o_rf_RRMO = 1.0,
               o_rf_SCMO = 1.0,
-              pp_payoff = 0.0
+              pp_payoff = 0.0,
+              xd_payoff = 0.0,
+              dv_payoff = 0.0
             }
     let days = cashCalculationDay <$> genProjectedCashflows riskFactors ct
     rf <- vectorOf (L.length days) riskAtTGen
@@ -284,6 +292,12 @@ riskFactorsGenRandomWalkGen contractTerms = do
         fluctuate state fluctiation = state + (fluctiation - 50) / 100
         walk rf st =
             let fluctuate' extractor = fluctuate (extractor rf) (extractor st)
-            in RiskFactorsPoly (fluctuate' o_rf_CURS) (fluctuate' o_rf_RRMO) (fluctuate' o_rf_SCMO) (fluctuate' pp_payoff)
+            in RiskFactorsPoly
+                (fluctuate' o_rf_CURS)
+                (fluctuate' o_rf_RRMO)
+                (fluctuate' o_rf_SCMO)
+                (fluctuate' pp_payoff)
+                (fluctuate' xd_payoff)
+                (fluctuate' dv_payoff)
         path = L.scanl walk riskAtT riskFactorsValues
     return $ M.fromList $ L.zip riskFactorsDates path

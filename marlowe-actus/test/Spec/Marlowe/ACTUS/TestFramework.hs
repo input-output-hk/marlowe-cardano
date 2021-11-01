@@ -50,7 +50,9 @@ tests n t = testGroup n [testCase (getField @"identifier" tc) (runTest tc) | tc 
                       { o_rf_CURS = 1.0,
                         o_rf_RRMO = 1.0,
                         o_rf_SCMO = 1.0,
-                        pp_payoff = 0.0
+                        pp_payoff = 0.0,
+                        xd_payoff = 0.0,
+                        dv_payoff = 0.0
                       }
 
                   observedKey RR = marketObjectCodeOfRateReset ct
@@ -72,8 +74,8 @@ tests n t = testGroup n [testCase (getField @"identifier" tc) (runTest tc) | tc 
                in case ev of
                     RR -> rf {o_rf_RRMO = v}
                     SC -> rf {o_rf_SCMO = v}
-                    DV -> rf {pp_payoff = v}
-                    XD -> rf {pp_payoff = v}
+                    DV -> rf {dv_payoff = v}
+                    XD -> rf {xd_payoff = v}
                     _  -> rf {o_rf_CURS = v}
 
             cashFlows = genProjectedCashflows getRiskFactors ct

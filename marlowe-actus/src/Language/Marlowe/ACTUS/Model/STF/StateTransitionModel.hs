@@ -644,7 +644,7 @@ _STF_XD_OPTNS
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ _max (pp_payoff - ops1) _zero,
+    { xa = Just $ _max (xd_payoff - ops1) _zero,
       sd = t
     }
 _STF_XD_OPTNS
@@ -655,7 +655,7 @@ _STF_XD_OPTNS
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ _max (ops1 - pp_payoff) _zero,
+    { xa = Just $ _max (ops1 - xd_payoff) _zero,
       sd = t
     }
 _STF_XD_OPTNS
@@ -666,7 +666,7 @@ _STF_XD_OPTNS
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ _max (pp_payoff - ops1) _zero + _max (ops1 - pp_payoff) _zero,
+    { xa = Just $ _max (xd_payoff - ops1) _zero + _max (ops1 - xd_payoff) _zero,
       sd = t
     }
 _STF_XD_OPTNS _ st _ t =
@@ -682,7 +682,7 @@ _STF_XD_FUTUR
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ pp_payoff - pfut,
+    { xa = Just $ xd_payoff - pfut,
       sd = t
     }
 _STF_XD_FUTUR _ _ _ _ = undefined
