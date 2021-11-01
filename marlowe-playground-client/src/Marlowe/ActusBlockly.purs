@@ -993,7 +993,7 @@ actusContractToTerms raw = do
         , ct_XA: Nothing
         , ct_PFUT: Nothing
         , ct_SCIED: Just 0.0
-        , ct_SCEF: Just SE_000
+        , ct_SCEF: Just SE_OOO
         , ct_SCCL: Nothing
         , ct_SCANX: Nothing
         , ct_SCCDD: Just 0.0
