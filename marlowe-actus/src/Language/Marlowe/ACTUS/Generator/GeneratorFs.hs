@@ -50,7 +50,7 @@ import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        as S
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionFs         as FS (stateTransition)
 import           Ledger.Value                                               (TokenName (TokenName))
-import           Prelude                                                    as P hiding (Fractional, Num, (*), (+), (/))
+import           Prelude                                                    hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |'genFsContract' validatate the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
@@ -140,16 +140,16 @@ genFsContract' rf ct =
     stateAt :: Integer -> LocalTime -> ContractStateMarlowe
     stateAt i sd =
       ContractStatePoly
-        { nsc = useval "nsc" $ i P.- 1,
-          nt = useval "nt" $ i P.- 1,
-          isc = useval "isc" $ i P.- 1,
-          ipac = useval "ipac" $ i P.- 1,
-          feac = useval "feac" $ i P.- 1,
-          ipnr = useval "ipnr" $ i P.- 1,
-          ipcb = useval "ipcb" $ i P.- 1,
-          xa = Just $ useval "xa" $ i P.- 1,
-          xd = Just $ useval "xd" $ i P.- 1,
-          prnxt = useval "prnxt" $ i P.- 1,
+        { nsc = useval "nsc" $ pred i,
+          nt = useval "nt" $ pred i,
+          isc = useval "isc" $ pred i,
+          ipac = useval "ipac" $ pred i,
+          feac = useval "feac" $ pred i,
+          ipnr = useval "ipnr" $ pred i,
+          ipcb = useval "ipcb" $ pred i,
+          xa = Just $ useval "xa" $ pred i,
+          xd = Just $ useval "xd" $ pred i,
+          prnxt = useval "prnxt" $ pred i,
           tmd = Just $ useval "tmd" i,
           prf = PRF_DF,
           sd = useval "sd" (timeToSlotNumber sd)
