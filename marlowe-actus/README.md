@@ -39,21 +39,7 @@ This generates yearly cash flows with the interest payment for 10 years and the 
 |9|10000|0|200|200|
 |10|10000|10000|200|10200|
 
-The contract in ACTUS is specified as follows - only the relevant parameters are shown here:
-
-```
-ContractTerms
-  { contractType = PAM
-  , ct_IED       = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_MD        = iso8601ParseM "2030-01-01T00:00:00"
-  , ct_NT        = Just 10000.0
-  , ct_DCC       = Just DCC_E30_360
-  , ct_IPCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_IPANX     = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_IPNR      = Just 0.02
-  ...
-  }
-```
+[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_pam1.json)
 
 #### Linear Amortizer (LAM)
 
@@ -80,26 +66,7 @@ term: 10 years
 |9|2000|1000|40|1040|
 |10|1000|1000|20|1020|
 
-The contract in ACTUS is specified as follows - only the relevant parameters are shown here:
-
-```
-ContractTerms
-  { contractType = LAM
-  , ct_IED       = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_MD        = iso8601ParseM "2030-01-01T00:00:00"
-  , ct_PRNXT     = Just 1000.0
-  , ct_NT        = Just 10000.0
-  , ct_DCC       = Just DCC_E30_360
-  , ct_IPCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_IPANX     = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_IPNR      = Just 0.02
-  , ct_IPAC      = Just 0.0
-  , ct_PRCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_PRANX     = iso8601ParseM "2021-01-01T00:00:00"
-  , ct_IPCB      = Just IPCB_NT
-  ...
-  }
-```
+[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_lam1.json)
 
 #### Negative Amortizer (NAM)
 
@@ -125,26 +92,7 @@ term: 10 years
 |9|3134|1000|63|1000|
 |10|2196|1000|44|1000|
 
-The contract in ACTUS is specified as follows - only the relevant parameters are shown here:
-
-```
-ContractTerms
-  { contractType = NAM
-  , ct_IED       = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_MD        = iso8601ParseM "2030-01-01T00:00:00"
-  , ct_PRNXT     = Just 1000.0
-  , ct_NT        = Just 10000.0
-  , ct_DCC       = Just DCC_E30_360
-  , ct_IPCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_IPANX     = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_IPNR      = Just 0.02
-  , ct_IPAC      = Just 0.0
-  , ct_PRCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_PRANX     = iso8601ParseM "2021-01-01T00:00:00"
-  , ct_IPCB      = Just IPCB_NT
-  ...
-  }
-```
+[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_nam1.json)
 
 #### Annuity (ANN)
 
@@ -170,26 +118,7 @@ term: 10 years
 |9|3134|937|63|1000|
 |10|2196|956|44|1000|
 
-The contract in ACTUS is specified as follows - only the relevant parameters are shown here:
-
-```
-ContractTerms
-  { contractType = ANN
-  , ct_IED       = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_MD        = iso8601ParseM "2030-01-01T00:00:00"
-  , ct_PRNXT     = Just 1000.0
-  , ct_NT        = Just 10000.0
-  , ct_DCC       = Just DCC_E30_360
-  , ct_IPCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_IPANX     = iso8601ParseM "2020-01-01T00:00:00"
-  , ct_IPNR      = Just 0.02
-  , ct_IPAC      = Just 0.0
-  , ct_PRCL      = Just $ Cycle 1 P_Y ShortStub False
-  , ct_PRANX     = iso8601ParseM "2021-01-01T00:00:00"
-  , ct_IPCB      = Just IPCB_NT
-  ...
-  }
-```
+[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_ann1.json)
 
 #### Stock
 
@@ -198,6 +127,21 @@ A stock is a contract that pay dividends based on a schedule.
 #### Option
 
 An option is the right to buy (or sell) a specific underlying at a defined date for a defined price.
+
+```
+option type: Call
+exercise type: European
+underlying: XXX
+strike: 80
+price at purchase date: 10
+purchase date: 2.1.2020
+maturity date: 30.3.2020
+```
+
+|Price of underlying at maturity|120|
+|Payoff|40|
+
+[ACTUS contract terms](test/Spec/Marlowe/ACTUS/ex_optns1.json)
 
 #### Future
 
