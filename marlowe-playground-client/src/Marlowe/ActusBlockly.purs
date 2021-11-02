@@ -978,8 +978,8 @@ actusContractToTerms raw = do
         , scheduleConfig:
             ScheduleConfig
               { calendar: Just CLDR_NC
-              , eomc: Just EOMC_EOM
-              , bdc: Just BDC_NULL
+              , endOfMonthConvention: Just EOMC_EOM
+              , businessDayConvention: Just BDC_NULL
               }
         , penaltyRate: Just 0.0
         , penaltyType: Just PYTP_A
