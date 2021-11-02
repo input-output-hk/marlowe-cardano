@@ -348,12 +348,12 @@ instance encodeJsonSession :: EncodeJson Session where
 
 instance decodeJsonSession :: DecodeJson Session where
   decodeJson json = do
-     obj <- decodeJObject json
-     projectName <- obj .: "projectName"
-     gistId <- obj .:? "gistId"
-     workflow <- obj .:? "workflow"
-     contractMetadata <- obj .: "contractMetadata"
-     pure $ Session { projectName, gistId, workflow, contractMetadata }
+    obj <- decodeJObject json
+    projectName <- obj .: "projectName"
+    gistId <- obj .:? "gistId"
+    workflow <- obj .:? "workflow"
+    contractMetadata <- obj .: "contractMetadata"
+    pure $ Session { projectName, gistId, workflow, contractMetadata }
 
 stateToSession :: State -> Session
 stateToSession { projectName

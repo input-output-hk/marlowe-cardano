@@ -14,7 +14,6 @@ module Page.Contract.State
   ) where
 
 import Prologue
-
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
 import Capability.MarloweStorage (class ManageMarloweStorage, insertIntoContractNicknames)

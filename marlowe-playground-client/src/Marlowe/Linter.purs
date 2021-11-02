@@ -12,7 +12,6 @@ module Marlowe.Linter
   ) where
 
 import Prologue
-
 import Control.Monad.State as CMS
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)

@@ -1,7 +1,6 @@
 module Marlowe.Extended.Metadata where
 
 import Prologue
-
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
@@ -47,10 +46,10 @@ instance decodeJsonNumberFormat :: DecodeJson NumberFormat where
     D.decode
       $ D.sumType "NumberFormat"
       $ Map.fromFoldable
-        [ "DefaultFormat" /\ D.content (DefaultFormat <$ D.null)
-        , "DecimalFormat" /\ D.content (uncurry DecimalFormat <$> D.value)
-        , "TimeFormat" /\ D.content (TimeFormat <$ D.null)
-        ]
+          [ "DefaultFormat" /\ D.content (DefaultFormat <$ D.null)
+          , "DecimalFormat" /\ D.content (uncurry DecimalFormat <$> D.value)
+          , "TimeFormat" /\ D.content (TimeFormat <$ D.null)
+          ]
 
 instance showNumberFormat :: Show NumberFormat where
   show = genericShow

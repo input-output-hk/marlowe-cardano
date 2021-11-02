@@ -7,7 +7,6 @@ module Component.Template.State
   ) where
 
 import Prologue
-
 import Component.Contacts.Types (WalletLibrary)
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (dummyState, handleAction, mkInitialState) as InputField
@@ -52,13 +51,13 @@ dummyState = initialState
 
 initialState :: State
 initialState =
-    { contractSetupStage: Start
-    , contractTemplate: Escrow.contractTemplate
-    , contractNicknameInput: InputField.mkInitialState Nothing
-    , roleWalletInputs: Map.empty
-    , slotContentInputs: Map.empty
-    , valueContentInputs: Map.empty
-    }
+  { contractSetupStage: Start
+  , contractTemplate: Escrow.contractTemplate
+  , contractNicknameInput: InputField.mkInitialState Nothing
+  , roleWalletInputs: Map.empty
+  , slotContentInputs: Map.empty
+  , valueContentInputs: Map.empty
+  }
 
 -- Some actions are handled in `Dashboard.State` because they involve
 -- modifications of that state. See Note [State] in MainFrame.State.

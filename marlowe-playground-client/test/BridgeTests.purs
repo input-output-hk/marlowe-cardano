@@ -3,7 +3,6 @@ module BridgeTests
   ) where
 
 import Prologue
-
 import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError, printJsonDecodeError)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)

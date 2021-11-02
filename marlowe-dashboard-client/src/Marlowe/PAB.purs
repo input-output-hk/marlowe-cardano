@@ -5,7 +5,6 @@ module Marlowe.PAB
   ) where
 
 import Prologue
-
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.BigInt.Argonaut (BigInt, fromInt)

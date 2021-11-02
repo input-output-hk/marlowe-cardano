@@ -44,7 +44,7 @@ instance encodeJsonActionInputId :: EncodeJson ActionInputId where
           , encodeJson amount
           ]
       }
-  encodeJson (ChoiceInputId choiceId) = 
+  encodeJson (ChoiceInputId choiceId) =
     encodeJson
       { tag: "ChoiceInputId"
       , contents: encodeJson choiceId
@@ -53,12 +53,14 @@ instance encodeJsonActionInputId :: EncodeJson ActionInputId where
   encodeJson MoveToSlotId = encodeJson { tag: "MoveToSlotId" }
 
 instance decodeJsonActionInputId :: DecodeJson ActionInputId where
-  decodeJson = D.decode $ D.sumType "ActionInputId" $ Map.fromFoldable
-    [ "DepositInputId" /\ D.content (D.tuple $ DepositInputId </$\> D.value </*\> D.value </*\> D.value </*\> D.value)
-    , "ChoiceInputId" /\ D.content (ChoiceInputId <$> D.value)
-    , "NotifyInputId" /\ pure NotifyInputId
-    , "MoveToSlotId" /\ pure MoveToSlotId
-    ]
+  decodeJson =
+    D.decode $ D.sumType "ActionInputId"
+      $ Map.fromFoldable
+          [ "DepositInputId" /\ D.content (D.tuple $ DepositInputId </$\> D.value </*\> D.value </*\> D.value </*\> D.value)
+          , "ChoiceInputId" /\ D.content (ChoiceInputId <$> D.value)
+          , "NotifyInputId" /\ pure NotifyInputId
+          , "MoveToSlotId" /\ pure MoveToSlotId
+          ]
 
 -- | On the front end we need Actions however we also need to keep track of the current
 -- | choice that has been set for Choices
@@ -85,7 +87,7 @@ instance encodeJsonActionInput :: EncodeJson ActionInput where
           , encodeJson amount
           ]
       }
-  encodeJson (ChoiceInput choiceId bounds chosen) = 
+  encodeJson (ChoiceInput choiceId bounds chosen) =
     encodeJson
       { tag: "ChoiceInput"
       , contents:
@@ -102,12 +104,14 @@ instance encodeJsonActionInput :: EncodeJson ActionInput where
       }
 
 instance decodeJsonActionInput :: DecodeJson ActionInput where
-  decodeJson = D.decode $ D.sumType "ActionInputId" $ Map.fromFoldable
-    [ "DepositInput" /\ D.content (D.tuple $ DepositInput </$\> D.value </*\> D.value </*\> D.value </*\> D.value)
-    , "ChoiceInput" /\ D.content (D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\> D.value)
-    , "NotifyInput" /\ pure NotifyInput
-    , "MoveToSlot" /\ D.content (MoveToSlot <$> D.value)
-    ]
+  decodeJson =
+    D.decode $ D.sumType "ActionInputId"
+      $ Map.fromFoldable
+          [ "DepositInput" /\ D.content (D.tuple $ DepositInput </$\> D.value </*\> D.value </*\> D.value </*\> D.value)
+          , "ChoiceInput" /\ D.content (D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\> D.value)
+          , "NotifyInput" /\ pure NotifyInput
+          , "MoveToSlot" /\ D.content (MoveToSlot <$> D.value)
+          ]
 
 -- TODO: Probably rename to PartiesActions or similar
 newtype Parties
@@ -140,7 +144,7 @@ data LogEntry
 derive instance genericLogEntry :: Generic LogEntry _
 
 instance encodeJsonLogEntry :: EncodeJson LogEntry where
-  encodeJson (StartEvent slot) = 
+  encodeJson (StartEvent slot) =
     encodeJson
       { tag: "StartEvent"
       , contents: encodeJson slot
@@ -150,7 +154,7 @@ instance encodeJsonLogEntry :: EncodeJson LogEntry where
       { tag: "InputEvent"
       , contents: encodeJson input
       }
-  encodeJson (OutputEvent interval payment) = 
+  encodeJson (OutputEvent interval payment) =
     encodeJson
       { tag: "OutputEvent"
       , contents:
@@ -165,12 +169,14 @@ instance encodeJsonLogEntry :: EncodeJson LogEntry where
       }
 
 instance decodeJsonLogEntry :: DecodeJson LogEntry where
-  decodeJson = D.decode $ D.sumType "LogEntry" $ Map.fromFoldable
-    [ "StartEvent" /\ D.content (StartEvent <$> D.value)
-    , "InputEvent" /\ D.content (InputEvent <$> D.value)
-    , "OutputEvent" /\ D.content (uncurry OutputEvent <$> D.value)
-    , "CloseEvent" /\ D.content (CloseEvent <$> D.value)
-    ]
+  decodeJson =
+    D.decode $ D.sumType "LogEntry"
+      $ Map.fromFoldable
+          [ "StartEvent" /\ D.content (StartEvent <$> D.value)
+          , "InputEvent" /\ D.content (InputEvent <$> D.value)
+          , "OutputEvent" /\ D.content (uncurry OutputEvent <$> D.value)
+          , "CloseEvent" /\ D.content (CloseEvent <$> D.value)
+          ]
 
 type ExecutionStateRecord
   = { possibleActions :: Parties

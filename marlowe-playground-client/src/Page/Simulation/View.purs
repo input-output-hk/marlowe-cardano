@@ -203,7 +203,7 @@ sidebar metadata state = case view (_marloweState <<< _Head <<< _executionState)
     ]
 
 ------------------------------------------------------------
-type TemplateFormDisplayInfo :: forall k1 k2. k1 -> k2 -> Type
+  type TemplateFormDisplayInfo :: forall k1 k2. k1 -> k2 -> Type
 type TemplateFormDisplayInfo a action
   = { lookupFormat :: String -> Maybe (String /\ Int) -- Gets the format for a given key
     , lookupDefinition :: String -> Maybe String -- Gets the definition for a given key

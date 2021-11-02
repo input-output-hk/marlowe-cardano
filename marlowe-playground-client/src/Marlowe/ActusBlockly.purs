@@ -588,54 +588,58 @@ instance showActusContract :: Show ActusContract where
   show x = genericShow x
 
 instance encodeJsonJsonActusContract :: EncodeJson ActusContract where
-  encodeJson = E.encode $ unwrap >$< E.record
-    { contractType: E.value :: _ CT
-    , startDate: E.value :: _ ActusValue
-    , initialExchangeDate: E.value :: _ ActusValue
-    , maturityDate: E.value :: _ ActusValue
-    , amortizationDate: E.value :: _ ActusValue
-    , terminationDate: E.value :: _ ActusValue
-    , terminationPrice: E.value :: _ ActusValue
-    , periodicPaymentAmount: E.value :: _ ActusValue
-    , purchaseDate: E.value :: _ ActusValue
-    , purchasePrice: E.value :: _ ActusValue
-    , dayCountConvention: E.value :: _ ActusValue
-    , endOfMonthConvention: E.value :: _ ActusValue
-    , rateReset: E.value :: _ ActusValue
-    , notional: E.value :: _ ActusValue
-    , premiumDiscount: E.value :: _ ActusValue
-    , interestRate: E.value :: _ ActusValue
-    , interestRateCycle: E.value :: _ ActusValue
-    , principalRedemptionCycle: E.value :: _ ActusValue
-    , interestCalculationBaseCycle: E.value :: _ ActusValue
-    , assertionCtx: E.value :: _ ActusValue
-    , assertion: E.value :: _ ActusValue
-    }
+  encodeJson =
+    E.encode $ unwrap
+      >$< E.record
+          { contractType: E.value :: _ CT
+          , startDate: E.value :: _ ActusValue
+          , initialExchangeDate: E.value :: _ ActusValue
+          , maturityDate: E.value :: _ ActusValue
+          , amortizationDate: E.value :: _ ActusValue
+          , terminationDate: E.value :: _ ActusValue
+          , terminationPrice: E.value :: _ ActusValue
+          , periodicPaymentAmount: E.value :: _ ActusValue
+          , purchaseDate: E.value :: _ ActusValue
+          , purchasePrice: E.value :: _ ActusValue
+          , dayCountConvention: E.value :: _ ActusValue
+          , endOfMonthConvention: E.value :: _ ActusValue
+          , rateReset: E.value :: _ ActusValue
+          , notional: E.value :: _ ActusValue
+          , premiumDiscount: E.value :: _ ActusValue
+          , interestRate: E.value :: _ ActusValue
+          , interestRateCycle: E.value :: _ ActusValue
+          , principalRedemptionCycle: E.value :: _ ActusValue
+          , interestCalculationBaseCycle: E.value :: _ ActusValue
+          , assertionCtx: E.value :: _ ActusValue
+          , assertion: E.value :: _ ActusValue
+          }
 
 instance decodeJsonJsonActusContract :: DecodeJson ActusContract where
-  decodeJson json = flip D.decode json $ ActusContract <$> D.record "ActusContract"
-    { contractType: D.value :: _ CT
-    , startDate: D.value :: _ ActusValue
-    , initialExchangeDate: D.value :: _ ActusValue
-    , maturityDate: D.value :: _ ActusValue
-    , amortizationDate: D.value :: _ ActusValue
-    , terminationDate: D.value :: _ ActusValue
-    , terminationPrice: D.value :: _ ActusValue
-    , periodicPaymentAmount: D.value :: _ ActusValue
-    , purchaseDate: D.value :: _ ActusValue
-    , purchasePrice: D.value :: _ ActusValue
-    , dayCountConvention: D.value :: _ ActusValue
-    , endOfMonthConvention: D.value :: _ ActusValue
-    , rateReset: D.value :: _ ActusValue
-    , notional: D.value :: _ ActusValue
-    , premiumDiscount: D.value :: _ ActusValue
-    , interestRate: D.value :: _ ActusValue
-    , interestRateCycle: D.value :: _ ActusValue
-    , principalRedemptionCycle: D.value :: _ ActusValue
-    , interestCalculationBaseCycle: D.value :: _ ActusValue
-    , assertionCtx: D.value :: _ ActusValue
-    , assertion: D.value :: _ ActusValue
-    }
+  decodeJson json =
+    flip D.decode json $ ActusContract
+      <$> D.record "ActusContract"
+          { contractType: D.value :: _ CT
+          , startDate: D.value :: _ ActusValue
+          , initialExchangeDate: D.value :: _ ActusValue
+          , maturityDate: D.value :: _ ActusValue
+          , amortizationDate: D.value :: _ ActusValue
+          , terminationDate: D.value :: _ ActusValue
+          , terminationPrice: D.value :: _ ActusValue
+          , periodicPaymentAmount: D.value :: _ ActusValue
+          , purchaseDate: D.value :: _ ActusValue
+          , purchasePrice: D.value :: _ ActusValue
+          , dayCountConvention: D.value :: _ ActusValue
+          , endOfMonthConvention: D.value :: _ ActusValue
+          , rateReset: D.value :: _ ActusValue
+          , notional: D.value :: _ ActusValue
+          , premiumDiscount: D.value :: _ ActusValue
+          , interestRate: D.value :: _ ActusValue
+          , interestRateCycle: D.value :: _ ActusValue
+          , principalRedemptionCycle: D.value :: _ ActusValue
+          , interestCalculationBaseCycle: D.value :: _ ActusValue
+          , assertionCtx: D.value :: _ ActusValue
+          , assertion: D.value :: _ ActusValue
+          }
 
 data ActusValue
   = DateValue String String String
@@ -674,12 +678,12 @@ instance encodeJsonJsonActusValue :: EncodeJson ActusValue where
   encodeJson (DecimalValue a) =
     encodeJson
       { tag: "DecimalValue"
-      , contents: encodeJson a 
+      , contents: encodeJson a
       }
   encodeJson (IntegerValue a) =
     encodeJson
       { tag: "IntegerValue"
-      , contents: encodeJson a 
+      , contents: encodeJson a
       }
   encodeJson (ActusAssertionCtx a b) =
     encodeJson
@@ -701,20 +705,22 @@ instance encodeJsonJsonActusValue :: EncodeJson ActusValue where
   encodeJson (ActusError a) =
     encodeJson
       { tag: "ActusError"
-      , contents: encodeJson a 
+      , contents: encodeJson a
       }
 
 instance decodeJsonJsonActusValue :: DecodeJson ActusValue where
-  decodeJson json = flip D.decode json $ D.sumType "ActusValue" $ Map.fromFoldable
-    [ "DateValue" /\ D.content (D.tuple $ DateValue </$\> D.value </*\> D.value </*\> D.value)
-    , "CycleValue" /\ D.content (D.tuple $ CycleValue </$\> D.value </*\> D.value </*\> D.value)
-    , "DecimalValue" /\ D.content (DecimalValue <$> D.value)
-    , "IntegerValue" /\ D.content (IntegerValue <$> D.value)
-    , "ActusAssertionCtx" /\ D.content (uncurry ActusAssertionCtx <$> D.value)
-    , "ActusAssertionNpv" /\ D.content (uncurry ActusAssertionNpv <$> D.value)
-    , "NoActusValue" /\ pure NoActusValue
-    , "ActusError" /\ D.content (ActusError <$> D.value)
-    ]
+  decodeJson json =
+    flip D.decode json $ D.sumType "ActusValue"
+      $ Map.fromFoldable
+          [ "DateValue" /\ D.content (D.tuple $ DateValue </$\> D.value </*\> D.value </*\> D.value)
+          , "CycleValue" /\ D.content (D.tuple $ CycleValue </$\> D.value </*\> D.value </*\> D.value)
+          , "DecimalValue" /\ D.content (DecimalValue <$> D.value)
+          , "IntegerValue" /\ D.content (IntegerValue <$> D.value)
+          , "ActusAssertionCtx" /\ D.content (uncurry ActusAssertionCtx <$> D.value)
+          , "ActusAssertionNpv" /\ D.content (uncurry ActusAssertionNpv <$> D.value)
+          , "NoActusValue" /\ pure NoActusValue
+          , "ActusError" /\ D.content (ActusError <$> D.value)
+          ]
 
 parseFieldActusValueJson :: Generator -> Block -> String -> ActusValue
 parseFieldActusValueJson g block name = Either.either (const NoActusValue) identity result

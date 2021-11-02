@@ -1,7 +1,6 @@
 module Marlowe.BlocklyTests where
 
 import Prologue
-
 import Blockly.Dom (explainError, getDom)
 import Blockly.Generator (getInputWithName, inputList)
 import Blockly.Headless as Headless
@@ -34,11 +33,12 @@ codeToBlocklyToCode :: GenWithHoles Result
 codeToBlocklyToCode = do
   contract <- genTerm "contract" genContract
   let
-    positionedContract = rmap show
-      $ lmap show
-      $ Parser.parseContract
-      $ stripParens
-      $ show contract
+    positionedContract =
+      rmap show
+        $ lmap show
+        $ Parser.parseContract
+        $ stripParens
+        $ show contract
 
     -- Unfortunately quickcheck runs the concrete Gen monad and it would need to be re-written to use MonadGen
     -- https://github.com/purescript/purescript-quickcheck/blob/v5.0.0/src/Test/QuickCheck.purs#L97

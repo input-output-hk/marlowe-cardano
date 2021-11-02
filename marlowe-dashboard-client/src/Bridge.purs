@@ -6,7 +6,6 @@ module Bridge
   ) where
 
 import Prologue
-
 import Cardano.Wallet.Mock.Types (WalletInfo(..)) as Back
 import Component.Contacts.Types (Wallet(..), WalletInfo(..)) as Front
 import Data.Bifunctor (bimap)

@@ -104,14 +104,13 @@ handleAction (HandleEditorMessage (Monaco.TextChanged text)) = do
         if ((mContent == Nothing) || (mContent == Just prunedText)) then
           -- The case where `mContent == Just prunedText` is to prevent potential infinite loops, it should not happen
           assign _compilationResult NotCompiled
+        else if checkJSboilerplate text && checkDecorationPosition numLines mRangeHeader mRangeFooter then
+          ( do
+              liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedText
+              assign _compilationResult NotCompiled
+          )
         else
-          if checkJSboilerplate text && checkDecorationPosition numLines mRangeHeader mRangeFooter then
-            ( do
-                liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedText
-                assign _compilationResult NotCompiled
-            )
-          else
-            editorSetValue (fromMaybe "" mContent)
+          editorSetValue (fromMaybe "" mContent)
       Nothing -> editorSetValue prunedText
 
 handleAction (ChangeKeyBindings bindings) = do
@@ -171,11 +170,9 @@ handleAction (MetadataAction _) = pure unit
 
 handleAction AnalyseContract = analyze analyseContract
 
-handleAction AnalyseReachabilityContract =
-  analyze analyseReachability
+handleAction AnalyseReachabilityContract = analyze analyseReachability
 
-handleAction AnalyseContractForCloseRefund =
-  analyze analyseClose
+handleAction AnalyseContractForCloseRefund = analyze analyseClose
 
 handleAction ClearAnalysisResults = assign (_analysisState <<< _analysisExecutionState) NoneAsked
 

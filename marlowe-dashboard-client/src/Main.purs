@@ -1,7 +1,6 @@
 module Main where
 
 import Prologue
-
 import AppM (runAppM)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Data.BigInt.Argonaut as BigInt

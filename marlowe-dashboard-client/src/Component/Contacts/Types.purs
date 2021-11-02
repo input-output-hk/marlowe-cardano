@@ -12,7 +12,6 @@ module Component.Contacts.Types
   ) where
 
 import Prologue
-
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.InputField.Types (Action, State) as InputField

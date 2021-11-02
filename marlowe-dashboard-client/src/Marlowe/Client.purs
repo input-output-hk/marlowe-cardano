@@ -6,7 +6,6 @@ by the Marlowe Run frontend.
 module Marlowe.Client where
 
 import Prologue
-
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)

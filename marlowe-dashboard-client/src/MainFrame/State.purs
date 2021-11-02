@@ -1,7 +1,6 @@
 module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
-
 import Bridge (toFront)
 import Capability.Marlowe (class ManageMarlowe, getFollowerApps, subscribeToPlutusApp, subscribeToWallet, unsubscribeFromPlutusApp, unsubscribeFromWallet)
 import Capability.MarloweStorage (class ManageMarloweStorage, getContractNicknames, getWalletLibrary)

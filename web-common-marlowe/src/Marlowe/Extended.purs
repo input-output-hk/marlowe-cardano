@@ -1,7 +1,6 @@
 module Marlowe.Extended where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut (class DecodeJson, class EncodeJson, JsonDecodeError(..), caseJsonObject, decodeJson, encodeJson)
@@ -247,8 +246,7 @@ instance encodeJsonValue :: EncodeJson Value where
       }
 
 instance decodeJsonValue :: DecodeJson Value where
-  decodeJson =
-    caseConstantFrom valueConstants \json -> Constant <$> decodeJson json <|> decodeObject json
+  decodeJson = caseConstantFrom valueConstants \json -> Constant <$> decodeJson json <|> decodeObject json
     where
     valueConstants =
       Map.fromFoldable

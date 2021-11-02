@@ -1,7 +1,6 @@
 module Marlowe.Template where
 
 import Prelude
-
 import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (foldl)
 import Data.Lens (Lens')
@@ -61,10 +60,11 @@ typeToLens ValueContent = _valueContent
 derive instance newTypeTemplateContent :: Newtype TemplateContent _
 
 instance semigroupTemplateContent :: Semigroup TemplateContent where
-  append (TemplateContent a) (TemplateContent b) = TemplateContent
-    { slotContent: Map.unionWith (const identity) a.slotContent b.slotContent
-    , valueContent: Map.unionWith (const identity) a.valueContent b.valueContent
-    }
+  append (TemplateContent a) (TemplateContent b) =
+    TemplateContent
+      { slotContent: Map.unionWith (const identity) a.slotContent b.slotContent
+      , valueContent: Map.unionWith (const identity) a.valueContent b.valueContent
+      }
 
 instance monoidTemplateContent :: Monoid TemplateContent where
   mempty = TemplateContent { slotContent: Map.empty, valueContent: Map.empty }

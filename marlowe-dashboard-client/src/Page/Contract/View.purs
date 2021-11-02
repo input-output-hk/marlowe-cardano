@@ -4,7 +4,6 @@ module Page.Contract.View
   ) where
 
 import Prologue hiding (div)
-
 import Component.Contacts.State (adaToken)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon

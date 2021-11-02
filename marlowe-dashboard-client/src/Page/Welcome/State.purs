@@ -5,7 +5,6 @@ module Page.Welcome.State
   ) where
 
 import Prologue
-
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, createWallet, lookupWalletDetails)
 import Capability.MarloweStorage (class ManageMarloweStorage, clearAllLocalStorage, insertIntoWalletLibrary)

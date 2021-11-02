@@ -9,7 +9,6 @@ module API.Contract
   ) where
 
 import Prologue
-
 import API.Request (doGetRequest, doPostRequest, doPutRequest)
 import API.Url (toUrlPiece)
 import Control.Monad.Error.Class (class MonadError)

@@ -14,7 +14,6 @@ module Capability.PlutusApps.MarloweApp
   ) where
 
 import Prologue
-
 import AppM (AppM)
 import Bridge (toBack)
 import Capability.Contract (class ManageContract)

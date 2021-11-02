@@ -10,7 +10,6 @@ module Types
   ) where
 
 import Prologue
-
 import Data.Argonaut.Decode (JsonDecodeError)
 import Network.RemoteData (RemoteData)
 import Servant.PureScript (AjaxError)
@@ -38,4 +37,3 @@ type NotFoundAjaxResponse
 
 type NotFoundWebData
   = RemoteData NotFoundAjaxError
-

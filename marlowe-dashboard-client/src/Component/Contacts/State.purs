@@ -10,7 +10,6 @@ module Component.Contacts.State
   ) where
 
 import Prologue
-
 import Capability.MainFrameLoop (callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, lookupWalletDetails, lookupWalletInfo)
 import Capability.MarloweStorage (class ManageMarloweStorage, insertIntoWalletLibrary)
@@ -201,11 +200,10 @@ walletNicknameError _ "" = Just EmptyWalletNickname
 walletNicknameError walletLibrary walletNickname =
   if member walletNickname walletLibrary then
     Just DuplicateWalletNickname
+  else if any (\char -> not $ isAlphaNum $ codePointFromChar char) $ toCharArray walletNickname then
+    Just BadWalletNickname
   else
-    if any (\char -> not $ isAlphaNum $ codePointFromChar char) $ toCharArray walletNickname then
-      Just BadWalletNickname
-    else
-      Nothing
+    Nothing
 
 walletIdError :: NotFoundWebData WalletInfo -> WalletLibrary -> String -> Maybe WalletIdError
 walletIdError _ _ "" = Just EmptyWalletId

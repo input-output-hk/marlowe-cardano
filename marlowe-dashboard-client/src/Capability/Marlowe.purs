@@ -198,8 +198,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
                 , previousCompanionAppState: Nothing
                 }
             Nothing -> except $ Left Nothing
-        _ ->
-          except $ Left Nothing
+        _ -> except $ Left Nothing
   -- get the observable state of a wallet's WalletCompanion
   getRoleContracts walletDetails =
     runExceptT do
@@ -233,16 +232,16 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   subscribeToWallet =
     toBack
       >>> un Back.Wallet
-      >>> _.getWalletId 
+      >>> _.getWalletId
       >>> (\x -> Back.PubKeyHash { getPubKeyHash: x })
       >>> Right
       >>> Subscribe
       >>> sendWsMessage
   unsubscribeFromPlutusApp = toBack >>> Left >>> Unsubscribe >>> sendWsMessage
-  unsubscribeFromWallet = 
+  unsubscribeFromWallet =
     toBack
       >>> un Back.Wallet
-      >>> _.getWalletId 
+      >>> _.getWalletId
       >>> (\x -> Back.PubKeyHash { getPubKeyHash: x })
       >>> Right
       >>> Unsubscribe

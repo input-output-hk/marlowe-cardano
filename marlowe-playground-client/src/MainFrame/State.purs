@@ -202,7 +202,7 @@ handleSubRoute Router.ActusBlocklyEditor = selectView ActusBlocklyEditor
 -- This route is supposed to be called by the github oauth flow after a succesful login flow
 -- It is supposed to be run inside a popup window
 handleSubRoute Router.GithubAuthCallback = do
-  authResult <- runAjax Server.getApiOauthStatus 
+  authResult <- runAjax Server.getApiOauthStatus
   case authResult of
     (Success authStatus) -> liftEffect $ informParentAndClose $ view authStatusAuthRole authStatus
     -- TODO: is it worth showing a particular view for Failure, NotAsked and Loading?

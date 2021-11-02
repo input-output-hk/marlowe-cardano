@@ -15,7 +15,6 @@ module Component.Contacts.Lenses
   ) where
 
 import Prologue
-
 import Component.Contacts.Types (CardSection, State, Wallet, WalletIdError, WalletInfo, WalletLibrary, WalletNickname, WalletNicknameError, WalletDetails)
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')

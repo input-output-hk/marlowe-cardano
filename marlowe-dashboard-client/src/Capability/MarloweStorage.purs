@@ -14,7 +14,6 @@ module Capability.MarloweStorage
   ) where
 
 import Prologue
-
 import AppM (AppM)
 import Component.Contacts.Lenses (_assets, _pubKeyHash, _walletInfo, _walletNickname)
 import Component.Contacts.Types (WalletDetails, WalletLibrary)
@@ -79,7 +78,7 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       walletNickname = view _walletNickname walletDetails
 
       updatedWalletLibrary = insert walletNickname walletDetails walletLibrary
-    liftEffect $ setItem walletLibraryLocalStorageKey $ encodeStringifyJson  updatedWalletLibrary
+    liftEffect $ setItem walletLibraryLocalStorageKey $ encodeStringifyJson updatedWalletLibrary
   -- contract nicknames
   getContractNicknames = do
     mContractNicknamesJson <- liftEffect $ getItem contractNicknamesLocalStorageKey
@@ -88,7 +87,7 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
     contractNicknames <- getContractNicknames
     let
       updatedContractNicknames = insert plutusAppId nickname contractNicknames
-    liftEffect $ setItem contractNicknamesLocalStorageKey $ encodeStringifyJson  updatedContractNicknames
+    liftEffect $ setItem contractNicknamesLocalStorageKey $ encodeStringifyJson updatedContractNicknames
   -- temporary data that we persist until everything is working with the PAB
   addAssets pubKeyHash assets = do
     walletLibrary <- Map.values <$> getWalletLibrary
@@ -108,7 +107,7 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
     existingContracts <- getContracts
     let
       newContracts = insert marloweParams contractData existingContracts
-    void $ liftEffect $ setItem contractsLocalStorageKey $ encodeStringifyJson  newContracts
+    void $ liftEffect $ setItem contractsLocalStorageKey $ encodeStringifyJson newContracts
   getAllWalletRoleContracts = do
     mAllWalletRoleContracts <- liftEffect $ getItem walletRoleContractsLocalStorageKey
     pure $ fromMaybe Map.empty $ hush <<< parseDecodeJson =<< mAllWalletRoleContracts
@@ -122,8 +121,8 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       newWalletRoleContracts = insert marloweParams marloweData walletRoleContracts
 
       newAllWalletRoleContracts = insert walletId newWalletRoleContracts allWalletRoleContracts
-    void $ liftEffect $ setItem walletRoleContractsLocalStorageKey $
-      encodeStringifyJson newAllWalletRoleContracts
+    void $ liftEffect $ setItem walletRoleContractsLocalStorageKey
+      $ encodeStringifyJson newAllWalletRoleContracts
 
 instance manageMarloweStorageHalogenM :: ManageMarloweStorage m => ManageMarloweStorage (HalogenM state action slots msg m) where
   clearAllLocalStorage = lift clearAllLocalStorage

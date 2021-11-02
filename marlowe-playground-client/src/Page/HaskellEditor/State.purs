@@ -127,11 +127,9 @@ handleAction (MetadataAction _) = pure unit
 
 handleAction AnalyseContract = analyze analyseContract
 
-handleAction AnalyseReachabilityContract =
-  analyze analyseReachability
+handleAction AnalyseReachabilityContract = analyze analyseReachability
 
-handleAction AnalyseContractForCloseRefund =
-  analyze analyseClose
+handleAction AnalyseContractForCloseRefund = analyze analyseClose
 
 handleAction ClearAnalysisResults = assign (_analysisState <<< _analysisExecutionState) NoneAsked
 

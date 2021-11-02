@@ -26,7 +26,7 @@ data Lang
 
 derive instance eqLang :: Eq Lang
 
-derive instance ord:: Ord Lang
+derive instance ord :: Ord Lang
 
 derive instance genericLang :: Generic Lang _
 

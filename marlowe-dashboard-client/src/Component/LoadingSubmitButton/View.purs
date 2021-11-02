@@ -1,7 +1,6 @@
 module Component.LoadingSubmitButton.View (render) where
 
 import Prologue hiding (div)
-
 import Component.Icons as Icon
 import Component.LoadingSubmitButton.Types (Action(..), State, buttonRef)
 import Css as Css
@@ -47,9 +46,10 @@ render { caption, styles, status, enabled } =
               [ Just $ classNames classes
               , Just $ ref buttonRef
               , Just $ disabled $ not enabled
-              , onClick <<< const <$> case status of
-                  NotAsked -> Just Submit
-                  _ -> Nothing
+              , onClick <<< const
+                  <$> case status of
+                      NotAsked -> Just Submit
+                      _ -> Nothing
               ]
           )
           content
