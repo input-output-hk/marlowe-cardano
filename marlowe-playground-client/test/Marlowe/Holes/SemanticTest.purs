@@ -67,7 +67,7 @@ escrowContract :: EM.Contract
 escrowContract =
   fillTemplate
     ( TemplateContent
-        { slotContent: mempty
+        { slotContent: Map.empty
         , valueContent:
             Map.fromFoldable
               [ "Price" /\ escrowPrice
@@ -261,7 +261,7 @@ testTransactionList extendedContract inputs =
       _ -> success
 
 testFlows :: EM.Contract -> ContractFlows -> TestSuite
-testFlows contract Nil = pure unit
+testFlows _ Nil = pure unit
 
 testFlows contract ((flowName /\ flow) : rest) = do
   test flowName $ testTransactionList contract flow

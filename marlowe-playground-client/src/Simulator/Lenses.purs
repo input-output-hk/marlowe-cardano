@@ -12,7 +12,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Profunctor.Choice (class Choice)
 import Data.Profunctor.Strong (class Strong)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Marlowe.Holes (Contract, Term)
 import Marlowe.Semantics (Party)
 import Simulator.Types (ActionInput, ActionInputId(..), ExecutionState(..), ExecutionStateRecord, InitialConditionsRecord, MarloweState, Parties, otherActionsParty)
@@ -45,43 +45,43 @@ _moveToAction = lens get' set'
 -- ExecutionStateRecord Lenses
 --
 _possibleActions :: forall s a. Lens' { possibleActions :: a | s } a
-_possibleActions = prop (SProxy :: SProxy "possibleActions")
+_possibleActions = prop (Proxy :: _ "possibleActions")
 
 _pendingInputs :: forall s a. Lens' { pendingInputs :: a | s } a
-_pendingInputs = prop (SProxy :: SProxy "pendingInputs")
+_pendingInputs = prop (Proxy :: _ "pendingInputs")
 
 _state :: forall s a. Lens' { state :: a | s } a
-_state = prop (SProxy :: SProxy "state")
+_state = prop (Proxy :: _ "state")
 
 _transactionError :: forall s a. Lens' { transactionError :: a | s } a
-_transactionError = prop (SProxy :: SProxy "transactionError")
+_transactionError = prop (Proxy :: _ "transactionError")
 
 _transactionWarnings :: forall s a. Lens' { transactionWarnings :: a | s } a
-_transactionWarnings = prop (SProxy :: SProxy "transactionWarnings")
+_transactionWarnings = prop (Proxy :: _ "transactionWarnings")
 
 _slot :: forall s a. Lens' { slot :: a | s } a
-_slot = prop (SProxy :: SProxy "slot")
+_slot = prop (Proxy :: _ "slot")
 
 _moneyInContract :: forall s a. Lens' { moneyInContract :: a | s } a
-_moneyInContract = prop (SProxy :: SProxy "moneyInContract")
+_moneyInContract = prop (Proxy :: _ "moneyInContract")
 
 _contract :: forall s a. Lens' { contract :: a | s } a
-_contract = prop (SProxy :: SProxy "contract")
+_contract = prop (Proxy :: _ "contract")
 
 _log :: forall s a. Lens' { log :: a | s } a
-_log = prop (SProxy :: SProxy "log")
+_log = prop (Proxy :: _ "log")
 
 --------------------------------------------------------------------------
 -- InitialConditionsRecord Lenses
 --
 _initialSlot :: forall s a. Lens' { initialSlot :: a | s } a
-_initialSlot = prop (SProxy :: SProxy "initialSlot")
+_initialSlot = prop (Proxy :: _ "initialSlot")
 
 _termContract :: forall s a. Lens' { termContract :: a | s } a
-_termContract = prop (SProxy :: SProxy "termContract")
+_termContract = prop (Proxy :: _ "termContract")
 
 _templateContent :: forall s a. Lens' { templateContent :: a | s } a
-_templateContent = prop (SProxy :: SProxy "templateContent")
+_templateContent = prop (Proxy :: _ "templateContent")
 
 --------------------------------------------------------------------------
 -- ExecutionState Lenses
@@ -108,23 +108,23 @@ _SimulationNotStarted =
 -- MarloweState Lenses
 --
 _executionState :: forall s a. Lens' { executionState :: a | s } a
-_executionState = prop (SProxy :: SProxy "executionState")
+_executionState = prop (Proxy :: _ "executionState")
 
 _editorErrors :: forall s a. Lens' { editorErrors :: a | s } a
-_editorErrors = prop (SProxy :: SProxy "editorErrors")
+_editorErrors = prop (Proxy :: _ "editorErrors")
 
 _editorWarnings :: forall s a. Lens' { editorWarnings :: a | s } a
-_editorWarnings = prop (SProxy :: SProxy "editorWarnings")
+_editorWarnings = prop (Proxy :: _ "editorWarnings")
 
 _holes :: forall s a. Lens' { holes :: a | s } a
-_holes = prop (SProxy :: SProxy "holes")
+_holes = prop (Proxy :: _ "holes")
 
 --- Language.Haskell.Interpreter ---
 _result :: forall s a. Lens' { result :: a | s } a
-_result = prop (SProxy :: SProxy "result")
+_result = prop (Proxy :: _ "result")
 
 _marloweState :: forall s. Lens' { marloweState :: NonEmptyList MarloweState | s } (NonEmptyList MarloweState)
-_marloweState = prop (SProxy :: SProxy "marloweState")
+_marloweState = prop (Proxy :: _ "marloweState")
 
 _currentMarloweState :: forall s. Lens' { marloweState :: NonEmptyList MarloweState | s } MarloweState
 _currentMarloweState = _marloweState <<< _Head

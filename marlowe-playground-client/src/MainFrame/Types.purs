@@ -9,15 +9,19 @@ import Component.Demos.Types as Demos
 import Component.NewProject.Types as NewProject
 import Component.Projects.Types (Lang(..))
 import Component.Projects.Types as Projects
+import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Component.Tooltip.Types (ReferenceId)
+import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut.Decode ((.:), (.:?))
+import Data.Argonaut.Decode.Decoders (decodeJObject)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has, (^.))
 import Data.Lens.Record (prop)
+import Data.Maybe (maybe)
 import Data.Newtype (class Newtype)
-import Data.Symbol (SProxy(..))
-import Foreign.Class (class Decode, class Encode)
-import Foreign.Generic (defaultOptions, genericDecode, genericEncode)
+import Type.Proxy (Proxy(..))
 import Gist (Gist, GistId)
 import Gists.Types (GistAction)
 import Halogen (ClassName)
@@ -146,31 +150,35 @@ type ChildSlots
     , marloweEditorPageSlot :: H.Slot Monaco.Query Monaco.Message Unit
     , tooltipSlot :: forall query. H.Slot query Void ReferenceId
     , hintSlot :: forall query. H.Slot query Void String
+    , currencyInput :: forall query. H.Slot query BigInt Unit
     )
 
-_haskellEditorSlot :: SProxy "haskellEditorSlot"
-_haskellEditorSlot = SProxy
+_haskellEditorSlot :: Proxy "haskellEditorSlot"
+_haskellEditorSlot = Proxy
 
-_jsEditorSlot :: SProxy "jsEditorSlot"
-_jsEditorSlot = SProxy
+_jsEditorSlot :: Proxy "jsEditorSlot"
+_jsEditorSlot = Proxy
 
-_blocklySlot :: SProxy "blocklySlot"
-_blocklySlot = SProxy
+_blocklySlot :: Proxy "blocklySlot"
+_blocklySlot = Proxy
 
-_actusBlocklySlot :: SProxy "actusBlocklySlot"
-_actusBlocklySlot = SProxy
+_actusBlocklySlot :: Proxy "actusBlocklySlot"
+_actusBlocklySlot = Proxy
 
-_simulationSlot :: SProxy "simulationSlot"
-_simulationSlot = SProxy
+_simulationSlot :: Proxy "simulationSlot"
+_simulationSlot = Proxy
 
-_simulatorEditorSlot :: SProxy "simulatorEditorSlot"
-_simulatorEditorSlot = SProxy
+_simulatorEditorSlot :: Proxy "simulatorEditorSlot"
+_simulatorEditorSlot = Proxy
 
-_marloweEditorPageSlot :: SProxy "marloweEditorPageSlot"
-_marloweEditorPageSlot = SProxy
+_marloweEditorPageSlot :: Proxy "marloweEditorPageSlot"
+_marloweEditorPageSlot = Proxy
 
-_walletSlot :: SProxy "walletSlot"
-_walletSlot = SProxy
+_walletSlot :: Proxy "walletSlot"
+_walletSlot = Proxy
+
+_currencyInputSlot :: Proxy "currencyInput"
+_currencyInputSlot = Proxy
 
 -----------------------------------------------------------
 type State
@@ -207,73 +215,73 @@ type State
     }
 
 _view :: Lens' State View
-_view = prop (SProxy :: SProxy "view")
+_view = prop (Proxy :: _ "view")
 
 _jsCompilationResult :: Lens' State CompilationState
-_jsCompilationResult = prop (SProxy :: SProxy "jsCompilationResult")
+_jsCompilationResult = prop (Proxy :: _ "jsCompilationResult")
 
 _jsEditorKeybindings :: Lens' State KeyBindings
-_jsEditorKeybindings = prop (SProxy :: SProxy "jsEditorKeybindings")
+_jsEditorKeybindings = prop (Proxy :: _ "jsEditorKeybindings")
 
 _activeJSDemo :: Lens' State String
-_activeJSDemo = prop (SProxy :: SProxy "activeJSDemo")
+_activeJSDemo = prop (Proxy :: _ "activeJSDemo")
 
 _showBottomPanel :: Lens' State Boolean
-_showBottomPanel = prop (SProxy :: SProxy "showBottomPanel")
+_showBottomPanel = prop (Proxy :: _ "showBottomPanel")
 
 _marloweEditorState :: Lens' State ME.State
-_marloweEditorState = prop (SProxy :: SProxy "marloweEditorState")
+_marloweEditorState = prop (Proxy :: _ "marloweEditorState")
 
 _blocklyEditorState :: Lens' State BE.State
-_blocklyEditorState = prop (SProxy :: SProxy "blocklyEditorState")
+_blocklyEditorState = prop (Proxy :: _ "blocklyEditorState")
 
 _haskellState :: Lens' State HE.State
-_haskellState = prop (SProxy :: SProxy "haskellState")
+_haskellState = prop (Proxy :: _ "haskellState")
 
 _javascriptState :: Lens' State JS.State
-_javascriptState = prop (SProxy :: SProxy "javascriptState")
+_javascriptState = prop (Proxy :: _ "javascriptState")
 
 _simulationState :: Lens' State Simulation.State
-_simulationState = prop (SProxy :: SProxy "simulationState")
+_simulationState = prop (Proxy :: _ "simulationState")
 
 _contractMetadata :: Lens' State MetaData
-_contractMetadata = prop (SProxy :: SProxy "contractMetadata")
+_contractMetadata = prop (Proxy :: _ "contractMetadata")
 
 _projects :: Lens' State Projects.State
-_projects = prop (SProxy :: SProxy "projects")
+_projects = prop (Proxy :: _ "projects")
 
 _newProject :: Lens' State NewProject.State
-_newProject = prop (SProxy :: SProxy "newProject")
+_newProject = prop (Proxy :: _ "newProject")
 
 _rename :: Lens' State Rename.State
-_rename = prop (SProxy :: SProxy "rename")
+_rename = prop (Proxy :: _ "rename")
 
 _saveAs :: Lens' State SaveAs.State
-_saveAs = prop (SProxy :: SProxy "saveAs")
+_saveAs = prop (Proxy :: _ "saveAs")
 
 _authStatus :: Lens' State (WebData AuthStatus)
-_authStatus = prop (SProxy :: SProxy "authStatus")
+_authStatus = prop (Proxy :: _ "authStatus")
 
 _gistId :: Lens' State (Maybe GistId)
-_gistId = prop (SProxy :: SProxy "gistId")
+_gistId = prop (Proxy :: _ "gistId")
 
 _createGistResult :: Lens' State (WebData Gist)
-_createGistResult = prop (SProxy :: SProxy "createGistResult")
+_createGistResult = prop (Proxy :: _ "createGistResult")
 
 _loadGistResult :: Lens' State (Either String (WebData Gist))
-_loadGistResult = prop (SProxy :: SProxy "loadGistResult")
+_loadGistResult = prop (Proxy :: _ "loadGistResult")
 
 _projectName :: Lens' State String
-_projectName = prop (SProxy :: SProxy "projectName")
+_projectName = prop (Proxy :: _ "projectName")
 
 _showModal :: Lens' State (Maybe ModalView)
-_showModal = prop (SProxy :: SProxy "showModal")
+_showModal = prop (Proxy :: _ "showModal")
 
 _hasUnsavedChanges :: Lens' State Boolean
-_hasUnsavedChanges = prop (SProxy :: SProxy "hasUnsavedChanges")
+_hasUnsavedChanges = prop (Proxy :: _ "hasUnsavedChanges")
 
 _workflow :: Lens' State (Maybe Lang)
-_workflow = prop (SProxy :: SProxy "workflow")
+_workflow = prop (Proxy :: _ "workflow")
 
 currentLang :: State -> Maybe Lang
 currentLang state = case state ^. _view of
@@ -306,10 +314,10 @@ hasGlobalLoading state = Projects.modalIsLoading (state ^. _projects) || (projec
 _timestamp ::
   forall s a.
   Lens' { timestamp :: a | s } a
-_timestamp = prop (SProxy :: SProxy "timestamp")
+_timestamp = prop (Proxy :: _ "timestamp")
 
 _value :: forall s a. Lens' { value :: a | s } a
-_value = prop (SProxy :: SProxy "value")
+_value = prop (Proxy :: _ "value")
 
 isActiveTab :: State -> View -> Array ClassName
 isActiveTab state activeView = state ^. _view <<< (activeClass (eq activeView))
@@ -329,11 +337,23 @@ derive instance eqSession :: Eq Session
 
 derive instance genericSession :: Generic Session _
 
-instance encodeSession :: Encode Session where
-  encode value = genericEncode defaultOptions value
+instance encodeJsonSession :: EncodeJson Session where
+  encodeJson (Session { projectName, gistId, workflow, contractMetadata }) =
+    encodeJson
+      { projectName
+      , gistId: maybe jsonNull encodeJson gistId
+      , workflow: maybe jsonNull encodeJson workflow
+      , contractMetadata
+      }
 
-instance decodeSession :: Decode Session where
-  decode value = genericDecode defaultOptions value
+instance decodeJsonSession :: DecodeJson Session where
+  decodeJson json = do
+     obj <- decodeJObject json
+     projectName <- obj .: "projectName"
+     gistId <- obj .:? "gistId"
+     workflow <- obj .:? "workflow"
+     contractMetadata <- obj .: "contractMetadata"
+     pure $ Session { projectName, gistId, workflow, contractMetadata }
 
 stateToSession :: State -> Session
 stateToSession { projectName

@@ -8,9 +8,9 @@ module Page.Simulation.State
 import Prologue hiding (div)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State, initialState) as BottomPanel
-import Control.Monad.Except (ExceptT, lift, runExcept, runExceptT)
+import Control.Monad.Except (lift, runExcept, runExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk, asks, runReaderT)
+import Control.Monad.Reader (class MonadAsk)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt, fromString)
 import Data.Decimal (truncated, fromNumber)
@@ -49,13 +49,12 @@ import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.Simulation.Lenses (_bottomPanelState, _decorationIds, _helpContext, _showRightPanel)
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
-import Servant.PureScript (AjaxError, errorToString)
+import Servant.PureScript (printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses (_SimulationNotStarted, _SimulationRunning, _currentContract, _currentMarloweState, _executionState, _initialSlot, _marloweState, _moveToAction, _possibleActions, _templateContent, _termContract)
 import Simulator.State (applyInput, emptyMarloweState, inFuture, moveToSlot, startSimulation, updateChoice)
 import Simulator.Types (ActionInput(..), ActionInputId(..), ExecutionState(..), Parties(..))
 import StaticData (simulatorBufferLocalStorageKey)
-import Types (WebData)
 import Web.DOM.Document as D
 import Web.DOM.Element (setScrollTop)
 import Web.DOM.Element as E
@@ -207,14 +206,13 @@ getPrice ::
   String ->
   HalogenM State Action ChildSlots Void m BigInt
 getPrice inverse exchange pair = do
-  settings <- asks _.ajaxSettings
-  result <- runAjax (runReaderT (Server.getApiOracleByExchangeByPair exchange pair) settings)
+  result <- RemoteData.fromEither <$> runExceptT (Server.getApiOracleByExchangeByPair exchange pair)
   calculatedPrice <-
     liftEffect case result of
       NotAsked -> pure "0"
       Loading -> pure "0"
       Failure e -> do
-        log $ "Failure" <> errorToString e
+        log $ "Failure" <> printAjaxError e
         pure "0"
       Success (RawJson json) -> do
         let
@@ -241,12 +239,6 @@ getPrice inverse exchange pair = do
 
 getCurrentContract :: forall m. HalogenM State Action ChildSlots Void m (Maybe String)
 getCurrentContract = editorGetValue
-
-runAjax ::
-  forall m a.
-  ExceptT AjaxError (HalogenM State Action ChildSlots Void m) a ->
-  HalogenM State Action ChildSlots Void m (WebData a)
-runAjax action = RemoteData.fromEither <$> runExceptT action
 
 scrollHelpPanel :: forall m. MonadEffect m => HalogenM State Action ChildSlots Void m Unit
 scrollHelpPanel =
@@ -293,9 +285,9 @@ updateOracleAndContractEditor = do
         decorationOptions = { isWholeLine: false, className: "monaco-simulation-text-decoration", linesDecorationsClassName: "monaco-simulation-line-decoration" }
       mNewDecorationIds <- query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations oldDecorationIds [ { range: r, options: decorationOptions } ] identity
       for_ mNewDecorationIds (assign _decorationIds)
-      void $ query _simulatorEditorSlot unit $ tell $ Monaco.RevealRange r
+      void $ tell _simulatorEditorSlot unit $ Monaco.RevealRange r
     _ -> do
       void $ query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations oldDecorationIds [] identity
       assign _decorationIds []
-      void $ query _simulatorEditorSlot unit $ tell $ Monaco.SetPosition { column: 1, lineNumber: 1 }
+      void $ tell _simulatorEditorSlot unit $ Monaco.SetPosition { column: 1, lineNumber: 1 }
   setOraclePrice

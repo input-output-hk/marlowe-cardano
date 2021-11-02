@@ -35,7 +35,7 @@ render state =
   link lang =
     div
       [ classes [ ClassName "environment-selector" ]
-      , onClick (const <<< Just $ CreateProject lang)
+      , onClick (const $ CreateProject lang)
       ]
       [ img [ src $ langIcon lang ]
       , span [ classes [ textSm, fontSemibold ] ]

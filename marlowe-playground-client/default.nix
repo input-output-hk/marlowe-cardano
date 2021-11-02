@@ -48,7 +48,7 @@ let
       inherit pkgs nodeModules;
       src = cleanSrc;
       checkPhase = ''
-        node -e 'require("./output/Test.Main").main()'
+        ${pkgs.nodejs}/bin/npm run test
       '';
       name = "marlowe-playground-client";
       extraSrcs = {

@@ -33,15 +33,9 @@ module.exports = {
                     {
                         loader: "purs-loader",
                         options: {
-                            src: [
-                                "src/**/*.purs",
-                                "generated/**/*.purs",
-                                ".spago/*/*/src/**/*.purs",
-                                "web-common/**/*.purs",
-                                "web-common-marlowe/**/*.purs",
-                                "web-common-playground/**/*.purs",
-                                "test/**/*.purs"
-                            ],
+                            psc: "psa",
+                            warnings: true,
+                            spago: true
                         }
                     }
                 ]

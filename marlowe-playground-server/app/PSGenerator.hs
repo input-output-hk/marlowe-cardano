@@ -43,9 +43,9 @@ import           Language.Marlowe.ACTUS.Domain.Schedule       as SC (CashFlow)
 import           Language.Marlowe.Extended
 import           Language.Marlowe.SemanticsTypes              (State (..))
 import           Language.PureScript.Bridge                   (BridgePart, Language (Haskell), PSType, SumType,
-                                                               TypeInfo (TypeInfo), argonaut, buildBridge, genericShow,
-                                                               mkSumType, psTypeParameters, typeModule, typeName,
-                                                               writePSTypes, (^==))
+                                                               TypeInfo (TypeInfo), argonaut, buildBridge, equal,
+                                                               genericShow, mkSumType, order, psTypeParameters,
+                                                               typeModule, typeName, writePSTypes, (^==))
 import           Language.PureScript.Bridge.Builder           (BridgeData)
 import           Language.PureScript.Bridge.PSTypes           (psString)
 import           Language.PureScript.Bridge.TypeParameters    (A, B)
@@ -155,28 +155,28 @@ myTypes =
     , genericShow . argonaut $ mkSumType @MSRes.Result
     , argonaut $ mkSumType @MSReq.Request
     , argonaut $ mkSumType @(CT.ContractTermsPoly A B)
-    , argonaut $ mkSumType @CT.PYTP
-    , argonaut $ mkSumType @CT.PPEF
-    , argonaut $ mkSumType @CT.SCEF
-    , argonaut $ mkSumType @CT.OPTP
-    , argonaut $ mkSumType @CT.OPXT
-    , argonaut $ mkSumType @CT.DS
+    , equal . order . genericShow . argonaut $ mkSumType @CT.PYTP
+    , equal . order . genericShow . argonaut $ mkSumType @CT.PPEF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.SCEF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.OPTP
+    , equal . order . genericShow . argonaut $ mkSumType @CT.OPXT
+    , equal . order . genericShow . argonaut $ mkSumType @CT.DS
     , argonaut $ mkSumType @CT.Cycle
-    , argonaut $ mkSumType @CT.Period
-    , argonaut $ mkSumType @CT.Stub
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Period
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Stub
     , argonaut $ mkSumType @CT.ScheduleConfig
     , argonaut $ mkSumType @CT.ContractStructure
-    , argonaut $ mkSumType @CT.ReferenceType
-    , argonaut $ mkSumType @CT.ReferenceRole
-    , argonaut $ mkSumType @CT.DCC
-    , argonaut $ mkSumType @CT.BDC
-    , argonaut $ mkSumType @CT.EOMC
-    , argonaut $ mkSumType @CT.PRF
-    , argonaut $ mkSumType @CT.FEB
-    , argonaut $ mkSumType @CT.IPCB
-    , argonaut $ mkSumType @CT.CR
-    , argonaut $ mkSumType @CT.CT
-    , argonaut $ mkSumType @CT.Calendar
+    , equal . order . genericShow . argonaut $ mkSumType @CT.ReferenceType
+    , equal . order . genericShow . argonaut $ mkSumType @CT.ReferenceRole
+    , equal . order . genericShow . argonaut $ mkSumType @CT.DCC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.BDC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.EOMC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.PRF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.FEB
+    , equal . order . genericShow . argonaut $ mkSumType @CT.IPCB
+    , equal . order . genericShow . argonaut $ mkSumType @CT.CR
+    , equal . order . genericShow . argonaut $ mkSumType @CT.CT
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Calendar
     , argonaut $ mkSumType @CT.Assertion
     , argonaut $ mkSumType @CT.Assertions
     , argonaut $ mkSumType @CT.AssertionContext

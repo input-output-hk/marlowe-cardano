@@ -11,8 +11,8 @@ import Data.Foldable (foldl, oneOf)
 import Data.Lens (Lens', assign, use)
 import Data.Lens.Record (prop)
 import Data.List (List(..), (:))
-import Data.Symbol (SProxy(..))
-import Data.Traversable (for_)
+import Type.Proxy (Proxy(..))
+import Data.Traversable (for_, traverse_)
 import Effect (Effect)
 import Effect.Aff (Aff, finally, makeAff, nonCanceler)
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -22,16 +22,12 @@ import Effect.Ref as Ref
 import Effect.Timer (clearTimeout, setTimeout)
 import Halogen (HalogenM, SubscriptionId)
 import Halogen as H
+import Halogen.Subscription as HS
 import Web.Event.EventTarget (EventListener, eventListener)
 
-blocklyEvents ::
-  forall m action.
-  MonadAff m =>
-  (BlocklyEvent -> action) ->
-  Workspace ->
-  EventSource m action
+blocklyEvents :: forall action. (BlocklyEvent -> action) -> Workspace -> HS.Emitter action
 blocklyEvents toAction workspace =
-  EventSource.effectEventSource \emitter -> do
+  HS.makeEmitter \push -> do
     listener <-
       eventListener \event ->
         let
@@ -47,12 +43,12 @@ blocklyEvents toAction workspace =
               , BT.Select <$> fromEvent event
               ]
         in
-          for_ mEvent \ev -> EventSource.emit emitter (toAction ev)
+          traverse_ (push <<< toAction) mEvent
     addChangeListener workspace listener
-    pure $ EventSource.Finalizer $ removeChangeListener workspace listener
+    pure $ removeChangeListener workspace listener
 
 _eventsWhileDragging :: forall state. Lens' { eventsWhileDragging :: Maybe (List BlocklyEvent) | state } (Maybe (List BlocklyEvent))
-_eventsWhileDragging = prop (SProxy :: SProxy "eventsWhileDragging")
+_eventsWhileDragging = prop (Proxy :: _ "eventsWhileDragging")
 
 -- | Using the blockly events, detect when the contract has changed and fire a halogen message.
 -- |
@@ -135,7 +131,7 @@ waitForEvents workspace time = liftEffect (Ref.new Nothing) >>= waitForEventsAnd
       resolveAfterTimeout
       -- Create and subscribe the event listener
       listener <-
-        eventListener \event -> do
+        eventListener \_ -> do
           -- Clear the previous timer and and fire a new one
           mTimeoutId <- Ref.read timerRef
           for_ mTimeoutId clearTimeout
@@ -162,9 +158,9 @@ runWithoutEventSubscription ::
   HalogenM { blocklyState :: Maybe BlocklyState, blocklyEventSubscription :: Maybe SubscriptionId | state } action slots message m Unit
 runWithoutEventSubscription time toAction doEffect = do
   let
-    _blocklyEventSubscription = prop (SProxy :: SProxy "blocklyEventSubscription")
+    _blocklyEventSubscription = prop (Proxy :: _ "blocklyEventSubscription")
 
-    _blocklyState = prop (SProxy :: SProxy "blocklyState")
+    _blocklyState = prop (Proxy :: _ "blocklyState")
   mSubscription <- use _blocklyEventSubscription
   mBlocklyState <- use _blocklyState
   for_ mBlocklyState \{ workspace } -> do
@@ -174,5 +170,5 @@ runWithoutEventSubscription time toAction doEffect = do
     liftEffect doEffect
     liftAff $ waitForEvents workspace time
     -- Resubscribe to blockly events
-    newSubscription <- H.subscribe $ blocklyEvents toAction workspace
-    assign _blocklyEventSubscription (Just newSubscription)
+    subscription <- H.subscribe (blocklyEvents toAction workspace)
+    assign _blocklyEventSubscription (Just subscription)

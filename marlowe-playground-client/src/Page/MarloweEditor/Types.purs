@@ -11,7 +11,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', to, view)
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetadataHintInfo)
@@ -42,6 +42,7 @@ data Action
   | AnalyseContractForCloseRefund
   | ClearAnalysisResults
   | Save
+  | DoNothing
 
 defaultEvent :: String -> Event
 defaultEvent s = A.defaultEvent $ "MarloweEditor." <> s
@@ -67,6 +68,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent Save = Just $ defaultEvent "Save"
+  toEvent DoNothing = Nothing
 
 data BottomPanelView
   = StaticAnalysisView
@@ -95,31 +97,31 @@ type State
     }
 
 _keybindings :: Lens' State KeyBindings
-_keybindings = prop (SProxy :: SProxy "keybindings")
+_keybindings = prop (Proxy :: _ "keybindings")
 
 _showErrorDetail :: Lens' State Boolean
-_showErrorDetail = prop (SProxy :: SProxy "showErrorDetail")
+_showErrorDetail = prop (Proxy :: _ "showErrorDetail")
 
 _selectedHole :: Lens' State (Maybe String)
-_selectedHole = prop (SProxy :: SProxy "selectedHole")
+_selectedHole = prop (Proxy :: _ "selectedHole")
 
 _metadataHintInfo :: Lens' State MetadataHintInfo
-_metadataHintInfo = prop (SProxy :: SProxy "metadataHintInfo")
+_metadataHintInfo = prop (Proxy :: _ "metadataHintInfo")
 
 _editorErrors :: forall s a. Lens' { editorErrors :: a | s } a
-_editorErrors = prop (SProxy :: SProxy "editorErrors")
+_editorErrors = prop (Proxy :: _ "editorErrors")
 
 _editorWarnings :: forall s a. Lens' { editorWarnings :: a | s } a
-_editorWarnings = prop (SProxy :: SProxy "editorWarnings")
+_editorWarnings = prop (Proxy :: _ "editorWarnings")
 
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
-_bottomPanelState = prop (SProxy :: SProxy "bottomPanelState")
+_bottomPanelState = prop (Proxy :: _ "bottomPanelState")
 
 _hasHoles :: Lens' State Boolean
-_hasHoles = prop (SProxy :: SProxy "hasHoles")
+_hasHoles = prop (Proxy :: _ "hasHoles")
 
 _editorReady :: Lens' State Boolean
-_editorReady = prop (SProxy :: SProxy "editorReady")
+_editorReady = prop (Proxy :: _ "editorReady")
 
 initialState :: State
 initialState =

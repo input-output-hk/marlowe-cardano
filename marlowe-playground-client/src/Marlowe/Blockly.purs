@@ -14,18 +14,18 @@ import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
+import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Either (note')
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
-import Data.Foldable (for_)
-import Data.Generic.Rep (class Generic)
-import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
 import Data.Eq.Generic (genericEq)
-import Data.Ord.Generic (genericCompare)
-import Data.Show.Generic (genericShow)
+import Data.Foldable (for_)
+import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (maybe)
+import Data.Ord.Generic (genericCompare)
+import Data.Show.Generic (genericShow)
 import Data.TraversableWithIndex (forWithIndex)
 import Effect (Effect)
 import Foreign.Object as Object
@@ -1259,7 +1259,7 @@ instance blockToTermContract :: BlockToTerm Contract where
     contract1 <- singleStatementToTerm "contract1" b
     contract2 <- singleStatementToTerm "contract2" b
     pure $ Term (If observation contract1 contract2) (BlockId id)
-  blockToTerm b@({ type: "WhenContractType", id, children }) = do
+  blockToTerm b@({ type: "WhenContractType", id }) = do
     timeoutType <- fieldAsString "timeout_type" b
     cases <- statementsToTerms "case" b
     let
@@ -1374,8 +1374,8 @@ instance blockToTermValue :: BlockToTerm Value where
     choiceName <- fieldAsString "choice_name" b
     party <- valueToTerm "party" b
     pure $ Term (ChoiceValue (ChoiceId choiceName party)) (BlockId id)
-  blockToTerm b@({ type: "SlotIntervalStartValueType", id }) = pure $ Term SlotIntervalStart (BlockId id)
-  blockToTerm b@({ type: "SlotIntervalEndValueType", id }) = pure $ Term SlotIntervalEnd (BlockId id)
+  blockToTerm ({ type: "SlotIntervalStartValueType", id }) = pure $ Term SlotIntervalStart (BlockId id)
+  blockToTerm ({ type: "SlotIntervalEndValueType", id }) = pure $ Term SlotIntervalEnd (BlockId id)
   blockToTerm b@({ type: "UseValueValueType", id }) = do
     valueId <- fieldAsString "value_id" b
     let
@@ -1443,7 +1443,7 @@ instance blockToTermPayee :: BlockToTerm Payee where
   blockToTerm block = throwError $ InvalidBlock block "Payee"
 
 instance blockToTermToken :: BlockToTerm Token where
-  blockToTerm b@({ type: "AdaTokenType", id }) = pure $ Term (Token "" "") (BlockId id)
+  blockToTerm ({ type: "AdaTokenType", id }) = pure $ Term (Token "" "") (BlockId id)
   blockToTerm b@({ type: "CustomTokenType", id }) = do
     currencySymbol <- fieldAsString "currency_symbol" b
     tokenName <- fieldAsString "token_name" b
@@ -1504,7 +1504,7 @@ class ToBlockly a where
 
 instance toBlocklyTerm :: ToBlockly a => ToBlockly (Term a) where
   toBlockly newBlock workspace input (Term a _) = toBlockly newBlock workspace input a
-  toBlockly newBlock workspace input _ = pure unit
+  toBlockly _ _ _ _ = pure unit
 
 instance toBlocklyPayee :: ToBlockly Payee where
   toBlockly newBlock workspace input (Account accountOwner) = do
@@ -1543,8 +1543,8 @@ nextBound newBlock workspace fromConnection bounds = do
     Just { head: (Hole _ _ _) } -> pure unit
     Just { head: (Term (Bound from to) _), tail } -> do
       block <- newBlock workspace (show BoundsType)
-      setField block "from" (show from)
-      setField block "to" (show to)
+      setField block "from" (BigInt.toString from)
+      setField block "to" (BigInt.toString to)
       toConnection <- previousConnection block
       connect fromConnection toConnection
       nextFromConnection <- nextConnection block
@@ -1557,8 +1557,8 @@ instance toBlocklyBounds :: ToBlockly (Array (Term Bound)) where
       Just { head: (Hole _ _ _) } -> pure unit
       Just { head: (Term (Bound from to) _), tail } -> do
         block <- newBlock workspace (show BoundsType)
-        setField block "from" (show from)
-        setField block "to" (show to)
+        setField block "from" (BigInt.toString from)
+        setField block "to" (BigInt.toString to)
         connectToPrevious block input
         fromConnection <- nextConnection block
         nextBound newBlock workspace fromConnection tail
@@ -1646,7 +1646,7 @@ instance toBlocklyContract :: ToBlockly Contract where
       )
     setField block "timeout"
       ( case timeout of
-          Term (Slot slotNum) _ -> show slotNum
+          Term (Slot slotNum) _ -> BigInt.toString slotNum
           Term (SlotParam paramName) _ -> paramName
           _ -> "0"
       )
@@ -1724,7 +1724,7 @@ instance toBlocklyValue :: ToBlockly Value where
   toBlockly newBlock workspace input (Constant v) = do
     block <- newBlock workspace (show ConstantValueType)
     connectToOutput block input
-    setField block "constant" (show v)
+    setField block "constant" (BigInt.toString v)
   toBlockly newBlock workspace input (ConstantParam n) = do
     block <- newBlock workspace (show ConstantParamValueType)
     connectToOutput block input
@@ -1753,18 +1753,18 @@ instance toBlocklyValue :: ToBlockly Value where
     connectToOutput block input
     inputToBlockly newBlock workspace block "value1" v1
     inputToBlockly newBlock workspace block "value2" v2
-  toBlockly newBlock workspace input (Scale (TermWrapper (Rational numerator denominator) _) value) = do
+  toBlockly newBlock workspace input (Scale (TermWrapper (Rational n d) _) value) = do
     block <- newBlock workspace (show ScaleValueType)
     connectToOutput block input
     -- this makes sure the `-` sign is always on the top
     let
       (Tuple fixedNumerator fixedDenominator) =
-        if denominator > zero then
-          Tuple numerator denominator
+        if d > zero then
+          Tuple n d
         else
-          Tuple (-numerator) (-denominator)
-    setField block "numerator" (show fixedNumerator)
-    setField block "denominator" (show fixedDenominator)
+          Tuple (-n) (-d)
+    setField block "numerator" (BigInt.toString fixedNumerator)
+    setField block "denominator" (BigInt.toString fixedDenominator)
     inputToBlockly newBlock workspace block "value" value
   toBlockly newBlock workspace input (ChoiceValue (ChoiceId choiceName choiceOwner)) = do
     block <- newBlock workspace (show ChoiceValueValueType)

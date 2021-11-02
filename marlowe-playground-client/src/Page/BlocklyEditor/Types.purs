@@ -11,7 +11,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Linter (Warning)
 import Marlowe.Template (IntegerTemplateType)
@@ -73,25 +73,25 @@ type State
     }
 
 _errorMessage :: Lens' State (Maybe String)
-_errorMessage = prop (SProxy :: SProxy "errorMessage")
+_errorMessage = prop (Proxy :: _ "errorMessage")
 
 _marloweCode :: Lens' State (Maybe String)
-_marloweCode = prop (SProxy :: SProxy "marloweCode")
+_marloweCode = prop (Proxy :: _ "marloweCode")
 
 _hasHoles :: Lens' State Boolean
-_hasHoles = prop (SProxy :: SProxy "hasHoles")
+_hasHoles = prop (Proxy :: _ "hasHoles")
 
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
-_bottomPanelState = prop (SProxy :: SProxy "bottomPanelState")
+_bottomPanelState = prop (Proxy :: _ "bottomPanelState")
 
 _metadataHintInfo :: Lens' State MetadataHintInfo
-_metadataHintInfo = prop (SProxy :: SProxy "metadataHintInfo")
+_metadataHintInfo = prop (Proxy :: _ "metadataHintInfo")
 
 _analysisState :: Lens' State AnalysisState
-_analysisState = prop (SProxy :: SProxy "analysisState")
+_analysisState = prop (Proxy :: _ "analysisState")
 
 _warnings :: Lens' State (Array Warning)
-_warnings = prop (SProxy :: SProxy "warnings")
+_warnings = prop (Proxy :: _ "warnings")
 
 initialState :: State
 initialState =

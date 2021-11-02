@@ -1,8 +1,10 @@
 module Pretty where
 
 import Prologue
+
 import Data.Array (concat, drop, dropWhile, length, replicate, take)
-import Data.BigInt.Argonaut (BigInt, format)
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.String as String
@@ -36,8 +38,10 @@ showPrettyParty (PK pkh) = "PubKey " <> pkh
 
 showPrettyParty (Role role) = show role
 
+-- TODO I think this used to add commas? confirm this and add this back if
+-- needed.
 showPrettyMoney :: BigInt -> String
-showPrettyMoney i = format i
+showPrettyMoney = BigInt.toString
 
 renderPrettyPayee :: forall p i. MetaData -> Payee -> Array (HTML p i)
 renderPrettyPayee metadata (Account owner2) = [ text "account of ", renderPrettyParty metadata owner2 ]

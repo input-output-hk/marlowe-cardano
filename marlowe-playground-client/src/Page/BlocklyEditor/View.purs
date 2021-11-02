@@ -16,7 +16,7 @@ import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
 import Halogen.HTML (HTML, button, div, section, slot, text)
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (classes, enabled, id_)
+import Halogen.HTML.Properties (classes, enabled, id)
 import MainFrame.Types (ChildSlots, _blocklySlot)
 import Marlowe.Blockly as MB
 import Marlowe.Extended.Metadata (MetaData)
@@ -34,7 +34,7 @@ render metadata state =
     [ section
         [ classes [ paddingX, minH0, overflowHidden, fullHeight ]
         ]
-        [ slot _blocklySlot unit (Blockly.blocklyComponent MB.rootBlockName MB.blockDefinitions MB.toolbox) unit (Just <<< HandleBlocklyMessage)
+        [ slot _blocklySlot unit (Blockly.blocklyComponent MB.rootBlockName MB.blockDefinitions MB.toolbox) unit HandleBlocklyMessage
         , workspaceBlocks
         ]
     , section [ classes [ paddingX, maxH70p ] ]
@@ -63,8 +63,8 @@ render metadata state =
 
 workspaceBlocks :: forall a b. HTML a b
 workspaceBlocks =
-  xml [ id_ "workspaceBlocks", style "display:none" ]
-    [ block [ blockType (show MB.BaseContractType), x "13", y "187", id_ MB.rootBlockName ] []
+  xml [ id "workspaceBlocks", style "display:none" ]
+    [ block [ blockType (show MB.BaseContractType), x "13", y "187", id MB.rootBlockName ] []
     ]
 
 otherActions ::
@@ -73,13 +73,13 @@ otherActions ::
 otherActions state =
   div [ classes [ group ] ]
     [ button
-        [ onClick $ const $ Just ViewAsMarlowe
+        [ onClick $ const ViewAsMarlowe
         , enabled hasCode
         , classNames [ "btn" ]
         ]
         [ text "View as Marlowe" ]
     , button
-        [ onClick $ const $ Just SendToSimulator
+        [ onClick $ const SendToSimulator
         , enabled (hasCode && not hasHoles)
         , classNames [ "btn" ]
         ]

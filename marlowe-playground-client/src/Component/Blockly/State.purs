@@ -21,7 +21,6 @@ import Halogen (Component, HalogenM, getHTMLElementRef, liftEffect, mkComponent,
 import Halogen as H
 import Halogen.BlocklyCommons (blocklyEvents, runWithoutEventSubscription, detectCodeChanges)
 import Halogen.ElementResize (elementResize)
-import Halogen.HTML (HTML)
 import Marlowe.Blockly (buildBlocks)
 import Marlowe.Holes (Term(..), Location(..))
 import Marlowe.Linter (_location)
@@ -37,7 +36,7 @@ blocklyComponent ::
   String ->
   Array BlockDefinition ->
   Toolbox ->
-  Component HTML Query Unit Message m
+  Component Query Unit Message m
 blocklyComponent rootBlockName blockDefinitions toolbox =
   mkComponent
     { initialState: const emptyState

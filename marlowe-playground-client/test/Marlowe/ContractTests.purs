@@ -57,9 +57,7 @@ toTerm :: EM.Contract -> Term T.Contract
 toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $ pretty contract
 
 contractToExtended :: String -> Maybe EM.Contract
-contractToExtended contract = case parseContract contract of -- We reuse the extended Marlowe parser for now since it is a superset
-  Right parsedContract -> fromTerm parsedContract
-  Left error -> Nothing
+contractToExtended = fromTerm <=< hush <<< parseContract
 
 examplesMatch :: TestSuite
 examplesMatch =
@@ -117,7 +115,7 @@ filledEscrowWithCollateral =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
                   [ "Price" /\ BigInt.fromInt 450
@@ -153,7 +151,7 @@ filledCouponBondGuaranteed =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
                   [ "Interest instalment" /\ BigInt.fromInt 100
@@ -169,7 +167,7 @@ filledSwap =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
                   [ "Amount of Ada" /\ BigInt.fromInt 1500000
@@ -326,6 +324,6 @@ contractHasNoErrors contractName contract =
         case mError, mWarnings of
           -- TODO: If we run into this message, we'll need to implement the refactor described in runContract to know how to reach this state
           Nothing, Just [] -> runContract mContract
-          Just err, _ -> pure $ Failed "it has errors"
-          _, Just warnings -> pure $ Failed "it has warnings"
+          Just _, _ -> pure $ Failed "it has errors"
+          _, Just _ -> pure $ Failed "it has warnings"
           _, _ -> pure $ Failed "Wrong simulation state"

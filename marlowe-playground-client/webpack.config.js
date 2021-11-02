@@ -62,20 +62,11 @@ module.exports = {
                     {
                         loader: "purs-loader",
                         options: {
-                            src: [
-                                "src/**/*.purs",
-                                "generated/**/*.purs",
-                                ".spago/*/*/src/**/*.purs",
-                                "web-common/**/*.purs",
-                                "web-common-marlowe/**/*.purs",
-                                "web-common-playground/**/*.purs"
-                            ],
-                            psc: null,
+                            psc: "psa",
                             bundle: !(isWebpackDevServer || isWatch),
                             warnings: true,
                             watch: isWebpackDevServer || isWatch,
-                            pscPackage: false,
-                            pscIde: false
+                            spago: true
                         }
                     }
                 ]
@@ -119,7 +110,7 @@ module.exports = {
     },
     plugins: [
         new HtmlWebpackPlugin({
-            template: "web-common/static/index.html",
+            template: `${process.env.WEB_COMMON_SRC}/static/index.html`,
             favicon: "static/favicon.ico",
             title: "Marlowe Playground",
             productName: "marlowe-playground",

@@ -7,7 +7,7 @@ import Data.Bifunctor (bimap)
 import Data.Foldable (foldMap)
 import Data.String.CodeUnits (drop, fromCharArray, singleton, take)
 import Data.String.CodeUnits as String
-import Text.Parsing.StringParser (ParseError, Parser(..), Pos)
+import Text.Parsing.StringParser (Parser(..), Pos)
 import Text.Parsing.StringParser.CodeUnits (anyDigit, char, string, satisfy, skipSpaces)
 import Text.Parsing.StringParser.Combinators (between, option)
 
@@ -66,5 +66,5 @@ lines = map String.fromCharArray <<< go <<< String.toCharArray
 replaceInPosition :: { start :: Pos, end :: Pos, string :: String, replacement :: String } -> String
 replaceInPosition { start, end, string, replacement } = take start string <> replacement <> drop end string
 
-runParser' :: forall a. Parser a -> String -> Either { error :: ParseError, pos :: Pos } a
+runParser' :: forall a. Parser a -> String -> Either { error :: String, pos :: Pos } a
 runParser' (Parser p) s = bimap identity _.result (p { str: s, pos: 0 })

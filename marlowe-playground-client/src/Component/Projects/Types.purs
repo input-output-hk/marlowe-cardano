@@ -2,15 +2,19 @@ module Component.Projects.Types where
 
 import Prologue
 import Analytics (class IsEvent, Event)
+import Data.Argonaut (class DecodeJson, class EncodeJson)
+import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Enum (class Enum)
+import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has)
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
-import Foreign.Class (class Decode, class Encode)
-import Foreign.Generic.EnumEncoding (defaultGenericEnumOptions, genericDecodeEnum, genericEncodeEnum)
+import Type.Proxy (Proxy(..))
 import Gist (Gist, GistId)
 import Network.RemoteData (RemoteData(..), _Loading)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
 
 -----------------------------------------------------------
 data Lang
@@ -22,13 +26,23 @@ data Lang
 
 derive instance eqLang :: Eq Lang
 
+derive instance ord:: Ord Lang
+
 derive instance genericLang :: Generic Lang _
 
-instance encodeLang :: Encode Lang where
-  encode value = genericEncodeEnum defaultGenericEnumOptions value
+instance encodeJsonLang :: EncodeJson Lang where
+  encodeJson = E.encode E.enum
 
-instance decodeLang :: Decode Lang where
-  decode value = genericDecodeEnum defaultGenericEnumOptions value
+instance decodeJsonLang :: DecodeJson Lang where
+  decodeJson = D.decode D.enum
+
+instance enumLang :: Enum Lang where
+  succ = genericSucc
+  pred = genericPred
+
+instance boundedLang :: Bounded Lang where
+  bottom = genericBottom
+  top = genericTop
 
 -----------------------------------------------------------
 instance showLang :: Show Lang where
@@ -55,7 +69,7 @@ emptyState :: State
 emptyState = { projects: NotAsked }
 
 _projects :: Lens' State (RemoteData String (Array Gist))
-_projects = prop (SProxy :: SProxy "projects")
+_projects = prop (Proxy :: _ "projects")
 
 modalIsLoading :: State -> Boolean
 modalIsLoading = has (_projects <<< _Loading)

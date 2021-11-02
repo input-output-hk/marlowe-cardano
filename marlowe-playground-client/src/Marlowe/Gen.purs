@@ -1,6 +1,7 @@
 module Marlowe.Gen where
 
 import Prologue
+
 import Control.Lazy (class Lazy, defer)
 import Control.Monad.Gen (class MonadGen, chooseInt, resize, suchThat, unfoldable)
 import Control.Monad.Gen as Gen
@@ -13,12 +14,13 @@ import Data.Char.Gen (genAlpha, genDigitChar)
 import Data.Foldable (class Foldable)
 import Data.Int (rem)
 import Data.Maybe (fromMaybe)
-import Data.NonEmpty (NonEmpty, foldl1, (:|))
+import Data.NonEmpty (NonEmpty, (:|))
+import Data.Semigroup.Foldable (foldl1)
 import Data.String.CodeUnits (fromCharArray)
 import Marlowe.Extended as EM
 import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), MarloweType(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Token(..), Value(..), ValueId(..), mkArgName)
 import Marlowe.Holes as H
-import Marlowe.Semantics (Rational(..), CurrencySymbol, Input(..), PubKey, Slot(..), SlotInterval(..), TokenName, TransactionInput(..), TransactionWarning(..))
+import Marlowe.Semantics (CurrencySymbol, Input(..), PubKey, Rational(..), Slot(..), SlotInterval(..), TokenName, TransactionInput(..), TransactionWarning(..))
 import Marlowe.Semantics as S
 import Text.Parsing.StringParser (Pos)
 import Type.Proxy (Proxy(..))
@@ -191,7 +193,7 @@ genCases ::
   m (Array (Term Case))
 genCases size = resize (_ - 1) (unfoldable (local withoutHoles (genTerm "case" (genCase size))))
   where
-  withoutHoles (GenerationOptions { withHoles, withExtendedConstructs }) = GenerationOptions { withHoles: false, withExtendedConstructs }
+  withoutHoles (GenerationOptions { withExtendedConstructs }) = GenerationOptions { withHoles: false, withExtendedConstructs }
 
 genValue :: forall m. MonadGen m => MonadRec m => Lazy (m Value) => Lazy (m Observation) => MonadReader GenerationOptions m => m Value
 genValue = genValue' 5

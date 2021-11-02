@@ -3,11 +3,12 @@ module Component.Projects.State where
 import Prologue hiding (div)
 import Component.Projects.Types (Action(..), State, _projects)
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Reader (class MonadAsk, runReaderT, asks)
+import Control.Monad.Reader (class MonadAsk)
+import Data.Argonaut (decodeJson, fromString)
 import Data.Array (sortBy)
 import Data.Bifunctor (lmap, rmap)
 import Data.DateTime (DateTime)
-import Data.DateTime.ISO as ISO
+import Data.DateTime.ISO (ISO)
 import Data.Either (hush)
 import Data.Lens (assign)
 import Data.Maybe (fromMaybe)
@@ -21,8 +22,7 @@ import MainFrame.Types (ChildSlots)
 import Marlowe (getApiGists)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Servant.PureScript (errorToString)
-import Text.Parsing.Parser (runParser)
+import Servant.PureScript (printAjaxError)
 
 handleAction ::
   forall m.
@@ -32,11 +32,10 @@ handleAction ::
   HalogenM State Action ChildSlots Void m Unit
 handleAction LoadProjects = do
   assign _projects Loading
-  settings <- asks _.ajaxSettings
-  resp <- flip runReaderT settings $ runExceptT getApiGists
-  assign _projects $ rmap sortGists $ lmap errorToString $ RemoteData.fromEither resp
+  resp <- runExceptT getApiGists
+  assign _projects $ rmap sortGists $ lmap printAjaxError $ RemoteData.fromEither resp
 
-handleAction (LoadProject lang gistId) = pure unit
+handleAction (LoadProject _ _) = pure unit
 
 handleAction (Cancel) = pure unit
 
@@ -44,6 +43,6 @@ sortGists :: Array Gist -> Array Gist
 sortGists = sortBy f
   where
   dt :: String -> DateTime
-  dt s = fromMaybe bottom <<< map unwrap <<< hush $ runParser s ISO.parseISO
+  dt s = fromMaybe bottom $ map unwrap $ hush (decodeJson $ fromString s :: _ _ ISO)
 
   f (Gist { _gistUpdatedAt: a }) (Gist { _gistUpdatedAt: b }) = invert $ compare (dt a) (dt b)

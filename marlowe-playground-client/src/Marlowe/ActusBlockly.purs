@@ -1,12 +1,18 @@
 module Marlowe.ActusBlockly where
 
-import Prologue
+import Prologue hiding (Either(..))
+import Prologue (Either) as P
+import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson, printJsonDecodeError)
+import Data.Argonaut.Extra (parseDecodeJson)
+import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson ((>$<))
+import Data.Argonaut.Encode.Aeson as E
 import Blockly.Generator (Generator, getFieldValue, getType, insertGeneratorFunction, mkGenerator, statementToCode)
 import Blockly.Internal (AlignDirection(..), Arg(..), BlockDefinition(..), block, blockType, defaultBlockDefinition, style, x, xml, y)
 import Blockly.Toolbox (Toolbox(..), category, leaf)
 import Blockly.Types (Block, Blockly)
 import Control.Alternative ((<|>))
-import Control.Monad.Except (runExcept)
 import Data.Bifunctor (lmap, rmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
@@ -21,18 +27,16 @@ import Data.Eq.Generic (genericEq)
 import Data.Ord.Generic (genericCompare)
 import Data.Show.Generic (genericShow)
 import Data.Int (fromString)
+import Data.Map as Map
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Newtype (class Newtype, unwrap)
 import Data.Traversable (sequence, traverse_)
+import Data.Tuple (uncurry)
+import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Foreign (F)
-import Foreign.Class (class Decode, class Encode, decode)
-import Foreign.Generic (genericEncode, genericDecode, encodeJSON)
-import Foreign.Generic.Class (Options, defaultOptions, aesonSumEncoding)
-import Foreign.JSON (parseJSON)
 import Halogen.HTML (HTML)
-import Halogen.HTML.Properties (id_)
-import Language.Marlowe.ACTUS.Domain.ContractTerms (Assertion(..), AssertionContext(..), Assertions(..), BDC(..), CR(..), PRF(..), ContractTermsPoly(..), CT(..), Cycle(..), DCC(..), EOMC(..), FEB(..), PPEF(..), PYTP(..), Period(..), SCEF(..), Calendar(..), ScheduleConfig(..), Stub(..), IPCB(..), ContractStructure(..))
+import Halogen.HTML.Properties (id)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (Assertion(..), AssertionContext(..), Assertions(..), BDC(..), CR(..), CT(..), Calendar(..), ContractTermsPoly(..), Cycle(..), DCC(..), EOMC(..), FEB(..), IPCB(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig(..), Stub(..))
 import Record (merge)
 import Text.Parsing.StringParser (Parser)
 import Text.Parsing.StringParser.Basic (parens, runParser')
@@ -138,13 +142,13 @@ instance boundedEnumActusPeriodType :: BoundedEnum ActusPeriodType where
   fromEnum = genericFromEnum
 
 instance showActusPeriod :: Show ActusPeriodType where
-  show = encodeJSON
+  show = genericShow
 
-instance encodeJsonActusPeriod :: Encode ActusPeriodType where
-  encode a = genericEncode aesonCompatibleOptions a
+instance encodeJsonJsonActusPeriod :: EncodeJson ActusPeriodType where
+  encodeJson = E.encode E.enum
 
-instance decodeJsonActusPeriod :: Decode ActusPeriodType where
-  decode a = genericDecode aesonCompatibleOptions a
+instance decodeJsonJsonActusPeriod :: DecodeJson ActusPeriodType where
+  decodeJson = D.decode D.enum
 
 actusPeriodTypes :: Array ActusPeriodType
 actusPeriodTypes = upFromIncluding bottom
@@ -522,18 +526,18 @@ toolbox =
 
 workspaceBlocks :: forall a b. HTML a b
 workspaceBlocks =
-  xml [ id_ "actusWorkspaceBlocks", style "display:none" ]
-    [ block [ blockType (show BaseContractType), x "13", y "187", id_ rootBlockName ] []
+  xml [ id "actusWorkspaceBlocks", style "display:none" ]
+    [ block [ blockType (show BaseContractType), x "13", y "187", id rootBlockName ] []
     ]
 
-parse :: forall a. Parser a -> String -> Either String a
+parse :: forall a. Parser a -> String -> P.Either String a
 parse p = lmap show <<< runParser' (parens p <|> p)
 
 buildGenerator :: Blockly -> Effect Generator
 buildGenerator blockly = do
   generator <- mkGenerator blockly "Actus"
   let
-    mkGenFun :: forall a t. Show a => Show t => t -> (Block -> Either String a) -> Effect Unit
+    mkGenFun :: forall a t. Show a => Show t => t -> (Block -> P.Either String a) -> Effect Unit
     mkGenFun blockType f = insertGeneratorFunction generator (show blockType) ((rmap show) <<< f)
   traverse_ (\t -> mkGenFun t (baseContractDefinition generator)) [ BaseContractType ]
   traverse_ (\t -> mkGenFun t (blockDefinition t generator)) actusContractTypes
@@ -542,13 +546,12 @@ buildGenerator blockly = do
   pure generator
 
 class HasBlockDefinition a b | a -> b where
-  blockDefinition :: a -> Generator -> Block -> Either String b
+  blockDefinition :: a -> Generator -> Block -> P.Either String b
 
-baseContractDefinition :: Generator -> Block -> Either String ActusContract
+baseContractDefinition :: Generator -> Block -> P.Either String ActusContract
 baseContractDefinition g block = do
   code <- statementToCode g block (show BaseContractType)
-  json <- catch $ runExcept $ parseJSON code
-  catch $ runExcept (decode json :: F ActusContract)
+  parseActusJsonCode code
 
 newtype ActusContract
   = ActusContract
@@ -582,13 +585,57 @@ derive instance actusContract :: Generic ActusContract _
 derive instance actusContractNewtype :: Newtype ActusContract _
 
 instance showActusContract :: Show ActusContract where
-  show = encodeJSON
+  show x = genericShow x
 
-instance encodeJsonActusContract :: Encode ActusContract where
-  encode a = genericEncode aesonCompatibleOptions a
+instance encodeJsonJsonActusContract :: EncodeJson ActusContract where
+  encodeJson = E.encode $ unwrap >$< E.record
+    { contractType: E.value :: _ CT
+    , startDate: E.value :: _ ActusValue
+    , initialExchangeDate: E.value :: _ ActusValue
+    , maturityDate: E.value :: _ ActusValue
+    , amortizationDate: E.value :: _ ActusValue
+    , terminationDate: E.value :: _ ActusValue
+    , terminationPrice: E.value :: _ ActusValue
+    , periodicPaymentAmount: E.value :: _ ActusValue
+    , purchaseDate: E.value :: _ ActusValue
+    , purchasePrice: E.value :: _ ActusValue
+    , dayCountConvention: E.value :: _ ActusValue
+    , endOfMonthConvention: E.value :: _ ActusValue
+    , rateReset: E.value :: _ ActusValue
+    , notional: E.value :: _ ActusValue
+    , premiumDiscount: E.value :: _ ActusValue
+    , interestRate: E.value :: _ ActusValue
+    , interestRateCycle: E.value :: _ ActusValue
+    , principalRedemptionCycle: E.value :: _ ActusValue
+    , interestCalculationBaseCycle: E.value :: _ ActusValue
+    , assertionCtx: E.value :: _ ActusValue
+    , assertion: E.value :: _ ActusValue
+    }
 
-instance decodeJsonActusContract :: Decode ActusContract where
-  decode a = genericDecode aesonCompatibleOptions a
+instance decodeJsonJsonActusContract :: DecodeJson ActusContract where
+  decodeJson json = flip D.decode json $ ActusContract <$> D.record "ActusContract"
+    { contractType: D.value :: _ CT
+    , startDate: D.value :: _ ActusValue
+    , initialExchangeDate: D.value :: _ ActusValue
+    , maturityDate: D.value :: _ ActusValue
+    , amortizationDate: D.value :: _ ActusValue
+    , terminationDate: D.value :: _ ActusValue
+    , terminationPrice: D.value :: _ ActusValue
+    , periodicPaymentAmount: D.value :: _ ActusValue
+    , purchaseDate: D.value :: _ ActusValue
+    , purchasePrice: D.value :: _ ActusValue
+    , dayCountConvention: D.value :: _ ActusValue
+    , endOfMonthConvention: D.value :: _ ActusValue
+    , rateReset: D.value :: _ ActusValue
+    , notional: D.value :: _ ActusValue
+    , premiumDiscount: D.value :: _ ActusValue
+    , interestRate: D.value :: _ ActusValue
+    , interestRateCycle: D.value :: _ ActusValue
+    , principalRedemptionCycle: D.value :: _ ActusValue
+    , interestCalculationBaseCycle: D.value :: _ ActusValue
+    , assertionCtx: D.value :: _ ActusValue
+    , assertion: D.value :: _ ActusValue
+    }
 
 data ActusValue
   = DateValue String String String
@@ -603,36 +650,85 @@ data ActusValue
 derive instance actusValue :: Generic ActusValue _
 
 instance showActusValue :: Show ActusValue where
-  show = encodeJSON
+  show x = genericShow x
 
-instance encodeJsonActusValue :: Encode ActusValue where
-  encode a = genericEncode aesonCompatibleOptions a
+instance encodeJsonJsonActusValue :: EncodeJson ActusValue where
+  encodeJson (DateValue a b c) =
+    encodeJson
+      { tag: "DateValue"
+      , contents:
+          [ encodeJson a
+          , encodeJson b
+          , encodeJson c
+          ]
+      }
+  encodeJson (CycleValue a b c) =
+    encodeJson
+      { tag: "CycleValue"
+      , contents:
+          [ encodeJson a
+          , encodeJson b
+          , encodeJson c
+          ]
+      }
+  encodeJson (DecimalValue a) =
+    encodeJson
+      { tag: "DecimalValue"
+      , contents: encodeJson a 
+      }
+  encodeJson (IntegerValue a) =
+    encodeJson
+      { tag: "IntegerValue"
+      , contents: encodeJson a 
+      }
+  encodeJson (ActusAssertionCtx a b) =
+    encodeJson
+      { tag: "ActusAssertionCtx"
+      , contents:
+          [ encodeJson a
+          , encodeJson b
+          ]
+      }
+  encodeJson (ActusAssertionNpv a b) =
+    encodeJson
+      { tag: "ActusAssertionNpv"
+      , contents:
+          [ encodeJson a
+          , encodeJson b
+          ]
+      }
+  encodeJson NoActusValue = encodeJson { tag: "encodeJson" }
+  encodeJson (ActusError a) =
+    encodeJson
+      { tag: "ActusError"
+      , contents: encodeJson a 
+      }
 
-instance decodeJsonActusValue :: Decode ActusValue where
-  decode a = genericDecode aesonCompatibleOptions a
-
-catch :: forall a b. Show a => Either a b -> Either String b
-catch = lmap show
+instance decodeJsonJsonActusValue :: DecodeJson ActusValue where
+  decodeJson json = flip D.decode json $ D.sumType "ActusValue" $ Map.fromFoldable
+    [ "DateValue" /\ D.content (D.tuple $ DateValue </$\> D.value </*\> D.value </*\> D.value)
+    , "CycleValue" /\ D.content (D.tuple $ CycleValue </$\> D.value </*\> D.value </*\> D.value)
+    , "DecimalValue" /\ D.content (DecimalValue <$> D.value)
+    , "IntegerValue" /\ D.content (IntegerValue <$> D.value)
+    , "ActusAssertionCtx" /\ D.content (uncurry ActusAssertionCtx <$> D.value)
+    , "ActusAssertionNpv" /\ D.content (uncurry ActusAssertionNpv <$> D.value)
+    , "NoActusValue" /\ pure NoActusValue
+    , "ActusError" /\ D.content (ActusError <$> D.value)
+    ]
 
 parseFieldActusValueJson :: Generator -> Block -> String -> ActusValue
 parseFieldActusValueJson g block name = Either.either (const NoActusValue) identity result
   where
   result = do
     value <- statementToCode g block name
-    parsed <- catch $ runExcept $ parseJSON value
-    let
-      decoded = decode parsed :: F ActusValue
-    catch $ runExcept $ decoded
+    parseActusJsonCode value
 
 parseFieldActusPeriodJson :: Generator -> Block -> String -> Maybe ActusPeriodType
 parseFieldActusPeriodJson g block name = Either.hush result
   where
   result = do
     value <- statementToCode g block name
-    parsed <- catch $ runExcept $ parseJSON value
-    let
-      decoded = decode parsed :: F ActusPeriodType
-    catch $ runExcept $ decoded
+    parseActusJsonCode value
 
 parseActusContractType :: Block -> CT
 parseActusContractType b = case getType b of
@@ -645,13 +741,8 @@ parseActusContractType b = case getType b of
   "Future" -> FUTUR
   _ -> PAM
 
-parseActusJsonCode :: String -> Either String ContractTerms
-parseActusJsonCode str = do
-  parsed <- catch $ runExcept $ parseJSON str
-  let
-    decoded = decode parsed :: F ActusContract
-  result <- catch $ runExcept $ decoded
-  actusContractToTerms result
+parseActusJsonCode :: forall a. DecodeJson a => String -> P.Either String a
+parseActusJsonCode = lmap printJsonDecodeError <<< parseDecodeJson
 
 instance hasBlockDefinitionActusContract :: HasBlockDefinition ActusContractType ActusContract where
   blockDefinition _ g block = case parseActusContractType block of
@@ -768,7 +859,7 @@ instance hasBlockDefinitionActusContract :: HasBlockDefinition ActusContractType
     FUTUR -> Either.Left "Unsupported contract type"
 
 instance hasBlockDefinitionValue :: HasBlockDefinition ActusValueType ActusValue where
-  blockDefinition ActusDate g block = do
+  blockDefinition ActusDate _ block = do
     yyyy <- getFieldValue block "yyyy"
     m <- getFieldValue block "mm"
     d <- getFieldValue block "dd"
@@ -797,21 +888,21 @@ instance hasBlockDefinitionValue :: HasBlockDefinition ActusValueType ActusValue
     let
       period = parseFieldActusPeriodJson g block "period"
     pure $ fromMaybe NoActusValue $ CycleValue anchor value <$> period --todo validation: return value if date is invalid
-  blockDefinition ActusDecimalType g block = do
+  blockDefinition ActusDecimalType _ block = do
     valueString <- getFieldValue block "value"
     value <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> parseFloat valueString
     pure $ DecimalValue value
-  blockDefinition ActusIntegerType g block = do
+  blockDefinition ActusIntegerType _ block = do
     valueString <- getFieldValue block "value"
     value <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> BigInt.fromString valueString
     pure $ IntegerValue value
-  blockDefinition ActusAssertionContextType g block = do
+  blockDefinition ActusAssertionContextType _ block = do
     minValueString <- getFieldValue block "min_rrmo"
     minValue <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> parseFloat minValueString
     maxValueString <- getFieldValue block "max_rrmo"
     maxValue <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> parseFloat maxValueString
     pure $ ActusAssertionCtx minValue maxValue
-  blockDefinition ActusAssertionType g block = do
+  blockDefinition ActusAssertionType _ block = do
     npvString <- getFieldValue block "npv"
     npv <- fromMaybe (Either.Left "can't parse numeric") $ Either.Right <$> parseFloat npvString
     zeroInterestString <- getFieldValue block "rate"
@@ -821,7 +912,7 @@ instance hasBlockDefinitionValue :: HasBlockDefinition ActusValueType ActusValue
 instance hasBlockDefinitionPeriod :: HasBlockDefinition ActusPeriodType ActusPeriodType where
   blockDefinition x _ _ = pure x
 
-actusDateToDay :: ActusValue -> Either String (Maybe String)
+actusDateToDay :: ActusValue -> P.Either String (Maybe String)
 actusDateToDay (DateValue yyyy mm dd) = Either.Right $ Just $ yyyy <> "-" <> mm <> "-" <> dd --should be validated in a parser
 
 actusDateToDay (ActusError msg) = Either.Left msg
@@ -830,7 +921,7 @@ actusDateToDay NoActusValue = Either.Right Nothing
 
 actusDateToDay x = Either.Left $ "Unexpected: " <> show x -- should be unreachable
 
-actusDecimalToNumber :: ActusValue -> Either String (Maybe Number)
+actusDecimalToNumber :: ActusValue -> P.Either String (Maybe Number)
 actusDecimalToNumber (DecimalValue n) = Either.Right $ Just $ n
 
 actusDecimalToNumber (ActusError msg) = Either.Left msg
@@ -839,7 +930,7 @@ actusDecimalToNumber NoActusValue = Either.Right Nothing
 
 actusDecimalToNumber x = Either.Left $ "Unexpected: " <> show x
 
-actusIntegerToNumber :: ActusValue -> Either String (Maybe BigInt)
+actusIntegerToNumber :: ActusValue -> P.Either String (Maybe BigInt)
 actusIntegerToNumber (IntegerValue n) = Either.Right $ Just $ n
 
 actusIntegerToNumber (ActusError msg) = Either.Left msg
@@ -848,7 +939,7 @@ actusIntegerToNumber NoActusValue = Either.Right Nothing
 
 actusIntegerToNumber x = Either.Left $ "Unexpected: " <> show x
 
-blocklyCycleToCycle :: ActusValue -> Either String (Maybe Cycle)
+blocklyCycleToCycle :: ActusValue -> P.Either String (Maybe Cycle)
 blocklyCycleToCycle (CycleValue _ value period) =
   Either.Right $ Just
     $ Cycle
@@ -869,7 +960,7 @@ blocklyCycleToCycle NoActusValue = Either.Right Nothing
 
 blocklyCycleToCycle x = Either.Left $ "Unexpected: " <> show x -- should be unreachable
 
-blocklyAssertionCtxToAssertionCtx :: ActusValue -> Either String (Maybe AssertionContext)
+blocklyAssertionCtxToAssertionCtx :: ActusValue -> P.Either String (Maybe AssertionContext)
 blocklyAssertionCtxToAssertionCtx (ActusAssertionCtx min max) =
   Either.Right $ Just
     $ AssertionContext
@@ -883,7 +974,7 @@ blocklyAssertionCtxToAssertionCtx NoActusValue = Either.Right Nothing
 
 blocklyAssertionCtxToAssertionCtx x = Either.Left $ "Unexpected: " <> show x -- should be unreachable
 
-blocklyAssertionToAssertion :: ActusValue -> Either String (Maybe Assertion)
+blocklyAssertionToAssertion :: ActusValue -> P.Either String (Maybe Assertion)
 blocklyAssertionToAssertion (ActusAssertionNpv npv rate) =
   Either.Right $ Just
     $ NpvAssertionAgainstZeroRiskBond
@@ -897,7 +988,7 @@ blocklyAssertionToAssertion NoActusValue = Either.Right Nothing
 
 blocklyAssertionToAssertion x = Either.Left $ "Unexpected: " <> show x -- should be unreachable
 
-blocklyCycleToAnchor :: ActusValue -> Either String (Maybe ActusValue)
+blocklyCycleToAnchor :: ActusValue -> P.Either String (Maybe ActusValue)
 blocklyCycleToAnchor (CycleValue anchor _ _) = Either.Right $ Just anchor
 
 blocklyCycleToAnchor (ActusError msg) = Either.Left msg
@@ -906,7 +997,7 @@ blocklyCycleToAnchor NoActusValue = Either.Right Nothing
 
 blocklyCycleToAnchor x = Either.Left $ "Unexpected: " <> show x -- should be unreachable
 
-actusContractToTerms :: ActusContract -> Either String ContractTerms
+actusContractToTerms :: ActusContract -> P.Either String ContractTerms
 actusContractToTerms raw = do
   let
     c = (unwrap raw)
@@ -1036,10 +1127,3 @@ actusContractToTerms raw = do
         -- , collateralAmount: fromMaybe (BigInt.fromInt 0) collateral
         , collateralAmount: BigInt.fromInt 0
         }
-
-aesonCompatibleOptions :: Options
-aesonCompatibleOptions =
-  defaultOptions
-    { unwrapSingleConstructors = true
-    , sumEncoding = aesonSumEncoding
-    }

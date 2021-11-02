@@ -108,7 +108,7 @@ displayWarning index (TransactionShadowing valId oldVal newVal) =
   , text "."
   ]
 
-displayWarning index TransactionAssertionFailed =
+displayWarning _ TransactionAssertionFailed =
   [ b_ [ text "Assertion failed" ]
   , text " - An assertion in the contract did not hold."
   ]

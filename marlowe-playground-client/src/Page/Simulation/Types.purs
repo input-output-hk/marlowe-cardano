@@ -55,7 +55,7 @@ defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
   toEvent (SetInitialSlot _) = Just $ defaultEvent "SetInitialSlot"
-  toEvent (SetIntegerTemplateParam templateType key value) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent (MoveSlot _) = Just $ defaultEvent "MoveSlot"
   toEvent (SetSlot _) = Just $ defaultEvent "SetSlot"

@@ -3,7 +3,7 @@ module Page.Simulation.BottomPanel (panelContents) where
 import Prologue hiding (div)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (foldMap)
-import Data.Lens (preview, previewOn, to, view, (^.))
+import Data.Lens (preview, to, view, (^.))
 import Data.Lens.NonEmptyList (_Head)
 import Data.Map as Map
 import Data.Tuple.Nested ((/\))
@@ -20,7 +20,7 @@ import Marlowe.Semantics (ChoiceId(..), Party, Token, TransactionError, Transact
 import Marlowe.ViewPartials (displayWarningList)
 import Page.Simulation.Types (BottomPanelView(..), State)
 import Pretty (renderPrettyParty, renderPrettyToken, showPrettyMoney)
-import Simulator.Lenses (_SimulationNotStarted, _SimulationRunning, _executionState, _initialSlot, _marloweState, _slot, _state, _transactionError, _transactionWarnings)
+import Simulator.Lenses (_SimulationRunning, _executionState, _marloweState, _state, _transactionError, _transactionWarnings)
 
 panelContents ::
   forall m action.
@@ -31,7 +31,7 @@ panelContents ::
   ComponentHTML action ChildSlots m
 panelContents metadata state CurrentStateView = currentStateView metadata state
 
-panelContents metadata state WarningsAndErrorsView =
+panelContents _ state WarningsAndErrorsView =
   let
     runtimeWarnings = view (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _transactionWarnings) state
 
@@ -62,12 +62,6 @@ currentStateView metadata state =
             }
     )
   where
-  slotText = case previewOn state (_marloweState <<< _Head <<< _executionState <<< _SimulationNotStarted <<< _initialSlot) of
-    Just initialSlot -> Right $ show initialSlot
-    Nothing -> case previewOn state (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _slot) of
-      Just slot -> Right $ show slot
-      Nothing -> Left "Slot number not defined"
-
   accountsData =
     let
       (accounts :: Array (Tuple (Tuple Party Token) BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _accounts <<< to Map.toUnfoldable)

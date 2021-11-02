@@ -2,17 +2,20 @@ module Marlowe.Semantics where
 
 import Prologue
 import Control.Alt ((<|>))
-import Control.Monad.Reader (ReaderT(..))
+import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
+import Control.Monad.Reader (ReaderT(..), runReaderT)
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, getField, getFieldOptional)
 import Data.Argonaut.Core (fromArray)
-import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), (.:))
-import Data.Argonaut.Decode.Aeson (Decoder, (</$\>), (</*\>))
+import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Decode.Decoders (decodeJObject)
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Decode.Decoders (decodeJArray, decodeJObject)
 import Data.Argonaut.Encode.Aeson as E
 import Data.Argonaut.Encode.Encoders (encodeArray)
-import Data.Array (catMaybes)
+import Data.Array (catMaybes, (!!))
+import Data.Array as Array
+import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.Either (note')
 import Data.Foldable (class Foldable, any, foldl, minimum)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Generic.Rep (class Generic)
@@ -22,30 +25,78 @@ import Data.Lens.Record (prop)
 import Data.List (List(..), fromFoldable, reverse, (:))
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Ord (abs, signum)
 import Data.Show.Generic (genericShow)
-import Data.String (toLower)
+import Data.String (joinWith, toLower)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import PlutusTx.Ratio (Ratio, denominator, numerator, reduce)
-import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, text)
+import Foreign.Object (Object)
+import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, pretty, text)
 import Type.Proxy (Proxy(..))
 
-exactValue :: forall a. Eq a => DecodeJson a => EncodeJson a => a -> Decoder a
-exactValue expected = do
-  value <- D.value
-  if value == expected then
-    pure value
-  else
-    ReaderT $ const $ Left $ UnexpectedValue $ encodeJson value
+caseConstantFrom ::
+  forall a b.
+  Ord a =>
+  Show a =>
+  DecodeJson a =>
+  Map a b ->
+  (Json -> Either JsonDecodeError b) ->
+  Json ->
+  Either JsonDecodeError b
+caseConstantFrom values onFail json = case decodeJson json of
+  Left _ -> onFail json
+  Right value -> note' mkError $ Map.lookup value values
+  where
+  mkError _ =
+    TypeMismatch
+      $ joinWith " | " (map show $ Array.fromFoldable $ Map.keys values)
 
-decodeProp :: forall a. DecodeJson a => String -> Decoder a
-decodeProp label =
-  ReaderT \json -> do
+object ::
+  forall a.
+  String ->
+  (ReaderT (Object Json) (Either JsonDecodeError) (Maybe a)) ->
+  Json ->
+  Either JsonDecodeError a
+object name decoder json =
+  lmap (Named name) do
     obj <- decodeJObject json
-    obj .: label
+    result <- runReaderT decoder obj
+    maybe (Left $ UnexpectedValue json) Right result
+
+getProp ::
+  forall a.
+  DecodeJson a =>
+  String ->
+  ReaderT (Object Json) (Either JsonDecodeError) (Maybe a)
+getProp key = ReaderT $ flip getFieldOptional key
+
+requireProp ::
+  forall a.
+  DecodeJson a =>
+  String ->
+  ReaderT (Object Json) (Either JsonDecodeError) a
+requireProp key = ReaderT $ flip getField key
+
+array ::
+  forall a.
+  String ->
+  (RWST (Array Json) Unit Int (Either JsonDecodeError) a) ->
+  Json ->
+  Either JsonDecodeError a
+array name decoder json =
+  lmap (Named name) do
+    arr <- decodeJArray json
+    fst <$> evalRWST decoder arr 0
+
+next :: forall a. DecodeJson a => RWST (Array Json) Unit Int (Either JsonDecodeError) a
+next =
+  RWST \arr ix ->
+    RWSResult
+      <$> pure (ix + 1)
+      <*> maybe (Left $ AtIndex ix MissingValue) decodeJson (arr !! ix)
+      <*> pure unit
 
 type PubKey
   = String
@@ -69,9 +120,12 @@ instance encodeJsonParty :: EncodeJson Party where
 
 instance decodeJsonParty :: DecodeJson Party where
   decodeJson =
-    D.decode
-      $ (PK <$> decodeProp "pk_hash")
-      <|> (Role <$> decodeProp "role_token")
+    object "Party" do
+      pkHash <- getProp "pk_hash"
+      roleToken <- getProp "role_token"
+      pure
+        $ (PK <$> pkHash)
+        <|> (Role <$> roleToken)
 
 instance showParty :: Show Party where
   show = genericShow
@@ -109,7 +163,10 @@ type TokenJson
   = { currency :: { unCurrencySymbol :: String }, token :: { unTokenName :: String } }
 
 instance decodeJsonToken :: DecodeJson Token where
-  decodeJson = D.decode $ Token <$> decodeProp "currency_symbol" <*> decodeProp "token_name"
+  decodeJson =
+    object "Token"
+      $ Just
+      <$> (Token <$> requireProp "currency_symbol" <*> requireProp "token_name")
 
 derive instance genericToken :: Generic Token _
 
@@ -240,8 +297,9 @@ instance encodeJsonChoiceId :: EncodeJson ChoiceId where
 
 instance decodeJsonChoiceId :: DecodeJson ChoiceId where
   decodeJson =
-    D.decode
-      (ChoiceId <$> decodeProp "choice_name" <*> decodeProp "choice_owner")
+    object "ChoiceId"
+      $ Just
+      <$> (ChoiceId <$> requireProp "choice_name" <*> requireProp "choice_owner")
 
 instance showChoiceId :: Show ChoiceId where
   show (ChoiceId name owner) = "(ChoiceId " <> show name <> " " <> show owner <> ")"
@@ -281,8 +339,30 @@ instance hasArgsValueId :: Args ValueId where
   hasArgs _ = false
   hasNestedArgs _ = false
 
-type Rational
-  = Ratio BigInt
+data Rational
+  = Rational BigInt BigInt
+
+derive instance genericRational :: Generic Rational _
+
+derive instance eqRational :: Eq Rational
+
+derive instance ordRational :: Ord Rational
+
+instance encodeJsonRational :: EncodeJson Rational where
+  encodeJson (Rational n d) = encodeJson [ n, d ]
+
+instance decodeJsonRational :: DecodeJson Rational where
+  decodeJson = array "Rational" $ Rational <$> next <*> next
+
+instance showRational :: Show Rational where
+  show (Rational n d) = "(" <> show (pretty n) <> "%" <> show (pretty d) <> ")"
+
+instance prettyRational :: Pretty Rational where
+  pretty r = text $ show r
+
+instance hasArgsRational :: Args Rational where
+  hasArgs _ = false
+  hasNestedArgs _ = false
 
 data Value
   = AvailableMoney AccountId Token
@@ -336,11 +416,11 @@ instance encodeJsonValue :: EncodeJson Value where
       { divide: lhs
       , by: rhs
       }
-  encodeJson (Scale r val) =
+  encodeJson (Scale (Rational n d) val) =
     encodeJson
       { multiply: val
-      , times: numerator r
-      , divide_by: denominator r
+      , times: n
+      , divide_by: d
       }
   encodeJson (ChoiceValue choiceId) =
     encodeJson
@@ -360,21 +440,52 @@ instance encodeJsonValue :: EncodeJson Value where
       }
 
 instance decodeJsonValue :: DecodeJson Value where
-  decodeJson j =
-    flip D.decode j
-      $ (SlotIntervalStart <$ exactValue "slot_interval_start")
-      <|> (SlotIntervalEnd <$ exactValue "slot_interval_end")
-      <|> (AvailableMoney <$> decodeProp "in_account" <*> decodeProp "amount_of_token")
-      <|> (Constant <$> D.value)
-      <|> (NegValue <$> decodeProp "negate")
-      <|> (AddValue <$> decodeProp "add" <*> decodeProp "and")
-      <|> (SubValue <$> decodeProp "value" <*> decodeProp "minus")
-      <|> (DivValue <$> decodeProp "divide" <*> decodeProp "by")
-      <|> (Scale <$> (reduce <$> decodeProp "times" <*> decodeProp "divide_by") <*> decodeProp "multiply")
-      <|> (MulValue <$> decodeProp "multiply" <*> decodeProp "times")
-      <|> (ChoiceValue <$> decodeProp "value_of_choice")
-      <|> (UseValue <$> decodeProp "use_value")
-      <|> (Cond <$> decodeProp "if" <*> decodeProp "then" <*> decodeProp "else")
+  decodeJson =
+    caseConstantFrom valueConstants \json ->
+      Constant <$> decodeJson json <|> decodeObject json
+    where
+    valueConstants =
+      Map.fromFoldable
+        [ Tuple "slot_interval_start" SlotIntervalStart
+        , Tuple "slot_interval_end" SlotIntervalEnd
+        ]
+
+    decodeObject =
+      object "Value" do
+        inAccount <- getProp "in_account"
+        amountOfToken <- getProp "amount_of_token"
+        negate <- getProp "negate"
+        add <- getProp "add"
+        and <- getProp "and"
+        value <- getProp "value"
+        minus <- getProp "minus"
+        divide <- getProp "divide"
+        multiply <- getProp "multiply"
+        by <- getProp "by"
+        times <- getProp "times"
+        divideBy <- getProp "divide_by"
+        valueOfChoices <- getProp "value_of_choice"
+        useValue <- getProp "use_value"
+        if_ <- getProp "if"
+        then_ <- getProp "then"
+        else_ <- getProp "else"
+        let
+          timesConst =
+            times
+              >>= case _ of
+                  Constant v -> Just v
+                  _ -> Nothing
+        pure
+          $ (AvailableMoney <$> inAccount <*> amountOfToken)
+          <|> (NegValue <$> negate)
+          <|> (AddValue <$> add <*> and)
+          <|> (SubValue <$> value <*> minus)
+          <|> (DivValue <$> divide <*> by)
+          <|> (Scale <$> (Rational <$> timesConst <*> divideBy) <*> multiply)
+          <|> (MulValue <$> multiply <*> times)
+          <|> (ChoiceValue <$> valueOfChoices)
+          <|> (UseValue <$> useValue)
+          <|> (Cond <$> if_ <*> then_ <*> else_)
 
 instance showValue :: Show Value where
   show v = genericShow v
@@ -453,19 +564,38 @@ instance encodeJsonObservation :: EncodeJson Observation where
   encodeJson FalseObs = encodeJson false
 
 instance decodeJsonObservation :: DecodeJson Observation where
-  decodeJson j =
-    flip D.decode j
-      $ (TrueObs <$ exactValue true)
-      <|> (FalseObs <$ exactValue false)
-      <|> (AndObs <$> decodeProp "both" <*> decodeProp "and")
-      <|> (OrObs <$> decodeProp "either" <*> decodeProp "or")
-      <|> (NotObs <$> decodeProp "not")
-      <|> (ChoseSomething <$> decodeProp "chose_something_for")
-      <|> (ValueGE <$> decodeProp "value" <*> decodeProp "ge_than")
-      <|> (ValueGT <$> decodeProp "value" <*> decodeProp "gt")
-      <|> (ValueLT <$> decodeProp "value" <*> decodeProp "lt")
-      <|> (ValueLE <$> decodeProp "value" <*> decodeProp "le_than")
-      <|> (ValueEQ <$> decodeProp "value" <*> decodeProp "equal_to")
+  decodeJson json = caseConstantFrom observationConstants decodeObject json
+    where
+    observationConstants =
+      Map.fromFoldable
+        [ Tuple true TrueObs
+        , Tuple false FalseObs
+        ]
+
+    decodeObject =
+      object "Observation" do
+        both <- getProp "both"
+        and <- getProp "and"
+        either <- getProp "either"
+        or <- getProp "or"
+        not <- getProp "not"
+        choseSomethingFor <- getProp "chose_something_for"
+        value <- getProp "value"
+        gte <- getProp "ge_than"
+        gt <- getProp "gt"
+        lt <- getProp "lt"
+        lte <- getProp "le_than"
+        equalTo <- getProp "equal_to"
+        pure
+          $ (AndObs <$> both <*> and)
+          <|> (OrObs <$> either <*> or)
+          <|> (NotObs <$> not)
+          <|> (ChoseSomething <$> choseSomethingFor)
+          <|> (ValueGE <$> value <*> gte)
+          <|> (ValueGT <$> value <*> gt)
+          <|> (ValueLT <$> value <*> lt)
+          <|> (ValueLE <$> value <*> lte)
+          <|> (ValueEQ <$> value <*> equalTo)
 
 instance showObservation :: Show Observation where
   show o = genericShow o
@@ -502,7 +632,7 @@ instance genericEncodeSlotInterval :: EncodeJson SlotInterval where
   encodeJson (SlotInterval a b) = encodeArray encodeJson [ a, b ]
 
 instance genericDecodeJsonSlotInterval :: DecodeJson SlotInterval where
-  decodeJson = D.decode $ uncurry SlotInterval <$> D.value
+  decodeJson = array "SlotInterval" $ SlotInterval <$> next <*> next
 
 ivFrom :: SlotInterval -> Slot
 ivFrom (SlotInterval from _) = from
@@ -527,7 +657,10 @@ instance encodeJsonBound :: EncodeJson Bound where
       }
 
 instance decodeJsonBound :: DecodeJson Bound where
-  decodeJson = D.decode $ Bound <$> decodeProp "from" <*> decodeProp "to"
+  decodeJson =
+    object "Bound"
+      $ Just
+      <$> (Bound <$> requireProp "from" <*> requireProp "to")
 
 instance showBound :: Show Bound where
   show = genericShow
@@ -591,15 +724,18 @@ instance encodeJsonAction :: EncodeJson Action where
 
 instance decodeJsonAction :: DecodeJson Action where
   decodeJson =
-    D.decode
-      $ ( Deposit
-            <$> decodeProp "into_account"
-            <*> decodeProp "party"
-            <*> decodeProp "of_token"
-            <*> decodeProp "deposits"
-        )
-      <|> (Choice <$> decodeProp "for_choice" <*> decodeProp "choose_between")
-      <|> (Notify <$> decodeProp "notify_if")
+    object "Action" do
+      intoAccount <- getProp "into_account"
+      party <- getProp "party"
+      ofToken <- getProp "of_token"
+      deposits <- getProp "deposits"
+      forChoice <- getProp "for_choice"
+      chooseBetween <- getProp "choose_between"
+      notifyIf <- getProp "notify_if"
+      pure
+        $ (Deposit <$> intoAccount <*> party <*> ofToken <*> deposits)
+        <|> (Choice <$> forChoice <*> chooseBetween)
+        <|> (Notify <$> notifyIf)
 
 instance showAction :: Show Action where
   show (Choice cid bounds) = "(Choice " <> show cid <> " " <> show bounds <> ")"
@@ -628,9 +764,10 @@ instance encodeJsonPayee :: EncodeJson Payee where
 
 instance decodeJsonPayee :: DecodeJson Payee where
   decodeJson =
-    D.decode
-      $ (Account <$> decodeProp "")
-      <|> (Party <$> decodeProp "party")
+    object "Payee" do
+      account <- getProp "account"
+      party <- getProp "party"
+      pure $ (Account <$> account) <|> (Party <$> party)
 
 instance showPayee :: Show Payee where
   show v = genericShow v
@@ -659,7 +796,10 @@ instance encodeJsonCase :: EncodeJson Case where
       }
 
 instance decodeJsonCase :: DecodeJson Case where
-  decodeJson j = flip D.decode j $ Case <$> decodeProp "case" <*> decodeProp "then"
+  decodeJson =
+    object "Case"
+      $ Just
+      <$> (Case <$> requireProp "case" <*> requireProp "then")
 
 instance showCase :: Show Case where
   show (Case action contract) = "Case " <> show action <> " " <> show contract
@@ -720,31 +860,29 @@ instance encodeJsonContract :: EncodeJson Contract where
       }
 
 instance decodeJsonContract :: DecodeJson Contract where
-  decodeJson j =
-    flip D.decode j
-      $ (Close <$ exactValue "close")
-      <|> ( Pay
-            <$> decodeProp "from_account"
-            <*> decodeProp "to"
-            <*> decodeProp "token"
-            <*> decodeProp "pay"
-            <*> decodeProp "then"
-        )
-      <|> (If <$> decodeProp "if" <*> decodeProp "then" <*> decodeProp "else")
-      <|> ( When
-            <$> decodeProp "when"
-            <*> decodeProp "timeout"
-            <*> decodeProp "timeout_continuation"
-        )
-      <|> ( Let
-            <$> decodeProp "let"
-            <*> decodeProp "be"
-            <*> decodeProp "then"
-        )
-      <|> ( Assert
-            <$> decodeProp "assert"
-            <*> decodeProp "then"
-        )
+  decodeJson = caseConstantFrom (Map.singleton "close" Close) decodeObject
+    where
+    decodeObject =
+      object "Contract" do
+        fromAccount <- getProp "from_account"
+        to <- getProp "to"
+        token <- getProp "token"
+        pay <- getProp "pay"
+        _then <- getProp "then"
+        _if <- getProp "if"
+        _else <- getProp "else"
+        when <- getProp "when"
+        timeout <- getProp "timeout"
+        timeoutContinuation <- getProp "timeout_continuation"
+        _let <- getProp "let"
+        be <- getProp "be"
+        assert <- getProp "assert"
+        pure
+          $ (Pay <$> fromAccount <*> to <*> token <*> pay <*> _then)
+          <|> (If <$> _if <*> _then <*> _else)
+          <|> (When <$> when <*> timeout <*> timeoutContinuation)
+          <|> (Let <$> _let <*> be <*> _then)
+          <|> (Assert <$> assert <*> _then)
 
 instance showContract :: Show Contract where
   show v = genericShow v
@@ -851,18 +989,26 @@ instance encodeJsonInput :: EncodeJson Input where
 
 instance decodeJsonInput :: DecodeJson Input where
   decodeJson =
-    D.decode
-      $ (INotify <$ exactValue "input_notify")
-      <|> ( IDeposit
-            <$> decodeProp "into_account"
-            <*> decodeProp "input_from_party"
-            <*> decodeProp "of_token"
-            <*> decodeProp "that_deposits"
-        )
-      <|> ( IChoice
-            <$> decodeProp "for_choice_id"
-            <*> decodeProp "input_that_chooses_num"
-        )
+    caseConstantFrom
+      (Map.singleton "input_notify" INotify)
+      decodeObject
+    where
+    decodeObject =
+      object "Action" do
+        intoAccount <- getProp "into_account"
+        inputFromParty <- getProp "input_from_party"
+        ofToken <- getProp "of_token"
+        thatDeposits <- getProp "that_deposits"
+        forChoiceId <- getProp "for_choice_id"
+        inputThatChoosesNum <- getProp "input_that_chooses_num"
+        pure
+          $ ( IDeposit
+                <$> intoAccount
+                <*> inputFromParty
+                <*> ofToken
+                <*> thatDeposits
+            )
+          <|> (IChoice <$> forChoiceId <*> inputThatChoosesNum)
 
 -- Processing of slot interval
 data IntervalError
@@ -889,9 +1035,9 @@ instance genericDecodeJsonIntervalError :: DecodeJson IntervalError where
     D.decode
       $ D.sumType "IntervalError"
       $ Map.fromFoldable
-        [ "InvalidInterval" /\ D.content (InvalidInterval <$> D.value)
-        , "IntervalInPastError" /\ D.content (uncurry IntervalInPastError <$> D.value)
-        ]
+          [ "InvalidInterval" /\ D.content (InvalidInterval <$> D.value)
+          , "IntervalInPastError" /\ D.content (uncurry IntervalInPastError <$> D.value)
+          ]
 
 data IntervalResult
   = IntervalTrimmed Environment State
@@ -1065,32 +1211,48 @@ instance encodeTransactionWarning :: EncodeJson TransactionWarning where
 
 instance decodeTransactionWarning :: DecodeJson TransactionWarning where
   decodeJson =
-    D.decode
-      $ (TransactionAssertionFailed <$ exactValue "assertion_failed")
-      <|> ( TransactionNonPositiveDeposit
-            <$> decodeProp "party"
-            <*> decodeProp "in_account"
-            <*> decodeProp "of_token"
-            <*> decodeProp "asked_to_deposit"
-        )
-      <|> ( TransactionPartialPay
-            <$> decodeProp "account"
-            <*> decodeProp "to_payee"
-            <*> decodeProp "of_token"
-            <*> decodeProp "but_only_paid"
-            <*> decodeProp "asked_to_pay"
-        )
-      <|> ( TransactionNonPositivePay
-            <$> decodeProp "account"
-            <*> decodeProp "to_payee"
-            <*> decodeProp "of_token"
-            <*> decodeProp "asked_to_pay"
-        )
-      <|> ( TransactionShadowing
-            <$> decodeProp "value_id"
-            <*> decodeProp "had_value"
-            <*> decodeProp "is_now_assigned"
-        )
+    caseConstantFrom
+      (Map.singleton "assertion_failed" TransactionAssertionFailed)
+      decodeObject
+    where
+    decodeObject =
+      object "TransactionWarning" do
+        party <- getProp "party"
+        inAccount <- getProp "in_account"
+        ofToken <- getProp "of_token"
+        askedToDeposit <- getProp "asked_to_deposit"
+        account <- getProp "account"
+        toPayee <- getProp "to_payee"
+        butOnlyPaid <- getProp "but_only_paid"
+        askedToPay <- getProp "asked_to_pay"
+        valueId <- getProp "value_id"
+        hadValue <- getProp "had_value"
+        isNowAssigned <- getProp "is_now_assigned"
+        pure
+          $ ( TransactionNonPositiveDeposit
+                <$> party
+                <*> inAccount
+                <*> ofToken
+                <*> askedToDeposit
+            )
+          <|> ( TransactionPartialPay
+                <$> account
+                <*> toPayee
+                <*> ofToken
+                <*> butOnlyPaid
+                <*> askedToPay
+            )
+          <|> ( TransactionNonPositivePay
+                <$> account
+                <*> toPayee
+                <*> ofToken
+                <*> askedToPay
+            )
+          <|> ( TransactionShadowing
+                <$> valueId
+                <*> hadValue
+                <*> isNowAssigned
+            )
 
 -- | Transaction error
 data TransactionError
@@ -1112,7 +1274,7 @@ instance showTransactionError :: Show TransactionError where
   show TEUselessTransaction = "Useless Transaction"
 
 instance genericEncodeTransactionError :: EncodeJson TransactionError where
-  encodeJson = case _  of
+  encodeJson = case _ of
     TEAmbiguousSlotIntervalError -> E.encodeTagged "TEAmbiguousSlotIntervalError" unit E.null
     TEApplyNoMatchError -> E.encodeTagged "TEApplyNoMatchError" unit E.null
     TEIntervalError e -> E.encodeTagged "TEIntervalError" e E.value
@@ -1123,11 +1285,11 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
     D.decode
       $ D.sumType "TransactionError"
       $ Map.fromFoldable
-        [ "TEAmbiguousSlotIntervalError" /\ D.content (TEAmbiguousSlotIntervalError <$ D.null)
-        , "TEApplyNoMatchError" /\ D.content (TEApplyNoMatchError <$ D.null)
-        , "TEIntervalError" /\ D.content (TEIntervalError <$> D.value)
-        , "TEUselessTransaction" /\ D.content (TEUselessTransaction <$ D.null)
-        ]
+          [ "TEAmbiguousSlotIntervalError" /\ D.content (TEAmbiguousSlotIntervalError <$ D.null)
+          , "TEApplyNoMatchError" /\ D.content (TEApplyNoMatchError <$ D.null)
+          , "TEIntervalError" /\ D.content (TEIntervalError <$> D.value)
+          , "TEUselessTransaction" /\ D.content (TEUselessTransaction <$ D.null)
+          ]
 
 newtype TransactionInput
   = TransactionInput
@@ -1162,17 +1324,18 @@ instance encodeTransactionInput :: EncodeJson TransactionInput where
 
 instance decodeTransactionInput :: DecodeJson TransactionInput where
   decodeJson =
-    D.decode do
-      intervalObject <- decodeProp "tx_interval"
-      inputs <- decodeProp "tx_inputs"
+    object "TransactionInput" do
+      intervalObject <- requireProp "tx_interval"
+      inputs <- requireProp "tx_inputs"
       interval <-
-        ReaderT $ const
-          $ flip D.decode intervalObject
-              ( SlotInterval
-                  <$> (Slot <$> decodeProp "from")
-                  <*> (Slot <$> decodeProp "to")
+        ReaderT \_ ->
+          flip (object "nested SlotInterval") intervalObject
+            $ Just
+            <$> ( SlotInterval
+                  <$> (Slot <$> requireProp "from")
+                  <*> (Slot <$> requireProp "to")
               )
-      pure $ TransactionInput { interval, inputs: inputs }
+      pure $ Just $ TransactionInput { interval, inputs: inputs }
 
 data TransactionOutput
   = TransactionOutput
@@ -1322,12 +1485,8 @@ evalValue env state value =
                       qIsEven = q `mod` fromInt 2 == fromInt 0
                     in
                       if qIsEven then q else q + signum n * signum d
-      Scale rat rhs ->
+      Scale (Rational n d) rhs ->
         let
-          n = numerator rat
-
-          d = denominator rat
-
           nn = eval rhs * n
 
           q = nn `div` d

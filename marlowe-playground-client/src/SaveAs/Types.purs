@@ -4,7 +4,7 @@ import Prologue
 import Analytics (class IsEvent)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Network.RemoteData (RemoteData(..))
 
 data Action
@@ -29,7 +29,7 @@ emptyState :: State
 emptyState = { projectName: "New Project", status: NotAsked }
 
 _projectName :: Lens' State String
-_projectName = prop (SProxy :: SProxy "projectName")
+_projectName = prop (Proxy :: _ "projectName")
 
 _status :: Lens' State (RemoteData String Void)
-_status = prop (SProxy :: SProxy "status")
+_status = prop (Proxy :: _ "status")

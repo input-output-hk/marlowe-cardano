@@ -4,6 +4,7 @@ module Marlowe.Parser
   ) where
 
 import Prologue
+
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Function.Uncurried (Fn5, runFn5)
@@ -20,7 +21,7 @@ type HelperFunctions a
     , mkTerm :: a -> IRange -> Term a
     , mkTermWrapper :: a -> IRange -> TermWrapper a
     , getRange :: Term a -> IRange
-    , mkBigInt :: Int -> BigInt
+    , mkBigInteger :: Int -> BigInt
     , mkSlot :: BigInt -> Slot
     , mkExtendedSlot :: BigInt -> Timeout
     , mkExtendedSlotParam :: String -> Timeout
@@ -85,7 +86,7 @@ helperFunctions =
   , mkTerm: \a pos -> Term a (Range pos)
   , mkTermWrapper: \a pos -> TermWrapper a (Range pos)
   , getRange: getLocation >>> locationToRange
-  , mkBigInt: BigInt.fromInt
+  , mkBigInteger: BigInt.fromInt
   , mkSlot: Slot
   , mkExtendedSlot: H.Slot
   , mkExtendedSlotParam: SlotParam

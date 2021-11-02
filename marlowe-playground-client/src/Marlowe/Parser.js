@@ -18,6 +18,8 @@ exports.parse_ = function (emptyInputError, parserError, success, fs, input) {
           return success(parser.results[0]);
         }
     } catch (error) {
+        console.log(input);
+        console.log(message);
         if (error.token) {
             return parserError({ message: error.message, row: error.token.line, column: error.token.col, token: error.token.value });
         } else {

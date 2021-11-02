@@ -14,12 +14,8 @@ import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
 
-render ::
-  forall m state.
-  MonadAff m =>
-  state ->
-  ComponentHTML Action ChildSlots m
-render state =
+render :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
+render =
   div_
     [ modalHeader "Demo Files" (Just Cancel)
     , div [ classes [ modalContent, ClassName "projects-container" ] ]
@@ -41,22 +37,22 @@ demoFile key name description =
         [ span [ class_ (ClassName "description") ] [ text description ]
         , div [ classes [ group, ClassName "open-buttons" ] ]
             [ button
-                [ onClick $ const $ Just $ LoadDemo Haskell key
+                [ onClick $ const $ LoadDemo Haskell key
                 , classNames [ "btn" ]
                 ]
                 [ text "Haskell" ]
             , button
-                [ onClick $ const $ Just $ LoadDemo Javascript key
+                [ onClick $ const $ LoadDemo Javascript key
                 , classNames [ "btn" ]
                 ]
                 [ text "Javascript" ]
             , button
-                [ onClick $ const $ Just $ LoadDemo Marlowe key
+                [ onClick $ const $ LoadDemo Marlowe key
                 , classNames [ "btn" ]
                 ]
                 [ text "Marlowe" ]
             , button
-                [ onClick $ const $ Just $ LoadDemo Blockly key
+                [ onClick $ const $ LoadDemo Blockly key
                 , classNames [ "btn" ]
                 ]
                 [ text "Blockly" ]

@@ -30,7 +30,7 @@ import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
 import Page.Simulation.View (integerTemplateParameters)
 import Pretty (showPrettyToken)
-import Servant.PureScript (AjaxError(..), ErrorDescription(..))
+import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types (AnalysisExecutionState(..), AnalysisState, MultiStageAnalysisData(..), _analysisExecutionState, _analysisState, _templateContent)
 import Types (WarningAnalysisError(..))
 
@@ -38,7 +38,7 @@ analyzeButton ::
   forall p action. Boolean -> Boolean -> String -> action -> HTML p action
 analyzeButton isLoading isEnabled name action =
   button
-    [ onClick $ const $ Just $ action
+    [ onClick $ const action
     , enabled isEnabled
     , classes [ spaceTop, spaceBottom, spaceRight, btn ]
     ]
@@ -48,7 +48,7 @@ clearButton ::
   forall p action. Boolean -> String -> action -> HTML p action
 clearButton isEnabled name action =
   button
-    [ onClick $ const $ Just $ action
+    [ onClick $ const action
     , enabled isEnabled
     , classes [ spaceTop, spaceBottom, spaceRight, btn ]
     ]
@@ -74,8 +74,8 @@ analysisResultPane metadata actionGen state =
         explanation
           [ text ""
           , ul [ class_ (ClassName "templates") ]
-              ( integerTemplateParameters metadata actionGen slotParameterDisplayInfo (unwrap templateContent).slotContent
-                  <> integerTemplateParameters metadata actionGen valueParameterDisplayInfo (unwrap templateContent).valueContent
+              ( integerTemplateParameters actionGen slotParameterDisplayInfo (unwrap templateContent).slotContent
+                  <> integerTemplateParameters actionGen valueParameterDisplayInfo (unwrap templateContent).valueContent
               )
           ]
       WarningAnalysis staticSubResult -> case staticSubResult of
@@ -117,24 +117,16 @@ analysisResultPane metadata actionGen state =
                     ]
                 ]
             ]
-        Failure (WarningAnalysisAjaxError (AjaxError { description })) ->
-          let
-            err = case description of
-              DecodingError e -> "Decoding error: " <> e
-              ConnectionError e -> "Connection error: " <> e
-              NotFound -> "Data not found."
-              ResponseError status body -> "Response error: " <> show status <> " " <> body
-              ResponseFormatError e -> "Response Format error: " <> e
-          in
-            explanation
-              [ h3 [ classes [ ClassName "analysis-result-title" ] ] [ text "Error during warning analysis" ]
-              , text "Analysis failed for the following reason:"
-              , ul [ classes [ ClassName "indented-enum-initial" ] ]
-                  [ li_
-                      [ b_ [ spanText err ]
-                      ]
-                  ]
-              ]
+        Failure (WarningAnalysisAjaxError error) ->
+          explanation
+            [ h3 [ classes [ ClassName "analysis-result-title" ] ] [ text "Error during warning analysis" ]
+            , text "Analysis failed for the following reason:"
+            , ul [ classes [ ClassName "indented-enum-initial" ] ]
+                [ li_
+                    [ b_ [ spanText $ printAjaxError error ]
+                    ]
+                ]
+            ]
         Failure WarningAnalysisIsExtendedMarloweError ->
           explanation
             [ h3 [ classes [ ClassName "analysis-result-title" ] ] [ text "Error during warning analysis" ]

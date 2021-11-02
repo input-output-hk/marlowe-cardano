@@ -9,7 +9,6 @@ import Data.Traversable (sequence_)
 import Data.Tuple.Nested (type (/\), (/\))
 import Marlowe.Linter (State(..), WarningDetail(..), lint)
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics as S
 import StaticData (marloweContracts)
 import Test.Unit (TestSuite, Test, suite, test, failure)
 import Test.Unit.Assert as Assert
@@ -113,16 +112,13 @@ makeObservationSimplificationWarning simplifiableExpression simplification = "Th
 unCurry2 :: forall a b c. (a -> b -> c) -> (a /\ b) -> c
 unCurry2 f (a /\ b) = f a b
 
-testWarningWithState :: forall a. S.State -> (a -> Array String) -> (a -> String) -> a -> Test
-testWarningWithState state makeWarning composeExpression expression = case parseContract $ composeExpression expression of
+testWarning :: forall a. (a -> Array String) -> (a -> String) -> a -> Test
+testWarning makeWarning composeExpression expression = case parseContract $ composeExpression expression of
   Right contractTerm -> do
     let
       State st = lint Nil contractTerm
     Assert.equal (makeWarning expression) $ map show $ toUnfoldable $ st.warnings
   Left err -> failure (show err)
-
-testWarning :: forall a. (a -> Array String) -> (a -> String) -> a -> Test
-testWarning = testWarningWithState (S.emptyState zero)
 
 testSimplificationWarning :: (String -> String -> String) -> (String -> String) -> String -> String -> Test
 testSimplificationWarning f g simplifiableExpression simplification = testWarning (singleton <<< unCurry2 f) (g <<< fst) (simplifiableExpression /\ simplification)
@@ -136,11 +132,8 @@ testObservationSimplificationWarning = testSimplificationWarning makeObservation
 testWarningSimple :: String -> String -> Test
 testWarningSimple expression warning = testWarning (const [ warning ]) (const expression) unit
 
-testNoWarningWithState :: S.State -> String -> Test
-testNoWarningWithState state expression = testWarningWithState state (const []) (const expression) unit
-
 testNoWarning :: String -> Test
-testNoWarning = testNoWarningWithState (S.emptyState zero)
+testNoWarning expression = testWarning (const []) (const expression) unit
 
 letSimplifies :: Test
 letSimplifies =

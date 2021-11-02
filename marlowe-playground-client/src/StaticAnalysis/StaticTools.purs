@@ -11,7 +11,7 @@ module StaticAnalysis.StaticTools
 import Prologue hiding (div)
 import Analytics (class IsEvent, analyticsTracking)
 import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.Reader (class MonadAsk, asks, runReaderT)
+import Control.Monad.Reader (class MonadAsk)
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, toNumber)
 import Data.Lens (assign, use)
@@ -33,14 +33,11 @@ import Marlowe.Symbolic.Types.Request as MSReq
 import Marlowe.Symbolic.Types.Response (Response(..), Result(..))
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Servant.PureScript (AjaxError(..))
+import Servant.PureScript (AjaxError)
 import StaticAnalysis.Types (AnalysisExecutionState(..), AnalysisInProgressRecord, AnalysisState, ContractPath, ContractPathStep(..), ContractZipper(..), MultiStageAnalysisData(..), MultiStageAnalysisProblemDef, RemainingSubProblemInfo, _analysisExecutionState, _analysisState, _templateContent)
 import Types (WarningAnalysisError(..), WebData)
 
-runAjax ::
-  forall m a state action slots.
-  ExceptT AjaxError (HalogenM state action slots Void m) a ->
-  HalogenM state action slots Void m (WebData a)
+runAjax :: forall m a. Functor m => ExceptT AjaxError m a -> m (WebData a)
 runAjax action = RemoteData.fromEither <$> runExceptT action
 
 analyseContract ::
@@ -57,14 +54,18 @@ analyseContract extendedContract = do
       -- when editor and simulator were together the analyse contract could be made
       -- at any step of the simulator. Now that they are separate, it can only be done
       -- with initial state
-      settings <- asks _.ajaxSettings
-      response <- checkContractForWarnings settings emptySemanticState contract
+      response <- checkContractForWarnings emptySemanticState contract
       assign (_analysisState <<< _analysisExecutionState) $ WarningAnalysis $ lmap WarningAnalysisAjaxError $ response
     Nothing -> assign (_analysisState <<< _analysisExecutionState) $ WarningAnalysis $ Failure WarningAnalysisIsExtendedMarloweError
   where
   emptySemanticState = emptyState zero
 
-  checkContractForWarnings settings state contract = traverse logAndStripDuration =<< (runAjax $ (flip runReaderT) settings (Server.postApiMarloweanalysis (MSReq.Request { onlyAssertions: false, contract, state })))
+  checkContractForWarnings state contract =
+    traverse logAndStripDuration
+      =<< runAjax
+          ( Server.postApiMarloweanalysis
+              $ MSReq.Request { onlyAssertions: false, contract, state }
+          )
 
 splitArray :: forall a. List a -> List (List a /\ a /\ List a)
 splitArray x = splitArrayAux Nil x
@@ -153,7 +154,7 @@ nullifyAsserts (When cases timeout timCont) =
 
 nullifyAsserts (Let valId val cont) = Let valId val (nullifyAsserts cont)
 
-nullifyAsserts (Assert obs cont) = Assert TrueObs cont
+nullifyAsserts (Assert _ cont) = Assert TrueObs cont
 
 initSubproblems :: Contract -> RemainingSubProblemInfo
 initSubproblems c = Cons (HeadZip /\ c) Nil
@@ -218,9 +219,13 @@ checkContractForFailedAssertions ::
   Contract ->
   S.State ->
   HalogenM state action slots Void m (WebData Result)
-checkContractForFailedAssertions contract state = do
-  settings <- asks _.ajaxSettings
-  traverse logAndStripDuration =<< (runAjax $ (flip runReaderT) settings (Server.postApiMarloweanalysis (MSReq.Request { onlyAssertions: true, contract: contract, state: state })))
+checkContractForFailedAssertions contract state =
+  traverse logAndStripDuration
+    =<< runAjax
+        ( Server.postApiMarloweanalysis
+            $ MSReq.Request
+                { onlyAssertions: true, contract: contract, state: state }
+        )
 
 startMultiStageAnalysis ::
   forall m state action slots.
@@ -261,7 +266,6 @@ startMultiStageAnalysis problemDef contract state = do
 
 stepSubproblem :: MultiStageAnalysisProblemDef -> Boolean -> AnalysisInProgressRecord -> Boolean /\ AnalysisInProgressRecord
 stepSubproblem problemDef isCounterExample ( rad@{ currPath: oldPath
-  , originalState: state
   , subproblems: oldSubproblems
   , currChildren: oldChildren
   , numSolvedSubproblems: n
@@ -311,9 +315,9 @@ updateWithResponse ::
   MultiStageAnalysisProblemDef ->
   MultiStageAnalysisData ->
   WebData Result -> HalogenM { analysisState :: AnalysisState | state } action slots Void m MultiStageAnalysisData
-updateWithResponse _ (AnalysisInProgress _) (Failure (AjaxError err)) = pure (AnalysisFailure "connection error")
+updateWithResponse _ (AnalysisInProgress _) (Failure _) = pure (AnalysisFailure "connection error")
 
-updateWithResponse _ (AnalysisInProgress { currPath: path }) (Success (Error err)) = pure (AnalysisFailure err)
+updateWithResponse _ (AnalysisInProgress _) (Success (Error err)) = pure (AnalysisFailure err)
 
 updateWithResponse problemDef (AnalysisInProgress rad) (Success Valid) = stepAnalysis problemDef false rad
 

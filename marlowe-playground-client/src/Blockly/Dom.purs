@@ -76,17 +76,16 @@ import Data.Compactable (separate)
 import Data.Either (note')
 import Data.Lens (Lens', _1, view)
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Web.DOM (Element, Node)
+import Web.DOM (Element)
 import Web.DOM.Element as Element
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.DOM.Node as Node
-import Web.DOM.NodeList as NodeList
 import Web.DOM.ParentNode as ParentNode
 
 type Block
@@ -100,7 +99,7 @@ type Block
     }
 
 _id :: Lens' Block String
-_id = prop (SProxy :: SProxy "id")
+_id = prop (Proxy :: _ "id")
 
 data BlockChild
   -- A Field is visually represented as a label and an editable field, for example
@@ -133,9 +132,9 @@ data ReadDomError
 explainError :: ReadDomError -> String
 explainError (TypeMismatch element expectedType) = "Element is of the wrong type (" <> show expectedType <> " expected, " <> show (Element.tagName element) <> " received)"
 
-explainError (MissingProperty element missingProperty) = "Element is missing required property " <> show missingProperty
+explainError (MissingProperty _ missingProperty) = "Element is missing required property " <> show missingProperty
 
-explainError (SingleChildExpected element elementCount) = "Element was expected to have a single child, and it had " <> show elementCount
+explainError (SingleChildExpected _ elementCount) = "Element was expected to have a single child, and it had " <> show elementCount
 
 explainError (RootElementNotFound rootBlockName) = "The element with id " <> show rootBlockName <> " was not found."
 
@@ -220,9 +219,6 @@ getDom { blockly, workspace, rootBlockName } = do
 
   getChildren :: Element -> Effect (Array Element)
   getChildren element = HTMLCollection.toArray =<< (ParentNode.children $ Element.toParentNode element)
-
-  getChildNodes :: Element -> Effect (Array Node)
-  getChildNodes element = NodeList.toArray =<< (Node.childNodes $ Element.toNode element)
 
   getElementText :: Element -> Effect String
   getElementText = Node.textContent <<< Element.toNode
