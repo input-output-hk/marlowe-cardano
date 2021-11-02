@@ -173,7 +173,7 @@ handleAction (GetTerms flavour) = do
             ct = (unwrap ctRaw)
           case flavour of
             F ->
-              if (isJust ct.ct_RRCL) then
+              if (isJust ct.cycleOfRateReset) then
                 assign _errorMessage $ Just "Rate resets are not allowed in static contracts"
               else
                 raise $ CurrentTerms flavour $ contract
