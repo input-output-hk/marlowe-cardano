@@ -2,20 +2,21 @@
   "name": "marlowe-dashboard-client",
   "version": "1.0.0",
   "scripts": {
-    "webpack": "webpack --progress --bail --mode=production --node-env=production",
-    "webpack:server": "webpack-cli serve --progress --inline --hot --mode=development --node-env=development",
-    "purs:compile": "spago build",
-    "purs:ide": "purs ide server --log-level=debug 'src/**/*.purs' 'generated/**/*.purs' 'test/**/*.purs' \"$WEB_COMMON_SRC/**/*.purs\" 'web-common-marlowe/**/*.purs'",
-    "test": "spago --no-psa test",
-    "test:watch": "spago test --no-psa --watch",
+    "build:webpack": "webpack --progress --bail --mode=development --node-env=production",
+    "build:webpack:dev": "webpack-cli serve --progress --inline --hot --mode=development --node-env=development",
+    "build:webpack:prod": "webpack --progress --bail --mode=production --node-env=production",
+    "build:spago": "spago build --purs-args \"--strict --censor-lib --stash --is-lib=generated --is-lib=.spago\"",
+    "build:spago:watch": "spago build --purs-args \"--strict --censor-lib --stash --is-lib=generated --is-lib=.spago\" --watch --clear-screen",
+    "install:spago": "spago install",
     "docs": "spago docs",
     "repl": "spago repl",
-    "start": "npm install && marlowe-pab-generate-purs && npm run purs:compile && npm run webpack:server"
+    "start": "marlowe-pab-generate-purs && npm run install:spago && npm run build:webpack:dev"
   },
   "resolutions": {},
   "license": "Apache-2.0",
   "dependencies": {
     "@popperjs/core": "^2.9.2",
+    "big-integer": "^1.6.50",
     "json-bigint": "^1.0.0",
     "uuid": "^8.3.2",
     "xhr2": "^0.2.1"

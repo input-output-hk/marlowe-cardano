@@ -6,6 +6,7 @@ You can edit this file as you like.
 , dependencies =
   [ "aff"
   , "affjax"
+  , "argonaut"
   , "argonaut-codecs"
   , "argonaut-core"
   , "arrays"
@@ -19,6 +20,7 @@ You can edit this file as you like.
   , "exceptions"
   , "filterable"
   , "foldable-traversable"
+  , "foreign-object"
   , "formatters"
   , "halogen"
   , "halogen-subscriptions"
@@ -50,5 +52,8 @@ You can edit this file as you like.
   ]
 , packages = ../packages.dhall
 , sources =
-  [ "src/**/*.purs", "generated/**/*.purs", "../web-common-marlowe/src/**/*.purs" ]
+  [ "src/**/*.purs"
+  , "generated/**/*.purs"
+  , "../web-common-marlowe/src/**/*.purs"
+  ]
 }

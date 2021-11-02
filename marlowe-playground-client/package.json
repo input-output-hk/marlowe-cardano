@@ -11,7 +11,7 @@
     "docs": "spago docs",
     "repl": "spago repl",
     "start": "marlowe-playground-generate-purs && npm run install:spago && npm run build:webpack:dev",
-    "test": "webpack --config webpack.test.config.js --mode=development && node dist/test.js"
+    "test": "NODE_OPTIONS=\"--max-old-space-size=8192\" webpack --config webpack.test.config.js --mode=development && node --max-old-space-size=8192 dist/test.js"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.10.2",

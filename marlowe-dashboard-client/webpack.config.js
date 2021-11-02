@@ -60,16 +60,11 @@ module.exports = {
                     {
                         loader: "purs-loader",
                         options: {
-                            src: [
-                                "src/**/*.purs",
-                                "generated/**/*.purs",
-                                ".spago/*/*/src/**/*.purs",
-                                "web-common-marlowe/**/*.purs",
-                                process.env.WEB_COMMON_SRC + "/**/*.purs",
-                            ],
                             psc: "psa",
                             bundle: !isDevelopment,
                             watch: isDevelopment,
+                            warnings: true,
+                            spago: true,
                         },
                     },
                 ],
