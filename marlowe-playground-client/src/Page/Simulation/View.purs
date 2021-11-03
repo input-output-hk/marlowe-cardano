@@ -1,8 +1,10 @@
 module Page.Simulation.View where
 
 import Prologue hiding (div)
+
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
+import Component.CurrencyInput (currencyInput)
 import Component.Hint.State (hint)
 import Component.Icons as Icon
 import Component.Popper (Placement(..))
@@ -26,7 +28,6 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Halogen.Classes (aHorizontal, bold, btn, flex, flexCol, flexGrow, flexShrink0, fontBold, fullHeight, fullWidth, grid, gridColsDescriptionLocation, group, justifyBetween, justifyCenter, justifyEnd, maxH70p, minH0, noMargins, overflowHidden, overflowScroll, paddingX, plusBtn, smallBtn, smallSpaceBottom, spaceBottom, spaceLeft, spaceRight, spanText, spanTextBreakWord, textSecondaryColor, textXs, uppercase, w30p)
 import Halogen.Css (classNames)
-import Component.CurrencyInput (currencyInput)
 import Halogen.Extra (renderSubmodule)
 import Halogen.HTML (ClassName(..), ComponentHTML, HTML, PlainHTML, aside, b_, button, div, div_, em, em_, h4, h6, h6_, li, li_, p, p_, section, slot, span, span_, strong_, text, ul)
 import Halogen.HTML.Events (onClick)
@@ -224,7 +225,7 @@ startSimulationWidget metadata { initialSlot, templateContent } =
     $ div_
         [ div [ classes [ ClassName "slot-input", ClassName "initial-slot-input" ] ]
             [ spanText "Initial slot:"
-            , marloweActionInput [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetInitialSlot <<< wrap) (unwrap initialSlot)
+            , marloweActionInput "initial-slot" [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetInitialSlot <<< wrap) (unwrap initialSlot)
             ]
         , div_
             [ ul [ class_ (ClassName "templates") ]
@@ -279,12 +280,13 @@ integerTemplateParameters ::
   Array (ComponentHTML action ChildSlots m)
 integerTemplateParameters actionGen { lookupFormat, lookupDefinition, typeName, title, prefix, orderedMetadataSet } content =
   let
+    ref key = "template-parameter-" <> key
     parameterHint key =
       maybe []
         ( \explanation ->
             [ hint
                 [ "leading-none" ]
-                ("template-parameter-" <> key)
+                (ref key)
                 Auto
                 (markdownHintWithTitle key explanation)
             ]
@@ -307,8 +309,8 @@ integerTemplateParameters actionGen { lookupFormat, lookupDefinition, typeName, 
                               ]
                                 <> parameterHint key
                                 <> [ case lookupFormat key of
-                                      Just (currencyLabel /\ numDecimals) -> marloweCurrencyInput [ "mx-2", "flex-grow", "flex-shrink-0" ] (actionGen typeName key) currencyLabel numDecimals value
-                                      Nothing -> marloweActionInput [ "mx-2", "flex-grow", "flex-shrink-0" ] (actionGen typeName key) value
+                                      Just (currencyLabel /\ numDecimals) -> marloweCurrencyInput (ref key) [ "mx-2", "flex-grow", "flex-shrink-0" ] (actionGen typeName key) currencyLabel numDecimals value
+                                      Nothing -> marloweActionInput (ref key) [ "mx-2", "flex-grow", "flex-shrink-0" ] (actionGen typeName key) value
                                   ]
                             )
                         )
@@ -466,12 +468,13 @@ inputItem metadata _ (DepositInput accountId party token value) =
 
 inputItem metadata _ (ChoiceInput choiceId@(ChoiceId choiceName choiceOwner) bounds chosenNum) =
   let
+    ref = "choice-hint-" <> choiceName
     choiceHint =
       maybe (div_ [])
         ( \explanation ->
             hint
               [ "relative", "-top-1" ]
-              ("choice-hint-" <> choiceName)
+              ref
               Auto
               (markdownHintWithTitle choiceName explanation)
         )
@@ -487,8 +490,8 @@ inputItem metadata _ (ChoiceInput choiceId@(ChoiceId choiceName choiceOwner) bou
                     , choiceHint
                     ]
                 , case mChoiceInfo of
-                    Just { choiceFormat: DecimalFormat numDecimals currencyLabel } -> marloweCurrencyInput [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetChoice choiceId) currencyLabel numDecimals chosenNum
-                    _ -> marloweActionInput [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetChoice choiceId) chosenNum
+                    Just { choiceFormat: DecimalFormat numDecimals currencyLabel } -> marloweCurrencyInput ref [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetChoice choiceId) currencyLabel numDecimals chosenNum
+                    _ -> marloweActionInput ref [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetChoice choiceId) chosenNum
                 ]
             , div [ class_ (ClassName "choice-error") ] error
             ]
@@ -544,7 +547,7 @@ inputItem _ state (MoveToSlot slot) =
     ( [ div [ classes [ ClassName "action" ] ]
           [ p [ class_ (ClassName "slot-input") ]
               [ spanTextBreakWord "Move to slot "
-              , marloweActionInput [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetSlot <<< wrap) (unwrap slot)
+              , marloweActionInput "move-to-slot" [ "mx-2", "flex-grow", "flex-shrink-0" ] (SetSlot <<< wrap) (unwrap slot)
               ]
           , p [ class_ (ClassName "choice-error") ] error
           ]
@@ -569,27 +572,29 @@ inputItem _ state (MoveToSlot slot) =
 
 marloweCurrencyInput ::
   forall m action.
+  String ->
   Array String ->
   (BigInt -> action) ->
   String ->
   Int ->
   BigInt ->
   ComponentHTML action ChildSlots m
-marloweCurrencyInput classList f currencyLabel numDecimals value =
+marloweCurrencyInput ref classList f currencyLabel numDecimals value =
   slot
     _currencyInputSlot
-    unit
+    ref
     currencyInput
     { classList, value, prefix: currencyLabel, numDecimals }
     f
 
 marloweActionInput ::
   forall m action.
+  String ->
   Array String ->
   (BigInt -> action) ->
   BigInt ->
   ComponentHTML action ChildSlots m
-marloweActionInput classes f current = marloweCurrencyInput classes f "" 0 current
+marloweActionInput ref classes f current = marloweCurrencyInput ref classes f "" 0 current
 
 renderDeposit :: forall p. MetaData -> AccountId -> Party -> Token -> BigInt -> HTML p Action
 renderDeposit metadata accountOwner party tok money =

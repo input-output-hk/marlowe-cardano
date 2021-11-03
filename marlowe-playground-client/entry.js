@@ -23,7 +23,3 @@ global.monacoExtraTypeScriptLibs = [
 import { BigNumber } from 'bignumber';
 
 require('./src/Main.purs').main();
-
-if (module.hot) {
-  module.hot.accept();
-}

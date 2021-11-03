@@ -1,20 +1,22 @@
 module Component.CurrencyInput where
 
 import Prologue hiding (div)
+
 import Control.MonadZero (guard)
-import Data.Array (filter)
+import Data.Array (replicate, (!!))
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
-import Data.String (trim)
-import Data.String.CodeUnits (fromCharArray, toCharArray)
-import Data.Traversable (traverse_)
+import Data.Filterable (filter)
+import Data.Foldable (traverse_)
+import Data.Maybe (fromMaybe, maybe)
+import Data.String (Pattern(..), Replacement(..), length, replace, split, trim)
+import Data.String.CodeUnits (dropRight, fromCharArray)
 import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Halogen.Hooks (Hook, OutputToken, StateId, UseEffect)
 import Halogen.Hooks as Hooks
 import Pretty (showBigIntAsCurrency)
 
@@ -27,13 +29,17 @@ type Input
 
 currencyInput :: forall a m. H.Component a Input BigInt m
 currencyInput =
-  Hooks.component \{ outputToken } input -> Hooks.do
-    Tuple value valueId <- Hooks.useState input.value
-    useInputEffect valueId input
-    useChangeEffect outputToken value
+  Hooks.component \{ outputToken } input@{ classList, prefix, numDecimals } -> Hooks.do
+    Tuple value valueId <- Hooks.useState $ showBigIntAsCurrency input.value $ max 0 numDecimals
+    Hooks.captures { value } Hooks.useTickEffect do
+      let parsed = parseInput numDecimals value
+      Hooks.put valueId
+        $ flip showBigIntAsCurrency (max 0 numDecimals)
+        $ fromMaybe zero parsed
+      traverse_ (Hooks.raise outputToken) $ filter (_ /= input.value) parsed
+      pure Nothing
+
     Hooks.pure do
-      let
-        { classList, prefix, numDecimals } = input
       HH.div
         [ classNames
             ( [ "bg-gray-light"
@@ -72,29 +78,24 @@ currencyInput =
                         , "border-0"
                         , "outline-none"
                         ]
-                    , HE.onValueChange $ handleChange $ Hooks.put valueId
+                    , HE.onValueChange $ Hooks.put valueId
                     , HP.type_ HP.InputNumber
-                    , HP.value $ showBigIntAsCurrency value $ max 0 numDecimals
+                    , HP.value value
                     ]
             ]
+  where
+  parseInput numDecimals =
+    BigInt.fromString
+      <<< replace dot (Replacement "")
+      <<< fixDecimals numDecimals
 
-useInputEffect :: forall m. StateId BigInt -> Input -> Hook m UseEffect Unit
-useInputEffect valueId { value } =
-  Hooks.captures { value } Hooks.useTickEffect do
-    Hooks.put valueId value
-    pure Nothing
+  fixDecimals numDecimals value = case compare providedDecimals numDecimals of
+    GT -> dropRight (providedDecimals - numDecimals) value
+    LT -> pad (numDecimals - providedDecimals) value
+    EQ -> value
+    where
+          providedDecimals = maybe 0 length $ split dot value !! 1
 
-useChangeEffect :: forall m. OutputToken BigInt -> BigInt -> Hook m UseEffect Unit
-useChangeEffect outputToken value =
-  Hooks.captures { value } Hooks.useTickEffect do
-    Hooks.raise outputToken value
-    pure Nothing
+  pad num value = value <> fromCharArray (replicate num '0')
 
-handleChange ::
-  forall m. Applicative m => (BigInt -> m Unit) -> String -> m Unit
-handleChange cb =
-  traverse_ cb
-    <<< BigInt.fromString
-    <<< fromCharArray
-    <<< filter (_ /= '.')
-    <<< toCharArray
+  dot = Pattern "."

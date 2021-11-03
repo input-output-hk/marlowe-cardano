@@ -150,7 +150,7 @@ type ChildSlots
     , marloweEditorPageSlot :: H.Slot Monaco.Query Monaco.Message Unit
     , tooltipSlot :: forall query. H.Slot query Void ReferenceId
     , hintSlot :: forall query. H.Slot query Void String
-    , currencyInput :: forall query. H.Slot query BigInt Unit
+    , currencyInput :: forall query. H.Slot query BigInt String
     )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"

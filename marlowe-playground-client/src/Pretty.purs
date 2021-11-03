@@ -1,6 +1,7 @@
 module Pretty where
 
 import Prologue
+
 import Data.Array (concat, drop, dropWhile, length, replicate, take)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
@@ -50,7 +51,7 @@ renderPrettyPayee metadata (Party dest) = [ text "party ", renderPrettyParty met
 showBigIntAsCurrency :: BigInt -> Int -> String
 showBigIntAsCurrency number numDecimals = fromCharArray numberStr
   where
-  absValStr = replicate (numDecimals + 1) '0' <> toCharArray (show (if number < zero then -number else number))
+  absValStr = replicate (numDecimals + 1) '0' <> toCharArray (BigInt.toString (if number < zero then -number else number))
 
   numDigits = length absValStr
 
