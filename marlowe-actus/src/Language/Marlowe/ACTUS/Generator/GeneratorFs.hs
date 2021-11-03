@@ -17,7 +17,7 @@ where
 import           Control.Monad.Reader
 import           Data.Foldable                                              (foldrM)
 import qualified Data.List                                                  as L (zip5)
-import           Data.Maybe                                                 (maybe, maybeToList)
+import           Data.Maybe                                                 (maybeToList)
 import           Data.Monoid                                                (Endo (Endo, appEndo))
 import           Data.String                                                (IsString (fromString))
 import           Data.Time                                                  (LocalTime)
@@ -34,7 +34,7 @@ import           Language.Marlowe.ACTUS.Domain.ContractTerms                (Ass
                                                                              Assertions (..), ContractTerms,
                                                                              ContractTermsPoly (..), PRF (..),
                                                                              TermValidationError (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                          as O (ActusNum (..), YearFractionOps (_y))
+import qualified Language.Marlowe.ACTUS.Domain.Ops                          as O (ActusNum (..), YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
                                                                              calculationDay)
 import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
@@ -50,7 +50,6 @@ import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        as S
 import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionFs         as FS (stateTransition)
 import           Ledger.Value                                               (TokenName (TokenName))
-import           Prelude                                                    hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |'genFsContract' validatate the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
@@ -243,7 +242,7 @@ genFsContract' rf ct =
       let cfs = genProjectedCashflows rf terms
 
           dateToYearFraction :: LocalTime -> Double
-          dateToYearFraction dt = _y dcc statusDate dt maturityDate
+          dateToYearFraction dt = O._y dcc statusDate dt maturityDate
 
           dateToDiscountFactor dt = (1 O.- zeroRiskInterest) ** dateToYearFraction dt
 
@@ -251,7 +250,7 @@ genFsContract' rf ct =
           accumulateAndDiscount acc (cf, t) =
             let discountFactor = dateToDiscountFactor $ cashCalculationDay cf
                 sign x = if amount cf < 0.0 then NegValue x else x
-             in constnt discountFactor * (sign $ useval "payoff" t) + acc
+             in constnt discountFactor O.* (sign $ useval "payoff" t) O.+ acc
 
           npv = foldl accumulateAndDiscount (constnt 0) (zip cfs [1 ..])
        in Assert (ValueLT (constnt expectedNpv) npv) continue
