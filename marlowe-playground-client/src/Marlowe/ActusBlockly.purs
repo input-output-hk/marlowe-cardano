@@ -32,7 +32,7 @@ import Foreign.Generic.Class (Options, defaultOptions, aesonSumEncoding)
 import Foreign.JSON (parseJSON)
 import Halogen.HTML (HTML)
 import Halogen.HTML.Properties (id_)
-import Language.Marlowe.ACTUS.Definitions.ContractTerms (Assertion(..), AssertionContext(..), Assertions(..), BDC(..), CR(..), PRF(..), ContractTermsPoly(..), CT(..), Cycle(..), DCC(..), EOMC(..), FEB(..), PPEF(..), PYTP(..), Period(..), SCEF(..), Calendar(..), ScheduleConfig(..), Stub(..), IPCB(..), ContractStructure(..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (Assertion(..), AssertionContext(..), Assertions(..), BDC(..), CR(..), PRF(..), ContractTermsPoly(..), CT(..), Cycle(..), DCC(..), EOMC(..), FEB(..), PPEF(..), PYTP(..), Period(..), SCEF(..), Calendar(..), ScheduleConfig(..), Stub(..), IPCB(..), ContractStructure(..))
 import Record (merge)
 import Text.Parsing.StringParser (Parser)
 import Text.Parsing.StringParser.Basic (parens, runParser')
@@ -959,77 +959,77 @@ actusContractToTerms raw = do
         { contractId: "0"
         , contractType: contractType
         , contractStructure: []
-        , ct_IED: Just initialExchangeDate
-        , ct_SD: startDate
-        , ct_MD: maturityDate
-        , ct_AD: amortizationDate
-        , ct_XD: Nothing
-        , ct_TD: terminationDate
-        , ct_PRNXT: periodicPaymentAmount
-        , ct_PRD: purchaseDate
-        , ct_CNTRL: CR_ST
-        , ct_PDIED: Just premium
-        , ct_NT: notional
-        , ct_PPRD: purchasePrice
-        , ct_PTD: terminationPrice
-        , ct_DCC: Just DCC_A_360
-        , ct_PPEF: Just PPEF_N
-        , ct_PRF: Just PRF_PF
-        , scfg:
+        , initialExchangeDate: Just initialExchangeDate
+        , statusDate: startDate
+        , maturityDate: maturityDate
+        , amortizationDate: amortizationDate
+        , exerciseDate: Nothing
+        , terminationDate: terminationDate
+        , nextPrincipalRedemptionPayment: periodicPaymentAmount
+        , purchaseDate: purchaseDate
+        , contractRole: CR_ST
+        , premiumDiscountAtIED: Just premium
+        , notionalPrincipal: notional
+        , priceAtPurchaseDate: purchasePrice
+        , priceAtTerminationDate: terminationPrice
+        , dayCountConvention: Just DCC_A_360
+        , prepaymentEffect: Just PPEF_N
+        , contractPerformance: Just PRF_PF
+        , scheduleConfig:
             ScheduleConfig
               { calendar: Just CLDR_NC
-              , eomc: Just EOMC_EOM
-              , bdc: Just BDC_NULL
+              , endOfMonthConvention: Just EOMC_EOM
+              , businessDayConvention: Just BDC_NULL
               }
-        , ct_PYRT: Just 0.0
-        , ct_PYTP: Just PYTP_A
-        , ct_OPCL: Nothing
-        , ct_OPANX: Nothing
-        , ct_OPTP: Nothing
-        , ct_OPS1: Nothing
-        , ct_OPXT: Nothing
-        , ct_STP: Nothing
-        , ct_DS: Nothing
-        , ct_XA: Nothing
-        , ct_PFUT: Nothing
-        , ct_SCIED: Just 0.0
-        , ct_SCEF: Just SE_000
-        , ct_SCCL: Nothing
-        , ct_SCANX: Nothing
-        , ct_SCCDD: Just 0.0
-        , ct_RRCL: rateResetCycle
-        , ct_RRANX: rateResetAnchor >>= identity
-        , ct_RRNXT: Nothing
-        , ct_RRSP: Just 0.0
-        , ct_RRMLT: Just 1.0
-        , ct_RRPF: Just $ -1.0
-        , ct_RRPC: Just 1.0
-        , ct_RRLC: Just 1.0
-        , ct_RRLF: Just 0.0
-        , ct_IPCED: Nothing
-        , ct_IPCL: interestRateCycle
-        , ct_IPANX: interestRateAnchor >>= identity
-        , ct_IPNR: interestRate
-        , ct_SCIP: Nothing
-        , ct_SCNT: Nothing
-        , ct_IPAC: Nothing
-        , ct_PRCL: principalRedemptionCycle
-        , ct_PRANX: principalRedemptionAnchor >>= identity
-        , ct_IPCB: Just IPCB_NT -- Default for now
-        , ct_IPCBA: Just 0.0 -- Default for now
-        , ct_IPCBCL: interestCalculationBaseCycle -- unused due to above defaults for now
-        , ct_IPCBANX: interestCalculationBaseAnchor >>= identity -- also unused
-        , ct_FECL: Nothing
-        , ct_FEANX: Nothing
-        , ct_FEAC: Nothing
-        , ct_FEB: Just FEB_N
-        , ct_FER: Just 0.0
-        , ct_CURS: Nothing
-        , ct_SCMO: Nothing
-        , ct_RRMO: Nothing
-        , ct_DVCL: Nothing
-        , ct_DVANX: Nothing
-        , ct_DVNP: Nothing
+        , penaltyRate: Just 0.0
+        , penaltyType: Just PYTP_A
+        , cycleOfOptionality: Nothing
+        , cycleAnchorDateOfOptionality: Nothing
+        , optionType: Nothing
+        , optionStrike1: Nothing
+        , optionExerciseType: Nothing
+        , settlementPeriod: Nothing
+        , deliverySettlement: Nothing
+        , exerciseAmount: Nothing
+        , futuresPrice: Nothing
+        , scalingIndexAtStatusDate: Just 0.0
+        , scalingEffect: Just SE_OOO
+        , cycleOfScalingIndex: Nothing
+        , cycleAnchorDateOfScalingIndex: Nothing
+        , scalingIndexAtContractDealDate: Just 0.0
+        , cycleOfRateReset: rateResetCycle
+        , cycleAnchorDateOfRateReset: rateResetAnchor >>= identity
+        , nextResetRate: Nothing
+        , rateSpread: Just 0.0
+        , rateMultiplier: Just 1.0
+        , periodFloor: Just $ -1.0
+        , periodCap: Just 1.0
+        , lifeCap: Just 1.0
+        , lifeFloor: Just 0.0
+        , capitalizationEndDate: Nothing
+        , cycleOfInterestPayment: interestRateCycle
+        , cycleAnchorDateOfInterestPayment: interestRateAnchor >>= identity
+        , nominalInterestRate: interestRate
+        , interestScalingMultiplier: Nothing
+        , notionalScalingMultiplier: Nothing
+        , accruedInterest: Nothing
+        , cycleOfPrincipalRedemption: principalRedemptionCycle
+        , cycleAnchorDateOfPrincipalRedemption: principalRedemptionAnchor >>= identity
+        , interestCalculationBase: Just IPCB_NT -- Default for now
+        , interestCalculationBaseA: Just 0.0 -- Default for now
+        , cycleOfInterestCalculationBase: interestCalculationBaseCycle -- unused due to above defaults for now
+        , cycleAnchorDateOfInterestCalculationBase: interestCalculationBaseAnchor >>= identity -- also unused
+        , cycleOfFee: Nothing
+        , cycleAnchorDateOfFee: Nothing
+        , feeAccrued: Nothing
+        , feeBasis: Just FEB_N
+        , feeRate: Just 0.0
+        , settlementCurrency: Nothing
+        , marketObjectCodeOfScalingIndex: Nothing
+        , marketObjectCodeOfRateReset: Nothing
+        , cycleOfDividend: Nothing
+        , cycleAnchorDateOfDividend: Nothing
+        , nextDividendPaymentAmount: Nothing
         , enableSettlement: false
         , constraints: constraint <$> assertionCtx
         -- Any collateral-related code is commented out, until implemented properly

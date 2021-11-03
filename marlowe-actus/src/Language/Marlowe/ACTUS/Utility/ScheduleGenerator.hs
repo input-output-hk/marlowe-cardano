@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator
+module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
   ( generateRecurrentScheduleWithCorrections
   , (<+>)
   , (<->)
@@ -15,15 +15,14 @@ module Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator
   )
 where
 
-import qualified Data.List                                        as L (delete, init, last, length)
-import           Data.Time                                        (LocalTime (..))
-import           Data.Time.Calendar                               (addDays, addGregorianMonthsClip,
-                                                                   addGregorianYearsClip, fromGregorian,
-                                                                   gregorianMonthLength, toGregorian)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..),
-                                                                   ScheduleConfig (..), Stub (LongStub))
-import           Language.Marlowe.ACTUS.Definitions.Schedule      (ShiftedDay (..), ShiftedSchedule)
-import           Language.Marlowe.ACTUS.Model.Utility.DateShift   (applyBDC)
+import qualified Data.List                                   as L (delete, init, last, length)
+import           Data.Time                                   (LocalTime (..))
+import           Data.Time.Calendar                          (addDays, addGregorianMonthsClip, addGregorianYearsClip,
+                                                              fromGregorian, gregorianMonthLength, toGregorian)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..),
+                                                              ScheduleConfig (..), Stub (LongStub))
+import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedDay (..), ShiftedSchedule)
+import           Language.Marlowe.ACTUS.Utility.DateShift    (applyBDC)
 
 maximumMaybe :: Ord a => [a] -> Maybe a
 maximumMaybe [] = Nothing
@@ -92,13 +91,13 @@ generateRecurrentScheduleWithCorrections
   cycle
   endDate
   ScheduleConfig
-    { eomc = Just eomc',
-      calendar = Just calendar',
-      bdc = Just bdc'
+    { endOfMonthConvention = Just eomc,
+      calendar = Just cal,
+      businessDayConvention = Just bdc
     } =
       let s = generateRecurrentSchedule cycle anchorDate endDate
           c = correction cycle anchorDate endDate s
-        in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc' calendar' . applyEOMC anchorDate cycle eomc') c
+        in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc cal . applyEOMC anchorDate cycle eomc) c
 generateRecurrentScheduleWithCorrections _ _ _ _ = []
 
 plusCycle :: LocalTime -> Cycle -> LocalTime

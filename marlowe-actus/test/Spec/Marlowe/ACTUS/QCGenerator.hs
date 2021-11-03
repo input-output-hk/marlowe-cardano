@@ -8,16 +8,16 @@
 
 module Spec.Marlowe.ACTUS.QCGenerator where
 
-import qualified Data.List                                         as L
-import qualified Data.Map                                          as M
-import           Data.Maybe                                        (catMaybes)
+import qualified Data.List                                    as L
+import qualified Data.Map                                     as M
+import           Data.Maybe                                   (catMaybes)
 import           Data.Time
-import           Data.Time.Clock.POSIX                             (posixSecondsToUTCTime)
-import           Data.Time.Clock.System                            (SystemTime (MkSystemTime), utcToSystemTime)
-import           Language.Marlowe.ACTUS.Analysis
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms
-import           Language.Marlowe.ACTUS.Definitions.Schedule
+import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
+import           Data.Time.Clock.System                       (SystemTime (MkSystemTime), utcToSystemTime)
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents
+import           Language.Marlowe.ACTUS.Domain.ContractTerms
+import           Language.Marlowe.ACTUS.Domain.Schedule
+import           Language.Marlowe.ACTUS.Generator.Analysis
 import           Test.QuickCheck
 
 largeamount :: Gen Double
@@ -104,9 +104,9 @@ contractTermsGen' ct = do
   calendar <- elements [CLDR_NC] -- TODO: add CLDR_MF
   dcc <- elements [DCC_A_AISDA, DCC_A_360, DCC_A_365, DCC_E30_360ISDA, DCC_E30_360] -- TODO: DCC_B_252 is not implemented
   ppef <- elements [PPEF_N, PPEF_A, PPEF_M]
-  cntrl <- elements [CR_BUY, CR_SEL]
+  contractRole <- elements [CR_BUY, CR_SEL]
 
-  scef <- elements [SE_000, SE_0N0, SE_00M, SE_0NM, SE_I00, SE_IN0, SE_I0M, SE_INM]
+  scef <- elements [SE_OOO, SE_ONO, SE_OOM, SE_ONM, SE_IOO, SE_INO, SE_IOM, SE_INM]
   sccdd <- oneOr scalingFactor
   scied <- oneOr scalingFactor
   scip <- oneOr scalingFactor
@@ -170,88 +170,88 @@ contractTermsGen' ct = do
       { contractId = "0",
         contractType = ct,
         contractStructure = [],
-        ct_IED = Just ied,
-        ct_SD = sd,
-        ct_MD = Just maturityDate,
-        ct_AD = amortizationDate,
-        ct_XD = exerciseDate,
-        ct_TD = terminationDate,
-        ct_PRNXT = nextPrincipalRedemption,
-        ct_PRD = purchaseDate,
-        ct_CNTRL = cntrl,
-        ct_PDIED = Just pdied,
-        ct_NT = Just notional,
-        ct_PPRD = priceAtPurchaseDate <$ purchaseDate,
-        ct_PTD = priceAtTerminationDate <$ terminationDate,
-        ct_DCC = Just dcc,
-        ct_PPEF = Just ppef,
-        ct_PRF = Just PRF_PF,
-        scfg =
+        initialExchangeDate = Just ied,
+        statusDate = sd,
+        maturityDate = Just maturityDate,
+        amortizationDate = amortizationDate,
+        exerciseDate = exerciseDate,
+        terminationDate = terminationDate,
+        nextPrincipalRedemptionPayment = nextPrincipalRedemption,
+        purchaseDate = purchaseDate,
+        contractRole = contractRole,
+        premiumDiscountAtIED = Just pdied,
+        notionalPrincipal = Just notional,
+        priceAtPurchaseDate = priceAtPurchaseDate <$ purchaseDate,
+        priceAtTerminationDate = priceAtTerminationDate <$ terminationDate,
+        dayCountConvention = Just dcc,
+        prepaymentEffect = Just ppef,
+        contractPerformance = Just PRF_PF,
+        scheduleConfig =
           ScheduleConfig
             { calendar = Just calendar,
-              eomc = Just eomc,
-              bdc = Just bdc
+              endOfMonthConvention = Just eomc,
+              businessDayConvention = Just bdc
             },
         -- Penalties
-        ct_PYRT = Just penaltyrate,
-        ct_PYTP = Just penaltytype,
+        penaltyRate = Just penaltyrate,
+        penaltyType = Just penaltytype,
         -- Optionality
-        ct_OPCL = optionalityCycle,
-        ct_OPANX = optionalityAnchor,
-        ct_OPTP = Nothing,
-        ct_OPS1 = Nothing,
-        ct_OPXT = Nothing,
+        cycleOfOptionality = optionalityCycle,
+        cycleAnchorDateOfOptionality = optionalityAnchor,
+        optionType = Nothing,
+        optionStrike1 = Nothing,
+        optionExerciseType = Nothing,
         -- Settlement
-        ct_STP = Nothing,
-        ct_DS = Nothing,
-        ct_XA = Nothing,
-        ct_PFUT = Nothing,
+        settlementPeriod = Nothing,
+        deliverySettlement = Nothing,
+        exerciseAmount = Nothing,
+        futuresPrice = Nothing,
         -- Scaling:
-        ct_SCIED = Just scied,
-        ct_SCEF = Just scef,
-        ct_SCCL = scalingCycle,
-        ct_SCANX = scalingAnchor,
-        ct_SCCDD = Just sccdd,
-        ct_SCIP = Just scip,
-        ct_SCNT = Just scnt,
+        scalingIndexAtStatusDate = Just scied,
+        scalingEffect = Just scef,
+        cycleOfScalingIndex = scalingCycle,
+        cycleAnchorDateOfScalingIndex = scalingAnchor,
+        scalingIndexAtContractDealDate = Just sccdd,
+        interestScalingMultiplier = Just scip,
+        notionalScalingMultiplier = Just scnt,
         -- Rate Reset
-        ct_RRCL = rateResetCycle,
-        ct_RRANX = Just rateResetAnchor,
-        ct_RRNXT = Just nextRateReset,
-        ct_RRSP = Just rrsp,
-        ct_RRMLT = Just rrmlt,
-        ct_RRPF = Just rrpf,
-        ct_RRPC = Just rrpc,
-        ct_RRLC = Just rrlc,
-        ct_RRLF = Just rrlf,
+        cycleOfRateReset = rateResetCycle,
+        cycleAnchorDateOfRateReset = Just rateResetAnchor,
+        nextResetRate = Just nextRateReset,
+        rateSpread = Just rrsp,
+        rateMultiplier = Just rrmlt,
+        periodFloor = Just rrpf,
+        periodCap = Just rrpc,
+        lifeCap = Just rrlc,
+        lifeFloor = Just rrlf,
         -- Interest
-        ct_IPCED = interestCapitalisationDate,
-        ct_IPCL = Just interestPaymentCycle,
-        ct_IPANX = interestPaymentAnchor,
-        ct_IPNR = Just interest,
-        ct_IPAC = accruedInterest,
-        ct_PRCL = case ct of
+        capitalizationEndDate = interestCapitalisationDate,
+        cycleOfInterestPayment = Just interestPaymentCycle,
+        cycleAnchorDateOfInterestPayment = interestPaymentAnchor,
+        nominalInterestRate = Just interest,
+        accruedInterest = accruedInterest,
+        cycleOfPrincipalRedemption = case ct of
           PAM -> Nothing
           _   -> Just principalRedemptionCycle,
-        ct_PRANX = principalRedemptionAnchor,
-        ct_IPCB = interestPaymentCalculationBase,
-        ct_IPCBA = case interestPaymentCalculationBase of
+        cycleAnchorDateOfPrincipalRedemption = principalRedemptionAnchor,
+        interestCalculationBase = interestPaymentCalculationBase,
+        interestCalculationBaseA = case interestPaymentCalculationBase of
           Just IPCB_NTIED -> Just interestPaymentCalculationBaseAmount
           _               -> Nothing,
-        ct_IPCBCL = interestPaymentCalculationBaseCycle,
-        ct_IPCBANX = interestPaymentCalculationBaseAnchor,
+        cycleOfInterestCalculationBase = interestPaymentCalculationBaseCycle,
+        cycleAnchorDateOfInterestCalculationBase = interestPaymentCalculationBaseAnchor,
         -- Fee
-        ct_FECL = feeCycle,
-        ct_FEANX = feeAnchor,
-        ct_FEAC = feeAccrued,
-        ct_FEB = Just feeBasis,
-        ct_FER = Just feeRate,
-        ct_CURS = Nothing,
-        ct_SCMO = Nothing,
-        ct_RRMO = Nothing,
-        ct_DVCL = Nothing,
-        ct_DVANX = Nothing,
-        ct_DVNP = Nothing,
+        cycleOfFee = feeCycle,
+        cycleAnchorDateOfFee = feeAnchor,
+        feeAccrued = feeAccrued,
+        feeBasis = Just feeBasis,
+        feeRate = Just feeRate,
+        settlementCurrency = Nothing,
+        marketObjectCodeOfScalingIndex = Nothing,
+        marketObjectCodeOfRateReset = Nothing,
+        cycleOfDividend = Nothing,
+        cycleAnchorDateOfDividend = Nothing,
+        nextDividendPaymentAmount = Nothing,
         -- enable settlement currency
         enableSettlement = False,
         constraints = Nothing,
@@ -259,7 +259,13 @@ contractTermsGen' ct = do
       }
 
 riskAtTGen :: Gen RiskFactors
-riskAtTGen = RiskFactorsPoly <$> percentage <*> percentage <*> percentage <*> smallamount
+riskAtTGen = RiskFactorsPoly
+    <$> percentage
+    <*> percentage
+    <*> percentage
+    <*> smallamount
+    <*> smallamount
+    <*> smallamount
 
 riskFactorsGen :: ContractTerms -> Gen (M.Map LocalTime RiskFactors)
 riskFactorsGen ct = do
@@ -268,7 +274,9 @@ riskFactorsGen ct = do
             { o_rf_CURS = 1.0,
               o_rf_RRMO = 1.0,
               o_rf_SCMO = 1.0,
-              pp_payoff = 0.0
+              pp_payoff = 0.0,
+              xd_payoff = 0.0,
+              dv_payoff = 0.0
             }
     let days = cashCalculationDay <$> genProjectedCashflows riskFactors ct
     rf <- vectorOf (L.length days) riskAtTGen
@@ -284,6 +292,12 @@ riskFactorsGenRandomWalkGen contractTerms = do
         fluctuate state fluctiation = state + (fluctiation - 50) / 100
         walk rf st =
             let fluctuate' extractor = fluctuate (extractor rf) (extractor st)
-            in RiskFactorsPoly (fluctuate' o_rf_CURS) (fluctuate' o_rf_RRMO) (fluctuate' o_rf_SCMO) (fluctuate' pp_payoff)
+            in RiskFactorsPoly
+                (fluctuate' o_rf_CURS)
+                (fluctuate' o_rf_RRMO)
+                (fluctuate' o_rf_SCMO)
+                (fluctuate' pp_payoff)
+                (fluctuate' xd_payoff)
+                (fluctuate' dv_payoff)
         path = L.scanl walk riskAtT riskFactorsValues
     return $ M.fromList $ L.zip riskFactorsDates path

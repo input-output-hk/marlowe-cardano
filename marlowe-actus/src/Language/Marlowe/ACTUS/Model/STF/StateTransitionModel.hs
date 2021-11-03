@@ -1,16 +1,17 @@
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Language.Marlowe.ACTUS.Model.STF.StateTransitionModel where
 
-import           Data.Maybe                                        (fromMaybe)
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents (RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractState  (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..),
-                                                                    OPTP (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Model.Utility.ANN.Annuity  (annuity)
-import           Language.Marlowe.ACTUS.Ops                        (ActusNum (..), ActusOps (..), DateOps (_lt),
-                                                                    RoleSignOps (_r))
-import           Prelude                                           hiding (Fractional, Num, (*), (+), (-), (/))
+import           Data.Maybe                                   (fromMaybe)
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents (RiskFactorsPoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..),
+                                                               SCEF (..))
+import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), ActusOps (..), DateOps (_lt),
+                                                               RoleSignOps (_r))
+import           Language.Marlowe.ACTUS.Utility.ANN.Annuity   (annuity)
+import           Prelude                                      hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- Principal at Maturity (PAM)
 
@@ -24,36 +25,36 @@ _STF_AD_PAM st@ContractStatePoly {..} t y_sd_t =
 _STF_IED_PAM :: (RoleSignOps a, DateOps b a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
 _STF_IED_PAM
   ContractTermsPoly
-    { ct_CNTRL = cntrl,
-      ct_IPNR = nominalInterestRate,
-      ct_NT = Just notionalPrincipal,
-      ct_IPAC = Just accruedInterest
+    { nominalInterestRate,
+      notionalPrincipal = Just nt,
+      accruedInterest = Just ipac,
+      contractRole
     }
   st
   t
   _ =
     st
-      { nt = _r cntrl * notionalPrincipal,
+      { nt = _r contractRole * nt,
         ipnr = fromMaybe _zero nominalInterestRate,
-        ipac = accruedInterest,
+        ipac = ipac,
         sd = t
       }
 _STF_IED_PAM
   ContractTermsPoly
-    { ct_CNTRL = cntrl,
-      ct_IPNR = nominalInterestRate,
-      ct_NT = Just notionalPrincipal,
-      ct_IPANX = Just anchorInterestPayment
+    { nominalInterestRate,
+      notionalPrincipal = Just nt,
+      cycleAnchorDateOfInterestPayment = Just ipanx,
+      contractRole
     }
   st
   t
   y_ipanx_t =
-    let nt' = _r cntrl * notionalPrincipal
+    let nt' = _r contractRole * nt
         ipnr' = fromMaybe _zero nominalInterestRate
      in st
           { nt = nt',
             ipnr = ipnr',
-            ipac = _lt anchorInterestPayment t * y_ipanx_t * nt' * ipnr',
+            ipac = _lt ipanx t * y_ipanx_t * nt' * ipnr',
             sd = t
           }
 _STF_IED_PAM _ st _ _ = st
@@ -77,9 +78,9 @@ _STF_PP_PAM ct st@ContractStatePoly {..} RiskFactorsPoly {..} t y_sd_t y_tfpminu
 _STF_PY_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_PY_PAM
   ContractTermsPoly
-    { ct_FEB = Just FEB_N,
-      ct_FER = Just feeRate,
-      ct_NT = Just notionalPrincipal
+    { feeBasis = Just FEB_N,
+      feeRate = Just fer,
+      notionalPrincipal = Just nt'
     }
   st@ContractStatePoly {..}
   t
@@ -88,13 +89,13 @@ _STF_PY_PAM
   _ =
     st
       { ipac = ipac + y_sd_t * ipnr * nt,
-        feac = feac + y_sd_t * notionalPrincipal * feeRate,
+        feac = feac + y_sd_t * nt' * fer,
         sd = t
       }
 _STF_PY_PAM
   ContractTermsPoly
-    { ct_FER = Just feeRate,
-      ct_CNTRL = cntrl
+    { feeRate = Just fer,
+      contractRole
     }
   st@ContractStatePoly {..}
   t
@@ -104,7 +105,7 @@ _STF_PY_PAM
     let
      in st
           { ipac = ipac + y_sd_t * ipnr * nt,
-            feac = _max _zero (y_tfpminus_t / y_tfpminus_tfpplus) * _r cntrl * feeRate,
+            feac = _max _zero (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fer,
             sd = t
           }
 _STF_PY_PAM _ st _ _ _ _ = st
@@ -133,7 +134,7 @@ _STF_TD_PAM st t =
 _STF_IP_PAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
 _STF_IP_PAM
   ContractTermsPoly
-    { ct_FER = Just fer
+    { feeRate = Just fer
     }
   st@ContractStatePoly {..}
   t
@@ -168,14 +169,14 @@ _STF_IPCI_PAM
 _STF_RR_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_RR_PAM
   ct@ContractTermsPoly
-    { ct_FEB = Just FEB_N,
-      ct_FER = Just feeRate,
-      ct_RRLF = Just rrlf,
-      ct_RRLC = Just rrlc,
-      ct_RRPC = Just rrpc,
-      ct_RRPF = Just rrpf,
-      ct_RRMLT = Just rrmlt,
-      ct_RRSP = Just rrsp
+    { feeBasis = Just FEB_N,
+      feeRate = Just fer,
+      lifeFloor = Just rrlf,
+      lifeCap = Just rrlc,
+      periodCap = Just rrpc,
+      periodFloor = Just rrpf,
+      rateMultiplier = Just rrmlt,
+      rateSpread = Just rrsp
     }
   st@ContractStatePoly {..}
   RiskFactorsPoly
@@ -190,24 +191,24 @@ _STF_RR_PAM
         ipnr' = _min (_max (ipnr + delta_r) rrlf) rrlc
      in st'
           { ipac = ipac + y_sd_t * ipnr * nt,
-            feac = feac + y_sd_t * nt * feeRate,
+            feac = feac + y_sd_t * nt * fer,
             ipnr = ipnr',
             sd = t
           }
 _STF_RR_PAM
   ct@ContractTermsPoly
-    { ct_FER = Just feeRate,
-      ct_RRLF = Just rrlf,
-      ct_RRLC = Just rrlc,
-      ct_RRPC = Just rrpc,
-      ct_RRPF = Just rrpf,
-      ct_RRMLT = Just rrmlt,
-      ct_RRSP = Just rrsp,
-      ct_CNTRL = cntrl
+    { feeRate = Just fer,
+      lifeFloor = Just rrlf,
+      lifeCap = Just rrlc,
+      periodCap = Just rrpc,
+      periodFloor = Just rrpf,
+      rateMultiplier = Just rrmlt,
+      rateSpread = Just rrsp,
+      contractRole
     }
   st@ContractStatePoly {..}
   RiskFactorsPoly
-    { ..
+    { o_rf_RRMO
     }
   t
   y_sd_t
@@ -218,7 +219,7 @@ _STF_RR_PAM
         ipnr' = _min (_max (ipnr + delta_r) rrlf) rrlc
      in st'
           { ipac = ipac + y_sd_t * ipnr * nt,
-            feac = (y_tfpminus_t / y_tfpminus_tfpplus) * _r cntrl * feeRate,
+            feac = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fer,
             ipnr = ipnr',
             sd = t
           }
@@ -227,7 +228,7 @@ _STF_RR_PAM _ st _ _ _ _ _ = st
 _STF_RRF_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_RRF_PAM
   ct@ContractTermsPoly
-    { ct_RRNXT = rrnxt
+    { nextResetRate = rrnxt
     }
   st
   t
@@ -242,8 +243,8 @@ _STF_RRF_PAM
 _STF_SC_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_SC_PAM
   ct@ContractTermsPoly
-    { ct_SCEF = Just scef,
-      ct_SCIED = Just scied
+    { scalingEffect = Just scef,
+      scalingIndexAtStatusDate = Just scied
     }
   st@ContractStatePoly {..}
   RiskFactorsPoly {..}
@@ -254,14 +255,14 @@ _STF_SC_PAM
     let st' = _STF_PY_PAM ct st t y_sd_t y_tfpminus_t y_tfpminus_tfpplus
 
         nsc' = case scef of
-          SE_00M -> nsc
-          SE_I00 -> nsc
+          SE_OOM -> nsc
+          SE_IOO -> nsc
           _      -> (o_rf_SCMO - scied) / scied
 
         isc' = case scef of
-          SE_0N0 -> isc
-          SE_00M -> isc
-          SE_0NM -> isc
+          SE_ONO -> isc
+          SE_OOM -> isc
+          SE_ONM -> isc
           _      -> (o_rf_SCMO - scied) / scied
      in st'
           { nsc = nsc',
@@ -277,27 +278,27 @@ _STF_CE_PAM = _STF_AD_PAM
 _STF_IED_LAM :: (RoleSignOps a, Ord b) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
 _STF_IED_LAM
   ct@ContractTermsPoly
-    { ct_NT = Just notionalPrincipal,
-      ct_IPNR = Just nominalInterestRate,
-      ct_CNTRL = cntrl
+    { notionalPrincipal = Just nt,
+      nominalInterestRate = Just ipnr,
+      contractRole
     }
   st
   t
   y_ipanx_t =
-    let nt' = _r cntrl * notionalPrincipal
+    let nt' = _r contractRole * nt
         ipcb' = interestCalculationBase ct
           where
-            interestCalculationBase ContractTermsPoly {ct_IPCB = Just IPCB_NT} = nt'
-            interestCalculationBase ContractTermsPoly {ct_IPCBA = Just ipcba}  = _r cntrl * ipcba
-            interestCalculationBase _                                          = _zero
+            interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
+            interestCalculationBase ContractTermsPoly {interestCalculationBaseA = Just ipcba}  = _r contractRole * ipcba
+            interestCalculationBase _                                                          = _zero
         ipac' = interestAccrued ct
           where
-            interestAccrued ContractTermsPoly {ct_IPAC = Just ipac} = _r cntrl * ipac
-            interestAccrued ContractTermsPoly {ct_IPANX = Just ipanx} | ipanx < t = y_ipanx_t * nt' * ipcb'
+            interestAccrued ContractTermsPoly {accruedInterest = Just ipac} = _r contractRole * ipac
+            interestAccrued ContractTermsPoly {cycleAnchorDateOfInterestPayment = Just ipanx} | ipanx < t = y_ipanx_t * nt' * ipcb'
             interestAccrued _ = _zero
      in st
           { nt = nt',
-            ipnr = nominalInterestRate,
+            ipnr = ipnr,
             ipac = ipac',
             ipcb = ipcb',
             sd = t
@@ -307,36 +308,36 @@ _STF_IED_LAM _ st _ _ = st
 _STF_PR_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
 _STF_PR_LAM
   ct@ContractTermsPoly
-    { ct_CNTRL = cntrl,
-      ct_FER = Just feeRate
+    { feeRate = Just fer,
+      contractRole
     }
   st@ContractStatePoly {..}
   t
   y_sd_t =
-    let nt' = nt - _r cntrl * (prnxt - _r cntrl * _max _zero (_abs prnxt - _abs nt))
+    let nt' = nt - _r contractRole * (prnxt - _r contractRole * _max _zero (_abs prnxt - _abs nt))
         ipcb' = interestCalculationBase ct
           where
-            interestCalculationBase ContractTermsPoly {ct_IPCB = Just IPCB_NTL} = ipcb
-            interestCalculationBase _                                           = nt'
+            interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NTL} = ipcb
+            interestCalculationBase _                                                           = nt'
      in st
           { nt = nt',
-            feac = feac + y_sd_t * nt * feeRate,
+            feac = feac + y_sd_t * nt * fer,
             ipcb = ipcb',
             ipac = ipac + ipnr * ipcb * y_sd_t,
             sd = t
           }
 _STF_PR_LAM
   ct@ContractTermsPoly
-    { ct_CNTRL = cntrl
+    { contractRole
     }
   st@ContractStatePoly {..}
   t
   y_sd_t =
-    let nt' = nt - _r cntrl * (prnxt - _r cntrl * _max _zero (_abs prnxt - _abs nt))
+    let nt' = nt - _r contractRole * (prnxt - _r contractRole * _max _zero (_abs prnxt - _abs nt))
         ipcb' = interestCalculationBase ct
           where
-            interestCalculationBase ContractTermsPoly {ct_IPCB = Just IPCB_NTL} = ipcb
-            interestCalculationBase _                                           = nt'
+            interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NTL} = ipcb
+            interestCalculationBase _                                                           = nt'
      in st
           { nt = nt',
             feac = feac,
@@ -368,8 +369,8 @@ _STF_PP_LAM
         nt' = nt - pp_payoff
         ipcb' = interestCalculationBase ct
           where
-            interestCalculationBase ContractTermsPoly {ct_IPCB = Just IPCB_NT} = nt'
-            interestCalculationBase _                                          = ipcb
+            interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
+            interestCalculationBase _                                                          = ipcb
      in st'
           { nt = nt',
             ipcb = ipcb'
@@ -378,8 +379,8 @@ _STF_PP_LAM
 _STF_PY_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_PY_LAM
   ct@ContractTermsPoly
-    { ct_FER = Just feeRate,
-      ct_CNTRL = cntrl
+    { feeRate = Just fer,
+      contractRole
     }
   st@ContractStatePoly {..}
   t
@@ -389,8 +390,8 @@ _STF_PY_LAM
     let ipac' = ipac + y_sd_t * ipnr * ipcb
         feac' = feeAccrued ct
           where
-            feeAccrued ContractTermsPoly {ct_FEB = Just FEB_N} = feac + y_sd_t * nt * feeRate
-            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r cntrl * feeRate
+            feeAccrued ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fer
+            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fer
      in st
           { ipac = ipac',
             feac = feac',
@@ -406,8 +407,8 @@ _STF_PY_LAM
     let ipac' = ipac + y_sd_t * ipnr * ipcb
         feac' = feeAccrued ct
           where
-            feeAccrued ContractTermsPoly {ct_FEB = Just FEB_N} = feac
-            feeAccrued _                                       = _zero
+            feeAccrued ContractTermsPoly {feeBasis = Just FEB_N} = feac
+            feeAccrued _                                         = _zero
      in st
           { ipac = ipac',
             feac = feac',
@@ -438,8 +439,8 @@ _STF_IPCI_LAM
         nt' = nt + ipac + y_sd_t * ipnr * ipcb
         ipcb' = interestCalculationBase ct
           where
-            interestCalculationBase ContractTermsPoly {ct_IPCB = Just IPCB_NT} = nt'
-            interestCalculationBase _                                          = ipcb
+            interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
+            interestCalculationBase _                                                          = ipcb
      in st'
           { nt = nt',
             ipcb = ipcb'
@@ -461,12 +462,12 @@ _STF_IPCB_LAM
 _STF_RR_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_RR_LAM
   ct@ContractTermsPoly
-    { ct_RRLF = Just rrlf,
-      ct_RRLC = Just rrlc,
-      ct_RRPC = Just rrpc,
-      ct_RRPF = Just rrpf,
-      ct_RRMLT = Just rrmlt,
-      ct_RRSP = Just rrsp
+    { lifeFloor = Just rrlf,
+      lifeCap = Just rrlc,
+      periodCap = Just rrpc,
+      periodFloor = Just rrpf,
+      rateMultiplier = Just rrmlt,
+      rateSpread = Just rrsp
     }
   st@ContractStatePoly {..}
   RiskFactorsPoly {..}
@@ -485,7 +486,7 @@ _STF_RR_LAM _ st _ _ _ _ _ = st
 _STF_RRF_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_RRF_LAM
   ct@ContractTermsPoly
-    { ct_RRNXT = rrnxt
+    { nextResetRate = rrnxt
     }
   st
   t
@@ -500,8 +501,8 @@ _STF_RRF_LAM
 _STF_SC_LAM :: (RoleSignOps a) => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
 _STF_SC_LAM
   ct@ContractTermsPoly
-    { ct_SCCDD = Just sccdd,
-      ct_SCEF = Just scef
+    { scalingIndexAtContractDealDate = Just sccdd,
+      scalingEffect = Just scef
     }
   st@ContractStatePoly {..}
   RiskFactorsPoly {..}
@@ -521,20 +522,20 @@ _STF_SC_LAM _ st _ _ _ _ _ = st
 _STF_PR_NAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
 _STF_PR_NAM
   ct@ContractTermsPoly
-    { ct_CNTRL = cntrl
+    { contractRole
     }
   st@ContractStatePoly {..}
   t
   y_sd_t =
     let st'@ContractStatePoly {ipac = ipac'} = _STF_PR_LAM ct st t y_sd_t
-        nt' = nt - _r cntrl * r
+        nt' = nt - _r contractRole * r
           where
-            ra = prnxt - _r cntrl * ipac'
+            ra = prnxt - _r contractRole * ipac'
             r = ra - _max _zero (ra - _abs nt)
         ipcb' = interestCalculationBase ct
           where
-            interestCalculationBase ContractTermsPoly {ct_IPCB = Just IPCB_NT} = nt'
-            interestCalculationBase _                                          = ipcb
+            interestCalculationBase ContractTermsPoly {interestCalculationBase = Just IPCB_NT} = nt'
+            interestCalculationBase _                                                          = ipcb
      in st'
           { nt = nt',
             ipcb = ipcb'
@@ -545,14 +546,13 @@ _STF_PR_NAM
 _STF_RR_ANN :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> [a] -> ContractStatePoly a b
 _STF_RR_ANN
   ct@ContractTermsPoly
-    { ct_FER = feeRate,
-      ct_RRLF = Just rrlf,
-      ct_RRLC = Just rrlc,
-      ct_RRPC = Just rrpc,
-      ct_RRPF = Just rrpf,
-      ct_RRMLT = Just rrmlt,
-      ct_RRSP = Just rrsp,
-      ct_CNTRL = cntrl
+    { lifeFloor = Just rrlf,
+      lifeCap = Just rrlc,
+      periodCap = Just rrpc,
+      periodFloor = Just rrpf,
+      rateMultiplier = Just rrmlt,
+      rateSpread = Just rrsp,
+      contractRole
     }
   st@ContractStatePoly {..}
   RiskFactorsPoly {..}
@@ -564,8 +564,8 @@ _STF_RR_ANN
     let ipac' = ipac + y_sd_t * ipnr * ipcb
         feac' = feeAccrued ct
           where
-            feeAccrued ContractTermsPoly {ct_FEB = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero feeRate
-            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r cntrl * fromMaybe _zero feeRate
+            feeAccrued ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
+            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fromMaybe _zero (feeRate ct)
         ipnr' = _min (_max (ipnr + delta_r) rrlf) rrlc
           where
             delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - ipnr) rrpf) rrpc
@@ -582,9 +582,8 @@ _STF_RR_ANN _ st _ _ _ _ _ _ = st
 _STF_RRF_ANN :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> [a] -> ContractStatePoly a b
 _STF_RRF_ANN
   ct@ContractTermsPoly
-    { ct_FER = feeRate,
-      ct_RRNXT = Just rrnxt,
-      ct_CNTRL = cntrl
+    { nextResetRate = Just rrnxt,
+      contractRole
     }
   st@ContractStatePoly {..}
   t
@@ -595,8 +594,8 @@ _STF_RRF_ANN
     let ipac' = ipac + y_sd_t * ipnr * ipcb
         feac' = feeAccrued ct
           where
-            feeAccrued ContractTermsPoly {ct_FEB = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero feeRate
-            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r cntrl * fromMaybe _zero feeRate
+            feeAccrued ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
+            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fromMaybe _zero (feeRate ct)
         ipnr' = rrnxt
         prnxt' = annuity ipnr' ti
      in st
@@ -611,8 +610,7 @@ _STF_RRF_ANN _ st _ _ _ _ _ = st
 _STF_PRF_ANN :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> a -> [a] -> ContractStatePoly a b
 _STF_PRF_ANN
   ct@ContractTermsPoly
-    { ct_FER = feeRate,
-      ct_CNTRL = cntrl
+    { contractRole
     }
   st@ContractStatePoly {..}
   t
@@ -624,9 +622,9 @@ _STF_PRF_ANN
     let ipac' = ipac + y_sd_t * ipnr * ipcb
         feac' = feeAccrued ct
           where
-            feeAccrued ContractTermsPoly {ct_FEB = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero feeRate
-            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r cntrl * fromMaybe _zero feeRate
-        prnxt' = _r cntrl * frac * scale
+            feeAccrued ContractTermsPoly {feeBasis = Just FEB_N} = feac + y_sd_t * nt * fromMaybe _zero (feeRate ct)
+            feeAccrued _ = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fromMaybe _zero (feeRate ct)
+        prnxt' = _r contractRole * frac * scale
           where
             scale = nt + ipac' + y_t * ipnr * nt
             frac = annuity ipnr ti
@@ -640,35 +638,35 @@ _STF_PRF_ANN
 _STF_XD_OPTNS :: (ActusNum a, ActusOps a) => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> ContractStatePoly a b
 _STF_XD_OPTNS
   ContractTermsPoly
-    { ct_OPTP = Just OPTP_C,
-      ct_OPS1 = Just strike
+    { optionType = Just OPTP_C,
+      optionStrike1 = Just ops1
     }
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ _max (pp_payoff - strike) _zero,
+    { xa = Just $ _max (xd_payoff - ops1) _zero,
       sd = t
     }
 _STF_XD_OPTNS
   ContractTermsPoly
-    { ct_OPTP = Just OPTP_P,
-      ct_OPS1 = Just strike
+    { optionType = Just OPTP_P,
+      optionStrike1 = Just ops1
     }
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ _max (strike - pp_payoff) _zero,
+    { xa = Just $ _max (ops1 - xd_payoff) _zero,
       sd = t
     }
 _STF_XD_OPTNS
   ContractTermsPoly
-    { ct_OPTP = Just OPTP_CP,
-      ct_OPS1 = Just strike
+    { optionType = Just OPTP_CP,
+      optionStrike1 = Just ops1
     }
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ _max (pp_payoff - strike) _zero + _max (strike - pp_payoff) _zero,
+    { xa = Just $ _max (xd_payoff - ops1) _zero + _max (ops1 - xd_payoff) _zero,
       sd = t
     }
 _STF_XD_OPTNS _ st _ t =
@@ -679,12 +677,12 @@ _STF_XD_OPTNS _ st _ t =
 _STF_XD_FUTUR :: ActusNum a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> ContractStatePoly a b
 _STF_XD_FUTUR
   ContractTermsPoly
-    { ct_PFUT = Just futuresPrice
+    { futuresPrice = Just pfut
     }
   st
   RiskFactorsPoly {..}
   t = st
-    { xa = Just $ pp_payoff - futuresPrice,
+    { xa = Just $ xd_payoff - pfut,
       sd = t
     }
 _STF_XD_FUTUR _ _ _ _ = undefined

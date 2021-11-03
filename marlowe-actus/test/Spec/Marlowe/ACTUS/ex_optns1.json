@@ -1,0 +1,28 @@
+{
+    "priceAtPurchaseDate": 10,
+    "purchaseDate": "2020-01-02T00:00:00",
+    "contractStructure": [
+        {
+            "referenceRole": "UDL",
+            "referenceType": "MOC",
+            "object": {
+                "marketObjectCode": "XXX"
+            }
+        }
+    ],
+    "scheduleConfig": {
+        "calendar": "NC"
+    },
+    "maturityDate": "2020-03-30T00:00:00",
+    "contractId": "option01",
+    "enableSettlement": false,
+    "deliverySettlement": "S",
+    "contractRole": "BUY",
+    "optionType": "C",
+    "settlementPeriod": "P0DL0",
+    "optionStrike1": 80,
+    "contractType": "OPTNS",
+    "collateralAmount": 0,
+    "statusDate": "2020-01-01T00:00:00",
+    "optionExerciseType": "E"
+}

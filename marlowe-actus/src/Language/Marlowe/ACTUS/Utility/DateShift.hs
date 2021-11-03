@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.Utility.DateShift
+module Language.Marlowe.ACTUS.Utility.DateShift
   ( applyBDC
   , applyBDCWithCfg
   , getPreceedingBusinessDay
@@ -8,20 +8,20 @@ module Language.Marlowe.ACTUS.Model.Utility.DateShift
   )
 where
 
-import           Data.Time                                        (LocalTime (..), addDays, toGregorian)
-import           Data.Time.Calendar.WeekDate                      (toWeekDate)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (BDC (..), Calendar (..), ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Definitions.Schedule      (ShiftedDay (..))
+import           Data.Time                                   (LocalTime (..), addDays, toGregorian)
+import           Data.Time.Calendar.WeekDate                 (toWeekDate)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (BDC (..), Calendar (..), ScheduleConfig (..))
+import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedDay (..))
 
 {- Business Day Convention -}
 
 applyBDCWithCfg :: ScheduleConfig -> LocalTime -> ShiftedDay
 applyBDCWithCfg
   ScheduleConfig
-    { bdc = Just bdc',
-      calendar = Just calendar'
+    { businessDayConvention = Just bdc,
+      calendar = Just cal
     }
-  d = applyBDC bdc' calendar' d
+  d = applyBDC bdc cal d
 applyBDCWithCfg _ date = ShiftedDay {paymentDay = date, calculationDay = date}
 
 applyBDC :: BDC -> Calendar -> LocalTime -> ShiftedDay

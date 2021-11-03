@@ -7,22 +7,22 @@ module Language.Marlowe.ACTUS.Model.STF.StateTransitionFs
 where
 
 import           Control.Monad.Reader
-import           Data.Maybe                                             (fromMaybe, maybeToList)
-import           Data.Time                                              (LocalTime)
-import           Language.Marlowe.ACTUS.Definitions.BusinessEvents      (EventType (..), RiskFactorsMarlowe)
-import           Language.Marlowe.ACTUS.Definitions.ContractState       (ContractStateMarlowe)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms       (CT (..), ContractTerms, ContractTermsMarlowe,
-                                                                         ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.MarloweCompat                   (constnt, marloweTime)
-import           Language.Marlowe.ACTUS.Model.STF.StateTransition       (CtxSTF (..))
+import           Data.Maybe                                            (fromMaybe, maybeToList)
+import           Data.Time                                             (LocalTime)
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents          (EventType (..), RiskFactorsMarlowe)
+import           Language.Marlowe.ACTUS.Domain.ContractState           (ContractStateMarlowe)
+import           Language.Marlowe.ACTUS.Domain.ContractTerms           (CT (..), ContractTerms, ContractTermsMarlowe,
+                                                                        ContractTermsPoly (..))
+import           Language.Marlowe.ACTUS.Domain.Ops                     (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat        (constnt, marloweTime)
+import           Language.Marlowe.ACTUS.Model.STF.StateTransition      (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
-import           Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator (inf', sup')
-import           Language.Marlowe.ACTUS.Ops                             (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator      (inf', sup')
 
 stateTransition :: EventType -> RiskFactorsMarlowe -> LocalTime -> LocalTime -> ContractStateMarlowe -> Reader (CtxSTF Double LocalTime) ContractStateMarlowe
 stateTransition ev rf prevDate t st = reader stateTransitionFs'
   where
-    stateTransitionFs' CtxSTF{ contractTerms = ct'@ContractTermsPoly {ct_MD = md, ct_DCC = Just dcc, ct_IPANX = Just ipanx}, ..} =
+    stateTransitionFs' CtxSTF{ contractTerms = ct'@ContractTermsPoly {maturityDate = md, dayCountConvention = Just dcc, cycleAnchorDateOfInterestPayment = Just ipanx}, ..} =
         stf ev (toMarlowe ct')
         where
           stf AD _ = _STF_AD_PAM st time y_sd_t
@@ -105,72 +105,72 @@ toMarlowe ct =
     { contractId = contractId ct,
       contractType = contractType ct,
       contractStructure = contractStructure ct,
-      ct_CNTRL = ct_CNTRL ct,
-      ct_CURS = ct_CURS ct,
-      ct_IED = marloweTime <$> ct_IED ct,
-      ct_DCC = ct_DCC ct,
-      scfg = scfg ct,
-      ct_SD = marloweTime $ ct_SD ct,
-      ct_PRF = ct_PRF ct,
-      ct_FECL = ct_FECL ct,
-      ct_FEANX = marloweTime <$> ct_FEANX ct,
-      ct_FEAC = constnt <$> ct_FEAC ct,
-      ct_FEB = ct_FEB ct,
-      ct_FER = constnt <$> ct_FER ct,
-      ct_IPANX = marloweTime <$> ct_IPANX ct,
-      ct_IPCL = ct_IPCL ct,
-      ct_IPAC = constnt <$> ct_IPAC ct,
-      ct_IPCED = marloweTime <$> ct_IPCED ct,
-      ct_IPCBANX = marloweTime <$> ct_IPCBANX ct,
-      ct_IPCBCL = ct_IPCBCL ct,
-      ct_IPCB = ct_IPCB ct,
-      ct_IPCBA = constnt <$> ct_IPCBA ct,
-      ct_IPNR = constnt <$> ct_IPNR ct,
-      ct_SCIP = constnt <$> ct_SCIP ct,
-      ct_NT = constnt <$> ct_NT ct,
-      ct_PDIED = constnt <$> ct_PDIED ct,
-      ct_MD = marloweTime <$> ct_MD ct,
-      ct_AD = marloweTime <$> ct_AD ct,
-      ct_XD = marloweTime <$> ct_XD ct,
-      ct_PRANX = marloweTime <$> ct_PRANX ct,
-      ct_PRCL = ct_PRCL ct,
-      ct_PRNXT = constnt <$> ct_PRNXT ct,
-      ct_PRD = marloweTime <$> ct_PRD ct,
-      ct_PPRD = constnt <$> ct_PPRD ct,
-      ct_TD = marloweTime <$> ct_TD ct,
-      ct_PTD = constnt <$> ct_PTD ct,
-      ct_SCIED = constnt <$> ct_SCIED ct,
-      ct_SCANX = marloweTime <$> ct_SCANX ct,
-      ct_SCCL = ct_SCCL ct,
-      ct_SCEF = ct_SCEF ct,
-      ct_SCCDD = constnt <$> ct_SCCDD ct,
-      ct_SCMO = ct_SCMO ct,
-      ct_SCNT = constnt <$> ct_SCNT ct,
-      ct_OPCL = ct_OPCL ct,
-      ct_OPANX = marloweTime <$> ct_OPANX ct,
-      ct_OPTP = ct_OPTP ct,
-      ct_OPS1 = constnt <$> ct_OPS1 ct,
-      ct_OPXT = ct_OPXT ct,
-      ct_STP = ct_STP ct,
-      ct_DS = ct_DS ct,
-      ct_XA = constnt <$> ct_XA ct,
-      ct_PFUT = constnt <$> ct_PFUT ct,
-      ct_PYRT = constnt <$> ct_PYRT ct,
-      ct_PYTP = ct_PYTP ct,
-      ct_PPEF = ct_PPEF ct,
-      ct_RRCL = ct_RRCL ct,
-      ct_RRANX = marloweTime <$> ct_RRANX ct,
-      ct_RRNXT = constnt <$> ct_RRNXT ct,
-      ct_RRSP = constnt <$> ct_RRSP ct,
-      ct_RRMLT = constnt <$> ct_RRMLT ct,
-      ct_RRPF = constnt <$> ct_RRPF ct,
-      ct_RRPC = constnt <$> ct_RRPC ct,
-      ct_RRLC = constnt <$> ct_RRLC ct,
-      ct_RRLF = constnt <$> ct_RRLF ct,
-      ct_RRMO = ct_RRMO ct,
-      ct_DVCL = ct_DVCL ct,
-      ct_DVANX = marloweTime <$> ct_DVANX ct,
-      ct_DVNP = constnt <$> ct_DVNP ct,
+      contractRole = contractRole ct,
+      settlementCurrency = settlementCurrency ct,
+      initialExchangeDate = marloweTime <$> initialExchangeDate ct,
+      dayCountConvention = dayCountConvention ct,
+      scheduleConfig = scheduleConfig ct,
+      statusDate = marloweTime $ statusDate ct,
+      contractPerformance = contractPerformance ct,
+      cycleOfFee = cycleOfFee ct,
+      cycleAnchorDateOfFee = marloweTime <$> cycleAnchorDateOfFee ct,
+      feeAccrued = constnt <$> feeAccrued ct,
+      feeBasis = feeBasis ct,
+      feeRate = constnt <$> feeRate ct,
+      cycleAnchorDateOfInterestPayment = marloweTime <$> cycleAnchorDateOfInterestPayment ct,
+      cycleOfInterestPayment = cycleOfInterestPayment ct,
+      accruedInterest = constnt <$> accruedInterest ct,
+      capitalizationEndDate = marloweTime <$> capitalizationEndDate ct,
+      cycleAnchorDateOfInterestCalculationBase = marloweTime <$> cycleAnchorDateOfInterestCalculationBase ct,
+      cycleOfInterestCalculationBase = cycleOfInterestCalculationBase ct,
+      interestCalculationBase = interestCalculationBase ct,
+      interestCalculationBaseA = constnt <$> interestCalculationBaseA ct,
+      nominalInterestRate = constnt <$> nominalInterestRate ct,
+      interestScalingMultiplier = constnt <$> interestScalingMultiplier ct,
+      notionalPrincipal = constnt <$> notionalPrincipal ct,
+      premiumDiscountAtIED = constnt <$> premiumDiscountAtIED ct,
+      maturityDate = marloweTime <$> maturityDate ct,
+      amortizationDate = marloweTime <$> amortizationDate ct,
+      exerciseDate = marloweTime <$> exerciseDate ct,
+      cycleAnchorDateOfPrincipalRedemption = marloweTime <$> cycleAnchorDateOfPrincipalRedemption ct,
+      cycleOfPrincipalRedemption = cycleOfPrincipalRedemption ct,
+      nextPrincipalRedemptionPayment = constnt <$> nextPrincipalRedemptionPayment ct,
+      purchaseDate = marloweTime <$> purchaseDate ct,
+      priceAtPurchaseDate = constnt <$> priceAtPurchaseDate ct,
+      terminationDate = marloweTime <$> terminationDate ct,
+      priceAtTerminationDate = constnt <$> priceAtTerminationDate ct,
+      scalingIndexAtStatusDate = constnt <$> scalingIndexAtStatusDate ct,
+      cycleAnchorDateOfScalingIndex = marloweTime <$> cycleAnchorDateOfScalingIndex ct,
+      cycleOfScalingIndex = cycleOfScalingIndex ct,
+      scalingEffect = scalingEffect ct,
+      scalingIndexAtContractDealDate = constnt <$> scalingIndexAtContractDealDate ct,
+      marketObjectCodeOfScalingIndex = marketObjectCodeOfScalingIndex ct,
+      notionalScalingMultiplier = constnt <$> notionalScalingMultiplier ct,
+      cycleOfOptionality = cycleOfOptionality ct,
+      cycleAnchorDateOfOptionality = marloweTime <$> cycleAnchorDateOfOptionality ct,
+      optionType = optionType ct,
+      optionStrike1 = constnt <$> optionStrike1 ct,
+      optionExerciseType = optionExerciseType ct,
+      settlementPeriod = settlementPeriod ct,
+      deliverySettlement = deliverySettlement ct,
+      exerciseAmount = constnt <$> exerciseAmount ct,
+      futuresPrice = constnt <$> futuresPrice ct,
+      penaltyRate = constnt <$> penaltyRate ct,
+      penaltyType = penaltyType ct,
+      prepaymentEffect = prepaymentEffect ct,
+      cycleOfRateReset = cycleOfRateReset ct,
+      cycleAnchorDateOfRateReset = marloweTime <$> cycleAnchorDateOfRateReset ct,
+      nextResetRate = constnt <$> nextResetRate ct,
+      rateSpread = constnt <$> rateSpread ct,
+      rateMultiplier = constnt <$> rateMultiplier ct,
+      periodFloor = constnt <$> periodFloor ct,
+      periodCap = constnt <$> periodCap ct,
+      lifeCap = constnt <$> lifeCap ct,
+      lifeFloor = constnt <$> lifeFloor ct,
+      marketObjectCodeOfRateReset = marketObjectCodeOfRateReset ct,
+      cycleOfDividend = cycleOfDividend ct,
+      cycleAnchorDateOfDividend = marloweTime <$> cycleAnchorDateOfDividend ct,
+      nextDividendPaymentAmount = constnt <$> nextDividendPaymentAmount ct,
       enableSettlement = enableSettlement ct,
       constraints = constraints ct,
       collateralAmount = collateralAmount ct

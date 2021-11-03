@@ -28,13 +28,16 @@ import           Data.Proxy                                       (Proxy (Proxy)
 import           Data.String                                      as S
 import           Data.Text                                        (Text)
 import qualified Data.Text                                        as Text
+import           Data.Time.LocalTime                              (LocalTime)
 import           Data.Time.Units                                  (Second, toMicroseconds)
 import qualified Data.Validation                                  as Validation
 import           GHC.Generics                                     (Generic)
 import           Language.Haskell.Interpreter                     (InterpreterError (CompilationErrors),
                                                                    InterpreterResult)
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms (ContractTerms)
-import           Language.Marlowe.ACTUS.Generator                 (genFsContract, genStaticContract)
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType, RiskFactors, RiskFactorsPoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms)
+import           Language.Marlowe.ACTUS.Generator.GeneratorFs     (genFsContract)
+import           Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
 import           Language.Marlowe.Pretty                          (pretty)
 import           Network.HTTP.Client.Conduit                      (defaultManagerSettings, managerResponseTimeout,
                                                                    responseTimeoutMicro)
@@ -53,16 +56,27 @@ import           Webghc.Server                                    (CompileReques
 
 genActusContract :: ContractTerms -> Handler String
 genActusContract terms =
-    case genFsContract terms of
+    case genFsContract defaultRiskFactors terms of
         -- Should probably send this as a server error and handle it properly on the front end
         Validation.Failure errs -> pure (unlines . (:) "ACTUS Term Validation Failed:" . map ((++) "    " . show) $ errs)
         Validation.Success c -> pure . show . pretty $ c
 
 genActusContractStatic :: ContractTerms -> Handler String
 genActusContractStatic terms =
-    case genStaticContract terms of
+    case genStaticContract defaultRiskFactors terms of
         Validation.Failure errs -> pure (unlines . (:) "ACTUS Term Validation Failed:" . map ((++) "    " . show) $ errs)
         Validation.Success c -> pure . show . pretty $ c
+
+defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
+defaultRiskFactors _ _ =
+    RiskFactorsPoly
+        { o_rf_CURS = 1.0,
+          o_rf_RRMO = 1.0,
+          o_rf_SCMO = 1.0,
+          pp_payoff = 0.0,
+          xd_payoff = 0.0,
+          dv_payoff = 0.0
+        }
 
 oracle :: MonadIO m => String -> String -> m Value
 oracle exchange pair = do

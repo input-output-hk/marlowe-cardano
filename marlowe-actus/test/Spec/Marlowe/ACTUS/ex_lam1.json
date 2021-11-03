@@ -1,0 +1,28 @@
+{
+    "scheduleConfig": {
+        "businessDayConvention": "NULL",
+        "endOfMonthConvention": "EOM",
+        "calendar": "NC"
+    },
+    "maturityDate": "2030-01-01T00:00:00",
+    "contractId": "0",
+    "enableSettlement": false,
+    "initialExchangeDate": "2020-01-01T00:00:00",
+    "contractRole": "RPA",
+    "penaltyType": "O",
+    "cycleAnchorDateOfInterestPayment": "2020-01-01T00:00:00",
+    "nextPrincipalRedemptionPayment": 1000,
+    "contractType": "LAM",
+    "notionalPrincipal": 10000,
+    "contractPerformance": "PF",
+    "collateralAmount": 0,
+    "cycleOfPrincipalRedemption": "P1YL1",
+    "dayCountConvention": "30E360",
+    "accruedInterest": 0,
+    "cycleAnchorDateOfPrincipalRedemption": "2021-01-01T00:00:00",
+    "statusDate": "2019-12-31T00:00:00",
+    "cycleOfInterestPayment": "P1YL1",
+    "prepaymentEffect": "N",
+    "nominalInterestRate": 2.0e-2,
+    "interestCalculationBase": "NT"
+}

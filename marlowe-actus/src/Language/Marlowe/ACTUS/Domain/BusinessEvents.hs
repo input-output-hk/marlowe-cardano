@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
 
-module Language.Marlowe.ACTUS.Definitions.BusinessEvents where
+module Language.Marlowe.ACTUS.Domain.BusinessEvents where
 
 import           Data.Aeson.Types (FromJSON, ToJSON)
 import           GHC.Generics     (Generic)
@@ -45,6 +45,8 @@ data RiskFactorsPoly a = RiskFactorsPoly
     , o_rf_RRMO :: a
     , o_rf_SCMO :: a
     , pp_payoff :: a
+    , xd_payoff :: a
+    , dv_payoff :: a
     }
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON)

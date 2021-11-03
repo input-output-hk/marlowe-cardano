@@ -1,14 +1,14 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Marlowe.ACTUS.Ops where
+module Language.Marlowe.ACTUS.Domain.Ops where
 
-import           Data.Time                                         (LocalTime)
-import           Language.Marlowe                                  (Observation (ValueGT, ValueLT),
-                                                                    Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
-                                                                    (%))
-import           Language.Marlowe.ACTUS.Definitions.ContractTerms  (CR (..), DCC)
-import           Language.Marlowe.ACTUS.Model.Utility.YearFraction (yearFraction)
+import           Data.Time                                   (LocalTime)
+import           Language.Marlowe                            (Observation (ValueGT, ValueLT),
+                                                              Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
+                                                              (%))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), DCC (..))
+import           Language.Marlowe.ACTUS.Utility.YearFraction (yearFraction)
 
 marloweFixedPoint :: Integer
 marloweFixedPoint = 1000
@@ -33,7 +33,7 @@ class DateOps a b where
     _lt :: a -> a -> b --returns pseudo-boolean
 
 _minusOne :: (ActusNum a, ActusOps a) => a
-_minusOne = _zero Language.Marlowe.ACTUS.Ops.- _one
+_minusOne = _zero Language.Marlowe.ACTUS.Domain.Ops.- _one
 
 class (ActusNum a, ActusOps a) => RoleSignOps a where
     _r :: CR -> a
@@ -72,6 +72,11 @@ instance DateOps LocalTime Double where
 
 instance YearFractionOps LocalTime Double where
     _y = yearFraction
+
+instance YearFractionOps (Value Observation) (Value Observation) where
+    _y DCC_A_360 _ _ _ = undefined
+    _y DCC_A_365 _ _ _ = undefined
+    _y _ _ _ _         = error "not available"
 
 instance ActusOps (Value Observation) where
     _min a b = Cond (ValueLT a b) a b

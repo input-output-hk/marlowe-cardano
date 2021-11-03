@@ -51,14 +51,16 @@ library
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   exposed-modules:
-    Language.Marlowe.ACTUS.MarloweCompat
-    Language.Marlowe.ACTUS.Generator
-    Language.Marlowe.ACTUS.Analysis
-    Language.Marlowe.ACTUS.Ops
-    Language.Marlowe.ACTUS.Definitions.BusinessEvents
-    Language.Marlowe.ACTUS.Definitions.ContractTerms
-    Language.Marlowe.ACTUS.Definitions.ContractState
-    Language.Marlowe.ACTUS.Definitions.Schedule
+    Language.Marlowe.ACTUS.Domain.BusinessEvents
+    Language.Marlowe.ACTUS.Domain.ContractTerms
+    Language.Marlowe.ACTUS.Domain.ContractState
+    Language.Marlowe.ACTUS.Domain.Ops
+    Language.Marlowe.ACTUS.Domain.Schedule
+    Language.Marlowe.ACTUS.Generator.Analysis
+    Language.Marlowe.ACTUS.Generator.Generator
+    Language.Marlowe.ACTUS.Generator.GeneratorFs
+    Language.Marlowe.ACTUS.Generator.GeneratorStatic
+    Language.Marlowe.ACTUS.Generator.MarloweCompat
     Language.Marlowe.ACTUS.Model.POF.PayoffModel
     Language.Marlowe.ACTUS.Model.POF.Payoff
     Language.Marlowe.ACTUS.Model.POF.PayoffFs
@@ -68,12 +70,12 @@ library
     Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel
     Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule
     Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel
-    Language.Marlowe.ACTUS.Model.APPLICABILITY.Applicability
-    Language.Marlowe.ACTUS.Model.APPLICABILITY.ApplicabilityModel
-    Language.Marlowe.ACTUS.Model.Utility.ANN.Annuity
-    Language.Marlowe.ACTUS.Model.Utility.DateShift
-    Language.Marlowe.ACTUS.Model.Utility.ScheduleGenerator
-    Language.Marlowe.ACTUS.Model.Utility.YearFraction
+    Language.Marlowe.ACTUS.Model.APPL.Applicability
+    Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
+    Language.Marlowe.ACTUS.Utility.ANN.Annuity
+    Language.Marlowe.ACTUS.Utility.DateShift
+    Language.Marlowe.ACTUS.Utility.ScheduleGenerator
+    Language.Marlowe.ACTUS.Utility.YearFraction
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
