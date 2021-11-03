@@ -26,6 +26,7 @@ data CashFlow = CashFlow
     cashCalculationDay :: LocalTime,
     cashEvent          :: EventType,
     amount             :: Double,
+    notional           :: Double,
     currency           :: String
   }
   deriving stock (Show, Eq, Generic)

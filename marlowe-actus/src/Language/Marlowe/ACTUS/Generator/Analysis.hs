@@ -22,7 +22,7 @@ import           Data.Maybe                                                 (fro
 import           Data.Sort                                                  (sortOn)
 import           Data.Time                                                  (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactors)
-import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState)
+import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState, ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms                (CT (..), ContractTerms,
                                                                              ContractTermsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
@@ -41,7 +41,7 @@ genProjectedCashflows ::
   -> ContractTerms                        -- ^ ACTUS contract terms
   -> [CashFlow]                           -- ^ List of projected cash flows
 genProjectedCashflows getRiskFactors ct =
-  let genCashflow (_, ev, t, am) =
+  let genCashflow (ContractStatePoly {..}, ev, t, am) =
         CashFlow
           { tick = 0,
             cashContractId = contractId ct,
@@ -51,6 +51,7 @@ genProjectedCashflows getRiskFactors ct =
             cashCalculationDay = calculationDay t,
             cashEvent = ev,
             amount = am,
+            notional = nt,
             currency = fromMaybe "unknown" (settlementCurrency ct)
           }
    in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs getRiskFactors $ ct
