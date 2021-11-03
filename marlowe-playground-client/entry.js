@@ -22,4 +22,8 @@ global.monacoExtraTypeScriptLibs = [
 
 import { BigNumber } from 'bignumber';
 
-import './src/Main.purs';
+require('./src/Main.purs').main();
+
+if (module.hot) {
+  module.hot.accept();
+}

@@ -1,3 +1,8 @@
 /*eslint-env node*/
 import './static/css/main.css';
-import './src/Main.purs';
+
+require('./src/Main.purs').main();
+
+if (module.hot) {
+  module.hot.accept();
+}

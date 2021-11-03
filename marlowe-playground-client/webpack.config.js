@@ -5,12 +5,10 @@ const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const path = require("path");
 
-const isWebpackDevServer = process.argv.some(a => path.basename(a) === "webpack-dev-server");
-
-const isWatch = process.argv.some(a => a === "--watch");
+const isDevelopment = process.env.NODE_ENV === "development";
 
 const plugins =
-    isWebpackDevServer || !isWatch ? [] : [
+    isDevelopment ? [] : [
         function () {
             this.plugin("done", function (stats) {
                 process.stderr.write(stats.toString("errors-only"));
@@ -20,11 +18,10 @@ const plugins =
 ;
 
 // source map adds 20Mb to the output!
-const devtool = isWebpackDevServer ? "eval-source-map" : false;
+const devtool = isDevelopment ? "eval-source-map" : false;
 
 module.exports = {
     devtool,
-
     devServer: {
         contentBase: path.join(__dirname, "dist"),
         compress: true,
@@ -42,12 +39,32 @@ module.exports = {
     entry: "./entry.js",
     output: {
         path: path.join(__dirname, "dist"),
+        filename: "[name].[hash].js",
         pathinfo: true,
-        filename: "app.[hash].js"
+        clean: true,
+    },
+    optimization: {
+        runtimeChunk: "single",
+        splitChunks: {
+            cacheGroups: {
+                vendor: {
+                    test: /[\\/]node_modules[\\/]/,
+                    name: "vendors",
+                    chunks: "all",
+                },
+            },
+        },
     },
     module: {
         rules: [
-            { test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/, loader: "url-loader?limit=10000&mimetype=application/font-woff" },
+            {
+                test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
+                loader: "url-loader",
+                options: {
+                    limit: 10000,
+                    mimetype: "mimetype=application/font-woff",
+                },
+            },
             { test: /fontawesome-.*\.(ttf|eot|svg)(\?v=[0-9]\.[0-9]\.[0-9])?$/, loader: "file-loader" },
             {
                 test: /\.ne$/,
@@ -63,14 +80,15 @@ module.exports = {
                         loader: "purs-loader",
                         options: {
                             psc: "psa",
-                            bundle: !(isWebpackDevServer || isWatch),
+                            bundle: !isDevelopment,
+                            watch: isDevelopment,
                             warnings: true,
-                            watch: isWebpackDevServer || isWatch,
-                            spago: true
-                        }
-                    }
-                ]
-            }, {
+                            spago: true,
+                        },
+                    },
+                ],
+            },
+            {
                 test: /\.tsx?$/,
                 loader: "ts-loader"
             },
@@ -100,7 +118,10 @@ module.exports = {
             static: path.resolve(__dirname, "./static"),
             src: path.resolve(__dirname, "./src")
         },
-        extensions: [".purs", ".js", ".ts", ".tsx"]
+        extensions: [".purs", ".js", ".ts", ".tsx"],
+        fallback: {
+            vm: require.resolve("vm-browserify"),
+        },
     },
     resolveLoader: {
         modules: [
@@ -114,8 +135,8 @@ module.exports = {
             favicon: "static/favicon.ico",
             title: "Marlowe Playground",
             productName: "marlowe-playground",
-            googleAnalyticsId: isWebpackDevServer ? "UA-XXXXXXXXX-X" : "G-G06CGG33D4",
-            segmentAnalyticsId: isWebpackDevServer ? "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" : "RMh20hw83CbQY1CXanru5hnwkFWZOzL0",
+            googleAnalyticsId: isDevelopment ? "UA-XXXXXXXXX-X" : "G-G06CGG33D4",
+            segmentAnalyticsId: isDevelopment ? "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" : "RMh20hw83CbQY1CXanru5hnwkFWZOzL0",
         }),
         new MonacoWebpackPlugin({
             // note that you have to include typescript if you want javascript to work!

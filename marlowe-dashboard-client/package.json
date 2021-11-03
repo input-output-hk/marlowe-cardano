@@ -32,7 +32,6 @@
     "postcss": "^8.2.13",
     "postcss-import": "^14.0.1",
     "postcss-loader": "^5.2.0",
-    "purescript-psa": "^0.8.2",
     "purs-loader": "^3.7.2",
     "raw-loader": "^4.0.2",
     "tailwindcss": "^2.2.7",
