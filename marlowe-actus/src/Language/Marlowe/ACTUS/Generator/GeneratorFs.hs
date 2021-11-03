@@ -82,12 +82,9 @@ genFsContract' rf ct =
             oracle_i = let ac = context <$> constraints ct in inquiryFs ev ("_" ++ show i) date "oracle" ac
             st_i = stateAt i sd
             rf_i = riskFactorAt i
-            stf_i = stateToContract i <$> FS.stateTransition ev rf_i sd t st_i
-            pof_i c =
-              case payoffFs ev rf_i ct st_i sd t of
-                Nothing -> c
-                Just p  -> payoff i cf date c p
-         in stf_i >>= \stf -> let f = return . oracle_i . comment ev . stf . pof_i in f cont
+            pof_i c = maybe c (payoff i cf date c) (payoffFs ev rf_i ct st_i sd t)
+         in do stf <- stateToContract i <$> FS.stateTransition ev rf_i sd t st_i
+               return $ oracle_i $ comment ev $ stf $ pof_i cont
 
       scheduleAcc :: Reader (CtxSTF Double LocalTime) Contract
       scheduleAcc =
