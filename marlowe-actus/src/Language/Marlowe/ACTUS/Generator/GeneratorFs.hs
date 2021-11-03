@@ -17,7 +17,7 @@ where
 import           Control.Monad.Reader
 import           Data.Foldable                                              (foldrM)
 import qualified Data.List                                                  as L (zip5)
-import           Data.Maybe                                                 (maybeToList)
+import           Data.Maybe                                                 (maybe, maybeToList)
 import           Data.Monoid                                                (Endo (Endo, appEndo))
 import           Data.String                                                (IsString (fromString))
 import           Data.Time                                                  (LocalTime)
