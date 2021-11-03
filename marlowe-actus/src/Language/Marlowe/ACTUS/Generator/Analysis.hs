@@ -41,7 +41,7 @@ genProjectedCashflows ::
   -> ContractTerms                        -- ^ ACTUS contract terms
   -> [CashFlow]                           -- ^ List of projected cash flows
 genProjectedCashflows getRiskFactors ct =
-  let genCashflow ((_, ev, t), am) =
+  let genCashflow (_, ev, t, am) =
         CashFlow
           { tick = 0,
             cashContractId = contractId ct,
@@ -56,9 +56,9 @@ genProjectedCashflows getRiskFactors ct =
    in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs getRiskFactors $ ct
 
 genProjectedPayoffs ::
-  (EventType -> LocalTime -> RiskFactors)               -- ^ Risk factors as a function of event type and time
-  -> ContractTerms                                      -- ^ ACTUS contract terms
-  -> [((ContractState, EventType, ShiftedDay), Double)] -- ^ List of projected payoffs
+  (EventType -> LocalTime -> RiskFactors)             -- ^ Risk factors as a function of event type and time
+  -> ContractTerms                                    -- ^ ACTUS contract terms
+  -> [(ContractState, EventType, ShiftedDay, Double)] -- ^ List of projected payoffs
 genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
   let -- schedules
 
@@ -97,7 +97,7 @@ genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
             let t = calculationDay d
                 rf = getRiskFactors ev t
              in payoff ev rf ct st t
-   in zip states payoffs
+   in zipWith (\(x,y,z) -> (x,y,z,)) states payoffs
   where
     mat = S.maturity ct
 
