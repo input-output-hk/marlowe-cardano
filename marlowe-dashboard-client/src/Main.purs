@@ -50,7 +50,3 @@ main = do
         $ liftEffect
         $ HS.subscribe driver.messages
         $ \(MainFrameActionMsg action) -> launchAff_ $ void $ driver.query $ MainFrameActionQuery action unit
-
--- TODO what is this? Can it be deleted?
-onLoad :: Unit
-onLoad = unsafePerformEffect main

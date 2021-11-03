@@ -46,9 +46,9 @@ extra-deps:
 - git: https://github.com/Quid2/flat.git
   commit: ee59880f47ab835dbd73bea0847dab7869fc20d8
 - git: https://github.com/input-output-hk/purescript-bridge.git
-  commit: 366fc70b341e2633f3ad0158a577d52e1cd2b138
+  commit: 6a92d7853ea514be8b70bab5e72077bf5a510596
 - git: https://github.com/input-output-hk/servant-purescript.git
-  commit: bc74e3e258764d62c836a0c53d61830ec0de2c79
+  commit: ebea59c7bdfc0338d83fca772b9a57e28560bcde
 - git: https://github.com/input-output-hk/cardano-crypto.git
   commit: 07397f0e50da97eaa0575d93bee7ac4b2b2576ec
 - git: https://github.com/input-output-hk/cardano-base
@@ -151,11 +151,12 @@ extra-deps:
     - prettyprinter-configurable
     - stubs/plutus-ghc-stub
 - git: https://github.com/input-output-hk/plutus-apps
-  commit: 2c214f9ab81abd48376a057605de0055eb4f0a02
+  commit: 87558c6e1b0caf74e76348ec66939c38dc0d8ad9
   subdirs:
     - freer-extras
     - playground-common
     - plutus-chain-index
+    - plutus-chain-index-core
     - plutus-contract
     - plutus-ledger
     - plutus-pab

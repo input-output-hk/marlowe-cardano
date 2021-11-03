@@ -120,7 +120,8 @@ timeBridge = typeName ^== "LocalTime" >> return psString
 
 myBridge :: BridgePart
 myBridge =
-    PSGenerator.Common.aesonBridge <|> PSGenerator.Common.containersBridge <|>
+    PSGenerator.Common.aesonBridge <|>
+    PSGenerator.Common.containersBridge <|>
     PSGenerator.Common.languageBridge <|>
     PSGenerator.Common.ledgerBridge <|>
     PSGenerator.Common.servantBridge <|>

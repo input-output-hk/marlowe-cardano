@@ -77,7 +77,7 @@ executable doc-doctests
       random -any,
       text -any,
       aeson -any,
-      plutus-chain-index
+      plutus-chain-index-core -any,
 
     if !(impl(ghcjs) || os(ghcjs))
         build-depends: plutus-tx-plugin -any

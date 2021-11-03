@@ -3,7 +3,7 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs webCommon webCommonPlayground;
+  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) purty-pre-commit;
@@ -87,11 +87,6 @@ let
     marlowe-dashboard.start-backend
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
-    plutus-pab.generate-purescript
-    plutus-pab.migrate
-    plutus-pab.start-backend
-    plutus-pab.start-all-servers
-    plutus-pab.start-all-servers-m
     purs
     purty
     spago

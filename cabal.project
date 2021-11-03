@@ -63,7 +63,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/servant-purescript.git
-  tag: bc74e3e258764d62c836a0c53d61830ec0de2c79
+  tag: ebea59c7bdfc0338d83fca772b9a57e28560bcde
 
 -- Copied from plutus-apps
 source-repository-package
@@ -104,18 +104,23 @@ source-repository-package
   tag: d2f86caa085402a953920c6714a0de6a50b655ec
   subdir:
     core
+    command-line
 
 -- Copied from plutus-apps
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-wallet
-  tag: ae7569293e94241ef6829139ec02bd91abd069df
+  location: https://github.com/j-mueller/cardano-wallet
+  tag: 6be73ab852c0592713dfe78218856d4a8a0ee69e
   subdir:
     lib/text-class
     lib/strict-non-empty-containers
     lib/core
     lib/test-utils
     lib/numeric
+    lib/launcher
+    lib/core-integration
+    lib/cli
+    lib/shelley
 
 -- Copied from plutus-apps
 source-repository-package
@@ -181,9 +186,14 @@ source-repository-package
     eras/byron/ledger/impl/test
     eras/shelley/impl
     eras/shelley-ma/impl
+    eras/shelley/chain-and-ledger/executable-spec
+    eras/shelley/test-suite
+    shelley/chain-and-ledger/shelley-spec-ledger-test
     libs/non-integral
     libs/small-steps
+    libs/cardano-ledger-pretty
     semantics/small-steps-test
+
 
 -- A lot of marlowe dependencies have to be synchronized with the dependencies of
 -- cardano-node. If you update cardano-node, please make sure that all dependencies
@@ -244,11 +254,12 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: 2c214f9ab81abd48376a057605de0055eb4f0a02
+  tag: 87558c6e1b0caf74e76348ec66939c38dc0d8ad9
   subdir:
     freer-extras
     playground-common
     plutus-chain-index
+    plutus-chain-index-core
     plutus-contract
     plutus-ledger
     plutus-pab
