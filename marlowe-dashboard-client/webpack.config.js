@@ -58,16 +58,29 @@ module.exports = {
                 test: /\.purs$/,
                 use: [
                     {
-                        loader: "purs-loader",
+                        loader: 'purs-loader',
                         options: {
-                            psc: "psa",
                             bundle: !isDevelopment,
+                            psc: "psa",
+                            pscArgs: {
+                                strict: true,
+                                censorLib: true,
+                                stash: isDevelopment,
+                                isLib: ["generated", ".spago"],
+                            },
+                            spago: isDevelopment,
                             watch: isDevelopment,
-                            warnings: true,
-                            spago: true,
-                        },
-                    },
-                ],
+                            src: isDevelopment
+                                ? []
+                                : [
+                                    '.spago/*/*/src/**/*.purs',
+                                    'src/**/*.purs',
+                                    'generated/**/*.purs',
+                                    "web-common-marlowe/src/**/*.purs",
+                                ],
+                        }
+                    }
+                ]
             },
             {
                 test: /\.css$/,
