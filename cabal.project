@@ -254,7 +254,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: 87558c6e1b0caf74e76348ec66939c38dc0d8ad9
+  tag: 3c2451d8fbff20a4b9e56a2e8f7704c9c7901d48
   subdir:
     freer-extras
     playground-common

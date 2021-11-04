@@ -62,7 +62,7 @@
       flake = false;
     };
     plutus-apps = {
-      url = "github:input-output-hk/plutus-apps?rev=87558c6e1b0caf74e76348ec66939c38dc0d8ad9";
+      url = "github:input-output-hk/plutus-apps?rev=3c2451d8fbff20a4b9e56a2e8f7704c9c7901d48";
       flake = false;
     };
     pre-commit-hooks-nix = {
