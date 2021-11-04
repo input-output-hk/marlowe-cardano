@@ -41,10 +41,6 @@ rec {
   webCommon = pkgs.callPackage sources.web-common { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlutus = pkgs.callPackage (sources.plutus-apps + "/web-common-plutus") { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
-  plutus-pab = pkgs.recurseIntoAttrs (pkgs.callPackage (sources.plutus-apps + "/plutus-pab-client") {
-    inherit (marlowe.lib) buildPursPackage buildNodeModules gitignore-nix filterNpm;
-    inherit haskell webCommonPlutus;
-  });
 
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (marlowe.lib) gitignore-nix; };
 
