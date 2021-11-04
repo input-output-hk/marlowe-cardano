@@ -1,7 +1,14 @@
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DerivingStrategies   #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Language.Marlowe.ACTUS.Domain.ContractState where
 
+import           Data.Aeson.Types                            (ToJSON)
 import           Data.Time                                   (LocalTime)
+import           GHC.Generics                                (Generic)
 import           Language.Marlowe                            (Observation, Value)
 import           Language.Marlowe.ACTUS.Domain.ContractTerms (PRF)
 
@@ -28,3 +35,6 @@ data ContractStatePoly a b = ContractStatePoly
 
 type ContractState = ContractStatePoly Double LocalTime
 type ContractStateMarlowe = ContractStatePoly (Value Observation) (Value Observation)
+
+deriving instance Generic ContractState
+deriving instance ToJSON ContractState

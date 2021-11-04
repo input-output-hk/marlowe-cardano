@@ -36,6 +36,8 @@ import           Language.Haskell.Interpreter                     (InterpreterEr
                                                                    InterpreterResult)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType, RiskFactors, RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms)
+import           Language.Marlowe.ACTUS.Domain.Schedule           (CashFlow)
+import           Language.Marlowe.ACTUS.Generator.Analysis        (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.GeneratorFs     (genFsContract)
 import           Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
 import           Language.Marlowe.Pretty                          (pretty)
@@ -66,6 +68,9 @@ genActusContractStatic terms =
     case genStaticContract defaultRiskFactors terms of
         Validation.Failure errs -> pure (unlines . (:) "ACTUS Term Validation Failed:" . map ((++) "    " . show) $ errs)
         Validation.Success c -> pure . show . pretty $ c
+
+genActusCashflows :: ContractTerms -> Handler [CashFlow]
+genActusCashflows terms = pure $ genProjectedCashflows defaultRiskFactors terms
 
 defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
 defaultRiskFactors _ _ =
@@ -114,7 +119,7 @@ mkHandlers AppConfig {..} = do
   pure (mhandlers webghcClientEnv :<|> liftedAuthServer githubEndpoints authConfig)
 
 mhandlers :: ClientEnv -> Server API
-mhandlers webghcClientEnv = oracle :<|> (genActusContract :<|> genActusContractStatic) :<|> compile webghcClientEnv
+mhandlers webghcClientEnv = oracle :<|> (genActusContract :<|> genActusContractStatic :<|> genActusCashflows) :<|> compile webghcClientEnv
 
 app :: Server Web -> Application
 app handlers =

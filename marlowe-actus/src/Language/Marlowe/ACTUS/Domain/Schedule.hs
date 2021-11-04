@@ -12,7 +12,8 @@ data ShiftedDay = ShiftedDay
   { paymentDay     :: LocalTime,
     calculationDay :: LocalTime
   }
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 type ShiftedSchedule = [ShiftedDay]
 
@@ -25,6 +26,7 @@ data CashFlow = CashFlow
     cashCalculationDay :: LocalTime,
     cashEvent          :: EventType,
     amount             :: Double,
+    notional           :: Double,
     currency           :: String
   }
   deriving stock (Show, Eq, Generic)
