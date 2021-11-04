@@ -1,10 +1,12 @@
-{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, buildPursPackage, buildNodeModules, filterNpm, plutus-pab }:
+{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, buildPursPackage, buildNodeModules, filterNpm }:
 let
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
 
+  pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
+
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
     mkdir $out
-    ${plutus-pab.server-setup-invoker}/bin/plutus-pab-setup psgenerator $out
+    ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
     ln -s ${./plutus-pab.yaml} plutus-pab.yaml
     ${marlowe-invoker}/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $out
   '';
@@ -12,7 +14,7 @@ let
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
     generatedDir=./generated
     rm -rf $generatedDir
-    $(nix-build ../default.nix -A plutus-pab.server-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
+    $(nix-build ../default.nix -A pab-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
     $(nix-build ../default.nix -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $generatedDir
   '';
 
@@ -49,6 +51,5 @@ let
     });
 in
 {
-  inherit (plutus-pab) server-setup-invoker;
-  inherit client marlowe-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
 }
