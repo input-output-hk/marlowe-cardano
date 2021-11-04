@@ -25,10 +25,9 @@ Then run `npm run webpack:server` for an auto-reloading dev build on https://loc
 ## Adding dependencies
 
 * Javascript dependencies are managed with npm, so add them to [package.json](./package.json)
-* purescript dependencies are managed with psc-package so add them to [psc-package.json](./psc-package.json)
 * purescript uses package sets managed by spago so if the package set doesn't contain a dependency you can add it to [packages.dhall](./packages.dhall)
 
-Whenever you change `psc-package.json` or `packages.dhall` you need to make sure that all dependencies can still properly be resolved and built.
+Whenever you change `packages.dhall` you need to make sure that all dependencies can still properly be resolved and built.
 You can do so using the `update-client-deps` script:
 
 - Inside the nix-shell environment: `update-client-deps`

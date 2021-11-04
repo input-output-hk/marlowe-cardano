@@ -58,7 +58,7 @@ let
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-darwin)
   '';
   updateClientDeps = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/update-client-deps") {
-    inherit purs psc-package spago spago2nix;
+    inherit purs spago spago2nix;
   };
 
   #
@@ -95,7 +95,7 @@ let
   # We pull out some packages from easyPS that are a pain to get otherwise.
   # In particular, we used to build purty ourselves, but now its build is a nightmare.
   # This does mean we can't as easily control the version we get, though.
-  inherit (easyPS) purty purs psc-package spago spago2nix psa purescript-language-server;
+  inherit (easyPS) purty purs spago spago2nix psa purescript-language-server;
 
   # sphinx haddock support
   sphinxcontrib-haddock = pkgs.callPackage (sources.sphinxcontrib-haddock) { pythonPackages = pkgs.python3Packages; };
