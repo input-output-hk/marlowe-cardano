@@ -14,14 +14,14 @@ module Language.Marlowe.ACTUS.Generator.GeneratorFs
   ( genFsContract )
 where
 
-import           Control.Monad.Reader
-import           Data.Foldable                                              (foldrM)
-import qualified Data.List                                                  as L (zip5)
+import           Control.Monad.Reader                                       (Reader, runReader)
+import qualified Data.List                                                  as L (zip4, zip6)
 import           Data.Maybe                                                 (maybeToList)
 import           Data.Monoid                                                (Endo (Endo, appEndo))
 import           Data.String                                                (IsString (fromString))
 import           Data.Time                                                  (LocalTime)
 import           Data.Validation                                            (Validation (..))
+import           GHC.List                                                   (scanl')
 import           Language.Marlowe                                           (Action (..), Bound (..), Case (..),
                                                                              ChoiceId (..), Contract (..),
                                                                              Observation (..), Party (..), Slot (..),
@@ -32,16 +32,15 @@ import           Language.Marlowe.ACTUS.Domain.ContractState                (Con
                                                                              ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms                (Assertion (..), AssertionContext (..),
                                                                              Assertions (..), ContractTerms,
-                                                                             ContractTermsPoly (..), PRF (..),
+                                                                             ContractTermsPoly (..),
                                                                              TermValidationError (..))
 import qualified Language.Marlowe.ACTUS.Domain.Ops                          as O (ActusNum (..), YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
                                                                              calculationDay)
 import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator                 (invoice)
-import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, letval, letval', marloweTime,
-                                                                             timeToSlotNumber, toMarloweFixedPoint,
-                                                                             useval)
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, marloweTime, timeToSlotNumber,
+                                                                             toMarloweFixedPoint, useval)
 import           Language.Marlowe.ACTUS.Model.APPL.Applicability            (validateTerms)
 import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
 import           Language.Marlowe.ACTUS.Model.POF.PayoffFs                  (payoffFs)
@@ -65,35 +64,24 @@ genFsContract' ::
   ContractTerms ->
   Contract
 genFsContract' rf ct =
-  let gen :: (CashFlow, LocalTime, EventType, Slot, Integer) -> Contract -> Reader (CtxSTF Double LocalTime) Contract
-      gen (cf, sd, ev, date, i) cont =
-        let t :: LocalTime
-            t = cashCalculationDay cf
+  let gen :: (CashFlow, LocalTime, EventType, Slot, Integer, ContractStateMarlowe) -> Contract -> Contract
+      gen (cf, sd, ev, date, i, st) cont =
+        let ora = inquiryFs ev ("_" ++ show i) date "oracle" (context <$> constraints ct)
+            pof = payoffFs ev (riskFactorAt i) ct st sd (cashCalculationDay cf)
+         in ora $ maybe cont (payoff i cf date cont) pof
 
-            comment :: EventType -> Contract -> Contract
-            comment IED = letval "IED" i (constnt 0)
-            comment MD  = letval "MD" i (constnt 0)
-            comment IP  = letval ("IP:" ++ show t ++ show sd) i (constnt 0)
-            comment RR  = letval ("RR:" ++ show t) i (constnt 0)
-            comment FP  = letval ("FP:" ++ show t) i (constnt 0)
-            comment _   = id
+      stf :: Reader (CtxSTF Double LocalTime) ContractStateMarlowe -> (CashFlow, LocalTime, EventType, Integer) -> Reader (CtxSTF Double LocalTime) ContractStateMarlowe
+      stf r (cf, sd, ev, i) = r >>= FS.stateTransition ev (riskFactorAt i) sd (cashCalculationDay cf)
 
-            oracle_i = let ac = context <$> constraints ct in inquiryFs ev ("_" ++ show i) date "oracle" ac
-            st_i = stateAt i sd
-            rf_i = riskFactorAt i
-            pof_i c = maybe c (payoff i cf date c) (payoffFs ev rf_i ct st_i sd t)
-         in do stf <- stateToContract i <$> FS.stateTransition ev rf_i sd t st_i
-               return $ oracle_i $ comment ev $ stf $ pof_i cont
+      projectedCashflows = genProjectedCashflows rf ct
+      eventTypesOfCashflows = cashEvent <$> projectedCashflows
+      paymentDayCashflows = Slot . timeToSlotNumber . cashPaymentDay <$> projectedCashflows
+      previousDates = statusDate ct : (cashCalculationDay <$> projectedCashflows)
 
-      scheduleAcc :: Reader (CtxSTF Double LocalTime) Contract
-      scheduleAcc =
-        let projectedCashflows = genProjectedCashflows rf ct
-            eventTypesOfCashflows = cashEvent <$> projectedCashflows
-            paymentDayCashflows = Slot . timeToSlotNumber . cashPaymentDay <$> projectedCashflows
-            previousDates = statusDate ct : (cashCalculationDay <$> projectedCashflows)
-         in foldrM gen (postProcess Close) $
-              L.zip5 projectedCashflows previousDates eventTypesOfCashflows paymentDayCashflows [1 ..]
-   in runReader (stateInitialisation <$> initializeState <*> scheduleAcc) initCtx
+      st0 = transform <$> initializeState
+      states = runReader (sequence $ scanl' stf st0 $ L.zip4 projectedCashflows previousDates eventTypesOfCashflows [1 ..]) initCtx
+
+   in foldr gen (postProcess Close) $ L.zip6 projectedCashflows previousDates eventTypesOfCashflows paymentDayCashflows [1 ..] states
   where
     fpSchedule, prSchedule, ipSchedule :: [LocalTime]
     fpSchedule = calculationDay <$> schedule FP ct
@@ -103,52 +91,22 @@ genFsContract' rf ct =
     initCtx :: CtxSTF Double LocalTime
     initCtx = CtxSTF ct fpSchedule prSchedule ipSchedule (S.maturity ct)
 
-    stateToContract :: Integer -> ContractStateMarlowe -> Contract -> Contract
-    stateToContract i ContractStatePoly {..} =
-      letval' "tmd" i tmd
-        . letval "nt" i nt
-        . letval "ipnr" i ipnr
-        . letval "ipac" i ipac
-        . letval "feac" i feac
-        . letval "nsc" i nsc
-        . letval "isc" i isc
-        . letval "sd" i sd
-        . letval "prnxt" i prnxt
-        . letval "ipcb" i ipcb
-        . letval' "xa" i xa
-        . letval' "xd" i xd
-
-    stateInitialisation :: ContractState -> Contract -> Contract
-    stateInitialisation ContractStatePoly {..} =
-      letval' "tmd" 0 (marloweTime <$> tmd)
-        . letval "nt" 0 (constnt nt)
-        . letval "ipnr" 0 (constnt ipnr)
-        . letval "ipac" 0 (constnt ipac)
-        . letval "feac" 0 (constnt feac)
-        . letval "nsc" 0 (constnt nsc)
-        . letval "isc" 0 (constnt isc)
-        . letval "sd" 0 (marloweTime sd)
-        . letval "prnxt" 0 (constnt prnxt)
-        . letval "ipcb" 0 (constnt ipcb)
-        . letval' "xa" 0 (constnt <$> xa)
-        . letval' "xd" 0 (marloweTime <$> xd)
-
-    stateAt :: Integer -> LocalTime -> ContractStateMarlowe
-    stateAt i sd =
+    transform :: ContractState -> ContractStateMarlowe
+    transform st =
       ContractStatePoly
-        { nsc = useval "nsc" $ pred i,
-          nt = useval "nt" $ pred i,
-          isc = useval "isc" $ pred i,
-          ipac = useval "ipac" $ pred i,
-          feac = useval "feac" $ pred i,
-          ipnr = useval "ipnr" $ pred i,
-          ipcb = useval "ipcb" $ pred i,
-          xa = Just $ useval "xa" $ pred i,
-          xd = Just $ useval "xd" $ pred i,
-          prnxt = useval "prnxt" $ pred i,
-          tmd = Just $ useval "tmd" i,
-          prf = PRF_DF,
-          sd = useval "sd" (timeToSlotNumber sd)
+        { nsc = constnt $ nsc st,
+          nt = constnt $ nt st,
+          isc = constnt $ isc st,
+          ipac = constnt $ ipac st,
+          feac = constnt $ feac st,
+          ipnr = constnt $ ipnr st,
+          ipcb = constnt $ ipcb st,
+          xa = constnt <$> xa st,
+          xd = marloweTime <$> xd st,
+          prnxt = constnt $ prnxt st,
+          tmd = marloweTime <$> tmd st,
+          prf = prf st,
+          sd = marloweTime $ sd st
         }
 
     riskFactorAt :: Integer -> RiskFactorsMarlowe

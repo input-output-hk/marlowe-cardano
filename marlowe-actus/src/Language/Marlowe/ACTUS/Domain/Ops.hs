@@ -73,11 +73,6 @@ instance DateOps LocalTime Double where
 instance YearFractionOps LocalTime Double where
     _y = yearFraction
 
-instance YearFractionOps (Value Observation) (Value Observation) where
-    _y DCC_A_360 _ _ _ = undefined
-    _y DCC_A_365 _ _ _ = undefined
-    _y _ _ _ _         = error "not available"
-
 instance ActusOps (Value Observation) where
     _min a b = Cond (ValueLT a b) a b
     _max a b = Cond (ValueGT a b) a b

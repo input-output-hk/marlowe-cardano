@@ -15,6 +15,7 @@ import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..
 import           Language.Marlowe.ACTUS.Domain.ContractTerms
 import           Language.Marlowe.ACTUS.Generator.GeneratorFs
 import           Language.Marlowe.ACTUS.Generator.GeneratorStatic
+import           Language.Marlowe.Pretty
 import qualified Ledger.Value                                     as Val
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -54,7 +55,7 @@ ex_pam1 =
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genFsContract defaultRiskFactors ct of
           Failure _ -> assertFailure "Terms validation should not fail"
-          Success contract ->
+          Success contract -> -- writeFile "pam1.marlowe" (show $ contract) >>
             let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
                 ip = IDeposit (Role "party") "party" ada 200
                 redemption = IDeposit (Role "party") "party" ada 10000
@@ -80,7 +81,7 @@ ex_pam1 =
                     (emptyState 0)
                     contract
              in case out of
-                  Error _ -> assertFailure "Transactions are not expected to fail"
+                  Error err -> assertFailure $ "Transactions are not expected to fail: " ++ show err
                   TransactionOutput txWarn txPay _ con -> do
                     assertBool "Contract is in Close" $ con == Close
                     assertBool "No warnings" $ null txWarn
@@ -115,7 +116,7 @@ ex_lam1 =
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genFsContract defaultRiskFactors ct of
           Failure _ -> assertFailure "Terms validation should not fail"
-          Success contract -> do
+          Success contract -> -- writeFile "lam1.marlowe" (show $ pretty contract) >>
             let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
                 pr i = IDeposit (Role "party") "party" ada i
                 ip i = IDeposit (Role "party") "party" ada i
@@ -176,7 +177,7 @@ ex_nam1 =
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genFsContract defaultRiskFactors ct of
         Failure _ -> assertFailure "Terms validation should not fail"
-        Success contract -> do
+        Success contract -> -- writeFile "nam1.marlowe" (show $ contract) >>
           let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
               pr i = IDeposit (Role "party") "party" ada i
               ip i = IDeposit (Role "party") "party" ada i
@@ -237,7 +238,7 @@ ex_ann1 =
       ( \err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct -> case genFsContract defaultRiskFactors ct of
         Failure _ -> assertFailure "Terms validation should not fail"
-        Success contract -> do
+        Success contract -> -- writeFile "ann1.marlowe" (show $ pretty contract) >>
           let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
               pr i = IDeposit (Role "party") "party" ada i
               ip i = IDeposit (Role "party") "party" ada i
@@ -281,7 +282,7 @@ ex_optns1 =
     msg err = putStr err
     run ct = case genStaticContract rf ct of
       Failure _ -> assertFailure "Terms validation should not fail"
-      Success contract -> -- Prelude.writeFile "option2.marlowe" (show $ pretty contract)
+      Success contract -> -- writeFile "optns1.marlowe" (show $ pretty contract) >>
           let principal = IDeposit (Role "counterparty") "counterparty" ada
               ex = IDeposit (Role "party") "party" ada
               out =
