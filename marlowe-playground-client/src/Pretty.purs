@@ -1,7 +1,6 @@
 module Pretty where
 
 import Prologue
-
 import Data.Array (concat, drop, dropWhile, length, replicate, take)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt

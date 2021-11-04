@@ -1,7 +1,6 @@
 module Component.CurrencyInput where
 
 import Prologue hiding (div)
-
 import Control.MonadZero (guard)
 import Data.Array (replicate, (!!))
 import Data.BigInt.Argonaut (BigInt)
@@ -32,13 +31,13 @@ currencyInput =
   Hooks.component \{ outputToken } input@{ classList, prefix, numDecimals } -> Hooks.do
     Tuple value valueId <- Hooks.useState $ showBigIntAsCurrency input.value $ max 0 numDecimals
     Hooks.captures { value } Hooks.useTickEffect do
-      let parsed = parseInput numDecimals value
+      let
+        parsed = parseInput numDecimals value
       Hooks.put valueId
         $ flip showBigIntAsCurrency (max 0 numDecimals)
         $ fromMaybe zero parsed
       traverse_ (Hooks.raise outputToken) $ filter (_ /= input.value) parsed
       pure Nothing
-
     Hooks.pure do
       HH.div
         [ classNames
@@ -94,7 +93,7 @@ currencyInput =
     LT -> pad (numDecimals - providedDecimals) value
     EQ -> value
     where
-          providedDecimals = maybe 0 length $ split dot value !! 1
+    providedDecimals = maybe 0 length $ split dot value !! 1
 
   pad num value = value <> fromCharArray (replicate num '0')
 

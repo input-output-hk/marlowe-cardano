@@ -1,7 +1,6 @@
 module Page.Simulation.View where
 
 import Prologue hiding (div)
-
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
 import Component.CurrencyInput (currencyInput)
@@ -204,7 +203,7 @@ sidebar metadata state = case view (_marloweState <<< _Head <<< _executionState)
     ]
 
 ------------------------------------------------------------
-type TemplateFormDisplayInfo :: forall a action. a -> action -> Type
+  type TemplateFormDisplayInfo :: forall a action. a -> action -> Type
 type TemplateFormDisplayInfo a action
   = { lookupFormat :: String -> Maybe (String /\ Int) -- Gets the format for a given key
     , lookupDefinition :: String -> Maybe String -- Gets the definition for a given key
@@ -281,6 +280,7 @@ integerTemplateParameters ::
 integerTemplateParameters actionGen { lookupFormat, lookupDefinition, typeName, title, prefix, orderedMetadataSet } content =
   let
     ref key = "template-parameter-" <> key
+
     parameterHint key =
       maybe []
         ( \explanation ->
@@ -469,6 +469,7 @@ inputItem metadata _ (DepositInput accountId party token value) =
 inputItem metadata _ (ChoiceInput choiceId@(ChoiceId choiceName choiceOwner) bounds chosenNum) =
   let
     ref = "choice-hint-" <> choiceName
+
     choiceHint =
       maybe (div_ [])
         ( \explanation ->
