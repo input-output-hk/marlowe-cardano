@@ -8,6 +8,7 @@ import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
@@ -143,7 +144,7 @@ instance decodeJsonTimeout :: DecodeJson Timeout where
           json
 
 instance showTimeout :: Show Timeout where
-  show (Slot x) = show x
+  show (Slot x) = BigInt.toString x
   show v = genericShow v
 
 instance prettyTimeout :: Pretty Timeout where
@@ -294,6 +295,7 @@ instance decodeJsonValue :: DecodeJson Value where
           <|> (Cond <$> if_ <*> then_ <*> else_)
 
 instance showValue :: Show Value where
+  show (Constant c) = BigInt.toString c
   show v = genericShow v
 
 instance prettyValue :: Pretty Value where

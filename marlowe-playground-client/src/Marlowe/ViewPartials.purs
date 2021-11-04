@@ -4,6 +4,7 @@ import Prologue hiding (div)
 import Component.Hint.State (hint)
 import Component.Popper (Placement(..))
 import Data.Array (mapWithIndex)
+import Data.BigInt.Argonaut as BigInt
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -50,7 +51,7 @@ displayWarning index (TransactionNonPositiveDeposit party owner tok amount) =
   , text " - Party "
   , b_ [ text $ show party ]
   , text " is asked to deposit "
-  , b_ [ text $ show amount ]
+  , b_ [ text $ BigInt.toString amount ]
   , text " units of "
   , b_ [ text $ showPrettyToken tok ]
   , text " into account of "
@@ -62,7 +63,7 @@ displayWarning index (TransactionNonPositivePay owner payee tok amount) =
   [ b_ [ text "Non-positive pay" ]
   , warningHint index "A non-positive pay is when the contract needs to pay a participant a value which is 0 or lower."
   , text " - The contract is supposed to make a payment of "
-  , b_ [ text $ show amount ]
+  , b_ [ text $ BigInt.toString amount ]
   , text " units of "
   , b_ [ text $ showPrettyToken tok ]
   , text " from account of "
@@ -80,7 +81,7 @@ displayWarning index (TransactionPartialPay owner payee tok amount expected) =
   [ b_ [ text "Partial pay" ]
   , warningHint index "A partial pay is when the contract needs to pay a participant a value grater than the funds available in the origin account."
   , text " - The contract is supposed to make a payment of "
-  , b_ [ text $ show expected ]
+  , b_ [ text $ BigInt.toString expected ]
   , text " units of "
   , b_ [ text $ showPrettyToken tok ]
   , text " from account of "
@@ -92,7 +93,7 @@ displayWarning index (TransactionPartialPay owner payee tok amount expected) =
           (Party dest) -> ("party " <> (show dest))
       ]
   , text " but there is only "
-  , b_ [ text $ show amount ]
+  , b_ [ text $ BigInt.toString amount ]
   , text "."
   ]
 
@@ -102,9 +103,9 @@ displayWarning index (TransactionShadowing valId oldVal newVal) =
   , text " - The contract defined the value with id "
   , b_ [ text (show valId) ]
   , text " before, it was assigned the value "
-  , b_ [ text (show oldVal) ]
+  , b_ [ text (BigInt.toString oldVal) ]
   , text " and now it is being assigned the value "
-  , b_ [ text (show newVal) ]
+  , b_ [ text (BigInt.toString newVal) ]
   , text "."
   ]
 

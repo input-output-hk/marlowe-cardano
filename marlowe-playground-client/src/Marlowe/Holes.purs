@@ -7,6 +7,7 @@ import Data.Argonaut.Decode.Aeson as D
 import Data.Array (foldl, foldMap, mapMaybe)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
 import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
@@ -271,7 +272,7 @@ constructMarloweType constructorName (MarloweHole { location }) m = case Map.loo
 
   showArgument (DefaultString arg) = "\"" <> arg <> "\""
 
-  showArgument (DefaultNumber arg) = show arg
+  showArgument (DefaultNumber arg) = BigInt.toString arg
 
   showArgument (DefaultRational arg) = show arg
 

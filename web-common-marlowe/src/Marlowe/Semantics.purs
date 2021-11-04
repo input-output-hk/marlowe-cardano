@@ -15,6 +15,7 @@ import Data.Array (catMaybes, (!!))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Either (note')
 import Data.Foldable (class Foldable, any, foldl, minimum)
 import Data.FoldableWithIndex (foldMapWithIndex)
@@ -237,7 +238,8 @@ derive instance eqSlot :: Eq Slot
 
 derive instance ordSlot :: Ord Slot
 
-derive newtype instance showSlot :: Show Slot
+instance showSlot :: Show Slot where
+  show (Slot s) = BigInt.toString s
 
 derive newtype instance semiRingSlot :: Semiring Slot
 
@@ -266,7 +268,8 @@ derive instance eqAda :: Eq Ada
 
 derive instance ordAda :: Ord Ada
 
-derive newtype instance showAda :: Show Ada
+instance showAda :: Show Ada where
+  show (Lovelace a) = BigInt.toString a
 
 derive newtype instance semiringAda :: Semiring Ada
 
@@ -663,7 +666,7 @@ instance decodeJsonBound :: DecodeJson Bound where
       <$> (Bound <$> requireProp "from" <*> requireProp "to")
 
 instance showBound :: Show Bound where
-  show = genericShow
+  show (Bound from to) = "(Bound " <> BigInt.toString from <> " " <> BigInt.toString to <> ")"
 
 instance prettyBound :: Pretty Bound where
   pretty v = genericPretty v

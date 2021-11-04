@@ -14,7 +14,7 @@ import Control.Monad.Reader (class MonadAsk)
 import Data.Array (head, last)
 import Data.Array (length, take) as Array
 import Data.BigInt.Argonaut (BigInt)
-import Data.BigInt.Argonaut (fromInt, fromString) as BigInt
+import Data.BigInt.Argonaut (fromInt, fromString, toString) as BigInt
 import Data.Int (pow) as Int
 import Data.Lens (assign, set, use, view)
 import Data.Maybe (fromMaybe)
@@ -141,15 +141,15 @@ getBigIntValue TimeFormat value = (BigInt.fromInt 60) * (fromMaybe zero $ BigInt
 --    for small negative values will just be a minus sign, so a zero needs to be added in these
 --    cases.
 formatBigIntValue :: NumberFormat -> BigInt -> String
-formatBigIntValue DefaultFormat value = show value
+formatBigIntValue DefaultFormat value = BigInt.toString value
 
 formatBigIntValue (DecimalFormat decimals _) value =
   let
     string =
       if value < zero then
-        "-" <> (leftPadTo decimals "0" $ String.drop 1 $ show value)
+        "-" <> (leftPadTo decimals "0" $ String.drop 1 $ BigInt.toString value)
       else
-        leftPadTo decimals "0" $ show value
+        leftPadTo decimals "0" $ BigInt.toString value
 
     len = String.length string
 
@@ -165,7 +165,7 @@ formatBigIntValue (DecimalFormat decimals _) value =
     else
       decimalString <> "." <> fractionalString
 
-formatBigIntValue TimeFormat value = show $ value / (BigInt.fromInt 60)
+formatBigIntValue TimeFormat value = BigInt.toString $ value / (BigInt.fromInt 60)
 
 validate :: forall e. InputFieldError e => State e -> Maybe e
 validate state =

@@ -6,6 +6,7 @@ module StaticAnalysis.BottomPanel
 
 import Prologue hiding (div)
 import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Lens ((^.))
 import Data.List (List, null, toUnfoldable)
 import Data.List as List
@@ -99,7 +100,7 @@ analysisResultPane metadata actionGen state =
                     ]
                 , li_
                     [ spanText "Initial slot: "
-                    , b_ [ spanText (show initialSlot) ]
+                    , b_ [ spanText (BigInt.toString initialSlot) ]
                     ]
                 , li_
                     [ spanText "Offending transaction list: "

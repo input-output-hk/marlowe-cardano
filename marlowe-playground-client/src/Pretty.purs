@@ -71,4 +71,4 @@ showPrettyChoice DefaultFormat num = showBigIntAsCurrency num 0
 
 showPrettyChoice (DecimalFormat numDecimals strLabel) num = strLabel <> " " <> showBigIntAsCurrency num numDecimals
 
-showPrettyChoice TimeFormat num = show num
+showPrettyChoice TimeFormat num = BigInt.toString num

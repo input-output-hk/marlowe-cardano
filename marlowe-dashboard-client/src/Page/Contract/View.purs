@@ -20,6 +20,7 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.BigInt.Argonaut (BigInt, fromString)
+import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
@@ -447,7 +448,7 @@ renderPartyPastActions { tzOffset } state { inputs, interval, party } =
           --       to detect if this is a single option or not, but we don't have the bounds of the choice
           --       available here. We could later add a way to get that from the contract or rethink the
           --       different constructs of When to properly include a single option and an enum.
-          , span_ [ text $ show chosenNum <> " for " ]
+          , span_ [ text $ BigInt.toString chosenNum <> " for " ]
           , span [ classNames [ "font-semibold" ] ] [ text choiceIdKey ]
           ]
       _ -> div_ []
@@ -773,8 +774,8 @@ renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
             , type_ InputNumber
             , enabled $ isActiveParticipant || debugMode
             , maybe'
-                (\_ -> placeholder $ "Choose between " <> show minBound <> " and " <> show maxBound)
-                (value <<< show)
+                (\_ -> placeholder $ "Choose between " <> BigInt.toString minBound <> " and " <> BigInt.toString maxBound)
+                (value <<< BigInt.toString)
                 mChosenNum
             , onValueInput_ $ ChangeChoice choiceId <<< fromString
             ]
