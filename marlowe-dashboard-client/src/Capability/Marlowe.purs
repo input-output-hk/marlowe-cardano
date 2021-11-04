@@ -41,7 +41,6 @@ import Data.Map (Map, fromFoldable)
 import Data.Newtype (unwrap, un)
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
-import Env (DataProvider(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
@@ -54,10 +53,7 @@ import Wallet.Emulator.Wallet (Wallet(..)) as Back
 import WebSocket.Support as WS
 
 -- The `ManageMarlowe` class provides a window on the `ManageContract` and `ManageWallet`
--- capabilities with functions specific to Marlowe. Or rather, it does when the
--- `dataProvider` env variable is set to `PAB`. When it is set to `LocalStorage`, these functions
--- instead provide what is needed to mimic real PAB behaviour in the frontend.
--- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
+-- capabilities with functions specific to Marlowe.
 class
   (ManageContract m, ManageMarloweStorage m, ManageWallet m) <= ManageMarlowe m where
   createWallet :: m (AjaxResponse WalletDetails)
@@ -250,9 +246,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
 sendWsMessage msg = do
   wsManager <- asks _.wsManager
-  dataProvider <- asks _.dataProvider
-  when (dataProvider == MarlowePAB)
-    $ liftAff
+  liftAff
     $ WS.managerWriteOutbound wsManager
     $ WS.SendMessage msg
 

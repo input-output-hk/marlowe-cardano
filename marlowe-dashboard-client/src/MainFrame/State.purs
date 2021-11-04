@@ -10,7 +10,6 @@ import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _previousCompanionAppState, _wallet, _walletInfo)
 import Control.Monad.Reader (class MonadAsk)
-import Control.Monad.Reader.Class (ask)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Foldable (for_)
 import Data.Lens (assign, set, use, view)
@@ -21,10 +20,9 @@ import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
-import Env (DataProvider(..), Env)
-import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_, subscribe)
+import Env (Env)
+import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
-import Halogen.LocalStorage (localStorageEvents)
 import Humanize (getTimezoneOffset)
 import MainFrame.Lenses (_currentSlot, _dashboardState, _subState, _toast, _tzOffset, _webSocketStatus, _welcomeState)
 import MainFrame.Types (Action(..), ChildSlots, Msg, Query(..), State, WebSocketStatus(..))
@@ -246,8 +244,6 @@ handleAction Init = do
   modify_
     $ set (_welcomeState <<< _walletLibrary) walletLibrary
     <<< set _tzOffset tzOffset
-  { dataProvider } <- ask
-  when (dataProvider == LocalStorage) (void $ subscribe $ localStorageEvents $ const $ DashboardAction $ Dashboard.UpdateFromStorage)
 
 {- [Workflow 3][1] Disconnect a wallet
 

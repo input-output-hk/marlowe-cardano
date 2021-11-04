@@ -8,8 +8,7 @@ import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (forkAff, launchAff_)
 import Effect.Class (liftEffect)
-import Effect.Unsafe (unsafePerformEffect)
-import Env (DataProvider(..), Env, WebSocketManager)
+import Env (Env, WebSocketManager)
 import Halogen (hoist)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
@@ -25,7 +24,6 @@ mkEnvironment wsManager = do
   pure
     { ajaxSettings: { baseURL: "/" }
     , contractStepCarouselSubscription
-    , dataProvider: MarlowePAB
     , marloweAppEndpointMutex
     , wsManager
     }

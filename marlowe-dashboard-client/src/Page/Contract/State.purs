@@ -24,7 +24,6 @@ import Component.Contacts.Types (WalletDetails, WalletNickname)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Transfer.Types (Termini(..), Transfer, Participant)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.Reader.Class (ask)
 import Data.Array (difference, filter, foldl, index, length, mapMaybe, modifyAt, null)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
@@ -51,7 +50,7 @@ import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
-import Env (DataProvider(..), Env)
+import Env (Env)
 import Halogen (HalogenM, getHTMLElementRef, liftEffect, put, subscribe, tell, unsubscribe)
 import Halogen.Subscription as HS
 import MainFrame.Types (Action(..)) as MainFrame
@@ -259,8 +258,6 @@ handleAction { currentSlot, walletDetails } (ConfirmAction namedAction) =
         put $ Started started { pendingTransaction = Just txInput }
         void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult (Milliseconds 600.0) (Right "")
         addToast $ successToast "Transaction submitted, awating confirmation."
-        { dataProvider } <- ask
-        when (dataProvider == LocalStorage) (callMainFrameAction $ MainFrame.DashboardAction $ Dashboard.UpdateFromStorage)
 
 handleAction _ (ChangeChoice choiceId chosenNum) = modifying (_Started <<< _namedActions <<< traversed <<< _2 <<< traversed) changeChoice
   where
