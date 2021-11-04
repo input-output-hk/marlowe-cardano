@@ -42,7 +42,6 @@ let
         web-common-marlowe = webCommonMarlowe;
         generated = generated-purescript;
       };
-      packages = pkgs.callPackage ./packages.nix { };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {

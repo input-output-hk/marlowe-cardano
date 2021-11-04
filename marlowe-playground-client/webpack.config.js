@@ -7,15 +7,16 @@ const path = require("path");
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
-const plugins =
-    isDevelopment ? [] : [
-        function () {
-            this.plugin("done", function (stats) {
-                process.stderr.write(stats.toString("errors-only"));
-            });
-        }
-    ]
-;
+class ErrorReportingPlugin {
+    apply(compiler) {
+        compiler.hooks.done.tap(
+            "ErrorReportingPlugin",
+            (stats) => process.stderr.write(stats.toString("errors-only")),
+        );
+    }
+}
+
+const plugins = isDevelopment ? [] : [new ErrorReportingPlugin()];
 
 // source map adds 20Mb to the output!
 const devtool = isDevelopment ? "eval-source-map" : false;
