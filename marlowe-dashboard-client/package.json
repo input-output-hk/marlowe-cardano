@@ -10,7 +10,7 @@
     "install:spago": "spago install",
     "docs": "spago docs",
     "repl": "spago repl",
-    "start": "marlowe-pab-generate-purs && npm run install:spago && npm run build:webpack:dev"
+    "start": "marlowe-pab-generate-purs && npm install && npm run install:spago && npm run build:webpack:dev"
   },
   "resolutions": {},
   "license": "Apache-2.0",

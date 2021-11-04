@@ -203,8 +203,7 @@ sidebar metadata state = case view (_marloweState <<< _Head <<< _executionState)
     ]
 
 ------------------------------------------------------------
-  type TemplateFormDisplayInfo :: forall a action. a -> action -> Type
-type TemplateFormDisplayInfo a action
+type TemplateFormDisplayInfo
   = { lookupFormat :: String -> Maybe (String /\ Int) -- Gets the format for a given key
     , lookupDefinition :: String -> Maybe String -- Gets the definition for a given key
     , typeName :: IntegerTemplateType -- Identifier for the type of template we are displaying
@@ -271,10 +270,10 @@ startSimulationWidget metadata { initialSlot, templateContent } =
     )
 
 integerTemplateParameters ::
-  forall a action m.
+  forall action m.
   MonadAff m =>
   (IntegerTemplateType -> String -> BigInt -> action) ->
-  TemplateFormDisplayInfo a action ->
+  TemplateFormDisplayInfo ->
   Map String BigInt ->
   Array (ComponentHTML action ChildSlots m)
 integerTemplateParameters actionGen { lookupFormat, lookupDefinition, typeName, title, prefix, orderedMetadataSet } content =
