@@ -47,7 +47,7 @@ import           Language.Marlowe.Util           (extractNonMerkleizedContractRo
 import           Ledger                          (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
                                                   TxOut (..), inScripts, txOutValue)
 import qualified Ledger
-import           Ledger.Ada                      (adaSymbol, adaValueOf)
+import           Ledger.Ada                      (adaSymbol, adaToken, adaValueOf)
 import           Ledger.Address                  (pubKeyHashAddress, scriptHashAddress)
 import           Ledger.Constraints
 import qualified Ledger.Constraints              as Constraints
@@ -102,7 +102,7 @@ data PartyAction
              | WaitForTimeout Slot
              | WaitOtherActionUntil Slot
              | NotSure
-             | CloseContract
+             | CloseContract [Payment]
   deriving (Show)
 
 type RoleOwners = AssocMap.Map Val.TokenName PubKeyHash
@@ -240,13 +240,18 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
+        ownPubKey <- Contract.ownPubKeyHash
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners contract
         slot <- currentSlot
         let StateMachineClient{scInstance} = mkMarloweClient params
         let marloweData = MarloweData {
                 marloweContract = contract,
-                marloweState = emptyState slot }
-        let payValue = adaValueOf 0
+                marloweState = State
+                    { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) 1000000
+                    , choices  = AssocMap.empty
+                    , boundValues = AssocMap.empty
+                    , minSlot = slot } }
+        let payValue = adaValueOf 1
         let SM.StateMachineInstance{SM.typedValidator} = scInstance
         let tx = mustPayToTheScript marloweData payValue <> distributeRoleTokens
         let lookups = Constraints.typedValidatorLookups typedValidator <> lkps
@@ -367,11 +372,21 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                     Transition _ _ marloweData -> continueWith marloweData
                     InitialState _ marloweData -> continueWith marloweData
 
-            CloseContract -> do
+            CloseContract payments -> do
                 logInfo @String $ "CloseContract"
-                tell $ OK reqId "auto"
-                marlowePlutusContract
+                let closeContract = do
+                        marloweData <- SM.runStep theClient (slotRange, [])
+                        case marloweData of
+                            SM.TransitionFailure e -> throwing _TransitionError e
+                            SM.TransitionSuccess d -> do
+                                tell $ OK reqId "auto"
+                                marlowePlutusContract
 
+                catching _StateMachineError closeContract $ \err -> do
+                    logWarn @String $ "Error " <> show err
+                    logInfo @String $ "Retry CloseContract in 2 slots"
+                    _ <- awaitSlot (slot + 2)
+                    continueWith marloweData
             NotSure -> do
                 logInfo @String $ "NotSure"
                 tell $ OK reqId "auto"
@@ -428,7 +443,7 @@ getAction :: MarloweSlotRange -> Party -> MarloweData -> PartyAction
 getAction slotRange party MarloweData{marloweContract,marloweState} = let
     env = Environment slotRange
     in case reduceContractUntilQuiescent env marloweState marloweContract of
-        ContractQuiescent _reduced _warnings _payments state contract ->
+        ContractQuiescent _reduced _warnings payments state contract ->
             -- here the contract is either When or Close
             case contract of
                 When [Case (Deposit acc depositParty tok value) _] _ _
@@ -439,7 +454,7 @@ getAction slotRange party MarloweData{marloweContract,marloweState} = let
                     | party /= depositParty    ->
                         WaitOtherActionUntil timeout
                 When [] timeout _ -> WaitForTimeout timeout
-                Close -> CloseContract
+                Close -> CloseContract payments
                 _ -> NotSure
         -- When timeout is in the slot range
         RRAmbiguousSlotIntervalError ->
