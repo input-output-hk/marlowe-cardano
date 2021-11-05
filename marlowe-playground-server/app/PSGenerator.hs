@@ -183,7 +183,7 @@ myTypes =
     , argonaut $ mkSumType @CT.AssertionContext
     , argonaut $ mkSumType @Webghc.CompileRequest
     , argonaut $ mkSumType @SC.CashFlow
-    , argonaut $ mkSumType @BV.EventType
+    , equal . order . genericShow . argonaut $ mkSumType @BV.EventType
     ]
 
 mySettings :: Settings
