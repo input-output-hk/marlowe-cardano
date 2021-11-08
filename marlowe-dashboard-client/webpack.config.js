@@ -75,6 +75,7 @@ module.exports = {
                                 : [
                                     '.spago/*/*/src/**/*.purs',
                                     'src/**/*.purs',
+                                    'test/**/*.purs',
                                     'generated/**/*.purs',
                                     "web-common-marlowe/src/**/*.purs",
                                 ],

@@ -12,6 +12,7 @@ You can edit this file as you like.
   , "arrays"
   , "avar"
   , "bifunctors"
+  , "console"
   , "control"
   , "datetime"
   , "effect"
@@ -53,6 +54,7 @@ You can edit this file as you like.
 , packages = ../packages.dhall
 , sources =
   [ "src/**/*.purs"
+  , "test/**/*.purs"
   , "generated/**/*.purs"
   , "../web-common-marlowe/src/**/*.purs"
   ]
