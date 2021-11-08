@@ -33,7 +33,6 @@ module.exports = {
                     {
                         loader: 'purs-loader',
                         options: {
-                            bundle: false,
                             psc: "psa",
                             pscArgs: {
                                 strict: true,
@@ -41,8 +40,14 @@ module.exports = {
                                 stash: true,
                                 isLib: ["generated", ".spago"],
                             },
-                            spago: true,
-                            watch: false,
+                            src: [
+                                '.spago/*/*/src/**/*.purs',
+                                'src/**/*.purs',
+                                'test/**/*.purs',
+                                'generated/**/*.purs',
+                                "web-common-marlowe/src/**/*.purs",
+                                `${process.env.WEB_COMMON_PLAYGROUND_SRC}/src/**/*.purs`,
+                            ],
                         }
                     }
                 ]
