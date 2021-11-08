@@ -11,15 +11,13 @@ import Halogen (ComponentHTML)
 import Halogen.Classes (marlowePlayLogo)
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
-import Halogen.HTML (HTML, a, div, div_, footer, h1, header, img, main, section, slot, span, text)
+import Halogen.HTML (HTML, a, div, div_, footer, h1, header, img, main, section, span, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, id, src, target)
 import Home as Home
 import Icons (Icon(..), icon)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, View(..), _actusBlocklySlot, _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _marloweEditorState, _projectName, _simulationState, _view, hasGlobalLoading)
-import Marlowe.ActusBlockly as AMB
+import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, View(..), _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _marloweEditorState, _projectName, _simulationState, _view, hasGlobalLoading)
 import Network.RemoteData (_Loading, _Success)
-import Page.ActusBlockly as ActusBlockly
 import Page.BlocklyEditor.View as BlocklyEditor
 import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
 import Page.JavascriptEditor.View as JSEditor
@@ -87,10 +85,6 @@ render state =
                     (BlocklyEditor.render (state ^. _contractMetadata))
                     state
                 ]
-              ActusBlocklyEditor ->
-                [ slot _actusBlocklySlot unit (ActusBlockly.mkBlockly AMB.rootBlockName AMB.blockDefinitions AMB.toolbox) unit HandleActusBlocklyMessage
-                , AMB.workspaceBlocks
-                ]
           ]
       , modal state
       , globalLoadingOverlay
@@ -143,7 +137,6 @@ render state =
     HaskellEditor -> true
     JSEditor -> true
     BlocklyEditor -> true
-    ActusBlocklyEditor -> true
     Simulation -> true
     MarloweEditor -> true
     _ -> false

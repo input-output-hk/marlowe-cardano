@@ -37,7 +37,7 @@ module.exports = {
                             pscArgs: {
                                 strict: true,
                                 censorLib: true,
-                                stash: true,
+                                stash: isDevelopment,
                                 isLib: ["generated", ".spago"],
                             },
                             src: [

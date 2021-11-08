@@ -32,7 +32,7 @@ import Env (Env)
 import Gist (Gist, _GistId, gistDescription, gistId)
 import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists
-import Halogen (Component, liftEffect, query, subscribe')
+import Halogen (Component, liftEffect, subscribe')
 import Halogen as H
 import Halogen.Analytics (withAnalytics)
 import Halogen.Extra (mapSubmodule)
@@ -41,16 +41,14 @@ import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
 import Halogen.Query.Event (eventListener)
 import LoginPopup (openLoginPopup, informParentAndClose)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), Query(..), State, View(..), _actusBlocklySlot, _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _loadGistResult, _marloweEditorState, _projectName, _projects, _rename, _saveAs, _showBottomPanel, _showModal, _simulationState, _view, _workflow, sessionToState, stateToSession)
+import MainFrame.Types (Action(..), ChildSlots, ModalView(..), Query(..), State, View(..), _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _loadGistResult, _marloweEditorState, _projectName, _projects, _rename, _saveAs, _showBottomPanel, _showModal, _simulationState, _view, _workflow, sessionToState, stateToSession)
 import MainFrame.View (render)
 import Marlowe (getApiGistsByGistId)
 import Marlowe as Server
-import Marlowe.ActusBlockly as AMB
 import Marlowe.Extended.Metadata (emptyContractMetadata, getHintsFromMetadata)
 import Marlowe.Gists (PlaygroundFiles, mkNewGist, playgroundFiles)
 import Network.RemoteData (RemoteData(..), _Success)
 import Network.RemoteData as RemoteData
-import Page.ActusBlockly as ActusBlockly
 import Page.BlocklyEditor.State as BlocklyEditor
 import Page.BlocklyEditor.Types (_marloweCode)
 import Page.BlocklyEditor.Types as BE
@@ -196,8 +194,6 @@ handleSubRoute Router.HaskellEditor = selectView HaskellEditor
 handleSubRoute Router.JSEditor = selectView JSEditor
 
 handleSubRoute Router.Blockly = selectView BlocklyEditor
-
-handleSubRoute Router.ActusBlocklyEditor = selectView ActusBlocklyEditor
 
 -- This route is supposed to be called by the github oauth flow after a succesful login flow
 -- It is supposed to be run inside a popup window
@@ -378,24 +374,6 @@ handleAction (ShowBottomPanel val) = do
   assign _showBottomPanel val
   pure unit
 
-handleAction (HandleActusBlocklyMessage ActusBlockly.Initialized) = pure unit
-
-handleAction (HandleActusBlocklyMessage (ActusBlockly.CurrentTerms flavour terms)) = do
-  let
-    parsedTermsEither = AMB.parseActusJsonCode terms
-  case parsedTermsEither of
-    Left e -> void $ query _actusBlocklySlot unit (ActusBlockly.SetError ("Couldn't parse contract-terms - " <> (show e)) unit)
-    Right parsedTerms -> do
-      result <- case flavour of
-        ActusBlockly.FS -> runAjax $ Server.postApiActusGenerate parsedTerms
-        ActusBlockly.F -> runAjax $ Server.postApiActusGeneratestatic parsedTerms
-      case result of
-        Success contractAST -> sendToSimulation contractAST
-        Failure e -> void $ query _actusBlocklySlot unit (ActusBlockly.SetError ("Server error! " <> printAjaxError e) unit)
-        _ -> void $ query _actusBlocklySlot unit (ActusBlockly.SetError "Unknown server error!" unit)
-
-handleAction (HandleActusBlocklyMessage ActusBlockly.CodeChange) = setUnsavedChangesForLanguage Actus true
-
 -- TODO: modify gist action type to take a gistid as a parameter
 -- https://github.com/input-output-hk/plutus/pull/2498#discussion_r533478042
 handleAction (ProjectsAction action@(Projects.LoadProject lang gistId)) = do
@@ -448,7 +426,6 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
     Blockly ->
       for_ (Map.lookup "Example" StaticData.marloweContracts) \contents -> do
         toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject contents
-    _ -> pure unit
   selectView $ selectLanguageView lang
   modify_
     ( set _showModal Nothing
@@ -481,7 +458,6 @@ handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
     Blockly -> do
       for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
         toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject contents
-    Actus -> pure unit
   where
   metadata = fromMaybe emptyContractMetadata $ Map.lookup key StaticData.demoFilesMetadata
 
@@ -574,7 +550,6 @@ selectLanguageView = case _ of
   Marlowe -> MarloweEditor
   Blockly -> BlocklyEditor
   Javascript -> JSEditor
-  Actus -> ActusBlocklyEditor
 
 routeToView :: Route -> Maybe View
 routeToView { subroute } = case subroute of
@@ -583,7 +558,6 @@ routeToView { subroute } = case subroute of
   Router.HaskellEditor -> Just HaskellEditor
   Router.MarloweEditor -> Just MarloweEditor
   Router.JSEditor -> Just JSEditor
-  Router.ActusBlocklyEditor -> Just ActusBlocklyEditor
   Router.Blockly -> Just BlocklyEditor
   Router.GithubAuthCallback -> Nothing
 
@@ -595,7 +569,6 @@ viewToRoute = case _ of
   HaskellEditor -> Router.HaskellEditor
   JSEditor -> Router.JSEditor
   BlocklyEditor -> Router.Blockly
-  ActusBlocklyEditor -> Router.ActusBlocklyEditor
 
 runAjax ::
   forall m a.
@@ -646,9 +619,6 @@ createFiles = do
     Just Javascript -> do
       javascript <- pruneEmpty <$> toJavascriptEditor JavascriptEditor.editorGetValue
       pure $ emptyFiles { javascript = javascript }
-    Just Actus -> do
-      actus <- pruneEmpty <$> H.request _actusBlocklySlot unit ActusBlockly.GetWorkspace
-      pure $ emptyFiles { actus = actus }
     Nothing -> mempty
 
 handleGistAction ::
@@ -733,7 +703,6 @@ loadGist gist = do
     , blockly
     , haskell
     , javascript
-    , actus
     , metadata: mMetadataJSON
     } = playgroundFiles gist
 
@@ -750,9 +719,6 @@ loadGist gist = do
   toMarloweEditor $ MarloweEditor.handleAction $ ME.InitMarloweProject $ fromMaybe mempty marlowe
   toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject $ fromMaybe mempty blockly
   assign _contractMetadata metadata
-  -- Actus doesn't have a SetCode to reset for the moment, so we only set if present.
-  -- TODO add SetCode to Actus
-  for_ actus \xml -> query _actusBlocklySlot unit (ActusBlockly.LoadWorkspace xml unit)
   modify_
     ( set _gistId gistId'
         <<< set _projectName description
@@ -817,7 +783,6 @@ withAccidentalNavigationGuard handleAction' action = do
   -- What actions would result in losing the work.
   actionIsGuarded = case action of
     (ChangeView HomePage) -> true
-    (ChangeView ActusBlocklyEditor) -> true
     (NewProjectAction (NewProject.CreateProject _)) -> true
     (ProjectsAction (Projects.LoadProject _ _)) -> true
     (DemosAction (Demos.LoadDemo _ _)) -> true
@@ -836,8 +801,6 @@ selectView view = do
     Window.scroll 0 0 window
   case view of
     HomePage -> modify_ (set _workflow Nothing <<< set _hasUnsavedChanges false)
-    ActusBlocklyEditor -> do
-      void $ query _actusBlocklySlot unit (ActusBlockly.Resize unit)
     _ -> pure unit
 
 ------------------------------------------------------------

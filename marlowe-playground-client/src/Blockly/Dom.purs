@@ -8,6 +8,7 @@
 -- The decision to use this intermediate representation instead of parsing the nodes directly was made
 -- because both ActusBlockly and MarloweBlockly have the same representation.
 --
+-- TODO now that ActusBlockly is going bye-bye, should this be reconsidered?
 --
 -- We can use the following Marlowe contract and it's XML representation to understand the
 -- different constructors we expose.

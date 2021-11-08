@@ -31,7 +31,6 @@ import Halogen.Monaco (KeyBindings)
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetaData)
 import Network.RemoteData (_Loading)
-import Page.ActusBlockly as AB
 import Page.BlocklyEditor.Types as BE
 import Page.HaskellEditor.Types as HE
 import Page.JavascriptEditor.Types (CompilationState)
@@ -84,7 +83,6 @@ data Action
   | ChangeView View
   | ConfirmUnsavedNavigationAction Action ConfirmUnsavedNavigation.Action
   -- blockly
-  | HandleActusBlocklyMessage AB.Message
   | ProjectsAction Projects.Action
   | NewProjectAction NewProject.Action
   | DemosAction Demos.Action
@@ -109,7 +107,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (JavascriptAction action) = toEvent action
   toEvent (MarloweEditorAction action) = toEvent action
   toEvent (ChangeView view) = Just $ (defaultEvent "View") { label = Just (show view) }
-  toEvent (HandleActusBlocklyMessage _) = Just $ (defaultEvent "HandleActusBlocklyMessage") { category = Just "ActusBlockly" }
   toEvent (ShowBottomPanel _) = Just $ defaultEvent "ShowBottomPanel"
   toEvent (ProjectsAction action) = toEvent action
   toEvent (NewProjectAction action) = toEvent action
@@ -131,7 +128,6 @@ data View
   | JSEditor
   | Simulation
   | BlocklyEditor
-  | ActusBlocklyEditor
 
 derive instance eqView :: Eq View
 
@@ -144,7 +140,6 @@ type ChildSlots
   = ( haskellEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
     , jsEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
     , blocklySlot :: H.Slot Blockly.Query Blockly.Message Unit
-    , actusBlocklySlot :: H.Slot AB.Query AB.Message Unit
     , simulationSlot :: H.Slot Simulation.Query Blockly.Message Unit
     , simulatorEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
     , marloweEditorPageSlot :: H.Slot Monaco.Query Monaco.Message Unit
@@ -161,9 +156,6 @@ _jsEditorSlot = Proxy
 
 _blocklySlot :: Proxy "blocklySlot"
 _blocklySlot = Proxy
-
-_actusBlocklySlot :: Proxy "actusBlocklySlot"
-_actusBlocklySlot = Proxy
 
 _simulationSlot :: Proxy "simulationSlot"
 _simulationSlot = Proxy
@@ -289,7 +281,6 @@ currentLang state = case state ^. _view of
   JSEditor -> Just Javascript
   Simulation -> Just Marlowe
   BlocklyEditor -> Just Blockly
-  ActusBlocklyEditor -> Just Actus
   _ -> Nothing
 
 -- This function checks wether some action that we triggered requires the global state to be present.

@@ -21,7 +21,6 @@ data SubRoute
   | MarloweEditor
   | HaskellEditor
   | JSEditor
-  | ActusBlocklyEditor
   | Blockly
   | GithubAuthCallback
 
@@ -42,7 +41,6 @@ route =
         , "HaskellEditor": "haskell" / noArgs
         , "JSEditor": "javascript" / noArgs
         , "Blockly": "blockly" / noArgs
-        , "ActusBlocklyEditor": "actus" / noArgs
         , "GithubAuthCallback": "gh-oauth-cb" / noArgs
         }
   where
