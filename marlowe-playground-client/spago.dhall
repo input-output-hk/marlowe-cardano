@@ -58,7 +58,6 @@ You can edit this file as you like.
   , "routing-duplex"
   , "servant-support"
   , "simple-json"
-  , "string-parsers"
   , "strings"
   , "tailrec"
   , "test-unit"

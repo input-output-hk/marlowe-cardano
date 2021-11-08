@@ -18,8 +18,10 @@ import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Template (IntegerTemplateType)
 import Monaco (IMarkerData)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
-import Text.Parsing.StringParser (Pos)
 import Web.HTML.Event.DragEvent (DragEvent)
+
+type Pos
+  = Int
 
 data Action
   = ChangeKeyBindings KeyBindings

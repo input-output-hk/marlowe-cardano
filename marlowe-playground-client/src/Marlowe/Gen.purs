@@ -21,7 +21,6 @@ import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..
 import Marlowe.Holes as H
 import Marlowe.Semantics (CurrencySymbol, Input(..), PubKey, Rational(..), Slot(..), SlotInterval(..), TokenName, TransactionInput(..), TransactionWarning(..))
 import Marlowe.Semantics as S
-import Text.Parsing.StringParser (Pos)
 import Type.Proxy (Proxy(..))
 
 newtype GenerationOptions
@@ -116,7 +115,7 @@ genBound = do
   to <- suchThat genBigInt (\v -> v > from)
   pure $ Bound from to
 
-genPosition :: forall m. MonadGen m => MonadRec m => m Pos
+genPosition :: forall m. MonadGen m => MonadRec m => m Int
 genPosition = chooseInt 0 1000
 
 genRange :: forall m. MonadGen m => MonadRec m => m Location

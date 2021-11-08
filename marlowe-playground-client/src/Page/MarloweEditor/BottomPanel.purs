@@ -21,7 +21,7 @@ import Marlowe.Extended.Metadata (MetaData)
 import Page.MarloweEditor.Types (Action(..), BottomPanelView(..), State, _editorErrors, _editorWarnings, _hasHoles, _metadataHintInfo, _showErrorDetail, contractHasErrors)
 import StaticAnalysis.BottomPanel (analysisResultPane, analyzeButton, clearButton)
 import StaticAnalysis.Types (_analysisExecutionState, _analysisState, isCloseAnalysisLoading, isNoneAsked, isReachabilityLoading, isStaticLoading)
-import Text.Parsing.StringParser.Basic (lines)
+import Text.Extra (lines)
 
 panelContents ::
   forall m.

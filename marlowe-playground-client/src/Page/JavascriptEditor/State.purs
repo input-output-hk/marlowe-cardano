@@ -42,7 +42,7 @@ import StaticAnalysis.StaticTools (analyseContract)
 import StaticAnalysis.Types (AnalysisExecutionState(..), _analysisExecutionState, _analysisState, _templateContent)
 import StaticData (jsBufferLocalStorageKey)
 import StaticData as StaticData
-import Text.Parsing.StringParser.Basic (lines)
+import Text.Extra (lines)
 
 toBottomPanel ::
   forall m a.
