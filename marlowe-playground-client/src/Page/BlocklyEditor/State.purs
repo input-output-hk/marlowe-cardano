@@ -1,4 +1,3 @@
--- TODO: rename modules from BlocklyEditor -> MarloweBlocklyEditor
 module Page.BlocklyEditor.State where
 
 import Prologue
