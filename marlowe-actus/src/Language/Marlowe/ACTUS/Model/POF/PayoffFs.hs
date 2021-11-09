@@ -214,6 +214,16 @@ payoffFs'
   _ _ = Just $ _POF_PRD_STK contractRole (constnt pprd)
 payoffFs'
   PRD
+  _
+  ContractTermsPoly
+    { contractType = COM,
+      priceAtPurchaseDate = Just pprd,
+      contractRole
+    }
+  _
+  _ _ = Just $ _POF_PRD_STK contractRole (constnt pprd)
+payoffFs'
+  PRD
   RiskFactorsPoly
     { o_rf_CURS
     }
@@ -262,6 +272,16 @@ payoffFs'
     }
   _
   _ _ = Just $ _POF_TD_STK contractRole (constnt ptd)
+payoffFs'
+  TD
+  _
+  ContractTermsPoly
+    { contractType = COM,
+      priceAtPurchaseDate = Just pprd,
+      contractRole
+    }
+  _
+  _ _ = Just $ _POF_PRD_STK contractRole (constnt pprd)
 payoffFs'
   TD
   RiskFactorsPoly

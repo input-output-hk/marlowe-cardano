@@ -209,7 +209,7 @@ payoff
       contractRole
     }
   _
-  _ | contractType `elem` [STK, OPTNS, FUTUR] = _POF_PRD_STK contractRole pprd
+  _ | contractType `elem` [STK, OPTNS, FUTUR, COM] = _POF_PRD_STK contractRole pprd
 -- TD
 payoff
   TD
@@ -242,6 +242,16 @@ payoff
     }
   _
   _ = _POF_TD_STK contractRole ptd
+payoff
+  TD
+  _
+  ContractTermsPoly
+    { contractType = COM,
+      priceAtPurchaseDate = Just pprd,
+      contractRole
+    }
+  _
+  _ = _POF_PRD_STK contractRole pprd
 payoff
   TD
   RiskFactorsPoly

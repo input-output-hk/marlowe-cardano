@@ -84,4 +84,5 @@ _POF_STD_OPTNS cntrl curs xa = curs * _r cntrl * xa
 
 -- Future (FUTUR)
 
+-- Commodity (COM)
 
