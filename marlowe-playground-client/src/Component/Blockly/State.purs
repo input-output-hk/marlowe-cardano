@@ -3,8 +3,7 @@ module Component.Blockly.State (blocklyComponent) where
 import Prologue hiding (div)
 import Blockly.Dom (explainError, getDom)
 import Blockly.Events (fromEvent, newParentId, oldParentId, newElementId)
-import Blockly.Generator (newBlock)
-import Blockly.Internal (BlockDefinition, ElementId(..), centerOnBlock, getBlockById, getBlockType, select, updateToolbox, addChangeListener, removeChangeListener)
+import Blockly.Internal (BlockDefinition, ElementId(..), centerOnBlock, getBlockById, getBlockType, newBlock, select, updateToolbox, addChangeListener, removeChangeListener)
 import Blockly.Internal as Blockly
 import Blockly.Toolbox (Toolbox)
 import Blockly.Types (BlocklyEvent, BlocklyState, Workspace, isDragStart, isDragStop)
@@ -173,8 +172,7 @@ handleAction (BlocklyEvent (BT.Select event)) = case newElementId event of
       $ runMaybeT do
           blocklyState <- MaybeT $ use _blocklyState
           block <- MaybeT $ liftEffect $ getBlockById blocklyState.workspace blockId
-          blockType <- MaybeT $ map pure $ liftEffect $ getBlockType block
-          MaybeT $ map pure $ raise $ BlockSelection $ Just { blockId, blockType }
+          MaybeT $ map pure $ raise $ BlockSelection $ Just { blockId, blockType: getBlockType block }
 
 handleAction (BlocklyEvent (BT.FinishLoading _)) = do
   alreadyFired <- use _blocklyReadyFired

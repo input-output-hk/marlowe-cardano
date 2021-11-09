@@ -1,8 +1,7 @@
 module Marlowe.Blockly where
 
 import Blockly.Dom as BDom
-import Blockly.Generator (clearWorkspace, connect, connectToOutput, connectToPrevious, fieldName, fieldRow, getInputWithName, inputList, inputName, inputType, nextConnection, previousConnection, setFieldText)
-import Blockly.Internal (AlignDirection(..), Arg(..), BlockDefinition(..), Pair(..), clearUndoStack, defaultBlockDefinition, getBlockById, initializeWorkspace, render, typedArguments)
+import Blockly.Internal (AlignDirection(..), Arg(..), BlockDefinition(..), Pair(..), clearWorkspace, connect, connectToOutput, connectToPrevious, fieldName, fieldRow, getInputWithName, inputList, inputName, inputType, nextConnection, previousConnection, setFieldText, clearUndoStack, defaultBlockDefinition, getBlockById, initializeWorkspace, render, typedArguments)
 import Blockly.Toolbox (Category, Toolbox(..), category, leaf, rename, separator)
 import Blockly.Types (Block, BlocklyState, Connection, Input, NewBlockFunction, Workspace)
 import Control.Monad.Error.Class (catchError)
@@ -383,7 +382,11 @@ toDefinition BaseContractType =
             [ DummyRight
             , DummyRight
             , DummyRight
-            , Statement { name: (show BaseContractType), check: (show BaseContractType), align: Right }
+            , Statement
+                { name: show BaseContractType
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             , DummyRight
             ]
         , colour: blockColour BaseContractType
@@ -415,12 +418,12 @@ toDefinition blockType@(ActionType DepositActionType) =
         , message0: "Deposit %1 by %2 the amount of %3 currency %4 into account of %5 continue as %6 %7"
         , args0:
             [ DummyCentre
-            , Value { name: "from_party", check: "party", align: Right }
-            , Value { name: "value", check: "value", align: Right }
-            , Value { name: "token", check: "token", align: Right }
-            , Value { name: "party", check: "party", align: Right }
+            , Value { name: "from_party", check: "party", align: AlignRight }
+            , Value { name: "value", check: "value", align: AlignRight }
+            , Value { name: "token", check: "token", align: AlignRight }
+            , Value { name: "party", check: "party", align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement { name: "contract", check: show BaseContractType, align: AlignRight }
             ]
         , colour: blockColour blockType
         , previousStatement: Just "ActionType"
@@ -437,11 +440,11 @@ toDefinition blockType@(ActionType ChoiceActionType) =
         , args0:
             [ Input { name: "choice_name", text: "name", spellcheck: false }
             , DummyLeft
-            , Value { name: "party", check: "party", align: Right }
+            , Value { name: "party", check: "party", align: AlignRight }
             , DummyLeft
-            , Statement { name: "bounds", check: (show BoundsType), align: Right }
+            , Statement { name: "bounds", check: show BoundsType, align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement { name: "contract", check: show BaseContractType, align: AlignRight }
             ]
         , colour: blockColour blockType
         , previousStatement: Just "ActionType"
@@ -456,9 +459,13 @@ toDefinition blockType@(ActionType NotifyActionType) =
         { type: show NotifyActionType
         , message0: "Notification of %1 continue as %2 %3"
         , args0:
-            [ Value { name: "observation", check: "observation", align: Right }
+            [ Value { name: "observation", check: "observation", align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just "ActionType"
@@ -475,7 +482,7 @@ toDefinition blockType@(PayeeType AccountPayeeType) =
         , message0: "Account of %1 %2"
         , args0:
             [ DummyLeft
-            , Value { name: "party", check: "party", align: Right }
+            , Value { name: "party", check: "party", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "payee"
@@ -489,7 +496,7 @@ toDefinition blockType@(PayeeType PartyPayeeType) =
         { type: show PartyPayeeType
         , message0: "Party %1"
         , args0:
-            [ Value { name: "party", check: "party", align: Right }
+            [ Value { name: "party", check: "party", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "payee"
@@ -575,12 +582,16 @@ toDefinition blockType@(ContractType PayContractType) =
         , message0: "Pay %1 payee %2 the amount of %3 of currency %4 from account of %5 continue as %6 %7"
         , args0:
             [ DummyCentre
-            , Value { name: "payee", check: "payee", align: Right }
-            , Value { name: "value", check: "value", align: Right }
-            , Value { name: "token", check: "token", align: Right }
-            , Value { name: "party", check: "party", align: Right }
+            , Value { name: "payee", check: "payee", align: AlignRight }
+            , Value { name: "value", check: "value", align: AlignRight }
+            , Value { name: "token", check: "token", align: AlignRight }
+            , Value { name: "party", check: "party", align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
@@ -594,14 +605,27 @@ toDefinition blockType@(ContractType IfContractType) =
         { type: show IfContractType
         , message0: "If observation %1 then %2 %3 else %4 %5"
         , args0:
-            [ Value { name: "observation", check: "observation", align: Right }
+            [ Value
+                { name: "observation"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
             , DummyLeft
-            , Statement { name: "contract1", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract1"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             , DummyLeft
-            , Statement { name: "contract2", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract2"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
-        , previousStatement: Just (show BaseContractType)
+        , previousStatement: Just $ show BaseContractType
         , inputsInline: Just false
         }
         defaultBlockDefinition
@@ -613,12 +637,16 @@ toDefinition blockType@(ContractType WhenContractType) =
         , message0: "When %1 %2 after %3 %4 %5 continue as %6 %7"
         , args0:
             [ DummyCentre
-            , Statement { name: "case", check: "ActionType", align: Left }
+            , Statement { name: "case", check: "ActionType", align: AlignLeft }
             , Dropdown { name: "timeout_type", options: [ Pair "slot number" "slot", Pair "slot parameter" "slot_param" ] }
             , Input { name: "timeout", text: "0", spellcheck: false }
             , DummyLeft
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
@@ -634,9 +662,13 @@ toDefinition blockType@(ContractType LetContractType) =
         , message0: "Let %1 be %2 continue as %3 %4"
         , args0:
             [ Input { name: "value_id", text: "value", spellcheck: false }
-            , Value { name: "value", check: "value", align: Right }
+            , Value { name: "value", check: "value", align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
@@ -650,9 +682,18 @@ toDefinition blockType@(ContractType AssertContractType) =
         , message0: "Assert %1 check that %2 continue as %3 %4"
         , args0:
             [ DummyCentre
-            , Value { name: "observation", check: "observation", align: Right }
+            , Value
+                { name: "observation"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
             , DummyLeft
-            , Statement { name: "contract", check: (show BaseContractType), align: Right }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just (show BaseContractType)
@@ -667,8 +708,18 @@ toDefinition blockType@(ObservationType AndObservationType) =
         { type: show AndObservationType
         , message0: "%1 and %2"
         , args0:
-            [ Value { name: "observation1", check: "observation", align: Right }
-            , Value { name: "observation2", check: "observation", align: Right }
+            [ Value
+                { name: "observation1"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
+            , Value
+                { name: "observation2"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -682,8 +733,18 @@ toDefinition blockType@(ObservationType OrObservationType) =
         { type: show OrObservationType
         , message0: "%1 or %2"
         , args0:
-            [ Value { name: "observation1", check: "observation", align: Right }
-            , Value { name: "observation2", check: "observation", align: Right }
+            [ Value
+                { name: "observation1"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
+            , Value
+                { name: "observation2"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -697,7 +758,12 @@ toDefinition blockType@(ObservationType NotObservationType) =
         { type: show NotObservationType
         , message0: "not %1"
         , args0:
-            [ Value { name: "observation", check: "observation", align: Right }
+            [ Value
+                { name: "observation"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -711,7 +777,7 @@ toDefinition blockType@(ObservationType ChoseSomethingObservationType) =
         { type: show ChoseSomethingObservationType
         , message0: "party %1 made choice %2"
         , args0:
-            [ Value { name: "party", check: "party", align: Right }
+            [ Value { name: "party", check: "party", align: AlignRight }
             , Input { name: "choice_name", text: "name", spellcheck: false }
             ]
         , colour: blockColour blockType
@@ -726,8 +792,8 @@ toDefinition blockType@(ObservationType ValueGEObservationType) =
         { type: show ValueGEObservationType
         , message0: "value %1 is greater than or equal to %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -741,8 +807,8 @@ toDefinition blockType@(ObservationType ValueGTObservationType) =
         { type: show ValueGTObservationType
         , message0: "value %1 is greater than %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -756,8 +822,8 @@ toDefinition blockType@(ObservationType ValueLEObservationType) =
         { type: show ValueLEObservationType
         , message0: "value %1 is less than or equal to %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -771,8 +837,8 @@ toDefinition blockType@(ObservationType ValueLTObservationType) =
         { type: show ValueLTObservationType
         , message0: "value %1 is less than %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -786,8 +852,8 @@ toDefinition blockType@(ObservationType ValueEQObservationType) =
         { type: show ValueEQObservationType
         , message0: "value %1 is equal to %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "observation"
@@ -800,7 +866,7 @@ toDefinition blockType@(ObservationType TrueObservationType) =
     $ merge
         { type: show TrueObservationType
         , message0: "true"
-        , lastDummyAlign0: Centre
+        , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "observation"
         , inputsInline: Just true
@@ -812,7 +878,7 @@ toDefinition blockType@(ObservationType FalseObservationType) =
     $ merge
         { type: show FalseObservationType
         , message0: "false"
-        , lastDummyAlign0: Centre
+        , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "observation"
         , inputsInline: Just true
@@ -826,10 +892,10 @@ toDefinition blockType@(ValueType AvailableMoneyValueType) =
         { type: show AvailableMoneyValueType
         , message0: "Available currency %1 from account of %2 %3 %4 %5"
         , args0:
-            [ Value { name: "token", check: "token", align: Right }
+            [ Value { name: "token", check: "token", align: AlignRight }
             , DummyRight
             , DummyRight
-            , Value { name: "party", check: "party", align: Right }
+            , Value { name: "party", check: "party", align: AlignRight }
             , DummyRight
             ]
         , colour: blockColour blockType
@@ -873,7 +939,7 @@ toDefinition blockType@(ValueType NegValueValueType) =
         { type: show NegValueValueType
         , message0: "- %1"
         , args0:
-            [ Value { name: "value", check: "value", align: Right }
+            [ Value { name: "value", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -887,8 +953,8 @@ toDefinition blockType@(ValueType AddValueValueType) =
         { type: show AddValueValueType
         , message0: "%1 + %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -902,8 +968,8 @@ toDefinition blockType@(ValueType MulValueValueType) =
         { type: show MulValueValueType
         , message0: "%1 * %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -917,8 +983,8 @@ toDefinition blockType@(ValueType DivValueValueType) =
         { type: show DivValueValueType
         , message0: "%1 / %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -932,9 +998,14 @@ toDefinition blockType@(ValueType CondObservationValueValueType) =
         { type: show CondObservationValueValueType
         , message0: "if %1 then %2 else %3"
         , args0:
-            [ Value { name: "condition", check: "observation", align: Right }
-            , Value { name: "then", check: "value", align: Right }
-            , Value { name: "else", check: "value", align: Right }
+            [ Value
+                { name: "condition"
+                , check: "observation"
+                , align:
+                    AlignRight
+                }
+            , Value { name: "then", check: "value", align: AlignRight }
+            , Value { name: "else", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -948,8 +1019,8 @@ toDefinition blockType@(ValueType SubValueValueType) =
         { type: show SubValueValueType
         , message0: "%1 - %2"
         , args0:
-            [ Value { name: "value1", check: "value", align: Right }
-            , Value { name: "value2", check: "value", align: Right }
+            [ Value { name: "value1", check: "value", align: AlignRight }
+            , Value { name: "value2", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -965,7 +1036,7 @@ toDefinition blockType@(ValueType ScaleValueType) =
         , args0:
             [ Number { name: "numerator", value: 1.0, min: Nothing, max: Nothing, precision: Just 1.0 }
             , Number { name: "denominator", value: 1.0, min: Just 1.0, max: Nothing, precision: Just 1.0 }
-            , Value { name: "value", check: "value", align: Right }
+            , Value { name: "value", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -981,7 +1052,7 @@ toDefinition blockType@(ValueType ChoiceValueValueType) =
         , message0: "Choice %1 by %2"
         , args0:
             [ Input { name: "choice_name", text: "name", spellcheck: false }
-            , Value { name: "party", check: "party", align: Right }
+            , Value { name: "party", check: "party", align: AlignRight }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -994,7 +1065,7 @@ toDefinition blockType@(ValueType SlotIntervalStartValueType) =
     $ merge
         { type: show SlotIntervalStartValueType
         , message0: "Slot Interval Start"
-        , lastDummyAlign0: Centre
+        , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "value"
         , inputsInline: Just true
@@ -1006,7 +1077,7 @@ toDefinition blockType@(ValueType SlotIntervalEndValueType) =
     $ merge
         { type: show SlotIntervalEndValueType
         , message0: "Slot Interval End"
-        , lastDummyAlign0: Centre
+        , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "value"
         , inputsInline: Just true
@@ -1468,9 +1539,7 @@ buildBlocks newBlock bs contract = do
     Nothing -> newBlock bs.workspace (show BaseContractType)
     Just block -> pure block
   let
-    inputs = inputList rootBlock
-
-    mInput = getInputWithName inputs (show BaseContractType)
+    mInput = getInputWithName (show BaseContractType) $ inputList rootBlock
   for_ mInput \input -> do
     toBlockly newBlock bs.workspace input contract
     render bs.workspace
@@ -1545,9 +1614,11 @@ nextBound newBlock workspace fromConnection bounds = do
       block <- newBlock workspace (show BoundsType)
       setField block "from" (BigInt.toString from)
       setField block "to" (BigInt.toString to)
-      toConnection <- previousConnection block
+      let
+        toConnection = previousConnection block
       connect fromConnection toConnection
-      nextFromConnection <- nextConnection block
+      let
+        nextFromConnection = nextConnection block
       nextBound newBlock workspace nextFromConnection tail
 
 instance toBlocklyBounds :: ToBlockly (Array (Term Bound)) where
@@ -1560,7 +1631,8 @@ instance toBlocklyBounds :: ToBlockly (Array (Term Bound)) where
         setField block "from" (BigInt.toString from)
         setField block "to" (BigInt.toString to)
         connectToPrevious block input
-        fromConnection <- nextConnection block
+        let
+          fromConnection = nextConnection block
         nextBound newBlock workspace fromConnection tail
 
 oneCaseToBlockly :: NewBlockFunction -> Workspace -> Case -> Effect Block
@@ -1601,9 +1673,11 @@ nextCase newBlock workspace fromConnection cases = do
     Just { head: (Hole _ _ _) } -> pure unit
     Just { head: (Term (Case action contract) _), tail } -> do
       block <- oneCaseToBlockly newBlock workspace (Case action contract)
-      toConnection <- previousConnection block
+      let
+        toConnection = previousConnection block
       connect fromConnection toConnection
-      nextFromConnection <- nextConnection block
+      let
+        nextFromConnection = nextConnection block
       nextCase newBlock workspace nextFromConnection tail
 
 instance toBlocklyCases :: ToBlockly (Array (Term Case)) where
@@ -1614,7 +1688,8 @@ instance toBlocklyCases :: ToBlockly (Array (Term Case)) where
       Just { head: (Term (Case action contract) _), tail } -> do
         block <- oneCaseToBlockly newBlock workspace (Case action contract)
         connectToPrevious block input
-        fromConnection <- nextConnection block
+        let
+          fromConnection = nextConnection block
         nextCase newBlock workspace fromConnection tail
 
 instance toBlocklyContract :: ToBlockly Contract where

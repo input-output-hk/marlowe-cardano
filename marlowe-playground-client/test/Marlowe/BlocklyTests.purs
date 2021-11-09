@@ -2,9 +2,8 @@ module Marlowe.BlocklyTests where
 
 import Prologue
 import Blockly.Dom (explainError, getDom)
-import Blockly.Generator (getInputWithName, inputList)
 import Blockly.Headless as Headless
-import Blockly.Internal (getBlockById)
+import Blockly.Internal (getInputWithName, inputList, getBlockById)
 import Blockly.Internal as Blockly
 import Blockly.Types (BlocklyState)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
@@ -70,6 +69,5 @@ buildBlocks bs contract = do
   rootBlock <- case mContract of
     Nothing -> Headless.newBlock bs.workspace "BaseContractType"
     Just block -> pure block
-  let
-    inputs = inputList rootBlock
-  for_ (getInputWithName inputs "BaseContractType") \input -> toBlockly Headless.newBlock bs.workspace input contract
+  for_ (getInputWithName "BaseContractType" $ inputList rootBlock) \input ->
+    toBlockly Headless.newBlock bs.workspace input contract

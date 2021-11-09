@@ -1,13 +1,13 @@
 module Blockly.Internal where
 
-import Prologue hiding (Either(..))
+import Prologue
 import Blockly.Toolbox (Toolbox, encodeToolbox)
-import Blockly.Types (Block, Blockly, BlocklyState, Workspace)
+import Blockly.Types (Block, Blockly, BlocklyState, Connection, Field, Input, Workspace)
 import Data.Argonaut.Core (Json)
 import Data.Array (catMaybes)
+import Data.Array as Array
 import Data.Newtype (class Newtype)
 import Data.Number (infinity)
-import Type.Proxy (Proxy(..))
 import Data.Traversable (class Foldable, traverse_)
 import Effect (Effect)
 import Effect.Exception (throw)
@@ -18,6 +18,7 @@ import Halogen.HTML.Properties (IProp, attr)
 import Record as Record
 import Simple.JSON (class WriteForeign)
 import Simple.JSON as JSON
+import Type.Proxy (Proxy(..))
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.Event.EventTarget (EventListener)
@@ -104,13 +105,68 @@ foreign import centerOnBlock :: Workspace -> String -> Effect Unit
 
 foreign import hideChaff :: Blockly -> Effect Unit
 
-foreign import getBlockType :: Block -> Effect String
+foreign import getBlockType :: Block -> String
 
 foreign import clearUndoStack :: Workspace -> Effect Unit
 
 foreign import isWorkspaceEmpty :: Workspace -> Effect Boolean
 
 foreign import setGroup :: Blockly -> Boolean -> Effect Unit
+
+foreign import inputList :: Block -> Array Input
+
+foreign import connectToPrevious :: Block -> Input -> Effect Unit
+
+foreign import previousConnection :: Block -> Connection
+
+foreign import nextConnection :: Block -> Connection
+
+foreign import connect :: Connection -> Connection -> Effect Unit
+
+foreign import connectToOutput :: Block -> Input -> Effect Unit
+
+foreign import newBlock :: Workspace -> String -> Effect Block
+
+foreign import inputName :: Input -> String
+
+foreign import inputType :: Input -> Int
+
+foreign import clearWorkspace :: Workspace -> Effect Unit
+
+foreign import fieldRow :: Input -> Array Field
+
+foreign import setFieldText :: Field -> String -> Effect Unit
+
+foreign import fieldName :: Field -> String
+
+foreign import nextBlock_ :: forall a. (Block -> a) -> a -> Block -> Effect (Maybe Block)
+
+nextBlock :: Block -> Effect (Maybe Block)
+nextBlock = nextBlock_ Just Nothing
+
+foreign import fieldValue_ ::
+  forall a.
+  (String -> a) ->
+  (String -> a) ->
+  Block ->
+  String ->
+  a
+
+fieldValue :: Block -> String -> Either String String
+fieldValue = fieldValue_ Left Right
+
+foreign import getBlockInputConnectedTo_ ::
+  forall a.
+  (String -> a) ->
+  (Block -> a) ->
+  Input ->
+  Effect a
+
+getBlockInputConnectedTo :: Input -> Effect (Either String Block)
+getBlockInputConnectedTo = getBlockInputConnectedTo_ Left Right
+
+getInputWithName :: String -> Array Input -> Maybe Input
+getInputWithName n = Array.find (eq n <<< inputName)
 
 newtype ElementId
   = ElementId String
@@ -241,19 +297,19 @@ instance writeForeignArg :: WriteForeign Arg where
   writeImpl (Image fields) = JSON.write $ Record.insert type_ "field_image" fields
   writeImpl (Value fields) = JSON.write $ Record.insert type_ "input_value" fields
   writeImpl (Statement fields) = JSON.write $ Record.insert type_ "input_statement" fields
-  writeImpl DummyRight = JSON.write $ { type: "input_dummy", align: Right }
-  writeImpl DummyLeft = JSON.write $ { type: "input_dummy", align: Left }
-  writeImpl DummyCentre = JSON.write $ { type: "input_dummy", align: Centre }
+  writeImpl DummyRight = JSON.write $ { type: "input_dummy", align: AlignRight }
+  writeImpl DummyLeft = JSON.write $ { type: "input_dummy", align: AlignLeft }
+  writeImpl DummyCentre = JSON.write $ { type: "input_dummy", align: AlignCentre }
 
 data AlignDirection
-  = Left
-  | Centre
-  | Right
+  = AlignLeft
+  | AlignCentre
+  | AlignRight
 
 instance writeForeignAlignDirection :: WriteForeign AlignDirection where
-  writeImpl Left = JSON.write "LEFT"
-  writeImpl Centre = JSON.write "CENTRE"
-  writeImpl Right = JSON.write "RIGHT"
+  writeImpl AlignLeft = JSON.write "LEFT"
+  writeImpl AlignCentre = JSON.write "CENTRE"
+  writeImpl AlignRight = JSON.write "RIGHT"
 
 type BasicBlockDefinition r
   = ( message0 :: String
@@ -295,7 +351,7 @@ defaultBlockDefinition ::
   }
 defaultBlockDefinition =
   { fieldValue: Nothing
-  , lastDummyAlign0: Left
+  , lastDummyAlign0: AlignLeft
   , args0: []
   , helpUrl: ""
   , inputsInline: Just true

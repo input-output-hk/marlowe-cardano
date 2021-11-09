@@ -7,14 +7,14 @@ exports.createBlocklyInstance_ = () => {
   return require("blockly");
 };
 
-exports.debugBlockly = (name) => (state) => {
+exports.debugBlockly = (name) => (state) => () => {
   if (typeof window.blockly === 'undefined') {
     window.blockly = {};
   }
   window.blockly[name] = state
 }
 
-exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => {
+exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => () =>{
 
   /* Disable comments */
   try { blockly.ContextMenuRegistry.registry.unregister('blockComment'); } catch(err) { }
@@ -118,7 +118,7 @@ exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => {
   return workspace;
 };
 
-exports.resize = (blockly) => (workspace) => {
+exports.resize = (blockly) => (workspace) => () => {
   blockly.svgResize(workspace);
   workspace.render();
 };
@@ -139,7 +139,7 @@ function removeEmptyArrayFields(obj) {
   }
 }
 
-exports.addBlockType_ = (blockly) => (name) => (block) => {
+exports.addBlockType_ = (blockly) => (name) => (block) => () => {
   // we really don't want to be mutating the input object, it is not supposed to be state
   var clone = JSONbig.parse(JSONbig.stringify(block));
   removeUndefinedFields(clone);
@@ -151,16 +151,16 @@ exports.addBlockType_ = (blockly) => (name) => (block) => {
   };
 };
 
-exports.initializeWorkspace_ = (blockly) => (workspace) => (workspaceBlocks) => {
+exports.initializeWorkspace_ = (blockly) => (workspace) => (workspaceBlocks) => () => {
   blockly.Xml.domToWorkspace(workspaceBlocks, workspace);
   workspace.getAllBlocks()[0].setDeletable(false);
 };
 
-exports.render = (workspace) => {
+exports.render = (workspace) => () => {
   workspace.render();
 };
 
-exports.getBlockById_ = (just) => (nothing) => (workspace) => (id) => {
+exports.getBlockById_ = (just) => (nothing) => (workspace) => (id) => () => {
   var result = workspace.getBlockById(id);
   if (result) {
     return just(result);
@@ -169,7 +169,7 @@ exports.getBlockById_ = (just) => (nothing) => (workspace) => (id) => {
   }
 };
 
-exports.workspaceXML = (blockly) => (workspace) => {
+exports.workspaceXML = (blockly) => (workspace) => () => {
   const isEmpty = workspace.getAllBlocks()[0].getChildren().length == 0;
   if (isEmpty) {
     return "";
@@ -179,33 +179,33 @@ exports.workspaceXML = (blockly) => (workspace) => {
   }
 };
 
-exports.loadWorkspace = (blockly) => (workspace) => (xml) => {
+exports.loadWorkspace = (blockly) => (workspace) => (xml) => () => {
   var dom = blockly.utils.xml.textToDomDocument(xml);
   blockly.Xml.clearWorkspaceAndLoadFromXml(dom.childNodes[0], workspace);
   workspace.getAllBlocks()[0].setDeletable(false);
 };
 
-exports.addChangeListener = (workspace) => (listener) => {
+exports.addChangeListener = (workspace) => (listener) => () => {
   workspace.addChangeListener(listener);
 };
 
-exports.removeChangeListener = (workspace) => (listener) => {
+exports.removeChangeListener = (workspace) => (listener) => () => {
   workspace.removeChangeListener(listener);
 };
 
-exports.workspaceToDom = (blockly) => (workspace) => {
+exports.workspaceToDom = (blockly) => (workspace) => () => {
   return blockly.Xml.workspaceToDom(workspace);
 };
 
-exports.select = (block) => {
+exports.select = (block) => () => {
   block.select();
 }
 
-exports.centerOnBlock = (workspace) => (blockId) => {
+exports.centerOnBlock = (workspace) => (blockId) => () => {
   workspace.centerOnBlock(blockId);
 }
 
-exports.hideChaff = (blockly) => {
+exports.hideChaff = (blockly) => () => {
   blockly.hideChaff();
 }
 
@@ -213,19 +213,116 @@ exports.getBlockType = (block) => {
   return block.type;
 }
 
-exports.updateToolbox_ = (toolboxJson) => (workspace) => {
+exports.updateToolbox_ = (toolboxJson) => (workspace) => () => {
   workspace.updateToolbox(toolboxJson);
 }
 
-exports.clearUndoStack = (workspace) => {
+exports.clearUndoStack = (workspace) => () => {
   workspace.clearUndo();
 }
 
-exports.isWorkspaceEmpty = (workspace) => {
+exports.isWorkspaceEmpty = (workspace) => () => {
   var topBlocks = workspace.getTopBlocks(false);
   return ((topBlocks == null) || (topBlocks.length == 0));
 }
 
-exports.setGroup = (blockly) => (isGroup) =>
+exports.setGroup = (blockly) => (isGroup) => () =>
   blockly.Events.setGroup(isGroup);
 
+exports.nextBlock_ = (just) => (nothing) => (block) => () => {
+  var mBlock = block.getNextBlock();
+  if (mBlock == null) {
+    return nothing;
+  } else {
+    return just(mBlock);
+  }
+};
+
+exports.fieldValue_ = (left) => (right) => (block) => (key) => {
+  var result = block.getFieldValue(key);
+  if (result == 0 || result) {
+    /* For some unknown reason, the xmljs library turns strings into numbers if it can
+     * We are always expecting a string and that's what the browser gives us but the
+     * tests break without this extra toString()
+     */
+    return right(result.toString());
+  } else {
+    // we used to return an error if the field returned null/undefined however
+    // this happens if the value is empty. We need to sometimes use empty values
+    // and they represent an empty string so now we just return an empty string
+    // This is slightly dangerous as it can lead to a bug if you use this function
+    // with a key that doesn't exist, instead of getting a run time error you
+    // will just get an empty string and may not notice.
+    // return left("couldn't find field: " + key);
+    return right("");
+  }
+};
+
+exports.inputList = (block) => {
+  return block.inputList;
+};
+
+exports.connectToPrevious = (block) => (input) => () => {
+  block.previousConnection.connect(input.connection);
+};
+exports.previousConnection = (block) => {
+  return block.previousConnection;
+};
+
+exports.nextConnection = (block) => {
+  return block.nextConnection;
+};
+
+exports.connect = (from) => (to) => () => {
+  from.connect(to);
+};
+
+exports.connectToOutput = (block) => (input) => () => {
+  block.outputConnection.connect(input.connection);
+};
+
+exports.newBlock = (workspace) => (name) => () => {
+  var block = workspace.newBlock(name);
+  block.initSvg();
+  return block;
+};
+
+exports.inputName = (input) => {
+  return input.name;
+};
+
+exports.inputType = (input) => {
+  return input.type;
+};
+
+exports.clearWorkspace = (workspace) => () => {
+  workspace.clear();
+};
+
+exports.fieldRow = (input) => {
+  return input.fieldRow;
+};
+
+exports.setFieldText = (field) => (text) => () => {
+  field.setValue(text);
+};
+
+exports.fieldName = (field) => {
+  return field.name;
+};
+
+exports.getBlockInputConnectedTo_ = (left) => (right) => (input) => () => {
+  try {
+    var mTargetConnection = input.connection.targetConnection;
+    if (mTargetConnection == null) {
+      return left("no target connection found");
+    }
+    var mBlock = mTargetConnection.getSourceBlock();
+    if (mBlock == null) {
+      return left("no block found");
+    }
+    return right(mBlock);
+  } catch (err) {
+    return left(err.message);
+  }
+};
