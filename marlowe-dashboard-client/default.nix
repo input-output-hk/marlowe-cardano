@@ -1,10 +1,12 @@
-{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, buildPursPackage, buildNodeModules, filterNpm, plutus-pab }:
+{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, buildPursPackage, buildNodeModules, filterNpm }:
 let
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
 
+  pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
+
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
     mkdir $out
-    ${plutus-pab.server-setup-invoker}/bin/plutus-pab-setup psgenerator $out
+    ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
     ln -s ${./plutus-pab.yaml} plutus-pab.yaml
     ${marlowe-invoker}/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $out
   '';
@@ -12,8 +14,8 @@ let
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
     generatedDir=./generated
     rm -rf $generatedDir
-    $(nix-build ../default.nix --quiet --no-build-output -A plutus-pab.server-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
-    $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.pab-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $generatedDir
   '';
 
   start-backend = pkgs.writeShellScriptBin "marlowe-pab-server" ''
@@ -39,18 +41,15 @@ let
       '';
       name = "marlowe-dashboard-client";
       extraSrcs = {
-        web-common = webCommon.cleanSrc;
         web-common-marlowe = webCommonMarlowe;
         generated = generated-purescript;
       };
-      packages = pkgs.callPackage ./packages.nix { };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
-      WEB_COMMON_SRC = webCommon.cleanSrc;
+      WEB_COMMON_SRC = webCommon;
     });
 in
 {
-  inherit (plutus-pab) server-setup-invoker;
-  inherit client marlowe-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
 }

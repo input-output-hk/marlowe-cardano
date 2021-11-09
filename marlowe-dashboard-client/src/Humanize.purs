@@ -13,7 +13,7 @@ module Humanize
   ) where
 
 import Prologue
-import Data.BigInteger (BigInteger, toNumber)
+import Data.BigInt.Argonaut (BigInt, toNumber)
 import Data.DateTime (DateTime, adjust)
 import Data.Formatter.DateTime (FormatterCommand(..), format) as DateTime
 import Data.Formatter.Number (Formatter(..), format) as Number
@@ -148,7 +148,7 @@ formatTime' =
         , DateTime.MinutesTwoDigits
         ]
 
-humanizeValue :: Token -> BigInteger -> String
+humanizeValue :: Token -> BigInt -> String
 -- TODO: use a different currencyFormatter with no decimal places when they're all zero
 humanizeValue (Token "" "") value = "₳ " <> Number.format (numberFormatter 6) (toAda value)
 
@@ -156,7 +156,7 @@ humanizeValue (Token "" "dollar") value = "$ " <> Number.format (numberFormatter
 
 humanizeValue (Token _ name) value = Number.format (numberFormatter 0) (toNumber value) <> " " <> name
 
-toAda :: BigInteger -> Number
+toAda :: BigInt -> Number
 toAda lovelace = (toNumber lovelace) / 1000000.0
 
 numberFormatter :: Int -> Number.Formatter

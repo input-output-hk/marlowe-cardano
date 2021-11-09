@@ -6,15 +6,18 @@ by the Marlowe Run frontend.
 module Marlowe.Client where
 
 import Prologue
+import Data.Argonaut.Decode (class DecodeJson)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode (class EncodeJson)
+import Data.Argonaut.Encode.Aeson ((>$<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Newtype (class Newtype)
-import Data.Symbol (SProxy(..))
-import Foreign.Class (class Encode, class Decode)
-import Foreign.Generic (genericDecode, genericEncode)
-import Marlowe.Semantics (MarloweData, MarloweParams, TransactionInput, aesonCompatibleOptions)
+import Data.Newtype (class Newtype, unwrap)
+import Marlowe.Semantics (MarloweData, MarloweParams, TransactionInput)
+import Type.Proxy (Proxy(..))
 
 -- This is the state of the follower contract. Its purpose is to provide us with an up-to-date
 -- transaction history for a Marlowe contract running on the blockchain.
@@ -30,14 +33,24 @@ derive instance eqContractHistory :: Eq ContractHistory
 
 derive instance genericContractHistory :: Generic ContractHistory _
 
-instance encodeContractHistory :: Encode ContractHistory where
-  encode a = genericEncode aesonCompatibleOptions a
+instance encodeJsonContractHistory :: EncodeJson ContractHistory where
+  encodeJson =
+    E.encode $ unwrap
+      >$< E.record
+          { chParams: E.maybe E.value :: _ (_ (Tuple MarloweParams MarloweData))
+          , chHistory: E.value :: _ (Array TransactionInput)
+          }
 
-instance decodeContractHistory :: Decode ContractHistory where
-  decode a = genericDecode aesonCompatibleOptions a
+instance decodeJsonContractHistory :: DecodeJson ContractHistory where
+  decodeJson =
+    D.decode $ ContractHistory
+      <$> D.record "ContractHistory"
+          { chParams: D.maybe D.value :: _ (_ (Tuple MarloweParams MarloweData))
+          , chHistory: D.value :: _ (Array TransactionInput)
+          }
 
 _chParams :: Lens' ContractHistory (Maybe (Tuple MarloweParams MarloweData))
-_chParams = _Newtype <<< prop (SProxy :: SProxy "chParams")
+_chParams = _Newtype <<< prop (Proxy :: _ "chParams")
 
 _chHistory :: Lens' ContractHistory (Array TransactionInput)
-_chHistory = _Newtype <<< prop (SProxy :: SProxy "chHistory")
+_chHistory = _Newtype <<< prop (Proxy :: _ "chHistory")

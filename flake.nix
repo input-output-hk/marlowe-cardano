@@ -69,16 +69,16 @@
       url = "github:cachix/pre-commit-hooks.nix";
       flake = false;
     };
-    spago2nix = {
-      url = "github:justinwoo/spago2nix";
-      flake = false;
-    };
     sphinxcontrib-haddock = {
       url = "github:michaelpj/sphinxcontrib-haddock";
       flake = false;
     };
     stackage-nix = {
       url = "github:input-output-hk/stackage.nix";
+      flake = false;
+    };
+    web-common = {
+      url = "github:input-output-hk/purescript-web-common";
       flake = false;
     };
   };

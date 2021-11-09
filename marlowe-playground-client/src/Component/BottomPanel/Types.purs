@@ -5,7 +5,7 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 
 -- This component is an UI element that allows you to have different panels with titles at the bottom of the page. Because the children of this component is set by the page, the Action type
 -- is parameterized in two types:
@@ -39,7 +39,7 @@ initialState view =
   }
 
 _showBottomPanel :: forall panel. Lens' (State panel) Boolean
-_showBottomPanel = prop (SProxy :: SProxy "showBottomPanel")
+_showBottomPanel = prop (Proxy :: _ "showBottomPanel")
 
 _panelView :: forall panel. Lens' (State panel) panel
-_panelView = prop (SProxy :: SProxy "panelView")
+_panelView = prop (Proxy :: _ "panelView")

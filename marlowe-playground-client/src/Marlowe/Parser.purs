@@ -4,11 +4,11 @@ module Marlowe.Parser
   ) where
 
 import Prologue
-import Data.BigInteger (BigInteger)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Function.Uncurried (Fn5, runFn5)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Marlowe.Holes (AccountId, Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Timeout(SlotParam), Token(..), Value(..), ValueId(..), getLocation, mkHole)
 import Marlowe.Holes as H
@@ -20,9 +20,9 @@ type HelperFunctions a
     , mkTerm :: a -> IRange -> Term a
     , mkTermWrapper :: a -> IRange -> TermWrapper a
     , getRange :: Term a -> IRange
-    , mkBigInteger :: Int -> BigInteger
-    , mkSlot :: BigInteger -> Slot
-    , mkExtendedSlot :: BigInteger -> Timeout
+    , mkBigInteger :: Int -> BigInt
+    , mkSlot :: BigInt -> Slot
+    , mkExtendedSlot :: BigInt -> Timeout
     , mkExtendedSlotParam :: String -> Timeout
     , mkClose :: Contract
     , mkPay :: AccountId -> Term Payee -> Term Token -> Term Value -> Term Contract -> Contract
@@ -31,7 +31,7 @@ type HelperFunctions a
     , mkLet :: TermWrapper ValueId -> Term Value -> Term Contract -> Contract
     , mkAssert :: Term Observation -> Term Contract -> Contract
     , mkCase :: Term Action -> Term Contract -> Case
-    , mkBound :: BigInteger -> BigInteger -> Bound
+    , mkBound :: BigInt -> BigInt -> Bound
     , mkDeposit :: AccountId -> Term Party -> Term Token -> Term Value -> Action
     , mkChoice :: ChoiceId -> Array (Term Bound) -> Action
     , mkNotify :: Term Observation -> Action
@@ -54,14 +54,14 @@ type HelperFunctions a
     , mkTrueObs :: Observation
     , mkFalseObs :: Observation
     , mkAvailableMoney :: AccountId -> Term Token -> Value
-    , mkConstant :: BigInteger -> Value
+    , mkConstant :: BigInt -> Value
     , mkConstantParam :: String -> Value
     , mkNegValue :: Term Value -> Value
     , mkAddValue :: Term Value -> Term Value -> Value
     , mkSubValue :: Term Value -> Term Value -> Value
     , mkMulValue :: Term Value -> Term Value -> Value
     , mkDivValue :: Term Value -> Term Value -> Value
-    , mkRational :: BigInteger -> BigInteger -> Rational
+    , mkRational :: BigInt -> BigInt -> Rational
     , mkScale :: TermWrapper Rational -> Term Value -> Value
     , mkChoiceValue :: ChoiceId -> Value
     , mkSlotIntervalStart :: Value
@@ -85,7 +85,7 @@ helperFunctions =
   , mkTerm: \a pos -> Term a (Range pos)
   , mkTermWrapper: \a pos -> TermWrapper a (Range pos)
   , getRange: getLocation >>> locationToRange
-  , mkBigInteger: BigInteger.fromInt
+  , mkBigInteger: BigInt.fromInt
   , mkSlot: Slot
   , mkExtendedSlot: H.Slot
   , mkExtendedSlotParam: SlotParam

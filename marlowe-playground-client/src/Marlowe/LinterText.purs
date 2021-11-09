@@ -8,14 +8,14 @@ module Marlowe.LinterText
   ) where
 
 import Prologue
-import Data.Array (catMaybes, fold, foldMap, take)
+import Data.Array (catMaybes, take)
 import Data.Array as Array
 import Data.Array.NonEmpty (index)
 import Data.Either (hush)
+import Data.Foldable (fold, foldMap)
 import Data.Functor (mapFlipped)
 import Data.Lens (to, view, (^.))
 import Data.List (List(..))
-import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
@@ -26,7 +26,7 @@ import Data.String.Regex.Flags (noFlags)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Help (holeText)
 import Marlowe.Extended.Metadata (MetadataHintInfo)
-import Marlowe.Holes (Contract, Holes(..), Location(..), MarloweHole(..), MarloweType, Term, TermGenerator, constructMarloweType, getMarloweConstructors, readMarloweType)
+import Marlowe.Holes (Contract, Holes(..), Location(..), MarloweHole(..), MarloweType, Term, constructMarloweType, getMarloweConstructors, readMarloweType)
 import Marlowe.Linter (Warning(..), WarningDetail(..), _holes, _metadataHints, _warnings, lint)
 import Marlowe.Parser (ContractParseError(..), parseContract)
 import Monaco (CodeAction, CompletionItem, IMarkerData, IRange, Uri, completionItemKind, markerSeverity)
@@ -53,7 +53,7 @@ markers :: List ContractPath -> Either ContractParseError (Term Contract) -> Tup
 markers unreachablePaths parsedContract = do
   case (lint unreachablePaths <$> parsedContract) of
     Left EmptyInput -> (Tuple [] { warnings: mempty, contract: Nothing, metadataHints: Nothing })
-    Left e@(ContractParseError { message, row, column, token }) ->
+    Left (ContractParseError { message, row, column, token }) ->
       let
         whiteSpaceChar c = Set.member c $ Set.fromFoldable $ map codePointFromChar [ '\n', '\r', ' ', '\t' ]
 
@@ -91,8 +91,8 @@ holesToMarkers (Holes holes) =
   in
     foldMap holeToMarkers allHoles
 
-holeToMarker :: MarloweHole -> Map String TermGenerator -> String -> IMarkerData
-holeToMarker hole@(MarloweHole { name, marloweType, location }) m constructorName =
+holeToMarker :: MarloweHole -> IMarkerData
+holeToMarker (MarloweHole { marloweType, location }) =
   let
     -- If holeToMarker is called with the wrong Location type it will yield incorrect results.
     -- That is why we want to make the Warnings polymorphic to the Location and to separate the linter
@@ -114,13 +114,13 @@ holeToMarker hole@(MarloweHole { name, marloweType, location }) m constructorNam
     }
 
 holeToMarkers :: MarloweHole -> Array IMarkerData
-holeToMarkers hole@(MarloweHole { name, marloweType }) =
+holeToMarkers hole@(MarloweHole { marloweType }) =
   let
     m = getMarloweConstructors marloweType
 
     constructors = take 1 $ Set.toUnfoldable $ Map.keys m
   in
-    map (holeToMarker hole m) constructors
+    holeToMarker hole <$ constructors
 
 markerToHole :: IMarkerData -> MarloweType -> MarloweHole
 markerToHole markerData marloweType = MarloweHole { name: "unknown", marloweType, location: Range (Monaco.getRange markerData) }
@@ -228,7 +228,7 @@ marloweHoleToSuggestionText stripParens firstHole@(MarloweHole { marloweType }) 
       fullInsertText
 
 marloweHoleToSuggestion :: String -> Boolean -> IRange -> MarloweHole -> String -> CompletionItem
-marloweHoleToSuggestion original stripParens range marloweHole@(MarloweHole { marloweType }) constructorName =
+marloweHoleToSuggestion original stripParens range marloweHole constructorName =
   let
     kind = completionItemKind "Constructor"
 
@@ -253,7 +253,7 @@ marloweHoleToSuggestion original stripParens range marloweHole@(MarloweHole { ma
     }
 
 holeSuggestions :: String -> Boolean -> IRange -> MarloweHole -> Array CompletionItem
-holeSuggestions original stripParens range marloweHole@(MarloweHole { name, marloweType }) =
+holeSuggestions original stripParens range marloweHole@(MarloweHole { marloweType }) =
   let
     marloweHoles = getMarloweConstructors marloweType
   in

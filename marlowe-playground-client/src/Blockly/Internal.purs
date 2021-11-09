@@ -1,18 +1,18 @@
 module Blockly.Internal where
 
-import Prologue
+import Prologue hiding (Either(..))
 import Blockly.Toolbox (Toolbox, encodeToolbox)
 import Blockly.Types (Block, Blockly, BlocklyState, Workspace)
 import Data.Argonaut.Core (Json)
 import Data.Array (catMaybes)
-import Data.Newtype (class Newtype, unwrap)
-import Data.Symbol (SProxy(..))
-import Data.Traversable (class Foldable, for_, traverse_)
+import Data.Newtype (class Newtype)
+import Data.Number (infinity)
+import Type.Proxy (Proxy(..))
+import Data.Traversable (class Foldable, traverse_)
 import Effect (Effect)
 import Effect.Exception (throw)
 import Effect.Uncurried (EffectFn1, EffectFn2, EffectFn3, EffectFn4, runEffectFn1, runEffectFn2, runEffectFn3, runEffectFn4)
 import Foreign (Foreign)
-import Global (infinity)
 import Halogen.HTML (AttrName(..), ElemName(..), Node)
 import Halogen.HTML.Elements (element)
 import Halogen.HTML.Properties (IProp, attr)
@@ -264,14 +264,14 @@ data Arg
   | DummyCentre
 
 argType :: Arg -> Maybe { name :: String, check :: String }
-argType (Value { name, check }) = Just { name, check }
+argType (Value { name: _name, check }) = Just { name: _name, check }
 
-argType (Statement { name, check }) = Just { name, check }
+argType (Statement { name: _name, check }) = Just { name: _name, check }
 
 argType _ = Nothing
 
-type_ :: SProxy "type"
-type_ = SProxy
+type_ :: Proxy "type"
+type_ = Proxy
 
 instance writeForeignArg :: WriteForeign Arg where
   writeImpl (Input fields) = JSON.write $ Record.insert type_ "field_input" fields

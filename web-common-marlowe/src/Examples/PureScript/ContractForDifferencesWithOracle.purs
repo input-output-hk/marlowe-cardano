@@ -5,7 +5,7 @@ module Examples.PureScript.ContractForDifferencesWithOracle
   ) where
 
 import Prelude
-import Data.BigInteger (fromInt)
+import Data.BigInt.Argonaut (fromInt)
 import Examples.Metadata as Metadata
 import Marlowe.Extended (Action(..), Case(..), Contract(..), Observation(..), Payee(..), Timeout(..), Value(..))
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
@@ -34,9 +34,6 @@ partyDeposit = ConstantParam "Amount paid by party"
 
 counterpartyDeposit :: Value
 counterpartyDeposit = ConstantParam "Amount paid by counterparty"
-
-bothDeposits :: Value
-bothDeposits = AddValue partyDeposit counterpartyDeposit
 
 priceBeginning :: Value
 priceBeginning = ConstantParam "Amount of Ada to use as asset"

@@ -1,48 +1,39 @@
 module Types
   ( AjaxResponse
-  , DecodedAjaxResponse
-  , WebData
-  , DecodedWebData
   , DecodedAjaxError
-  , CombinedWSStreamToServer(..)
+  , DecodedAjaxResponse
+  , DecodedWebData
+  , NotFoundAjaxError
+  , NotFoundAjaxResponse
+  , NotFoundWebData
+  , WebData
   ) where
 
 import Prologue
-import Data.Generic.Rep (class Generic)
-import Foreign (MultipleErrors)
-import Foreign.Class (class Encode, class Decode)
-import Foreign.Generic (defaultOptions, genericDecode, genericEncode)
+import Data.Argonaut.Decode (JsonDecodeError)
 import Network.RemoteData (RemoteData)
-import Servant.PureScript.Ajax (AjaxError)
-import Wallet.Emulator.Wallet (Wallet) as Back
-import Wallet.Types (ContractInstanceId) as Back
+import Servant.PureScript (AjaxError)
 
 type AjaxResponse
   = Either AjaxError
 
-type DecodedAjaxResponse
-  = Either DecodedAjaxError
-
 type WebData
   = RemoteData AjaxError
+
+type DecodedAjaxError
+  = Either AjaxError JsonDecodeError
+
+type DecodedAjaxResponse
+  = Either DecodedAjaxError
 
 type DecodedWebData
   = RemoteData DecodedAjaxError
 
-type DecodedAjaxError
-  = Either AjaxError MultipleErrors
+type NotFoundAjaxError
+  = Maybe AjaxError
 
--- TODO: purescript-bridge generates a version of this type in Plutus.PAB.Webserver.Types, but the
--- encode/decode instances are wrong. I haven't figured out how to fix that yet, but in the
--- meantime this hack works. :/
-data CombinedWSStreamToServer
-  = Subscribe (Either Back.ContractInstanceId Back.Wallet)
-  | Unsubscribe (Either Back.ContractInstanceId Back.Wallet)
+type NotFoundAjaxResponse
+  = Either NotFoundAjaxError
 
-derive instance genericCombinedWSStreamToServer :: Generic CombinedWSStreamToServer _
-
-instance encodeCombinedWSStreamToServer :: Encode CombinedWSStreamToServer where
-  encode value = genericEncode defaultOptions value
-
-instance decodeCombinedWSStreamToServer :: Decode CombinedWSStreamToServer where
-  decode value = genericDecode defaultOptions value
+type NotFoundWebData
+  = RemoteData NotFoundAjaxError

@@ -14,9 +14,9 @@ import Prologue
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.Icons (Icon(..))
-import Foreign (MultipleErrors)
+import Data.Argonaut.Decode (JsonDecodeError)
 import Halogen (SubscriptionId)
-import Servant.PureScript.Ajax (AjaxError)
+import Servant.PureScript (AjaxError)
 import Types (DecodedAjaxError)
 
 type ToastMessage
@@ -79,10 +79,10 @@ errorToast shortDescription longDescription =
   }
 
 ajaxErrorToast :: String -> AjaxError -> ToastMessage
-ajaxErrorToast shortDescription ajaxError = errorToast shortDescription $ Just "A request was made to the server, but the expected response was not returned."
+ajaxErrorToast shortDescription _ = errorToast shortDescription $ Just "A request was made to the server, but the expected response was not returned."
 
-decodingErrorToast :: String -> MultipleErrors -> ToastMessage
-decodingErrorToast shortDescription decodingError = errorToast shortDescription $ Just "Some data was received from the server, but the browser was unable to parse it."
+decodingErrorToast :: String -> JsonDecodeError -> ToastMessage
+decodingErrorToast shortDescription _ = errorToast shortDescription $ Just "Some data was received from the server, but the browser was unable to parse it."
 
 decodedAjaxErrorToast :: String -> DecodedAjaxError -> ToastMessage
 decodedAjaxErrorToast shortDescription decodedAjaxError = case decodedAjaxError of

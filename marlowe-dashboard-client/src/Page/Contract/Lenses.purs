@@ -24,7 +24,7 @@ import Component.Contacts.Types (WalletNickname)
 import Data.Lens (Lens', Prism', lens', prism')
 import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics (Party)
@@ -49,7 +49,7 @@ _Started =
     )
 
 _nickname :: forall a r. Lens' { nickname :: a | r } a
-_nickname = prop (SProxy :: SProxy "nickname")
+_nickname = prop (Proxy :: _ "nickname")
 
 _stateNickname :: Lens' State String
 _stateNickname = lens' go
@@ -59,25 +59,25 @@ _stateNickname = lens' go
   go (Started s) = s.nickname /\ Started <<< s { nickname = _ }
 
 _tab :: forall a r. Lens' { tab :: a | r } a
-_tab = prop (SProxy :: SProxy "tab")
+_tab = prop (Proxy :: _ "tab")
 
 _executionState :: forall a r. Lens' { executionState :: a | r } a
-_executionState = prop (SProxy :: SProxy "executionState")
+_executionState = prop (Proxy :: _ "executionState")
 
 _pendingTransaction :: forall a r. Lens' { pendingTransaction :: a | r } a
-_pendingTransaction = prop (SProxy :: SProxy "pendingTransaction")
+_pendingTransaction = prop (Proxy :: _ "pendingTransaction")
 
 _previousSteps :: forall a r. Lens' { previousSteps :: a | r } a
-_previousSteps = prop (SProxy :: SProxy "previousSteps")
+_previousSteps = prop (Proxy :: _ "previousSteps")
 
 _marloweParams :: forall a r. Lens' { marloweParams :: a | r } a
-_marloweParams = prop (SProxy :: SProxy "marloweParams")
+_marloweParams = prop (Proxy :: _ "marloweParams")
 
 _selectedStep :: forall a r. Lens' { selectedStep :: a | r } a
-_selectedStep = prop (SProxy :: SProxy "selectedStep")
+_selectedStep = prop (Proxy :: _ "selectedStep")
 
 _metadata :: forall a r. Lens' { metadata :: a | r } a
-_metadata = prop (SProxy :: SProxy "metadata")
+_metadata = prop (Proxy :: _ "metadata")
 
 _stateMetadata :: Lens' State MetaData
 _stateMetadata = lens' go
@@ -87,7 +87,7 @@ _stateMetadata = lens' go
   go (Started s) = s.metadata /\ Started <<< s { metadata = _ }
 
 _participants :: forall a r. Lens' { participants :: a | r } a
-_participants = prop (SProxy :: SProxy "participants")
+_participants = prop (Proxy :: _ "participants")
 
 _stateParticipants :: Lens' State (Map Party (Maybe WalletNickname))
 _stateParticipants = lens' go
@@ -97,13 +97,13 @@ _stateParticipants = lens' go
   go (Started s) = s.participants /\ Started <<< s { participants = _ }
 
 _userParties :: forall a r. Lens' { userParties :: a | r } a
-_userParties = prop (SProxy :: SProxy "userParties")
+_userParties = prop (Proxy :: _ "userParties")
 
 _namedActions :: forall a r. Lens' { namedActions :: a | r } a
-_namedActions = prop (SProxy :: SProxy "namedActions")
+_namedActions = prop (Proxy :: _ "namedActions")
 
 _expandPayments :: forall a r. Lens' { expandPayments :: a | r } a
-_expandPayments = prop (SProxy :: SProxy "expandPayments")
+_expandPayments = prop (Proxy :: _ "expandPayments")
 
 _resultingPayments :: forall a r. Lens' { resultingPayments :: a | r } a
-_resultingPayments = prop (SProxy :: SProxy "resultingPayments")
+_resultingPayments = prop (Proxy :: _ "resultingPayments")

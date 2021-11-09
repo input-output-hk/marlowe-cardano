@@ -7,8 +7,8 @@ import Control.Monad.Gen (class MonadGen, chooseInt, elements, oneOf)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (StateT, evalStateT, execState, get, gets, lift)
 import Data.Array.NonEmpty (NonEmptyArray, fromArray)
-import Data.BigInteger (BigInteger)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Either (hush)
 import Data.Int (round)
 import Data.Lens (_Just, preview, previewOn, (^.))
@@ -57,9 +57,7 @@ toTerm :: EM.Contract -> Term T.Contract
 toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $ pretty contract
 
 contractToExtended :: String -> Maybe EM.Contract
-contractToExtended contract = case parseContract contract of -- We reuse the extended Marlowe parser for now since it is a superset
-  Right parsedContract -> fromTerm parsedContract
-  Left error -> Nothing
+contractToExtended = fromTerm <=< hush <<< parseContract
 
 examplesMatch :: TestSuite
 examplesMatch =
@@ -98,14 +96,14 @@ filledEscrow =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Payment deadline" /\ BigInteger.fromInt 10
-                  , "Complaint response deadline" /\ BigInteger.fromInt 50
-                  , "Complaint deadline" /\ BigInteger.fromInt 100
-                  , "Mediation deadline" /\ BigInteger.fromInt 1000
+                  [ "Payment deadline" /\ BigInt.fromInt 10
+                  , "Complaint response deadline" /\ BigInt.fromInt 50
+                  , "Complaint deadline" /\ BigInt.fromInt 100
+                  , "Mediation deadline" /\ BigInt.fromInt 1000
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Price" /\ BigInteger.fromInt 450
+                  [ "Price" /\ BigInt.fromInt 450
                   ]
             }
         )
@@ -117,11 +115,11 @@ filledEscrowWithCollateral =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
-                  [ "Price" /\ BigInteger.fromInt 450
-                  , "Collateral amount" /\ BigInteger.fromInt 500
+                  [ "Price" /\ BigInt.fromInt 450
+                  , "Collateral amount" /\ BigInt.fromInt 500
                   ]
             }
         )
@@ -135,13 +133,13 @@ filledZeroCouponBond =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Interest" /\ BigInteger.fromInt 100
-                  , "Amount" /\ BigInteger.fromInt 200
+                  [ "Interest" /\ BigInt.fromInt 100
+                  , "Amount" /\ BigInt.fromInt 200
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Interest" /\ BigInteger.fromInt 100
-                  , "Amount" /\ BigInteger.fromInt 200
+                  [ "Interest" /\ BigInt.fromInt 100
+                  , "Amount" /\ BigInt.fromInt 200
                   ]
             }
         )
@@ -153,11 +151,11 @@ filledCouponBondGuaranteed =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
-                  [ "Interest instalment" /\ BigInteger.fromInt 100
-                  , "Principal" /\ BigInteger.fromInt 200
+                  [ "Interest instalment" /\ BigInt.fromInt 100
+                  , "Principal" /\ BigInt.fromInt 200
                   ]
             }
         )
@@ -169,11 +167,11 @@ filledSwap =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
-                  [ "Amount of Ada" /\ BigInteger.fromInt 1500000
-                  , "Amount of dollars" /\ BigInteger.fromInt 1
+                  [ "Amount of Ada" /\ BigInt.fromInt 1500000
+                  , "Amount of dollars" /\ BigInt.fromInt 1
                   ]
             }
         )
@@ -187,17 +185,17 @@ filledContractForDifferences =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInteger.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInteger.fromInt 20
-                  , "First window beginning" /\ BigInteger.fromInt 30
-                  , "First window deadline" /\ BigInteger.fromInt 40
-                  , "Second window beginning" /\ BigInteger.fromInt 100
-                  , "Second window deadline" /\ BigInteger.fromInt 110
+                  [ "Party deposit deadline" /\ BigInt.fromInt 10
+                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
+                  , "First window beginning" /\ BigInt.fromInt 30
+                  , "First window deadline" /\ BigInt.fromInt 40
+                  , "Second window beginning" /\ BigInt.fromInt 100
+                  , "Second window deadline" /\ BigInt.fromInt 110
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Amount paid by party" /\ BigInteger.fromInt 100000000
-                  , "Amount paid by counterparty" /\ BigInteger.fromInt 100000000
+                  [ "Amount paid by party" /\ BigInt.fromInt 100000000
+                  , "Amount paid by counterparty" /\ BigInt.fromInt 100000000
                   ]
             }
         )
@@ -211,18 +209,18 @@ filledContractForDifferencesWithOracle =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInteger.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInteger.fromInt 20
-                  , "First window beginning" /\ BigInteger.fromInt 30
-                  , "First window deadline" /\ BigInteger.fromInt 40
-                  , "Second window beginning" /\ BigInteger.fromInt 100
-                  , "Second window deadline" /\ BigInteger.fromInt 110
+                  [ "Party deposit deadline" /\ BigInt.fromInt 10
+                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
+                  , "First window beginning" /\ BigInt.fromInt 30
+                  , "First window deadline" /\ BigInt.fromInt 40
+                  , "Second window beginning" /\ BigInt.fromInt 100
+                  , "Second window deadline" /\ BigInt.fromInt 110
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Amount paid by party" /\ BigInteger.fromInt 100000000
-                  , "Amount paid by counterparty" /\ BigInteger.fromInt 100000000
-                  , "Amount of Ada to use as asset" /\ BigInteger.fromInt 100000000
+                  [ "Amount paid by party" /\ BigInt.fromInt 100000000
+                  , "Amount paid by counterparty" /\ BigInt.fromInt 100000000
+                  , "Amount of Ada to use as asset" /\ BigInt.fromInt 100000000
                   ]
             }
         )
@@ -237,11 +235,11 @@ escrowSimpleFlow =
   test "Escrow" do
     -- A simple test that runs the Escrow contract to completion
     let
-      deposit = IDeposit seller buyer ada (BigInteger.fromInt 450)
+      deposit = IDeposit seller buyer ada (BigInt.fromInt 450)
 
-      choice1 = IChoice ((ChoiceId "Report problem") buyer) (BigInteger.fromInt 1)
+      choice1 = IChoice ((ChoiceId "Report problem") buyer) (BigInt.fromInt 1)
 
-      choice2 = IChoice ((ChoiceId "Confirm problem") seller) (BigInteger.fromInt 1)
+      choice2 = IChoice ((ChoiceId "Confirm problem") seller) (BigInt.fromInt 1)
 
       finalState =
         (flip execState mkState) do
@@ -285,12 +283,12 @@ contractHasNoErrors contractName contract =
     runContract (Just contract)
 
   -- When the possible action is a Choose, we need to generate a random value inside the provided Bound.
-  -- We use this function (which looses precision) in order to select a small integer and wrap it in a BigInteger
-  looselyToInt :: BigInteger -> Int
-  looselyToInt = round <<< BigInteger.toNumber
+  -- We use this function (which looses precision) in order to select a small integer and wrap it in a BigInt
+  looselyToInt :: BigInt -> Int
+  looselyToInt = round <<< BigInt.toNumber
 
-  genValueInBound :: forall m. MonadGen m => MonadRec m => Bound -> m BigInteger
-  genValueInBound (Bound from to) = BigInteger.fromInt <$> chooseInt (looselyToInt from) (looselyToInt to)
+  genValueInBound :: forall m. MonadGen m => MonadRec m => Bound -> m BigInt
+  genValueInBound (Bound from to) = BigInt.fromInt <$> chooseInt (looselyToInt from) (looselyToInt to)
 
   -- TODO: For the moment it was not needed, as none of the examples triggered a warning nor an error
   --       but we should add an extra parameter to runContract that includes the current Action list
@@ -326,6 +324,6 @@ contractHasNoErrors contractName contract =
         case mError, mWarnings of
           -- TODO: If we run into this message, we'll need to implement the refactor described in runContract to know how to reach this state
           Nothing, Just [] -> runContract mContract
-          Just err, _ -> pure $ Failed "it has errors"
-          _, Just warnings -> pure $ Failed "it has warnings"
+          Just _, _ -> pure $ Failed "it has errors"
+          _, Just _ -> pure $ Failed "it has warnings"
           _, _ -> pure $ Failed "Wrong simulation state"

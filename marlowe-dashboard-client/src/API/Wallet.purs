@@ -14,7 +14,7 @@ import Control.Monad.Error.Class (class MonadError)
 import Effect.Aff.Class (class MonadAff)
 import Plutus.V1.Ledger.Tx (Tx)
 import Plutus.V1.Ledger.Value (Value)
-import Servant.PureScript.Ajax (AjaxError)
+import Servant.PureScript (AjaxError)
 import Wallet.Emulator.Wallet (Wallet)
 
 createWallet ::

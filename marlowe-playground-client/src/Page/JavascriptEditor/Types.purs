@@ -5,12 +5,12 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Getter', Lens', Prism', Fold', prism, to, (^.))
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Language.Javascript.Interpreter (_result)
@@ -47,12 +47,13 @@ data Action
   | BottomPanelAction (BottomPanel.Action BottomPanelView Action)
   | SendResultToSimulator
   | InitJavascriptProject MetadataHintInfo String
-  | SetIntegerTemplateParam IntegerTemplateType String BigInteger
+  | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
   | ClearAnalysisResults
   | MetadataAction MetadataAction
+  | DoNothing
 
 defaultEvent :: String -> Event
 defaultEvent s = A.defaultEvent $ "Javascript." <> s
@@ -70,6 +71,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction") { label = Just $ showConstructor action }
+  toEvent DoNothing = Nothing
 
 type DecorationIds
   = { topDecorationId :: String
@@ -77,10 +79,10 @@ type DecorationIds
     }
 
 _topDecorationId :: Lens' DecorationIds String
-_topDecorationId = prop (SProxy :: SProxy "topDecorationId")
+_topDecorationId = prop (Proxy :: _ "topDecorationId")
 
 _bottomDecorationId :: Lens' DecorationIds String
-_bottomDecorationId = prop (SProxy :: SProxy "bottomDecorationId")
+_bottomDecorationId = prop (Proxy :: _ "bottomDecorationId")
 
 type State
   = { keybindings :: KeyBindings
@@ -93,25 +95,25 @@ type State
     }
 
 _keybindings :: Lens' State KeyBindings
-_keybindings = prop (SProxy :: SProxy "keybindings")
+_keybindings = prop (Proxy :: _ "keybindings")
 
 _compilationResult :: Lens' State CompilationState
-_compilationResult = prop (SProxy :: SProxy "compilationResult")
+_compilationResult = prop (Proxy :: _ "compilationResult")
 
 _decorationIds :: Lens' State (Maybe DecorationIds)
-_decorationIds = prop (SProxy :: SProxy "decorationIds")
+_decorationIds = prop (Proxy :: _ "decorationIds")
 
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
-_bottomPanelState = prop (SProxy :: SProxy "bottomPanelState")
+_bottomPanelState = prop (Proxy :: _ "bottomPanelState")
 
 _metadataHintInfo :: Lens' State MetadataHintInfo
-_metadataHintInfo = prop (SProxy :: SProxy "metadataHintInfo")
+_metadataHintInfo = prop (Proxy :: _ "metadataHintInfo")
 
 _analysisState :: Lens' State AnalysisState
-_analysisState = prop (SProxy :: SProxy "analysisState")
+_analysisState = prop (Proxy :: _ "analysisState")
 
 _editorReady :: Lens' State Boolean
-_editorReady = prop (SProxy :: SProxy "editorReady")
+_editorReady = prop (Proxy :: _ "editorReady")
 
 isCompiling :: State -> Boolean
 isCompiling state = case state ^. _compilationResult of

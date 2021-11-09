@@ -8,6 +8,7 @@ import Blockly.Toolbox (Toolbox)
 import Blockly.Types as BT
 import Bootstrap (btn)
 import Control.Monad.Except (ExceptT(..), except, runExceptT)
+import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Bifunctor (lmap)
 import Data.Either (note)
 import Data.Lens (Lens', assign, set, use)
@@ -15,13 +16,12 @@ import Data.Lens.Record (prop)
 import Data.List (List)
 import Data.Maybe (isJust)
 import Data.Newtype (unwrap)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Traversable (for, for_)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
-import Foreign.Generic (encodeJSON)
 import Halogen (ClassName(..), Component, HalogenM, RefLabel(..), liftEffect, mkComponent, modify_, raise)
 import Halogen as H
 import Halogen.BlocklyCommons (blocklyEvents, detectCodeChanges)
@@ -30,8 +30,8 @@ import Halogen.Css (classNames)
 import Halogen.HTML (HTML, button, div, text, iframe, aside, section)
 import Halogen.HTML.Core (AttrName(..))
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (class_, classes, id_, ref, src, attr)
-import Marlowe.ActusBlockly (buildGenerator, parseActusJsonCode)
+import Halogen.HTML.Properties (class_, classes, id, ref, src, attr)
+import Marlowe.ActusBlockly (ContractTerms, buildGenerator, parseActusJsonCode)
 
 foreign import sendContractToShiny ::
   String ->
@@ -46,16 +46,16 @@ type State
     }
 
 _actusBlocklyState :: Lens' State (Maybe BT.BlocklyState)
-_actusBlocklyState = prop (SProxy :: SProxy "actusBlocklyState")
+_actusBlocklyState = prop (Proxy :: _ "actusBlocklyState")
 
 _generator :: Lens' State (Maybe Generator)
-_generator = prop (SProxy :: SProxy "generator")
+_generator = prop (Proxy :: _ "generator")
 
 _errorMessage :: Lens' State (Maybe String)
-_errorMessage = prop (SProxy :: SProxy "errorMessage")
+_errorMessage = prop (Proxy :: _ "errorMessage")
 
 _showShiny :: Lens' State Boolean
-_showShiny = prop (SProxy :: SProxy "showShiny")
+_showShiny = prop (Proxy :: _ "showShiny")
 
 data Query a
   = Resize a
@@ -84,15 +84,14 @@ data Message
 type DSL m a
   = HalogenM State Action () Message m a
 
--- FIXME: rename to mkBlockly to avoid shadowing in handleQuery
-blockly ::
+mkBlockly ::
   forall m.
   MonadAff m =>
   String ->
   Array BlockDefinition ->
   Toolbox ->
-  Component HTML Query Unit Message m
-blockly rootBlockName blockDefinitions toolbox =
+  Component Query Unit Message m
+mkBlockly rootBlockName blockDefinitions toolbox =
   mkComponent
     { initialState:
         const
@@ -166,7 +165,7 @@ handleAction (GetTerms flavour) = do
     Left e -> assign _errorMessage $ Just e
     Right contract -> do
       assign _errorMessage Nothing
-      case parseActusJsonCode contract of
+      case parseActusJsonCode contract :: _ _ ContractTerms of
         Left e -> assign _errorMessage $ Just e
         Right ctRaw -> do
           let
@@ -195,11 +194,11 @@ handleAction RunAnalysis = do
     Left e -> assign _errorMessage $ Just e
     Right contract -> do
       assign _errorMessage Nothing
-      case parseActusJsonCode contract of
+      case parseActusJsonCode contract :: _ _ ContractTerms of
         Left e -> assign _errorMessage $ Just e
         Right c -> do
           assign _showShiny true
-          liftEffect $ sendContractToShiny $ encodeJSON c
+          liftEffect $ sendContractToShiny $ encodeStringifyJson c
   where
   unexpected s = "An unexpected error has occurred, please raise a support issue: " <> s
 
@@ -221,7 +220,7 @@ render state =
         ]
     , div
         [ ref blocklyRef
-        , id_ "actusBlocklyWorkspace"
+        , id "actusBlocklyWorkspace"
         , classes [ flexGrow ]
         ]
         []
@@ -235,7 +234,7 @@ shiny state =
     [ div [ attr (AttrName "style") "height: 100%;" ]
         [ iframe
             [ src "http://localhost:8081"
-            , id_ "shiny"
+            , id "shiny"
             , attr (AttrName "frameborder") "0"
             , attr (AttrName "scrolling") "no"
             , attr (AttrName "style") "position: relative; height: 100%; width: 100%;"
@@ -246,7 +245,7 @@ shiny state =
 toCodeButton :: forall p. String -> HTML p Action
 toCodeButton key =
   button
-    [ onClick $ const $ Just $ GetTerms FS
+    [ onClick $ const $ GetTerms FS
     , classNames [ "btn" ]
     ]
     [ text key ]
@@ -254,7 +253,7 @@ toCodeButton key =
 toStaticCodeButton :: forall p. String -> HTML p Action
 toStaticCodeButton key =
   button
-    [ onClick $ const $ Just $ GetTerms F
+    [ onClick $ const $ GetTerms F
     , classes ([ alignedButtonInTheMiddle, btn ])
     ]
     [ text key ]
@@ -262,7 +261,7 @@ toStaticCodeButton key =
 runAnalysis :: forall p. HTML p Action
 runAnalysis =
   button
-    [ onClick $ const $ Just $ RunAnalysis
+    [ onClick $ const $ RunAnalysis
     , classes ([ alignedButtonLast, hidden ]) --this feature is temporary disabled because shiny is not deployed yet
     ]
     [ text "Run Analysis" ]

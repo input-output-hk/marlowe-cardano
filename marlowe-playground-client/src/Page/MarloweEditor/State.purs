@@ -7,7 +7,7 @@ import Prologue hiding (div)
 import CloseAnalysis (analyseClose)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State) as BottomPanel
-import Control.Monad.Except (ExceptT, lift, runExceptT)
+import Control.Monad.Except (lift)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk)
@@ -38,9 +38,7 @@ import Marlowe.Parser (parseContract)
 import Marlowe.Template (TemplateContent)
 import Marlowe.Template as Template
 import Monaco (isError, isWarning)
-import Network.RemoteData as RemoteData
 import Page.MarloweEditor.Types (Action(..), BottomPanelView, State, _bottomPanelState, _editorErrors, _editorReady, _editorWarnings, _hasHoles, _keybindings, _metadataHintInfo, _selectedHole, _showErrorDetail)
-import Servant.PureScript.Ajax (AjaxError)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability, getUnreachableContracts)
 import StaticAnalysis.StaticTools (analyseContract)
@@ -48,7 +46,6 @@ import StaticAnalysis.Types (AnalysisExecutionState(..), _analysisExecutionState
 import StaticData (marloweBufferLocalStorageKey)
 import StaticData as StaticData
 import Text.Pretty (pretty)
-import Types (WebData)
 import Web.Event.Extra (preventDefault, readFileFromDragEvent)
 
 toBottomPanel ::
@@ -64,6 +61,8 @@ handleAction ::
   MonadAsk Env m =>
   Action ->
   HalogenM State Action ChildSlots Void m Unit
+handleAction DoNothing = pure unit
+
 handleAction (ChangeKeyBindings bindings) = do
   assign _keybindings bindings
   void $ query _marloweEditorPageSlot unit (Monaco.SetKeyBindings bindings unit)
@@ -211,7 +210,7 @@ processMarloweCode text = do
     -- then update the template content. If not, leave them as they are
     maybeUpdateTemplateContent :: TemplateContent -> TemplateContent
     maybeUpdateTemplateContent = maybe identity (Template.updateTemplateContent <<< Template.getPlaceholderIds) mContract
-  void $ query _marloweEditorPageSlot unit $ H.request $ Monaco.SetModelMarkers markerData
+  void $ H.request _marloweEditorPageSlot unit $ Monaco.SetModelMarkers markerData
   modify_
     ( set _editorWarnings warningMarkers
         <<< set _editorErrors errorMarkers
@@ -231,12 +230,6 @@ processMarloweCode text = do
   case mProviders of
     Just { codeActionProvider: Just caProvider, completionItemProvider: Just ciProvider } -> liftEffect $ updateAdditionalContext caProvider ciProvider additionalContext
     _ -> pure unit
-
-runAjax ::
-  forall m a.
-  ExceptT AjaxError (HalogenM State Action ChildSlots Void m) a ->
-  HalogenM State Action ChildSlots Void m (WebData a)
-runAjax action = RemoteData.fromEither <$> runExceptT action
 
 editorSetTheme :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
 editorSetTheme = void $ query _marloweEditorPageSlot unit (Monaco.SetTheme MM.daylightTheme.name unit)

@@ -27,21 +27,18 @@ all =
   suite "Marlowe.Blockly" do
     test "codeToBlocklyToCode" $ contractQuickCheck (GenerationOptions { withHoles: true, withExtendedConstructs: true }) codeToBlocklyToCode
 
-mkTestState :: forall m. MonadEffect m => m BlocklyState
-mkTestState = do
-  blocklyState <- liftEffect $ Headless.createBlocklyInstance rootBlockName
-  liftEffect do
-    Blockly.addBlockTypes blocklyState.blockly blockDefinitions
-    Headless.initializeWorkspace blocklyState
-  pure blocklyState
-
 -- Here we keep using `show` because the Term range is intentionally incorrect when converting from blockly
 -- It uses zero to create a dummy range. By using `show` we can reasonably compare contracts
 codeToBlocklyToCode :: GenWithHoles Result
 codeToBlocklyToCode = do
   contract <- genTerm "contract" genContract
   let
-    positionedContract = rmap show $ lmap show $ Parser.parseContract (stripParens $ show contract)
+    positionedContract =
+      rmap show
+        $ lmap show
+        $ Parser.parseContract
+        $ stripParens
+        $ show contract
 
     -- Unfortunately quickcheck runs the concrete Gen monad and it would need to be re-written to use MonadGen
     -- https://github.com/purescript/purescript-quickcheck/blob/v5.0.0/src/Test/QuickCheck.purs#L97
@@ -58,6 +55,14 @@ runContract contract =
     runExceptT do
       block <- withExceptT explainError (getDom blocklyState)
       ExceptT $ pure $ blockToContract block
+
+mkTestState :: forall m. MonadEffect m => m BlocklyState
+mkTestState = do
+  blocklyState <- liftEffect $ Headless.createBlocklyInstance rootBlockName
+  liftEffect do
+    Blockly.addBlockTypes blocklyState.blockly blockDefinitions
+    Headless.initializeWorkspace blocklyState
+  pure blocklyState
 
 buildBlocks :: BlocklyState -> Term Contract -> Effect Unit
 buildBlocks bs contract = do

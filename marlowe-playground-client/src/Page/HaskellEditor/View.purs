@@ -8,6 +8,7 @@ import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
 import Data.Lens (_Right, has, to, view, (^.))
+import Data.Maybe (maybe)
 import Data.String (Pattern(..), split)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff)
@@ -18,7 +19,7 @@ import Halogen.Extra (renderSubmodule)
 import Halogen.HTML (HTML, button, code_, div, div_, option, pre_, section, section_, select, slot, text)
 import Halogen.HTML.Events (onClick, onSelectedIndexChange)
 import Halogen.HTML.Properties (class_, classes, enabled)
-import Halogen.HTML.Properties as HTML
+import Halogen.HTML.Properties as HP
 import Halogen.Monaco (monacoComponent)
 import Language.Haskell.Interpreter (CompilationError(..), InterpreterError(..), InterpreterResult(..))
 import Language.Haskell.Monaco as HM
@@ -38,7 +39,7 @@ render ::
 render metadata state =
   div [ classes [ flex, flexCol, fullHeight ] ]
     [ section [ classes [ paddingX, minH0, flexGrow, overflowHidden ] ]
-        [ haskellEditor state ]
+        [ haskellEditor ]
     , section [ classes [ paddingX, maxH70p ] ]
         [ renderSubmodule
             _bottomPanelState
@@ -75,34 +76,28 @@ editorOptions :: forall p. State -> HTML p Action
 editorOptions state =
   div [ class_ (ClassName "editor-options") ]
     [ select
-        [ HTML.id_ "editor-options"
-        , HTML.value $ show $ state ^. _haskellEditorKeybindings
-        , onSelectedIndexChange (\idx -> ChangeKeyBindings <$> toEnum idx)
+        [ HP.id "editor-options"
+        , HP.value $ show $ state ^. _haskellEditorKeybindings
+        , onSelectedIndexChange (maybe DoNothing ChangeKeyBindings <<< toEnum)
         ]
         (map keybindingItem (upFromIncluding bottom))
     ]
   where
   keybindingItem item =
     if state ^. _haskellEditorKeybindings == item then
-      option [ class_ (ClassName "selected-item"), HTML.value (show item) ] [ text $ show item ]
+      option [ class_ (ClassName "selected-item"), HP.value (show item) ] [ text $ show item ]
     else
-      option [ HTML.value (show item) ] [ text $ show item ]
+      option [ HP.value (show item) ] [ text $ show item ]
 
-haskellEditor ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
-haskellEditor state = slot _haskellEditorSlot unit component unit (Just <<< HandleEditorMessage)
+haskellEditor :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
+haskellEditor = slot _haskellEditorSlot unit component unit HandleEditorMessage
   where
-  setup editor = pure unit
-
-  component = monacoComponent $ HM.settings setup
+  component = monacoComponent $ HM.settings $ const $ pure unit
 
 compileButton :: forall p. State -> HTML p Action
 compileButton state =
   button
-    [ onClick $ const $ Just Compile
+    [ onClick $ const Compile
     , enabled enabled'
     , classes classes'
     ]
@@ -127,7 +122,7 @@ compileButton state =
 sendToSimulationButton :: forall p. State -> HTML p Action
 sendToSimulationButton state =
   button
-    [ onClick $ const $ Just SendResultToSimulator
+    [ onClick $ const SendResultToSimulator
     , enabled enabled'
     , classNames [ "btn" ]
     ]

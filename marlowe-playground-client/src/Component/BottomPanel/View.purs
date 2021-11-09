@@ -43,7 +43,7 @@ render panelTitles panelContent state =
             )
         -- Visibility toggle
         , div [ classes [ smallPaddingRight ] ]
-            [ a [ onClick $ const $ Just $ SetVisibility (state ^. _showBottomPanel <<< to not) ]
+            [ a [ onClick $ const $ SetVisibility (state ^. _showBottomPanel <<< to not) ]
                 [ img [ classes (minimizeIcon $ state ^. _showBottomPanel), src closeDrawerArrowIcon, alt "close drawer icon" ] ]
             ]
         ]
@@ -57,9 +57,9 @@ render panelTitles panelContent state =
   -- visibility, and if not it changes to that panel (which also shows the panel if hidden)
   clickTitleAction view =
     if state ^. _panelView == view then
-      const $ Just $ SetVisibility (state ^. _showBottomPanel <<< to not)
+      const $ SetVisibility (state ^. _showBottomPanel <<< to not)
     else
-      const $ Just $ ChangePanel $ view
+      const $ ChangePanel $ view
 
   activeClasses view = if state ^. _panelView == view then [ textSecondary ] else [ textInactive ]
 

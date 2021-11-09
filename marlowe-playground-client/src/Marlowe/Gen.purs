@@ -6,19 +6,20 @@ import Control.Monad.Gen (class MonadGen, chooseInt, resize, suchThat, unfoldabl
 import Control.Monad.Gen as Gen
 import Control.Monad.Reader (class MonadReader, ask, local)
 import Control.Monad.Rec.Class (class MonadRec)
-import Data.BigInteger (BigInteger)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Char (fromCharCode)
 import Data.Char.Gen (genAlpha, genDigitChar)
 import Data.Foldable (class Foldable)
 import Data.Int (rem)
 import Data.Maybe (fromMaybe)
-import Data.NonEmpty (NonEmpty, foldl1, (:|))
+import Data.NonEmpty (NonEmpty, (:|))
+import Data.Semigroup.Foldable (foldl1)
 import Data.String.CodeUnits (fromCharArray)
 import Marlowe.Extended as EM
 import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), MarloweType(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Token(..), Value(..), ValueId(..), mkArgName)
 import Marlowe.Holes as H
-import Marlowe.Semantics (Rational(..), CurrencySymbol, Input(..), PubKey, Slot(..), SlotInterval(..), TokenName, TransactionInput(..), TransactionWarning(..))
+import Marlowe.Semantics (CurrencySymbol, Input(..), PubKey, Rational(..), Slot(..), SlotInterval(..), TokenName, TransactionInput(..), TransactionWarning(..))
 import Marlowe.Semantics as S
 import Text.Parsing.StringParser (Pos)
 import Type.Proxy (Proxy(..))
@@ -34,13 +35,13 @@ oneOf ::
   m a
 oneOf = foldl1 Gen.choose
 
-genBigInteger :: forall m. MonadGen m => MonadRec m => m BigInteger
-genBigInteger = BigInteger.fromInt <$> chooseInt bottom top
+genBigInt :: forall m. MonadGen m => MonadRec m => m BigInt
+genBigInt = BigInt.fromInt <$> chooseInt bottom top
 
 genRational :: forall m. MonadGen m => MonadRec m => m Rational
 genRational = do
-  n <- genBigInteger
-  d <- genBigInteger
+  n <- genBigInt
+  d <- genBigInt
   pure
     -- we need to do this because in tests where we wrap a Rational in a Term or TermWrapper
     
@@ -54,7 +55,7 @@ genRational = do
         Rational (-n) (-d)
 
 genSlot :: forall m. MonadGen m => MonadRec m => m Slot
-genSlot = Slot <$> genBigInteger
+genSlot = Slot <$> genBigInt
 
 genTimeout :: forall m. MonadGen m => MonadRec m => MonadReader GenerationOptions m => m H.Timeout
 genTimeout = do
@@ -64,7 +65,7 @@ genTimeout = do
   else
     slot
   where
-  slot = H.Slot <$> genBigInteger
+  slot = H.Slot <$> genBigInt
 
   slotParam = H.SlotParam <$> genTokenName
 
@@ -111,8 +112,8 @@ genSlotInterval gen = do
 
 genBound :: forall m. MonadGen m => MonadRec m => m Bound
 genBound = do
-  from <- genBigInteger
-  to <- suchThat genBigInteger (\v -> v > from)
+  from <- genBigInt
+  to <- suchThat genBigInt (\v -> v > from)
   pure $ Bound from to
 
 genPosition :: forall m. MonadGen m => MonadRec m => m Pos
@@ -191,7 +192,7 @@ genCases ::
   m (Array (Term Case))
 genCases size = resize (_ - 1) (unfoldable (local withoutHoles (genTerm "case" (genCase size))))
   where
-  withoutHoles (GenerationOptions { withHoles, withExtendedConstructs }) = GenerationOptions { withHoles: false, withExtendedConstructs }
+  withoutHoles (GenerationOptions { withExtendedConstructs }) = GenerationOptions { withHoles: false, withExtendedConstructs }
 
 genValue :: forall m. MonadGen m => MonadRec m => Lazy (m Value) => Lazy (m Observation) => MonadReader GenerationOptions m => m Value
 genValue = genValue' 5
@@ -220,7 +221,7 @@ genValue' size
       oneOf $ pure SlotIntervalStart
         :| ( [ pure SlotIntervalEnd
             , AvailableMoney <$> genTerm (mkArgName PartyType) genParty <*> genTerm (mkArgName TokenType) genToken
-            , Constant <$> genBigInteger
+            , Constant <$> genBigInt
             , NegValue <$> genNewValue
             , AddValue <$> genNewValueIndexed 1 <*> genNewValueIndexed 2
             , SubValue <$> genNewValueIndexed 1 <*> genNewValueIndexed 2
@@ -237,7 +238,7 @@ genValue' size
     oneOf $ pure SlotIntervalStart
       :| [ pure SlotIntervalEnd
         , AvailableMoney <$> genTerm (mkArgName PartyType) genParty <*> genTerm (mkArgName TokenType) genToken
-        , Constant <$> genBigInteger
+        , Constant <$> genBigInt
         , UseValue <$> genTermWrapper genValueId
         ]
 
@@ -381,8 +382,8 @@ genInput ::
   m S.Input
 genInput =
   oneOf
-    $ (IDeposit <$> genPartyValue <*> genPartyValue <*> genTokenValue <*> genBigInteger)
-    :| [ IChoice <$> genChoiceIdValue <*> genBigInteger
+    $ (IDeposit <$> genPartyValue <*> genPartyValue <*> genTokenValue <*> genBigInt)
+    :| [ IChoice <$> genChoiceIdValue <*> genBigInt
       , pure INotify
       ]
 
@@ -403,8 +404,8 @@ genTransactionWarning ::
   m TransactionWarning
 genTransactionWarning =
   oneOf
-    $ (TransactionNonPositiveDeposit <$> genPartyValue <*> genPartyValue <*> genTokenValue <*> genBigInteger)
-    :| [ TransactionNonPositivePay <$> genPartyValue <*> genPayeeValueCore <*> genTokenValue <*> genBigInteger
-      , TransactionPartialPay <$> genPartyValue <*> genPayeeValueCore <*> genTokenValue <*> genBigInteger <*> genBigInteger
-      , TransactionShadowing <$> genValueIdValue <*> genBigInteger <*> genBigInteger
+    $ (TransactionNonPositiveDeposit <$> genPartyValue <*> genPartyValue <*> genTokenValue <*> genBigInt)
+    :| [ TransactionNonPositivePay <$> genPartyValue <*> genPayeeValueCore <*> genTokenValue <*> genBigInt
+      , TransactionPartialPay <$> genPartyValue <*> genPayeeValueCore <*> genTokenValue <*> genBigInt <*> genBigInt
+      , TransactionShadowing <$> genValueIdValue <*> genBigInt <*> genBigInt
       ]

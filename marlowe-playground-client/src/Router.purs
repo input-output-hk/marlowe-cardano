@@ -4,7 +4,7 @@ import Prologue hiding ((/))
 import Data.Generic.Rep (class Generic)
 import Data.Newtype (unwrap)
 import Data.Profunctor (dimap)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Gist (GistId(..))
 import Routing.Duplex (RouteDuplex', optional, param, record, root, (:=))
 import Routing.Duplex.Generic (noArgs, sum)
@@ -46,6 +46,6 @@ route =
         , "GithubAuthCallback": "gh-oauth-cb" / noArgs
         }
   where
-  _gistId = SProxy :: SProxy "gistId"
+  _gistId = Proxy :: _ "gistId"
 
-  _subroute = SProxy :: SProxy "subroute"
+  _subroute = Proxy :: _ "subroute"

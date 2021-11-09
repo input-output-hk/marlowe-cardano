@@ -4,9 +4,8 @@ module API.Url
   , toUrlPiece
   ) where
 
-import Prologue
-import Data.Json.JsonUUID (JsonUUID(..))
 import Data.UUID (toString) as UUID
+import Data.UUID.Argonaut (UUID(..))
 import Wallet.Emulator.Wallet (Wallet(..))
 import Wallet.Types (ContractInstanceId(..))
 
@@ -19,7 +18,7 @@ class ToUrlPiece a where
   toUrlPiece :: a -> URLPiece
 
 instance contractInstanceIdToUrlPiece :: ToUrlPiece ContractInstanceId where
-  toUrlPiece (ContractInstanceId { unContractInstanceId: JsonUUID uuid }) = UUID.toString uuid
+  toUrlPiece (ContractInstanceId { unContractInstanceId: UUID uuid }) = UUID.toString uuid
 
 instance walletToUrlPiece :: ToUrlPiece Wallet where
   toUrlPiece (Wallet { getWalletId }) = getWalletId

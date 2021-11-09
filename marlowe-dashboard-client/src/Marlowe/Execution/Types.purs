@@ -9,7 +9,7 @@ module Marlowe.Execution.Types
   ) where
 
 import Prologue
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.List (List)
 import Data.Map (Map)
 import Marlowe.Semantics (AccountId, Bound, ChoiceId, ChosenNum, Contract, Observation, Party, Payment, Slot, Token, TransactionInput, ValueId, Accounts)
@@ -74,7 +74,7 @@ type PendingTimeouts
 data NamedAction
   -- Equivalent to Semantics.Action(Deposit)
   -- Creates IDeposit
-  = MakeDeposit AccountId Party Token BigInteger
+  = MakeDeposit AccountId Party Token BigInt
   -- Equivalent to Semantics.Action(Choice) but has ChosenNum since it is a stateful element that
   -- stores the users choice
   -- Creates IChoice
@@ -86,7 +86,7 @@ data NamedAction
   -- we work out the details of what will happen when this occurs, currently we are interested in
   -- any payments that will be made and new bindings that will be evaluated
   -- Creates empty tx
-  | Evaluate { payments :: Array Payment, bindings :: Map ValueId BigInteger }
+  | Evaluate { payments :: Array Payment, bindings :: Map ValueId BigInt }
   -- A special case of Evaluate where the only way the Contract can progress is to apply an empty
   -- transaction which results in the contract being closed
   -- Creates empty tx

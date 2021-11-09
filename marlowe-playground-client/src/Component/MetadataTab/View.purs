@@ -31,13 +31,13 @@ onlyDescriptionRenderer setAction deleteAction key info needed metadataAction ty
           , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
           , class_ $ ClassName "metadata-input"
           , value info
-          , onValueChange $ Just <<< metadataAction <<< setAction key
+          , onValueChange $ metadataAction <<< setAction key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
           [ classes [ if needed then plusBtn else minusBtn, ClassName "align-top", btn ]
-          , onClick $ const $ Just $ metadataAction $ deleteAction key
+          , onClick $ const $ metadataAction $ deleteAction key
           ]
           [ text "-" ]
       ]
@@ -60,7 +60,7 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
   , div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
       [ select
           [ class_ $ ClassName "metadata-input"
-          , onValueChange $ Just <<< metadataAction <<< setFormat key <<< setNumberFormatType
+          , onValueChange $ metadataAction <<< setFormat key <<< setNumberFormatType
           ]
           [ option
               [ value $ toString DefaultFormatType
@@ -82,13 +82,13 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
           , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
           , class_ $ ClassName "metadata-input"
           , value description
-          , onValueChange $ Just <<< metadataAction <<< setDescription key
+          , onValueChange $ metadataAction <<< setDescription key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
           [ classes [ if needed then plusBtn else minusBtn, ClassName "align-top", btn ]
-          , onClick $ const $ Just $ metadataAction $ deleteInfo key
+          , onClick $ const $ metadataAction $ deleteInfo key
           ]
           [ text "-" ]
       ]
@@ -105,7 +105,7 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
                   , value $ if numDecimals == 0 then "" else show numDecimals
                   , required true
                   , min zero
-                  , onValueChange $ Just <<< metadataAction <<< setFormat key <<< setDecimals labelStr
+                  , onValueChange $ metadataAction <<< setFormat key <<< setDecimals labelStr
                   ]
               ]
           , div [ class_ $ ClassName "metadata-prop-formattednum-col2" ]
@@ -114,7 +114,7 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
                   , placeholder $ "Currency label for " <> typeNameSmall <> " " <> show key
                   , class_ $ ClassName "metadata-input"
                   , value labelStr
-                  , onValueChange $ Just <<< metadataAction <<< setFormat key <<< DecimalFormat numDecimals
+                  , onValueChange $ metadataAction <<< setFormat key <<< DecimalFormat numDecimals
                   ]
               ]
           ]
@@ -183,7 +183,7 @@ metadataList metadataAction metadataMap hintSet metadataRenderer typeNameTitle t
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ Just $ metadataAction (setEmptyMetadata key)
+                              , onClick $ const $ metadataAction (setEmptyMetadata key)
                               ]
                               [ text "+" ]
                           ]
@@ -232,7 +232,7 @@ sortableMetadataList metadataAction metadataMap hintSet metadataRenderer typeNam
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ Just $ metadataAction (setEmptyMetadata key)
+                              , onClick $ const $ metadataAction (setEmptyMetadata key)
                               ]
                               [ text "+" ]
                           ]
@@ -266,7 +266,7 @@ metadataView metadataHints metadata metadataAction =
           , div [ class_ $ ClassName "metadata-mainprop-edit" ]
               [ select
                   [ class_ $ ClassName "metadata-input"
-                  , onValueChange $ Just <<< metadataAction <<< SetContractType <<< initialsToContractType
+                  , onValueChange $ metadataAction <<< SetContractType <<< initialsToContractType
                   ] do
                   ct <- contractTypeArray
                   pure
@@ -286,7 +286,7 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract name"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractName
-                  , onValueChange $ Just <<< metadataAction <<< SetContractName
+                  , onValueChange $ metadataAction <<< SetContractName
                   ]
               ]
           ]
@@ -298,7 +298,7 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractShortDescription
-                  , onValueChange $ Just <<< metadataAction <<< SetContractShortDescription
+                  , onValueChange $ metadataAction <<< SetContractShortDescription
                   ]
               ]
           ]
@@ -310,7 +310,7 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractLongDescription
-                  , onValueChange $ Just <<< metadataAction <<< SetContractLongDescription
+                  , onValueChange $ metadataAction <<< SetContractLongDescription
                   ]
               ]
           ]

@@ -3,17 +3,16 @@ module BridgeTests
   ) where
 
 import Prologue
-import Control.Monad.Except (runExcept)
-import Data.BigInteger (fromInt)
+import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError, printJsonDecodeError)
+import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
+import Data.Bifunctor (lmap)
+import Data.BigInt.Argonaut (fromInt)
 import Data.Map as Map
 import Data.String.Regex (replace)
 import Data.String.Regex.Flags (RegexFlags(..))
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Foreign (F, MultipleErrors)
-import Foreign.Class (class Decode)
-import Foreign.Generic (decodeJSON, encodeJSON)
 import Language.Haskell.Interpreter (CompilationError)
 import Marlowe.Semantics (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Rational(..), Slot(..), State(..), Token(..), Value(..), ValueId(..))
 import Node.Encoding (Encoding(UTF8))
@@ -30,10 +29,10 @@ all =
 jsonHandling :: TestSuite
 jsonHandling = do
   test "Json handling" do
-    response1 :: F String <- decodeFile "test/evaluation_response1.json"
-    assertRight $ runExcept response1
-    error1 :: F (Array CompilationError) <- decodeFile "test/evaluation_error1.json"
-    assertRight $ runExcept error1
+    response1 :: Either JsonDecodeError String <- decodeFile "test/evaluation_response1.json"
+    assertRight response1
+    error1 :: Either JsonDecodeError (Array CompilationError) <- decodeFile "test/evaluation_error1.json"
+    assertRight error1
 
 serializationTest :: TestSuite
 serializationTest =
@@ -80,33 +79,32 @@ serializationTest =
           , minSlot: (Slot $ fromInt 123)
           }
 
-      json = encodeJSON contract
+      json = encodeStringifyJson contract
 
-      jsonState = encodeJSON state
-    expectedJson <- liftEffect $ FS.readTextFile UTF8 "test/contract.json"
+      jsonState = encodeStringifyJson state
     expectedStateJson <- liftEffect $ FS.readTextFile UTF8 "test/state.json"
     bridgedJson <- liftEffect $ FS.readTextFile UTF8 "generated/JSON/contract.json"
     bridgedStateJson <- liftEffect $ FS.readTextFile UTF8 "generated/JSON/state.json"
     let
-      rx = unsafeRegex "\\s+" (RegexFlags { global: true, ignoreCase: true, multiline: true, sticky: false, unicode: true })
+      rx = unsafeRegex "\\s+" (RegexFlags { dotAll: false, global: true, ignoreCase: true, multiline: true, sticky: false, unicode: true })
 
       expectedState = replace rx "" expectedStateJson
     equal expectedState jsonState
-    equal (Right contract) (runExcept $ decodeJSON json)
-    equal (Right contract) (runExcept $ decodeJSON bridgedJson)
-    equal (Right state) (runExcept $ decodeJSON bridgedStateJson)
+    equal (Right contract) (lmap printJsonDecodeError $ parseDecodeJson json)
+    equal (Right contract) (lmap printJsonDecodeError $ parseDecodeJson bridgedJson)
+    equal (Right state) (lmap printJsonDecodeError $ parseDecodeJson bridgedStateJson)
 
-assertRight :: forall a. Either MultipleErrors a -> Test
-assertRight (Left err) = failure (show err)
+assertRight :: forall a. Either JsonDecodeError a -> Test
+assertRight (Left err) = failure (printJsonDecodeError err)
 
 assertRight (Right _) = success
 
 decodeFile ::
   forall m a.
   MonadAff m =>
-  Decode a =>
+  DecodeJson a =>
   String ->
-  m (F a)
+  m (Either JsonDecodeError a)
 decodeFile filename = do
   contents <- liftEffect $ FS.readTextFile UTF8 filename
-  pure (decodeJSON contents)
+  pure (parseDecodeJson contents)

@@ -6,24 +6,24 @@ module API.Request
   ) where
 
 import Prologue
-import Affjax (Request, Response, defaultRequest)
-import Affjax.RequestBody (string)
-import Control.Monad.Error.Class (class MonadError)
+import Affjax (Request, defaultRequest, request)
+import Affjax.RequestBody as Request
+import Affjax.ResponseFormat as Response
+import Control.Monad.Error.Class (class MonadError, throwError)
+import Data.Argonaut.Core (Json)
+import Data.Argonaut.Decode (class DecodeJson, decodeJson)
+import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.HTTP.Method (fromString)
-import Data.Lens (Lens', view)
-import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
-import Effect.Aff.Class (class MonadAff)
-import Foreign.Class (decode)
-import Foreign.Generic (class Decode, class Encode, encodeJSON)
-import Servant.PureScript.Ajax (AjaxError, ajax)
+import Data.Newtype (unwrap)
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Servant.PureScript (AjaxError, ErrorDescription(..))
 
 doPostRequest ::
   forall m d e.
   MonadError AjaxError m =>
   MonadAff m =>
-  Decode d =>
-  Encode e =>
+  DecodeJson d =>
+  EncodeJson e =>
   String -> e -> m d
 doPostRequest url requestBody =
   perform
@@ -31,14 +31,15 @@ doPostRequest url requestBody =
         { method = fromString "POST"
         , url = url
         , headers = defaultRequest.headers
-        , content = Just $ string $ encodeJSON requestBody
+        , content = Just $ Request.json $ encodeJson requestBody
+        , responseFormat = Response.json
         }
 
 doEmptyPostRequest ::
   forall m d.
   MonadError AjaxError m =>
   MonadAff m =>
-  Decode d =>
+  DecodeJson d =>
   String -> m d
 doEmptyPostRequest url =
   perform
@@ -46,13 +47,14 @@ doEmptyPostRequest url =
         { method = fromString "POST"
         , url = url
         , headers = defaultRequest.headers
+        , responseFormat = Response.json
         }
 
 doPutRequest ::
   forall m d.
   MonadError AjaxError m =>
   MonadAff m =>
-  Decode d =>
+  DecodeJson d =>
   String -> m d
 doPutRequest url =
   perform
@@ -60,13 +62,14 @@ doPutRequest url =
         { method = fromString "PUT"
         , url = url
         , headers = defaultRequest.headers
+        , responseFormat = Response.json
         }
 
 doGetRequest ::
   forall m d.
   MonadError AjaxError m =>
   MonadAff m =>
-  Decode d =>
+  DecodeJson d =>
   String -> m d
 doGetRequest url =
   perform
@@ -74,15 +77,24 @@ doGetRequest url =
         { method = fromString "GET"
         , url = url
         , headers = defaultRequest.headers
+        , responseFormat = Response.json
         }
 
 perform ::
   forall m d.
   MonadError AjaxError m =>
   MonadAff m =>
-  Decode d =>
-  Request Unit -> m d
-perform request = map (view _body) (ajax decode request)
-  where
-  _body :: forall a. Lens' (Response a) a
-  _body = prop (SProxy :: SProxy "body")
+  DecodeJson d =>
+  Request Json ->
+  m d
+perform req = do
+  result <- liftAff $ request req
+  response <- case result of
+    Left err -> throwError $ { request: req, description: ConnectingError err }
+    Right r -> pure r
+  when (unwrap response.status < 200 || unwrap response.status >= 299)
+    $ throwError
+    $ { request: req, description: UnexpectedHTTPStatus response }
+  case decodeJson response.body of
+    Left err -> throwError $ { request: req, description: DecodingError err }
+    Right body -> pure body
