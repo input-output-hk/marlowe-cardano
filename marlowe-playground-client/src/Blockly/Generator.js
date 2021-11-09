@@ -34,45 +34,6 @@ exports.getFieldValue_ = function (left, right, block, key) {
   }
 };
 
-exports.statementToCode_ = function (left, right, generator, block, key) {
-  var result = generator.statementToCode(block, key);
-  if (result) {
-    // Blockly adds some whitespace for some reason
-    return right(result.trim());
-  } else {
-    return left("couldn't find statement: " + key);
-  }
-};
-
-exports.valueToCode_ = function (left, right, generator, block, key, order) {
-  var result = generator.valueToCode(block, key, order);
-  if (result) {
-    // Blockly adds some whitespace for some reason
-    return right(result.trim());
-  } else {
-    return left("couldn't find value: " + key);
-  }
-};
-
-exports.mkGenerator_ = function (blockly, name) {
-  var generator = new blockly.Generator(name);
-  return generator;
-};
-
-exports.insertGeneratorFunction_ = function (generator, key, f) {
-  generator[key] = f;
-};
-
-exports.blockToCode_ = function (left, right, block, generator) {
-  try {
-    return right(generator.blockToCode(block));
-  } catch (err) {
-    console.log(block);
-    console.log(err.message);
-    return left(err.message);
-  }
-};
-
 exports.inputList_ = function (block) {
   return block.inputList;
 };

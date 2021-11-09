@@ -2,15 +2,11 @@ module Blockly.Generator where
 
 -- FIXME: SCP-1881 Remove the Generator functionality once we refactor Actus to use Blockly.Dom
 import Prologue
-import Blockly.Types (Block, Blockly, Workspace)
+import Blockly.Types (Block, Workspace)
 import Data.Array as Array
-import Data.Function.Uncurried (Fn1, Fn3, Fn4, Fn5, Fn6, runFn1, runFn3, runFn4, runFn5, runFn6)
+import Data.Function.Uncurried (Fn1, Fn3, Fn4, runFn1, runFn3, runFn4)
 import Effect (Effect)
-import Effect.Uncurried (EffectFn1, EffectFn2, EffectFn3, EffectFn4, runEffectFn1, runEffectFn2, runEffectFn3, runEffectFn4)
-import Partial.Unsafe (unsafePartial)
-
-type GeneratorFunction
-  = Block -> Either String String
+import Effect.Uncurried (EffectFn1, EffectFn2, runEffectFn1, runEffectFn2)
 
 -- FIXME: Do we still need a NewBlockFunction type? or was it because the ST code? can we use Blockly.Generator.newBlock directly?
 --        In any case we may get rid of Generator altogether in a second step of the refactor.
@@ -26,12 +22,11 @@ toNumber Atomic = 0.0
 
 toNumber None = 99.0
 
-foreign import data Generator :: Type
-
 foreign import data Input :: Type
 
 foreign import data Field :: Type
 
+-- TODO Move to Blockly.Internal
 foreign import data Connection :: Type
 
 -- FIXME: This should probably be EffectFn3, but read top level comment.
@@ -41,19 +36,6 @@ foreign import getType_ :: Fn1 Block String
 
 -- FIXME: This should probably be EffectFn4, but read top level comment.
 foreign import getFieldValue_ :: forall a. Fn4 (String -> Either String a) (a -> Either String a) Block String (Either String String)
-
--- FIXME: This should probably be EffectFn5, but read top level comment.
-foreign import statementToCode_ :: forall a. Fn5 (String -> Either String a) (a -> Either String a) Generator Block String (Either String String)
-
--- FIXME: This should probably be EffectFn6, but read top level comment.
-foreign import valueToCode_ :: forall a. Fn6 (String -> Either String a) (a -> Either String a) Generator Block String Number (Either String String)
-
-foreign import mkGenerator_ :: EffectFn2 Blockly String Generator
-
--- FIXME: should the callback be (Block -> Effect String)?
-foreign import insertGeneratorFunction_ :: EffectFn3 Generator String (Block -> String) Unit
-
-foreign import blockToCode_ :: forall a b. EffectFn4 (a -> Either a b) (b -> Either a b) Block Generator (Either String String)
 
 foreign import inputList_ :: Fn1 Block (Array Input)
 
@@ -99,26 +81,11 @@ getType = runFn1 getType_
 getFieldValue :: Block -> String -> Either String String
 getFieldValue = runFn4 getFieldValue_ Left Right
 
-statementToCode :: Generator -> Block -> String -> Either String String
-statementToCode = runFn5 statementToCode_ Left Right
-
-valueToCode :: Generator -> Block -> String -> Order -> Either String String
-valueToCode g b v o = runFn6 valueToCode_ Left Right g b v (toNumber o)
-
-mkGenerator :: Blockly -> String -> Effect Generator
-mkGenerator = runEffectFn2 mkGenerator_
-
-insertGeneratorFunction :: Generator -> String -> (Block -> Either String String) -> Effect Unit
-insertGeneratorFunction generator key f = runEffectFn3 insertGeneratorFunction_ generator key ((unsafePartial unsafeFromRight) <<< f)
-
 -- | This will throw the Left value in a result as a runtime exception
 unsafeFromRight :: forall a. Partial => Either String a -> a
 unsafeFromRight (Right a) = a
 
 unsafeFromRight (Left e) = runFn1 unsafeThrowError_ e
-
-blockToCode :: Block -> Generator -> Effect (Either String String)
-blockToCode = runEffectFn4 blockToCode_ Left Right
 
 inputList :: Block -> Array Input
 inputList = runFn1 inputList_
