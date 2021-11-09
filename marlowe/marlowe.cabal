@@ -212,6 +212,8 @@ executable marlowe-cli
   hs-source-dirs: cli
   other-modules:
     Language.Marlowe.CLI
+    Language.Marlowe.CLI.Export
+    Language.Marlowe.CLI.Types
     Paths_marlowe
   autogen-modules:
     Paths_marlowe
