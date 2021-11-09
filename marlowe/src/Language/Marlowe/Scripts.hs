@@ -172,19 +172,19 @@ mkValidator :: MarloweParams -> Scripts.ValidatorType MarloweStateMachine
 mkValidator p = SM.mkValidator $ SM.mkStateMachine Nothing (mkMarloweStateMachineTransition p) isFinal
 
 instance Scripts.ValidatorTypes (MarloweData) where
-    type instance RedeemerType (MarloweData) = MarloweInput
+    type instance RedeemerType (MarloweData) = [Input]
     type instance DatumType (MarloweData) = MarloweData
 
 
 
-{-# INLINABLE asdf #-}
-asdf
+{-# INLINABLE smallMarloweValidator #-}
+smallMarloweValidator
     :: MarloweParams
     -> MarloweData
-    -> MarloweInput
+    -> [Input]
     -> ScriptContext
     -> Bool
-asdf params MarloweData{..} (_, inputs) ctx = do
+smallMarloweValidator params MarloweData{..} inputs ctx = do
     let slotConfig = def :: TimeSlot.SlotConfig
     let txInfo = scriptContextTxInfo ctx
     let ownInput = case findOwnInput ctx of
@@ -193,7 +193,7 @@ asdf params MarloweData{..} (_, inputs) ctx = do
     let scriptInValue = maybe (P.traceError "S0" {-"Can't find validation input"-}) (txOutValue . txInInfoResolved) (findOwnInput ctx)
     let (minTime, maxTime) =
             case txInfoValidRange txInfo of
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) True) -> (l, h)
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
                 _ -> P.traceError "Mr"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
@@ -210,7 +210,7 @@ asdf params MarloweData{..} (_, inputs) ctx = do
         inputs (either other contracts or P2PKH).
         Then, we check scriptOutput to be correct.
      -}
-    let inputsOk = validateInputs1 params txInfo inputs
+    let inputsOk = validateInputs params txInfo inputs
 
     -- total balance of all accounts in State
     -- accounts must be positive, and we checked it above
@@ -233,27 +233,29 @@ asdf params MarloweData{..} (_, inputs) ctx = do
                     marloweContract = txOutContract,
                     marloweState = txOutState }
 
-            let (payoutsOk, finalBalance) = let
-                    payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
-                    in case txOutContract of
-                        Close -> (payoutConstraints txInfo payoutsByParty, P.zero)
-                        _ -> let
-                            payoutsOk = payoutConstraints txInfo payoutsByParty
-                            totalIncome = P.foldMap collectDeposits inputs
-                            totalPayouts = P.foldMap snd payoutsByParty
-                            finalBalance = inputBalance P.+ totalIncome P.- totalPayouts
-                            in (payoutsOk, finalBalance)
-            let outConstrs = OutputConstraint
-                                        { ocDatum = marloweData
-                                        , ocValue = finalBalance
-                                        }
-            let checkOutput = checkOwnOutputConstraint ctx outConstrs
-            preconditionsOk && payoutsOk && checkOutput
-        Error _ -> P.traceError "ME"
+                payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
+                payoutsOk = payoutConstraints txInfo payoutsByParty
+                checkContinuation = case txOutContract of
+                    Close -> True
+                    _ -> let
+                        totalIncome = P.foldMap collectDeposits inputs
+                        totalPayouts = P.foldMap snd payoutsByParty
+                        finalBalance = inputBalance P.+ totalIncome P.- totalPayouts
+                        outConstrs = OutputConstraint
+                                    { ocDatum = marloweData
+                                    , ocValue = finalBalance
+                                    }
+                        in checkOwnOutputConstraint ctx outConstrs
+            preconditionsOk && payoutsOk && checkContinuation
+        Error TEAmbiguousSlotIntervalError -> P.traceError "E1"
+        Error TEApplyNoMatchError -> P.traceError "E2"
+        Error (TEIntervalError (InvalidInterval _)) -> P.traceError "E3"
+        Error (TEIntervalError (IntervalInPastError _ _)) -> P.traceError "E4"
+        Error TEUselessTransaction -> P.traceError "E5"
 
   where
-    validateInputs1 :: MarloweParams -> TxInfo -> [Input] -> Bool
-    validateInputs1 MarloweParams{rolesCurrency} scriptContextTxInfo inputs = P.all validateInputWitness inputs
+    validateInputs :: MarloweParams -> TxInfo -> [Input] -> Bool
+    validateInputs MarloweParams{rolesCurrency} scriptContextTxInfo inputs = P.all validateInputWitness inputs
       where
         validateInputWitness :: Input -> Bool
         validateInputWitness input =
@@ -312,7 +314,7 @@ typedValidator params = Scripts.mkTypedValidator @MarloweStateMachine
 
 typedValidator1 :: MarloweParams -> Scripts.TypedValidator MarloweData
 typedValidator1 params = Scripts.mkTypedValidatorParam @MarloweData
-    $$(PlutusTx.compile [|| asdf ||])
+    $$(PlutusTx.compile [|| smallMarloweValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
     params
     where
