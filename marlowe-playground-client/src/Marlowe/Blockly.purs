@@ -1,10 +1,10 @@
 module Marlowe.Blockly where
 
 import Blockly.Dom as BDom
-import Blockly.Generator (Connection, Input, NewBlockFunction, clearWorkspace, connect, connectToOutput, connectToPrevious, fieldName, fieldRow, getInputWithName, inputList, inputName, inputType, nextConnection, previousConnection, setFieldText)
+import Blockly.Generator (clearWorkspace, connect, connectToOutput, connectToPrevious, fieldName, fieldRow, getInputWithName, inputList, inputName, inputType, nextConnection, previousConnection, setFieldText)
 import Blockly.Internal (AlignDirection(..), Arg(..), BlockDefinition(..), Pair(..), clearUndoStack, defaultBlockDefinition, getBlockById, initializeWorkspace, render, typedArguments)
 import Blockly.Toolbox (Category, Toolbox(..), category, leaf, rename, separator)
-import Blockly.Types (Block, BlocklyState, Workspace)
+import Blockly.Types (Block, BlocklyState, Connection, Input, NewBlockFunction, Workspace)
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.Error.Extra (toMonadThrow)
 import Control.Monad.Except (class MonadError, throwError)

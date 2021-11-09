@@ -2,32 +2,11 @@ module Blockly.Generator where
 
 -- FIXME: SCP-1881 Remove the Generator functionality once we refactor Actus to use Blockly.Dom
 import Prologue
-import Blockly.Types (Block, Workspace)
+import Blockly.Types (Block, Input, Workspace, Connection, Field)
 import Data.Array as Array
 import Data.Function.Uncurried (Fn1, Fn3, Fn4, runFn1, runFn3, runFn4)
 import Effect (Effect)
 import Effect.Uncurried (EffectFn1, EffectFn2, runEffectFn1, runEffectFn2)
-
--- FIXME: Do we still need a NewBlockFunction type? or was it because the ST code? can we use Blockly.Generator.newBlock directly?
---        In any case we may get rid of Generator altogether in a second step of the refactor.
-type NewBlockFunction
-  = Workspace -> String -> Effect Block
-
-data Order
-  = Atomic
-  | None
-
-toNumber :: Order -> Number
-toNumber Atomic = 0.0
-
-toNumber None = 99.0
-
-foreign import data Input :: Type
-
-foreign import data Field :: Type
-
--- TODO Move to Blockly.Internal
-foreign import data Connection :: Type
 
 -- FIXME: This should probably be EffectFn3, but read top level comment.
 foreign import nextBlock_ :: Fn3 (Block -> Maybe Block) (Maybe Block) Block (Maybe Block)
