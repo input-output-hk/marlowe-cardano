@@ -3,20 +3,18 @@
 
 var JSONbig = require("json-bigint");
 
-exports.createBlocklyInstance_ = function () {
+exports.createBlocklyInstance_ = () => {
   return require("blockly");
 };
-exports.debugBlockly_ = function debugBlockly_(name, state) {
+
+exports.debugBlockly = (name) => (state) => {
   if (typeof window.blockly === 'undefined') {
     window.blockly = {};
   }
   window.blockly[name] = state
 }
-exports.getElementById_ = function (id) {
-  return document.getElementById(id);
-};
 
-exports.createWorkspace_ = function (blockly, workspaceDiv, config) {
+exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => {
 
   /* Disable comments */
   try { blockly.ContextMenuRegistry.registry.unregister('blockComment'); } catch(err) { }
@@ -120,7 +118,7 @@ exports.createWorkspace_ = function (blockly, workspaceDiv, config) {
   return workspace;
 };
 
-exports.resizeBlockly_ = function (blockly, workspace) {
+exports.resize = (blockly) => (workspace) => {
   blockly.svgResize(workspace);
   workspace.render();
 };
@@ -141,7 +139,7 @@ function removeEmptyArrayFields(obj) {
   }
 }
 
-exports.addBlockType_ = function (blockly, name, block) {
+exports.addBlockType_ = (blockly) => (name) => (block) => {
   // we really don't want to be mutating the input object, it is not supposed to be state
   var clone = JSONbig.parse(JSONbig.stringify(block));
   removeUndefinedFields(clone);
@@ -153,16 +151,16 @@ exports.addBlockType_ = function (blockly, name, block) {
   };
 };
 
-exports.initializeWorkspace_ = function (blockly, workspace, workspaceBlocks) {
+exports.initializeWorkspace_ = (blockly) => (workspace) => (workspaceBlocks) => {
   blockly.Xml.domToWorkspace(workspaceBlocks, workspace);
   workspace.getAllBlocks()[0].setDeletable(false);
 };
 
-exports.render_ = function (workspace) {
+exports.render = (workspace) => {
   workspace.render();
 };
 
-exports.getBlockById_ = function (just, nothing, workspace, id) {
+exports.getBlockById_ = (just) => (nothing) => (workspace) => (id) => {
   var result = workspace.getBlockById(id);
   if (result) {
     return just(result);
@@ -171,7 +169,7 @@ exports.getBlockById_ = function (just, nothing, workspace, id) {
   }
 };
 
-exports.workspaceXML_ = function (blockly, workspace) {
+exports.workspaceXML = (blockly) => (workspace) => {
   const isEmpty = workspace.getAllBlocks()[0].getChildren().length == 0;
   if (isEmpty) {
     return "";
@@ -181,54 +179,53 @@ exports.workspaceXML_ = function (blockly, workspace) {
   }
 };
 
-exports.loadWorkspace_ = function (blockly, workspace, xml) {
+exports.loadWorkspace = (blockly) => (workspace) => (xml) => {
   var dom = blockly.utils.xml.textToDomDocument(xml);
   blockly.Xml.clearWorkspaceAndLoadFromXml(dom.childNodes[0], workspace);
   workspace.getAllBlocks()[0].setDeletable(false);
 };
 
-exports.addChangeListener_ = function (workspace, listener) {
+exports.addChangeListener = (workspace) => (listener) => {
   workspace.addChangeListener(listener);
 };
 
-exports.removeChangeListener_ = function (workspace, listener) {
+exports.removeChangeListener = (workspace) => (listener) => {
   workspace.removeChangeListener(listener);
 };
 
-exports.workspaceToDom_ = function (blockly, workspace) {
+exports.workspaceToDom = (blockly) => (workspace) => {
   return blockly.Xml.workspaceToDom(workspace);
 };
 
-exports.select_ = function (block) {
+exports.select = (block) => {
   block.select();
 }
 
-exports.centerOnBlock_ = function (workspace, blockId) {
+exports.centerOnBlock = (workspace) => (blockId) => {
   workspace.centerOnBlock(blockId);
 }
 
-exports.hideChaff_ = function (blockly) {
+exports.hideChaff = (blockly) => {
   blockly.hideChaff();
 }
 
-exports.getBlockType_ = function (block) {
+exports.getBlockType = (block) => {
   return block.type;
 }
 
-exports.updateToolbox_ = function (toolboxJson, workspace) {
+exports.updateToolbox_ = (toolboxJson) => (workspace) => {
   workspace.updateToolbox(toolboxJson);
 }
 
-exports.clearUndoStack_ = function (workspace) {
+exports.clearUndoStack = (workspace) => {
   workspace.clearUndo();
 }
 
-exports.isWorkspaceEmpty_ = function (workspace) {
+exports.isWorkspaceEmpty = (workspace) => {
   var topBlocks = workspace.getTopBlocks(false);
   return ((topBlocks == null) || (topBlocks.length == 0));
 }
 
-exports.setGroup_ = function (blockly, isGroup) {
+exports.setGroup = (blockly) => (isGroup) =>
   blockly.Events.setGroup(isGroup);
-}
 
