@@ -210,6 +210,11 @@ executable marlowe-cli
   import: lang
   main-is: Main.hs
   hs-source-dirs: cli
+  other-modules:
+    Language.Marlowe.CLI
+    Paths_marlowe
+  autogen-modules:
+    Paths_marlowe
   ghc-options:
     -threaded
   build-depends:
@@ -251,6 +256,7 @@ executable marlowe-cli
     plutus-ledger-api -any,
     memory -any,
     mtl -any,
+    optparse-applicative -any,
     ouroboros-consensus-shelley -any,
     plutus-tx-plugin -any,
     prettyprinter -any,
