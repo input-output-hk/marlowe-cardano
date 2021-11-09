@@ -74,7 +74,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     (interval@(minSlot, maxSlot), inputs) = do
     let positiveBalances = validateBalances marloweState ||
             -- Avoid creating a too-big string literal
-            P.traceError ("Invalid contract state. " `P.appendString` "There exists an account with non positive balance")
+            P.traceError ("M1")
 
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
@@ -92,7 +92,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     -- ensure that a contract TxOut has what it suppose to have
     let balancesOk = inputBalance == scriptInValue
 
-    let preconditionsOk = P.traceIfFalse "Preconditions are false" $ positiveBalances && balancesOk
+    let preconditionsOk = P.traceIfFalse "M2" $ positiveBalances && balancesOk
 
     let txInput = TransactionInput {
             txInterval = interval,
@@ -170,6 +170,81 @@ isFinal MarloweData{marloweContract=c} = isClose c
 mkValidator :: MarloweParams -> Scripts.ValidatorType MarloweStateMachine
 mkValidator p = SM.mkValidator $ SM.mkStateMachine Nothing (mkMarloweStateMachineTransition p) isFinal
 
+instance Scripts.ValidatorTypes (MarloweData) where
+    type instance RedeemerType (MarloweData) = MarloweInput
+    type instance DatumType (MarloweData) = MarloweData
+
+
+
+{-# INLINABLE asdf #-}
+asdf
+    :: MarloweParams
+    -> MarloweData
+    -> MarloweInput
+    -> ScriptContext
+    -> Bool
+asdf params MarloweData{..} (interval@(minSlot, maxSlot), inputs) ctx = do
+    let txInput = TransactionInput {
+            txInterval = interval,
+            txInputs = inputs }
+
+    let computedResult = computeTransaction txInput marloweState marloweContract
+    case computedResult of
+        TransactionOutput {txOutPayments, txOutState, txOutContract} -> do
+            let marloweData = MarloweData {
+                    marloweContract = txOutContract,
+                    marloweState = txOutState }
+
+            let (outputsConstraints, finalBalance) = let
+                    payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
+                    in case txOutContract of
+                        _ -> (payoutConstraints payoutsByParty, True)
+
+            -- TODO Push this use of time further down the code
+            let range = TimeSlot.slotRangeToPOSIXTimeRange def $ Interval.interval minSlot maxSlot
+            let constraints :: TxConstraints MarloweInput MarloweData
+                constraints = outputsConstraints
+            checkScriptContext constraints ctx
+        Error _ -> False
+
+  where
+    validateInputs :: MarloweParams -> [Input] -> TxConstraints Void Void
+    validateInputs MarloweParams{rolesCurrency} inputs = let
+        (keys, roles) = P.foldMap validateInputWitness inputs
+        mustSpendSetOfRoleTokens = P.foldMap mustSpendRoleToken (AssocMap.keys roles)
+        in P.foldMap mustBeSignedBy keys P.<> mustSpendSetOfRoleTokens
+      where
+        validateInputWitness :: Input -> ([PubKeyHash], AssocMap.Map TokenName ())
+        validateInputWitness input =
+            case input of
+                IDeposit _ party _ _         -> validatePartyWitness party
+                IChoice (ChoiceId _ party) _ -> validatePartyWitness party
+                INotify                      -> (P.mempty, P.mempty)
+          where
+            validatePartyWitness (PK pk)     = ([pk], P.mempty)
+            validatePartyWitness (Role role) = ([], AssocMap.singleton role ())
+
+        mustSpendRoleToken :: TokenName -> TxConstraints Void Void
+        mustSpendRoleToken role = mustSpendAtLeast $ Val.singleton rolesCurrency role 1
+
+    collectDeposits :: Input -> Val.Value
+    collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
+    collectDeposits _                                     = P.zero
+
+    payoutByParty :: Payment -> AssocMap.Map Party Val.Value
+    payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
+    payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
+
+    payoutConstraints :: [(Party, Val.Value)] -> TxConstraints i0 o0
+    payoutConstraints payoutsByParty = P.foldMap payoutToTxOut payoutsByParty
+      where
+        payoutToTxOut (party, value) = case party of
+            PK pk  -> mustPayToPubKey pk value
+            Role role -> let
+                dataValue = Datum $ PlutusTx.toBuiltinData role
+                in mustPayToOtherScript (rolePayoutValidatorHash params) dataValue value
+
+
 
 mkMarloweValidatorCode
     :: MarloweParams
@@ -186,6 +261,15 @@ typedValidator params = Scripts.mkTypedValidator @MarloweStateMachine
     $$(PlutusTx.compile [|| wrap ||])
     where
         wrap = Scripts.wrapValidator @MarloweData @MarloweInput
+
+
+typedValidator1 :: MarloweParams -> Scripts.TypedValidator MarloweData
+typedValidator1 params = Scripts.mkTypedValidatorParam @MarloweData
+    $$(PlutusTx.compile [|| asdf ||])
+    $$(PlutusTx.compile [|| wrap ||])
+    params
+    where
+        wrap = Scripts.wrapValidator
 
 
 mkMachineInstance :: MarloweParams -> SM.StateMachineInstance MarloweData MarloweInput
