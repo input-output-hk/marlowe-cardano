@@ -229,35 +229,6 @@ exports.isWorkspaceEmpty = (workspace) => () => {
 exports.setGroup = (blockly) => (isGroup) => () =>
   blockly.Events.setGroup(isGroup);
 
-exports.nextBlock_ = (just) => (nothing) => (block) => () => {
-  var mBlock = block.getNextBlock();
-  if (mBlock == null) {
-    return nothing;
-  } else {
-    return just(mBlock);
-  }
-};
-
-exports.fieldValue_ = (left) => (right) => (block) => (key) => {
-  var result = block.getFieldValue(key);
-  if (result == 0 || result) {
-    /* For some unknown reason, the xmljs library turns strings into numbers if it can
-     * We are always expecting a string and that's what the browser gives us but the
-     * tests break without this extra toString()
-     */
-    return right(result.toString());
-  } else {
-    // we used to return an error if the field returned null/undefined however
-    // this happens if the value is empty. We need to sometimes use empty values
-    // and they represent an empty string so now we just return an empty string
-    // This is slightly dangerous as it can lead to a bug if you use this function
-    // with a key that doesn't exist, instead of getting a run time error you
-    // will just get an empty string and may not notice.
-    // return left("couldn't find field: " + key);
-    return right("");
-  }
-};
-
 exports.inputList = (block) => {
   return block.inputList;
 };
@@ -309,20 +280,4 @@ exports.setFieldText = (field) => (text) => () => {
 
 exports.fieldName = (field) => {
   return field.name;
-};
-
-exports.getBlockInputConnectedTo_ = (left) => (right) => (input) => () => {
-  try {
-    var mTargetConnection = input.connection.targetConnection;
-    if (mTargetConnection == null) {
-      return left("no target connection found");
-    }
-    var mBlock = mTargetConnection.getSourceBlock();
-    if (mBlock == null) {
-      return left("no block found");
-    }
-    return right(mBlock);
-  } catch (err) {
-    return left(err.message);
-  }
 };

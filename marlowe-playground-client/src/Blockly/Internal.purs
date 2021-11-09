@@ -1,4 +1,52 @@
-module Blockly.Internal where
+module Blockly.Internal
+  ( AlignDirection(..)
+  , Arg(..)
+  , BasicBlockDefinition
+  , BlockDefinition(..)
+  , ElementId(..)
+  , GridConfig
+  , Pair(..)
+  , XML(..)
+  , addBlockTypes
+  , addChangeListener
+  , block
+  , blockType
+  , centerOnBlock
+  , clearUndoStack
+  , clearWorkspace
+  , connect
+  , connectToOutput
+  , connectToPrevious
+  , createBlocklyInstance
+  , defaultBlockDefinition
+  , fieldName
+  , fieldRow
+  , getBlockById
+  , getBlockType
+  , getInputWithName
+  , hideChaff
+  , initializeWorkspace
+  , inputList
+  , inputName
+  , inputType
+  , loadWorkspace
+  , newBlock
+  , nextConnection
+  , previousConnection
+  , removeChangeListener
+  , render
+  , resize
+  , select
+  , setFieldText
+  , style
+  , typedArguments
+  , updateToolbox
+  , workspaceToDom
+  , workspaceXML
+  , x
+  , xml
+  , y
+  ) where
 
 import Prologue
 import Blockly.Toolbox (Toolbox, encodeToolbox)
@@ -138,32 +186,6 @@ foreign import fieldRow :: Input -> Array Field
 foreign import setFieldText :: Field -> String -> Effect Unit
 
 foreign import fieldName :: Field -> String
-
-foreign import nextBlock_ :: forall a. (Block -> a) -> a -> Block -> Effect (Maybe Block)
-
-nextBlock :: Block -> Effect (Maybe Block)
-nextBlock = nextBlock_ Just Nothing
-
-foreign import fieldValue_ ::
-  forall a.
-  (String -> a) ->
-  (String -> a) ->
-  Block ->
-  String ->
-  a
-
-fieldValue :: Block -> String -> Either String String
-fieldValue = fieldValue_ Left Right
-
-foreign import getBlockInputConnectedTo_ ::
-  forall a.
-  (String -> a) ->
-  (Block -> a) ->
-  Input ->
-  Effect a
-
-getBlockInputConnectedTo :: Input -> Effect (Either String Block)
-getBlockInputConnectedTo = getBlockInputConnectedTo_ Left Right
 
 getInputWithName :: String -> Array Input -> Maybe Input
 getInputWithName n = Array.find (eq n <<< inputName)
@@ -377,12 +399,6 @@ blockType = attr (AttrName "type")
 
 style :: forall i r. String -> IProp ( style :: String | r ) i
 style = attr (AttrName "style")
-
-colour :: forall i r. String -> IProp ( colour :: String | r ) i
-colour = attr (AttrName "colour")
-
-name :: forall i r. String -> IProp ( name :: String | r ) i
-name = attr (AttrName "name")
 
 x :: forall i r. String -> IProp ( x :: String | r ) i
 x = attr (AttrName "x")
