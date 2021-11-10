@@ -1,167 +1,207 @@
 
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE RecordWildCards #-}
+
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns  #-} -- FIXME: Remove this after error handling is implemented.
 
 
 module Language.Marlowe.CLI.Export (
-  exportDatum
-, exportMarlowe
+  exportValidator
+, exportDatum
 , exportRedeemer
-, exportValidator
+, buildValidator
+, buildDatum
+, buildRedeemer
 ) where
 
 
-import           Codec.Serialise                       (serialise)
-import           Control.Monad                         (void, when)
-import           Data.Aeson                            (decode, encode)
-import qualified Data.ByteString.Lazy                  as BSL
-import qualified Data.ByteString.Short                 as SBS
-import           Data.Word                             (Word32)
-import           Language.Marlowe.Analysis.FSSemantics
-import           Language.Marlowe.CLI.Types            (Command (..))
-import           Language.Marlowe.Client
-import           Language.Marlowe.Deserialisation      (byteStringToInt, byteStringToList)
-import           Language.Marlowe.Scripts
+import           Cardano.Api                     (AlonzoEra, IsShelleyBasedEra, Lovelace, NetworkId,
+                                                  PaymentCredential (..), Quantity (..), ScriptDataJsonSchema (..),
+                                                  SlotNo (..), StakeAddressReference (..), hashScript,
+                                                  lovelaceToQuantity, makeShelleyAddressInEra, scriptDataToJson,
+                                                  serialiseAddress, writeFileTextEnvelope)
+import           Cardano.Api.Shelley             (fromPlutusData)
+import           Codec.Serialise                 (serialise)
+import           Control.Monad                   (void, when)
+import           Data.Aeson.Encode.Pretty        (encodePretty)
+import           Language.Marlowe.CLI.Types      (DatumInfo (..), RedeemerInfo (..), ValidatorInfo (..))
+import           Language.Marlowe.Client         (defaultMarloweParams)
+import           Language.Marlowe.Scripts        (typedValidator1)
+import           Language.Marlowe.Semantics      (MarloweData (..))
+import           Language.Marlowe.SemanticsTypes (Contract (..), Input, Party (..), State (..), Token (..))
+import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
+import           Ledger.Typed.Scripts            (validatorHash, validatorScript)
+import           Plutus.V1.Ledger.Api            (CostModelParams, Datum (..), PubKeyHash, Redeemer (..),
+                                                  VerboseMode (..), adaSymbol, adaToken, defaultCostModelParams,
+                                                  evaluateScriptCounting, getValidator)
+import           Plutus.V1.Ledger.Slot           (Slot (..))
+import           PlutusTx                        (builtinDataToData, toBuiltinData)
 
-import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsTypes
-import           Language.Marlowe.Serialisation        (intToByteString, listToByteString)
-import           Language.Marlowe.Util
-import           Ledger                                (Datum (..), PubKeyHash (..), Redeemer (..), Slot (..),
-                                                        getValidator, pubKeyHash, validatorHash)
-import           Ledger.Ada                            (adaSymbol, adaToken, lovelaceValueOf)
-import           Ledger.Constraints.TxConstraints      (TxConstraints)
-import           Ledger.Scripts                        (dataHash, datumHash, redeemerHash, toCardanoApiScript)
-import qualified Ledger.Typed.Scripts                  as Scripts
-import qualified Ledger.Value                          as Val
-import qualified Plutus.Contract.StateMachine          as SM
-import           Plutus.Contract.Test                  hiding ((.&&.))
-import qualified Plutus.Contract.Test                  as T
-import           Plutus.Contract.Types                 (_observableState)
-import qualified Plutus.Trace.Emulator                 as Trace
-import           Plutus.Trace.Emulator.Types           (instContractState)
-import           Plutus.V1.Ledger.Api
-import qualified PlutusTx
-import qualified PlutusTx.AssocMap                     as AssocMap
-import           PlutusTx.Builtins                     (emptyByteString)
-import           PlutusTx.Lattice
-import qualified PlutusTx.Prelude                      as P
-
-import           Cardano.Api                           hiding (Script)
-import           Cardano.Api.Shelley                   (fromPlutusData)
-import qualified Data.ByteString.Base16                as Base16
-
-import qualified Cardano.Ledger.BaseTypes              as Shelley
-import           Control.Monad.Fail                    (fail)
-import           Data.Time.Clock                       (UTCTime)
-import           Data.Time.Format                      (defaultTimeLocale, iso8601DateFormat, parseTimeOrError)
-import           Prettyprinter                         (line, pretty)
-
-
-import qualified Data.ByteString                       as BS
-import qualified Data.ByteString.Lazy.Char8            as BSC
-import qualified Data.List.NonEmpty                    as NE
-import qualified Data.Set                              as Set
-import qualified Data.Text                             as Text
-import qualified Data.Text.Encoding                    as Text
-
-import qualified Data.Aeson                            as Aeson
-import qualified Data.Aeson.Parser                     as Aeson.Parser
-
-exportRedeemer = undefined
-exportDatum = undefined
-exportMarlowe = undefined
-
-
-data ValidatorInfo era =
-  ValidatorInfo
-  {
-    validator :: Scripts.TypedValidator MarloweData
-  , script    :: Script
-  , cbor      :: BS.ByteString
-  , bytes     :: SBS.ShortByteString
-  , size      :: Int
-  , hash      :: ValidatorHash
-  , address   :: AddressInEra era
-  }
+import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
+import qualified Data.ByteString.Short           as SBS (length, toShort)
+import qualified Data.Text                       as T (unpack)
+import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 buildValidator :: IsShelleyBasedEra era
-               => NetworkId
+               => CostModelParams
+               -> NetworkId
                -> StakeAddressReference
                -> ValidatorInfo era
-buildValidator network stake =
+buildValidator costModel network stake =
   let
-    validator = typedValidator1 defaultMarloweParams
-    script = getValidator . Scripts.validatorScript $ validator
-    cbor = Base16.encode . serialiseToCBOR . toCardanoApiScript $ script
-    bytes = SBS.toShort . BSL.toStrict . serialise $ script
-    size = SBS.length bytes
-    hash = Scripts.validatorHash validator
-    address =
+    viValidator = typedValidator1 defaultMarloweParams
+    viScript = getValidator . validatorScript $ viValidator
+    bytes = SBS.toShort . LBS.toStrict . serialise $ viScript
+    viHash = validatorHash viValidator
+    viAddress =
       makeShelleyAddressInEra
         network
-        (PaymentCredentialByScript . hashScript $ toCardanoApiScript script)
+        (PaymentCredentialByScript . hashScript $ toCardanoApiScript viScript)
         stake
+    viSize = SBS.length bytes
+    (_, Right viCost) = evaluateScriptCounting Verbose costModel bytes [] -- FIXME: Implement error handling.
   in
     ValidatorInfo{..}
 
 
-exportValidator :: Maybe Word32
-                -> Maybe String
+exportValidator :: NetworkId
+                -> StakeAddressReference
                 -> FilePath
                 -> Bool
                 -> Bool
                 -> Bool
                 -> IO ()
-exportValidator magic stake validatorFile printAddress printHash printStats =
+exportValidator network stake validatorFile printAddress printHash printStats =
   do
     let
-      network = maybe Mainnet (Testnet . NetworkMagic) magic
-      -- FIXME: Deserialize stake address.
-      stakeAddress = maybe NoStakeAddress undefined stake
-      -- FIXME: Generalize eras.
-      ValidatorInfo{..} = buildValidator network stakeAddress :: ValidatorInfo AlonzoEra
-      Just dcmp = defaultCostModelParams
-      cost = evaluateScriptCounting Verbose dcmp bytes []
+      Just costModel = defaultCostModelParams -- FIXME: Implement error handling.
+      ValidatorInfo{..} = buildValidator costModel network stake :: ValidatorInfo AlonzoEra
     void
       . writeFileTextEnvelope validatorFile Nothing
-      $ toCardanoApiScript script
+      $ toCardanoApiScript viScript
     when printHash
       $ do
         putStrLn ""
-        putStrLn $ "Validator hash: " ++ show hash
+        putStrLn $ "Validator hash: " ++ show viHash
     when printAddress
       $ do
         putStrLn ""
-        putStrLn $ "Validator address: " ++ Text.unpack (serialiseAddress address)
+        putStrLn $ "Validator address: " ++ T.unpack (serialiseAddress viAddress)
     when printStats
       $ do
         putStrLn ""
-        putStrLn $ "Validator size: " ++ show size
-        putStrLn $ "Validator cost: " ++ show cost
+        putStrLn $ "Validator size: " ++ show viSize
+        putStrLn $ "Validator cost: " ++ show viCost
 
 
-exportMarlowe' :: IO ()
-exportMarlowe' = do
+buildDatum :: Contract
+           -> PubKeyHash
+           -> Lovelace
+           -> SlotNo
+           -> DatumInfo
+buildDatum contract accountHash accountLovelace (SlotNo minimumSlot) =
+  let
+    Quantity lovelace = lovelaceToQuantity accountLovelace
+    marloweData =
+      MarloweData
+      {
+        marloweState    = State
+                          {
+                            accounts    = AM.singleton
+                                            (PK accountHash, Token adaSymbol adaToken)
+                                            lovelace
+                          , choices     = AM.empty
+                          , boundValues = AM.empty
+                          , minSlot     = Slot . toInteger $ minimumSlot
+                          }
+      , marloweContract = contract
+      }
+    diDatum = Datum . PlutusTx.toBuiltinData $ marloweData
+    bytes = SBS.toShort . LBS.toStrict . serialise $ diDatum
+    diJson =
+      scriptDataToJson ScriptDataJsonDetailedSchema
+        . fromPlutusData
+        . PlutusTx.builtinDataToData
+        $ PlutusTx.toBuiltinData marloweData
+    diHash = datumHash diDatum
+    diSize = SBS.length bytes
+  in
+    DatumInfo{..}
+
+
+exportDatum :: PubKeyHash
+            -> Lovelace
+            -> SlotNo
+            -> FilePath
+            -> Bool
+            -> Bool
+            -> IO ()
+exportDatum accountHash accountLovelace minimumSlot datumFile printHash printStats =
+  do
+    let
+      DatumInfo{..} = buildDatum Close accountHash accountLovelace minimumSlot
+    LBS.writeFile datumFile
+      $ encodePretty diJson
+    when printHash
+      $ do
+        putStrLn ""
+        putStrLn $ "Datum hash: " ++ show diHash
+    when printStats
+      $ do
+        putStrLn ""
+        putStrLn $ "Datum size: " ++ show diSize
+
+
+buildRedeemer :: SlotNo
+              -> SlotNo
+              -> RedeemerInfo
+buildRedeemer (SlotNo minimumSlot) (SlotNo maximumSlot) =
+  let
+    inputs :: ((Integer, Integer), [Input])
+    inputs = ((fromIntegral minimumSlot, fromIntegral maximumSlot), [])
+    riRedeemer = Redeemer . PlutusTx.toBuiltinData $ inputs
+    bytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
+    riJson =
+      scriptDataToJson ScriptDataJsonDetailedSchema
+        . fromPlutusData
+        . PlutusTx.builtinDataToData
+        $ PlutusTx.toBuiltinData inputs
+    riSize = SBS.length bytes
+  in
+    RedeemerInfo{..}
+
+
+exportRedeemer :: SlotNo
+               -> SlotNo
+               -> FilePath
+               -> Bool
+               -> IO ()
+exportRedeemer minimumSlot maximumSlot redeemerFile printStats =
+  do
+    let
+      RedeemerInfo{..} = buildRedeemer minimumSlot maximumSlot
+    LBS.writeFile redeemerFile
+      $ encodePretty riJson
+    when printStats
+      $ do
+        putStrLn ""
+        putStrLn $ "Redeemer size: " ++ show riSize
+
+
+{-
+
+exportMarlowe = do
     let marloweValidator = typedValidator1 defaultMarloweParams
     let marloweScript = getValidator . Scripts.validatorScript $ marloweValidator
-    let marloweScriptSBS = (SBS.toShort . BSL.toStrict . serialise) marloweScript
+    let marloweScriptSBS = (SBS.toShort . LBS.toStrict . serialise) marloweScript
     let Right eeee = Base16.decode "d7604c51452bf9c135d63c686ba306d268fcae8494c877e12c44c657"
     let ownPubKey = PubKeyHash (toBuiltin eeee)
     let contract = Close
     let md = MarloweData {
             marloweState = State
-                { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) 3000000
-                , choices  = AssocMap.empty
-                , boundValues = AssocMap.empty
+                { accounts = AM.singleton (PK ownPubKey, Token adaSymbol adaToken) 3000000
+                , choices  = AM.empty
+                , boundValues = AM.empty
                 , minSlot = 10 },
             marloweContract = contract
             }
@@ -193,3 +233,5 @@ exportMarlowe' = do
     let Just dcmp = defaultCostModelParams
     let result = evaluateScriptCounting Verbose dcmp marloweScriptSBS []
     print result
+
+-}
