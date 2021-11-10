@@ -103,6 +103,8 @@ let
   # ghc web service
   web-ghc = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/web-ghc") { inherit haskell; extraPackagesFun = ps: [ ps.marlowe ]; };
 
+  webCommon = pkgs.callPackage sources.web-common { inherit gitignore-nix; };
+
   # combined haddock documentation for all public plutus libraries
   plutus-haddock-combined =
     let
@@ -142,4 +144,5 @@ in
   inherit web-ghc;
   inherit easyPS plutus-haddock-combined;
   inherit lib;
+  inherit webCommon;
 }

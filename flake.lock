@@ -281,11 +281,11 @@
     "web-common": {
       "flake": false,
       "locked": {
-        "lastModified": 1635526611,
-        "narHash": "sha256-qLUmwG7hKGbc3pFWkKSKFFE0uWxgPSrIUZspUwwEFCo=",
+        "lastModified": 1636582556,
+        "narHash": "sha256-sUMGwh6PJNGFNLeNJ5aPm4ZpT1x6TSdp6z9VSUB4dXM=",
         "owner": "input-output-hk",
         "repo": "purescript-web-common",
-        "rev": "f1241ea27fc6acc78d093574e3707165b4ef9b3e",
+        "rev": "a0a81da88232a38ffde93bd402941eb224d50834",
         "type": "github"
       },
       "original": {
