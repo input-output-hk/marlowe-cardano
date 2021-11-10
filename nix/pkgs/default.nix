@@ -40,7 +40,6 @@ let
   #
   # dev convenience scripts
   #
-  fixPurty = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/fix-purty") { inherit purty; };
   fixStylishHaskell = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/fix-stylish-haskell") { inherit stylish-haskell; };
   fixPngOptimization = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/fix-png-optimization") { };
   updateMaterialized = pkgs.writeShellScriptBin "updateMaterialized" ''
@@ -75,12 +74,6 @@ let
     inherit (sources) nixpkgs;
   });
 
-  # purty is unable to process several files but that is what pre-commit
-  # does. pre-commit-hooks.nix does provide a wrapper for that but when
-  # we pin our own `tools` attribute that gets overwritten so we have to
-  # instead provide the wrapper.
-  purty-pre-commit = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/purty-pre-commit") { inherit purty; };
-
   # easy-purescript-nix has some kind of wacky internal IFD
   # usage that breaks the logic that makes source fetchers
   # use native dependencies. This isn't easy to fix, since
@@ -93,9 +86,8 @@ let
   easyPS = pkgs.callPackage (sources.easy-purescript-nix) { };
 
   # We pull out some packages from easyPS that are a pain to get otherwise.
-  # In particular, we used to build purty ourselves, but now its build is a nightmare.
   # This does mean we can't as easily control the version we get, though.
-  inherit (easyPS) purty purs spago spago2nix psa purescript-language-server;
+  inherit (easyPS) purs-tidy purs spago spago2nix psa purescript-language-server;
 
   # sphinx haddock support
   sphinxcontrib-haddock = pkgs.callPackage (sources.sphinxcontrib-haddock) { pythonPackages = pkgs.python3Packages; };
@@ -139,10 +131,11 @@ in
   inherit sphinx-markdown-tables sphinxemoji sphinxcontrib-haddock;
   inherit nix-pre-commit-hooks;
   inherit haskell cabal-install cardano-repo-tool stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-cli cardano-node;
-  inherit purty purty-pre-commit purs spago spago2nix psa purescript-language-server;
-  inherit fixPurty fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps;
+  inherit purs-tidy purs spago spago2nix psa purescript-language-server;
+  inherit fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps;
   inherit web-ghc;
   inherit easyPS plutus-haddock-combined;
   inherit lib;
   inherit webCommon;
+  inherit (webCommon.flake.defaultNix.packages.${builtins.currentSystem}) fix-prettier prettier-hook fix-purs-tidy purs-tidy-hook;
 }

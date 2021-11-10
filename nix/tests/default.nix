@@ -1,7 +1,8 @@
 { pkgs
 , gitignore-nix
 , fixStylishHaskell
-, fixPurty
+, fix-purs-tidy
+, fix-prettier
 , fixPngOptimization
 , src
 , marlowe-playground
@@ -25,9 +26,14 @@ pkgs.recurseIntoAttrs {
     inherit fixStylishHaskell;
   };
 
-  purty = pkgs.callPackage ./purty.nix {
+  pursTidy = pkgs.callPackage ./purs-tidy.nix {
     src = cleanSrc;
-    inherit fixPurty;
+    inherit fix-purs-tidy;
+  };
+
+  prettier = pkgs.callPackage ./prettier.nix {
+    src = cleanSrc;
+    inherit fix-prettier;
   };
 
   nixpkgsFmt = pkgs.callPackage ./nixpkgs-fmt.nix {
