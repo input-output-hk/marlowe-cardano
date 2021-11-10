@@ -20,16 +20,49 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set as Set
-import Data.String (Pattern(..), codePointFromChar, contains, fromCodePointArray, length, takeWhile, toCodePointArray)
+import Data.String
+  ( Pattern(..)
+  , codePointFromChar
+  , contains
+  , fromCodePointArray
+  , length
+  , takeWhile
+  , toCodePointArray
+  )
 import Data.String.Regex (match, regex)
 import Data.String.Regex.Flags (noFlags)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Help (holeText)
 import Marlowe.Extended.Metadata (MetadataHintInfo)
-import Marlowe.Holes (Contract, Holes(..), Location(..), MarloweHole(..), MarloweType, Term, constructMarloweType, getMarloweConstructors, readMarloweType)
-import Marlowe.Linter (Warning(..), WarningDetail(..), _holes, _metadataHints, _warnings, lint)
+import Marlowe.Holes
+  ( Contract
+  , Holes(..)
+  , Location(..)
+  , MarloweHole(..)
+  , MarloweType
+  , Term
+  , constructMarloweType
+  , getMarloweConstructors
+  , readMarloweType
+  )
+import Marlowe.Linter
+  ( Warning(..)
+  , WarningDetail(..)
+  , _holes
+  , _metadataHints
+  , _warnings
+  , lint
+  )
 import Marlowe.Parser (ContractParseError(..), parseContract)
-import Monaco (CodeAction, CompletionItem, IMarkerData, IRange, Uri, completionItemKind, markerSeverity)
+import Monaco
+  ( CodeAction
+  , CompletionItem
+  , IMarkerData
+  , IRange
+  , Uri
+  , completionItemKind
+  , markerSeverity
+  )
 import Monaco as Monaco
 import StaticAnalysis.Types (ContractPath)
 import Text.Extra as Text
@@ -40,22 +73,30 @@ import Text.Pretty (pretty)
 locationToRange :: Location -> IRange
 locationToRange (Range range) = range
 
-locationToRange (BlockId _) = unsafeThrow "Unexpected BlockId location found in LinterText"
+locationToRange (BlockId _) = unsafeThrow
+  "Unexpected BlockId location found in LinterText"
 
-locationToRange NoLocation = unsafeThrow "Unexpected NoLocation found in LinterText"
+locationToRange NoLocation = unsafeThrow
+  "Unexpected NoLocation found in LinterText"
 
 getWarningRange :: Warning -> IRange
 getWarningRange (Warning { location }) = locationToRange location
 
 -- FIXME: We have multiple model markers, 1 per quick fix. This is wrong though, we need only 1 but in MarloweCodeActionProvider we want to run the code
 -- to generate the quick fixes from this single model marker
-markers :: List ContractPath -> Either ContractParseError (Term Contract) -> Tuple (Array IMarkerData) AdditionalContext
+markers
+  :: List ContractPath
+  -> Either ContractParseError (Term Contract)
+  -> Tuple (Array IMarkerData) AdditionalContext
 markers unreachablePaths parsedContract = do
   case (lint unreachablePaths <$> parsedContract) of
-    Left EmptyInput -> (Tuple [] { warnings: mempty, contract: Nothing, metadataHints: Nothing })
+    Left EmptyInput ->
+      (Tuple [] { warnings: mempty, contract: Nothing, metadataHints: Nothing })
     Left (ContractParseError { message, row, column, token }) ->
       let
-        whiteSpaceChar c = Set.member c $ Set.fromFoldable $ map codePointFromChar [ '\n', '\r', ' ', '\t' ]
+        whiteSpaceChar c = Set.member c $ Set.fromFoldable $ map
+          codePointFromChar
+          [ '\n', '\r', ' ', '\t' ]
 
         word = takeWhile (not <<< whiteSpaceChar) token
 
@@ -71,15 +112,22 @@ markers unreachablePaths parsedContract = do
             }
           ]
       in
-        (Tuple markerData { warnings: mempty, contract: Nothing, metadataHints: Nothing })
+        ( Tuple markerData
+            { warnings: mempty, contract: Nothing, metadataHints: Nothing }
+        )
     Right state ->
       let
         holesMarkers = state ^. (_holes <<< to holesToMarkers)
 
-        warningsMarkers = state ^. (_warnings <<< to Set.toUnfoldable <<< to (map warningToMarker))
+        warningsMarkers = state ^.
+          (_warnings <<< to Set.toUnfoldable <<< to (map warningToMarker))
 
         -- we store the current warnings and the parsed contract in the halogen state so that they can be reused
-        additionalContext = { warnings: state ^. _warnings, contract: hush parsedContract, metadataHints: Just $ state ^. _metadataHints }
+        additionalContext =
+          { warnings: state ^. _warnings
+          , contract: hush parsedContract
+          , metadataHints: Just $ state ^. _metadataHints
+          }
       in
         (Tuple (holesMarkers <> warningsMarkers) additionalContext)
 
@@ -98,7 +146,8 @@ holeToMarker (MarloweHole { marloweType, location }) =
     -- That is why we want to make the Warnings polymorphic to the Location and to separate the linter
     -- in 3. General linter that does not care about Location, MarloweLinter that deals with `Warning IRange`
     -- and BlocklyLinter that deals with `Warning BlocklyId`
-    { startColumn, startLineNumber, endColumn, endLineNumber } = locationToRange location
+    { startColumn, startLineNumber, endColumn, endLineNumber } = locationToRange
+      location
 
     dropEnd :: Int -> String -> String
     dropEnd n = fromCodePointArray <<< Array.dropEnd n <<< toCodePointArray
@@ -123,7 +172,8 @@ holeToMarkers hole@(MarloweHole { marloweType }) =
     holeToMarker hole <$ constructors
 
 markerToHole :: IMarkerData -> MarloweType -> MarloweHole
-markerToHole markerData marloweType = MarloweHole { name: "unknown", marloweType, location: Range (Monaco.getRange markerData) }
+markerToHole markerData marloweType = MarloweHole
+  { name: "unknown", marloweType, location: Range (Monaco.getRange markerData) }
 
 warningType :: Warning -> String
 warningType (Warning { warning }) = case warning of
@@ -145,7 +195,8 @@ warningType (Warning { warning }) = case warning of
 warningToMarker :: Warning -> IMarkerData
 warningToMarker warning =
   let
-    { startColumn, startLineNumber, endColumn, endLineNumber } = getWarningRange warning
+    { startColumn, startLineNumber, endColumn, endLineNumber } = getWarningRange
+      warning
   in
     { startColumn
     , startLineNumber
@@ -163,7 +214,8 @@ shortWarning (SimplifiableValue _ _) = "Simplify Value"
 shortWarning _ = ""
 
 provideLintCodeActions :: Uri -> AdditionalContext -> Array CodeAction
-provideLintCodeActions uri { warnings } = catMaybes <<< map codeAction <<< Set.toUnfoldable $ warnings
+provideLintCodeActions uri { warnings } =
+  catMaybes <<< map codeAction <<< Set.toUnfoldable $ warnings
   where
   codeAction :: Warning -> Maybe CodeAction
   codeAction (Warning { warning, refactoring: Just refactoring }) =
@@ -175,47 +227,61 @@ provideLintCodeActions uri { warnings } = catMaybes <<< map codeAction <<< Set.t
 
   codeAction _ = Nothing
 
-provideCodeActions :: Uri -> Array IMarkerData -> AdditionalContext -> Array CodeAction
+provideCodeActions
+  :: Uri -> Array IMarkerData -> AdditionalContext -> Array CodeAction
 provideCodeActions uri markers' additionalContext =
   provideLintCodeActions uri additionalContext
-    <> (flip foldMap) markers' \(marker@{ source, startLineNumber, startColumn, endLineNumber, endColumn }) -> case regex "Hole: (\\w+)" noFlags of
+    <> (flip foldMap) markers'
+      \( marker@
+           { source, startLineNumber, startColumn, endLineNumber, endColumn }
+       ) -> case regex "Hole: (\\w+)" noFlags of
         Left _ -> []
-        Right r -> case readMarloweType =<< (join <<< (flip index 1)) =<< match r (source <> "Type") of
-          Nothing -> []
-          Just marloweType ->
-            let
-              m = getMarloweConstructors marloweType
+        Right r ->
+          case
+            readMarloweType =<< (join <<< (flip index 1)) =<< match r
+              (source <> "Type")
+            of
+            Nothing -> []
+            Just marloweType ->
+              let
+                m = getMarloweConstructors marloweType
 
-              hole = markerToHole marker marloweType
+                hole = markerToHole marker marloweType
 
-              (constructors :: Array _) = Set.toUnfoldable $ Map.keys m
+                (constructors :: Array _) = Set.toUnfoldable $ Map.keys m
 
-              range =
-                { startLineNumber
-                , startColumn
-                , endLineNumber
-                , endColumn
-                }
+                range =
+                  { startLineNumber
+                  , startColumn
+                  , endLineNumber
+                  , endColumn
+                  }
 
-              actions =
-                mapFlipped constructors \constructorName ->
-                  let
-                    text = constructMarloweType constructorName hole m
+                actions =
+                  mapFlipped constructors \constructorName ->
+                    let
+                      text = constructMarloweType constructorName hole m
 
-                    edit = { resource: uri, edit: { range, text } }
-                  in
-                    { title: constructorName, edit: { edits: [ edit ] }, kind: "quickfix" }
-            in
-              actions
+                      edit = { resource: uri, edit: { range, text } }
+                    in
+                      { title: constructorName
+                      , edit: { edits: [ edit ] }
+                      , kind: "quickfix"
+                      }
+              in
+                actions
 
-type AdditionalContext
-  = { warnings :: Set Warning
-    , contract :: Maybe (Term Contract)
-    , metadataHints :: Maybe MetadataHintInfo
-    }
+type AdditionalContext =
+  { warnings :: Set Warning
+  , contract :: Maybe (Term Contract)
+  , metadataHints :: Maybe MetadataHintInfo
+  }
 
 marloweHoleToSuggestionText :: Boolean -> MarloweHole -> String -> String
-marloweHoleToSuggestionText stripParens firstHole@(MarloweHole { marloweType }) constructorName =
+marloweHoleToSuggestionText
+  stripParens
+  firstHole@(MarloweHole { marloweType })
+  constructorName =
   let
     m = getMarloweConstructors marloweType
 
@@ -226,12 +292,14 @@ marloweHoleToSuggestionText stripParens firstHole@(MarloweHole { marloweType }) 
     else
       fullInsertText
 
-marloweHoleToSuggestion :: String -> Boolean -> IRange -> MarloweHole -> String -> CompletionItem
+marloweHoleToSuggestion
+  :: String -> Boolean -> IRange -> MarloweHole -> String -> CompletionItem
 marloweHoleToSuggestion original stripParens range marloweHole constructorName =
   let
     kind = completionItemKind "Constructor"
 
-    insertText = marloweHoleToSuggestionText stripParens marloweHole constructorName
+    insertText = marloweHoleToSuggestionText stripParens marloweHole
+      constructorName
 
     preselect = contains (Pattern original) constructorName
 
@@ -251,14 +319,27 @@ marloweHoleToSuggestion original stripParens range marloweHole constructorName =
     , preselect
     }
 
-holeSuggestions :: String -> Boolean -> IRange -> MarloweHole -> Array CompletionItem
-holeSuggestions original stripParens range marloweHole@(MarloweHole { marloweType }) =
+holeSuggestions
+  :: String -> Boolean -> IRange -> MarloweHole -> Array CompletionItem
+holeSuggestions
+  original
+  stripParens
+  range
+  marloweHole@(MarloweHole { marloweType }) =
   let
     marloweHoles = getMarloweConstructors marloweType
   in
-    map (marloweHoleToSuggestion original stripParens range marloweHole) $ Set.toUnfoldable $ Map.keys marloweHoles
+    map (marloweHoleToSuggestion original stripParens range marloweHole)
+      $ Set.toUnfoldable
+      $ Map.keys marloweHoles
 
-suggestions :: String -> Boolean -> String -> IRange -> AdditionalContext -> Array CompletionItem
+suggestions
+  :: String
+  -> Boolean
+  -> String
+  -> IRange
+  -> AdditionalContext
+  -> Array CompletionItem
 suggestions original stripParens contractString range { contract } =
   fromMaybe [] do
     -- there will be no contract if it had errors, this is no good because we want to try to fix this

@@ -15,7 +15,14 @@ import Marlowe.Extended as EM
 import Marlowe.Holes (Term, fromTerm)
 import Marlowe.Holes as T
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics (Input, Party(..), Slot(..), Token(..), TransactionInput, emptyState)
+import Marlowe.Semantics
+  ( Input
+  , Party(..)
+  , Slot(..)
+  , Token(..)
+  , TransactionInput
+  , emptyState
+  )
 import Marlowe.Semantics as S
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Test.Unit (Test, TestSuite, failure, success, suite, test)
@@ -44,8 +51,7 @@ timeout slot =
     , inputs: mempty
     }
 
-type ContractFlows
-  = List (String /\ List TransactionInput)
+type ContractFlows = List (String /\ List TransactionInput)
 
 ------------------------------------------------------------------------------------------------------
 seller :: Party
@@ -81,60 +87,62 @@ escrowFlows =
   List.fromFoldable
     [ "Everything is alright"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer) zero
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer)
+              zero
+          ]
     , "Seller confirm problem"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
-            , transaction $ S.IChoice (S.ChoiceId "Confirm problem" seller) one
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
+          , transaction $ S.IChoice (S.ChoiceId "Confirm problem" seller) one
+          ]
     , "Dismiss claim"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
-            , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
-            , transaction $ S.IChoice (S.ChoiceId "Dismiss claim" arbiter) zero
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
+          , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
+          , transaction $ S.IChoice (S.ChoiceId "Dismiss claim" arbiter) zero
+          ]
     , "Mediator confirm problem"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
-            , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
-            , transaction $ S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
+          , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
+          , transaction $ S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
+          ]
     , "Mediator confirm problem (multiple actions in same transaction)"
         /\ List.singleton
-            ( multipleInputs
-                $ List.fromFoldable
-                    [ S.IDeposit seller buyer ada escrowPrice
-                    , S.IChoice (S.ChoiceId "Report problem" buyer) one
-                    , S.IChoice (S.ChoiceId "Dispute problem" seller) zero
-                    , S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
-                    ]
-            )
+          ( multipleInputs
+              $ List.fromFoldable
+                  [ S.IDeposit seller buyer ada escrowPrice
+                  , S.IChoice (S.ChoiceId "Report problem" buyer) one
+                  , S.IChoice (S.ChoiceId "Dispute problem" seller) zero
+                  , S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
+                  ]
+          )
     , "Invalid input"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit arbiter arbiter ada escrowPrice
-            ]
+          [ transaction $ S.IDeposit arbiter arbiter ada escrowPrice
+          ]
     , "Timeout 1"
         /\ List.fromFoldable
-            [ timeout (fromInt 61)
-            ]
+          [ timeout (fromInt 61)
+          ]
     , "Timeout 2"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , timeout (fromInt 181)
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , timeout (fromInt 181)
+          ]
     -- Because the slot 10 is lower than the first timeout (60), this "timeout" should
     -- not be significant
     , "Everything is alright (with non significant timeout)"
         /\ List.fromFoldable
-            [ timeout (fromInt 10)
-            , transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer) zero
-            ]
+          [ timeout (fromInt 10)
+          , transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer)
+              zero
+          ]
     ]
 
 ------------------------------------------------------------------------------------------------------
@@ -177,31 +185,37 @@ contractForDifferencesFlows =
   List.fromFoldable
     [ "Decrease in price"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit party party ada cfdPrice
-            , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-            , timeout (fromInt 35)
-            , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle) (fromInt 90000000)
-            , timeout (fromInt 105)
-            , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle) (fromInt 85000000)
-            ]
+          [ transaction $ S.IDeposit party party ada cfdPrice
+          , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
+          , timeout (fromInt 35)
+          , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
+              (fromInt 90000000)
+          , timeout (fromInt 105)
+          , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
+              (fromInt 85000000)
+          ]
     , "Increase in price"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit party party ada cfdPrice
-            , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-            , timeout (fromInt 35)
-            , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle) (fromInt 90000000)
-            , timeout (fromInt 105)
-            , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle) (fromInt 95000000)
-            ]
+          [ transaction $ S.IDeposit party party ada cfdPrice
+          , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
+          , timeout (fromInt 35)
+          , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
+              (fromInt 90000000)
+          , timeout (fromInt 105)
+          , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
+              (fromInt 95000000)
+          ]
     , "Same price"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit party party ada cfdPrice
-            , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-            , timeout (fromInt 35)
-            , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle) (fromInt 90000000)
-            , timeout (fromInt 105)
-            , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle) (fromInt 90000000)
-            ]
+          [ transaction $ S.IDeposit party party ada cfdPrice
+          , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
+          , timeout (fromInt 35)
+          , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
+              (fromInt 90000000)
+          , timeout (fromInt 105)
+          , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
+              (fromInt 90000000)
+          ]
     ]
 
 ------------------------------------------------------------------------------------------------------
@@ -211,7 +225,8 @@ contractForDifferencesFlows =
 semanticToTerms :: S.Contract -> Maybe (Term T.Contract)
 semanticToTerms = hush <<< parseContract <<< show <<< pretty
 
-extendedToSemanticAndTerm :: EM.Contract -> Maybe (S.Contract /\ Term T.Contract)
+extendedToSemanticAndTerm
+  :: EM.Contract -> Maybe (S.Contract /\ Term T.Contract)
 extendedToSemanticAndTerm extendedContract = do
   semanticContract <- toCore extendedContract
   termContract <- semanticToTerms semanticContract
@@ -248,7 +263,8 @@ testTransactionList extendedContract inputs =
     in
       testStep inputs state semanticContract termContract
 
-  testStep Nil _ semanticContract termContract = equal (Just semanticContract) (fromTerm termContract)
+  testStep Nil _ semanticContract termContract = equal (Just semanticContract)
+    (fromTerm termContract)
 
   testStep (input : rest) state semanticContract termContract = do
     let
@@ -257,7 +273,10 @@ testTransactionList extendedContract inputs =
       termOutput = T.computeTransaction input state termContract
     shouldHaveSameOutput semanticOutput termOutput
     case semanticOutput /\ termOutput of
-      S.TransactionOutput o1 /\ T.TransactionOutput o2 -> testStep rest o1.txOutState o1.txOutContract o2.txOutContract
+      S.TransactionOutput o1 /\ T.TransactionOutput o2 -> testStep rest
+        o1.txOutState
+        o1.txOutContract
+        o2.txOutContract
       _ -> success
 
 testFlows :: EM.Contract -> ContractFlows -> TestSuite
@@ -271,4 +290,5 @@ all :: TestSuite
 all =
   suite "Marlowe.Holes.Semantic" do
     suite "Escrow flows" $ testFlows escrowContract escrowFlows
-    suite "Contract for differences" $ testFlows contractForDifferences contractForDifferencesFlows
+    suite "Contract for differences" $ testFlows contractForDifferences
+      contractForDifferencesFlows

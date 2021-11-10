@@ -38,7 +38,8 @@ _Pretty :: Getter' Contract String
 _Pretty = to (show <<< pretty)
 
 _ContractString :: forall r. Monoid r => Fold' r State String
-_ContractString = _compilationResult <<< _CompiledSuccessfully <<< _result <<< _Pretty
+_ContractString = _compilationResult <<< _CompiledSuccessfully <<< _result <<<
+  _Pretty
 
 data Action
   = Compile
@@ -64,19 +65,24 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (HandleEditorMessage _) = Just $ defaultEvent "HandleEditorMessage"
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent SendResultToSimulator = Just $ defaultEvent "SendResultToSimulator"
-  toEvent (InitJavascriptProject _ _) = Just $ defaultEvent "InitJavascriptProject"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (InitJavascriptProject _ _) = Just $ defaultEvent
+    "InitJavascriptProject"
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
-  toEvent AnalyseReachabilityContract = Just $ defaultEvent "AnalyseReachabilityContract"
-  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
+  toEvent AnalyseReachabilityContract = Just $ defaultEvent
+    "AnalyseReachabilityContract"
+  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
+    "AnalyseContractForCloseRefund"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
-  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction") { label = Just $ showConstructor action }
+  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
+    { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing
 
-type DecorationIds
-  = { topDecorationId :: String
-    , bottomDecorationId :: String
-    }
+type DecorationIds =
+  { topDecorationId :: String
+  , bottomDecorationId :: String
+  }
 
 _topDecorationId :: Lens' DecorationIds String
 _topDecorationId = prop (Proxy :: _ "topDecorationId")
@@ -84,15 +90,15 @@ _topDecorationId = prop (Proxy :: _ "topDecorationId")
 _bottomDecorationId :: Lens' DecorationIds String
 _bottomDecorationId = prop (Proxy :: _ "bottomDecorationId")
 
-type State
-  = { keybindings :: KeyBindings
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , compilationResult :: CompilationState
-    , decorationIds :: Maybe DecorationIds
-    , metadataHintInfo :: MetadataHintInfo
-    , analysisState :: AnalysisState
-    , editorReady :: Boolean
-    }
+type State =
+  { keybindings :: KeyBindings
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , compilationResult :: CompilationState
+  , decorationIds :: Maybe DecorationIds
+  , metadataHintInfo :: MetadataHintInfo
+  , analysisState :: AnalysisState
+  , editorReady :: Boolean
+  }
 
 _keybindings :: Lens' State KeyBindings
 _keybindings = prop (Proxy :: _ "keybindings")

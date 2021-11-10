@@ -47,13 +47,42 @@ import Marlowe.Semantics (ChoiceId(..), Input(..), Party(..), inBounds)
 import Marlowe.Template (fillTemplate, typeToLens)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Page.Simulation.Lenses (_bottomPanelState, _decorationIds, _helpContext, _showRightPanel)
+import Page.Simulation.Lenses
+  ( _bottomPanelState
+  , _decorationIds
+  , _helpContext
+  , _showRightPanel
+  )
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
 import Servant.PureScript (printAjaxError)
 import SessionStorage as SessionStorage
-import Simulator.Lenses (_SimulationNotStarted, _SimulationRunning, _currentContract, _currentMarloweState, _executionState, _initialSlot, _marloweState, _moveToAction, _possibleActions, _templateContent, _termContract)
-import Simulator.State (applyInput, emptyMarloweState, inFuture, moveToSlot, startSimulation, updateChoice)
-import Simulator.Types (ActionInput(..), ActionInputId(..), ExecutionState(..), Parties(..))
+import Simulator.Lenses
+  ( _SimulationNotStarted
+  , _SimulationRunning
+  , _currentContract
+  , _currentMarloweState
+  , _executionState
+  , _initialSlot
+  , _marloweState
+  , _moveToAction
+  , _possibleActions
+  , _templateContent
+  , _termContract
+  )
+import Simulator.State
+  ( applyInput
+  , emptyMarloweState
+  , inFuture
+  , moveToSlot
+  , startSimulation
+  , updateChoice
+  )
+import Simulator.Types
+  ( ActionInput(..)
+  , ActionInputId(..)
+  , ExecutionState(..)
+  , Parties(..)
+  )
 import StaticData (simulatorBufferLocalStorageKey)
 import Web.DOM.Document as D
 import Web.DOM.Element (setScrollTop)
@@ -72,44 +101,69 @@ mkState =
   , decorationIds: []
   }
 
-toBottomPanel ::
-  forall m a.
-  Functor m =>
-  HalogenM (BottomPanel.State BottomPanelView) (BottomPanel.Action BottomPanelView Action) ChildSlots Void m a ->
-  HalogenM State Action ChildSlots Void m a
+toBottomPanel
+  :: forall m a
+   . Functor m
+  => HalogenM (BottomPanel.State BottomPanelView)
+       (BottomPanel.Action BottomPanelView Action)
+       ChildSlots
+       Void
+       m
+       a
+  -> HalogenM State Action ChildSlots Void m a
 toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 
-handleAction ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  Action ->
-  HalogenM State Action ChildSlots Void m Unit
+handleAction
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => Action
+  -> HalogenM State Action ChildSlots Void m Unit
 handleAction (HandleEditorMessage Monaco.EditorReady) = do
-  contents <- fromMaybe "" <$> (liftEffect $ SessionStorage.getItem simulatorBufferLocalStorageKey)
+  contents <- fromMaybe "" <$>
+    (liftEffect $ SessionStorage.getItem simulatorBufferLocalStorageKey)
   handleAction $ LoadContract contents
   editorSetTheme
 
 handleAction (HandleEditorMessage (Monaco.TextChanged _)) = pure unit
 
 handleAction (SetInitialSlot initialSlot) = do
-  assign (_currentMarloweState <<< _executionState <<< _SimulationNotStarted <<< _initialSlot) initialSlot
+  assign
+    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted <<<
+        _initialSlot
+    )
+    initialSlot
   setOraclePrice
 
 handleAction (SetIntegerTemplateParam templateType key value) = do
-  modifying (_currentMarloweState <<< _executionState <<< _SimulationNotStarted <<< _templateContent <<< typeToLens templateType) (Map.insert key value)
+  modifying
+    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+        <<< _templateContent
+        <<< typeToLens templateType
+    )
+    (Map.insert key value)
   setOraclePrice
 
 handleAction StartSimulation =
   void
     {- The marloweState is a non empty list of an object that includes the ExecutionState (SimulationRunning | SimulationNotStarted)
-       Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
-       this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
-    
+    Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
+    this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
+
     $ runMaybeT do
-        initialSlot <- MaybeT $ peruse (_currentMarloweState <<< _executionState <<< _SimulationNotStarted <<< _initialSlot)
-        termContract <- MaybeT $ peruse (_currentMarloweState <<< _executionState <<< _SimulationNotStarted <<< _termContract <<< _Just)
-        templateContent <- MaybeT $ peruse (_currentMarloweState <<< _executionState <<< _SimulationNotStarted <<< _templateContent)
+        initialSlot <- MaybeT $ peruse
+          ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+              <<< _initialSlot
+          )
+        termContract <- MaybeT $ peruse
+          ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+              <<< _termContract
+              <<< _Just
+          )
+        templateContent <- MaybeT $ peruse
+          ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+              <<< _templateContent
+          )
         let
           contract = fillTemplate templateContent termContract
         startSimulation initialSlot contract
@@ -122,7 +176,12 @@ handleAction (MoveSlot slot) = do
     updateOracleAndContractEditor
 
 handleAction (SetSlot slot) = do
-  assign (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _possibleActions <<< _moveToAction) (Just $ MoveToSlot slot)
+  assign
+    ( _currentMarloweState <<< _executionState <<< _SimulationRunning
+        <<< _possibleActions
+        <<< _moveToAction
+    )
+    (Just $ MoveToSlot slot)
   setOraclePrice
 
 handleAction (AddInput input bounds) = do
@@ -151,7 +210,8 @@ handleAction (LoadContract contents) = do
   assign _marloweState $ NEL.singleton $ emptyMarloweState mTermContract
   editorSetValue contents
 
-handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction action
+handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
+  action
 
 handleAction (BottomPanelAction action) = do
   toBottomPanel (BottomPanel.handleAction action)
@@ -171,11 +231,11 @@ stripPair pair = case splitAt 4 pair of
     | before == "dir-" -> false /\ after
   _ -> false /\ pair
 
-setOraclePrice ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  HalogenM State Action ChildSlots Void m Unit
+setOraclePrice
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => HalogenM State Action ChildSlots Void m Unit
 setOraclePrice = do
   execState <- use (_currentMarloweState <<< _executionState)
   case execState of
@@ -194,19 +254,22 @@ setOraclePrice = do
         Nothing -> pure unit
     _ -> pure unit
 
-type Resp
-  = { result :: { price :: Number }, allowance :: { remaining :: Number, upgrade :: String, cost :: Number } }
+type Resp =
+  { result :: { price :: Number }
+  , allowance :: { remaining :: Number, upgrade :: String, cost :: Number }
+  }
 
-getPrice ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  Boolean ->
-  String ->
-  String ->
-  HalogenM State Action ChildSlots Void m BigInt
+getPrice
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => Boolean
+  -> String
+  -> String
+  -> HalogenM State Action ChildSlots Void m BigInt
 getPrice inverse exchange pair = do
-  result <- RemoteData.fromEither <$> runExceptT (Server.getApiOracleByExchangeByPair exchange pair)
+  result <- RemoteData.fromEither <$> runExceptT
+    (Server.getApiOracleByExchangeByPair exchange pair)
   calculatedPrice <-
     liftEffect case result of
       NotAsked -> pure "0"
@@ -227,8 +290,11 @@ getPrice inverse exchange pair = do
             let
               price = fromNumber resp.result.price
 
-              adjustedPrice = (if inverse then one / price else price) * fromNumber 100000000.0
-            log $ "Got price: " <> show resp.result.price <> ", remaining calls: " <> show resp.allowance.remaining
+              adjustedPrice = (if inverse then one / price else price) *
+                fromNumber 100000000.0
+            log $ "Got price: " <> show resp.result.price
+              <> ", remaining calls: "
+              <> show resp.allowance.remaining
             pure $ Decimal.toString (truncated adjustedPrice)
           Left err -> do
             log $ "Left " <> show err
@@ -237,16 +303,20 @@ getPrice inverse exchange pair = do
     price = fromMaybe zero (fromString calculatedPrice)
   pure price
 
-getCurrentContract :: forall m. HalogenM State Action ChildSlots Void m (Maybe String)
+getCurrentContract
+  :: forall m. HalogenM State Action ChildSlots Void m (Maybe String)
 getCurrentContract = editorGetValue
 
-scrollHelpPanel :: forall m. MonadEffect m => HalogenM State Action ChildSlots Void m Unit
+scrollHelpPanel
+  :: forall m. MonadEffect m => HalogenM State Action ChildSlots Void m Unit
 scrollHelpPanel =
   liftEffect do
     window <- Web.window
     document <- toDocument <$> W.document window
-    mSidePanel <- WC.item 0 =<< D.getElementsByClassName "sidebar-composer" document
-    mDocPanel <- WC.item 0 =<< D.getElementsByClassName "documentation-panel" document
+    mSidePanel <- WC.item 0 =<< D.getElementsByClassName "sidebar-composer"
+      document
+    mDocPanel <- WC.item 0 =<< D.getElementsByClassName "documentation-panel"
+      document
     case mSidePanel, mDocPanel of
       Just sidePanel, Just docPanel -> do
         sidePanelHeight <- E.scrollHeight sidePanel
@@ -261,20 +331,28 @@ scrollHelpPanel =
         setScrollTop newScrollHeight sidePanel
       _, _ -> pure unit
 
-editorSetTheme :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
-editorSetTheme = void $ query _simulatorEditorSlot unit (Monaco.SetTheme MM.daylightTheme.name unit)
+editorSetTheme
+  :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
+editorSetTheme = void $ query _simulatorEditorSlot unit
+  (Monaco.SetTheme MM.daylightTheme.name unit)
 
-editorSetValue :: forall state action msg m. String -> HalogenM state action ChildSlots msg m Unit
-editorSetValue contents = void $ query _simulatorEditorSlot unit (Monaco.SetText contents unit)
+editorSetValue
+  :: forall state action msg m
+   . String
+  -> HalogenM state action ChildSlots msg m Unit
+editorSetValue contents = void $ query _simulatorEditorSlot unit
+  (Monaco.SetText contents unit)
 
-editorGetValue :: forall state action msg m. HalogenM state action ChildSlots msg m (Maybe String)
+editorGetValue
+  :: forall state action msg m
+   . HalogenM state action ChildSlots msg m (Maybe String)
 editorGetValue = query _simulatorEditorSlot unit (Monaco.GetText identity)
 
-updateOracleAndContractEditor ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  HalogenM State Action ChildSlots Void m Unit
+updateOracleAndContractEditor
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => HalogenM State Action ChildSlots Void m Unit
 updateOracleAndContractEditor = do
   mContract <- peruse _currentContract
   -- Update the decorations around the current part of the running contract
@@ -282,12 +360,23 @@ updateOracleAndContractEditor = do
   case getLocation <$> mContract of
     Just (Range r) -> do
       let
-        decorationOptions = { isWholeLine: false, className: "monaco-simulation-text-decoration", linesDecorationsClassName: "monaco-simulation-line-decoration" }
-      mNewDecorationIds <- query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations oldDecorationIds [ { range: r, options: decorationOptions } ] identity
+        decorationOptions =
+          { isWholeLine: false
+          , className: "monaco-simulation-text-decoration"
+          , linesDecorationsClassName: "monaco-simulation-line-decoration"
+          }
+      mNewDecorationIds <- query _simulatorEditorSlot unit $
+        Monaco.SetDeltaDecorations oldDecorationIds
+          [ { range: r, options: decorationOptions } ]
+          identity
       for_ mNewDecorationIds (assign _decorationIds)
       void $ tell _simulatorEditorSlot unit $ Monaco.RevealRange r
     _ -> do
-      void $ query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations oldDecorationIds [] identity
+      void $ query _simulatorEditorSlot unit $ Monaco.SetDeltaDecorations
+        oldDecorationIds
+        []
+        identity
       assign _decorationIds []
-      void $ tell _simulatorEditorSlot unit $ Monaco.SetPosition { column: 1, lineNumber: 1 }
+      void $ tell _simulatorEditorSlot unit $ Monaco.SetPosition
+        { column: 1, lineNumber: 1 }
   setOraclePrice

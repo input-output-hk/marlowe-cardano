@@ -12,50 +12,100 @@ import Data.String.Extra (unlines)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
-import Halogen.Classes (flex, flexCol, fontBold, fullWidth, grid, gridColsDescriptionLocation, justifySelfEnd, minW0, overflowXScroll, paddingRight, underline)
+import Halogen.Classes
+  ( flex
+  , flexCol
+  , fontBold
+  , fullWidth
+  , grid
+  , gridColsDescriptionLocation
+  , justifySelfEnd
+  , minW0
+  , overflowXScroll
+  , paddingRight
+  , underline
+  )
 import Halogen.HTML (a, div, div_, pre_, section, section_, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
-import Page.MarloweEditor.Types (Action(..), BottomPanelView(..), State, _editorErrors, _editorWarnings, _hasHoles, _metadataHintInfo, _showErrorDetail, contractHasErrors)
-import StaticAnalysis.BottomPanel (analysisResultPane, analyzeButton, clearButton)
-import StaticAnalysis.Types (_analysisExecutionState, _analysisState, isCloseAnalysisLoading, isNoneAsked, isReachabilityLoading, isStaticLoading)
+import Page.MarloweEditor.Types
+  ( Action(..)
+  , BottomPanelView(..)
+  , State
+  , _editorErrors
+  , _editorWarnings
+  , _hasHoles
+  , _metadataHintInfo
+  , _showErrorDetail
+  , contractHasErrors
+  )
+import StaticAnalysis.BottomPanel
+  ( analysisResultPane
+  , analyzeButton
+  , clearButton
+  )
+import StaticAnalysis.Types
+  ( _analysisExecutionState
+  , _analysisState
+  , isCloseAnalysisLoading
+  , isNoneAsked
+  , isReachabilityLoading
+  , isStaticLoading
+  )
 import Text.Extra (lines)
 
-panelContents ::
-  forall m.
-  MonadAff m =>
-  State ->
-  MetaData ->
-  BottomPanelView ->
-  ComponentHTML Action ChildSlots m
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents
+  :: forall m
+   . MonadAff m
+  => State
+  -> MetaData
+  -> BottomPanelView
+  -> ComponentHTML Action ChildSlots m
+panelContents state metadata MetadataView = metadataView
+  (state ^. _metadataHintInfo)
+  metadata
+  MetadataAction
 
 panelContents state metadata StaticAnalysisView =
   section [ classes [ flex, flexCol ] ]
     if (state ^. _hasHoles) then
-      [ div_ [ text "The contract needs to be complete (no holes) before doing static analysis." ]
+      [ div_
+          [ text
+              "The contract needs to be complete (no holes) before doing static analysis."
+          ]
       ]
     else
       [ analysisResultPane metadata SetIntegerTemplateParam state
       , div [ classes [ paddingRight ] ]
-          [ analyzeButton loadingWarningAnalysis analysisEnabled "Analyse for warnings" AnalyseContract
-          , analyzeButton loadingReachability analysisEnabled "Analyse reachability" AnalyseReachabilityContract
-          , analyzeButton loadingCloseAnalysis analysisEnabled "Analyse for refunds on Close" AnalyseContractForCloseRefund
+          [ analyzeButton loadingWarningAnalysis analysisEnabled
+              "Analyse for warnings"
+              AnalyseContract
+          , analyzeButton loadingReachability analysisEnabled
+              "Analyse reachability"
+              AnalyseReachabilityContract
+          , analyzeButton loadingCloseAnalysis analysisEnabled
+              "Analyse for refunds on Close"
+              AnalyseContractForCloseRefund
           , clearButton clearEnabled "Clear" ClearAnalysisResults
           ]
       ]
   where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isStaticLoading
+  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
+    <<< to isStaticLoading
 
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<< to isReachabilityLoading
+  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isReachabilityLoading
 
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isCloseAnalysisLoading
+  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isCloseAnalysisLoading
 
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isNoneAsked
+  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
+    isNoneAsked
 
-  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not loadingCloseAnalysis
+  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not
+    loadingCloseAnalysis
 
   clearEnabled = nothingLoading && not noneAskedAnalysis
 
@@ -80,7 +130,8 @@ panelContents state _ MarloweWarningsView =
   renderWarning warning =
     [ span_ $ [ text warning.message ]
     , a
-        [ onClick $ const $ MoveToPosition warning.startLineNumber warning.startColumn
+        [ onClick $ const $ MoveToPosition warning.startLineNumber
+            warning.startColumn
         , classes [ underline, justifySelfEnd ]
         ]
         [ text $ show warning.startLineNumber ]
@@ -105,16 +156,22 @@ panelContents state _ MarloweErrorsView =
   renderError error =
     [ div [ classes [ minW0, overflowXScroll ] ]
         ( [ a
-              [ onClick $ const $ ShowErrorDetail (state ^. (_showErrorDetail <<< to not)) ]
-              [ text $ (if state ^. _showErrorDetail then "- " else "+ ") <> error.firstLine ]
+              [ onClick $ const $ ShowErrorDetail
+                  (state ^. (_showErrorDetail <<< to not))
+              ]
+              [ text $ (if state ^. _showErrorDetail then "- " else "+ ") <>
+                  error.firstLine
+              ]
           ]
-            <> if (state ^. _showErrorDetail) then
+            <>
+              if (state ^. _showErrorDetail) then
                 [ pre_ [ text error.restLines ] ]
               else
                 []
         )
     , a
-        [ onClick $ const $ MoveToPosition error.startLineNumber error.startColumn
+        [ onClick $ const $ MoveToPosition error.startLineNumber
+            error.startColumn
         , class_ underline
         ]
         [ text $ show error.startLineNumber ]

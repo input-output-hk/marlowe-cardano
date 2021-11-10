@@ -1,9 +1,47 @@
 module Marlowe.Blockly where
 
 import Blockly.Dom as BDom
-import Blockly.Internal (AlignDirection(..), Arg(..), BlockDefinition(..), Pair(..), clearWorkspace, connect, connectToOutput, connectToPrevious, fieldName, fieldRow, getInputWithName, inputList, inputName, inputType, nextConnection, previousConnection, setFieldText, clearUndoStack, defaultBlockDefinition, getBlockById, initializeWorkspace, render, typedArguments)
-import Blockly.Toolbox (Category, Toolbox(..), category, leaf, rename, separator)
-import Blockly.Types (Block, BlocklyState, Connection, Input, NewBlockFunction, Workspace)
+import Blockly.Internal
+  ( AlignDirection(..)
+  , Arg(..)
+  , BlockDefinition(..)
+  , Pair(..)
+  , clearWorkspace
+  , connect
+  , connectToOutput
+  , connectToPrevious
+  , fieldName
+  , fieldRow
+  , getInputWithName
+  , inputList
+  , inputName
+  , inputType
+  , nextConnection
+  , previousConnection
+  , setFieldText
+  , clearUndoStack
+  , defaultBlockDefinition
+  , getBlockById
+  , initializeWorkspace
+  , render
+  , typedArguments
+  )
+import Blockly.Toolbox
+  ( Category
+  , Toolbox(..)
+  , category
+  , leaf
+  , rename
+  , separator
+  )
+import Blockly.Types
+  ( Block
+  , BlocklyState
+  , Connection
+  , Input
+  , NewBlockFunction
+  , Workspace
+  )
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.Error.Extra (toMonadThrow)
 import Control.Monad.Except (class MonadError, throwError)
@@ -16,7 +54,13 @@ import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Either (note')
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
-import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
+import Data.Enum.Generic
+  ( genericCardinality
+  , genericFromEnum
+  , genericPred
+  , genericSucc
+  , genericToEnum
+  )
 import Data.Eq.Generic (genericEq)
 import Data.Foldable (for_)
 import Data.Generic.Rep (class Generic)
@@ -28,8 +72,48 @@ import Data.Show.Generic (genericShow)
 import Data.TraversableWithIndex (forWithIndex)
 import Effect (Effect)
 import Foreign.Object as Object
-import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Timeout(..), Token(..), Value(..), ValueId(..))
-import Prologue (class Bounded, class Eq, class Ord, class Show, Either, Maybe(..), Tuple(..), Unit, bind, bottom, discard, map, pure, show, unit, ($), (<#>), (<$>), (<<<), (<>), (=<<), (==), (>>=))
+import Marlowe.Holes
+  ( Action(..)
+  , Bound(..)
+  , Case(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Location(..)
+  , Observation(..)
+  , Party(..)
+  , Payee(..)
+  , Term(..)
+  , TermWrapper(..)
+  , Timeout(..)
+  , Token(..)
+  , Value(..)
+  , ValueId(..)
+  )
+import Prologue
+  ( class Bounded
+  , class Eq
+  , class Ord
+  , class Show
+  , Either
+  , Maybe(..)
+  , Tuple(..)
+  , Unit
+  , bind
+  , bottom
+  , discard
+  , map
+  , pure
+  , show
+  , unit
+  , ($)
+  , (<#>)
+  , (<$>)
+  , (<<<)
+  , (<>)
+  , (=<<)
+  , (==)
+  , (>>=)
+  )
 import Record (merge)
 import Type.Proxy (Proxy(..))
 
@@ -369,7 +453,8 @@ blockDefinitions :: Array BlockDefinition
 blockDefinitions = map toDefinition (upFromIncluding bottom)
 
 definitionsMap :: Map String BlockDefinition
-definitionsMap = Map.fromFoldable $ (\def@(BlockDefinition d) -> Tuple d.type def) <$> blockDefinitions
+definitionsMap = Map.fromFoldable $
+  (\def@(BlockDefinition d) -> Tuple d.type def) <$> blockDefinitions
 
 toDefinition :: BlockType -> BlockDefinition
 toDefinition BaseContractType =
@@ -399,8 +484,20 @@ toDefinition BoundsType =
         { type: show BoundsType
         , message0: "between %1 and %2"
         , args0:
-            [ Number { name: "from", value: 1.0, min: Nothing, max: Nothing, precision: Just 1.0 }
-            , Number { name: "to", value: 2.0, min: Nothing, max: Nothing, precision: Just 1.0 }
+            [ Number
+                { name: "from"
+                , value: 1.0
+                , min: Nothing
+                , max: Nothing
+                , precision: Just 1.0
+                }
+            , Number
+                { name: "to"
+                , value: 2.0
+                , min: Nothing
+                , max: Nothing
+                , precision: Just 1.0
+                }
             ]
         , colour: blockColour BoundsType
         , previousStatement: Just (show BoundsType)
@@ -414,7 +511,8 @@ toDefinition blockType@(ActionType DepositActionType) =
   BlockDefinition
     $ merge
         { type: show DepositActionType
-        , message0: "Deposit %1 by %2 the amount of %3 currency %4 into account of %5 continue as %6 %7"
+        , message0:
+            "Deposit %1 by %2 the amount of %3 currency %4 into account of %5 continue as %6 %7"
         , args0:
             [ DummyCentre
             , Value { name: "from_party", check: "party", align: AlignRight }
@@ -422,7 +520,11 @@ toDefinition blockType@(ActionType DepositActionType) =
             , Value { name: "token", check: "token", align: AlignRight }
             , Value { name: "party", check: "party", align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: show BaseContractType, align: AlignRight }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just "ActionType"
@@ -435,15 +537,21 @@ toDefinition blockType@(ActionType ChoiceActionType) =
   BlockDefinition
     $ merge
         { type: show ChoiceActionType
-        , message0: "Choice name %1 %2 choice owner %3 choice bounds %4 %5 continue as %6 %7"
+        , message0:
+            "Choice name %1 %2 choice owner %3 choice bounds %4 %5 continue as %6 %7"
         , args0:
             [ Input { name: "choice_name", text: "name", spellcheck: false }
             , DummyLeft
             , Value { name: "party", check: "party", align: AlignRight }
             , DummyLeft
-            , Statement { name: "bounds", check: show BoundsType, align: AlignRight }
+            , Statement
+                { name: "bounds", check: show BoundsType, align: AlignRight }
             , DummyLeft
-            , Statement { name: "contract", check: show BaseContractType, align: AlignRight }
+            , Statement
+                { name: "contract"
+                , check: show BaseContractType
+                , align: AlignRight
+                }
             ]
         , colour: blockColour blockType
         , previousStatement: Just "ActionType"
@@ -458,7 +566,8 @@ toDefinition blockType@(ActionType NotifyActionType) =
         { type: show NotifyActionType
         , message0: "Notification of %1 continue as %2 %3"
         , args0:
-            [ Value { name: "observation", check: "observation", align: AlignRight }
+            [ Value
+                { name: "observation", check: "observation", align: AlignRight }
             , DummyLeft
             , Statement
                 { name: "contract"
@@ -510,7 +619,12 @@ toDefinition blockType@(PartyType PKPartyType) =
         { type: show PKPartyType
         , message0: "Public Key %1"
         , args0:
-            [ Input { name: "pubkey", text: "0000000000000000000000000000000000000000000000000000000000000000", spellcheck: false }
+            [ Input
+                { name: "pubkey"
+                , text:
+                    "0000000000000000000000000000000000000000000000000000000000000000"
+                , spellcheck: false
+                }
             ]
         , colour: blockColour blockType
         , output: Just "party"
@@ -578,7 +692,8 @@ toDefinition blockType@(ContractType PayContractType) =
   BlockDefinition
     $ merge
         { type: show PayContractType
-        , message0: "Pay %1 payee %2 the amount of %3 of currency %4 from account of %5 continue as %6 %7"
+        , message0:
+            "Pay %1 payee %2 the amount of %3 of currency %4 from account of %5 continue as %6 %7"
         , args0:
             [ DummyCentre
             , Value { name: "payee", check: "payee", align: AlignRight }
@@ -637,7 +752,13 @@ toDefinition blockType@(ContractType WhenContractType) =
         , args0:
             [ DummyCentre
             , Statement { name: "case", check: "ActionType", align: AlignLeft }
-            , Dropdown { name: "timeout_type", options: [ Pair "slot number" "slot", Pair "slot parameter" "slot_param" ] }
+            , Dropdown
+                { name: "timeout_type"
+                , options:
+                    [ Pair "slot number" "slot"
+                    , Pair "slot parameter" "slot_param"
+                    ]
+                }
             , Input { name: "timeout", text: "0", spellcheck: false }
             , DummyLeft
             , DummyLeft
@@ -909,7 +1030,13 @@ toDefinition blockType@(ValueType ConstantValueType) =
         { type: show ConstantValueType
         , message0: "Constant %1"
         , args0:
-            [ Number { name: "constant", value: 1.0, min: Nothing, max: Nothing, precision: Just 1.0 }
+            [ Number
+                { name: "constant"
+                , value: 1.0
+                , min: Nothing
+                , max: Nothing
+                , precision: Just 1.0
+                }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -924,7 +1051,8 @@ toDefinition blockType@(ValueType ConstantParamValueType) =
         { type: show ConstantParamValueType
         , message0: "ConstantParam %1"
         , args0:
-            [ Input { name: "paramName", text: "parameterName", spellcheck: false }
+            [ Input
+                { name: "paramName", text: "parameterName", spellcheck: false }
             ]
         , colour: blockColour blockType
         , output: Just "value"
@@ -1033,8 +1161,20 @@ toDefinition blockType@(ValueType ScaleValueType) =
         { type: show ScaleValueType
         , message0: "(%1 / %2) * %3"
         , args0:
-            [ Number { name: "numerator", value: 1.0, min: Nothing, max: Nothing, precision: Just 1.0 }
-            , Number { name: "denominator", value: 1.0, min: Just 1.0, max: Nothing, precision: Just 1.0 }
+            [ Number
+                { name: "numerator"
+                , value: 1.0
+                , min: Nothing
+                , max: Nothing
+                , precision: Just 1.0
+                }
+            , Number
+                { name: "denominator"
+                , value: 1.0
+                , min: Just 1.0
+                , max: Nothing
+                , precision: Just 1.0
+                }
             , Value { name: "value", check: "value", align: AlignRight }
             ]
         , colour: blockColour blockType
@@ -1102,13 +1242,17 @@ toDefinition blockType@(ValueType UseValueValueType) =
 -- Toolbox definition
 --
 contractsCategory :: Category
-contractsCategory = category "Contracts" contractColour $ map (leaf <<< show) contractTypes
+contractsCategory = category "Contracts" contractColour $ map (leaf <<< show)
+  contractTypes
 
 observationsCategory :: Category
-observationsCategory = category "Observations" observationColour $ map (leaf <<< show) observationTypes
+observationsCategory = category "Observations" observationColour $ map
+  (leaf <<< show)
+  observationTypes
 
 actionsCategory :: Category
-actionsCategory = category "Actions" actionColour $ map (leaf <<< show) actionTypes
+actionsCategory = category "Actions" actionColour $ map (leaf <<< show)
+  actionTypes
 
 valueCategory :: Category
 valueCategory = category "Values" valueColour $ map (leaf <<< show) valueTypes
@@ -1157,7 +1301,8 @@ toolbox :: Toolbox
 toolbox = CategoryToolbox defaultCategories
 
 toolboxWithHoles :: BlockDefinition -> Toolbox
-toolboxWithHoles definition = CategoryToolbox (defaultCategories <> addSeparator holesCategories)
+toolboxWithHoles definition = CategoryToolbox
+  (defaultCategories <> addSeparator holesCategories)
   where
   addSeparator = case _ of
     [] -> []
@@ -1167,7 +1312,7 @@ toolboxWithHoles definition = CategoryToolbox (defaultCategories <> addSeparator
   holesCategories =
     catMaybes
       $ typedArguments definition
-      <#> \{ name, check } -> rename name <$> Map.lookup check typeMap
+          <#> \{ name, check } -> rename name <$> Map.lookup check typeMap
 
 ---------------------------------------------------------------------------------------------------
 --
@@ -1177,7 +1322,8 @@ blockToContract :: BDom.Block -> Either String (Term Contract)
 blockToContract block = lmap explainParseTermError $ blockToTerm block
 
 class BlockToTerm a where
-  blockToTerm :: forall m. MonadError ParseTermError m => BDom.Block -> m (Term a)
+  blockToTerm
+    :: forall m. MonadError ParseTermError m => BDom.Block -> m (Term a)
 
 data ParseTermError
   = InvalidBlock BDom.Block String
@@ -1187,38 +1333,64 @@ data ParseTermError
   | ErrorInChild BDom.Block String ParseTermError
 
 explainParseTermError :: ParseTermError -> String
-explainParseTermError (InvalidBlock block expectedType) = "Block with id " <> show block.id <> " and type " <> show block.type <> " is not a valid " <> expectedType <> " type"
+explainParseTermError (InvalidBlock block expectedType) = "Block with id "
+  <> show block.id
+  <> " and type "
+  <> show block.type
+  <> " is not a valid "
+  <> expectedType
+  <> " type"
 
-explainParseTermError (MissingArgument block attr) = "Block " <> show block.id <> " is missing required argument " <> show attr
+explainParseTermError (MissingArgument block attr) = "Block " <> show block.id
+  <> " is missing required argument "
+  <> show attr
 
-explainParseTermError (InvalidChildType childType) = "Attribute should be of type " <> childType
+explainParseTermError (InvalidChildType childType) =
+  "Attribute should be of type " <> childType
 
-explainParseTermError (InvalidFieldCast fieldValue castType) = "Could not convert value " <> show fieldValue <> " to " <> castType
+explainParseTermError (InvalidFieldCast fieldValue castType) =
+  "Could not convert value " <> show fieldValue <> " to " <> castType
 
-explainParseTermError (ErrorInChild block attr err) = "Error in " <> block.type <> "." <> attr <> explainNested err
+explainParseTermError (ErrorInChild block attr err) = "Error in " <> block.type
+  <> "."
+  <> attr
+  <> explainNested err
   where
-  explainNested (ErrorInChild block' attr' err') = " -> " <> block'.type <> "." <> attr' <> explainNested err'
+  explainNested (ErrorInChild block' attr' err') = " -> " <> block'.type <> "."
+    <> attr'
+    <> explainNested err'
 
   explainNested err' = ": " <> explainParseTermError err'
 
-getRequiredAttribute :: forall m. MonadThrow ParseTermError m => String -> BDom.Block -> m BDom.BlockChild
+getRequiredAttribute
+  :: forall m
+   . MonadThrow ParseTermError m
+  => String
+  -> BDom.Block
+  -> m BDom.BlockChild
 getRequiredAttribute attr block = case (Object.lookup attr block.children) of
   Nothing -> throwError $ MissingArgument block attr
   Just child -> pure child
 
-asStatement :: forall m. MonadThrow ParseTermError m => BDom.BlockChild -> m (Array BDom.Block)
+asStatement
+  :: forall m
+   . MonadThrow ParseTermError m
+  => BDom.BlockChild
+  -> m (Array BDom.Block)
 asStatement child = case child of
   BDom.Statement blocks -> pure blocks
   _ -> throwError $ InvalidChildType "Statement"
 
-asSingleStatement :: forall m. MonadThrow ParseTermError m => BDom.BlockChild -> m BDom.Block
+asSingleStatement
+  :: forall m. MonadThrow ParseTermError m => BDom.BlockChild -> m BDom.Block
 asSingleStatement child = do
   statements <- asStatement child
   case uncons statements of
     Just { head, tail: [] } -> pure head
     _ -> throwError $ InvalidChildType "Statement with a single child"
 
-asValue :: forall m. MonadThrow ParseTermError m => BDom.BlockChild -> m BDom.Block
+asValue
+  :: forall m. MonadThrow ParseTermError m => BDom.BlockChild -> m BDom.Block
 asValue child = case child of
   BDom.Value block -> pure block
   _ -> throwError $ InvalidChildType "Value"
@@ -1229,93 +1401,100 @@ asField child = case child of
   _ -> throwError $ InvalidChildType "Field"
 
 asBigInt :: forall m. MonadThrow ParseTermError m => String -> m BigInt
-asBigInt str = toMonadThrow $ note' (\_ -> InvalidFieldCast str "BigInt") (BigInt.fromString str)
+asBigInt str = toMonadThrow $ note' (\_ -> InvalidFieldCast str "BigInt")
+  (BigInt.fromString str)
 
-mkTermFromChild ::
-  forall m a.
-  MonadError ParseTermError m =>
-  BlockToTerm a =>
-  (BDom.BlockChild -> m BDom.Block) ->
-  String ->
-  BDom.Block ->
-  m (Term a)
-mkTermFromChild childToBlock attr block = case Object.lookup attr block.children of
-  -- FIXME: Check if I can use something relating to the term type `a` instead of
-  --        attr to generate the hole name. That way I could rename the blockly attributes
-  --        without problem
-  Nothing -> pure $ Hole attr Proxy (BlockId block.id)
-  Just child ->
-    catchError
-      (blockToTerm =<< childToBlock child)
-      (\err -> throwError $ ErrorInChild block attr err)
+mkTermFromChild
+  :: forall m a
+   . MonadError ParseTermError m
+  => BlockToTerm a
+  => (BDom.BlockChild -> m BDom.Block)
+  -> String
+  -> BDom.Block
+  -> m (Term a)
+mkTermFromChild childToBlock attr block =
+  case Object.lookup attr block.children of
+    -- FIXME: Check if I can use something relating to the term type `a` instead of
+    --        attr to generate the hole name. That way I could rename the blockly attributes
+    --        without problem
+    Nothing -> pure $ Hole attr Proxy (BlockId block.id)
+    Just child ->
+      catchError
+        (blockToTerm =<< childToBlock child)
+        (\err -> throwError $ ErrorInChild block attr err)
 
-valueToTerm ::
-  forall m a.
-  MonadError ParseTermError m =>
-  BlockToTerm a =>
-  String ->
-  BDom.Block ->
-  m (Term a)
+valueToTerm
+  :: forall m a
+   . MonadError ParseTermError m
+  => BlockToTerm a
+  => String
+  -> BDom.Block
+  -> m (Term a)
 valueToTerm = mkTermFromChild asValue
 
-singleStatementToTerm ::
-  forall m a.
-  MonadError ParseTermError m =>
-  BlockToTerm a =>
-  String ->
-  BDom.Block ->
-  m (Term a)
+singleStatementToTerm
+  :: forall m a
+   . MonadError ParseTermError m
+  => BlockToTerm a
+  => String
+  -> BDom.Block
+  -> m (Term a)
 singleStatementToTerm = mkTermFromChild asSingleStatement
 
 -- Parse the child of a block as a statement (array of blocks), and convert each
 -- block to a term
-statementsToTerms ::
-  forall m a.
-  MonadError ParseTermError m =>
-  BlockToTerm a =>
-  String ->
-  BDom.Block ->
-  m (Array (Term a))
+statementsToTerms
+  :: forall m a
+   . MonadError ParseTermError m
+  => BlockToTerm a
+  => String
+  -> BDom.Block
+  -> m (Array (Term a))
 statementsToTerms attr block =
   let
     parseStatements child = do
-      statements <- catchError (asStatement child) (\err -> throwError $ ErrorInChild block attr err)
+      statements <- catchError (asStatement child)
+        (\err -> throwError $ ErrorInChild block attr err)
       forWithIndex statements \i block' ->
         catchError
           (blockToTerm block')
-          (\err -> throwError $ ErrorInChild block (attr <> "[" <> show i <> "]") err)
+          ( \err -> throwError $ ErrorInChild block
+              (attr <> "[" <> show i <> "]")
+              err
+          )
   in
     maybe
       (pure [])
       parseStatements
       (Object.lookup attr block.children)
 
-fieldAsString ::
-  forall m.
-  MonadError ParseTermError m =>
-  String ->
-  BDom.Block ->
-  m String
+fieldAsString
+  :: forall m
+   . MonadError ParseTermError m
+  => String
+  -> BDom.Block
+  -> m String
 fieldAsString attr block =
   catchError
     (asField =<< getRequiredAttribute attr block)
     (\err -> throwError $ ErrorInChild block attr err)
 
-fieldAsBigInt ::
-  forall m.
-  MonadError ParseTermError m =>
-  String ->
-  BDom.Block ->
-  m BigInt
+fieldAsBigInt
+  :: forall m
+   . MonadError ParseTermError m
+  => String
+  -> BDom.Block
+  -> m BigInt
 fieldAsBigInt attr block =
   catchError
     (asBigInt =<< asField =<< getRequiredAttribute attr block)
     (\err -> throwError $ ErrorInChild block attr err)
 
 instance blockToTermContract :: BlockToTerm Contract where
-  blockToTerm { type: "BaseContractType", children, id } = case Object.lookup "BaseContractType" children of
-    Nothing -> pure $ Hole "contract" Proxy (BlockId id)
-    Just child -> blockToTerm =<< asSingleStatement child
+  blockToTerm { type: "BaseContractType", children, id } =
+    case Object.lookup "BaseContractType" children of
+      Nothing -> pure $ Hole "contract" Proxy (BlockId id)
+      Just child -> blockToTerm =<< asSingleStatement child
   blockToTerm { type: "CloseContractType", id } = pure $ Term Close (BlockId id)
   blockToTerm b@({ type: "PayContractType", id }) = do
     accountOwner <- valueToTerm "party" b
@@ -1341,7 +1520,8 @@ instance blockToTermContract :: BlockToTerm Contract where
       "slot_param" -> do
         slotParam <- fieldAsString "timeout" b
         pure $ Term (SlotParam slotParam) location
-      _ -> throwError $ ErrorInChild b "timeout_type" (InvalidChildType "Timeout")
+      _ -> throwError $ ErrorInChild b "timeout_type"
+        (InvalidChildType "Timeout")
     contract <- singleStatementToTerm "contract" b
     pure $ Term (When cases timeout contract) location
   blockToTerm b@({ type: "LetContractType", id }) = do
@@ -1397,8 +1577,10 @@ instance blockToTermObservation :: BlockToTerm Observation where
     value1 <- valueToTerm "value1" b
     value2 <- valueToTerm "value2" b
     pure $ Term (ValueEQ value1 value2) (BlockId id)
-  blockToTerm { type: "TrueObservationType", id } = pure $ Term TrueObs (BlockId id)
-  blockToTerm { type: "FalseObservationType", id } = pure $ Term FalseObs (BlockId id)
+  blockToTerm { type: "TrueObservationType", id } = pure $ Term TrueObs
+    (BlockId id)
+  blockToTerm { type: "FalseObservationType", id } = pure $ Term FalseObs
+    (BlockId id)
   blockToTerm block = throwError $ InvalidBlock block "Observation"
 
 instance blockToTermValue :: BlockToTerm Value where
@@ -1435,8 +1617,12 @@ instance blockToTermValue :: BlockToTerm Value where
     choiceName <- fieldAsString "choice_name" b
     party <- valueToTerm "party" b
     pure $ Term (ChoiceValue (ChoiceId choiceName party)) (BlockId id)
-  blockToTerm ({ type: "SlotIntervalStartValueType", id }) = pure $ Term SlotIntervalStart (BlockId id)
-  blockToTerm ({ type: "SlotIntervalEndValueType", id }) = pure $ Term SlotIntervalEnd (BlockId id)
+  blockToTerm ({ type: "SlotIntervalStartValueType", id }) = pure $ Term
+    SlotIntervalStart
+    (BlockId id)
+  blockToTerm ({ type: "SlotIntervalEndValueType", id }) = pure $ Term
+    SlotIntervalEnd
+    (BlockId id)
   blockToTerm b@({ type: "UseValueValueType", id }) = do
     valueId <- fieldAsString "value_id" b
     let
@@ -1504,7 +1690,8 @@ instance blockToTermPayee :: BlockToTerm Payee where
   blockToTerm block = throwError $ InvalidBlock block "Payee"
 
 instance blockToTermToken :: BlockToTerm Token where
-  blockToTerm ({ type: "AdaTokenType", id }) = pure $ Term (Token "" "") (BlockId id)
+  blockToTerm ({ type: "AdaTokenType", id }) = pure $ Term (Token "" "")
+    (BlockId id)
   blockToTerm b@({ type: "CustomTokenType", id }) = do
     currencySymbol <- fieldAsString "currency_symbol" b
     tokenName <- fieldAsString "token_name" b
@@ -1552,7 +1739,15 @@ getNextInput block = do
     nextConInputs = filter (\input -> inputType input == 5) inputs
   pure (head nextConInputs)
 
-inputToBlockly :: forall a. ToBlockly a => NewBlockFunction -> Workspace -> Block -> String -> a -> Effect Unit
+inputToBlockly
+  :: forall a
+   . ToBlockly a
+  => NewBlockFunction
+  -> Workspace
+  -> Block
+  -> String
+  -> a
+  -> Effect Unit
 inputToBlockly newBlock workspace block name value = do
   case Array.find (\i -> inputName i == name) (inputList block) of
     Nothing -> pure unit
@@ -1562,7 +1757,9 @@ class ToBlockly a where
   toBlockly :: NewBlockFunction -> Workspace -> Input -> a -> Effect Unit
 
 instance toBlocklyTerm :: ToBlockly a => ToBlockly (Term a) where
-  toBlockly newBlock workspace input (Term a _) = toBlockly newBlock workspace input a
+  toBlockly newBlock workspace input (Term a _) = toBlockly newBlock workspace
+    input
+    a
   toBlockly _ _ _ _ = pure unit
 
 instance toBlocklyPayee :: ToBlockly Payee where
@@ -1595,7 +1792,12 @@ instance toBlocklyToken :: ToBlockly Token where
     setField block "currency_symbol" currSym
     setField block "token_name" tokName
 
-nextBound :: NewBlockFunction -> Workspace -> Connection -> Array (Term Bound) -> Effect Unit
+nextBound
+  :: NewBlockFunction
+  -> Workspace
+  -> Connection
+  -> Array (Term Bound)
+  -> Effect Unit
 nextBound newBlock workspace fromConnection bounds = do
   case uncons bounds of
     Nothing -> pure unit
@@ -1626,7 +1828,10 @@ instance toBlocklyBounds :: ToBlockly (Array (Term Bound)) where
         nextBound newBlock workspace fromConnection tail
 
 oneCaseToBlockly :: NewBlockFunction -> Workspace -> Case -> Effect Block
-oneCaseToBlockly newBlock workspace (Case (Term (Deposit accountOwner party tok value) _) cont) = do
+oneCaseToBlockly
+  newBlock
+  workspace
+  (Case (Term (Deposit accountOwner party tok value) _) cont) = do
   block <- newBlock workspace (show DepositActionType)
   inputToBlockly newBlock workspace block "party" accountOwner
   inputToBlockly newBlock workspace block "token" tok
@@ -1635,7 +1840,10 @@ oneCaseToBlockly newBlock workspace (Case (Term (Deposit accountOwner party tok 
   inputToBlockly newBlock workspace block "contract" cont
   pure block
 
-oneCaseToBlockly newBlock workspace (Case (Term (Choice (ChoiceId choiceName choiceOwner) bounds) _) cont) = do
+oneCaseToBlockly
+  newBlock
+  workspace
+  (Case (Term (Choice (ChoiceId choiceName choiceOwner) bounds) _) cont) = do
   block <- newBlock workspace (show ChoiceActionType)
   setField block "choice_name" choiceName
   inputToBlockly newBlock workspace block "party" choiceOwner
@@ -1643,20 +1851,27 @@ oneCaseToBlockly newBlock workspace (Case (Term (Choice (ChoiceId choiceName cho
   inputToBlockly newBlock workspace block "contract" cont
   pure block
 
-oneCaseToBlockly newBlock workspace (Case (Term (Notify observation) _) cont) = do
-  block <- newBlock workspace (show NotifyActionType)
-  inputToBlockly newBlock workspace block "observation" observation
-  inputToBlockly newBlock workspace block "contract" cont
-  pure block
+oneCaseToBlockly newBlock workspace (Case (Term (Notify observation) _) cont) =
+  do
+    block <- newBlock workspace (show NotifyActionType)
+    inputToBlockly newBlock workspace block "observation" observation
+    inputToBlockly newBlock workspace block "contract" cont
+    pure block
 
 -- This is a temporary hack to cover a mismatch between blockly and holes
 -- Case is a pair of an Action and a Contract so to make code easy to write in the simulation
 -- we allow `Case ?action ?contract` however that doesn't fit in with Blockly which doesn't
 -- have a `Case` block type but instead flattens things out. So in the case of `Case ?action ?contract`
 -- we will allow blockly to fill in a default Notify action
-oneCaseToBlockly newBlock workspace _ = newBlock workspace (show NotifyActionType)
+oneCaseToBlockly newBlock workspace _ = newBlock workspace
+  (show NotifyActionType)
 
-nextCase :: NewBlockFunction -> Workspace -> Connection -> Array (Term Case) -> Effect Unit
+nextCase
+  :: NewBlockFunction
+  -> Workspace
+  -> Connection
+  -> Array (Term Case)
+  -> Effect Unit
 nextCase newBlock workspace fromConnection cases = do
   case uncons cases of
     Nothing -> pure unit
@@ -1686,14 +1901,15 @@ instance toBlocklyContract :: ToBlockly Contract where
   toBlockly newBlock workspace input Close = do
     block <- newBlock workspace (show CloseContractType)
     connectToPrevious block input
-  toBlockly newBlock workspace input (Pay accountOwner payee tok value contract) = do
-    block <- newBlock workspace (show PayContractType)
-    connectToPrevious block input
-    inputToBlockly newBlock workspace block "party" accountOwner
-    inputToBlockly newBlock workspace block "token" tok
-    inputToBlockly newBlock workspace block "payee" payee
-    inputToBlockly newBlock workspace block "value" value
-    inputToBlockly newBlock workspace block "contract" contract
+  toBlockly newBlock workspace input (Pay accountOwner payee tok value contract) =
+    do
+      block <- newBlock workspace (show PayContractType)
+      connectToPrevious block input
+      inputToBlockly newBlock workspace block "party" accountOwner
+      inputToBlockly newBlock workspace block "token" tok
+      inputToBlockly newBlock workspace block "payee" payee
+      inputToBlockly newBlock workspace block "value" value
+      inputToBlockly newBlock workspace block "contract" contract
   toBlockly newBlock workspace input (If observation contract1 contract2) = do
     block <- newBlock workspace (show IfContractType)
     connectToPrevious block input
@@ -1716,7 +1932,11 @@ instance toBlocklyContract :: ToBlockly Contract where
           _ -> "0"
       )
     inputToBlockly newBlock workspace block "contract" contract
-  toBlockly newBlock workspace input (Let (TermWrapper (ValueId valueId) _) value contract) = do
+  toBlockly
+    newBlock
+    workspace
+    input
+    (Let (TermWrapper (ValueId valueId) _) value contract) = do
     block <- newBlock workspace (show LetContractType)
     connectToPrevious block input
     setField block "value_id" valueId
@@ -1743,7 +1963,11 @@ instance toBlocklyObservation :: ToBlockly Observation where
     block <- newBlock workspace (show NotObservationType)
     connectToOutput block input
     inputToBlockly newBlock workspace block "observation" observation
-  toBlockly newBlock workspace input (ChoseSomething (ChoiceId choiceName choiceOwner)) = do
+  toBlockly
+    newBlock
+    workspace
+    input
+    (ChoseSomething (ChoiceId choiceName choiceOwner)) = do
     block <- newBlock workspace (show ChoseSomethingObservationType)
     connectToOutput block input
     setField block "choice_name" choiceName
@@ -1818,7 +2042,11 @@ instance toBlocklyValue :: ToBlockly Value where
     connectToOutput block input
     inputToBlockly newBlock workspace block "value1" v1
     inputToBlockly newBlock workspace block "value2" v2
-  toBlockly newBlock workspace input (ChoiceValue (ChoiceId choiceName choiceOwner)) = do
+  toBlockly
+    newBlock
+    workspace
+    input
+    (ChoiceValue (ChoiceId choiceName choiceOwner)) = do
     block <- newBlock workspace (show ChoiceValueValueType)
     connectToOutput block input
     setField block "choice_name" choiceName
@@ -1829,7 +2057,11 @@ instance toBlocklyValue :: ToBlockly Value where
   toBlockly newBlock workspace input SlotIntervalEnd = do
     block <- newBlock workspace (show SlotIntervalEndValueType)
     connectToOutput block input
-  toBlockly newBlock workspace input (UseValue (TermWrapper (ValueId valueId) _)) = do
+  toBlockly
+    newBlock
+    workspace
+    input
+    (UseValue (TermWrapper (ValueId valueId) _)) = do
     block <- newBlock workspace (show UseValueValueType)
     connectToOutput block input
     setField block "value_id" valueId

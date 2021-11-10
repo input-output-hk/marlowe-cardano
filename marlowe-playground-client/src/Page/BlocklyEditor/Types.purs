@@ -33,7 +33,8 @@ data Action
   | SelectWarning Warning
 
 defaultEvent :: String -> Event
-defaultEvent s = (A.defaultEvent $ "BlocklyEditor." <> s) { category = Just "Blockly" }
+defaultEvent s = (A.defaultEvent $ "BlocklyEditor." <> s)
+  { category = Just "Blockly" }
 
 instance blocklyActionIsEvent :: IsEvent Action where
   toEvent (HandleBlocklyMessage _) = Just $ defaultEvent "HandleBlocklyMessage"
@@ -43,10 +44,14 @@ instance blocklyActionIsEvent :: IsEvent Action where
   toEvent Save = Just $ defaultEvent "Save"
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
-  toEvent AnalyseReachabilityContract = Just $ defaultEvent "AnalyseReachabilityContract"
-  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
-  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction") { label = Just $ showConstructor action }
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent AnalyseReachabilityContract = Just $ defaultEvent
+    "AnalyseReachabilityContract"
+  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
+    "AnalyseContractForCloseRefund"
+  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
+    { label = Just $ showConstructor action }
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent (SelectWarning _) = Just $ defaultEvent "SelectWarning"
 
@@ -62,15 +67,15 @@ derive instance genericBottomPanelView :: Generic BottomPanelView _
 instance showBottomPanelView :: Show BottomPanelView where
   show = genericShow
 
-type State
-  = { errorMessage :: Maybe String
-    , marloweCode :: Maybe String
-    , hasHoles :: Boolean
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , metadataHintInfo :: MetadataHintInfo
-    , analysisState :: AnalysisState
-    , warnings :: Array Warning
-    }
+type State =
+  { errorMessage :: Maybe String
+  , marloweCode :: Maybe String
+  , hasHoles :: Boolean
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , metadataHintInfo :: MetadataHintInfo
+  , analysisState :: AnalysisState
+  , warnings :: Array Warning
+  }
 
 _errorMessage :: Lens' State (Maybe String)
 _errorMessage = prop (Proxy :: _ "errorMessage")

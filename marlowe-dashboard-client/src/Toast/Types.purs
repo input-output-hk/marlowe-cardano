@@ -19,15 +19,15 @@ import Halogen (SubscriptionId)
 import Servant.PureScript (AjaxError)
 import Types (DecodedAjaxError)
 
-type ToastMessage
-  = { shortDescription :: String
-    , longDescription :: Maybe String
-    , icon :: Icon
-    , iconColor :: String
-    , textColor :: String
-    , bgColor :: String
-    , timeout :: Number
-    }
+type ToastMessage =
+  { shortDescription :: String
+  , longDescription :: Maybe String
+  , icon :: Icon
+  , iconColor :: String
+  , textColor :: String
+  , bgColor :: String
+  , timeout :: Number
+  }
 
 data Action
   = AddToast ToastMessage
@@ -46,15 +46,15 @@ instance actionIsEvent :: IsEvent Action where
 
 -- TODO: For now the state and actions can only represent a single toast. If you open a new toast
 --       it will replace the current one. We could later on extend this to have multiple messages
-type ToastState
-  = { message :: ToastMessage
-    , expanded :: Boolean
-    , timeoutSubscription :: SubscriptionId
-    }
+type ToastState =
+  { message :: ToastMessage
+  , expanded :: Boolean
+  , timeoutSubscription :: SubscriptionId
+  }
 
-type State
-  = { mToast :: Maybe ToastState
-    }
+type State =
+  { mToast :: Maybe ToastState
+  }
 
 successToast :: String -> ToastMessage
 successToast shortDescription =
@@ -70,7 +70,8 @@ successToast shortDescription =
 errorToast :: String -> Maybe String -> ToastMessage
 errorToast shortDescription longDescription =
   { shortDescription
-  , longDescription: map (\m -> m <> " " <> contactSupportMessage) longDescription
+  , longDescription: map (\m -> m <> " " <> contactSupportMessage)
+      longDescription
   , icon: ErrorOutline
   , iconColor: "text-white"
   , textColor: "text-white"
@@ -79,15 +80,18 @@ errorToast shortDescription longDescription =
   }
 
 ajaxErrorToast :: String -> AjaxError -> ToastMessage
-ajaxErrorToast shortDescription _ = errorToast shortDescription $ Just "A request was made to the server, but the expected response was not returned."
+ajaxErrorToast shortDescription _ = errorToast shortDescription $ Just
+  "A request was made to the server, but the expected response was not returned."
 
 decodingErrorToast :: String -> JsonDecodeError -> ToastMessage
-decodingErrorToast shortDescription _ = errorToast shortDescription $ Just "Some data was received from the server, but the browser was unable to parse it."
+decodingErrorToast shortDescription _ = errorToast shortDescription $ Just
+  "Some data was received from the server, but the browser was unable to parse it."
 
 decodedAjaxErrorToast :: String -> DecodedAjaxError -> ToastMessage
-decodedAjaxErrorToast shortDescription decodedAjaxError = case decodedAjaxError of
-  Left ajaxError -> ajaxErrorToast shortDescription ajaxError
-  Right multipleErrors -> decodingErrorToast shortDescription multipleErrors
+decodedAjaxErrorToast shortDescription decodedAjaxError =
+  case decodedAjaxError of
+    Left ajaxError -> ajaxErrorToast shortDescription ajaxError
+    Right multipleErrors -> decodingErrorToast shortDescription multipleErrors
 
 contactSupportMessage :: String
 contactSupportMessage = "Please contact support if the problem persists."

@@ -106,17 +106,20 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (BlocklyEditorAction action) = toEvent action
   toEvent (JavascriptAction action) = toEvent action
   toEvent (MarloweEditorAction action) = toEvent action
-  toEvent (ChangeView view) = Just $ (defaultEvent "View") { label = Just (show view) }
+  toEvent (ChangeView view) = Just $ (defaultEvent "View")
+    { label = Just (show view) }
   toEvent (ShowBottomPanel _) = Just $ defaultEvent "ShowBottomPanel"
   toEvent (ProjectsAction action) = toEvent action
   toEvent (NewProjectAction action) = toEvent action
   toEvent (DemosAction action) = toEvent action
   toEvent (RenameAction action) = toEvent action
   toEvent (SaveAsAction action) = toEvent action
-  toEvent (ConfirmUnsavedNavigationAction _ _) = Just $ defaultEvent "ConfirmUnsavedNavigation"
+  toEvent (ConfirmUnsavedNavigationAction _ _) = Just $ defaultEvent
+    "ConfirmUnsavedNavigation"
   toEvent CheckAuthStatus = Just $ defaultEvent "CheckAuthStatus"
   toEvent (GistAction _) = Just $ defaultEvent "GistAction"
-  toEvent (OpenModal view) = Just $ (defaultEvent (show view)) { category = Just "OpenModal" }
+  toEvent (OpenModal view) = Just $ (defaultEvent (show view))
+    { category = Just "OpenModal" }
   toEvent CloseModal = Just $ defaultEvent "CloseModal"
   toEvent (ChangeProjectName _) = Just $ defaultEvent "ChangeProjectName"
   toEvent (OpenLoginPopup _) = Just $ defaultEvent "OpenLoginPopup"
@@ -136,17 +139,17 @@ derive instance genericView :: Generic View _
 instance showView :: Show View where
   show = genericShow
 
-type ChildSlots
-  = ( haskellEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
-    , jsEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
-    , blocklySlot :: H.Slot Blockly.Query Blockly.Message Unit
-    , simulationSlot :: H.Slot Simulation.Query Blockly.Message Unit
-    , simulatorEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
-    , marloweEditorPageSlot :: H.Slot Monaco.Query Monaco.Message Unit
-    , tooltipSlot :: forall query. H.Slot query Void ReferenceId
-    , hintSlot :: forall query. H.Slot query Void String
-    , currencyInput :: forall query. H.Slot query BigInt String
-    )
+type ChildSlots =
+  ( haskellEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
+  , jsEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
+  , blocklySlot :: H.Slot Blockly.Query Blockly.Message Unit
+  , simulationSlot :: H.Slot Simulation.Query Blockly.Message Unit
+  , simulatorEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
+  , marloweEditorPageSlot :: H.Slot Monaco.Query Monaco.Message Unit
+  , tooltipSlot :: forall query. H.Slot query Void ReferenceId
+  , hintSlot :: forall query. H.Slot query Void String
+  , currencyInput :: forall query. H.Slot query BigInt String
+  )
 
 _haskellEditorSlot :: Proxy "haskellEditorSlot"
 _haskellEditorSlot = Proxy
@@ -173,38 +176,38 @@ _currencyInputSlot :: Proxy "currencyInput"
 _currencyInputSlot = Proxy
 
 -----------------------------------------------------------
-type State
-  = { view :: View
-    , jsCompilationResult :: CompilationState
-    , jsEditorKeybindings :: KeyBindings
-    , activeJSDemo :: String
-    , showBottomPanel :: Boolean
-    -- TODO: rename to haskellEditorState
-    , haskellState :: HE.State
-    -- TODO: rename to javascriptEditorState
-    , javascriptState :: JS.State
-    , marloweEditorState :: ME.State
-    , blocklyEditorState :: BE.State
-    , simulationState :: Simulation.State
-    , contractMetadata :: MetaData
-    , projects :: Projects.State
-    , newProject :: NewProject.State
-    , rename :: Rename.State
-    , saveAs :: SaveAs.State
-    , authStatus :: WebData AuthStatus
-    , gistId :: Maybe GistId
-    , createGistResult :: WebData Gist
-    , loadGistResult :: Either String (WebData Gist)
-    , projectName :: String
-    , showModal :: Maybe ModalView
-    , hasUnsavedChanges :: Boolean
-    -- The initial language selected when you create/load a project indicates the workflow a user might take
-    -- A user can start with a haskell/javascript example that eventually gets compiled into
-    -- marlowe/blockly and run in the simulator, or can create a marlowe/blockly contract directly,
-    -- which can be used interchangeably. This is used all across the site to know what are the posible
-    -- transitions.
-    , workflow :: Maybe Lang
-    }
+type State =
+  { view :: View
+  , jsCompilationResult :: CompilationState
+  , jsEditorKeybindings :: KeyBindings
+  , activeJSDemo :: String
+  , showBottomPanel :: Boolean
+  -- TODO: rename to haskellEditorState
+  , haskellState :: HE.State
+  -- TODO: rename to javascriptEditorState
+  , javascriptState :: JS.State
+  , marloweEditorState :: ME.State
+  , blocklyEditorState :: BE.State
+  , simulationState :: Simulation.State
+  , contractMetadata :: MetaData
+  , projects :: Projects.State
+  , newProject :: NewProject.State
+  , rename :: Rename.State
+  , saveAs :: SaveAs.State
+  , authStatus :: WebData AuthStatus
+  , gistId :: Maybe GistId
+  , createGistResult :: WebData Gist
+  , loadGistResult :: Either String (WebData Gist)
+  , projectName :: String
+  , showModal :: Maybe ModalView
+  , hasUnsavedChanges :: Boolean
+  -- The initial language selected when you create/load a project indicates the workflow a user might take
+  -- A user can start with a haskell/javascript example that eventually gets compiled into
+  -- marlowe/blockly and run in the simulator, or can create a marlowe/blockly contract directly,
+  -- which can be used interchangeably. This is used all across the site to know what are the posible
+  -- transitions.
+  , workflow :: Maybe Lang
+  }
 
 _view :: Lens' State View
 _view = prop (Proxy :: _ "view")
@@ -291,7 +294,8 @@ currentLang state = case state ^. _view of
 -- The good thing is that this becomes a derived state and we got a global loading for "Save" automatically.
 -- The downside is that the logic is a little bit contrived. We may need to rethink when and why we use "_createGistResult"
 hasGlobalLoading :: State -> Boolean
-hasGlobalLoading state = Projects.modalIsLoading (state ^. _projects) || (projectIsLoadingOrSaving && not isSaveAsModal)
+hasGlobalLoading state = Projects.modalIsLoading (state ^. _projects) ||
+  (projectIsLoadingOrSaving && not isSaveAsModal)
   where
   projectIsLoadingOrSaving = has (_createGistResult <<< _Loading) state
 
@@ -302,9 +306,9 @@ hasGlobalLoading state = Projects.modalIsLoading (state ^. _projects) || (projec
     _ -> false
 
 -- editable
-_timestamp ::
-  forall s a.
-  Lens' { timestamp :: a | s } a
+_timestamp
+  :: forall s a
+   . Lens' { timestamp :: a | s } a
 _timestamp = prop (Proxy :: _ "timestamp")
 
 _value :: forall s a. Lens' { value :: a | s } a
@@ -347,11 +351,12 @@ instance decodeJsonSession :: DecodeJson Session where
     pure $ Session { projectName, gistId, workflow, contractMetadata }
 
 stateToSession :: State -> Session
-stateToSession { projectName
-, gistId
-, workflow
-, contractMetadata
-} =
+stateToSession
+  { projectName
+  , gistId
+  , workflow
+  , contractMetadata
+  } =
   Session
     { projectName
     , gistId

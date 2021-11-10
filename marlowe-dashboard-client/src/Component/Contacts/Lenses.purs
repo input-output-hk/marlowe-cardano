@@ -15,7 +15,17 @@ module Component.Contacts.Lenses
   ) where
 
 import Prologue
-import Component.Contacts.Types (CardSection, State, Wallet, WalletIdError, WalletInfo, WalletLibrary, WalletNickname, WalletNicknameError, WalletDetails)
+import Component.Contacts.Types
+  ( CardSection
+  , State
+  , Wallet
+  , WalletIdError
+  , WalletInfo
+  , WalletLibrary
+  , WalletNickname
+  , WalletNicknameError
+  , WalletDetails
+  )
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -57,7 +67,8 @@ _walletInfo = prop (Proxy :: _ "walletInfo")
 _assets :: Lens' WalletDetails Assets
 _assets = prop (Proxy :: _ "assets")
 
-_previousCompanionAppState :: Lens' WalletDetails (Maybe (Map MarloweParams MarloweData))
+_previousCompanionAppState :: Lens' WalletDetails
+  (Maybe (Map MarloweParams MarloweData))
 _previousCompanionAppState = prop (Proxy :: _ "previousCompanionAppState")
 
 ------------------------------------------------------------

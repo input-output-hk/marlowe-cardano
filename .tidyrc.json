@@ -1,5 +1,6 @@
 {
-  "importWrap": "source",
+  "importSort": "ide",
+  "importWrap": "auto",
   "indent": 2,
   "operatorsFile": ".tidyoperators",
   "ribbon": 1,

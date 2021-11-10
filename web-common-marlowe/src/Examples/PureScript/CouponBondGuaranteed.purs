@@ -7,7 +7,14 @@ module Examples.PureScript.CouponBondGuaranteed
 import Prelude
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
 import Marlowe.Semantics (Party(..), Token(..))
 
@@ -36,21 +43,26 @@ instalment :: Value
 instalment = ConstantParam "Interest instalment"
 
 guaranteedAmount :: BigInt -> Value
-guaranteedAmount instalments = AddValue (MulValue (Constant instalments) instalment) principal
+guaranteedAmount instalments = AddValue
+  (MulValue (Constant instalments) instalment)
+  principal
 
 lastInstalment :: Value
 lastInstalment = AddValue instalment principal
 
-deposit :: Value -> Party -> Party -> Timeout -> Contract -> Contract -> Contract
+deposit
+  :: Value -> Party -> Party -> Timeout -> Contract -> Contract -> Contract
 deposit amount by toAccount timeout timeoutContinuation continuation =
   When [ Case (Deposit toAccount by ada amount) continuation ]
     timeout
     timeoutContinuation
 
 refundGuarantor :: Value -> Contract -> Contract
-refundGuarantor amount continuation = Pay investor (Party guarantor) ada amount continuation
+refundGuarantor amount continuation = Pay investor (Party guarantor) ada amount
+  continuation
 
-transfer :: Value -> Party -> Party -> Timeout -> Contract -> Contract -> Contract
+transfer
+  :: Value -> Party -> Party -> Timeout -> Contract -> Contract -> Contract
 transfer amount from to timeout timeoutContinuation continuation =
   deposit amount from to timeout timeoutContinuation
     $ Pay to (Party to) ada amount

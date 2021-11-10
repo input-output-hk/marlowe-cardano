@@ -84,15 +84,15 @@ import Web.DOM.HTMLCollection as HTMLCollection
 import Web.DOM.Node as Node
 import Web.DOM.ParentNode as ParentNode
 
-type Block
-  = { id :: String
-    , type :: String
-    -- In the XML the children of a block are stored/represented as an array of elements, but to simplify
-    -- consumption we use a JS native Object (like a `Map String a` but with better performance).
-    -- This decision implies that we cannot have two childs properties with the same `name`, but I think we shouldn't
-    -- anyway, and if we do, we are going to have the same kind of error later on, while transforming from Dom -> Term
-    , children :: Object BlockChild
-    }
+type Block =
+  { id :: String
+  , type :: String
+  -- In the XML the children of a block are stored/represented as an array of elements, but to simplify
+  -- consumption we use a JS native Object (like a `Map String a` but with better performance).
+  -- This decision implies that we cannot have two childs properties with the same `name`, but I think we shouldn't
+  -- anyway, and if we do, we are going to have the same kind of error later on, while transforming from Dom -> Term
+  , children :: Object BlockChild
+  }
 
 _id :: Lens' Block String
 _id = prop (Proxy :: _ "id")
@@ -113,8 +113,7 @@ data BlockChild
   -- while parsing.
   | Statement (Array Block)
 
-type NamedBlockChild
-  = Tuple String BlockChild
+type NamedBlockChild = Tuple String BlockChild
 
 data ReadDomError
   = TypeMismatch Element String
@@ -126,23 +125,34 @@ data ReadDomError
 -- NOTE: In some errors the element is not currently used to display the error. The idea is that we could later Change
 --       the signature to Effect String and traverse the parents of the element to provide error location information.
 explainError :: ReadDomError -> String
-explainError (TypeMismatch element expectedType) = "Element is of the wrong type (" <> show expectedType <> " expected, " <> show (Element.tagName element) <> " received)"
+explainError (TypeMismatch element expectedType) =
+  "Element is of the wrong type (" <> show expectedType <> " expected, "
+    <> show (Element.tagName element)
+    <> " received)"
 
-explainError (MissingProperty _ missingProperty) = "Element is missing required property " <> show missingProperty
+explainError (MissingProperty _ missingProperty) =
+  "Element is missing required property " <> show missingProperty
 
-explainError (SingleChildExpected _ elementCount) = "Element was expected to have a single child, and it had " <> show elementCount
+explainError (SingleChildExpected _ elementCount) =
+  "Element was expected to have a single child, and it had " <> show
+    elementCount
 
-explainError (RootElementNotFound rootBlockName) = "The element with id " <> show rootBlockName <> " was not found."
+explainError (RootElementNotFound rootBlockName) = "The element with id "
+  <> show rootBlockName
+  <> " was not found."
 
-explainError (IncorrectSiblingNesting node) = "Incorrect <next> element found outside the scope of a <statement> and inside of a " <> node <> " node"
+explainError (IncorrectSiblingNesting node) =
+  "Incorrect <next> element found outside the scope of a <statement> and inside of a "
+    <> node
+    <> " node"
 
 -- | Read and parse the DOM nodes of a blockly workspace.
-getDom ::
-  forall m.
-  MonadEffect m =>
-  MonadThrow ReadDomError m =>
-  BlocklyState ->
-  m Block
+getDom
+  :: forall m
+   . MonadEffect m
+  => MonadThrow ReadDomError m
+  => BlocklyState
+  -> m Block
 getDom { blockly, workspace, rootBlockName } = do
   rootElement <- liftEffect $ workspaceToDom blockly workspace
   if Element.tagName rootElement /= "xml" then
@@ -214,7 +224,8 @@ getDom { blockly, workspace, rootBlockName } = do
       _ -> throwError $ SingleChildExpected element $ length children
 
   getChildren :: Element -> Effect (Array Element)
-  getChildren element = HTMLCollection.toArray =<< (ParentNode.children $ Element.toParentNode element)
+  getChildren element = HTMLCollection.toArray =<<
+    (ParentNode.children $ Element.toParentNode element)
 
   getElementText :: Element -> Effect String
   getElementText = Node.textContent <<< Element.toNode

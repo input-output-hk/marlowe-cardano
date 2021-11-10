@@ -53,11 +53,18 @@ class Bridge a b where
   toFront :: a -> b
   toBack :: b -> a
 
-instance webDataBridge :: (Bridge a b) => Bridge (RemoteData e a) (RemoteData e b) where
+instance webDataBridge ::
+  ( Bridge a b
+  ) =>
+  Bridge (RemoteData e a) (RemoteData e b) where
   toFront = map toFront
   toBack = map toBack
 
-instance tupleBridge :: (Bridge a c, Bridge b d) => Bridge (Tuple a b) (Tuple c d) where
+instance tupleBridge ::
+  ( Bridge a c
+  , Bridge b d
+  ) =>
+  Bridge (Tuple a b) (Tuple c d) where
   toFront (a /\ b) = toFront a /\ toFront b
   toBack (c /\ d) = toBack c /\ toBack d
 
@@ -65,7 +72,11 @@ instance arrayBridge :: Bridge a b => Bridge (Array a) (Array b) where
   toFront = map toFront
   toBack = map toBack
 
-instance eitherBridge :: (Bridge a c, Bridge b d) => Bridge (Either a b) (Either c d) where
+instance eitherBridge ::
+  ( Bridge a c
+  , Bridge b d
+  ) =>
+  Bridge (Either a b) (Either c d) where
   toFront = bimap toFront toFront
   toBack = bimap toBack toBack
 
@@ -73,7 +84,13 @@ instance maybeBridge :: (Bridge a b) => Bridge (Maybe a) (Maybe b) where
   toFront = map toFront
   toBack = map toBack
 
-instance mapBridge :: (Ord a, Ord c, Bridge a c, Bridge b d) => Bridge (Back.Map a b) (Front.Map c d) where
+instance mapBridge ::
+  ( Ord a
+  , Ord c
+  , Bridge a c
+  , Bridge b d
+  ) =>
+  Bridge (Back.Map a b) (Front.Map c d) where
   toFront map = Front.fromFoldable $ toFront <$> unwrap map
   toBack map = Back.Map $ toBack <$> Front.toUnfoldable map
 
@@ -106,8 +123,10 @@ instance currencySymbolBridge :: Bridge Back.CurrencySymbol String where
   toBack unCurrencySymbol = Back.CurrencySymbol { unCurrencySymbol }
 
 instance walletInfoBridge :: Bridge Back.WalletInfo Front.WalletInfo where
-  toFront (Back.WalletInfo { wiWallet, wiPubKeyHash }) = Front.WalletInfo { wallet: toFront wiWallet, pubKeyHash: toFront wiPubKeyHash }
-  toBack (Front.WalletInfo { wallet, pubKeyHash }) = Back.WalletInfo { wiWallet: toBack wallet, wiPubKeyHash: toBack pubKeyHash }
+  toFront (Back.WalletInfo { wiWallet, wiPubKeyHash }) = Front.WalletInfo
+    { wallet: toFront wiWallet, pubKeyHash: toFront wiPubKeyHash }
+  toBack (Front.WalletInfo { wallet, pubKeyHash }) = Back.WalletInfo
+    { wiWallet: toBack wallet, wiPubKeyHash: toBack pubKeyHash }
 
 instance walletBridge :: Bridge Back.Wallet Front.Wallet where
   toFront (Back.Wallet { getWalletId }) = Front.Wallet getWalletId
@@ -119,5 +138,7 @@ instance pubKeyHashBridge :: Bridge Back.PubKeyHash String where
   toBack getPubKeyHash = Back.PubKeyHash { getPubKeyHash }
 
 instance bridgePlutusAppId :: Bridge ContractInstanceId PlutusAppId where
-  toFront (ContractInstanceId { unContractInstanceId }) = PlutusAppId unContractInstanceId
-  toBack (PlutusAppId unContractInstanceId) = ContractInstanceId { unContractInstanceId }
+  toFront (ContractInstanceId { unContractInstanceId }) = PlutusAppId
+    unContractInstanceId
+  toBack (PlutusAppId unContractInstanceId) = ContractInstanceId
+    { unContractInstanceId }

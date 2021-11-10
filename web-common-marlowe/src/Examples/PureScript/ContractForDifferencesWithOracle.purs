@@ -7,9 +7,23 @@ module Examples.PureScript.ContractForDifferencesWithOracle
 import Prelude
 import Data.BigInt.Argonaut (fromInt)
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Observation(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Observation(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), Token(..), ValueId(..))
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Party(..)
+  , Token(..)
+  , ValueId(..)
+  )
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract }
@@ -61,7 +75,10 @@ initialDeposit by deposit timeout timeoutContinuation continuation =
 
 oracleInput :: ChoiceId -> Timeout -> Contract -> Contract -> Contract
 oracleInput choiceId timeout timeoutContinuation continuation =
-  When [ Case (Choice choiceId [ Bound zero (fromInt 100000 * fromInt 1000000) ]) continuation ]
+  When
+    [ Case (Choice choiceId [ Bound zero (fromInt 100000 * fromInt 1000000) ])
+        continuation
+    ]
     timeout
     timeoutContinuation
 
@@ -75,18 +92,27 @@ gtLtEq value1 value2 gtContinuation ltContinuation eqContinuation =
         eqContinuation
 
 recordEndPrice :: ValueId -> ChoiceId -> ChoiceId -> Contract -> Contract
-recordEndPrice name choiceId1 choiceId2 = Let name (DivValue (MulValue priceBeginning (MulValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))) (Constant ((fromInt 100000000) * (fromInt 100000000))))
+recordEndPrice name choiceId1 choiceId2 = Let name
+  ( DivValue
+      ( MulValue priceBeginning
+          (MulValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))
+      )
+      (Constant ((fromInt 100000000) * (fromInt 100000000)))
+  )
 
 recordDifference :: ValueId -> Value -> Value -> Contract -> Contract
 recordDifference name val1 val2 = Let name (SubValue val1 val2)
 
 transferUpToDeposit :: Party -> Value -> Party -> Value -> Contract -> Contract
-transferUpToDeposit from payerDeposit to amount = Pay from (Account to) ada (Cond (ValueLT amount payerDeposit) amount payerDeposit)
+transferUpToDeposit from payerDeposit to amount = Pay from (Account to) ada
+  (Cond (ValueLT amount payerDeposit) amount payerDeposit)
 
 extendedContract :: Contract
 extendedContract =
   initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
-    $ initialDeposit counterparty counterpartyDeposit (SlotParam "Counterparty deposit deadline") Close
+    $ initialDeposit counterparty counterpartyDeposit
+        (SlotParam "Counterparty deposit deadline")
+        Close
     $ wait (SlotParam "First window beginning")
     $ oracleInput exchangeBeginning (SlotParam "First window deadline") Close
     $ wait (SlotParam "Second window beginning")
@@ -94,11 +120,13 @@ extendedContract =
     $ recordEndPrice priceEnd exchangeBeginning exchangeEnd
     $ gtLtEq priceBeginning (UseValue priceEnd)
         ( recordDifference decreaseInPrice priceBeginning (UseValue priceEnd)
-            $ transferUpToDeposit counterparty counterpartyDeposit party (UseValue decreaseInPrice)
+            $ transferUpToDeposit counterparty counterpartyDeposit party
+                (UseValue decreaseInPrice)
                 Close
         )
         ( recordDifference increaseInPrice (UseValue priceEnd) priceBeginning
-            $ transferUpToDeposit party partyDeposit counterparty (UseValue increaseInPrice)
+            $ transferUpToDeposit party partyDeposit counterparty
+                (UseValue increaseInPrice)
                 Close
         )
         Close

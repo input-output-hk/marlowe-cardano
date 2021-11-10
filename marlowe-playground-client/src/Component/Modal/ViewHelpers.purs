@@ -8,11 +8,11 @@ import Halogen.HTML (ClassName(ClassName), HTML, div, h2, img, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, src)
 
-modalHeader ::
-  forall w action.
-  String ->
-  Maybe action ->
-  HTML w action
+modalHeader
+  :: forall w action
+   . String
+  -> Maybe action
+  -> HTML w action
 modalHeader title mCloseAction =
   div [ classes [ ClassName "modal-header" ] ]
     ( [ h2 [ classes [ ClassName "title" ] ] [ text title ]

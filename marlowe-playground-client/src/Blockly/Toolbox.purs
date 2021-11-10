@@ -39,9 +39,9 @@ encodeToolbox (CategoryToolbox xs) =
         ]
     )
 
-type ToolboxBlock
-  = { type :: String
-    }
+type ToolboxBlock =
+  { type :: String
+  }
 
 encodeBlock :: ToolboxBlock -> Json
 encodeBlock b =
@@ -55,18 +55,18 @@ encodeBlock b =
 block :: String -> ToolboxBlock
 block _type = { type: _type }
 
-type CategoryFields
-  = { name :: String
-    , toolboxitemid :: Maybe String
-    , colour :: Maybe String
-    , categorystyle :: Maybe String
-    -- https://developers.google.com/blockly/guides/configure/web/toolbox#expanded
-    , expanded :: Boolean
-    -- Categories can also have this properties that we don't need to implement at the moment
-    -- cssConfig :: Object String
-    -- https://developers.google.com/blockly/guides/configure/web/toolbox#dynamic_categories
-    -- custom :: Maybe String
-    }
+type CategoryFields =
+  { name :: String
+  , toolboxitemid :: Maybe String
+  , colour :: Maybe String
+  , categorystyle :: Maybe String
+  -- https://developers.google.com/blockly/guides/configure/web/toolbox#expanded
+  , expanded :: Boolean
+  -- Categories can also have this properties that we don't need to implement at the moment
+  -- cssConfig :: Object String
+  -- https://developers.google.com/blockly/guides/configure/web/toolbox#dynamic_categories
+  -- custom :: Maybe String
+  }
 
 defaultCategoryFields :: CategoryFields
 defaultCategoryFields =
@@ -101,7 +101,8 @@ data Category
   | Label String (Maybe String)
 
 rename :: String -> Category -> Category
-rename name (Category fields children) = Category (fields { name = name }) children
+rename name (Category fields children) = Category (fields { name = name })
+  children
 
 rename _ category' = category'
 
@@ -114,17 +115,17 @@ encodeCategory (Category fields children) =
           , Tuple "contents" (A.fromArray $ encodeCategory <$> children)
           ]
             <> catMaybes
-                [ Tuple "toolboxitemid" <<< A.fromString <$> fields.toolboxitemid
-                , Tuple "colour" <<< A.fromString <$> fields.colour
-                , Tuple "categorystyle" <<< A.fromString <$> fields.categorystyle
-                -- Even if the expanded field is always present in our configuration (true/false)
-                -- we only encode it (as string) when is true, as Blockly expects the value to either
-                -- be present as a string, or not present at all.
-                , if fields.expanded then
-                    Just $ Tuple "expanded" (A.fromString "true")
-                  else
-                    Nothing
-                ]
+              [ Tuple "toolboxitemid" <<< A.fromString <$> fields.toolboxitemid
+              , Tuple "colour" <<< A.fromString <$> fields.colour
+              , Tuple "categorystyle" <<< A.fromString <$> fields.categorystyle
+              -- Even if the expanded field is always present in our configuration (true/false)
+              -- we only encode it (as string) when is true, as Blockly expects the value to either
+              -- be present as a string, or not present at all.
+              , if fields.expanded then
+                  Just $ Tuple "expanded" (A.fromString "true")
+                else
+                  Nothing
+              ]
         )
     )
 
@@ -135,12 +136,12 @@ encodeCategory (Separator mClassName) =
     ( Object.fromFoldable
         ( [ Tuple "kind" (A.fromString "sep") ]
             <> catMaybes
-                [ Tuple "cssConfig"
-                    <<< A.fromObject
-                    <<< Object.singleton "container"
-                    <<< A.fromString
-                    <$> mClassName
-                ]
+              [ Tuple "cssConfig"
+                  <<< A.fromObject
+                  <<< Object.singleton "container"
+                  <<< A.fromString
+                  <$> mClassName
+              ]
         )
     )
 
@@ -151,7 +152,7 @@ encodeCategory (Label text mClassName) =
           , Tuple "text" (A.fromString text)
           ]
             <> catMaybes
-                [ Tuple "web-class" <<< A.fromString <$> mClassName
-                ]
+              [ Tuple "web-class" <<< A.fromString <$> mClassName
+              ]
         )
     )

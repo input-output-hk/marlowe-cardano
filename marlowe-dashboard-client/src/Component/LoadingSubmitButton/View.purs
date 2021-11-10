@@ -16,10 +16,19 @@ render { caption, styles, status, enabled } =
   let
     withWidthAnimation = [ "transition-width", "duration-200" ]
 
-    resultClasses = Css.button <> withWidthAnimation <> [ "w-full", "border-2", "flex", "items-center", "justify-center", "cursor-default" ]
+    resultClasses = Css.button <> withWidthAnimation <>
+      [ "w-full"
+      , "border-2"
+      , "flex"
+      , "items-center"
+      , "justify-center"
+      , "cursor-default"
+      ]
 
     classes = case status of
-      NotAsked -> Css.button <> Css.bgBlueGradient <> Css.withShadow <> withWidthAnimation <> [ "w-full" ]
+      NotAsked -> Css.button <> Css.bgBlueGradient <> Css.withShadow
+        <> withWidthAnimation
+        <> [ "w-full" ]
       Loading ->
         [ "border-4"
         , "border-gray"
@@ -36,7 +45,8 @@ render { caption, styles, status, enabled } =
     content = case status of
       NotAsked -> [ text caption ]
       Loading -> []
-      Success msg -> [ Icon.icon Icon.TaskAlt [ "font-normal", "mr-2" ], text msg ]
+      Success msg ->
+        [ Icon.icon Icon.TaskAlt [ "font-normal", "mr-2" ], text msg ]
       Failure msg -> [ text msg ]
   in
     div
@@ -48,8 +58,8 @@ render { caption, styles, status, enabled } =
               , Just $ disabled $ not enabled
               , onClick <<< const
                   <$> case status of
-                      NotAsked -> Just Submit
-                      _ -> Nothing
+                    NotAsked -> Just Submit
+                    _ -> Nothing
               ]
           )
           content

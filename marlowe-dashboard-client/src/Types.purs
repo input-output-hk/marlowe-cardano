@@ -14,26 +14,18 @@ import Data.Argonaut.Decode (JsonDecodeError)
 import Network.RemoteData (RemoteData)
 import Servant.PureScript (AjaxError)
 
-type AjaxResponse
-  = Either AjaxError
+type AjaxResponse = Either AjaxError
 
-type WebData
-  = RemoteData AjaxError
+type WebData = RemoteData AjaxError
 
-type DecodedAjaxError
-  = Either AjaxError JsonDecodeError
+type DecodedAjaxError = Either AjaxError JsonDecodeError
 
-type DecodedAjaxResponse
-  = Either DecodedAjaxError
+type DecodedAjaxResponse = Either DecodedAjaxError
 
-type DecodedWebData
-  = RemoteData DecodedAjaxError
+type DecodedWebData = RemoteData DecodedAjaxError
 
-type NotFoundAjaxError
-  = Maybe AjaxError
+type NotFoundAjaxError = Maybe AjaxError
 
-type NotFoundAjaxResponse
-  = Either NotFoundAjaxError
+type NotFoundAjaxResponse = Either NotFoundAjaxError
 
-type NotFoundWebData
-  = RemoteData NotFoundAjaxError
+type NotFoundWebData = RemoteData NotFoundAjaxError

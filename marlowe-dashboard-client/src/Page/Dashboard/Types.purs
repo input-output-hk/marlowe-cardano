@@ -23,17 +23,18 @@ import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Page.Contract.Types (Action, State) as Contract
 
 type State
-  = { contactsState :: Contacts.State
-    , walletDetails :: WalletDetails
-    , walletCompanionStatus :: WalletCompanionStatus
-    , menuOpen :: Boolean
-    , card :: Maybe Card
-    , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
-    , contracts :: Map PlutusAppId Contract.State
-    , contractFilter :: ContractFilter
-    , selectedContractFollowerAppId :: Maybe PlutusAppId
-    , templateState :: Template.State
-    }
+  =
+  { contactsState :: Contacts.State
+  , walletDetails :: WalletDetails
+  , walletCompanionStatus :: WalletCompanionStatus
+  , menuOpen :: Boolean
+  , card :: Maybe Card
+  , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
+  , contracts :: Map PlutusAppId Contract.State
+  , contractFilter :: ContractFilter
+  , selectedContractFollowerAppId :: Maybe PlutusAppId
+  , templateState :: Template.State
+  }
 
 data WalletCompanionStatus
   = FirstUpdatePending
@@ -55,10 +56,10 @@ data ContractFilter
 
 derive instance eqContractFilter :: Eq ContractFilter
 
-type Input
-  = { currentSlot :: Slot
-    , tzOffset :: Minutes
-    }
+type Input =
+  { currentSlot :: Slot
+  , tzOffset :: Minutes
+  }
 
 data Action
   = DisconnectWallet

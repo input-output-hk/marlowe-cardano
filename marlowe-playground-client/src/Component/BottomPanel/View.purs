@@ -1,54 +1,104 @@
 module Component.BottomPanel.View (render) where
 
 import Prologue hiding (div)
-import Component.BottomPanel.Types (Action(..), State, _panelView, _showBottomPanel)
+import Component.BottomPanel.Types
+  ( Action(..)
+  , State
+  , _panelView
+  , _showBottomPanel
+  )
 import Data.Lens (to, (^.))
-import Halogen.Classes (accentBorderTop, borderSeparator, boxShadowInverted, closeDrawerArrowIcon, collapsed, flex, flexCol, flexShrink0, fontBold, fullHeight, hidden, justifyBetween, minH0, minimizeIcon, overflowScroll, paddingX, smallPaddingRight, smallPaddingTop, smallPaddingY, spaceX, textInactive, textSecondary)
+import Halogen.Classes
+  ( accentBorderTop
+  , borderSeparator
+  , boxShadowInverted
+  , closeDrawerArrowIcon
+  , collapsed
+  , flex
+  , flexCol
+  , flexShrink0
+  , fontBold
+  , fullHeight
+  , hidden
+  , justifyBetween
+  , minH0
+  , minimizeIcon
+  , overflowScroll
+  , paddingX
+  , smallPaddingRight
+  , smallPaddingTop
+  , smallPaddingY
+  , spaceX
+  , textInactive
+  , textSecondary
+  )
 import Halogen.HTML (ClassName, HTML, a, div, img, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (alt, classes, src)
 
-type PanelTitle panel
-  = { view :: panel
-    , classes :: Array ClassName
-    , title :: String
-    }
+type PanelTitle panel =
+  { view :: panel
+  , classes :: Array ClassName
+  , title :: String
+  }
 
-render ::
-  forall p panel action.
+render
+  :: forall p panel action
+   .
   -- The panel equality restriction allow us to identify the current selected panel.
-  Eq panel =>
+  Eq panel
+  =>
   -- panelTitles is an ordered list of the titles we'll show in the widget. The caller needs to provide a
   -- `title` name to display, the `view` that is selected when the title is clicked and a list
   -- of `classes` to optionally style the titles.
-  Array (PanelTitle panel) ->
+  Array (PanelTitle panel)
+  ->
   -- The panelContent function receives the active panel and returns it's content. The `action` type parameter
   -- is what allow us to fire an action from the child that is intended to be interpreted on the parent.
-  (panel -> HTML p (Action panel action)) ->
-  State panel ->
-  HTML p (Action panel action)
+  (panel -> HTML p (Action panel action))
+  -> State panel
+  -> HTML p (Action panel action)
 render panelTitles panelContent state =
-  div [ classes ([ boxShadowInverted, flex, flexCol, fullHeight ] <> collapseWhenHidden) ]
+  div
+    [ classes
+        ([ boxShadowInverted, flex, flexCol, fullHeight ] <> collapseWhenHidden)
+    ]
     -- Header
     [ div [ classes [ flexShrink0, smallPaddingTop, flex, justifyBetween ] ]
         -- Titles
         [ div [ classes [ borderSeparator ] ]
             ( panelTitles
                 <#> \panelTitle ->
-                    a
-                      [ classes ([ fontBold, paddingX ] <> panelTitle.classes <> activeClasses panelTitle.view)
-                      , onClick $ clickTitleAction panelTitle.view
-                      ]
-                      [ text panelTitle.title ]
+                  a
+                    [ classes
+                        ( [ fontBold, paddingX ] <> panelTitle.classes <>
+                            activeClasses panelTitle.view
+                        )
+                    , onClick $ clickTitleAction panelTitle.view
+                    ]
+                    [ text panelTitle.title ]
             )
         -- Visibility toggle
         , div [ classes [ smallPaddingRight ] ]
-            [ a [ onClick $ const $ SetVisibility (state ^. _showBottomPanel <<< to not) ]
-                [ img [ classes (minimizeIcon $ state ^. _showBottomPanel), src closeDrawerArrowIcon, alt "close drawer icon" ] ]
+            [ a
+                [ onClick $ const $ SetVisibility
+                    (state ^. _showBottomPanel <<< to not)
+                ]
+                [ img
+                    [ classes (minimizeIcon $ state ^. _showBottomPanel)
+                    , src closeDrawerArrowIcon
+                    , alt "close drawer icon"
+                    ]
+                ]
             ]
         ]
     -- Panel contents
-    , div [ classes ([ spaceX, smallPaddingY, accentBorderTop, overflowScroll, minH0 ] <> dontDisplayWhenHidden) ]
+    , div
+        [ classes
+            ( [ spaceX, smallPaddingY, accentBorderTop, overflowScroll, minH0 ]
+                <> dontDisplayWhenHidden
+            )
+        ]
         [ panelContent (state ^. _panelView)
         ]
     ]
@@ -61,7 +111,8 @@ render panelTitles panelContent state =
     else
       const $ ChangePanel $ view
 
-  activeClasses view = if state ^. _panelView == view then [ textSecondary ] else [ textInactive ]
+  activeClasses view =
+    if state ^. _panelView == view then [ textSecondary ] else [ textInactive ]
 
   dontDisplayWhenHidden = if state ^. _showBottomPanel then [] else [ hidden ]
 

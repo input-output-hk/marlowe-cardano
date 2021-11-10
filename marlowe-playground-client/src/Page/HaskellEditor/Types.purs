@@ -13,7 +13,11 @@ import Data.Lens.Record (prop)
 import Type.Proxy (Proxy(..))
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
-import Language.Haskell.Interpreter (InterpreterError, InterpreterResult, _InterpreterResult)
+import Language.Haskell.Interpreter
+  ( InterpreterError
+  , InterpreterResult
+  , _InterpreterResult
+  )
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Parser (parseContract)
 import Marlowe.Template (IntegerTemplateType)
@@ -47,27 +51,33 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent SendResultToSimulator = Just $ defaultEvent "SendResultToSimulator"
   toEvent (InitHaskellProject _ _) = Just $ defaultEvent "InitHaskellProject"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
-  toEvent AnalyseReachabilityContract = Just $ defaultEvent "AnalyseReachabilityContract"
-  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
+  toEvent AnalyseReachabilityContract = Just $ defaultEvent
+    "AnalyseReachabilityContract"
+  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
+    "AnalyseContractForCloseRefund"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
-  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction") { label = Just $ showConstructor action }
+  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
+    { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing
 
-type State
-  = { keybindings :: KeyBindings
-    , compilationResult :: WebData (Either InterpreterError (InterpreterResult String))
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , metadataHintInfo :: MetadataHintInfo
-    , analysisState :: AnalysisState
-    , editorReady :: Boolean
-    }
+type State =
+  { keybindings :: KeyBindings
+  , compilationResult ::
+      WebData (Either InterpreterError (InterpreterResult String))
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , metadataHintInfo :: MetadataHintInfo
+  , analysisState :: AnalysisState
+  , editorReady :: Boolean
+  }
 
 _haskellEditorKeybindings :: Lens' State KeyBindings
 _haskellEditorKeybindings = prop (Proxy :: _ "keybindings")
 
-_compilationResult :: Lens' State (WebData (Either InterpreterError (InterpreterResult String)))
+_compilationResult :: Lens' State
+  (WebData (Either InterpreterError (InterpreterResult String)))
 _compilationResult = prop (Proxy :: _ "compilationResult")
 
 _metadataHintInfo :: Lens' State MetadataHintInfo
@@ -91,7 +101,10 @@ _Pretty = to f
     Left _ -> ugly
 
 _ContractString :: forall r. Monoid r => Fold' r State String
-_ContractString = _compilationResult <<< _Success <<< _Right <<< _InterpreterResult <<< _result <<< _Pretty
+_ContractString = _compilationResult <<< _Success <<< _Right
+  <<< _InterpreterResult
+  <<< _result
+  <<< _Pretty
 
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
 _bottomPanelState = prop (Proxy :: _ "bottomPanelState")

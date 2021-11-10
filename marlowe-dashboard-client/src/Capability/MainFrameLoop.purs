@@ -9,7 +9,8 @@ import MainFrame.Types (Msg(..), Action)
 -- a loop between a MainFrame output message and a MainFrame query, which was the only way
 -- I was able to call a parent handleAction from a child.
 class
-  Monad m <= MainFrameLoop m where
+  Monad m <=
+  MainFrameLoop m where
   callMainFrameAction :: Action -> m Unit
 
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
@@ -17,5 +18,6 @@ class
 instance mainFrameLoopAppM :: MainFrameLoop AppM where
   callMainFrameAction _ = pure unit
 
-instance mainFrameLoopHalogenM :: MainFrameLoop (HalogenM state action slots Msg m) where
+instance mainFrameLoopHalogenM ::
+  MainFrameLoop (HalogenM state action slots Msg m) where
   callMainFrameAction action = raise $ MainFrameActionMsg action

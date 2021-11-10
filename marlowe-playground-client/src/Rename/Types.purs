@@ -12,12 +12,17 @@ data Action
 
 instance isEventAction :: IsEvent Action where
   toEvent (ChangeInput _) = Nothing
-  toEvent SaveProject = Just { category: Just "Rename", action: "SaveProject", label: Nothing, value: Nothing }
-
-type State
-  = { projectName :: String
-    , error :: Maybe String
+  toEvent SaveProject = Just
+    { category: Just "Rename"
+    , action: "SaveProject"
+    , label: Nothing
+    , value: Nothing
     }
+
+type State =
+  { projectName :: String
+  , error :: Maybe String
+  }
 
 emptyState :: State
 emptyState = { projectName: "New Project", error: Nothing }

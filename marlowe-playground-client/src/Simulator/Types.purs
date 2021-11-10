@@ -17,7 +17,22 @@ import Data.Tuple.Nested ((/\))
 import Marlowe.Template (TemplateContent)
 import Marlowe.Holes (Holes, Term)
 import Marlowe.Holes as T
-import Marlowe.Semantics (AccountId, Assets, Bound, ChoiceId, ChosenNum, Input, Party(..), Payment, Slot, SlotInterval, Token, TransactionError, TransactionInput, TransactionWarning)
+import Marlowe.Semantics
+  ( AccountId
+  , Assets
+  , Bound
+  , ChoiceId
+  , ChosenNum
+  , Input
+  , Party(..)
+  , Payment
+  , Slot
+  , SlotInterval
+  , Token
+  , TransactionError
+  , TransactionInput
+  , TransactionWarning
+  )
 import Marlowe.Semantics as S
 import Monaco (IMarker)
 
@@ -56,7 +71,11 @@ instance decodeJsonActionInputId :: DecodeJson ActionInputId where
   decodeJson =
     D.decode $ D.sumType "ActionInputId"
       $ Map.fromFoldable
-          [ "DepositInputId" /\ D.content (D.tuple $ DepositInputId </$\> D.value </*\> D.value </*\> D.value </*\> D.value)
+          [ "DepositInputId" /\ D.content
+              ( D.tuple $ DepositInputId </$\> D.value </*\> D.value
+                  </*\> D.value
+                  </*\> D.value
+              )
           , "ChoiceInputId" /\ D.content (ChoiceInputId <$> D.value)
           , "NotifyInputId" /\ pure NotifyInputId
           , "MoveToSlotId" /\ pure MoveToSlotId
@@ -107,8 +126,12 @@ instance decodeJsonActionInput :: DecodeJson ActionInput where
   decodeJson =
     D.decode $ D.sumType "ActionInputId"
       $ Map.fromFoldable
-          [ "DepositInput" /\ D.content (D.tuple $ DepositInput </$\> D.value </*\> D.value </*\> D.value </*\> D.value)
-          , "ChoiceInput" /\ D.content (D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\> D.value)
+          [ "DepositInput" /\ D.content
+              ( D.tuple $ DepositInput </$\> D.value </*\> D.value </*\> D.value
+                  </*\> D.value
+              )
+          , "ChoiceInput" /\ D.content
+              (D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\> D.value)
           , "NotifyInput" /\ pure NotifyInput
           , "MoveToSlot" /\ D.content (MoveToSlot <$> D.value)
           ]
@@ -178,37 +201,37 @@ instance decodeJsonLogEntry :: DecodeJson LogEntry where
           , "CloseEvent" /\ D.content (CloseEvent <$> D.value)
           ]
 
-type ExecutionStateRecord
-  = { possibleActions :: Parties
-    , pendingInputs :: Array Input
-    , transactionError :: Maybe TransactionError
-    , transactionWarnings :: Array TransactionWarning
-    , log :: Array LogEntry
-    , state :: S.State
-    , slot :: Slot
-    , moneyInContract :: Assets
-    -- This is the remaining of the contract to be executed
-    , contract :: Term T.Contract
-    }
+type ExecutionStateRecord =
+  { possibleActions :: Parties
+  , pendingInputs :: Array Input
+  , transactionError :: Maybe TransactionError
+  , transactionWarnings :: Array TransactionWarning
+  , log :: Array LogEntry
+  , state :: S.State
+  , slot :: Slot
+  , moneyInContract :: Assets
+  -- This is the remaining of the contract to be executed
+  , contract :: Term T.Contract
+  }
 
-type InitialConditionsRecord
-  = { initialSlot :: Slot
-    -- TODO: Should we remove the Maybe and just not set InitialConditionsRecord if we cannot
-    --       parse the contract?
-    , termContract :: Maybe (Term T.Contract)
-    , templateContent :: TemplateContent
-    }
+type InitialConditionsRecord =
+  { initialSlot :: Slot
+  -- TODO: Should we remove the Maybe and just not set InitialConditionsRecord if we cannot
+  --       parse the contract?
+  , termContract :: Maybe (Term T.Contract)
+  , templateContent :: TemplateContent
+  }
 
 data ExecutionState
   = SimulationRunning ExecutionStateRecord
   | SimulationNotStarted InitialConditionsRecord
 
-type MarloweState
-  = { executionState :: ExecutionState
-    , holes :: Holes
-    -- NOTE: as part of the marlowe editor and simulator split this part of the
-    --       state wont be used, but it is left as it is because it may make sense
-    --       to use it as part of task SCP-1642
-    , editorErrors :: Array IMarker
-    , editorWarnings :: Array IMarker
-    }
+type MarloweState =
+  { executionState :: ExecutionState
+  , holes :: Holes
+  -- NOTE: as part of the marlowe editor and simulator split this part of the
+  --       state wont be used, but it is left as it is because it may make sense
+  --       to use it as part of task SCP-1642
+  , editorErrors :: Array IMarker
+  , editorWarnings :: Array IMarker
+  }

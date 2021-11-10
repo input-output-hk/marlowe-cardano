@@ -18,13 +18,15 @@ import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Servant.PureScript (AjaxError, ErrorDescription(..))
 
-doPostRequest ::
-  forall m d e.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  DecodeJson d =>
-  EncodeJson e =>
-  String -> e -> m d
+doPostRequest
+  :: forall m d e
+   . MonadError AjaxError m
+  => MonadAff m
+  => DecodeJson d
+  => EncodeJson e
+  => String
+  -> e
+  -> m d
 doPostRequest url requestBody =
   perform
     $ defaultRequest
@@ -35,12 +37,13 @@ doPostRequest url requestBody =
         , responseFormat = Response.json
         }
 
-doEmptyPostRequest ::
-  forall m d.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  DecodeJson d =>
-  String -> m d
+doEmptyPostRequest
+  :: forall m d
+   . MonadError AjaxError m
+  => MonadAff m
+  => DecodeJson d
+  => String
+  -> m d
 doEmptyPostRequest url =
   perform
     $ defaultRequest
@@ -50,12 +53,13 @@ doEmptyPostRequest url =
         , responseFormat = Response.json
         }
 
-doPutRequest ::
-  forall m d.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  DecodeJson d =>
-  String -> m d
+doPutRequest
+  :: forall m d
+   . MonadError AjaxError m
+  => MonadAff m
+  => DecodeJson d
+  => String
+  -> m d
 doPutRequest url =
   perform
     $ defaultRequest
@@ -65,12 +69,13 @@ doPutRequest url =
         , responseFormat = Response.json
         }
 
-doGetRequest ::
-  forall m d.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  DecodeJson d =>
-  String -> m d
+doGetRequest
+  :: forall m d
+   . MonadError AjaxError m
+  => MonadAff m
+  => DecodeJson d
+  => String
+  -> m d
 doGetRequest url =
   perform
     $ defaultRequest
@@ -80,13 +85,13 @@ doGetRequest url =
         , responseFormat = Response.json
         }
 
-perform ::
-  forall m d.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  DecodeJson d =>
-  Request Json ->
-  m d
+perform
+  :: forall m d
+   . MonadError AjaxError m
+  => MonadAff m
+  => DecodeJson d
+  => Request Json
+  -> m d
 perform req = do
   result <- liftAff $ request req
   response <- case result of

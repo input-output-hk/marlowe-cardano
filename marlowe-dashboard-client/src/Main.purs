@@ -40,11 +40,15 @@ main = do
         $ forkAff
         $ WS.runWebSocketManager
             (WS.URI "/ws")
-            (\msg -> void $ forkAff $ driver.query $ ReceiveWebSocketMessage msg unit)
+            ( \msg -> void $ forkAff $ driver.query $ ReceiveWebSocketMessage
+                msg
+                unit
+            )
             wsManager
       -- This handler allows us to call an action in the MainFrame from a child component
       -- (more info in the MainFrameLoop capability)
       void
         $ liftEffect
         $ HS.subscribe driver.messages
-        $ \(MainFrameActionMsg action) -> launchAff_ $ void $ driver.query $ MainFrameActionQuery action unit
+        $ \(MainFrameActionMsg action) -> launchAff_ $ void $ driver.query $
+            MainFrameActionQuery action unit

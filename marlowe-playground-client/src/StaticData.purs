@@ -15,18 +15,52 @@ module StaticData
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested ((/\))
-import Examples.Haskell.Contracts (contractForDifferences, contractForDifferencesWithOracle, couponBondGuaranteed, escrow, escrowWithCollateral, example, swap, zeroCouponBond) as HE
-import Examples.JS.Contracts (contractForDifferences, contractForDifferencesWithOracle, couponBondGuaranteed, escrow, escrowWithCollateral, example, swap, zeroCouponBond) as JSE
-import Examples.Marlowe.Contracts (contractForDifferences, contractForDifferencesWithOracle, couponBondGuaranteed, escrow, escrowWithCollateral, example, swap, zeroCouponBond) as ME
-import Examples.Metadata (contractForDifferences, contractForDifferencesWithOracle, couponBondGuaranteed, escrow, escrowWithCollateral, example, swap, zeroCouponBond) as M
+import Examples.Haskell.Contracts
+  ( contractForDifferences
+  , contractForDifferencesWithOracle
+  , couponBondGuaranteed
+  , escrow
+  , escrowWithCollateral
+  , example
+  , swap
+  , zeroCouponBond
+  ) as HE
+import Examples.JS.Contracts
+  ( contractForDifferences
+  , contractForDifferencesWithOracle
+  , couponBondGuaranteed
+  , escrow
+  , escrowWithCollateral
+  , example
+  , swap
+  , zeroCouponBond
+  ) as JSE
+import Examples.Marlowe.Contracts
+  ( contractForDifferences
+  , contractForDifferencesWithOracle
+  , couponBondGuaranteed
+  , escrow
+  , escrowWithCollateral
+  , example
+  , swap
+  , zeroCouponBond
+  ) as ME
+import Examples.Metadata
+  ( contractForDifferences
+  , contractForDifferencesWithOracle
+  , couponBondGuaranteed
+  , escrow
+  , escrowWithCollateral
+  , example
+  , swap
+  , zeroCouponBond
+  ) as M
 import LocalStorage as LocalStorage
 import Marlowe.Extended.Metadata (MetaData)
 
-type Label
-  = String
+type Label = String
 
-type Contents
-  = String
+type Contents = String
 
 demoFiles ::
   Map Label Contents

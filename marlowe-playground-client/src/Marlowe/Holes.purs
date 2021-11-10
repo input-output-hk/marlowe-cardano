@@ -10,7 +10,13 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
-import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
+import Data.Enum.Generic
+  ( genericCardinality
+  , genericFromEnum
+  , genericPred
+  , genericSucc
+  , genericToEnum
+  )
 import Data.Foldable (intercalate)
 import Data.Function (on)
 import Data.Generic.Rep (class Generic)
@@ -32,11 +38,39 @@ import Data.Tuple.Nested ((/\), type (/\))
 import Effect.Exception.Unsafe (unsafeThrow)
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Semantics (class HasTimeout, CurrencySymbol, IntervalResult(..), PubKey, Timeouts(..), TokenName, _slotInterval, fixInterval, ivFrom, ivTo, timeouts)
+import Marlowe.Semantics
+  ( class HasTimeout
+  , CurrencySymbol
+  , IntervalResult(..)
+  , PubKey
+  , Timeouts(..)
+  , TokenName
+  , _slotInterval
+  , fixInterval
+  , ivFrom
+  , ivTo
+  , timeouts
+  )
 import Marlowe.Semantics as S
-import Marlowe.Template (class Fillable, class Template, Placeholders(..), TemplateContent, fillTemplate, getPlaceholderIds)
+import Marlowe.Template
+  ( class Fillable
+  , class Template
+  , Placeholders(..)
+  , TemplateContent
+  , fillTemplate
+  , getPlaceholderIds
+  )
 import Monaco (IRange)
-import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, hasArgs, hasNestedArgs, pretty)
+import Text.Pretty
+  ( class Args
+  , class Pretty
+  , genericHasArgs
+  , genericHasNestedArgs
+  , genericPretty
+  , hasArgs
+  , hasNestedArgs
+  , pretty
+  )
 import Text.Pretty as P
 import Type.Proxy (Proxy(..))
 
@@ -132,14 +166,23 @@ data TermGenerator
   | SimpleArgument Argument
 
 getMarloweConstructors :: MarloweType -> Map String TermGenerator
-getMarloweConstructors ChoiceIdType = Map.singleton "ChoiceId" $ ArgumentArray [ DefaultString "choiceNumber", DataArg PartyType ]
+getMarloweConstructors ChoiceIdType = Map.singleton "ChoiceId" $ ArgumentArray
+  [ DefaultString "choiceNumber", DataArg PartyType ]
 
 getMarloweConstructors ValueIdType = Map.empty
 
 getMarloweConstructors ActionType =
   Map.fromFoldable
-    [ (Tuple "Deposit" $ ArgumentArray [ DataArg PartyType, NamedDataArg "from_party", DataArg TokenType, DataArg ValueType ])
-    , (Tuple "Choice" $ ArgumentArray [ GenArg ChoiceIdType, ArrayArg "bounds" ])
+    [ ( Tuple "Deposit" $ ArgumentArray
+          [ DataArg PartyType
+          , NamedDataArg "from_party"
+          , DataArg TokenType
+          , DataArg ValueType
+          ]
+      )
+    , ( Tuple "Choice" $ ArgumentArray
+          [ GenArg ChoiceIdType, ArrayArg "bounds" ]
+      )
     , (Tuple "Notify" $ ArgumentArray [ DataArg ObservationType ])
     ]
 
@@ -149,36 +192,63 @@ getMarloweConstructors PayeeType =
     , (Tuple "Party" $ ArgumentArray [ DataArg PartyType ])
     ]
 
-getMarloweConstructors CaseType = Map.singleton "Case" $ ArgumentArray [ DataArg ActionType, DataArg ContractType ]
+getMarloweConstructors CaseType = Map.singleton "Case" $ ArgumentArray
+  [ DataArg ActionType, DataArg ContractType ]
 
 getMarloweConstructors ValueType =
   Map.fromFoldable
-    [ (Tuple "AvailableMoney" $ ArgumentArray [ DataArg PartyType, DataArg TokenType ])
+    [ ( Tuple "AvailableMoney" $ ArgumentArray
+          [ DataArg PartyType, DataArg TokenType ]
+      )
     , (Tuple "Constant" $ ArgumentArray [ DefaultNumber zero ])
     , (Tuple "ConstantParam" $ ArgumentArray [ DefaultString "parameterName" ])
     , (Tuple "NegValue" $ ArgumentArray [ DataArg ValueType ])
-    , (Tuple "AddValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "SubValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "MulValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "DivValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
+    , ( Tuple "AddValue" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "SubValue" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "MulValue" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "DivValue" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
     , (Tuple "ChoiceValue" $ ArgumentArray [ GenArg ChoiceIdType ])
     , (Tuple "SlotIntervalStart" $ ArgumentArray [])
     , (Tuple "SlotIntervalEnd" $ ArgumentArray [])
     , (Tuple "UseValue" $ ArgumentArray [ DefaultString "valueId" ])
-    , (Tuple "Cond" $ ArgumentArray [ DataArg ObservationType, DataArg ValueType, DataArg ValueType ])
+    , ( Tuple "Cond" $ ArgumentArray
+          [ DataArg ObservationType, DataArg ValueType, DataArg ValueType ]
+      )
     ]
 
 getMarloweConstructors ObservationType =
   Map.fromFoldable
-    [ (Tuple "AndObs" $ ArgumentArray [ DataArgIndexed 1 ObservationType, DataArgIndexed 2 ObservationType ])
-    , (Tuple "OrObs" $ ArgumentArray [ DataArgIndexed 1 ObservationType, DataArgIndexed 2 ObservationType ])
+    [ ( Tuple "AndObs" $ ArgumentArray
+          [ DataArgIndexed 1 ObservationType, DataArgIndexed 2 ObservationType ]
+      )
+    , ( Tuple "OrObs" $ ArgumentArray
+          [ DataArgIndexed 1 ObservationType, DataArgIndexed 2 ObservationType ]
+      )
     , (Tuple "NotObs" $ ArgumentArray [ DataArg ObservationType ])
     , (Tuple "ChoseSomething" $ ArgumentArray [ GenArg ChoiceIdType ])
-    , (Tuple "ValueGE" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "ValueGT" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "ValueLE" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "ValueLT" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "ValueEQ" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
+    , ( Tuple "ValueGE" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "ValueGT" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "ValueLE" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "ValueLT" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
+    , ( Tuple "ValueEQ" $ ArgumentArray
+          [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
+      )
     , (Tuple "TrueObs" $ ArgumentArray [])
     , (Tuple "FalseObs" $ ArgumentArray [])
     ]
@@ -186,20 +256,44 @@ getMarloweConstructors ObservationType =
 getMarloweConstructors ContractType =
   Map.fromFoldable
     [ (Tuple "Close" $ ArgumentArray [])
-    , (Tuple "Pay" $ ArgumentArray [ DataArg PartyType, DataArg PayeeType, DataArg TokenType, DataArg ValueType, DataArg ContractType ])
-    , (Tuple "If" $ ArgumentArray [ DataArg ObservationType, DataArgIndexed 1 ContractType, DataArgIndexed 2 ContractType ])
-    , (Tuple "When" $ ArgumentArray [ EmptyArrayArg, DataArg TimeoutType, DataArg ContractType ])
-    , (Tuple "Let" $ ArgumentArray [ DefaultString "valueId", DataArg ValueType, DataArg ContractType ])
-    , (Tuple "Assert" $ ArgumentArray [ DataArg ObservationType, DataArg ContractType ])
+    , ( Tuple "Pay" $ ArgumentArray
+          [ DataArg PartyType
+          , DataArg PayeeType
+          , DataArg TokenType
+          , DataArg ValueType
+          , DataArg ContractType
+          ]
+      )
+    , ( Tuple "If" $ ArgumentArray
+          [ DataArg ObservationType
+          , DataArgIndexed 1 ContractType
+          , DataArgIndexed 2 ContractType
+          ]
+      )
+    , ( Tuple "When" $ ArgumentArray
+          [ EmptyArrayArg, DataArg TimeoutType, DataArg ContractType ]
+      )
+    , ( Tuple "Let" $ ArgumentArray
+          [ DefaultString "valueId", DataArg ValueType, DataArg ContractType ]
+      )
+    , ( Tuple "Assert" $ ArgumentArray
+          [ DataArg ObservationType, DataArg ContractType ]
+      )
     ]
 
-getMarloweConstructors BoundType = Map.singleton "Bound" $ ArgumentArray [ DefaultNumber zero, DefaultNumber zero ]
+getMarloweConstructors BoundType = Map.singleton "Bound" $ ArgumentArray
+  [ DefaultNumber zero, DefaultNumber zero ]
 
-getMarloweConstructors TokenType = Map.singleton "Token" $ ArgumentArray [ DefaultString "", DefaultString "" ]
+getMarloweConstructors TokenType = Map.singleton "Token" $ ArgumentArray
+  [ DefaultString "", DefaultString "" ]
 
 getMarloweConstructors PartyType =
   Map.fromFoldable
-    [ (Tuple "PK" $ ArgumentArray [ DefaultString "0000000000000000000000000000000000000000000000000000000000000000" ])
+    [ ( Tuple "PK" $ ArgumentArray
+          [ DefaultString
+              "0000000000000000000000000000000000000000000000000000000000000000"
+          ]
+      )
     , (Tuple "Role" $ ArgumentArray [ DefaultString "token" ])
     ]
 
@@ -229,7 +323,9 @@ allMarloweConstructorNames =
       constructors = Map.keys $ getMarloweConstructors marloweType'
 
       kvs :: Array (Tuple String MarloweType)
-      kvs = Set.toUnfoldable $ Set.map (\constructor -> Tuple constructor marloweType') constructors
+      kvs = Set.toUnfoldable $ Set.map
+        (\constructor -> Tuple constructor marloweType')
+        constructors
     in
       Map.fromFoldable kvs
 
@@ -245,18 +341,22 @@ getMarloweTypeFromConstructor constructor =
 
 -- | Return a constructor name if there is exactly one constructor for a type
 getConstructorFromMarloweType :: MarloweType -> Maybe String
-getConstructorFromMarloweType t = case Set.toUnfoldable $ Map.keys (getMarloweConstructors t) of
-  [ constructorName ] -> Just constructorName
-  _ -> Nothing
+getConstructorFromMarloweType t =
+  case Set.toUnfoldable $ Map.keys (getMarloweConstructors t) of
+    [ constructorName ] -> Just constructorName
+    _ -> Nothing
 
 -- | Creates a String consisting of the data constructor name followed by argument holes
 --   e.g. "When [ ?case_10 ] ?timeout_11 ?contract_12"
-constructMarloweType :: String -> MarloweHole -> Map String TermGenerator -> String
-constructMarloweType constructorName (MarloweHole { location }) m = case Map.lookup constructorName m of
-  Nothing -> ""
-  Just (ArgumentArray []) -> constructorName
-  Just (ArgumentArray vs) -> parens location $ constructorName <> " " <> intercalate " " (map showArgument vs)
-  Just (SimpleArgument vs) -> showArgument vs
+constructMarloweType
+  :: String -> MarloweHole -> Map String TermGenerator -> String
+constructMarloweType constructorName (MarloweHole { location }) m =
+  case Map.lookup constructorName m of
+    Nothing -> ""
+    Just (ArgumentArray []) -> constructorName
+    Just (ArgumentArray vs) -> parens location $ constructorName <> " " <>
+      intercalate " " (map showArgument vs)
+    Just (SimpleArgument vs) -> showArgument vs
   where
   showArgument EmptyArrayArg = "[]"
 
@@ -274,15 +374,16 @@ constructMarloweType constructorName (MarloweHole { location }) m = case Map.loo
 
   showArgument NewtypeArg = ""
 
-  showArgument (GenArg marloweType) = case getConstructorFromMarloweType marloweType of
-    Nothing -> "?hole"
-    Just name ->
-      let
-        newArgs = getMarloweConstructors marloweType
+  showArgument (GenArg marloweType) =
+    case getConstructorFromMarloweType marloweType of
+      Nothing -> "?hole"
+      Just name ->
+        let
+          newArgs = getMarloweConstructors marloweType
 
-        hole = MarloweHole { name, marloweType, location: NoLocation }
-      in
-        constructMarloweType name hole newArgs
+          hole = MarloweHole { name, marloweType, location: NoLocation }
+        in
+          constructMarloweType name hole newArgs
 
   -- This parens helper adds parentesis to the code if the hole is not in the first line and character
   -- position of the editor. This is like this because the parser throws an error if the Contract starts
@@ -294,7 +395,11 @@ constructMarloweType constructorName (MarloweHole { location }) m = case Map.loo
   --   * See if we can Modify the parser so that a contract starting with parentesis is valid
   --   * Or see if we have another way to detect the first hole that does not depend on being the first
   --     character
-  parens (Range { startColumn: 1, startLineNumber: 1, endColumn: _, endLineNumber: _ }) text = text
+  parens
+    ( Range
+        { startColumn: 1, startLineNumber: 1, endColumn: _, endLineNumber: _ }
+    )
+    text = text
 
   parens _ text = "(" <> text <> ")"
 
@@ -313,7 +418,8 @@ derive instance genericLocation :: Generic Location _
 
 instance encodeJsonLocation :: EncodeJson Location where
   encodeJson (Range r) = encodeJson { tag: "Range", contents: encodeJson r }
-  encodeJson (BlockId id) = encodeJson { tag: "BlockId", contents: encodeJson id }
+  encodeJson (BlockId id) = encodeJson
+    { tag: "BlockId", contents: encodeJson id }
   encodeJson NoLocation = encodeJson { tag: "NoLocation" }
 
 instance decodeJsonLocation :: DecodeJson Location where
@@ -356,9 +462,11 @@ compareLocation NoLocation _ = LT
 
 compareLocation _ NoLocation = GT
 
-compareLocation (BlockId _) (Range _) = unsafeThrow "Invalid comparation of a BlockId and Range (this should not happen)"
+compareLocation (BlockId _) (Range _) = unsafeThrow
+  "Invalid comparation of a BlockId and Range (this should not happen)"
 
-compareLocation (Range _) (BlockId _) = unsafeThrow "Invalid comparation of a BlockId and Range (this should not happen)"
+compareLocation (Range _) (BlockId _) = unsafeThrow
+  "Invalid comparation of a BlockId and Range (this should not happen)"
 
 data Term a
   = Term a Location
@@ -406,9 +514,10 @@ class HasMarloweHoles a where
   getHoles :: a -> Holes -> Holes
 
 type ContractData
-  = { parties :: Set Party
-    , tokens :: Set Token
-    }
+  =
+  { parties :: Set Party
+  , tokens :: Set Token
+  }
 
 _parties :: forall s. Lens' { parties :: Set Party | s } (Set Party)
 _parties = prop (Proxy :: _ "parties")
@@ -419,7 +528,11 @@ _tokens = prop (Proxy :: _ "tokens")
 class HasContractData a where
   gatherContractData :: a -> ContractData -> ContractData
 
-instance termHasMarloweHoles :: (IsMarloweType a, HasMarloweHoles a) => HasMarloweHoles (Term a) where
+instance termHasMarloweHoles ::
+  ( IsMarloweType a
+  , HasMarloweHoles a
+  ) =>
+  HasMarloweHoles (Term a) where
   getHoles (Term a _) m = getHoles a m
   getHoles h m = insertHole h m
 
@@ -461,7 +574,9 @@ instance hasArgsTermWrapper :: Args a => Args (TermWrapper a) where
 instance fromTermTermWrapper :: FromTerm a b => FromTerm (TermWrapper a) b where
   fromTerm (TermWrapper a _) = fromTerm a
 
-instance termWrapperHasContractData :: HasContractData a => HasContractData (TermWrapper a) where
+instance termWrapperHasContractData ::
+  HasContractData a =>
+  HasContractData (TermWrapper a) where
   gatherContractData (TermWrapper a _) s = gatherContractData a s
 
 mkDefaultTermWrapper :: forall a. a -> TermWrapper a
@@ -480,7 +595,8 @@ derive instance genericMarloweHole :: Generic MarloweHole _
 derive instance eqMarloweHole :: Eq MarloweHole
 
 instance ordMarloweHole :: Ord MarloweHole where
-  compare (MarloweHole { location: a }) (MarloweHole { location: b }) = compareLocation a b
+  compare (MarloweHole { location: a }) (MarloweHole { location: b }) =
+    compareLocation a b
 
 class IsMarloweType :: forall k. k -> Constraint
 class IsMarloweType a where
@@ -530,7 +646,8 @@ derive instance genericBound :: Generic Bound _
 derive instance eqBound :: Eq Bound
 
 instance showBound :: Show Bound where
-  show (Bound l u) = "(Bound " <> show (pretty l) <> " " <> show (pretty u) <> ")"
+  show (Bound l u) = "(Bound " <> show (pretty l) <> " " <> show (pretty u) <>
+    ")"
 
 instance prettyBound :: Pretty Bound where
   pretty v = genericPretty v
@@ -573,15 +690,19 @@ instance hasArgsTimeout :: Args Timeout where
   hasNestedArgs x = genericHasNestedArgs x
 
 instance templateTimeout :: Template Timeout Placeholders where
-  getPlaceholderIds (SlotParam slotParamId) = Placeholders (unwrap (mempty :: Placeholders)) { slotPlaceholderIds = Set.singleton slotParamId }
+  getPlaceholderIds (SlotParam slotParamId) = Placeholders
+    (unwrap (mempty :: Placeholders))
+      { slotPlaceholderIds = Set.singleton slotParamId }
   getPlaceholderIds (Slot _) = mempty
 
 instance fillableTimeout :: Fillable Timeout TemplateContent where
-  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $ Map.lookup slotParamId (unwrap placeholders).slotContent
+  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $
+    Map.lookup slotParamId (unwrap placeholders).slotContent
   fillTemplate _ (Slot x) = Slot x
 
 instance hasTimeoutTimeout :: HasTimeout Timeout where
-  timeouts (Slot slot) = Timeouts { maxTime: (S.Slot slot), minTime: Just (S.Slot slot) }
+  timeouts (Slot slot) = Timeouts
+    { maxTime: (S.Slot slot), minTime: Just (S.Slot slot) }
   timeouts (SlotParam _) = Timeouts { maxTime: zero, minTime: Nothing }
 
 instance timeoutFromTerm :: FromTerm Timeout EM.Timeout where
@@ -729,7 +850,9 @@ instance fillableAction :: Fillable Action TemplateContent where
     go = fillTemplate placeholders
 
 instance actionFromTerm :: FromTerm Action EM.Action where
-  fromTerm (Deposit a b c d) = EM.Deposit <$> fromTerm a <*> fromTerm b <*> fromTerm c <*> fromTerm d
+  fromTerm (Deposit a b c d) = EM.Deposit <$> fromTerm a <*> fromTerm b
+    <*> fromTerm c
+    <*> fromTerm d
   fromTerm (Choice a b) = EM.Choice <$> fromTerm a <*> (traverse fromTerm b)
   fromTerm (Notify a) = EM.Notify <$> fromTerm a
 
@@ -737,7 +860,10 @@ instance actionMarloweType :: IsMarloweType Action where
   marloweType _ = ActionType
 
 instance actionHasContractData :: HasContractData Action where
-  gatherContractData (Deposit accountId party token value) s = gatherContractData accountId s <> gatherContractData party s <> gatherContractData value s <> gatherContractData token s
+  gatherContractData (Deposit accountId party token value) s =
+    gatherContractData accountId s <> gatherContractData party s
+      <> gatherContractData value s
+      <> gatherContractData token s
   gatherContractData (Choice choiceId _) s = gatherContractData choiceId s
   gatherContractData (Notify obs) s = gatherContractData obs s
 
@@ -818,7 +944,8 @@ instance caseMarloweType :: IsMarloweType Case where
   marloweType _ = CaseType
 
 instance caseHasContractData :: HasContractData Case where
-  gatherContractData (Case action contract) s = gatherContractData action s <> gatherContractData contract s
+  gatherContractData (Case action contract) s = gatherContractData action s <>
+    gatherContractData contract s
 
 data Value
   = AvailableMoney AccountId (Term Token)
@@ -853,24 +980,34 @@ instance hasArgsValue :: Args Value where
   hasNestedArgs a = genericHasNestedArgs a
 
 instance templateValue :: Template Value Placeholders where
-  getPlaceholderIds (ConstantParam constantParamId) = Placeholders (unwrap (mempty :: Placeholders)) { valuePlaceholderIds = Set.singleton constantParamId }
+  getPlaceholderIds (ConstantParam constantParamId) = Placeholders
+    (unwrap (mempty :: Placeholders))
+      { valuePlaceholderIds = Set.singleton constantParamId }
   getPlaceholderIds (Constant _) = mempty
   getPlaceholderIds (AvailableMoney _ _) = mempty
   getPlaceholderIds (NegValue v) = getPlaceholderIds v
-  getPlaceholderIds (AddValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (SubValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (MulValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (AddValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (SubValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (MulValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
   getPlaceholderIds (ChoiceValue _) = mempty
   getPlaceholderIds SlotIntervalStart = mempty
   getPlaceholderIds SlotIntervalEnd = mempty
   getPlaceholderIds (UseValue _) = mempty
-  getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs <> getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs
+    <> getPlaceholderIds lhs
+    <> getPlaceholderIds rhs
 
 instance fillableValue :: Fillable Value TemplateContent where
   fillTemplate placeholders val = case val of
     Constant _ -> val
-    ConstantParam constantParamId -> maybe val Constant $ Map.lookup constantParamId (unwrap placeholders).valueContent
+    ConstantParam constantParamId -> maybe val Constant $ Map.lookup
+      constantParamId
+      (unwrap placeholders).valueContent
     AvailableMoney _ _ -> val
     NegValue v -> NegValue $ go v
     AddValue lhs rhs -> AddValue (go lhs) (go rhs)
@@ -887,7 +1024,8 @@ instance fillableValue :: Fillable Value TemplateContent where
     go = fillTemplate placeholders
 
 instance valueFromTerm :: FromTerm Value EM.Value where
-  fromTerm (AvailableMoney a b) = EM.AvailableMoney <$> fromTerm a <*> fromTerm b
+  fromTerm (AvailableMoney a b) = EM.AvailableMoney <$> fromTerm a <*> fromTerm
+    b
   fromTerm (Constant a) = pure $ EM.Constant a
   fromTerm (ConstantParam a) = pure $ EM.ConstantParam a
   fromTerm (NegValue a) = EM.NegValue <$> fromTerm a
@@ -910,14 +1048,21 @@ instance valueIsMarloweType :: IsMarloweType Value where
   marloweType _ = ValueType
 
 instance valueHasContractData :: HasContractData Value where
-  gatherContractData (AvailableMoney a token) s = gatherContractData a s <> gatherContractData token s
+  gatherContractData (AvailableMoney a token) s = gatherContractData a s <>
+    gatherContractData token s
   gatherContractData (NegValue a) s = gatherContractData a s
-  gatherContractData (AddValue a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (SubValue a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (MulValue a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (DivValue a b) s = gatherContractData a s <> gatherContractData b s
+  gatherContractData (AddValue a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (SubValue a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (MulValue a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (DivValue a b) s = gatherContractData a s <>
+    gatherContractData b s
   gatherContractData (ChoiceValue a) s = gatherContractData a s
-  gatherContractData (Cond c a b) s = gatherContractData c s <> gatherContractData a s <> gatherContractData b s
+  gatherContractData (Cond c a b) s = gatherContractData c s
+    <> gatherContractData a s
+    <> gatherContractData b s
   gatherContractData _ s = s
 
 data Observation
@@ -950,15 +1095,22 @@ instance hasArgsObservation :: Args Observation where
   hasNestedArgs a = genericHasNestedArgs a
 
 instance templateObservation :: Template Observation Placeholders where
-  getPlaceholderIds (AndObs lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (OrObs lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (AndObs lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (OrObs lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds
+    rhs
   getPlaceholderIds (NotObs v) = getPlaceholderIds v
   getPlaceholderIds (ChoseSomething _) = mempty
-  getPlaceholderIds (ValueGE lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueGT lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueLT lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueLE lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueEQ lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (ValueGE lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueGT lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueLT lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueLE lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueEQ lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
   getPlaceholderIds TrueObs = mempty
   getPlaceholderIds FalseObs = mempty
 
@@ -1001,15 +1153,22 @@ instance observationIsMarloweType :: IsMarloweType Observation where
   marloweType _ = ObservationType
 
 instance observationHasContractData :: HasContractData Observation where
-  gatherContractData (AndObs a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (OrObs a b) s = gatherContractData a s <> gatherContractData b s
+  gatherContractData (AndObs a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (OrObs a b) s = gatherContractData a s <>
+    gatherContractData b s
   gatherContractData (NotObs a) s = gatherContractData a s
   gatherContractData (ChoseSomething a) s = gatherContractData a s
-  gatherContractData (ValueGE a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (ValueGT a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (ValueLT a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (ValueLE a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (ValueEQ a b) s = gatherContractData a s <> gatherContractData b s
+  gatherContractData (ValueGE a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (ValueGT a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (ValueLT a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (ValueLE a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (ValueEQ a b) s = gatherContractData a s <>
+    gatherContractData b s
   gatherContractData _ s = s
 
 data Contract
@@ -1036,11 +1195,18 @@ instance hasArgsContract :: Args Contract where
 
 instance templateContract :: Template Contract Placeholders where
   getPlaceholderIds Close = mempty
-  getPlaceholderIds (Pay _ _ _ val cont) = getPlaceholderIds val <> getPlaceholderIds cont
-  getPlaceholderIds (If obs cont1 cont2) = getPlaceholderIds obs <> getPlaceholderIds cont1 <> getPlaceholderIds cont2
-  getPlaceholderIds (When cases tim cont) = foldMap getPlaceholderIds cases <> getPlaceholderIds tim <> getPlaceholderIds cont
-  getPlaceholderIds (Let _ val cont) = getPlaceholderIds val <> getPlaceholderIds cont
-  getPlaceholderIds (Assert obs cont) = getPlaceholderIds obs <> getPlaceholderIds cont
+  getPlaceholderIds (Pay _ _ _ val cont) = getPlaceholderIds val <>
+    getPlaceholderIds cont
+  getPlaceholderIds (If obs cont1 cont2) = getPlaceholderIds obs
+    <> getPlaceholderIds cont1
+    <> getPlaceholderIds cont2
+  getPlaceholderIds (When cases tim cont) = foldMap getPlaceholderIds cases
+    <> getPlaceholderIds tim
+    <> getPlaceholderIds cont
+  getPlaceholderIds (Let _ val cont) = getPlaceholderIds val <>
+    getPlaceholderIds cont
+  getPlaceholderIds (Assert obs cont) = getPlaceholderIds obs <>
+    getPlaceholderIds cont
 
 instance fillableContract :: Fillable Contract TemplateContent where
   fillTemplate placeholders contract = case contract of
@@ -1057,7 +1223,8 @@ instance fillableContract :: Fillable Contract TemplateContent where
 instance hasTimeoutContract :: HasTimeout Contract where
   timeouts Close = Timeouts { maxTime: zero, minTime: Nothing }
   timeouts (Pay _ _ _ _ contract) = timeouts contract
-  timeouts (If _ contractTrue contractFalse) = timeouts [ contractTrue, contractFalse ]
+  timeouts (If _ contractTrue contractFalse) = timeouts
+    [ contractTrue, contractFalse ]
   timeouts (When cases timeoutTerm contract) =
     timeouts
       [ timeouts cases
@@ -1069,9 +1236,12 @@ instance hasTimeoutContract :: HasTimeout Contract where
 
 instance contractFromTerm :: FromTerm Contract EM.Contract where
   fromTerm Close = pure EM.Close
-  fromTerm (Pay a b c d e) = EM.Pay <$> fromTerm a <*> fromTerm b <*> fromTerm c <*> fromTerm d <*> fromTerm e
+  fromTerm (Pay a b c d e) = EM.Pay <$> fromTerm a <*> fromTerm b <*> fromTerm c
+    <*> fromTerm d
+    <*> fromTerm e
   fromTerm (If a b c) = EM.If <$> fromTerm a <*> fromTerm b <*> fromTerm c
-  fromTerm (When as b c) = EM.When <$> (traverse fromTerm as) <*> fromTerm b <*> fromTerm c
+  fromTerm (When as b c) = EM.When <$> (traverse fromTerm as) <*> fromTerm b <*>
+    fromTerm c
   fromTerm (Let a b c) = EM.Let <$> fromTerm a <*> fromTerm b <*> fromTerm c
   fromTerm (Assert a b) = EM.Assert <$> fromTerm a <*> fromTerm b
 
@@ -1085,11 +1255,20 @@ instance contractIsMarloweType :: IsMarloweType Contract where
 
 instance contractHasContractData :: HasContractData Contract where
   gatherContractData Close s = s
-  gatherContractData (Pay a b c d e) s = gatherContractData a s <> gatherContractData b s <> gatherContractData c s <> gatherContractData d s <> gatherContractData e s
-  gatherContractData (If a b c) s = gatherContractData a s <> gatherContractData b s <> gatherContractData c s
-  gatherContractData (When as _ b) s = gatherContractData as s <> gatherContractData b s
-  gatherContractData (Let _ a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (Assert a b) s = gatherContractData a s <> gatherContractData b s
+  gatherContractData (Pay a b c d e) s = gatherContractData a s
+    <> gatherContractData b s
+    <> gatherContractData c s
+    <> gatherContractData d s
+    <> gatherContractData e s
+  gatherContractData (If a b c) s = gatherContractData a s
+    <> gatherContractData b s
+    <> gatherContractData c s
+  gatherContractData (When as _ b) s = gatherContractData as s <>
+    gatherContractData b s
+  gatherContractData (Let _ a b) s = gatherContractData a s <>
+    gatherContractData b s
+  gatherContractData (Assert a b) s = gatherContractData a s <>
+    gatherContractData b s
 
 newtype ValueId
   = ValueId String
@@ -1164,16 +1343,17 @@ class FromTerm a b where
 -- with template parameters
 data TransactionOutput
   = TransactionOutput
-    { txOutWarnings :: List S.TransactionWarning
-    , txOutPayments :: List S.Payment
-    , txOutState :: S.State
-    , txOutContract :: Term Contract
-    }
+      { txOutWarnings :: List S.TransactionWarning
+      , txOutPayments :: List S.Payment
+      , txOutState :: S.State
+      , txOutContract :: Term Contract
+      }
   | SemanticError S.TransactionError
   | InvalidContract
 
 -- This function is like Semantics.computeTransaction,
-computeTransaction :: S.TransactionInput -> S.State -> Term Contract -> TransactionOutput
+computeTransaction
+  :: S.TransactionInput -> S.State -> Term Contract -> TransactionOutput
 computeTransaction tx state contract =
   let
     inputs = (unwrap tx).inputs
@@ -1200,7 +1380,12 @@ computeTransaction tx state contract =
             S.Error error /\ _ -> SemanticError error
             _ /\ Nothing -> InvalidContract
 
-applyAllInputs :: S.Environment -> S.State -> Term Contract -> (List S.Input) -> Maybe (Term Contract)
+applyAllInputs
+  :: S.Environment
+  -> S.State
+  -> Term Contract
+  -> (List S.Input)
+  -> Maybe (Term Contract)
 applyAllInputs env state startContract inputs = do
   (curState /\ cont) <- reduceContractUntilQuiescent env state startContract
   semanticCont <- fromTerm cont
@@ -1213,19 +1398,25 @@ applyAllInputs env state startContract inputs = do
         termsApplyResult = applyInput env curState input cont
       in
         case semanticApplyResult /\ termsApplyResult of
-          (S.Applied _ newState _) /\ (Just nextContract) -> applyAllInputs env newState nextContract rest
+          (S.Applied _ newState _) /\ (Just nextContract) -> applyAllInputs env
+            newState
+            nextContract
+            rest
           _ -> Nothing
 
-applyCases :: S.Environment -> S.State -> S.Input -> List Case -> Maybe (Term Contract)
+applyCases
+  :: S.Environment -> S.State -> S.Input -> List Case -> Maybe (Term Contract)
 applyCases env state input cases = case input, cases of
-  S.IDeposit accId1 party1 tok1 amount, (Case (Term (Deposit accId2 party2 tok2 val) _) cont) : rest ->
+  S.IDeposit accId1 party1 tok1 amount,
+  (Case (Term (Deposit accId2 party2 tok2 val) _) cont) : rest ->
     let
       val' = S.evalValue env state <$> fromTerm val
     in
-      if Just accId1 == fromTerm accId2
-        && (Just party1 == fromTerm party2)
-        && (Just tok1 == fromTerm tok2)
-        && (Just amount == val') then
+      if
+        Just accId1 == fromTerm accId2
+          && (Just party1 == fromTerm party2)
+          && (Just tok1 == fromTerm tok2)
+          && (Just amount == val') then
         Just cont
       else
         applyCases env state input rest
@@ -1245,15 +1436,26 @@ applyCases env state input cases = case input, cases of
   _, _ : rest -> applyCases env state input rest
   _, Nil -> Nothing
 
-applyInput :: S.Environment -> S.State -> S.Input -> Term Contract -> Maybe (Term Contract)
-applyInput env state input (Term (When cases _ _) _) = applyCases env state input (List.mapMaybe termToValue $ fromFoldable cases)
+applyInput
+  :: S.Environment
+  -> S.State
+  -> S.Input
+  -> Term Contract
+  -> Maybe (Term Contract)
+applyInput env state input (Term (When cases _ _) _) = applyCases env state
+  input
+  (List.mapMaybe termToValue $ fromFoldable cases)
 
 applyInput _ _ _ _ = Nothing
 
 -- This function is a simplified version of Semantics.reduceContractUntilQuiescent, we don't care
 -- in here about the warnings or payments, but we do need to keep track of the real semantic state
 -- as some continuations could depend on previous payments.
-reduceContractUntilQuiescent :: S.Environment -> S.State -> Term Contract -> Maybe (S.State /\ Term Contract)
+reduceContractUntilQuiescent
+  :: S.Environment
+  -> S.State
+  -> Term Contract
+  -> Maybe (S.State /\ Term Contract)
 reduceContractUntilQuiescent env startState term@(Term startContract _) = do
   semanticContract <- fromTerm startContract
   let
@@ -1261,7 +1463,8 @@ reduceContractUntilQuiescent env startState term@(Term startContract _) = do
 
     termsStep = reduceContractStep env startState startContract
   case semanticStep /\ termsStep of
-    S.Reduced _ _ newState _ /\ Reduced newContract -> reduceContractUntilQuiescent env newState newContract
+    S.Reduced _ _ newState _ /\ Reduced newContract ->
+      reduceContractUntilQuiescent env newState newContract
     -- This case is thought for the Close contract, because in the semantic version, running a contract step
     -- can do a payment (so the state is reduced), but in this version the close is never reduced
     S.Reduced _ _ _ S.Close /\ NotReduced -> Just (startState /\ term)
@@ -1292,9 +1495,12 @@ reduceContractStep env state contract = case contract of
           cont1
         else
           cont2
-    Nothing -> ReduceError "this function should not be called in a contract with holes"
-  When _ (Hole _ _ _) _ -> ReduceError "this function should not be called in a contract with holes"
-  When _ (Term (SlotParam _) _) _ -> ReduceError "this function should not be called with slot params"
+    Nothing -> ReduceError
+      "this function should not be called in a contract with holes"
+  When _ (Hole _ _ _) _ -> ReduceError
+    "this function should not be called in a contract with holes"
+  When _ (Term (SlotParam _) _) _ -> ReduceError
+    "this function should not be called with slot params"
   When _ (Term (Slot timeout) _) nextContract ->
     let
       sTimeout = S.Slot timeout

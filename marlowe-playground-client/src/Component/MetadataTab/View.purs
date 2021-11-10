@@ -15,14 +15,79 @@ import Data.Set (Set, toUnfoldable)
 import Data.Set.Ordered.OSet (OSet)
 import Data.Tuple.Nested (type (/\), (/\))
 import Halogen.Classes (minusBtn, plusBtn, btn)
-import Halogen.HTML (ClassName(..), HTML, button, div, em_, h6_, input, option, select, text)
+import Halogen.HTML
+  ( ClassName(..)
+  , HTML
+  , button
+  , div
+  , em_
+  , h6_
+  , input
+  , option
+  , select
+  , text
+  )
 import Halogen.HTML.Events (onClick, onValueChange)
-import Halogen.HTML.Properties (InputType(..), class_, classes, min, placeholder, required, selected, type_, value)
-import Marlowe.Extended (contractTypeArray, contractTypeInitials, contractTypeName, initialsToContractType)
-import Marlowe.Extended.Metadata (ChoiceInfo, MetaData, MetadataHintInfo, NumberFormat(..), NumberFormatType(..), ValueParameterInfo, _choiceInfo, _choiceNames, _roleDescriptions, _roles, _slotParameterDescriptions, _slotParameters, _valueParameterInfo, _valueParameters, defaultForFormatType, fromString, getFormatType, isDecimalFormat, isDefaultFormat, toString)
+import Halogen.HTML.Properties
+  ( InputType(..)
+  , class_
+  , classes
+  , min
+  , placeholder
+  , required
+  , selected
+  , type_
+  , value
+  )
+import Marlowe.Extended
+  ( contractTypeArray
+  , contractTypeInitials
+  , contractTypeName
+  , initialsToContractType
+  )
+import Marlowe.Extended.Metadata
+  ( ChoiceInfo
+  , MetaData
+  , MetadataHintInfo
+  , NumberFormat(..)
+  , NumberFormatType(..)
+  , ValueParameterInfo
+  , _choiceInfo
+  , _choiceNames
+  , _roleDescriptions
+  , _roles
+  , _slotParameterDescriptions
+  , _slotParameters
+  , _valueParameterInfo
+  , _valueParameters
+  , defaultForFormatType
+  , fromString
+  , getFormatType
+  , isDecimalFormat
+  , isDefaultFormat
+  , toString
+  )
 
-onlyDescriptionRenderer :: forall a b p. (String -> String -> b) -> (String -> b) -> String -> String -> Boolean -> (b -> a) -> String -> String -> Array (HTML p a)
-onlyDescriptionRenderer setAction deleteAction key info needed metadataAction typeNameTitle typeNameSmall =
+onlyDescriptionRenderer
+  :: forall a b p
+   . (String -> String -> b)
+  -> (String -> b)
+  -> String
+  -> String
+  -> Boolean
+  -> (b -> a)
+  -> String
+  -> String
+  -> Array (HTML p a)
+onlyDescriptionRenderer
+  setAction
+  deleteAction
+  key
+  info
+  needed
+  metadataAction
+  typeNameTitle
+  typeNameSmall =
   [ div [ class_ $ ClassName "metadata-prop-label" ]
       [ text $ typeNameTitle <> " " <> show key <> ": " ]
   , div [ class_ $ ClassName "metadata-prop-edit" ]
@@ -36,31 +101,58 @@ onlyDescriptionRenderer setAction deleteAction key info needed metadataAction ty
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
-          [ classes [ if needed then plusBtn else minusBtn, ClassName "align-top", btn ]
+          [ classes
+              [ if needed then plusBtn else minusBtn
+              , ClassName "align-top"
+              , btn
+              ]
           , onClick $ const $ metadataAction $ deleteAction key
           ]
           [ text "-" ]
       ]
   ]
-    <> if needed then [] else [ div [ classes [ ClassName "metadata-error", ClassName "metadata-prop-not-used" ] ] [ text "Not used" ] ]
+    <>
+      if needed then []
+      else
+        [ div
+            [ classes
+                [ ClassName "metadata-error"
+                , ClassName "metadata-prop-not-used"
+                ]
+            ]
+            [ text "Not used" ]
+        ]
 
-type FormattedNumberInfo
-  = { key :: String
-    , description :: String
-    , format :: NumberFormat
-    , setFormat :: String -> NumberFormat -> MetadataAction
-    , setDescription :: String -> String -> MetadataAction
-    , deleteInfo :: String -> MetadataAction
-    }
+type FormattedNumberInfo =
+  { key :: String
+  , description :: String
+  , format :: NumberFormat
+  , setFormat :: String -> NumberFormat -> MetadataAction
+  , setDescription :: String -> String -> MetadataAction
+  , deleteInfo :: String -> MetadataAction
+  }
 
-formattedNumberMetadataRenderer :: forall a p. FormattedNumberInfo -> Boolean -> (MetadataAction -> a) -> String -> String -> Array (HTML p a)
-formattedNumberMetadataRenderer { key, description, format, setFormat, setDescription, deleteInfo } needed metadataAction typeNameTitle typeNameSmall =
+formattedNumberMetadataRenderer
+  :: forall a p
+   . FormattedNumberInfo
+  -> Boolean
+  -> (MetadataAction -> a)
+  -> String
+  -> String
+  -> Array (HTML p a)
+formattedNumberMetadataRenderer
+  { key, description, format, setFormat, setDescription, deleteInfo }
+  needed
+  metadataAction
+  typeNameTitle
+  typeNameSmall =
   [ div [ class_ $ ClassName "metadata-prop-label" ]
       [ text $ typeNameTitle <> " " <> show key <> ": " ]
   , div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
       [ select
           [ class_ $ ClassName "metadata-input"
-          , onValueChange $ metadataAction <<< setFormat key <<< setNumberFormatType
+          , onValueChange $ metadataAction <<< setFormat key <<<
+              setNumberFormatType
           ]
           [ option
               [ value $ toString DefaultFormatType
@@ -87,38 +179,58 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
-          [ classes [ if needed then plusBtn else minusBtn, ClassName "align-top", btn ]
+          [ classes
+              [ if needed then plusBtn else minusBtn
+              , ClassName "align-top"
+              , btn
+              ]
           , onClick $ const $ metadataAction $ deleteInfo key
           ]
           [ text "-" ]
       ]
   ]
-    <> (if needed then [] else [ div [ classes [ ClassName "metadata-error", ClassName "metadata-prop-not-used" ] ] [ text "Not used" ] ])
-    <> case format of
-        DefaultFormat -> []
-        DecimalFormat numDecimals labelStr ->
-          [ div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
-              [ input
-                  [ type_ InputNumber
-                  , placeholder $ "Number of decimal digits for " <> typeNameSmall <> " " <> show key
-                  , class_ $ ClassName "metadata-input"
-                  , value $ if numDecimals == 0 then "" else show numDecimals
-                  , required true
-                  , min zero
-                  , onValueChange $ metadataAction <<< setFormat key <<< setDecimals labelStr
+    <>
+      ( if needed then []
+        else
+          [ div
+              [ classes
+                  [ ClassName "metadata-error"
+                  , ClassName "metadata-prop-not-used"
                   ]
               ]
-          , div [ class_ $ ClassName "metadata-prop-formattednum-col2" ]
-              [ input
-                  [ type_ InputText
-                  , placeholder $ "Currency label for " <> typeNameSmall <> " " <> show key
-                  , class_ $ ClassName "metadata-input"
-                  , value labelStr
-                  , onValueChange $ metadataAction <<< setFormat key <<< DecimalFormat numDecimals
-                  ]
-              ]
+              [ text "Not used" ]
           ]
-        TimeFormat -> []
+      )
+    <> case format of
+      DefaultFormat -> []
+      DecimalFormat numDecimals labelStr ->
+        [ div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
+            [ input
+                [ type_ InputNumber
+                , placeholder $ "Number of decimal digits for " <> typeNameSmall
+                    <> " "
+                    <> show key
+                , class_ $ ClassName "metadata-input"
+                , value $ if numDecimals == 0 then "" else show numDecimals
+                , required true
+                , min zero
+                , onValueChange $ metadataAction <<< setFormat key <<<
+                    setDecimals labelStr
+                ]
+            ]
+        , div [ class_ $ ClassName "metadata-prop-formattednum-col2" ]
+            [ input
+                [ type_ InputText
+                , placeholder $ "Currency label for " <> typeNameSmall <> " " <>
+                    show key
+                , class_ $ ClassName "metadata-input"
+                , value labelStr
+                , onValueChange $ metadataAction <<< setFormat key <<<
+                    DecimalFormat numDecimals
+                ]
+            ]
+        ]
+      TimeFormat -> []
   where
   setNumberFormatType :: String -> NumberFormat
   setNumberFormatType str = case fromString str of
@@ -137,7 +249,15 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
       )
       labelStr
 
-choiceMetadataRenderer :: forall a p. String -> ChoiceInfo -> Boolean -> (MetadataAction -> a) -> String -> String -> Array (HTML p a)
+choiceMetadataRenderer
+  :: forall a p
+   . String
+  -> ChoiceInfo
+  -> Boolean
+  -> (MetadataAction -> a)
+  -> String
+  -> String
+  -> Array (HTML p a)
 choiceMetadataRenderer key { choiceDescription, choiceFormat } =
   formattedNumberMetadataRenderer
     { key: key
@@ -148,8 +268,18 @@ choiceMetadataRenderer key { choiceDescription, choiceFormat } =
     , deleteInfo: DeleteChoiceInfo
     }
 
-valueParameterMetadataRenderer :: forall a p. String -> ValueParameterInfo -> Boolean -> (MetadataAction -> a) -> String -> String -> Array (HTML p a)
-valueParameterMetadataRenderer key { valueParameterDescription, valueParameterFormat } =
+valueParameterMetadataRenderer
+  :: forall a p
+   . String
+  -> ValueParameterInfo
+  -> Boolean
+  -> (MetadataAction -> a)
+  -> String
+  -> String
+  -> Array (HTML p a)
+valueParameterMetadataRenderer
+  key
+  { valueParameterDescription, valueParameterFormat } =
   formattedNumberMetadataRenderer
     { key: key
     , description: valueParameterDescription
@@ -159,31 +289,60 @@ valueParameterMetadataRenderer key { valueParameterDescription, valueParameterFo
     , deleteInfo: DeleteValueParameterInfo
     }
 
-metadataList ::
-  forall a b c p.
-  (b -> a) ->
-  Map String c ->
-  Set String ->
-  (String -> c -> Boolean -> (b -> a) -> String -> String -> Array (HTML p a)) ->
-  String -> String -> (String -> b) -> Array (HTML p a)
-metadataList metadataAction metadataMap hintSet metadataRenderer typeNameTitle typeNameSmall setEmptyMetadata =
+metadataList
+  :: forall a b c p
+   . (b -> a)
+  -> Map String c
+  -> Set String
+  -> ( String
+       -> c
+       -> Boolean
+       -> (b -> a)
+       -> String
+       -> String
+       -> Array (HTML p a)
+     )
+  -> String
+  -> String
+  -> (String -> b)
+  -> Array (HTML p a)
+metadataList
+  metadataAction
+  metadataMap
+  hintSet
+  metadataRenderer
+  typeNameTitle
+  typeNameSmall
+  setEmptyMetadata =
   if Map.isEmpty combinedMap then
     []
   else
     [ div [ class_ $ ClassName "metadata-group-title" ]
         [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]
     ]
-      <> ( concatMap
+      <>
+        ( concatMap
             ( \(key /\ val) ->
                 ( case val of
-                    Just (info /\ needed) -> metadataRenderer key info needed metadataAction typeNameTitle typeNameSmall
+                    Just (info /\ needed) -> metadataRenderer key info needed
+                      metadataAction
+                      typeNameTitle
+                      typeNameSmall
                     Nothing ->
-                      [ div [ classes [ ClassName "metadata-error", ClassName "metadata-prop-not-defined" ] ]
-                          [ text $ typeNameTitle <> " " <> show key <> " meta-data not defined" ]
+                      [ div
+                          [ classes
+                              [ ClassName "metadata-error"
+                              , ClassName "metadata-prop-not-defined"
+                              ]
+                          ]
+                          [ text $ typeNameTitle <> " " <> show key <>
+                              " meta-data not defined"
+                          ]
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ metadataAction (setEmptyMetadata key)
+                              , onClick $ const $ metadataAction
+                                  (setEmptyMetadata key)
                               ]
                               [ text "+" ]
                           ]
@@ -193,7 +352,11 @@ metadataList metadataAction metadataMap hintSet metadataRenderer typeNameTitle t
             $ Map.toUnfoldable combinedMap
         )
   where
-  mergeMaps :: forall c2. (Maybe (c2 /\ Boolean)) -> (Maybe (c2 /\ Boolean)) -> (Maybe (c2 /\ Boolean))
+  mergeMaps
+    :: forall c2
+     . (Maybe (c2 /\ Boolean))
+    -> (Maybe (c2 /\ Boolean))
+    -> (Maybe (c2 /\ Boolean))
   mergeMaps (Just (x /\ _)) _ = Just (x /\ true)
 
   mergeMaps _ _ = Nothing
@@ -206,33 +369,64 @@ metadataList metadataAction metadataMap hintSet metadataRenderer typeNameTitle t
   combinedMap =
     Map.unionWith mergeMaps
       (map (\x -> Just (x /\ false)) metadataMap)
-      (Map.fromFoldable (map (\x -> x /\ Nothing) ((toUnfoldable hintSet) :: List String)))
+      ( Map.fromFoldable
+          (map (\x -> x /\ Nothing) ((toUnfoldable hintSet) :: List String))
+      )
 
-sortableMetadataList ::
-  forall a b c p.
-  (b -> a) ->
-  OMap String c ->
-  OSet String ->
-  (String -> c -> Boolean -> (b -> a) -> String -> String -> Array (HTML p a)) ->
-  String -> String -> (String -> b) -> Array (HTML p a)
-sortableMetadataList metadataAction metadataMap hintSet metadataRenderer typeNameTitle typeNameSmall setEmptyMetadata =
+sortableMetadataList
+  :: forall a b c p
+   . (b -> a)
+  -> OMap String c
+  -> OSet String
+  -> ( String
+       -> c
+       -> Boolean
+       -> (b -> a)
+       -> String
+       -> String
+       -> Array (HTML p a)
+     )
+  -> String
+  -> String
+  -> (String -> b)
+  -> Array (HTML p a)
+sortableMetadataList
+  metadataAction
+  metadataMap
+  hintSet
+  metadataRenderer
+  typeNameTitle
+  typeNameSmall
+  setEmptyMetadata =
   if OMap.isEmpty combinedMap then
     []
   else
     [ div [ class_ $ ClassName "metadata-group-title" ]
         [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]
     ]
-      <> ( concatMap
+      <>
+        ( concatMap
             ( \(key /\ val) ->
                 ( case val of
-                    Just (info /\ needed) -> metadataRenderer key info needed metadataAction typeNameTitle typeNameSmall
+                    Just (info /\ needed) -> metadataRenderer key info needed
+                      metadataAction
+                      typeNameTitle
+                      typeNameSmall
                     Nothing ->
-                      [ div [ classes [ ClassName "metadata-error", ClassName "metadata-prop-not-defined" ] ]
-                          [ text $ typeNameTitle <> " " <> show key <> " meta-data not defined" ]
+                      [ div
+                          [ classes
+                              [ ClassName "metadata-error"
+                              , ClassName "metadata-prop-not-defined"
+                              ]
+                          ]
+                          [ text $ typeNameTitle <> " " <> show key <>
+                              " meta-data not defined"
+                          ]
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ metadataAction (setEmptyMetadata key)
+                              , onClick $ const $ metadataAction
+                                  (setEmptyMetadata key)
                               ]
                               [ text "+" ]
                           ]
@@ -242,7 +436,11 @@ sortableMetadataList metadataAction metadataMap hintSet metadataRenderer typeNam
             $ OMap.toUnfoldable combinedMap
         )
   where
-  mergeMaps :: forall c2. (Maybe (c2 /\ Boolean)) -> (Maybe (c2 /\ Boolean)) -> (Maybe (c2 /\ Boolean))
+  mergeMaps
+    :: forall c2
+     . (Maybe (c2 /\ Boolean))
+    -> (Maybe (c2 /\ Boolean))
+    -> (Maybe (c2 /\ Boolean))
   mergeMaps (Just (x /\ _)) _ = Just (x /\ true)
 
   mergeMaps _ _ = Nothing
@@ -257,7 +455,12 @@ sortableMetadataList metadataAction metadataMap hintSet metadataRenderer typeNam
       (map (\x -> Just (x /\ false)) metadataMap)
       (foldMap (\x -> OMap.singleton x Nothing) hintSet)
 
-metadataView :: forall a p. MetadataHintInfo -> MetaData -> (MetadataAction -> a) -> HTML p a
+metadataView
+  :: forall a p
+   . MetadataHintInfo
+  -> MetaData
+  -> (MetadataAction -> a)
+  -> HTML p a
 metadataView metadataHints metadata metadataAction =
   div [ classes [ ClassName "metadata-form" ] ]
     ( concat
@@ -266,16 +469,18 @@ metadataView metadataHints metadata metadataAction =
           , div [ class_ $ ClassName "metadata-mainprop-edit" ]
               [ select
                   [ class_ $ ClassName "metadata-input"
-                  , onValueChange $ metadataAction <<< SetContractType <<< initialsToContractType
-                  ] do
-                  ct <- contractTypeArray
-                  pure
-                    $ option
-                        [ value $ contractTypeInitials ct
-                        , selected (ct == metadata.contractType)
-                        ]
-                        [ text $ contractTypeName ct
-                        ]
+                  , onValueChange $ metadataAction <<< SetContractType <<<
+                      initialsToContractType
+                  ]
+                  do
+                    ct <- contractTypeArray
+                    pure
+                      $ option
+                          [ value $ contractTypeInitials ct
+                          , selected (ct == metadata.contractType)
+                          ]
+                          [ text $ contractTypeName ct
+                          ]
               ]
           ]
         , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
@@ -298,7 +503,8 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractShortDescription
-                  , onValueChange $ metadataAction <<< SetContractShortDescription
+                  , onValueChange $ metadataAction <<<
+                      SetContractShortDescription
                   ]
               ]
           ]
@@ -310,35 +516,73 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractLongDescription
-                  , onValueChange $ metadataAction <<< SetContractLongDescription
+                  , onValueChange $ metadataAction <<<
+                      SetContractLongDescription
                   ]
               ]
           ]
-        , generateMetadataList _roleDescriptions _roles (onlyDescriptionRenderer SetRoleDescription DeleteRoleDescription) "Role" "role" (\x -> SetRoleDescription x mempty)
-        , generateMetadataList _choiceInfo _choiceNames choiceMetadataRenderer "Choice" "choice" (\x -> SetChoiceDescription x mempty)
-        , generateSortableMetadataList _slotParameterDescriptions _slotParameters (onlyDescriptionRenderer SetSlotParameterDescription DeleteSlotParameterDescription) "Slot parameter" "slot parameter" (\x -> SetSlotParameterDescription x mempty)
-        , generateSortableMetadataList _valueParameterInfo _valueParameters valueParameterMetadataRenderer "Value parameter" "value parameter" (\x -> SetValueParameterDescription x mempty)
+        , generateMetadataList _roleDescriptions _roles
+            (onlyDescriptionRenderer SetRoleDescription DeleteRoleDescription)
+            "Role"
+            "role"
+            (\x -> SetRoleDescription x mempty)
+        , generateMetadataList _choiceInfo _choiceNames choiceMetadataRenderer
+            "Choice"
+            "choice"
+            (\x -> SetChoiceDescription x mempty)
+        , generateSortableMetadataList _slotParameterDescriptions
+            _slotParameters
+            ( onlyDescriptionRenderer SetSlotParameterDescription
+                DeleteSlotParameterDescription
+            )
+            "Slot parameter"
+            "slot parameter"
+            (\x -> SetSlotParameterDescription x mempty)
+        , generateSortableMetadataList _valueParameterInfo _valueParameters
+            valueParameterMetadataRenderer
+            "Value parameter"
+            "value parameter"
+            (\x -> SetValueParameterDescription x mempty)
         ]
     )
   where
-  generateMetadataList ::
-    forall c.
-    Lens' MetaData (Map String c) ->
-    Lens' MetadataHintInfo (Set String) ->
-    (String -> c -> Boolean -> (MetadataAction -> a) -> String -> String -> Array (HTML p a)) ->
-    String ->
-    String ->
-    (String -> MetadataAction) ->
-    Array (HTML p a)
-  generateMetadataList mapLens setLens = metadataList metadataAction (metadata ^. mapLens) (metadataHints ^. setLens)
+  generateMetadataList
+    :: forall c
+     . Lens' MetaData (Map String c)
+    -> Lens' MetadataHintInfo (Set String)
+    -> ( String
+         -> c
+         -> Boolean
+         -> (MetadataAction -> a)
+         -> String
+         -> String
+         -> Array (HTML p a)
+       )
+    -> String
+    -> String
+    -> (String -> MetadataAction)
+    -> Array (HTML p a)
+  generateMetadataList mapLens setLens = metadataList metadataAction
+    (metadata ^. mapLens)
+    (metadataHints ^. setLens)
 
-  generateSortableMetadataList ::
-    forall c.
-    Lens' MetaData (OMap String c) ->
-    Lens' MetadataHintInfo (OSet String) ->
-    (String -> c -> Boolean -> (MetadataAction -> a) -> String -> String -> Array (HTML p a)) ->
-    String ->
-    String ->
-    (String -> MetadataAction) ->
-    Array (HTML p a)
-  generateSortableMetadataList mapLens setLens = sortableMetadataList metadataAction (metadata ^. mapLens) (metadataHints ^. setLens)
+  generateSortableMetadataList
+    :: forall c
+     . Lens' MetaData (OMap String c)
+    -> Lens' MetadataHintInfo (OSet String)
+    -> ( String
+         -> c
+         -> Boolean
+         -> (MetadataAction -> a)
+         -> String
+         -> String
+         -> Array (HTML p a)
+       )
+    -> String
+    -> String
+    -> (String -> MetadataAction)
+    -> Array (HTML p a)
+  generateSortableMetadataList mapLens setLens = sortableMetadataList
+    metadataAction
+    (metadata ^. mapLens)
+    (metadataHints ^. setLens)

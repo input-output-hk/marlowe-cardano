@@ -20,8 +20,7 @@ import Monaco (IMarkerData)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Web.HTML.Event.DragEvent (DragEvent)
 
-type Pos
-  = Int
+type Pos = Int
 
 data Action
   = ChangeKeyBindings KeyBindings
@@ -55,7 +54,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (HandleDragEvent _) = Just $ defaultEvent "HandleDragEvent"
   toEvent (HandleDropEvent _) = Just $ defaultEvent "HandleDropEvent"
   toEvent (MoveToPosition _ _) = Just $ defaultEvent "MoveToPosition"
-  toEvent (LoadScript script) = Just $ (defaultEvent "LoadScript") { label = Just script }
+  toEvent (LoadScript script) = Just $ (defaultEvent "LoadScript")
+    { label = Just script }
   toEvent (SetEditorText _) = Just $ defaultEvent "SetEditorText"
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent (ShowErrorDetail _) = Just $ defaultEvent "ShowErrorDetail"
@@ -63,11 +63,15 @@ instance actionIsEvent :: IsEvent Action where
   toEvent ViewAsBlockly = Just $ defaultEvent "ViewAsBlockly"
   toEvent (InitMarloweProject _) = Just $ defaultEvent "InitMarloweProject"
   toEvent (SelectHole _) = Just $ defaultEvent "SelectHole"
-  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction") { label = Just $ showConstructor action }
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
+    { label = Just $ showConstructor action }
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
-  toEvent AnalyseReachabilityContract = Just $ defaultEvent "AnalyseReachabilityContract"
-  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
+  toEvent AnalyseReachabilityContract = Just $ defaultEvent
+    "AnalyseReachabilityContract"
+  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
+    "AnalyseContractForCloseRefund"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent Save = Just $ defaultEvent "Save"
   toEvent DoNothing = Nothing
@@ -85,18 +89,18 @@ derive instance genericBottomPanelView :: Generic BottomPanelView _
 instance showBottomPanelView :: Show BottomPanelView where
   show = genericShow
 
-type State
-  = { keybindings :: KeyBindings
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , showErrorDetail :: Boolean
-    , selectedHole :: Maybe String
-    , metadataHintInfo :: MetadataHintInfo
-    , analysisState :: AnalysisState
-    , editorErrors :: Array IMarkerData
-    , editorWarnings :: Array IMarkerData
-    , hasHoles :: Boolean
-    , editorReady :: Boolean
-    }
+type State =
+  { keybindings :: KeyBindings
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , showErrorDetail :: Boolean
+  , selectedHole :: Maybe String
+  , metadataHintInfo :: MetadataHintInfo
+  , analysisState :: AnalysisState
+  , editorErrors :: Array IMarkerData
+  , editorWarnings :: Array IMarkerData
+  , hasHoles :: Boolean
+  , editorReady :: Boolean
+  }
 
 _keybindings :: Lens' State KeyBindings
 _keybindings = prop (Proxy :: _ "keybindings")

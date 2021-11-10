@@ -20,7 +20,8 @@ import Component.Contacts.Types (Wallet, WalletInfo)
 
 -- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
-  Monad m <= ManageWallet m where
+  Monad m <=
+  ManageWallet m where
   createWallet :: m (AjaxResponse WalletInfo)
   submitWalletTransaction :: Wallet -> Tx -> m (AjaxResponse Unit)
   getWalletInfo :: Wallet -> m (AjaxResponse WalletInfo)
@@ -29,12 +30,19 @@ class
 
 instance monadWalletAppM :: ManageWallet AppM where
   createWallet = map (map toFront) $ runExceptT $ API.createWallet
-  submitWalletTransaction wallet tx = runExceptT $ API.submitWalletTransaction (toBack wallet) tx
-  getWalletInfo wallet = map (map toFront) $ runExceptT $ API.getWalletInfo (toBack wallet)
-  getWalletTotalFunds wallet = map (map toFront) $ runExceptT $ API.getWalletTotalFunds (toBack wallet)
-  signTransaction wallet tx = runExceptT $ API.signTransaction (toBack wallet) tx
+  submitWalletTransaction wallet tx = runExceptT $ API.submitWalletTransaction
+    (toBack wallet)
+    tx
+  getWalletInfo wallet = map (map toFront) $ runExceptT $ API.getWalletInfo
+    (toBack wallet)
+  getWalletTotalFunds wallet = map (map toFront) $ runExceptT $
+    API.getWalletTotalFunds (toBack wallet)
+  signTransaction wallet tx = runExceptT $ API.signTransaction (toBack wallet)
+    tx
 
-instance monadWalletHalogenM :: ManageWallet m => ManageWallet (HalogenM state action slots msg m) where
+instance monadWalletHalogenM ::
+  ManageWallet m =>
+  ManageWallet (HalogenM state action slots msg m) where
   createWallet = lift createWallet
   submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet
   getWalletInfo = lift <<< getWalletInfo

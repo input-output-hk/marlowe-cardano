@@ -12,12 +12,22 @@ data Action
   | Cancel
 
 instance isEventAction :: IsEvent Action where
-  toEvent (CreateProject lang) = Just { category: Just "NewProject", action: "CreateProject", label: Just (show lang), value: Nothing }
-  toEvent Cancel = Just { category: Just "NewProject", action: "Cancel", label: Nothing, value: Nothing }
-
-type State
-  = { error :: Maybe String
+  toEvent (CreateProject lang) = Just
+    { category: Just "NewProject"
+    , action: "CreateProject"
+    , label: Just (show lang)
+    , value: Nothing
     }
+  toEvent Cancel = Just
+    { category: Just "NewProject"
+    , action: "Cancel"
+    , label: Nothing
+    , value: Nothing
+    }
+
+type State =
+  { error :: Maybe String
+  }
 
 emptyState :: State
 emptyState = { error: Nothing }

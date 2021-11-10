@@ -17,10 +17,10 @@ data CompilationError
   = RawError String
   | JSONParsingError String
   | CompilationError
-    { row :: Int
-    , column :: Int
-    , text :: Array String
-    }
+      { row :: Int
+      , column :: Int
+      , text :: Array String
+      }
 
 newtype Warning
   = Warning String
@@ -36,7 +36,10 @@ derive instance newtypeInterpreterResult :: Newtype (InterpreterResult a) _
 _result :: forall a. Lens' (InterpreterResult a) a
 _result = _Newtype <<< prop (Proxy :: _ "result")
 
-foreign import eval_ :: forall a b. EffectFn3 (String -> Either a b) (String -> Either a b) ITextModel (Promise (Either a b))
+foreign import eval_
+  :: forall a b
+   . EffectFn3 (String -> Either a b) (String -> Either a b) ITextModel
+       (Promise (Either a b))
 
 eval :: ITextModel -> Aff (Either CompilationError (InterpreterResult Contract))
 eval model = do
@@ -46,5 +49,6 @@ eval model = do
         Left err -> Left (RawError err)
         Right result -> case parseDecodeJson result of
           Left err -> Left (JSONParsingError (show err))
-          Right contract -> Right (InterpreterResult { warnings: [], result: contract })
+          Right contract -> Right
+            (InterpreterResult { warnings: [], result: contract })
     )

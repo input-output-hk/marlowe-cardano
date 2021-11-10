@@ -15,15 +15,18 @@ all :: TestSuite
 all =
   suite "Marlowe.Parser" do
     let
-      genOpts = GenerationOptions { withHoles: false, withExtendedConstructs: true }
+      genOpts = GenerationOptions
+        { withHoles: false, withExtendedConstructs: true }
     test "Contract Parser" $ contractQuickCheck genOpts contractParser
-    test "Pretty Contract Parser" $ contractQuickCheck genOpts prettyContractParser
+    test "Pretty Contract Parser" $ contractQuickCheck genOpts
+      prettyContractParser
 
 contractParser :: GenWithHoles Result
 contractParser = do
   v <- genContract
   let
-    contractWithNoParens = fromMaybe (show v) (stripPrefix (Pattern "(") (show v) >>= stripSuffix (Pattern ")"))
+    contractWithNoParens = fromMaybe (show v)
+      (stripPrefix (Pattern "(") (show v) >>= stripSuffix (Pattern ")"))
 
     result = parseContract contractWithNoParens
 
@@ -36,7 +39,8 @@ prettyContractParser = do
   let
     prettyContract = trim <<< show <<< genericPretty $ v
 
-    contractWithNoParens = fromMaybe prettyContract (stripPrefix (Pattern "(") prettyContract >>= stripSuffix (Pattern ")"))
+    contractWithNoParens = fromMaybe prettyContract
+      (stripPrefix (Pattern "(") prettyContract >>= stripSuffix (Pattern ")"))
 
     result = parseContract contractWithNoParens
 

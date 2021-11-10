@@ -18,14 +18,14 @@ import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)
 
 --
-type State
-  = { showRightPanel :: Boolean
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , marloweState :: NonEmptyList MarloweState
-    , helpContext :: HelpContext
-    -- List of decoration ids used by the monaco editor to track the running contract
-    , decorationIds :: Array String
-    }
+type State =
+  { showRightPanel :: Boolean
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , marloweState :: NonEmptyList MarloweState
+  , helpContext :: HelpContext
+  -- List of decoration ids used by the monaco editor to track the running contract
+  , decorationIds :: Array String
+  }
 
 data Action
   = HandleEditorMessage Monaco.Message
@@ -55,7 +55,8 @@ defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
   toEvent (SetInitialSlot _) = Just $ defaultEvent "SetInitialSlot"
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent (MoveSlot _) = Just $ defaultEvent "MoveSlot"
   toEvent (SetSlot _) = Just $ defaultEvent "SetSlot"
@@ -64,7 +65,8 @@ instance isEventAction :: IsEvent Action where
   toEvent ResetSimulator = Just $ defaultEvent "ResetSimulator"
   toEvent Undo = Just $ defaultEvent "Undo"
   toEvent (LoadContract _) = Just $ defaultEvent "LoadContract"
-  toEvent (ChangeHelpContext help) = Just $ (defaultEvent "ChangeHelpContext") { label = Just $ show help }
+  toEvent (ChangeHelpContext help) = Just $ (defaultEvent "ChangeHelpContext")
+    { label = Just $ show help }
   toEvent (ShowRightPanel _) = Just $ defaultEvent "ShowRightPanel"
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent EditSource = Just $ defaultEvent "EditSource"

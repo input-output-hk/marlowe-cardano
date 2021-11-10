@@ -54,7 +54,6 @@ _valueContent = _Newtype <<< prop (Proxy :: _ "valueContent")
 
 typeToLens :: IntegerTemplateType -> Lens' TemplateContent (Map String BigInt)
 typeToLens SlotContent = _slotContent
-
 typeToLens ValueContent = _valueContent
 
 derive instance newTypeTemplateContent :: Newtype TemplateContent _
@@ -63,7 +62,8 @@ instance semigroupTemplateContent :: Semigroup TemplateContent where
   append (TemplateContent a) (TemplateContent b) =
     TemplateContent
       { slotContent: Map.unionWith (const identity) a.slotContent b.slotContent
-      , valueContent: Map.unionWith (const identity) a.valueContent b.valueContent
+      , valueContent: Map.unionWith (const identity) a.valueContent
+          b.valueContent
       }
 
 instance monoidTemplateContent :: Monoid TemplateContent where
@@ -73,20 +73,27 @@ initializeWith :: forall a b. Ord a => (a -> b) -> Set a -> Map a b
 initializeWith f = foldl (\m x -> Map.insert x (f x) m) Map.empty
 
 initializeTemplateContent :: Placeholders -> TemplateContent
-initializeTemplateContent ( Placeholders
-    { slotPlaceholderIds, valuePlaceholderIds }
-) =
+initializeTemplateContent
+  ( Placeholders
+      { slotPlaceholderIds, valuePlaceholderIds }
+  ) =
   TemplateContent
     { slotContent: initializeWith (const one) slotPlaceholderIds
     , valueContent: initializeWith (const zero) valuePlaceholderIds
     }
 
 updateTemplateContent :: Placeholders -> TemplateContent -> TemplateContent
-updateTemplateContent ( Placeholders { slotPlaceholderIds, valuePlaceholderIds }
-) (TemplateContent { slotContent, valueContent }) =
+updateTemplateContent
+  ( Placeholders { slotPlaceholderIds, valuePlaceholderIds }
+  )
+  (TemplateContent { slotContent, valueContent }) =
   TemplateContent
-    { slotContent: initializeWith (\x -> fromMaybe one $ Map.lookup x slotContent) slotPlaceholderIds
-    , valueContent: initializeWith (\x -> fromMaybe zero $ Map.lookup x valueContent) valuePlaceholderIds
+    { slotContent: initializeWith
+        (\x -> fromMaybe one $ Map.lookup x slotContent)
+        slotPlaceholderIds
+    , valueContent: initializeWith
+        (\x -> fromMaybe zero $ Map.lookup x valueContent)
+        valuePlaceholderIds
     }
 
 class Template a b where
@@ -95,11 +102,16 @@ class Template a b where
 class Fillable a b where
   fillTemplate :: b -> a -> a
 
-orderContentUsingMetadata :: forall a. Map String a -> OSet String -> OMap String a
-orderContentUsingMetadata content orderedMetadataSet = orderedTaggedContent <> OMap.fromFoldableWithIndex untaggedContent
+orderContentUsingMetadata
+  :: forall a. Map String a -> OSet String -> OMap String a
+orderContentUsingMetadata content orderedMetadataSet = orderedTaggedContent <>
+  OMap.fromFoldableWithIndex untaggedContent
   where
-  orderedTaggedContent = foldMap (\x -> maybe mempty (\y -> OMap.singleton x y) (Map.lookup x content)) orderedMetadataSet
+  orderedTaggedContent = foldMap
+    (\x -> maybe mempty (\y -> OMap.singleton x y) (Map.lookup x content))
+    orderedMetadataSet
 
   metadataSet = Set.fromFoldable orderedMetadataSet -- For efficiency
 
-  untaggedContent = Map.filterKeys (\x -> not $ Set.member x metadataSet) content
+  untaggedContent = Map.filterKeys (\x -> not $ Set.member x metadataSet)
+    content

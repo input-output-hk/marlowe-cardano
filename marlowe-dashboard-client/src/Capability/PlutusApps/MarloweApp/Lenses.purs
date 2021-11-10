@@ -1,7 +1,11 @@
 module Capability.PlutusApps.MarloweApp.Lenses where
 
 import Prologue
-import Capability.PlutusApps.MarloweApp.Types (EndpointMutex, LastResult, MarloweAppEndpointMutexEnv)
+import Capability.PlutusApps.MarloweApp.Types
+  ( EndpointMutex
+  , LastResult
+  , MarloweAppEndpointMutexEnv
+  )
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Type.Proxy (Proxy(..))
@@ -9,7 +13,8 @@ import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Effect.AVar (AVar)
 
-_marloweAppEndpointMutex :: forall a. Lens' (MarloweAppEndpointMutexEnv a) EndpointMutex
+_marloweAppEndpointMutex
+  :: forall a. Lens' (MarloweAppEndpointMutexEnv a) EndpointMutex
 _marloweAppEndpointMutex = prop (Proxy :: _ "marloweAppEndpointMutex")
 
 _redeem :: Lens' EndpointMutex (AVar Unit)

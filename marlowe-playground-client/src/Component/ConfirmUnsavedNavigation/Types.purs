@@ -9,6 +9,8 @@ data Action
   | Cancel
 
 instance isEventAction :: IsEvent Action where
-  toEvent SaveProject = Just $ defaultEvent "ConfirmUnsavedNavigationSaveProject"
-  toEvent DontSaveProject = Just $ defaultEvent "ConfirmUnsavedNavigationDontSaveProject"
+  toEvent SaveProject = Just $ defaultEvent
+    "ConfirmUnsavedNavigationSaveProject"
+  toEvent DontSaveProject = Just $ defaultEvent
+    "ConfirmUnsavedNavigationDontSaveProject"
   toEvent Cancel = Just $ defaultEvent "ConfirmUnsavedNavigationCancel"

@@ -19,45 +19,47 @@ import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
 import Pretty (showBigIntAsCurrency)
 
-type Input
-  = { classList :: Array String
-    , value :: BigInt
-    , prefix :: String
-    , numDecimals :: Int
-    }
+type Input =
+  { classList :: Array String
+  , value :: BigInt
+  , prefix :: String
+  , numDecimals :: Int
+  }
 
 currencyInput :: forall a m. H.Component a Input BigInt m
 currencyInput =
-  Hooks.component \{ outputToken } input@{ classList, prefix, numDecimals } -> Hooks.do
-    Tuple value valueId <- Hooks.useState $ showBigIntAsCurrency input.value $ max 0 numDecimals
-    Hooks.captures { value } Hooks.useTickEffect do
-      let
-        parsed = parseInput numDecimals value
-      Hooks.put valueId
-        $ flip showBigIntAsCurrency (max 0 numDecimals)
-        $ fromMaybe zero parsed
-      traverse_ (Hooks.raise outputToken) $ filter (_ /= input.value) parsed
-      pure Nothing
-    Hooks.pure do
-      HH.div
-        [ classNames
-            ( [ "bg-gray-light"
-              , "flex"
-              , "items-center"
-              , "border-solid"
-              , "border"
-              , "rounded-sm"
-              , "overflow-hidden"
-              , "box-border"
-              , "focus-within:ring-1"
-              , "focus-within:ring-black"
-              ]
-                <> classList
-            )
-        ]
-        $ compact
-            [ guard (trim prefix /= "")
-                $> HH.div
+  Hooks.component \{ outputToken } input@{ classList, prefix, numDecimals } ->
+    Hooks.do
+      Tuple value valueId <- Hooks.useState $ showBigIntAsCurrency input.value $
+        max 0 numDecimals
+      Hooks.captures { value } Hooks.useTickEffect do
+        let
+          parsed = parseInput numDecimals value
+        Hooks.put valueId
+          $ flip showBigIntAsCurrency (max 0 numDecimals)
+          $ fromMaybe zero parsed
+        traverse_ (Hooks.raise outputToken) $ filter (_ /= input.value) parsed
+        pure Nothing
+      Hooks.pure do
+        HH.div
+          [ classNames
+              ( [ "bg-gray-light"
+                , "flex"
+                , "items-center"
+                , "border-solid"
+                , "border"
+                , "rounded-sm"
+                , "overflow-hidden"
+                , "box-border"
+                , "focus-within:ring-1"
+                , "focus-within:ring-black"
+                ]
+                  <> classList
+              )
+          ]
+          $ compact
+              [ guard (trim prefix /= "")
+                  $> HH.div
                     [ classNames
                         [ "flex-none"
                         , "px-2"
@@ -67,21 +69,21 @@ currencyInput =
                         ]
                     ]
                     [ HH.text prefix ]
-            , Just
-                $ HH.input
-                    [ classNames
-                        [ "flex-1"
-                        , "px-1"
-                        , "box-border"
-                        , "self-stretch"
-                        , "border-0"
-                        , "outline-none"
-                        ]
-                    , HE.onValueChange $ Hooks.put valueId
-                    , HP.type_ HP.InputNumber
-                    , HP.value value
-                    ]
-            ]
+              , Just
+                  $ HH.input
+                      [ classNames
+                          [ "flex-1"
+                          , "px-1"
+                          , "box-border"
+                          , "self-stretch"
+                          , "border-0"
+                          , "outline-none"
+                          ]
+                      , HE.onValueChange $ Hooks.put valueId
+                      , HP.type_ HP.InputNumber
+                      , HP.value value
+                      ]
+              ]
   where
   parseInput numDecimals =
     BigInt.fromString

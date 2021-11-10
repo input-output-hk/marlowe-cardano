@@ -4,7 +4,16 @@ import Prologue
 import Control.Alt ((<|>))
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, getField, getFieldOptional)
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , Json
+  , JsonDecodeError(..)
+  , decodeJson
+  , encodeJson
+  , getField
+  , getFieldOptional
+  )
 import Data.Argonaut.Core (fromArray)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -34,18 +43,26 @@ import Data.String (joinWith, toLower)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Foreign.Object (Object)
-import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, pretty, text)
+import Text.Pretty
+  ( class Args
+  , class Pretty
+  , genericHasArgs
+  , genericHasNestedArgs
+  , genericPretty
+  , pretty
+  , text
+  )
 import Type.Proxy (Proxy(..))
 
-caseConstantFrom ::
-  forall a b.
-  Ord a =>
-  Show a =>
-  DecodeJson a =>
-  Map a b ->
-  (Json -> Either JsonDecodeError b) ->
-  Json ->
-  Either JsonDecodeError b
+caseConstantFrom
+  :: forall a b
+   . Ord a
+  => Show a
+  => DecodeJson a
+  => Map a b
+  -> (Json -> Either JsonDecodeError b)
+  -> Json
+  -> Either JsonDecodeError b
 caseConstantFrom values onFail json = case decodeJson json of
   Left _ -> onFail json
   Right value -> note' mkError $ Map.lookup value values
@@ -54,44 +71,47 @@ caseConstantFrom values onFail json = case decodeJson json of
     TypeMismatch
       $ joinWith " | " (map show $ Array.fromFoldable $ Map.keys values)
 
-object ::
-  forall a.
-  String ->
-  (ReaderT (Object Json) (Either JsonDecodeError) (Maybe a)) ->
-  Json ->
-  Either JsonDecodeError a
+object
+  :: forall a
+   . String
+  -> (ReaderT (Object Json) (Either JsonDecodeError) (Maybe a))
+  -> Json
+  -> Either JsonDecodeError a
 object name decoder json =
   lmap (Named name) do
     obj <- decodeJObject json
     result <- runReaderT decoder obj
     maybe (Left $ UnexpectedValue json) Right result
 
-getProp ::
-  forall a.
-  DecodeJson a =>
-  String ->
-  ReaderT (Object Json) (Either JsonDecodeError) (Maybe a)
+getProp
+  :: forall a
+   . DecodeJson a
+  => String
+  -> ReaderT (Object Json) (Either JsonDecodeError) (Maybe a)
 getProp key = ReaderT $ flip getFieldOptional key
 
-requireProp ::
-  forall a.
-  DecodeJson a =>
-  String ->
-  ReaderT (Object Json) (Either JsonDecodeError) a
+requireProp
+  :: forall a
+   . DecodeJson a
+  => String
+  -> ReaderT (Object Json) (Either JsonDecodeError) a
 requireProp key = ReaderT $ flip getField key
 
-array ::
-  forall a.
-  String ->
-  (RWST (Array Json) Unit Int (Either JsonDecodeError) a) ->
-  Json ->
-  Either JsonDecodeError a
+array
+  :: forall a
+   . String
+  -> (RWST (Array Json) Unit Int (Either JsonDecodeError) a)
+  -> Json
+  -> Either JsonDecodeError a
 array name decoder json =
   lmap (Named name) do
     arr <- decodeJArray json
     fst <$> evalRWST decoder arr 0
 
-next :: forall a. DecodeJson a => RWST (Array Json) Unit Int (Either JsonDecodeError) a
+next
+  :: forall a
+   . DecodeJson a
+  => RWST (Array Json) Unit Int (Either JsonDecodeError) a
 next =
   RWST \arr ix ->
     RWSResult
@@ -126,7 +146,7 @@ instance decodeJsonParty :: DecodeJson Party where
       roleToken <- getProp "role_token"
       pure
         $ (PK <$> pkHash)
-        <|> (Role <$> roleToken)
+            <|> (Role <$> roleToken)
 
 instance showParty :: Show Party where
   show = genericShow
@@ -161,23 +181,31 @@ instance encodeJsonToken :: EncodeJson Token where
       }
 
 type TokenJson
-  = { currency :: { unCurrencySymbol :: String }, token :: { unTokenName :: String } }
+  =
+  { currency :: { unCurrencySymbol :: String }
+  , token :: { unTokenName :: String }
+  }
 
 instance decodeJsonToken :: DecodeJson Token where
   decodeJson =
     object "Token"
       $ Just
-      <$> (Token <$> requireProp "currency_symbol" <*> requireProp "token_name")
+          <$>
+            ( Token <$> requireProp "currency_symbol" <*> requireProp
+                "token_name"
+            )
 
 derive instance genericToken :: Generic Token _
 
 instance eqToken :: Eq Token where
-  eq (Token cur1 tok1) (Token cur2 tok2) = eq (toLower cur1) (toLower cur2) && eq tok1 tok2
+  eq (Token cur1 tok1) (Token cur2 tok2) = eq (toLower cur1) (toLower cur2) &&
+    eq tok1 tok2
 
 instance ordToken :: Ord Token where
-  compare (Token cur1 tok1) (Token cur2 tok2) = case compare (toLower cur1) (toLower cur2) of
-    EQ -> compare tok1 tok2
-    other -> other
+  compare (Token cur1 tok1) (Token cur2 tok2) =
+    case compare (toLower cur1) (toLower cur2) of
+      EQ -> compare tok1 tok2
+      other -> other
 
 instance showToken :: Show Token where
   show (Token cur tok) = genericShow (Token (toLower cur) tok)
@@ -302,10 +330,14 @@ instance decodeJsonChoiceId :: DecodeJson ChoiceId where
   decodeJson =
     object "ChoiceId"
       $ Just
-      <$> (ChoiceId <$> requireProp "choice_name" <*> requireProp "choice_owner")
+          <$>
+            ( ChoiceId <$> requireProp "choice_name" <*> requireProp
+                "choice_owner"
+            )
 
 instance showChoiceId :: Show ChoiceId where
-  show (ChoiceId name owner) = "(ChoiceId " <> show name <> " " <> show owner <> ")"
+  show (ChoiceId name owner) = "(ChoiceId " <> show name <> " " <> show owner <>
+    ")"
 
 instance prettyChoiceId :: Pretty ChoiceId where
   pretty = genericPretty
@@ -466,14 +498,14 @@ instance decodeJsonValue :: DecodeJson Value where
         else_ <- getProp "else"
         pure
           $ (AvailableMoney <$> inAccount <*> amountOfToken)
-          <|> (NegValue <$> negate)
-          <|> (AddValue <$> add <*> and)
-          <|> (SubValue <$> value <*> minus)
-          <|> (DivValue <$> divide <*> by)
-          <|> (MulValue <$> multiply <*> times)
-          <|> (ChoiceValue <$> valueOfChoices)
-          <|> (UseValue <$> useValue)
-          <|> (Cond <$> if_ <*> then_ <*> else_)
+              <|> (NegValue <$> negate)
+              <|> (AddValue <$> add <*> and)
+              <|> (SubValue <$> value <*> minus)
+              <|> (DivValue <$> divide <*> by)
+              <|> (MulValue <$> multiply <*> times)
+              <|> (ChoiceValue <$> valueOfChoices)
+              <|> (UseValue <$> useValue)
+              <|> (Cond <$> if_ <*> then_ <*> else_)
 
 instance showValue :: Show Value where
   show v = genericShow v
@@ -576,14 +608,14 @@ instance decodeJsonObservation :: DecodeJson Observation where
         equalTo <- getProp "equal_to"
         pure
           $ (AndObs <$> both <*> and)
-          <|> (OrObs <$> either <*> or)
-          <|> (NotObs <$> not)
-          <|> (ChoseSomething <$> choseSomethingFor)
-          <|> (ValueGE <$> value <*> gte)
-          <|> (ValueGT <$> value <*> gt)
-          <|> (ValueLT <$> value <*> lt)
-          <|> (ValueLE <$> value <*> lte)
-          <|> (ValueEQ <$> value <*> equalTo)
+              <|> (OrObs <$> either <*> or)
+              <|> (NotObs <$> not)
+              <|> (ChoseSomething <$> choseSomethingFor)
+              <|> (ValueGE <$> value <*> gte)
+              <|> (ValueGT <$> value <*> gt)
+              <|> (ValueLT <$> value <*> lt)
+              <|> (ValueLE <$> value <*> lte)
+              <|> (ValueEQ <$> value <*> equalTo)
 
 instance showObservation :: Show Observation where
   show o = genericShow o
@@ -648,10 +680,12 @@ instance decodeJsonBound :: DecodeJson Bound where
   decodeJson =
     object "Bound"
       $ Just
-      <$> (Bound <$> requireProp "from" <*> requireProp "to")
+          <$> (Bound <$> requireProp "from" <*> requireProp "to")
 
 instance showBound :: Show Bound where
-  show (Bound from to) = "(Bound " <> BigInt.toString from <> " " <> BigInt.toString to <> ")"
+  show (Bound from to) = "(Bound " <> BigInt.toString from <> " "
+    <> BigInt.toString to
+    <> ")"
 
 instance prettyBound :: Pretty Bound where
   pretty v = genericPretty v
@@ -671,7 +705,8 @@ getEncompassBound bounds =
   let
     minBound = foldl min (fromInt top) $ map (\(Bound lower _) -> lower) bounds
 
-    maxBound = foldl max (fromInt bottom) $ map (\(Bound _ higher) -> higher) bounds
+    maxBound = foldl max (fromInt bottom) $ map (\(Bound _ higher) -> higher)
+      bounds
   in
     Bound minBound maxBound
 
@@ -722,8 +757,8 @@ instance decodeJsonAction :: DecodeJson Action where
       notifyIf <- getProp "notify_if"
       pure
         $ (Deposit <$> intoAccount <*> party <*> ofToken <*> deposits)
-        <|> (Choice <$> forChoice <*> chooseBetween)
-        <|> (Notify <$> notifyIf)
+            <|> (Choice <$> forChoice <*> chooseBetween)
+            <|> (Notify <$> notifyIf)
 
 instance showAction :: Show Action where
   show (Choice cid bounds) = "(Choice " <> show cid <> " " <> show bounds <> ")"
@@ -787,7 +822,7 @@ instance decodeJsonCase :: DecodeJson Case where
   decodeJson =
     object "Case"
       $ Just
-      <$> (Case <$> requireProp "case" <*> requireProp "then")
+          <$> (Case <$> requireProp "case" <*> requireProp "then")
 
 instance showCase :: Show Case where
   show (Case action contract) = "Case " <> show action <> " " <> show contract
@@ -867,10 +902,10 @@ instance decodeJsonContract :: DecodeJson Contract where
         assert <- getProp "assert"
         pure
           $ (Pay <$> fromAccount <*> to <*> token <*> pay <*> _then)
-          <|> (If <$> _if <*> _then <*> _else)
-          <|> (When <$> when <*> timeout <*> timeoutContinuation)
-          <|> (Let <$> _let <*> be <*> _then)
-          <|> (Assert <$> assert <*> _then)
+              <|> (If <$> _if <*> _then <*> _else)
+              <|> (When <$> when <*> timeout <*> timeoutContinuation)
+              <|> (Let <$> _let <*> be <*> _then)
+              <|> (Assert <$> assert <*> _then)
 
 instance showContract :: Show Contract where
   show v = genericShow v
@@ -944,7 +979,8 @@ _slotInterval :: Lens' Environment SlotInterval
 _slotInterval = _Newtype <<< prop (Proxy :: _ "slotInterval")
 
 makeEnvironment :: BigInt -> BigInt -> Environment
-makeEnvironment l h = Environment { slotInterval: SlotInterval (Slot h) (Slot l) }
+makeEnvironment l h = Environment
+  { slotInterval: SlotInterval (Slot h) (Slot l) }
 
 data Input
   = IDeposit AccountId Party Token BigInt
@@ -990,13 +1026,14 @@ instance decodeJsonInput :: DecodeJson Input where
         forChoiceId <- getProp "for_choice_id"
         inputThatChoosesNum <- getProp "input_that_chooses_num"
         pure
-          $ ( IDeposit
+          $
+            ( IDeposit
                 <$> intoAccount
                 <*> inputFromParty
                 <*> ofToken
                 <*> thatDeposits
             )
-          <|> (IChoice <$> forChoiceId <*> inputThatChoosesNum)
+              <|> (IChoice <$> forChoiceId <*> inputThatChoosesNum)
 
 -- Processing of slot interval
 data IntervalError
@@ -1011,12 +1048,16 @@ derive instance ordIntervalError :: Ord IntervalError
 
 instance showIntervalError :: Show IntervalError where
   show (InvalidInterval interval) = "Invalid interval: " <> show interval
-  show (IntervalInPastError slot interval) = "Interval is in the past, the current slot is " <> show slot <> " but the interval is " <> show interval
+  show (IntervalInPastError slot interval) =
+    "Interval is in the past, the current slot is " <> show slot
+      <> " but the interval is "
+      <> show interval
 
 instance genericEncodeIntervalError :: EncodeJson IntervalError where
   encodeJson = case _ of
     InvalidInterval a -> E.encodeTagged "InvalidInterval" a E.value
-    IntervalInPastError a b -> E.encodeTagged "IntervalInPastError" (a /\ b) E.value
+    IntervalInPastError a b -> E.encodeTagged "IntervalInPastError" (a /\ b)
+      E.value
 
 instance genericDecodeJsonIntervalError :: DecodeJson IntervalError where
   decodeJson =
@@ -1024,7 +1065,8 @@ instance genericDecodeJsonIntervalError :: DecodeJson IntervalError where
       $ D.sumType "IntervalError"
       $ Map.fromFoldable
           [ "InvalidInterval" /\ D.content (InvalidInterval <$> D.value)
-          , "IntervalInPastError" /\ D.content (uncurry IntervalInPastError <$> D.value)
+          , "IntervalInPastError" /\ D.content
+              (uncurry IntervalInPastError <$> D.value)
           ]
 
 data IntervalResult
@@ -1053,10 +1095,12 @@ instance showPayment :: Show Payment where
   show = genericShow
 
 instance encodePayment :: EncodeJson Payment where
-  encodeJson (Payment a p m) = fromArray [ encodeJson a, encodeJson p, encodeJson m ]
+  encodeJson (Payment a p m) = fromArray
+    [ encodeJson a, encodeJson p, encodeJson m ]
 
 instance decodePayment :: DecodeJson Payment where
-  decodeJson = D.decode $ D.tuple $ Payment </$\> D.value </*\> D.value </*\> D.value
+  decodeJson = D.decode $ D.tuple $ Payment </$\> D.value </*\> D.value </*\>
+    D.value
 
 data ReduceEffect
   = ReduceWithPayment Payment
@@ -1137,7 +1181,8 @@ instance showApplyResult :: Show ApplyResult where
   show = genericShow
 
 data ApplyAllResult
-  = ApplyAllSuccess Boolean (List TransactionWarning) (List Payment) State Contract
+  = ApplyAllSuccess Boolean (List TransactionWarning) (List Payment) State
+      Contract
   | ApplyAllNoMatchError
   | ApplyAllAmbiguousSlotIntervalError
 
@@ -1217,30 +1262,34 @@ instance decodeTransactionWarning :: DecodeJson TransactionWarning where
         hadValue <- getProp "had_value"
         isNowAssigned <- getProp "is_now_assigned"
         pure
-          $ ( TransactionNonPositiveDeposit
+          $
+            ( TransactionNonPositiveDeposit
                 <$> party
                 <*> inAccount
                 <*> ofToken
                 <*> askedToDeposit
             )
-          <|> ( TransactionPartialPay
-                <$> account
-                <*> toPayee
-                <*> ofToken
-                <*> butOnlyPaid
-                <*> askedToPay
-            )
-          <|> ( TransactionNonPositivePay
-                <$> account
-                <*> toPayee
-                <*> ofToken
-                <*> askedToPay
-            )
-          <|> ( TransactionShadowing
-                <$> valueId
-                <*> hadValue
-                <*> isNowAssigned
-            )
+              <|>
+                ( TransactionPartialPay
+                    <$> account
+                    <*> toPayee
+                    <*> ofToken
+                    <*> butOnlyPaid
+                    <*> askedToPay
+                )
+              <|>
+                ( TransactionNonPositivePay
+                    <$> account
+                    <*> toPayee
+                    <*> ofToken
+                    <*> askedToPay
+                )
+              <|>
+                ( TransactionShadowing
+                    <$> valueId
+                    <*> hadValue
+                    <*> isNowAssigned
+                )
 
 -- | Transaction error
 data TransactionError
@@ -1257,13 +1306,17 @@ derive instance ordTransactionError :: Ord TransactionError
 
 instance showTransactionError :: Show TransactionError where
   show TEAmbiguousSlotIntervalError = "Abiguous slot interval"
-  show TEApplyNoMatchError = "At least one of the inputs in the transaction is not allowed by the contract"
+  show TEApplyNoMatchError =
+    "At least one of the inputs in the transaction is not allowed by the contract"
   show (TEIntervalError err) = show err
   show TEUselessTransaction = "Useless Transaction"
 
 instance genericEncodeTransactionError :: EncodeJson TransactionError where
   encodeJson = case _ of
-    TEAmbiguousSlotIntervalError -> E.encodeTagged "TEAmbiguousSlotIntervalError" unit E.null
+    TEAmbiguousSlotIntervalError -> E.encodeTagged
+      "TEAmbiguousSlotIntervalError"
+      unit
+      E.null
     TEApplyNoMatchError -> E.encodeTagged "TEApplyNoMatchError" unit E.null
     TEIntervalError e -> E.encodeTagged "TEIntervalError" e E.value
     TEUselessTransaction -> E.encodeTagged "TEUselessTransaction" unit E.null
@@ -1273,7 +1326,8 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
     D.decode
       $ D.sumType "TransactionError"
       $ Map.fromFoldable
-          [ "TEAmbiguousSlotIntervalError" /\ D.content (TEAmbiguousSlotIntervalError <$ D.null)
+          [ "TEAmbiguousSlotIntervalError" /\ D.content
+              (TEAmbiguousSlotIntervalError <$ D.null)
           , "TEApplyNoMatchError" /\ D.content (TEApplyNoMatchError <$ D.null)
           , "TEIntervalError" /\ D.content (TEIntervalError <$> D.value)
           , "TEUselessTransaction" /\ D.content (TEUselessTransaction <$ D.null)
@@ -1297,11 +1351,12 @@ instance showTransactionInput :: Show TransactionInput where
   show = genericShow
 
 instance encodeTransactionInput :: EncodeJson TransactionInput where
-  encodeJson ( TransactionInput
-      { interval: (SlotInterval (Slot fromSlot) (Slot toSlot))
-    , inputs: txInps
-    }
-  ) =
+  encodeJson
+    ( TransactionInput
+        { interval: (SlotInterval (Slot fromSlot) (Slot toSlot))
+        , inputs: txInps
+        }
+    ) =
     encodeJson
       { tx_interval:
           { from: fromSlot
@@ -1319,19 +1374,20 @@ instance decodeTransactionInput :: DecodeJson TransactionInput where
         ReaderT \_ ->
           flip (object "nested SlotInterval") intervalObject
             $ Just
-            <$> ( SlotInterval
-                  <$> (Slot <$> requireProp "from")
-                  <*> (Slot <$> requireProp "to")
-              )
+                <$>
+                  ( SlotInterval
+                      <$> (Slot <$> requireProp "from")
+                      <*> (Slot <$> requireProp "to")
+                  )
       pure $ Just $ TransactionInput { interval, inputs: inputs }
 
 data TransactionOutput
   = TransactionOutput
-    { txOutWarnings :: List TransactionWarning
-    , txOutPayments :: List Payment
-    , txOutState :: State
-    , txOutContract :: Contract
-    }
+      { txOutWarnings :: List TransactionWarning
+      , txOutPayments :: List Payment
+      , txOutState :: State
+      , txOutContract :: Contract
+      }
   | Error TransactionError
 
 derive instance genericTransactionOutput :: Generic TransactionOutput _
@@ -1382,10 +1438,12 @@ derive newtype instance encodeJsonMarloweParams :: EncodeJson MarloweParams
 derive newtype instance decodeMarloweParams :: DecodeJson MarloweParams
 
 _rolePayoutValidatorHash :: Lens' MarloweParams ValidatorHash
-_rolePayoutValidatorHash = _Newtype <<< prop (Proxy :: _ "rolePayoutValidatorHash")
+_rolePayoutValidatorHash = _Newtype <<< prop
+  (Proxy :: _ "rolePayoutValidatorHash")
 
 _rolesCurrency :: Lens' MarloweParams CurrencySymbol
-_rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop (Proxy :: _ "unCurrencySymbol")
+_rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop
+  (Proxy :: _ "unCurrencySymbol")
 
 type ValidatorHash
   = String
@@ -1413,20 +1471,21 @@ boundTo (Bound _ to) = to
 fixInterval :: SlotInterval -> State -> IntervalResult
 fixInterval interval@(SlotInterval from to) (State state)
   | (not <<< validInterval) interval = IntervalError (InvalidInterval interval)
-  | state.minSlot `above` interval = IntervalError (IntervalInPastError state.minSlot interval)
+  | state.minSlot `above` interval = IntervalError
+      (IntervalInPastError state.minSlot interval)
   | otherwise =
-    let
-      -- newLow is both new "low" and new "minSlot" (the lower bound for slotNum)
-      newLow = max from state.minSlot
+      let
+        -- newLow is both new "low" and new "minSlot" (the lower bound for slotNum)
+        newLow = max from state.minSlot
 
-      -- We know high is greater or equal than newLow (prove)
-      currentInterval = SlotInterval newLow to
+        -- We know high is greater or equal than newLow (prove)
+        currentInterval = SlotInterval newLow to
 
-      env = Environment { slotInterval: currentInterval }
+        env = Environment { slotInterval: currentInterval }
 
-      newState = State (state { minSlot = newLow })
-    in
-      IntervalTrimmed env newState
+        newState = State (state { minSlot = newLow })
+      in
+        IntervalTrimmed env newState
 
 -- EVALUATION
 -- | Evaluate a @Value@ to Integer
@@ -1436,7 +1495,8 @@ evalValue env state value =
     eval = evalValue env state
   in
     case value of
-      AvailableMoney accId token -> moneyInAccount accId token (unwrap state).accounts
+      AvailableMoney accId token -> moneyInAccount accId token
+        (unwrap state).accounts
       Constant integer -> integer
       NegValue val -> negate (eval val)
       AddValue lhs rhs -> eval lhs + eval rhs
@@ -1473,11 +1533,14 @@ evalValue env state value =
                       qIsEven = q `mod` fromInt 2 == fromInt 0
                     in
                       if qIsEven then q else q + signum n * signum d
-      ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId (unwrap state).choices
+      ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
+        (unwrap state).choices
       SlotIntervalStart -> view (_slotInterval <<< to ivFrom <<< to unwrap) env
       SlotIntervalEnd -> view (_slotInterval <<< to ivTo <<< to unwrap) env
-      UseValue valId -> fromMaybe zero $ Map.lookup valId (unwrap state).boundValues
-      Cond cond thn els -> if evalObservation env state cond then eval thn else eval els
+      UseValue valId -> fromMaybe zero $ Map.lookup valId
+        (unwrap state).boundValues
+      Cond cond thn els ->
+        if evalObservation env state cond then eval thn else eval els
 
 -- | Evaluate an @Observation@ to Bool
 evalObservation :: Environment -> State -> Observation -> Boolean
@@ -1515,11 +1578,14 @@ refundOne accounts = case Map.toUnfoldable accounts of
 
 -- | Obtains the amount of money available an account
 moneyInAccount :: AccountId -> Token -> Accounts -> BigInt
-moneyInAccount accId token accounts = fromMaybe zero (Map.lookup (Tuple accId token) accounts)
+moneyInAccount accId token accounts = fromMaybe zero
+  (Map.lookup (Tuple accId token) accounts)
 
 -- | Sets the amount of money available in an account
 updateMoneyInAccount :: AccountId -> Token -> BigInt -> Accounts -> Accounts
-updateMoneyInAccount accId token amount = if amount <= zero then Map.delete (Tuple accId token) else Map.insert (Tuple accId token) amount
+updateMoneyInAccount accId token amount =
+  if amount <= zero then Map.delete (Tuple accId token)
+  else Map.insert (Tuple accId token) amount
 
 {-| Add the given amount of money to an account (only if it is positive).
     Return the updated Map
@@ -1539,14 +1605,21 @@ addMoneyToAccount accId token amount accounts =
 {-| Gives the given amount of money to the given payee.
     Returns the appropriate effect and updated accounts
 -}
-giveMoney :: AccountId -> Payee -> Token -> BigInt -> Accounts -> Tuple ReduceEffect Accounts
+giveMoney
+  :: AccountId
+  -> Payee
+  -> Token
+  -> BigInt
+  -> Accounts
+  -> Tuple ReduceEffect Accounts
 giveMoney accountId payee token@(Token cur tok) amount accounts =
   let
     newAccounts = case payee of
       Party _ -> accounts
       Account accId -> addMoneyToAccount accId token amount accounts
   in
-    Tuple (ReduceWithPayment (Payment accountId payee (asset cur tok amount))) newAccounts
+    Tuple (ReduceWithPayment (Payment accountId payee (asset cur tok amount)))
+      newAccounts
 
 -- | Carry a step of the contract with no inputs
 reduceContractStep :: Environment -> State -> Contract -> ReduceStepResult
@@ -1558,7 +1631,10 @@ reduceContractStep env state contract = case contract of
 
         newState = wrap (oldState { accounts = newAccounts })
       in
-        Reduced ReduceNoWarning (ReduceWithPayment (Payment party (Party party) money)) newState Close
+        Reduced ReduceNoWarning
+          (ReduceWithPayment (Payment party (Party party) money))
+          newState
+          Close
     Nothing -> NotReduced
   Pay accId payee tok val cont ->
     let
@@ -1577,7 +1653,8 @@ reduceContractStep env state contract = case contract of
 
           newBalance = balance - paidAmount
 
-          newAccs = updateMoneyInAccount accId tok newBalance (unwrap state).accounts
+          newAccs = updateMoneyInAccount accId tok newBalance
+            (unwrap state).accounts
 
           warning =
             if paidAmount < amountToPay then
@@ -1585,7 +1662,8 @@ reduceContractStep env state contract = case contract of
             else
               ReduceNoWarning
 
-          (Tuple payment finalAccs) = giveMoney accId payee tok paidAmount newAccs
+          (Tuple payment finalAccs) = giveMoney accId payee tok paidAmount
+            newAccs
 
           newState = wrap ((unwrap state) { accounts = finalAccs })
         in
@@ -1632,30 +1710,44 @@ reduceContractStep env state contract = case contract of
 reduceContractUntilQuiescent :: Environment -> State -> Contract -> ReduceResult
 reduceContractUntilQuiescent startEnv startState startContract =
   let
-    reductionLoop ::
-      Boolean -> Environment -> State -> Contract -> (List ReduceWarning) -> (List Payment) -> ReduceResult
-    reductionLoop reduced env state contract warnings payments = case reduceContractStep env state contract of
-      Reduced warning effect newState nextContract ->
-        let
-          newWarnings = if warning == ReduceNoWarning then warnings else warning : warnings
+    reductionLoop
+      :: Boolean
+      -> Environment
+      -> State
+      -> Contract
+      -> (List ReduceWarning)
+      -> (List Payment)
+      -> ReduceResult
+    reductionLoop reduced env state contract warnings payments =
+      case reduceContractStep env state contract of
+        Reduced warning effect newState nextContract ->
+          let
+            newWarnings =
+              if warning == ReduceNoWarning then warnings
+              else warning : warnings
 
-          newPayments = case effect of
-            ReduceWithPayment payment -> payment : payments
-            ReduceNoPayment -> payments
-        in
-          reductionLoop true env newState nextContract newWarnings newPayments
-      AmbiguousSlotIntervalReductionError -> RRAmbiguousSlotIntervalError
-      -- this is the last invocation of reductionLoop, so we can reverse lists
-      NotReduced -> ContractQuiescent reduced (reverse warnings) (reverse payments) state contract
+            newPayments = case effect of
+              ReduceWithPayment payment -> payment : payments
+              ReduceNoPayment -> payments
+          in
+            reductionLoop true env newState nextContract newWarnings newPayments
+        AmbiguousSlotIntervalReductionError -> RRAmbiguousSlotIntervalError
+        -- this is the last invocation of reductionLoop, so we can reverse lists
+        NotReduced -> ContractQuiescent reduced (reverse warnings)
+          (reverse payments)
+          state
+          contract
   in
     reductionLoop false startEnv startState startContract mempty mempty
 
 applyCases :: Environment -> State -> Input -> List Case -> ApplyResult
 applyCases env state input cases = case input, cases of
-  IDeposit accId1 party1 tok1 amount, (Case (Deposit accId2 party2 tok2 val) cont) : rest ->
-    if accId1 == accId2 && party1 == party2 && tok1 == tok2
-      && amount
-      == evalValue env state val then
+  IDeposit accId1 party1 tok1 amount,
+  (Case (Deposit accId2 party2 tok2 val) cont) : rest ->
+    if
+      accId1 == accId2 && party1 == party2 && tok1 == tok2
+        && amount
+          == evalValue env state val then
       let
         warning =
           if amount > zero then
@@ -1663,7 +1755,8 @@ applyCases env state input cases = case input, cases of
           else
             ApplyNonPositiveDeposit party2 accId2 tok2 amount
 
-        newAccounts = addMoneyToAccount accId1 tok1 amount (unwrap state).accounts
+        newAccounts = addMoneyToAccount accId1 tok1 amount
+          (unwrap state).accounts
 
         newState = wrap ((unwrap state) { accounts = newAccounts })
       in
@@ -1684,7 +1777,8 @@ applyCases env state input cases = case input, cases of
   _, Nil -> ApplyNoMatchError
 
 applyInput :: Environment -> State -> Input -> Contract -> ApplyResult
-applyInput env state input (When cases _ _) = applyCases env state input (fromFoldable cases)
+applyInput env state input (When cases _ _) = applyCases env state input
+  (fromFoldable cases)
 
 applyInput _ _ _ _ = ApplyNoMatchError
 
@@ -1694,9 +1788,12 @@ convertReduceWarnings Nil = Nil
 convertReduceWarnings (first : rest) =
   ( case first of
       ReduceNoWarning -> Nil
-      ReduceNonPositivePay accId payee tok amount -> (TransactionNonPositivePay accId payee tok amount) : Nil
-      ReducePartialPay accId payee tok paid expected -> (TransactionPartialPay accId payee tok paid expected) : Nil
-      ReduceShadowing valId oldVal newVal -> (TransactionShadowing valId oldVal newVal) : Nil
+      ReduceNonPositivePay accId payee tok amount ->
+        (TransactionNonPositivePay accId payee tok amount) : Nil
+      ReducePartialPay accId payee tok paid expected ->
+        (TransactionPartialPay accId payee tok paid expected) : Nil
+      ReduceShadowing valId oldVal newVal ->
+        (TransactionShadowing valId oldVal newVal) : Nil
       ReduceAssertionFailed -> TransactionAssertionFailed : Nil
   )
     <> convertReduceWarnings rest
@@ -1704,40 +1801,45 @@ convertReduceWarnings (first : rest) =
 convertApplyWarning :: ApplyWarning -> List TransactionWarning
 convertApplyWarning warn = case warn of
   ApplyNoWarning -> Nil
-  ApplyNonPositiveDeposit party accId tok amount -> (TransactionNonPositiveDeposit party accId tok amount) : Nil
+  ApplyNonPositiveDeposit party accId tok amount ->
+    (TransactionNonPositiveDeposit party accId tok amount) : Nil
 
 -- | Apply a list of Inputs to the contract
-applyAllInputs :: Environment -> State -> Contract -> (List Input) -> ApplyAllResult
+applyAllInputs
+  :: Environment -> State -> Contract -> (List Input) -> ApplyAllResult
 applyAllInputs startEnv startState startContract startInputs =
   let
-    applyAllLoop ::
-      Boolean ->
-      Environment ->
-      State ->
-      Contract ->
-      List Input ->
-      List TransactionWarning ->
-      List Payment ->
-      ApplyAllResult
-    applyAllLoop contractChanged env state contract inputs warnings payments = case reduceContractUntilQuiescent env state contract of
-      RRAmbiguousSlotIntervalError -> ApplyAllAmbiguousSlotIntervalError
-      ContractQuiescent reduced reduceWarns pays curState cont -> case inputs of
-        Nil ->
-          ApplyAllSuccess (contractChanged || reduced)
-            (warnings <> (convertReduceWarnings reduceWarns))
-            (payments <> pays)
-            curState
-            cont
-        (input : rest) -> case applyInput env curState input cont of
-          Applied applyWarn newState nextContract ->
-            applyAllLoop true env newState nextContract rest
-              ( warnings <> (convertReduceWarnings reduceWarns)
-                  <> (convertApplyWarning applyWarn)
-              )
-              (payments <> pays)
-          ApplyNoMatchError -> ApplyAllNoMatchError
+    applyAllLoop
+      :: Boolean
+      -> Environment
+      -> State
+      -> Contract
+      -> List Input
+      -> List TransactionWarning
+      -> List Payment
+      -> ApplyAllResult
+    applyAllLoop contractChanged env state contract inputs warnings payments =
+      case reduceContractUntilQuiescent env state contract of
+        RRAmbiguousSlotIntervalError -> ApplyAllAmbiguousSlotIntervalError
+        ContractQuiescent reduced reduceWarns pays curState cont ->
+          case inputs of
+            Nil ->
+              ApplyAllSuccess (contractChanged || reduced)
+                (warnings <> (convertReduceWarnings reduceWarns))
+                (payments <> pays)
+                curState
+                cont
+            (input : rest) -> case applyInput env curState input cont of
+              Applied applyWarn newState nextContract ->
+                applyAllLoop true env newState nextContract rest
+                  ( warnings <> (convertReduceWarnings reduceWarns)
+                      <> (convertApplyWarning applyWarn)
+                  )
+                  (payments <> pays)
+              ApplyNoMatchError -> ApplyAllNoMatchError
   in
-    applyAllLoop false startEnv startState startContract startInputs mempty mempty
+    applyAllLoop false startEnv startState startContract startInputs mempty
+      mempty
 
 isClose :: Contract -> Boolean
 isClose Close = true
@@ -1751,19 +1853,25 @@ computeTransaction tx state contract =
     inputs = (unwrap tx).inputs
   in
     case fixInterval (unwrap tx).interval state of
-      IntervalTrimmed env fixState -> case applyAllInputs env fixState contract inputs of
-        ApplyAllSuccess reduced warnings payments newState cont ->
-          if not reduced && (not (isClose contract) || (Map.isEmpty $ (unwrap state).accounts)) then
-            Error TEUselessTransaction
-          else
-            TransactionOutput
-              { txOutWarnings: warnings
-              , txOutPayments: payments
-              , txOutState: newState
-              , txOutContract: cont
-              }
-        ApplyAllNoMatchError -> Error TEApplyNoMatchError
-        ApplyAllAmbiguousSlotIntervalError -> Error TEAmbiguousSlotIntervalError
+      IntervalTrimmed env fixState ->
+        case applyAllInputs env fixState contract inputs of
+          ApplyAllSuccess reduced warnings payments newState cont ->
+            if
+              not reduced &&
+                ( not (isClose contract) ||
+                    (Map.isEmpty $ (unwrap state).accounts)
+                ) then
+              Error TEUselessTransaction
+            else
+              TransactionOutput
+                { txOutWarnings: warnings
+                , txOutPayments: payments
+                , txOutState: newState
+                , txOutContract: cont
+                }
+          ApplyAllNoMatchError -> Error TEApplyNoMatchError
+          ApplyAllAmbiguousSlotIntervalError -> Error
+            TEAmbiguousSlotIntervalError
       IntervalError error -> Error (TEIntervalError error)
 
 moneyInContract :: State -> Money
@@ -1788,7 +1896,8 @@ class HasTimeout a where
 instance hasTimeoutContract :: HasTimeout Contract where
   timeouts Close = Timeouts { maxTime: zero, minTime: Nothing }
   timeouts (Pay _ _ _ _ contract) = timeouts contract
-  timeouts (If _ contractTrue contractFalse) = timeouts [ contractTrue, contractFalse ]
+  timeouts (If _ contractTrue contractFalse) = timeouts
+    [ contractTrue, contractFalse ]
   timeouts (When cases timeout contract) =
     timeouts
       [ timeouts cases

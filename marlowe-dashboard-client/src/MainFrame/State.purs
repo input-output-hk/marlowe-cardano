@@ -2,13 +2,30 @@ module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
 import Bridge (toFront)
-import Capability.Marlowe (class ManageMarlowe, getFollowerApps, subscribeToPlutusApp, subscribeToWallet, unsubscribeFromPlutusApp, unsubscribeFromWallet)
-import Capability.MarloweStorage (class ManageMarloweStorage, getContractNicknames, getWalletLibrary)
+import Capability.Marlowe
+  ( class ManageMarlowe
+  , getFollowerApps
+  , subscribeToPlutusApp
+  , subscribeToWallet
+  , unsubscribeFromPlutusApp
+  , unsubscribeFromWallet
+  )
+import Capability.MarloweStorage
+  ( class ManageMarloweStorage
+  , getContractNicknames
+  , getWalletLibrary
+  )
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.PlutusApps.MarloweApp.Types (LastResult(..))
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
-import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _previousCompanionAppState, _wallet, _walletInfo)
+import Component.Contacts.Lenses
+  ( _companionAppId
+  , _marloweAppId
+  , _previousCompanionAppState
+  , _wallet
+  , _walletInfo
+  )
 import Control.Monad.Reader (class MonadAsk)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Foldable (for_)
@@ -24,8 +41,23 @@ import Env (Env)
 import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
 import Humanize (getTimezoneOffset)
-import MainFrame.Lenses (_currentSlot, _dashboardState, _subState, _toast, _tzOffset, _webSocketStatus, _welcomeState)
-import MainFrame.Types (Action(..), ChildSlots, Msg, Query(..), State, WebSocketStatus(..))
+import MainFrame.Lenses
+  ( _currentSlot
+  , _dashboardState
+  , _subState
+  , _toast
+  , _tzOffset
+  , _webSocketStatus
+  , _welcomeState
+  )
+import MainFrame.Types
+  ( Action(..)
+  , ChildSlots
+  , Msg
+  , Query(..)
+  , State
+  , WebSocketStatus(..)
+  )
 import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts, _walletDetails)
@@ -34,10 +66,18 @@ import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.Lenses (_walletLibrary)
 import Page.Welcome.State (handleAction, dummyState, mkInitialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient(..), InstanceStatusToClient(..))
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient(..)
+  , InstanceStatusToClient(..)
+  )
 import Toast.State (defaultState, handleAction) as Toast
 import Toast.Types (Action, State) as Toast
-import Toast.Types (decodedAjaxErrorToast, decodingErrorToast, errorToast, successToast)
+import Toast.Types
+  ( decodedAjaxErrorToast
+  , decodingErrorToast
+  , errorToast
+  , successToast
+  )
 import WebSocket.Support as WS
 
 {-
@@ -61,14 +101,14 @@ Because of the synchronous nature of the app, with messages passing between the 
 the code. Comments are added throughout with the format "[Workflow n][m]" - so you can search the
 code for e.g. "[Workflow 4]" to see all of the steps involved in starting a contract.
 -}
-mkMainFrame ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  ManageMarlowe m =>
-  Toast m =>
-  MonadClipboard m =>
-  Component Query Action Msg m
+mkMainFrame
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => ManageMarlowe m
+  => Toast m
+  => MonadClipboard m
+  => Component Query Action Msg m
 mkMainFrame =
   mkComponent
     { initialState: const initialState
@@ -92,14 +132,15 @@ initialState =
   , tzOffset: Minutes 0.0 -- This will be updated on MainFrame.Init
   }
 
-handleQuery ::
-  forall a m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  ManageMarlowe m =>
-  Toast m =>
-  MonadClipboard m =>
-  Query a -> HalogenM State Action ChildSlots Msg m (Maybe a)
+handleQuery
+  :: forall a m
+   . MonadAff m
+  => MonadAsk Env m
+  => ManageMarlowe m
+  => Toast m
+  => MonadClipboard m
+  => Query a
+  -> HalogenM State Action ChildSlots Msg m (Maybe a)
 handleQuery (ReceiveWebSocketMessage msg next) = do
   case msg of
     WS.WebSocketOpen -> do
@@ -108,10 +149,12 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       mDashboardState <- peruse _dashboardState
       for_ mDashboardState \dashboardState -> do
         let
-          wallet = view (_walletDetails <<< _walletInfo <<< _wallet) dashboardState
+          wallet = view (_walletDetails <<< _walletInfo <<< _wallet)
+            dashboardState
 
           followAppIds :: Array PlutusAppId
-          followAppIds = Set.toUnfoldable $ keys $ view _contracts dashboardState
+          followAppIds = Set.toUnfoldable $ keys $ view _contracts
+            dashboardState
         subscribeToWallet wallet
         for followAppIds $ subscribeToPlutusApp
     (WS.WebSocketClosed closeEvent) -> do
@@ -119,7 +162,9 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       -- confusing than helpful, since the websocket is automatically reopened if it closes for any
       -- reason.
       assign _webSocketStatus (WebSocketClosed (Just closeEvent))
-    (WS.ReceiveMessage (Left multipleErrors)) -> addToast $ decodingErrorToast "Failed to parse message from the server." multipleErrors
+    (WS.ReceiveMessage (Left multipleErrors)) -> addToast $ decodingErrorToast
+      "Failed to parse message from the server."
+      multipleErrors
     (WS.ReceiveMessage (Right streamToClient)) -> case streamToClient of
       -- update the current slot
       SlotChange slot -> do
@@ -138,81 +183,112 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract
       -- instances, including its wallet companion contract
-      InstanceUpdate contractInstanceId instanceStatusToClient -> case instanceStatusToClient of
-        NewObservableState rawJson -> do
-          -- TODO: If we receive a second status update for the same contract / plutus app, while
-          -- the previous update is still being handled, then strange things could happen. This
-          -- does not seem very likely. Still, it might be worth considering guarding against this
-          -- possibility by e.g. keeping a list/array of updates and having a subscription that
-          -- handles them synchronously in the order in which they arrive.
-          let
-            plutusAppId = toFront contractInstanceId
-          mDashboardState <- peruse _dashboardState
-          -- these updates should only ever be coming when we are in the Dashboard state (and if
-          -- we're not, we don't care about them anyway)
-          for_ mDashboardState \dashboardState ->
+      InstanceUpdate contractInstanceId instanceStatusToClient ->
+        case instanceStatusToClient of
+          NewObservableState rawJson -> do
+            -- TODO: If we receive a second status update for the same contract / plutus app, while
+            -- the previous update is still being handled, then strange things could happen. This
+            -- does not seem very likely. Still, it might be worth considering guarding against this
+            -- possibility by e.g. keeping a list/array of updates and having a subscription that
+            -- handles them synchronously in the order in which they arrive.
             let
-              walletCompanionAppId = view (_walletDetails <<< _companionAppId) dashboardState
+              plutusAppId = toFront contractInstanceId
+            mDashboardState <- peruse _dashboardState
+            -- these updates should only ever be coming when we are in the Dashboard state (and if
+            -- we're not, we don't care about them anyway)
+            for_ mDashboardState \dashboardState ->
+              let
+                walletCompanionAppId = view (_walletDetails <<< _companionAppId)
+                  dashboardState
 
-              marloweAppId = view (_walletDetails <<< _marloweAppId) dashboardState
-            in
-              -- if this is the wallet's WalletCompanion app...
-              if (plutusAppId == walletCompanionAppId) then case parseDecodeJson $ unwrap rawJson of
-                Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
-                Right companionAppState -> do
-                  -- this check shouldn't be necessary, but at the moment we are getting too many update notifications
-                  -- through the PAB - so until that bug is fixed, this will have to mask it
-                  when (view (_walletDetails <<< _previousCompanionAppState) dashboardState /= Just companionAppState) do
-                    assign (_dashboardState <<< _walletDetails <<< _previousCompanionAppState) (Just companionAppState)
-                    {- [Workflow 2][5] Connect a wallet -}
-                    {- [Workflow 4][1] Start a contract
+                marloweAppId = view (_walletDetails <<< _marloweAppId)
+                  dashboardState
+              in
+                -- if this is the wallet's WalletCompanion app...
+                if (plutusAppId == walletCompanionAppId) then
+                  case parseDecodeJson $ unwrap rawJson of
+                    Left decodingError -> addToast $ decodingErrorToast
+                      "Failed to parse contract update."
+                      decodingError
+                    Right companionAppState -> do
+                      -- this check shouldn't be necessary, but at the moment we are getting too many update notifications
+                      -- through the PAB - so until that bug is fixed, this will have to mask it
+                      when
+                        ( view (_walletDetails <<< _previousCompanionAppState)
+                            dashboardState /= Just companionAppState
+                        )
+                        do
+                          assign
+                            ( _dashboardState <<< _walletDetails <<<
+                                _previousCompanionAppState
+                            )
+                            (Just companionAppState)
+                          {- [Workflow 2][5] Connect a wallet -}
+                          {- [Workflow 4][1] Start a contract
                     When we start a contract, our wallet will initially receive all the role tokens for that contract
                     (before they are paid out to the people we gave those roles to). And if someone else started a
                     contract and gave us a role, we will receive that role token. Either way, our `WalletCompanion` app
                     will notice, and its status will be updated to include the `MarloweParams` and initial `MarloweData`
                     of the contract in question. We can use that to start following the contract.
                     -}
-                    handleAction $ DashboardAction $ Dashboard.UpdateFollowerApps companionAppState
-              else do
-                -- if this is the wallet's MarloweApp...
-                if (plutusAppId == marloweAppId) then case parseDecodeJson $ unwrap rawJson of
-                  Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
-                  Right lastResult -> do
-                    -- The MarloweApp capability keeps track of the requests it makes to see if this
-                    -- new observable state is a WS response for an action that we made. If we refresh
-                    -- we get the last observable state, and if we have two tabs open we can get
-                    -- a result of an action that the other tab made.
-                    -- TODO: With a "significant refactor" (and the use of `MarloweApp.waitForResponse`)
-                    --       we could rework the different workflows for creating a contract and apply
-                    --       inputs so these toast are closer to the code that initiates the actions.
-                    mLastResult <- MarloweApp.onNewObservableState lastResult
-                    case mLastResult of
-                      Just (OK _ "create") -> addToast $ successToast "Contract initialised."
-                      Just (OK _ "apply-inputs") -> addToast $ successToast "Contract update applied."
-                      Just (SomeError _ "create" _) -> addToast $ errorToast "Failed to initialise contract." Nothing
-                      Just (SomeError _ "apply-inputs" _) -> addToast $ errorToast "Failed to update contract." Nothing
-                      _ -> pure unit
-                -- otherwise this should be one of the wallet's `MarloweFollower` apps
-                else case parseDecodeJson $ unwrap rawJson of
-                  Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
-                  Right contractHistory -> do
-                    {- [Workflow 2][7] Connect a wallet -}
-                    {- [Workflow 4][3] Start a contract -}
-                    {- [Workflow 5][1] Move a contract forward -}
-                    handleAction $ DashboardAction $ Dashboard.UpdateContract plutusAppId contractHistory
-                    {- [Workflow 6][0] Redeem payments -}
-                    handleAction $ DashboardAction $ Dashboard.RedeemPayments plutusAppId
-        NewActiveEndpoints activeEndpoints -> do
-          mDashboardState <- peruse _dashboardState
-          -- these updates should only ever be coming when we are in the Dashboard state (and if
-          -- we're not, we don't care about them anyway)
-          for_ mDashboardState \dashboardState -> do
-            let
-              plutusAppId = toFront contractInstanceId
+                          handleAction $ DashboardAction $
+                            Dashboard.UpdateFollowerApps companionAppState
+                else do
+                  -- if this is the wallet's MarloweApp...
+                  if (plutusAppId == marloweAppId) then
+                    case parseDecodeJson $ unwrap rawJson of
+                      Left decodingError -> addToast $ decodingErrorToast
+                        "Failed to parse contract update."
+                        decodingError
+                      Right lastResult -> do
+                        -- The MarloweApp capability keeps track of the requests it makes to see if this
+                        -- new observable state is a WS response for an action that we made. If we refresh
+                        -- we get the last observable state, and if we have two tabs open we can get
+                        -- a result of an action that the other tab made.
+                        -- TODO: With a "significant refactor" (and the use of `MarloweApp.waitForResponse`)
+                        --       we could rework the different workflows for creating a contract and apply
+                        --       inputs so these toast are closer to the code that initiates the actions.
+                        mLastResult <- MarloweApp.onNewObservableState
+                          lastResult
+                        case mLastResult of
+                          Just (OK _ "create") -> addToast $ successToast
+                            "Contract initialised."
+                          Just (OK _ "apply-inputs") -> addToast $ successToast
+                            "Contract update applied."
+                          Just (SomeError _ "create" _) -> addToast $ errorToast
+                            "Failed to initialise contract."
+                            Nothing
+                          Just (SomeError _ "apply-inputs" _) -> addToast $
+                            errorToast "Failed to update contract." Nothing
+                          _ -> pure unit
+                  -- otherwise this should be one of the wallet's `MarloweFollower` apps
+                  else case parseDecodeJson $ unwrap rawJson of
+                    Left decodingError -> addToast $ decodingErrorToast
+                      "Failed to parse contract update."
+                      decodingError
+                    Right contractHistory -> do
+                      {- [Workflow 2][7] Connect a wallet -}
+                      {- [Workflow 4][3] Start a contract -}
+                      {- [Workflow 5][1] Move a contract forward -}
+                      handleAction $ DashboardAction $ Dashboard.UpdateContract
+                        plutusAppId
+                        contractHistory
+                      {- [Workflow 6][0] Redeem payments -}
+                      handleAction $ DashboardAction $ Dashboard.RedeemPayments
+                        plutusAppId
+          NewActiveEndpoints activeEndpoints -> do
+            mDashboardState <- peruse _dashboardState
+            -- these updates should only ever be coming when we are in the Dashboard state (and if
+            -- we're not, we don't care about them anyway)
+            for_ mDashboardState \dashboardState -> do
+              let
+                plutusAppId = toFront contractInstanceId
 
-              marloweAppId = view (_walletDetails <<< _marloweAppId) dashboardState
-            when (plutusAppId == marloweAppId) $ MarloweApp.onNewActiveEndpoints activeEndpoints
-        ContractFinished _ -> pure unit
+                marloweAppId = view (_walletDetails <<< _marloweAppId)
+                  dashboardState
+              when (plutusAppId == marloweAppId) $
+                MarloweApp.onNewActiveEndpoints activeEndpoints
+          ContractFinished _ -> pure unit
   pure $ Just next
 
 handleQuery (MainFrameActionQuery action next) = do
@@ -228,22 +304,22 @@ handleQuery (MainFrameActionQuery action next) = do
 -- or our `render` functions a bit awkward. I prefer the former. Hence some
 -- submodule actions (triggered straightforwardly in the submodule's `render`
 -- functions) are handled by their parent module's `handleAction` function.
-handleAction ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  ManageMarlowe m =>
-  ManageMarloweStorage m =>
-  Toast m =>
-  MonadClipboard m =>
-  Action ->
-  HalogenM State Action ChildSlots Msg m Unit
+handleAction
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => ManageMarlowe m
+  => ManageMarloweStorage m
+  => Toast m
+  => MonadClipboard m
+  => Action
+  -> HalogenM State Action ChildSlots Msg m Unit
 handleAction Init = do
   tzOffset <- liftEffect getTimezoneOffset
   walletLibrary <- getWalletLibrary
   modify_
     $ set (_welcomeState <<< _walletLibrary) walletLibrary
-    <<< set _tzOffset tzOffset
+        <<< set _tzOffset tzOffset
 
 {- [Workflow 3][1] Disconnect a wallet
 
@@ -273,7 +349,9 @@ handleAction (EnterDashboardState walletLibrary walletDetails) = do
   ajaxFollowerApps <- getFollowerApps walletDetails
   currentSlot <- use _currentSlot
   case ajaxFollowerApps of
-    Left decodedAjaxError -> addToast $ decodedAjaxErrorToast "Failed to load wallet contracts." decodedAjaxError
+    Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
+      "Failed to load wallet contracts."
+      decodedAjaxError
     Right followerApps -> do
       let
         followerAppIds :: Array PlutusAppId
@@ -287,39 +365,46 @@ handleAction (EnterDashboardState walletLibrary walletDetails) = do
       -- we've just subscribed to this wallet's WalletCompanion app, however, the creation of new
       -- MarloweFollower apps will be triggered by the initial WebSocket status notification.
       contractNicknames <- getContractNicknames
-      assign _subState $ Right $ Dashboard.mkInitialState walletLibrary walletDetails followerApps contractNicknames currentSlot
+      assign _subState $ Right $ Dashboard.mkInitialState walletLibrary
+        walletDetails
+        followerApps
+        contractNicknames
+        currentSlot
 
-handleAction (WelcomeAction welcomeAction) = toWelcome $ Welcome.handleAction welcomeAction
+handleAction (WelcomeAction welcomeAction) = toWelcome $ Welcome.handleAction
+  welcomeAction
 
 handleAction (DashboardAction dashboardAction) = do
   currentSlot <- use _currentSlot
   tzOffset <- use _tzOffset
   toDashboard $ Dashboard.handleAction { currentSlot, tzOffset } dashboardAction
 
-handleAction (ToastAction toastAction) = toToast $ Toast.handleAction toastAction
+handleAction (ToastAction toastAction) = toToast $ Toast.handleAction
+  toastAction
 
 ------------------------------------------------------------
 -- Note [dummyState]: In order to map a submodule whose state might not exist, we need
 -- to provide a dummyState for that submodule. Halogen would use this dummyState to play
 -- with if we ever tried to call one of these handlers when the submodule state does not
 -- exist. In practice this should never happen.
-toWelcome ::
-  forall m msg slots.
-  Functor m =>
-  HalogenM Welcome.State Welcome.Action slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
+toWelcome
+  :: forall m msg slots
+   . Functor m
+  => HalogenM Welcome.State Welcome.Action slots msg m Unit
+  -> HalogenM State Action slots msg m Unit
 toWelcome = mapMaybeSubmodule _welcomeState WelcomeAction Welcome.dummyState
 
-toDashboard ::
-  forall m msg slots.
-  Functor m =>
-  HalogenM Dashboard.State Dashboard.Action slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
-toDashboard = mapMaybeSubmodule _dashboardState DashboardAction Dashboard.dummyState
+toDashboard
+  :: forall m msg slots
+   . Functor m
+  => HalogenM Dashboard.State Dashboard.Action slots msg m Unit
+  -> HalogenM State Action slots msg m Unit
+toDashboard = mapMaybeSubmodule _dashboardState DashboardAction
+  Dashboard.dummyState
 
-toToast ::
-  forall m msg slots.
-  Functor m =>
-  HalogenM Toast.State Toast.Action slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
+toToast
+  :: forall m msg slots
+   . Functor m
+  => HalogenM Toast.State Toast.Action slots msg m Unit
+  -> HalogenM State Action slots msg m Unit
 toToast = mapSubmodule _toast ToastAction

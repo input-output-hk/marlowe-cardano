@@ -17,37 +17,49 @@ import Plutus.V1.Ledger.Value (Value)
 import Servant.PureScript (AjaxError)
 import Wallet.Emulator.Wallet (Wallet)
 
-createWallet ::
-  forall m.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  m WalletInfo
+createWallet
+  :: forall m
+   . MonadError AjaxError m
+  => MonadAff m
+  => m WalletInfo
 createWallet = doEmptyPostRequest "/wallet/create"
 
-submitWalletTransaction ::
-  forall m.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  Wallet -> Tx -> m Unit
-submitWalletTransaction wallet tx = doPostRequest ("/wallet/" <> toUrlPiece wallet) tx
+submitWalletTransaction
+  :: forall m
+   . MonadError AjaxError m
+  => MonadAff m
+  => Wallet
+  -> Tx
+  -> m Unit
+submitWalletTransaction wallet tx = doPostRequest
+  ("/wallet/" <> toUrlPiece wallet)
+  tx
 
-getWalletInfo ::
-  forall m.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  Wallet -> m WalletInfo
-getWalletInfo wallet = doGetRequest ("/wallet/" <> toUrlPiece wallet <> "/own-public-key")
+getWalletInfo
+  :: forall m
+   . MonadError AjaxError m
+  => MonadAff m
+  => Wallet
+  -> m WalletInfo
+getWalletInfo wallet = doGetRequest
+  ("/wallet/" <> toUrlPiece wallet <> "/own-public-key")
 
-getWalletTotalFunds ::
-  forall m.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  Wallet -> m Value
-getWalletTotalFunds wallet = doGetRequest $ "/wallet/" <> toUrlPiece wallet <> "/total-funds"
+getWalletTotalFunds
+  :: forall m
+   . MonadError AjaxError m
+  => MonadAff m
+  => Wallet
+  -> m Value
+getWalletTotalFunds wallet = doGetRequest $ "/wallet/" <> toUrlPiece wallet <>
+  "/total-funds"
 
-signTransaction ::
-  forall m.
-  MonadError AjaxError m =>
-  MonadAff m =>
-  Wallet -> Tx -> m Tx
-signTransaction wallet tx = doPostRequest ("/wallet/" <> toUrlPiece wallet <> "/sign") tx
+signTransaction
+  :: forall m
+   . MonadError AjaxError m
+  => MonadAff m
+  => Wallet
+  -> Tx
+  -> m Tx
+signTransaction wallet tx = doPostRequest
+  ("/wallet/" <> toUrlPiece wallet <> "/sign")
+  tx

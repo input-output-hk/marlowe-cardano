@@ -12,7 +12,12 @@ import Marlowe.Gen (genBigInt, genContract, GenerationOptions(..))
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (fromTerm)
 import Marlowe.Semantics as S
-import Marlowe.Template (Placeholders(..), TemplateContent(..), fillTemplate, getPlaceholderIds)
+import Marlowe.Template
+  ( Placeholders(..)
+  , TemplateContent(..)
+  , fillTemplate
+  , getPlaceholderIds
+  )
 import Test.QuickCheck (Result(..), (===))
 import Test.Unit (TestSuite, suite, test)
 
@@ -20,9 +25,12 @@ all :: TestSuite
 all =
   suite "Marlowe.Holes.Template" do
     let
-      genOpts = GenerationOptions { withHoles: false, withExtendedConstructs: true }
-    test "Term and Extended contract has the same getPlaceholderIds" $ contractQuickCheck genOpts sameGetPlaceholderIds
-    test "Term and Extended contract has the same fillTemplate" $ contractQuickCheck genOpts sameFillTemplate
+      genOpts = GenerationOptions
+        { withHoles: false, withExtendedConstructs: true }
+    test "Term and Extended contract has the same getPlaceholderIds" $
+      contractQuickCheck genOpts sameGetPlaceholderIds
+    test "Term and Extended contract has the same fillTemplate" $
+      contractQuickCheck genOpts sameFillTemplate
 
 sameGetPlaceholderIds :: GenWithHoles Result
 sameGetPlaceholderIds = do
@@ -45,7 +53,8 @@ sameFillTemplate = do
   let
     (emContract :: Maybe EM.Contract) = fromTerm termContract
 
-    Placeholders { slotPlaceholderIds, valuePlaceholderIds } = getPlaceholderIds termContract
+    Placeholders { slotPlaceholderIds, valuePlaceholderIds } = getPlaceholderIds
+      termContract
 
     slotPlaceholderArray :: Array String
     slotPlaceholderArray = Set.toUnfoldable slotPlaceholderIds
@@ -55,13 +64,15 @@ sameFillTemplate = do
   -- We generate random values for the template variables
   slotContent <-
     Map.fromFoldable
-      <$> ( for slotPlaceholderArray \slotId -> do
+      <$>
+        ( for slotPlaceholderArray \slotId -> do
             slotValue <- genBigInt
             pure (slotId /\ slotValue)
         )
   valueContent <-
     Map.fromFoldable
-      <$> ( for valuePlaceholderArray \slotId -> do
+      <$>
+        ( for valuePlaceholderArray \slotId -> do
             slotValue <- genBigInt
             pure (slotId /\ slotValue)
         )

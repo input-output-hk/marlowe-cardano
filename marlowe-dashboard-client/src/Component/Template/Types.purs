@@ -19,13 +19,14 @@ import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Semantics (Slot, TokenName)
 
 type State
-  = { contractSetupStage :: ContractSetupStage
-    , contractTemplate :: ContractTemplate
-    , contractNicknameInput :: InputField.State ContractNicknameError
-    , roleWalletInputs :: Map TokenName (InputField.State RoleError)
-    , slotContentInputs :: Map String (InputField.State SlotError)
-    , valueContentInputs :: Map String (InputField.State ValueError)
-    }
+  =
+  { contractSetupStage :: ContractSetupStage
+  , contractTemplate :: ContractTemplate
+  , contractNicknameInput :: InputField.State ContractNicknameError
+  , roleWalletInputs :: Map TokenName (InputField.State RoleError)
+  , slotContentInputs :: Map String (InputField.State SlotError)
+  , valueContentInputs :: Map String (InputField.State ValueError)
+  }
 
 data ContractSetupStage
   = Start
@@ -35,17 +36,18 @@ data ContractSetupStage
 
 derive instance eqContractSetupStage :: Eq ContractSetupStage
 
-type Input
-  = { currentSlot :: Slot
-    , walletLibrary :: WalletLibrary
-    }
+type Input =
+  { currentSlot :: Slot
+  , walletLibrary :: WalletLibrary
+  }
 
 data ContractNicknameError
   = EmptyContractNickname
 
 derive instance eqContractNicknameError :: Eq ContractNicknameError
 
-instance inputFieldErrorContractNicknameError :: InputFieldError ContractNicknameError where
+instance inputFieldErrorContractNicknameError ::
+  InputFieldError ContractNicknameError where
   inputErrorToString EmptyContractNickname = "Contract nickname cannot be blank"
 
 data RoleError
@@ -56,7 +58,8 @@ derive instance eqRoleError :: Eq RoleError
 
 instance inputFieldErrorRoleError :: InputFieldError RoleError where
   inputErrorToString EmptyNickname = "Role nickname cannot be blank"
-  inputErrorToString NonExistentNickname = "Nickname not found in your wallet library"
+  inputErrorToString NonExistentNickname =
+    "Nickname not found in your wallet library"
 
 data SlotError
   = EmptySlot
@@ -92,12 +95,15 @@ data Action
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent (SetContractSetupStage _) = Just $ defaultEvent "SetContractSetupStage"
+  toEvent (SetContractSetupStage _) = Just $ defaultEvent
+    "SetContractSetupStage"
   toEvent (SetTemplate _) = Just $ defaultEvent "SetTemplate"
   toEvent (OpenCreateWalletCard _) = Nothing
-  toEvent (ContractNicknameInputAction inputFieldAction) = toEvent inputFieldAction
+  toEvent (ContractNicknameInputAction inputFieldAction) = toEvent
+    inputFieldAction
   toEvent UpdateRoleWalletValidators = Nothing
   toEvent (RoleWalletInputAction _ inputFieldAction) = toEvent inputFieldAction
   toEvent (SlotContentInputAction _ inputFieldAction) = toEvent inputFieldAction
-  toEvent (ValueContentInputAction _ inputFieldAction) = toEvent inputFieldAction
+  toEvent (ValueContentInputAction _ inputFieldAction) = toEvent
+    inputFieldAction
   toEvent StartContract = Just $ defaultEvent "StartContract"

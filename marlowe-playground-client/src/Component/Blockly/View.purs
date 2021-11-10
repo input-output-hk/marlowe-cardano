@@ -7,7 +7,8 @@ import Halogen.Classes (fullHeight, fullWidth)
 import Halogen.HTML (HTML, div, text)
 import Halogen.HTML.Properties (class_, classes, id, ref)
 
-render :: forall r p action. { errorMessage :: Maybe String | r } -> HTML p action
+render
+  :: forall r p action. { errorMessage :: Maybe String | r } -> HTML p action
 render state =
   div
     [ ref blocklyRef
@@ -17,6 +18,7 @@ render state =
     [ errorMessage state.errorMessage ]
 
 errorMessage :: forall p i. Maybe String -> HTML p i
-errorMessage (Just error) = div [ class_ (ClassName "blocklyError") ] [ text error ]
+errorMessage (Just error) = div [ class_ (ClassName "blocklyError") ]
+  [ text error ]
 
 errorMessage Nothing = div [ class_ (ClassName "blocklyError") ] []

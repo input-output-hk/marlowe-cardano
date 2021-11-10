@@ -14,7 +14,13 @@ import Data.Lens (has, view)
 import Data.Lens.Index (ix)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap, wrap)
-import Gist (Gist, NewGist(NewGist), NewGistFile(..), gistFileContent, gistFiles)
+import Gist
+  ( Gist
+  , NewGist(NewGist)
+  , NewGistFile(..)
+  , gistFileContent
+  , gistFiles
+  )
 
 mkNewGist :: String -> PlaygroundFiles -> NewGist
 mkNewGist description files =
@@ -31,28 +37,28 @@ mkNewGistFile _newGistFilename _newGistFileContent =
     , _newGistFileContent
     }
 
-type PlaygroundFiles
-  = { playground :: String
-    , marlowe :: Maybe String
-    , haskell :: Maybe String
-    , blockly :: Maybe String
-    , javascript :: Maybe String
-    , actus :: Maybe XML
-    , metadata :: Maybe String
-    }
+type PlaygroundFiles =
+  { playground :: String
+  , marlowe :: Maybe String
+  , haskell :: Maybe String
+  , blockly :: Maybe String
+  , javascript :: Maybe String
+  , actus :: Maybe XML
+  , metadata :: Maybe String
+  }
 
 toArray :: PlaygroundFiles -> Array NewGistFile
 toArray { playground, marlowe, haskell, blockly, javascript, actus, metadata } =
   [ mkNewGistFile filenames.playground playground
   ]
     <> catMaybes
-        [ mkNewGistFile filenames.marlowe <$> marlowe
-        , mkNewGistFile filenames.haskell <$> haskell
-        , mkNewGistFile filenames.blockly <$> blockly
-        , mkNewGistFile filenames.javascript <$> javascript
-        , mkNewGistFile filenames.actus <<< unwrap <$> actus
-        , mkNewGistFile filenames.metadata <$> metadata
-        ]
+      [ mkNewGistFile filenames.marlowe <$> marlowe
+      , mkNewGistFile filenames.haskell <$> haskell
+      , mkNewGistFile filenames.blockly <$> blockly
+      , mkNewGistFile filenames.javascript <$> javascript
+      , mkNewGistFile filenames.actus <<< unwrap <$> actus
+      , mkNewGistFile filenames.metadata <$> metadata
+      ]
 
 filenames ::
   { playground :: String
