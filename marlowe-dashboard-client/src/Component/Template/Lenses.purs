@@ -12,7 +12,14 @@ module Component.Template.Lenses
 
 import Prologue
 import Component.InputField.Types (State) as InputField
-import Component.Template.Types (ContractSetupStage, ContractNicknameError, RoleError, SlotError, State, ValueError)
+import Component.Template.Types
+  ( ContractSetupStage
+  , ContractNicknameError
+  , RoleError
+  , SlotError
+  , State
+  , ValueError
+  )
 import Data.Lens (Lens', Traversal')
 import Data.Lens.At (at)
 import Data.Lens.Prism.Maybe (_Just)

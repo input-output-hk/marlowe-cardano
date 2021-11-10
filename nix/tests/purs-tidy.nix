@@ -7,11 +7,10 @@ let
       name: type:
         let baseName = baseNameOf (toString name); in
         (
+          baseName == ".tidyoperators" ||
+          baseName == ".tidyrc.json" ||
           (type == "regular" && hasSuffix ".purs" baseName) ||
-          (type == "directory" && (baseName != "generated"
-          && baseName != "output"
-          && baseName != "node_modules"
-          && baseName != ".spago"))
+          type == "directory"
         );
   };
 in
@@ -20,6 +19,7 @@ runCommand "purs-tidy-check"
   buildInputs = [ fix-purs-tidy diffutils glibcLocales ];
 } ''
   set +e
+  echo ${toString src'}
   cp -a ${src'} orig
   cp -a ${src'} purs-tidy
   chmod -R +w purs-tidy

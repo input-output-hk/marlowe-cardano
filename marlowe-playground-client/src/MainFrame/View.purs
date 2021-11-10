@@ -11,12 +11,44 @@ import Halogen (ComponentHTML)
 import Halogen.Classes (marlowePlayLogo)
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
-import Halogen.HTML (HTML, a, div, div_, footer, h1, header, img, main, section, span, text)
+import Halogen.HTML
+  ( HTML
+  , a
+  , div
+  , div_
+  , footer
+  , h1
+  , header
+  , img
+  , main
+  , section
+  , span
+  , text
+  )
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, id, src, target)
 import Home as Home
 import Icons (Icon(..), icon)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, View(..), _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _marloweEditorState, _projectName, _simulationState, _view, hasGlobalLoading)
+import MainFrame.Types
+  ( Action(..)
+  , ChildSlots
+  , ModalView(..)
+  , State
+  , View(..)
+  , _authStatus
+  , _blocklyEditorState
+  , _contractMetadata
+  , _createGistResult
+  , _gistId
+  , _hasUnsavedChanges
+  , _haskellState
+  , _javascriptState
+  , _marloweEditorState
+  , _projectName
+  , _simulationState
+  , _view
+  , hasGlobalLoading
+  )
 import Network.RemoteData (_Loading, _Success)
 import Page.BlocklyEditor.View as BlocklyEditor
 import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
@@ -24,15 +56,24 @@ import Page.JavascriptEditor.View as JSEditor
 import Page.MarloweEditor.View as MarloweEditor
 import Page.Simulation.View as Simulation
 
-render ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
+render
+  :: forall m
+   . MonadAff m
+  => State
+  -> ComponentHTML Action ChildSlots m
 render state =
   div [ classNames [ "site-wrap" ] ]
     ( [ header [ classNames [ "no-margins", "flex", "flex-col" ] ]
-          [ div [ classNames [ "flex", "items-center", "justify-between", "bg-gray-dark", "px-medium", "py-small" ] ]
+          [ div
+              [ classNames
+                  [ "flex"
+                  , "items-center"
+                  , "justify-between"
+                  , "bg-gray-dark"
+                  , "px-medium"
+                  , "py-small"
+                  ]
+              ]
               [ img
                   [ classNames [ "h-10", "cursor-pointer" ]
                   , onClick $ const $ ChangeView HomePage
@@ -40,7 +81,12 @@ render state =
                   ]
               , projectTitle
               , div_
-                  [ a [ href "./doc/marlowe/tutorials/index.html", target "_blank", classNames [ "font-semibold" ] ] [ text "Tutorial" ]
+                  [ a
+                      [ href "./doc/marlowe/tutorials/index.html"
+                      , target "_blank"
+                      , classNames [ "font-semibold" ]
+                      ]
+                      [ text "Tutorial" ]
                   -- Link disabled as the Actus labs is not working properly. Future plans might include moving this functionality to Marlowe run
                   -- , a [ onClick $ const $ ChangeView ActusBlocklyEditor, classNames [ "ml-medium", "font-semibold" ] ] [ text "Actus Labs" ]
                   ]
@@ -88,15 +134,44 @@ render state =
           ]
       , modal state
       , globalLoadingOverlay
-      , footer [ classNames [ "flex", "justify-between", "px-medium", "py-small", "bg-gray-dark", "font-semibold" ] ]
+      , footer
+          [ classNames
+              [ "flex"
+              , "justify-between"
+              , "px-medium"
+              , "py-small"
+              , "bg-gray-dark"
+              , "font-semibold"
+              ]
+          ]
           [ div [ classNames [ "flex" ] ]
-              [ a [ href "https://cardano.org/", target "_blank", classNames [ "pr-small" ] ] [ text "cardano.org" ]
-              , a [ href "https://iohk.io/", target "_blank", classNames [ "pl-small" ] ] [ text "iohk.io" ]
+              [ a
+                  [ href "https://cardano.org/"
+                  , target "_blank"
+                  , classNames [ "pr-small" ]
+                  ]
+                  [ text "cardano.org" ]
+              , a
+                  [ href "https://iohk.io/"
+                  , target "_blank"
+                  , classNames [ "pl-small" ]
+                  ]
+                  [ text "iohk.io" ]
               ]
           , div_ [ text (copyright <> " 2021 IOHK Ltd") ]
           , div [ classNames [ "flex" ] ]
-              [ a [ href "https://t.me/IOHK_Marlowe", target "_blank", classNames [ "pr-small" ] ] [ text "Telegram" ]
-              , a [ href "https://twitter.com/hashtag/Marlowe", target "_blank", classNames [ "pl-small" ] ] [ text "Twitter" ]
+              [ a
+                  [ href "https://t.me/IOHK_Marlowe"
+                  , target "_blank"
+                  , classNames [ "pr-small" ]
+                  ]
+                  [ text "Telegram" ]
+              , a
+                  [ href "https://twitter.com/hashtag/Marlowe"
+                  , target "_blank"
+                  , classNames [ "pl-small" ]
+                  ]
+                  [ text "Twitter" ]
               ]
           ]
       ]
@@ -110,17 +185,20 @@ render state =
       let
         title = state ^. _projectName
 
-        unsavedChangesIndicator = if state ^. _hasUnsavedChanges then "*" else ""
+        unsavedChangesIndicator =
+          if state ^. _hasUnsavedChanges then "*" else ""
 
         isLoading = has (_createGistResult <<< _Loading) state
 
-        spinner = if isLoading then icon Spinner else div [ classNames [ "empty" ] ] []
+        spinner =
+          if isLoading then icon Spinner else div [ classNames [ "empty" ] ] []
       in
         div [ classNames [ "project-title" ] ]
           [ h1 [ classNames [ "text-lg" ] ]
               {- TODO: Fix style when name is super long -}
               [ text title
-              , span [ classNames [ "unsave-change-indicator" ] ] [ text unsavedChangesIndicator ]
+              , span [ classNames [ "unsave-change-indicator" ] ]
+                  [ text unsavedChangesIndicator ]
               ]
           , spinner
           ]
@@ -141,21 +219,42 @@ render state =
     MarloweEditor -> true
     _ -> false
 
-  otherActions HaskellEditor = [ renderSubmodule _haskellState HaskellAction HaskellEditor.otherActions state ]
+  otherActions HaskellEditor =
+    [ renderSubmodule _haskellState HaskellAction HaskellEditor.otherActions
+        state
+    ]
 
-  otherActions Simulation = [ renderSubmodule _simulationState SimulationAction (const Simulation.otherActions) state ]
+  otherActions Simulation =
+    [ renderSubmodule _simulationState SimulationAction
+        (const Simulation.otherActions)
+        state
+    ]
 
-  otherActions JSEditor = [ renderSubmodule _javascriptState JavascriptAction JSEditor.otherActions state ]
+  otherActions JSEditor =
+    [ renderSubmodule _javascriptState JavascriptAction JSEditor.otherActions
+        state
+    ]
 
-  otherActions MarloweEditor = [ renderSubmodule _marloweEditorState MarloweEditorAction MarloweEditor.otherActions state ]
+  otherActions MarloweEditor =
+    [ renderSubmodule _marloweEditorState MarloweEditorAction
+        MarloweEditor.otherActions
+        state
+    ]
 
-  otherActions BlocklyEditor = [ renderSubmodule _blocklyEditorState BlocklyEditorAction BlocklyEditor.otherActions state ]
+  otherActions BlocklyEditor =
+    [ renderSubmodule _blocklyEditorState BlocklyEditorAction
+        BlocklyEditor.otherActions
+        state
+    ]
 
   otherActions _ = []
 
   globalLoadingOverlay =
     if hasGlobalLoading state then
-      div [ classNames [ "loading-overlay", "text-3xl", "font-semibold", "text-white" ] ]
+      div
+        [ classNames
+            [ "loading-overlay", "text-3xl", "font-semibold", "text-white" ]
+        ]
         [ div [ classNames [ "mb-small" ] ] [ text "Loading..." ]
         , div_ [ icon Spinner ]
         ]
@@ -169,7 +268,11 @@ menuBar state =
     , gistModal (OpenModal OpenProject) "Open"
     , menuButton (OpenModal OpenDemo) "Open Example"
     , menuButton (OpenModal RenameProject) "Rename"
-    , gistModal (if isNothing $ state ^. _gistId then OpenModal SaveProjectAs else GistAction PublishOrUpdateGist) "Save"
+    , gistModal
+        ( if isNothing $ state ^. _gistId then OpenModal SaveProjectAs
+          else GistAction PublishOrUpdateGist
+        )
+        "Save"
     , gistModal (OpenModal SaveProjectAs) "Save As..."
     ]
   where
@@ -179,7 +282,9 @@ menuBar state =
       ]
 
   gistModal action name =
-    if has (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser) state then
+    if
+      has (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser)
+        state then
       menuButton action name
     else
       menuButton (OpenModal $ GithubLogin action) name

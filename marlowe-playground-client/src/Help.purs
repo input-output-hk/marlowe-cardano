@@ -50,22 +50,38 @@ toHTML helpType =
 
   bodyText MarloweHelp =
     div []
-      [ p_ [ text "In this pane you can create, simulate and analyse Marlowe contracts." ]
-      , p_ [ text "The main display area shows the contract that is still to be executed, so that this changes as the simulation moves forwards or backwards. Underneath this is shown the current state, including the currency in each of the contract’s accounts and the current slot. Other tabs in that section show logs, errors and warnings, as well as giving access to static analysis results." ]
-      , p_ [ text "Above this information are shown the actions available at this point in the simulation. An action is performed by pressing the “+” button next to it; a single action is undone by pressing “Undo”; “Reset” will reset the simulation to the start." ]
+      [ p_
+          [ text
+              "In this pane you can create, simulate and analyse Marlowe contracts."
+          ]
+      , p_
+          [ text
+              "The main display area shows the contract that is still to be executed, so that this changes as the simulation moves forwards or backwards. Underneath this is shown the current state, including the currency in each of the contract’s accounts and the current slot. Other tabs in that section show logs, errors and warnings, as well as giving access to static analysis results."
+          ]
+      , p_
+          [ text
+              "Above this information are shown the actions available at this point in the simulation. An action is performed by pressing the “+” button next to it; a single action is undone by pressing “Undo”; “Reset” will reset the simulation to the start."
+          ]
       ]
 
-  bodyText InputComposerHelp = text "The Input Composer allows you to choose any of the possible inputs to add to a transaction"
+  bodyText InputComposerHelp = text
+    "The Input Composer allows you to choose any of the possible inputs to add to a transaction"
 
-  bodyText TransactionComposerHelp = text "The transaction composer shows you the contents of a transaction which is ready to apply. The inputs within a transaction are applied in order."
+  bodyText TransactionComposerHelp = text
+    "The transaction composer shows you the contents of a transaction which is ready to apply. The inputs within a transaction are applied in order."
 
-  bodyText AvailableActionsHelp = text "The available actions are actions which will progress the contract when applied. After an available action is applied, a new set of actions will be shown."
+  bodyText AvailableActionsHelp = text
+    "The available actions are actions which will progress the contract when applied. After an available action is applied, a new set of actions will be shown."
 
-  bodyText WalletsSimulatorHelp = text "The Wallets Simulator allows you to see how your contract will look from the point of view of users. You can create multiple wallets then transfer roles, add assets and apply transactions in individual wallets. To get started create a wallet by clicking on the '+' button at the top of the main panel."
+  bodyText WalletsSimulatorHelp = text
+    "The Wallets Simulator allows you to see how your contract will look from the point of view of users. You can create multiple wallets then transfer roles, add assets and apply transactions in individual wallets. To get started create a wallet by clicking on the '+' button at the top of the main panel."
 
   bodyText EditorHelp =
     div []
-      [ p_ [ text "Marlowe code can be edited and analysed in the code editor. To make things easier to read, you can format code at any time by right-clicking in the editor and selecting \"Format Document\"." ]
+      [ p_
+          [ text
+              "Marlowe code can be edited and analysed in the code editor. To make things easier to read, you can format code at any time by right-clicking in the editor and selecting \"Format Document\"."
+          ]
       , p_
           [ text
               "If you enter some invalid code, the code will be underlined in "
@@ -76,34 +92,52 @@ toHTML helpType =
           , text " tab in the bottom panel."
           ]
       , p_
-          [ text "A valid contract can still contain parts that don't really make sense. Possible issues are underlined in "
+          [ text
+              "A valid contract can still contain parts that don't really make sense. Possible issues are underlined in "
           , code "yellow"
-          , text " and again, hovering over them will display more information about the warning. These are displayed in full in the "
+          , text
+              " and again, hovering over them will display more information about the warning. These are displayed in full in the "
           , bold "Warnings"
           , text " tab in the bottom panel."
           ]
       , p_
           [ text "It is also possible to leave a "
           , code "hole"
-          , text " in a contract where you are not sure what to fill in yet, you can do this by typing a "
+          , text
+              " in a contract where you are not sure what to fill in yet, you can do this by typing a "
           , code "?"
           , text " followed by a name, for example "
           , code "?next_contract."
-          , text " This will also show up as a warning but in this case, when you hover over the warning you will be given a "
+          , text
+              " This will also show up as a warning but in this case, when you hover over the warning you will be given a "
           , code "Quick Fix"
           , text " link. If you click "
           , code "Quick Fix"
-          , text " then you will be given a list of options. You can also see these options by clicking on the \x1f4a1 symbol."
+          , text
+              " then you will be given a list of options. You can also see these options by clicking on the \x1f4a1 symbol."
           ]
-      , p_ [ text "The editor also has an auto-complete feature. Instead of writing a hole you can just press ctrl+space to show a list of possible values. You can also just start typing to see the options." ]
+      , p_
+          [ text
+              "The editor also has an auto-complete feature. Instead of writing a hole you can just press ctrl+space to show a list of possible values. You can also just start typing to see the options."
+          ]
       , p_
           [ text "You can transfer a contract to blockly by clicking on the "
-          , img [ class_ (ClassName "blockly-btn-inline-icon"), src blocklyIcon, alt "blockly logo" ]
-          , text " button at the top-right of the editor. You cannot transfer a contract that has errors but warnings and holes are fine."
+          , img
+              [ class_ (ClassName "blockly-btn-inline-icon")
+              , src blocklyIcon
+              , alt "blockly logo"
+              ]
+          , text
+              " button at the top-right of the editor. You cannot transfer a contract that has errors but warnings and holes are fine."
           ]
       , p_
-          [ text "For more advanced users, the editor has key bindings for Vim and Emacs, you can select which mode you prefer from the drop-down list next to the "
-          , img [ class_ (ClassName "blockly-btn-inline-icon"), src blocklyIcon, alt "blockly logo" ]
+          [ text
+              "For more advanced users, the editor has key bindings for Vim and Emacs, you can select which mode you prefer from the drop-down list next to the "
+          , img
+              [ class_ (ClassName "blockly-btn-inline-icon")
+              , src blocklyIcon
+              , alt "blockly logo"
+              ]
           , text " button."
           ]
       ]
@@ -115,7 +149,10 @@ bold :: forall p a. String -> HTML p a
 bold s = span [ class_ Classes.bold ] [ text s ]
 
 holeText :: MarloweType -> String
-holeText marloweType = "Found a hole of type " <> dropEnd 4 (show marloweType) <> "\n" <> text <> "\nClick on Quick Fix below to see the options."
+holeText marloweType = "Found a hole of type " <> dropEnd 4 (show marloweType)
+  <> "\n"
+  <> text
+  <> "\nClick on Quick Fix below to see the options."
   where
   text = marloweTypeMarkerText marloweType
 

@@ -18,12 +18,13 @@ import Marlowe.Semantics (AccountId, Party, Token)
 -- Note that all the types are basically the same. The additional data
 -- constructors are purely to make the model more self-documenting
 type Transfer
-  = { sender :: Participant
-    , recipient :: Participant
-    , token :: Token
-    , quantity :: BigInt
-    , termini :: Termini
-    }
+  =
+  { sender :: Participant
+  , recipient :: Participant
+  , token :: Token
+  , quantity :: BigInt
+  , termini :: Termini
+  }
 
 data Termini
   = AccountToAccount AccountId AccountId
@@ -31,9 +32,10 @@ data Termini
   | WalletToAccount Party AccountId
 
 type Participant
-  = { nickname :: Maybe String
-    , isCurrentUser :: Boolean
-    }
+  =
+  { nickname :: Maybe String
+  , isCurrentUser :: Boolean
+  }
 
 type Nickname
   = String

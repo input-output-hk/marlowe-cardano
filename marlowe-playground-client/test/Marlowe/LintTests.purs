@@ -50,7 +50,8 @@ all = do
     test "Pay before deposit" payBeforeWarning
     test "Pay before deposit in branch" payBeforeWarningBranch
     test "Pay with insufficient deposit" payInsufficientDeposit
-    test "Pay twice with insufficient deposit for both" payTwiceInsufficientDeposit
+    test "Pay twice with insufficient deposit for both"
+      payTwiceInsufficientDeposit
   suite "Marlowe.Linter does not report good contracts" do
     test "Defined Let" normalLet
     test "Defined ChoiceValue" normalChoiceValue
@@ -65,28 +66,45 @@ addParenthesis :: String -> String
 addParenthesis str = "(" <> str <> ")"
 
 letContract :: String -> String
-letContract subExpression = "Let \"simplifiableValue\" " <> subExpression <> " Close"
+letContract subExpression = "Let \"simplifiableValue\" " <> subExpression <>
+  " Close"
 
 addContract :: String -> String
-addContract subExpression = "Let \"simplifiableValue\" (AddValue SlotIntervalEnd " <> subExpression <> ") Close"
+addContract subExpression =
+  "Let \"simplifiableValue\" (AddValue SlotIntervalEnd " <> subExpression <>
+    ") Close"
 
 subContract :: String -> String
-subContract subExpression = "Let \"simplifiableValue\" (SubValue SlotIntervalEnd " <> subExpression <> ") Close"
+subContract subExpression =
+  "Let \"simplifiableValue\" (SubValue SlotIntervalEnd " <> subExpression <>
+    ") Close"
 
 depositAndThenDo :: String -> String -> String
-depositAndThenDo subExpression continuation = "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") " <> subExpression <> ") " <> continuation <> "] 10 Close"
+depositAndThenDo subExpression continuation =
+  "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") "
+    <> subExpression
+    <> ") "
+    <> continuation
+    <> "] 10 Close"
 
 depositContract :: String -> String
 depositContract subExpression = depositAndThenDo subExpression "Close"
 
 choiceAndThenDo :: String -> String
-choiceAndThenDo continuation = "When [Case (Choice (ChoiceId \"choice\" (Role \"role\")) [Bound 50 100]) " <> continuation <> "] 5 Close"
+choiceAndThenDo continuation =
+  "When [Case (Choice (ChoiceId \"choice\" (Role \"role\")) [Bound 50 100]) "
+    <> continuation
+    <> "] 5 Close"
 
 payContract :: String -> String
-payContract subExpression = "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") " <> subExpression <> " Close)] 10 Close"
+payContract subExpression =
+  "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") "
+    <> subExpression
+    <> " Close)] 10 Close"
 
 notifyContract :: String -> String
-notifyContract subExpression = "When [Case (Notify " <> subExpression <> ") Close] 10 Close"
+notifyContract subExpression = "When [Case (Notify " <> subExpression <>
+  ") Close] 10 Close"
 
 assertContract :: String -> String
 assertContract subExpression = "Assert " <> subExpression <> " Close"
@@ -95,39 +113,63 @@ ifContract :: String -> String
 ifContract subExpression = "If " <> subExpression <> " Close Close"
 
 andContract :: String -> String
-andContract subExpression = "If (AndObs (ValueLE SlotIntervalEnd (Constant 20)) " <> subExpression <> ") Close Close"
+andContract subExpression =
+  "If (AndObs (ValueLE SlotIntervalEnd (Constant 20)) " <> subExpression <>
+    ") Close Close"
 
 orContract :: String -> String
-orContract subExpression = "If (OrObs (ValueGE SlotIntervalEnd (Constant 5)) " <> subExpression <> ") Close Close"
+orContract subExpression = "If (OrObs (ValueGE SlotIntervalEnd (Constant 5)) "
+  <> subExpression
+  <> ") Close Close"
 
 makeValueSimplificationWarning :: String -> String -> String
-makeValueSimplificationWarning simplifiableExpression simplification = "The value \"" <> simplifiableExpression <> "\" can be simplified to \"" <> simplification <> "\""
+makeValueSimplificationWarning simplifiableExpression simplification =
+  "The value \"" <> simplifiableExpression <> "\" can be simplified to \""
+    <> simplification
+    <> "\""
 
 makeObservationSimplificationWarning :: String -> String -> String
-makeObservationSimplificationWarning simplifiableExpression simplification = "The observation \"" <> simplifiableExpression <> "\" can be simplified to \"" <> simplification <> "\""
+makeObservationSimplificationWarning simplifiableExpression simplification =
+  "The observation \"" <> simplifiableExpression <> "\" can be simplified to \""
+    <> simplification
+    <> "\""
 
 unCurry2 :: forall a b c. (a -> b -> c) -> (a /\ b) -> c
 unCurry2 f (a /\ b) = f a b
 
 testWarning :: forall a. (a -> Array String) -> (a -> String) -> a -> Test
-testWarning makeWarning composeExpression expression = case parseContract $ composeExpression expression of
-  Right contractTerm -> do
-    let
-      State st = lint Nil contractTerm
-    Assert.equal (makeWarning expression) $ map show $ toUnfoldable $ st.warnings
-  Left err -> failure (show err)
+testWarning makeWarning composeExpression expression =
+  case parseContract $ composeExpression expression of
+    Right contractTerm -> do
+      let
+        State st = lint Nil contractTerm
+      Assert.equal (makeWarning expression) $ map show $ toUnfoldable $
+        st.warnings
+    Left err -> failure (show err)
 
-testSimplificationWarning :: (String -> String -> String) -> (String -> String) -> String -> String -> Test
-testSimplificationWarning f g simplifiableExpression simplification = testWarning (singleton <<< unCurry2 f) (g <<< fst) (simplifiableExpression /\ simplification)
+testSimplificationWarning
+  :: (String -> String -> String)
+  -> (String -> String)
+  -> String
+  -> String
+  -> Test
+testSimplificationWarning f g simplifiableExpression simplification =
+  testWarning (singleton <<< unCurry2 f) (g <<< fst)
+    (simplifiableExpression /\ simplification)
 
 testValueSimplificationWarning :: (String -> String) -> String -> String -> Test
-testValueSimplificationWarning = testSimplificationWarning makeValueSimplificationWarning
+testValueSimplificationWarning = testSimplificationWarning
+  makeValueSimplificationWarning
 
-testObservationSimplificationWarning :: (String -> String) -> String -> String -> Test
-testObservationSimplificationWarning = testSimplificationWarning makeObservationSimplificationWarning
+testObservationSimplificationWarning
+  :: (String -> String) -> String -> String -> Test
+testObservationSimplificationWarning = testSimplificationWarning
+  makeObservationSimplificationWarning
 
 testWarningSimple :: String -> String -> Test
-testWarningSimple expression warning = testWarning (const [ warning ]) (const expression) unit
+testWarningSimple expression warning = testWarning (const [ warning ])
+  (const expression)
+  unit
 
 testNoWarning :: String -> Test
 testNoWarning expression = testWarning (const []) (const expression) unit
@@ -135,128 +177,156 @@ testNoWarning expression = testWarning (const []) (const expression) unit
 letSimplifies :: Test
 letSimplifies =
   let
-    simplifiableExpression = "(AddValue (SubValue (Constant 6) (NegValue (Constant -3))) (Constant -5))"
+    simplifiableExpression =
+      "(AddValue (SubValue (Constant 6) (NegValue (Constant -3))) (Constant -5))"
 
     simplification = "(Constant -2)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
 depositSimplifies :: Test
 depositSimplifies =
   let
-    simplifiableExpression = "(AddValue (SubValue (Constant 3) (Constant -5)) (NegValue (Constant 7)))"
+    simplifiableExpression =
+      "(AddValue (SubValue (Constant 3) (Constant -5)) (NegValue (Constant 7)))"
 
     simplification = "(Constant 1)"
   in
-    testValueSimplificationWarning depositContract simplifiableExpression simplification
+    testValueSimplificationWarning depositContract simplifiableExpression
+      simplification
 
 paySimplifies :: Test
 paySimplifies =
   let
-    simplifiableExpression = "(AddValue (SubValue (Constant 6) (Constant -1)) (NegValue (Constant 6)))"
+    simplifiableExpression =
+      "(AddValue (SubValue (Constant 6) (Constant -1)) (NegValue (Constant 6)))"
 
     simplification = "(Constant 1)"
   in
-    testValueSimplificationWarning payContract simplifiableExpression simplification
+    testValueSimplificationWarning payContract simplifiableExpression
+      simplification
 
 addValueSimplifies :: Test
 addValueSimplifies =
   let
-    simplifiableExpression = "(AddValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -5))"
+    simplifiableExpression =
+      "(AddValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -5))"
 
     simplification = "(Constant 1)"
   in
-    testValueSimplificationWarning addContract simplifiableExpression simplification
+    testValueSimplificationWarning addContract simplifiableExpression
+      simplification
 
 addValueSimplifiesWithZero :: Test
 addValueSimplifiesWithZero =
   let
-    simplifiableExpression = "(AddValue SlotIntervalEnd (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)))"
+    simplifiableExpression =
+      "(AddValue SlotIntervalEnd (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)))"
 
     simplification = "SlotIntervalEnd"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
 subValueSimplifies :: Test
 subValueSimplifies =
   let
-    simplifiableExpression = "(SubValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -2))"
+    simplifiableExpression =
+      "(SubValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -2))"
 
     simplification = "(Constant 8)"
   in
-    testValueSimplificationWarning subContract simplifiableExpression simplification
+    testValueSimplificationWarning subContract simplifiableExpression
+      simplification
 
 subValueSimplifiesWithZero :: Test
 subValueSimplifiesWithZero =
   let
-    simplifiableExpression = "(SubValue (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)) SlotIntervalEnd)"
+    simplifiableExpression =
+      "(SubValue (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)) SlotIntervalEnd)"
 
     simplification = "(NegValue SlotIntervalEnd)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
 notifySimplifies :: Test
 notifySimplifies =
   let
-    simplifiableExpression = "(OrObs (ValueLT SlotIntervalEnd (Constant 34)) (OrObs (NotObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3))) (NotObs (OrObs TrueObs FalseObs))))"
+    simplifiableExpression =
+      "(OrObs (ValueLT SlotIntervalEnd (Constant 34)) (OrObs (NotObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3))) (NotObs (OrObs TrueObs FalseObs))))"
 
     simplification = "(ValueLT SlotIntervalEnd (Constant 34))"
   in
-    testObservationSimplificationWarning notifyContract simplifiableExpression simplification
+    testObservationSimplificationWarning notifyContract simplifiableExpression
+      simplification
 
 assertSimplifies :: Test
 assertSimplifies =
   let
-    simplifiableExpression = "(AndObs (ValueGT (Constant 14) SlotIntervalEnd) (AndObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3)) (OrObs FalseObs TrueObs)))"
+    simplifiableExpression =
+      "(AndObs (ValueGT (Constant 14) SlotIntervalEnd) (AndObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3)) (OrObs FalseObs TrueObs)))"
 
     simplification = "(ValueGT (Constant 14) SlotIntervalEnd)"
   in
-    testObservationSimplificationWarning assertContract simplifiableExpression simplification
+    testObservationSimplificationWarning assertContract simplifiableExpression
+      simplification
 
 ifSimplifies :: Test
 ifSimplifies =
   let
-    simplifiableExpression = "(OrObs (ValueGE SlotIntervalEnd (Constant 5)) (AndObs (NotObs (OrObs FalseObs (ValueEQ (AddValue (Constant -2) (Constant 3)) (Constant 1)))) TrueObs))"
+    simplifiableExpression =
+      "(OrObs (ValueGE SlotIntervalEnd (Constant 5)) (AndObs (NotObs (OrObs FalseObs (ValueEQ (AddValue (Constant -2) (Constant 3)) (Constant 1)))) TrueObs))"
 
     simplification = "(ValueGE SlotIntervalEnd (Constant 5))"
   in
-    testObservationSimplificationWarning ifContract simplifiableExpression simplification
+    testObservationSimplificationWarning ifContract simplifiableExpression
+      simplification
 
 andObsSimplifies :: Test
 andObsSimplifies =
   let
-    simplifiableExpression = "(OrObs FalseObs (ValueEQ SlotIntervalEnd (Constant 2)))"
+    simplifiableExpression =
+      "(OrObs FalseObs (ValueEQ SlotIntervalEnd (Constant 2)))"
 
     simplification = "(ValueEQ SlotIntervalEnd (Constant 2))"
   in
-    testObservationSimplificationWarning andContract simplifiableExpression simplification
+    testObservationSimplificationWarning andContract simplifiableExpression
+      simplification
 
 andObsSimplifiesWithTrue :: Test
 andObsSimplifiesWithTrue =
   let
-    simplifiableExpression = "(AndObs TrueObs (ValueLE SlotIntervalEnd (Constant 6)))"
+    simplifiableExpression =
+      "(AndObs TrueObs (ValueLE SlotIntervalEnd (Constant 6)))"
 
     simplification = "(ValueLE SlotIntervalEnd (Constant 6))"
   in
-    testObservationSimplificationWarning ifContract simplifiableExpression simplification
+    testObservationSimplificationWarning ifContract simplifiableExpression
+      simplification
 
 orObsSimplifies :: Test
 orObsSimplifies =
   let
-    simplifiableExpression = "(AndObs TrueObs (ValueEQ SlotIntervalEnd (Constant 12)))"
+    simplifiableExpression =
+      "(AndObs TrueObs (ValueEQ SlotIntervalEnd (Constant 12)))"
 
     simplification = "(ValueEQ SlotIntervalEnd (Constant 12))"
   in
-    testObservationSimplificationWarning orContract simplifiableExpression simplification
+    testObservationSimplificationWarning orContract simplifiableExpression
+      simplification
 
 orObsSimplifiesWithFalse :: Test
 orObsSimplifiesWithFalse =
   let
-    simplifiableExpression = "(OrObs FalseObs (ValueGE SlotIntervalEnd (Constant 3)))"
+    simplifiableExpression =
+      "(OrObs FalseObs (ValueGE SlotIntervalEnd (Constant 3)))"
 
     simplification = "(ValueGE SlotIntervalEnd (Constant 3))"
   in
-    testObservationSimplificationWarning ifContract simplifiableExpression simplification
+    testObservationSimplificationWarning ifContract simplifiableExpression
+      simplification
 
 divZeroSimplified :: Test
 divZeroSimplified =
@@ -265,7 +335,8 @@ divZeroSimplified =
 
     simplification = "(Constant 0)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
 divByZeroSimplified :: Test
 divByZeroSimplified =
@@ -274,7 +345,8 @@ divByZeroSimplified =
 
     simplification = "(Constant 0)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
 divConstantSimplified :: Test
 divConstantSimplified =
@@ -283,19 +355,25 @@ divConstantSimplified =
 
     simplification = "(Constant -2)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
 letShadowing :: Test
-letShadowing = testWarningSimple "Let \"value\" (Constant 1) (Let \"value\" (Constant 1) Close)" "Let is redefining a ValueId that already exists"
+letShadowing = testWarningSimple
+  "Let \"value\" (Constant 1) (Let \"value\" (Constant 1) Close)"
+  "Let is redefining a ValueId that already exists"
 
 nonIncreasingTimeouts :: Test
-nonIncreasingTimeouts = testWarningSimple "When [] 5 (When [] 5 Close)" "Timeouts should always increase in value"
+nonIncreasingTimeouts = testWarningSimple "When [] 5 (When [] 5 Close)"
+  "Timeouts should always increase in value"
 
 unreachableThen :: Test
-unreachableThen = testWarningSimple "If FalseObs Close Close" $ show UnreachableContract
+unreachableThen = testWarningSimple "If FalseObs Close Close" $ show
+  UnreachableContract
 
 unreachableElse :: Test
-unreachableElse = testWarningSimple "If TrueObs Close Close" $ show UnreachableContract
+unreachableElse = testWarningSimple "If TrueObs Close Close" $ show
+  UnreachableContract
 
 unreachableCaseNotify :: Test
 unreachableCaseNotify =
@@ -304,83 +382,120 @@ unreachableCaseNotify =
 
 unreachableCaseEmptyChoiceList :: Test
 unreachableCaseEmptyChoiceList =
-  testWarningSimple "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) []) Close] 10 Close"
+  testWarningSimple
+    "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) []) Close] 10 Close"
     $ show UnreachableCaseEmptyChoice
 
 unreachableCaseInvalidBound :: Test
 unreachableCaseInvalidBound =
-  testWarningSimple "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) [Bound 0 2, Bound 4 3]) Close] 10 Close"
+  testWarningSimple
+    "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) [Bound 0 2, Bound 4 3]) Close] 10 Close"
     $ show InvalidBound
 
 undefinedLet :: Test
-undefinedLet = testWarningSimple (letContract "(UseValue \"simplifiableValue\")") $ show UndefinedUse
+undefinedLet =
+  testWarningSimple (letContract "(UseValue \"simplifiableValue\")") $ show
+    UndefinedUse
 
 undefinedChoiceValue :: Test
-undefinedChoiceValue = testWarningSimple (choiceAndThenDo (addParenthesis (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role2\")))"))) $ show UndefinedChoice
+undefinedChoiceValue =
+  testWarningSimple
+    ( choiceAndThenDo
+        ( addParenthesis
+            (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role2\")))")
+        )
+    ) $ show UndefinedChoice
 
 nonPositiveDeposit :: Test
-nonPositiveDeposit = testWarningSimple (depositContract "(Constant 0)") $ show NegativeDeposit
+nonPositiveDeposit = testWarningSimple (depositContract "(Constant 0)") $ show
+  NegativeDeposit
 
 negativeDeposit :: Test
-negativeDeposit = testWarningSimple (depositContract "(Constant -1)") $ show NegativeDeposit
+negativeDeposit = testWarningSimple (depositContract "(Constant -1)") $ show
+  NegativeDeposit
 
 nonPositivePay :: Test
-nonPositivePay = testWarningSimple (payContract "(Constant 0)") $ show NegativePayment
+nonPositivePay = testWarningSimple (payContract "(Constant 0)") $ show
+  NegativePayment
 
 negativePay :: Test
-negativePay = testWarningSimple (payContract "(Constant -1)") $ show NegativePayment
+negativePay = testWarningSimple (payContract "(Constant -1)") $ show
+  NegativePayment
 
 payBeforeWarning :: Test
-payBeforeWarning = testWarningSimple contract "The contract makes a payment from account \"role\" before a deposit has been made"
+payBeforeWarning = testWarningSimple contract
+  "The contract makes a payment from account \"role\" before a deposit has been made"
   where
-  contract = "When [Case (Deposit (Role \"role1\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
+  contract =
+    "When [Case (Deposit (Role \"role1\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
 
 payBeforeWarningBranch :: Test
-payBeforeWarningBranch = testWarningSimple contract "The contract makes a payment from account \"role\" before a deposit has been made"
+payBeforeWarningBranch = testWarningSimple contract
+  "The contract makes a payment from account \"role\" before a deposit has been made"
   where
-  contract = "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") (Constant 10)) Close] 2 (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
+  contract =
+    "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") (Constant 10)) Close] 2 (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
 
 payDepositDifferentCurrency :: Test
-payDepositDifferentCurrency = testWarningSimple (depositAndThenDo "(Constant 10)" continuation) "The contract makes a payment from account \"role\" before a deposit has been made"
+payDepositDifferentCurrency = testWarningSimple
+  (depositAndThenDo "(Constant 10)" continuation)
+  "The contract makes a payment from account \"role\" before a deposit has been made"
   where
-  continuation = "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"0000\" \"0000\") (Constant 10) Close)"
+  continuation =
+    "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"0000\" \"0000\") (Constant 10) Close)"
 
 payInsufficientDeposit :: Test
-payInsufficientDeposit = testWarningSimple (depositAndThenDo "(Constant 9)" continuation) "The contract makes a payment of 10 ADA from account \"role\" but the account only has 9"
+payInsufficientDeposit = testWarningSimple
+  (depositAndThenDo "(Constant 9)" continuation)
+  "The contract makes a payment of 10 ADA from account \"role\" but the account only has 9"
   where
-  continuation = "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
+  continuation =
+    "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
 
 payTwiceInsufficientDeposit :: Test
-payTwiceInsufficientDeposit = testWarningSimple (depositAndThenDo "(Constant 9)" continuation) "The contract makes a payment of 5 ADA from account \"role\" but the account only has 4"
+payTwiceInsufficientDeposit = testWarningSimple
+  (depositAndThenDo "(Constant 9)" continuation)
+  "The contract makes a payment of 5 ADA from account \"role\" but the account only has 4"
   where
   continuation =
     "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) "
-      <> "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
+      <>
+        "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
 
 payToHole :: Test
 payToHole = testNoWarning contract
   where
-  contract = "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay ?party (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
+  contract =
+    "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay ?party (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
 
 payThroughAccount :: Test
-payThroughAccount = testNoWarning (depositAndThenDo "(Constant 10)" continuation)
+payThroughAccount = testNoWarning
+  (depositAndThenDo "(Constant 10)" continuation)
   where
   continuation =
     "(Pay (Role \"role\") (Account (Role \"role2\")) (Token \"\" \"\") (Constant 10) "
-      <> "(Pay (Role \"role2\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close))"
+      <>
+        "(Pay (Role \"role2\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close))"
 
 payTwice :: Test
 payTwice = testNoWarning (depositAndThenDo "(Constant 10)" continuation)
   where
   continuation =
     "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) "
-      <> "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
+      <>
+        "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
 
 normalLet :: Test
-normalLet = testNoWarning "Let \"a\" (Constant 0) (Let \"b\" (UseValue \"a\") Close)"
+normalLet = testNoWarning
+  "Let \"a\" (Constant 0) (Let \"b\" (UseValue \"a\") Close)"
 
 normalChoiceValue :: Test
-normalChoiceValue = testNoWarning (choiceAndThenDo (addParenthesis (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role\")))")))
+normalChoiceValue = testNoWarning
+  ( choiceAndThenDo
+      ( addParenthesis
+          (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role\")))")
+      )
+  )
 
 positiveDeposit :: Test
 positiveDeposit = testNoWarning (depositContract "(Constant 1)")
@@ -389,7 +504,12 @@ positivePay :: Test
 positivePay = testNoWarning (payContract "(Constant 1)")
 
 examplesPassLinter :: TestSuite
-examplesPassLinter = sequence_ (map examplePassesLinter (Map.toUnfoldable marloweContracts) :: Array TestSuite)
+examplesPassLinter = sequence_
+  ( map examplePassesLinter (Map.toUnfoldable marloweContracts) :: Array
+      TestSuite
+  )
   where
   examplePassesLinter :: String /\ String -> TestSuite
-  examplePassesLinter (name /\ contract) = test (show name <> " example passes Marlowe.Linter") $ testNoWarning contract
+  examplePassesLinter (name /\ contract) =
+    test (show name <> " example passes Marlowe.Linter") $ testNoWarning
+      contract

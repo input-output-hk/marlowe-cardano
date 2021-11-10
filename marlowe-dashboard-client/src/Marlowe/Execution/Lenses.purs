@@ -19,7 +19,13 @@ import Data.Lens (Lens', Traversal', _Just, traversed)
 import Data.Lens.Record (prop)
 import Data.List (List)
 import Type.Proxy (Proxy(..))
-import Marlowe.Execution.Types (ContractAndState, PastState, PendingTimeouts, State, TimeoutInfo)
+import Marlowe.Execution.Types
+  ( ContractAndState
+  , PastState
+  , PendingTimeouts
+  , State
+  , TimeoutInfo
+  )
 import Marlowe.Semantics (Contract, Payment, Slot, TransactionInput, Accounts)
 import Marlowe.Semantics (State) as Semantic
 

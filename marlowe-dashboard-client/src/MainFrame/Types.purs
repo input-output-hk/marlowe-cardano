@@ -32,12 +32,13 @@ import WebSocket.Support (FromSocket) as WS
 -- no wallet, and all you can do is generate one or create a new one; and the "dashboard"
 -- state for when you have selected a wallet, and can do all of the things.
 type State
-  = { webSocketStatus :: WebSocketStatus
-    , currentSlot :: Slot
-    , tzOffset :: Minutes
-    , subState :: Either Welcome.State Dashboard.State
-    , toast :: Toast.State
-    }
+  =
+  { webSocketStatus :: WebSocketStatus
+  , currentSlot :: Slot
+  , tzOffset :: Minutes
+  , subState :: Either Welcome.State Dashboard.State
+  , toast :: Toast.State
+  }
 
 data WebSocketStatus
   = WebSocketOpen
@@ -48,16 +49,18 @@ derive instance genericWebSocketStatus :: Generic WebSocketStatus _
 instance showWebSocketStatus :: Show WebSocketStatus where
   show WebSocketOpen = "WebSocketOpen"
   show (WebSocketClosed Nothing) = "WebSocketClosed"
-  show (WebSocketClosed (Just closeEvent)) = "WebSocketClosed " <> WS.reason closeEvent
+  show (WebSocketClosed (Just closeEvent)) = "WebSocketClosed " <> WS.reason
+    closeEvent
 
 ------------------------------------------------------------
 type ChildSlots
-  = ( tooltipSlot :: forall query. H.Slot query Void ReferenceId
-    , hintSlot :: forall query. H.Slot query Void String
-    , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
-    , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
-    , expandSlot :: Expand.Slot Void String
-    )
+  =
+  ( tooltipSlot :: forall query. H.Slot query Void ReferenceId
+  , hintSlot :: forall query. H.Slot query Void String
+  , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
+  , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
+  , expandSlot :: Expand.Slot Void String
+  )
 
 ------------------------------------------------------------
 data Query a
@@ -70,7 +73,8 @@ data Msg
 ------------------------------------------------------------
 data Action
   = Init
-  | EnterWelcomeState WalletLibrary WalletDetails (Map PlutusAppId Contract.State)
+  | EnterWelcomeState WalletLibrary WalletDetails
+      (Map PlutusAppId Contract.State)
   | EnterDashboardState WalletLibrary WalletDetails
   | WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action

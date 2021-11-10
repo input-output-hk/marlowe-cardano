@@ -102,27 +102,28 @@ newElementId = readProperty "newElementId"
 -- the appropiate value, but may not have the correct shape.
 -- https://pursuit.purescript.org/packages/purescript-web-events/2.0.1/docs/Web.Internal.FFI#v:unsafeReadProtoTagged
 readBlocklyEventType :: forall a b. String -> a -> Maybe b
-readBlocklyEventType name value = runFn4 _readBlocklyEventType Nothing Just name value
+readBlocklyEventType name value = runFn4 _readBlocklyEventType Nothing Just name
+  value
 
-foreign import _readBlocklyEventType ::
-  forall a b.
-  Fn4
-    (forall x. Maybe x)
-    (forall x. x -> Maybe x)
-    String
-    a
-    (Maybe b)
+foreign import _readBlocklyEventType
+  :: forall a b
+   . Fn4
+       (forall x. Maybe x)
+       (forall x. x -> Maybe x)
+       String
+       a
+       (Maybe b)
 
 -- Similar to the above, this function expects to receive a Blockly event and a property that may be undefined
 -- for example "newParentId" and return the property in a maybe
 readProperty :: forall a b. String -> a -> Maybe b
 readProperty property event = runFn4 _readProperty Nothing Just property event
 
-foreign import _readProperty ::
-  forall a b.
-  Fn4
-    (forall x. Maybe x)
-    (forall x. x -> Maybe x)
-    String
-    a
-    (Maybe b)
+foreign import _readProperty
+  :: forall a b
+   . Fn4
+       (forall x. Maybe x)
+       (forall x. x -> Maybe x)
+       String
+       a
+       (Maybe b)
