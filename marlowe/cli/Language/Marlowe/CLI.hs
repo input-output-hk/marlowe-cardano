@@ -95,19 +95,19 @@ exportMarloweCommand =
 exportMarloweOptions :: O.Parser Command
 exportMarloweOptions =
   Export
-    <$> (O.optional . O.option parseNetworkId)             (O.long "network-magic"  <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet." )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"      <> O.help "Stake address, if any."              )
-    <*> O.strOption                                        (O.long "validator-file" <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for validator."     )
-    <*> O.switch                                           (O.long "print-address"                              <> O.help "Print validator address."            )
-    <*> O.strOption                                        (O.long "account-hash"   <> O.metavar "PUB_KEY_HASH" <> O.help "Public key hash for the account."    )
-    <*> O.option parseLovelace                             (O.long "account-value"  <> O.metavar "LOVELACE"     <> O.help "Lovelace value for the account."     )
-    <*> O.option parseSlotNo                               (O.long "min-slot"       <> O.metavar "MIN_SLOT"     <> O.help "Minimum slot for the contract state.")
-    <*> O.strOption                                        (O.long "datum-file"     <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for datum."         )
-    <*> O.option parseSlotNo                               (O.long "min-slot"       <> O.metavar "SLOT_NUMBER"  <> O.help "Minimum slot for the redemption."    )
-    <*> O.option parseSlotNo                               (O.long "max-slot"       <> O.metavar "SLOT_NUMBER"  <> O.help "Maximum slot for the redemption."    )
-    <*> O.strOption                                        (O.long "redeemer-file"  <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for redeemer."      )
-    <*> O.switch                                           (O.long "print-hash"                                 <> O.help "Print hashes."                       )
-    <*> O.switch                                           (O.long "print-stats"                                <> O.help "Print statistics."                   )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "network-magic"        <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet." )
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"        <> O.metavar "ADDRESS"      <> O.help "Stake address, if any."              )
+    <*> O.strOption                                        (O.long "validator-file"       <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for validator."     )
+    <*> O.switch                                           (O.long "print-address"                                    <> O.help "Print validator address."            )
+    <*> O.strOption                                        (O.long "datum-account-hash"   <> O.metavar "PUB_KEY_HASH" <> O.help "Public key hash for the account."    )
+    <*> O.option parseLovelace                             (O.long "datum-account-value"  <> O.metavar "LOVELACE"     <> O.help "Lovelace value for the account."     )
+    <*> O.option parseSlotNo                               (O.long "datum-min-slot"       <> O.metavar "MIN_SLOT"     <> O.help "Minimum slot for the contract state.")
+    <*> O.strOption                                        (O.long "datum-file"           <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for datum."         )
+    <*> O.option parseSlotNo                               (O.long "redeemer-min-slot"    <> O.metavar "SLOT_NUMBER"  <> O.help "Minimum slot for the redemption."    )
+    <*> O.option parseSlotNo                               (O.long "redeemer-max-slot"    <> O.metavar "SLOT_NUMBER"  <> O.help "Maximum slot for the redemption."    )
+    <*> O.strOption                                        (O.long "redeemer-file"        <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for redeemer."      )
+    <*> O.switch                                           (O.long "print-hash"                                       <> O.help "Print hashes."                       )
+    <*> O.switch                                           (O.long "print-stats"                                      <> O.help "Print statistics."                   )
 
 
 exportValidatorCommand :: O.Mod O.CommandFields Command
