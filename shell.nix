@@ -6,7 +6,7 @@ let
   inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purty-pre-commit;
+  inherit (marlowe) purs-tidy-hook prettier-hook;
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
@@ -27,10 +27,10 @@ let
       stylish-haskell = stylish-haskell;
       nixpkgs-fmt = nixpkgs-fmt;
       shellcheck = pkgs.shellcheck;
-      purty = purty-pre-commit;
     };
     hooks = {
-      purty.enable = true;
+      inherit purs-tidy-hook;
+      prettier = prettier-hook;
       stylish-haskell.enable = true;
       nixpkgs-fmt = {
         enable = true;
@@ -70,6 +70,7 @@ let
     yq
     z3
     zlib
+    nodePackages.prettier
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
   # local build inputs ( -> ./nix/pkgs/default.nix )
@@ -77,7 +78,8 @@ let
     cabal-install
     cardano-repo-tool
     fixPngOptimization
-    fixPurty
+    fix-prettier
+    fix-purs-tidy
     fixStylishHaskell
     haskell-language-server
     haskell-language-server-wrapper
@@ -88,7 +90,7 @@ let
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
     purs
-    purty
+    purs-tidy
     spago
     psa
     purescript-language-server

@@ -57,11 +57,13 @@ message during the build with the actual hash value.
 
 ## Code formatting
 
-The code is formatted using [purty](https://gitlab.com/joneshf/purty), and there is a CI task that will fail if the code is not properly formatted. You can apply purty to the project by calling:
+The code is formatted using [purs-tidy](https://github.com/natefaubion/purescript-tidy), and there is a CI task that will fail if the code is not properly formatted. You can apply purs-tidy to the project by calling:
 
 ```bash
-nix-shell shell.nix --run fix-purty
+nix-shell shell.nix --run fix-purs-tidy
 ```
+
+The code is formatted using [purs-tidy](https://github.com/natefaubion/purescript-tidy), and there is a CI task that will fail if the code is not properly formatted. You can apply purs-tidy to the project by calling:
 
 ## VSCode notes
 

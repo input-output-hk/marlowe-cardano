@@ -59,7 +59,7 @@ rec {
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
     inherit (marlowe.lib) gitignore-nix;
-    inherit (marlowe) fixStylishHaskell fixPurty fixPngOptimization;
+    inherit (marlowe) fixStylishHaskell fix-purs-tidy fix-prettier fixPngOptimization;
     inherit (haskell) plutus-pab;
     inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;
