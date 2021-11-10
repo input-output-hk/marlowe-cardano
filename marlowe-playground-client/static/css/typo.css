@@ -1,6 +1,6 @@
 html,
 body {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: "Open Sans", Arial, sans-serif;
   color: var(--text-color);
 }
 
@@ -46,7 +46,7 @@ h6 {
 h4,
 h5,
 h6 {
-  line-height: calc(18px + .2vw);
+  line-height: calc(18px + 0.2vw);
   /* Responsive Vertical Rhythm */
 }
 

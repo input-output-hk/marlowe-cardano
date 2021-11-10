@@ -1,7 +1,6 @@
 /*eslint-env node*/
 "use strict";
 
-
 exports.arrowLeftUp = require("static/images/arrow-left-up.svg");
 
 exports.arrowLeftDown = require("static/images/arrow-left-down.svg");
@@ -46,7 +45,7 @@ exports.javascriptIcon = require("static/images/icons8-javascript.svg");
 
 exports.marloweLogo = require("static/images/marlowe-logo.svg");
 
-exports.marlowePlayLogo = require("static/images/marlowe-play.svg")
+exports.marlowePlayLogo = require("static/images/marlowe-play.svg");
 
 exports.newProjectHaskellIcon = require("static/images/new-project-haskell-icon.svg");
 

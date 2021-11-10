@@ -17,9 +17,9 @@ body,
      and the main content occupies the remaining space. */
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
-    'header'
-    'main'
-    'footer';
+    "header"
+    "main"
+    "footer";
 }
 
 header {
