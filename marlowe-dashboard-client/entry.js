@@ -1,4 +1,4 @@
 /*eslint-env node*/
-import './static/css/main.css';
+import "./static/css/main.css";
 
-require('./src/Main.purs').main();
+require("./src/Main.purs").main();

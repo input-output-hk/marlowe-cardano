@@ -1,3 +1,3 @@
-import '../grammar.ne';
+import "../grammar.ne";
 
-require('./Main.purs').main();
+require("./Main.purs").main();

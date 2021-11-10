@@ -42,7 +42,7 @@
   }
 }
 
- /* This class is only being used by the Rename modal.
+/* This class is only being used by the Rename modal.
     TODO: Delete with the issue SCP-1579 */
 .project-name-input {
   font-weight: normal;

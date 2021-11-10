@@ -7,7 +7,9 @@
 .project-list {
   display: grid;
   /* Creates a grid of 7 colums. The last four being the Open Actions */
-  grid-template-columns: 1fr max-content max-content [actions-start] repeat(4, min-content) [actions-end];
+  grid-template-columns:
+    1fr max-content max-content [actions-start] repeat(4, min-content)
+    [actions-end];
 
   /* Make the Open header to span accross all actions */
   & div:nth-child(4) {

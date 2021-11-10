@@ -19,7 +19,7 @@
   display: flex;
   -ms-flex-align: center;
   align-items: center;
-  padding: .375rem .75rem;
+  padding: 0.375rem 0.75rem;
   margin-bottom: 0;
   font-size: 1rem;
   font-weight: 400;
@@ -29,13 +29,13 @@
   white-space: nowrap;
   background-color: #e9ecef;
   border: 1px solid #ced4da;
-  border-radius: .25rem;
+  border-radius: 0.25rem;
 }
 
 .form-control {
   height: calc(1.5em + 0.75rem + 2px);
   /* width: 80%; */
-  padding: .375rem .75rem;
+  padding: 0.375rem 0.75rem;
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.5;
@@ -43,8 +43,8 @@
   background-color: #fff;
   background-clip: padding-box;
   border: 1px solid #ced4da;
-  border-radius: .25rem;
-  transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+  border-radius: 0.25rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   border-color: var(--bg-dark);
@@ -52,7 +52,7 @@
 }
 
 .form-control.error,
-.form-control.error~.input-group-append .input-group-text {
+.form-control.error ~ .input-group-append .input-group-text {
   border-bottom-color: var(--error-color);
 }
 
@@ -60,7 +60,7 @@
   outline: 0;
 }
 
-.input-group>.form-control {
+.input-group > .form-control {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -140,29 +140,30 @@
   stroke-dashoffset: 0;
   -webkit-transform-origin: center;
   transform-origin: center;
-  -webkit-animation: dash 1.4s ease-in-out infinite, colors 5.6s ease-in-out infinite;
+  -webkit-animation: dash 1.4s ease-in-out infinite,
+    colors 5.6s ease-in-out infinite;
   animation: dash 1.4s ease-in-out infinite, colors 5.6s ease-in-out infinite;
 }
 
 @-webkit-keyframes colors {
   0% {
-    stroke: #4285F4;
+    stroke: #4285f4;
   }
 
   25% {
-    stroke: #DE3E35;
+    stroke: #de3e35;
   }
 
   50% {
-    stroke: #F7C223;
+    stroke: #f7c223;
   }
 
   75% {
-    stroke: #1B9A59;
+    stroke: #1b9a59;
   }
 
   100% {
-    stroke: #4285F4;
+    stroke: #4285f4;
   }
 }
 

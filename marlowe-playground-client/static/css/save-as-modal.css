@@ -4,7 +4,7 @@
     padding: 0.5rem 1rem;
   }
   .error {
-    color: var(--error-color)
+    color: var(--error-color);
   }
   button {
     /* Make buttons have the same width, and reset horizontal padding so

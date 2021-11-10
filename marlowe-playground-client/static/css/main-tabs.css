@@ -44,7 +44,7 @@
   padding-top: 60%;
 }
 
-.tab-icon~div {
+.tab-icon ~ div {
   margin-top: -1rem;
   padding-bottom: 1rem;
   font-weight: bold;
@@ -103,12 +103,12 @@
 }
 
 .aligned-button-in-the-middle {
-  margin-left:5px;
-  margin-right:5px;
+  margin-left: 5px;
+  margin-right: 5px;
 }
 
 .aligned-button-last {
-  margin-right:5px;
+  margin-right: 5px;
 }
 
 .wallet-tab .tab-icon {
@@ -127,7 +127,7 @@
   margin-top: auto;
 }
 
-.nav-bottom-links *+* {
+.nav-bottom-links * + * {
   margin-top: 1rem;
 }
 
@@ -148,10 +148,10 @@
 }
 
 .open-link-icon:after {
-  content: '';
+  content: "";
   position: absolute;
   right: 0.5rem;
-  background: url('../images/open-link-icon-white.svg') no-repeat center center;
+  background: url("../images/open-link-icon-white.svg") no-repeat center center;
   height: 18px;
   width: 18px;
   background-size: 42px;
