@@ -4,8 +4,8 @@ module Main(main) where
 import qualified Spec.Marlowe.AutoExecute
 import qualified Spec.Marlowe.Marlowe
 
-import           Test.Tasty
-import           Test.Tasty.QuickCheck
+import Test.Tasty
+import Test.Tasty.QuickCheck
 
 main :: IO ()
 main = defaultMain tests

@@ -2,10 +2,10 @@
 
 module Language.Marlowe.ACTUS.Model.Applicability where
 
-import           Data.Maybe                                  (isJust)
-import           Data.Validation                             (Validation (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), IPCB (..),
-                                                              ScheduleConfig (..), TermValidationError (..))
+import Data.Maybe (isJust)
+import Data.Validation (Validation (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), IPCB (..), ScheduleConfig (..),
+                                                    TermValidationError (..))
 
 validateTerms :: ContractTermsPoly a -> Validation [TermValidationError] (ContractTermsPoly a)
 validateTerms ct@ContractTermsPoly {contractType = PAM, ..} =

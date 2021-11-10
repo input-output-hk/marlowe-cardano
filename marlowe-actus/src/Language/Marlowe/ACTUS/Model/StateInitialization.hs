@@ -13,19 +13,18 @@ module Language.Marlowe.ACTUS.Model.StateInitialization
   )
 where
 
-import           Control.Applicative                              ((<|>))
-import           Control.Monad.Reader                             (Reader, reader)
-import           Data.Maybe                                       (fromMaybe, maybeToList)
-import           Language.Marlowe.ACTUS.Domain.ContractState      (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..),
-                                                                   FEB (..), IPCB (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum (..), ActusOps (..), RoleSignOps (_r),
-                                                                   YearFractionOps (..))
-import           Language.Marlowe.ACTUS.Model.StateTransition     (CtxSTF (..))
-import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf', sup')
+import Control.Applicative ((<|>))
+import Control.Monad.Reader (Reader, reader)
+import Data.Maybe (fromMaybe, maybeToList)
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), Cycle (..), FEB (..), IPCB (..),
+                                                    SCEF (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (_r), YearFractionOps (..))
+import Language.Marlowe.ACTUS.Model.StateTransition (CtxSTF (..))
+import Language.Marlowe.ACTUS.Utility.ANN.Annuity (annuity)
+import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf', sup')
 
-import           Prelude                                          hiding ((*), (+), (-), (/))
+import Prelude hiding ((*), (+), (-), (/))
 
 {-# ANN module "HLint: ignore Use camelCase" #-}
 

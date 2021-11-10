@@ -20,21 +20,21 @@ module Main (
 ) where
 
 
-import           Cardano.Api                     (NetworkId (..), NetworkMagic (..), StakeAddressReference (..))
-import           Control.Monad.Except            (ExceptT, liftIO)
-import           Language.Marlowe.CLI            (mainCLI)
-import           Language.Marlowe.CLI.Export     (printMarlowe)
-import           Language.Marlowe.CLI.Types      (CliError (..), liftCli)
-import           Language.Marlowe.Client         (defaultMarloweParams)
-import           Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Input (..), InputContent (..),
-                                                  Party (..), State (..), Token (..), Value (..))
-import           Language.Marlowe.Util           (ada)
-import           Ledger.Ada                      (adaSymbol, adaToken)
-import           Paths_marlowe                   (version)
-import           Plutus.V1.Ledger.Api            (PubKeyHash (..), defaultCostModelParams, toBuiltin)
+import Cardano.Api (NetworkId (..), NetworkMagic (..), StakeAddressReference (..))
+import Control.Monad.Except (ExceptT, liftIO)
+import Language.Marlowe.CLI (mainCLI)
+import Language.Marlowe.CLI.Export (printMarlowe)
+import Language.Marlowe.CLI.Types (CliError (..), liftCli)
+import Language.Marlowe.Client (defaultMarloweParams)
+import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Input (..), InputContent (..),
+                                        Party (..), State (..), Token (..), Value (..))
+import Language.Marlowe.Util (ada)
+import Ledger.Ada (adaSymbol, adaToken)
+import Paths_marlowe (version)
+import Plutus.V1.Ledger.Api (PubKeyHash (..), defaultCostModelParams, toBuiltin)
 
-import qualified Data.ByteString.Base16          as Base16 (decode)
-import qualified PlutusTx.AssocMap               as AM (empty, singleton)
+import qualified Data.ByteString.Base16 as Base16 (decode)
+import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 
 -- | Run the Marlow CLI tool.

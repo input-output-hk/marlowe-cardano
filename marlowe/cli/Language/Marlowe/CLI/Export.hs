@@ -37,34 +37,33 @@ module Language.Marlowe.CLI.Export (
 ) where
 
 
-import           Cardano.Api                     (AddressInEra, AlonzoEra, IsShelleyBasedEra, NetworkId,
-                                                  PaymentCredential (..), ScriptDataJsonSchema (..), SlotNo (..),
-                                                  StakeAddressReference (..), hashScript, makeShelleyAddressInEra,
-                                                  scriptDataToJson, serialiseAddress, serialiseToTextEnvelope,
-                                                  writeFileTextEnvelope)
-import           Cardano.Api.Shelley             (fromPlutusData)
-import           Codec.Serialise                 (serialise)
-import           Control.Monad                   (void, when)
-import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
-import           Data.Aeson                      (FromJSON, eitherDecodeFileStrict, encode)
-import           Data.Aeson.Encode.Pretty        (encodePretty)
-import           Data.Bifunctor                  (first)
-import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
-                                                  ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (MarloweInput, smallUntypedValidator)
-import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
-import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
-import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
-import           Ledger.Typed.Scripts            (validatorHash, validatorScript)
-import           Plutus.V1.Ledger.Api            (CostModelParams, Datum (..), Redeemer (..), VerboseMode (..),
-                                                  evaluateScriptCounting, getValidator)
-import           PlutusTx                        (builtinDataToData, toBuiltinData)
-import           System.IO                       (hPutStrLn, stderr)
+import Cardano.Api (AddressInEra, AlonzoEra, IsShelleyBasedEra, NetworkId, PaymentCredential (..),
+                    ScriptDataJsonSchema (..), SlotNo (..), StakeAddressReference (..), hashScript,
+                    makeShelleyAddressInEra, scriptDataToJson, serialiseAddress, serialiseToTextEnvelope,
+                    writeFileTextEnvelope)
+import Cardano.Api.Shelley (fromPlutusData)
+import Codec.Serialise (serialise)
+import Control.Monad (void, when)
+import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
+import Data.Aeson (FromJSON, eitherDecodeFileStrict, encode)
+import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.Bifunctor (first)
+import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
+                                   ValidatorInfo (..))
+import Language.Marlowe.Scripts (MarloweInput, smallUntypedValidator)
+import Language.Marlowe.Semantics (MarloweData (..), MarloweParams)
+import Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
+import Ledger.Scripts (datumHash, toCardanoApiScript)
+import Ledger.Typed.Scripts (validatorHash, validatorScript)
+import Plutus.V1.Ledger.Api (CostModelParams, Datum (..), Redeemer (..), VerboseMode (..), evaluateScriptCounting,
+                             getValidator)
+import PlutusTx (builtinDataToData, toBuiltinData)
+import System.IO (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
-import qualified Data.ByteString.Lazy.Char8      as LBS8 (unpack)
-import qualified Data.ByteString.Short           as SBS (length, toShort)
-import qualified Data.Text                       as T (unpack)
+import qualified Data.ByteString.Lazy as LBS (toStrict, writeFile)
+import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
+import qualified Data.ByteString.Short as SBS (length, toShort)
+import qualified Data.Text as T (unpack)
 
 
 -- | Build comprehensive information about a Marlowe contract and transaction.

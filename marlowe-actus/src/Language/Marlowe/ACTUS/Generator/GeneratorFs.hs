@@ -15,18 +15,18 @@ module Language.Marlowe.ACTUS.Generator.GeneratorFs
   ( genFsContract )
 where
 
-import           Data.List                                      (foldl')
-import           Data.Time                                      (LocalTime)
-import           Data.Validation                                (Validation (..))
-import           Language.Marlowe
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents   (EventType (..), RiskFactorsMarlowe)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms    (ContractTermsMarlowe, TermValidationError (..))
-import           Language.Marlowe.ACTUS.Domain.Ops              (ActusOps (..), marloweFixedPoint)
-import           Language.Marlowe.ACTUS.Domain.Schedule         (CashFlowPoly (..))
-import           Language.Marlowe.ACTUS.Generator.Analysis      (genProjectedCashflows)
-import           Language.Marlowe.ACTUS.Generator.Generator     (invoice)
-import           Language.Marlowe.ACTUS.Generator.MarloweCompat (timeToSlotNumber)
-import           Language.Marlowe.ACTUS.Model.Applicability     (validateTerms)
+import Data.List (foldl')
+import Data.Time (LocalTime)
+import Data.Validation (Validation (..))
+import Language.Marlowe
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsMarlowe)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTermsMarlowe, TermValidationError (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusOps (..), marloweFixedPoint)
+import Language.Marlowe.ACTUS.Domain.Schedule (CashFlowPoly (..))
+import Language.Marlowe.ACTUS.Generator.Analysis (genProjectedCashflows)
+import Language.Marlowe.ACTUS.Generator.Generator (invoice)
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (timeToSlotNumber)
+import Language.Marlowe.ACTUS.Model.Applicability (validateTerms)
 
 -- |'genFsContract' validatates the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point

@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module ContractForDifferences where
 
-import           Language.Marlowe.Extended
+import Language.Marlowe.Extended
 
 main :: IO ()
 main = print . pretty $ contract

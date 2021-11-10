@@ -25,28 +25,28 @@
 
 module Language.Marlowe.SemanticsTypes where
 
-import           Control.Applicative         ((<*>), (<|>))
-import           Control.Newtype.Generics    (Newtype)
-import qualified Data.Aeson                  as JSON
-import qualified Data.Aeson.Extras           as JSON
-import           Data.Aeson.Types            hiding (Error, Value)
-import qualified Data.Foldable               as F
-import           Data.String                 (IsString (..))
-import           Data.Text                   (pack)
-import           Data.Text.Encoding          as Text (decodeUtf8, encodeUtf8)
-import           Deriving.Aeson
-import           Language.Marlowe.ParserUtil (getInteger, withInteger)
-import           Language.Marlowe.Pretty     (Pretty (..))
-import           Ledger                      (PubKeyHash (..), Slot (..))
-import           Ledger.Value                (CurrencySymbol (..), TokenName (..))
-import qualified Ledger.Value                as Val
-import           PlutusTx                    (makeIsDataIndexed)
-import           PlutusTx.AssocMap           (Map)
-import qualified PlutusTx.AssocMap           as Map
-import           PlutusTx.Lift               (makeLift)
-import           PlutusTx.Prelude            hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
-import           Prelude                     (mapM, (<$>))
-import qualified Prelude                     as Haskell
+import Control.Applicative ((<*>), (<|>))
+import Control.Newtype.Generics (Newtype)
+import qualified Data.Aeson as JSON
+import qualified Data.Aeson.Extras as JSON
+import Data.Aeson.Types hiding (Error, Value)
+import qualified Data.Foldable as F
+import Data.String (IsString (..))
+import Data.Text (pack)
+import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
+import Deriving.Aeson
+import Language.Marlowe.ParserUtil (getInteger, withInteger)
+import Language.Marlowe.Pretty (Pretty (..))
+import Ledger (PubKeyHash (..), Slot (..))
+import Ledger.Value (CurrencySymbol (..), TokenName (..))
+import qualified Ledger.Value as Val
+import PlutusTx (makeIsDataIndexed)
+import PlutusTx.AssocMap (Map)
+import qualified PlutusTx.AssocMap as Map
+import PlutusTx.Lift (makeLift)
+import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
+import Prelude (mapM, (<$>))
+import qualified Prelude as Haskell
 
 
 {- Functions that used in Plutus Core must be inlineable,

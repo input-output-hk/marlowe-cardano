@@ -8,17 +8,17 @@
 
 module Language.Marlowe.ACTUS.Domain.ContractTerms where
 
-import           Control.Applicative ((<|>))
-import           Control.Monad       (guard, mzero)
-import           Data.Aeson.TH       (deriveJSON)
-import           Data.Aeson.Types    (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String),
-                                      defaultOptions, object, parseJSON, toJSON, (.:), (.:?), (.=))
-import           Data.Maybe          (fromMaybe)
-import           Data.Text           as T hiding (reverse, takeWhile)
-import           Data.Text.Read      as T
-import           Data.Time           (Day, LocalTime)
-import           GHC.Generics        (Generic)
-import qualified Language.Marlowe    as Marlowe (Observation, Value)
+import Control.Applicative ((<|>))
+import Control.Monad (guard, mzero)
+import Data.Aeson.TH (deriveJSON)
+import Data.Aeson.Types (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String), defaultOptions, object,
+                         parseJSON, toJSON, (.:), (.:?), (.=))
+import Data.Maybe (fromMaybe)
+import Data.Text as T hiding (reverse, takeWhile)
+import Data.Text.Read as T
+import Data.Time (Day, LocalTime)
+import GHC.Generics (Generic)
+import qualified Language.Marlowe as Marlowe (Observation, Value)
 
 -- |ContractType
 data CT = PAM   -- ^ Principal at maturity
