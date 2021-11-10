@@ -42,30 +42,30 @@ and actions (i.e. /Choices/) are passed as
 
 module Language.Marlowe.Semantics where
 
-import           Control.Applicative             ((<*>), (<|>))
-import qualified Data.Aeson                      as JSON
-import           Data.Aeson.Types                hiding (Error, Value)
-import qualified Data.Foldable                   as F
-import           Data.Scientific                 (Scientific)
-import           Data.Text                       (pack)
-import           Deriving.Aeson
-import           Language.Marlowe.ParserUtil     (getInteger, withInteger)
-import           Language.Marlowe.Pretty         (Pretty (..))
-import           Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..),
-                                                  Environment (..), Input (..), IntervalError (..), IntervalResult (..),
-                                                  Money, Observation (..), Party, Payee (..), SlotInterval, State (..),
-                                                  Token (..), Value (..), ValueId, inBounds)
-import           Ledger                          (Slot (..), ValidatorHash)
-import           Ledger.Value                    (CurrencySymbol (..))
-import qualified Ledger.Value                    as Val
-import           PlutusTx                        (makeIsDataIndexed)
-import qualified PlutusTx.AssocMap               as Map
-import qualified PlutusTx.Builtins               as Builtins
-import           PlutusTx.Lift                   (makeLift)
-import           PlutusTx.Prelude                hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
-import           Prelude                         (mapM, (<$>))
-import qualified Prelude                         as Haskell
-import           Text.PrettyPrint.Leijen         (comma, hang, lbrace, line, rbrace, space, text, (<>))
+import Control.Applicative ((<*>), (<|>))
+import qualified Data.Aeson as JSON
+import Data.Aeson.Types hiding (Error, Value)
+import qualified Data.Foldable as F
+import Data.Scientific (Scientific)
+import Data.Text (pack)
+import Deriving.Aeson
+import Language.Marlowe.ParserUtil (getInteger, withInteger)
+import Language.Marlowe.Pretty (Pretty (..))
+import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
+                                        Input (..), IntervalError (..), IntervalResult (..), Money, Observation (..),
+                                        Party, Payee (..), SlotInterval, State (..), Token (..), Value (..), ValueId,
+                                        inBounds)
+import Ledger (Slot (..), ValidatorHash)
+import Ledger.Value (CurrencySymbol (..))
+import qualified Ledger.Value as Val
+import PlutusTx (makeIsDataIndexed)
+import qualified PlutusTx.AssocMap as Map
+import qualified PlutusTx.Builtins as Builtins
+import PlutusTx.Lift (makeLift)
+import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
+import Prelude (mapM, (<$>))
+import qualified Prelude as Haskell
+import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, (<>))
 
 {- HLINT ignore "Avoid restricted function" -}
 

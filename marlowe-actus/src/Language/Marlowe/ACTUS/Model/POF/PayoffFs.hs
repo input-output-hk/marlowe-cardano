@@ -5,17 +5,15 @@ module Language.Marlowe.ACTUS.Model.POF.PayoffFs
   ( payoffFs )
 where
 
-import           Data.Time                                      (LocalTime)
-import           Language.Marlowe                               (Observation, Value)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents   (EventType (..), RiskFactorsMarlowe,
-                                                                 RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState    (ContractStateMarlowe, ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms    (CT (..), ContractTerms, ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Ops              (ActusNum (..), ActusOps (..), YearFractionOps (_y),
-                                                                 marloweFixedPoint)
-import           Language.Marlowe.ACTUS.Generator.MarloweCompat (constnt)
-import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
-import           Prelude                                        hiding (Fractional, Num, (*), (+), (-), (/))
+import Data.Time (LocalTime)
+import Language.Marlowe (Observation, Value)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsMarlowe, RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStateMarlowe, ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTerms, ContractTermsPoly (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), YearFractionOps (_y), marloweFixedPoint)
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (constnt)
+import Language.Marlowe.ACTUS.Model.POF.PayoffModel
+import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |Payoff function for ACTUS contracts with /fixed schedules/
 -- This representation of the payoff function is less generic

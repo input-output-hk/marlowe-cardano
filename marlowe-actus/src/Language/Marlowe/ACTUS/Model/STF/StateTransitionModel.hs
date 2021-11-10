@@ -3,15 +3,13 @@
 
 module Language.Marlowe.ACTUS.Model.STF.StateTransitionModel where
 
-import           Data.Maybe                                   (fromMaybe)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents (RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..),
-                                                               SCEF (..))
-import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), ActusOps (..), DateOps (_lt),
-                                                               RoleSignOps (_r))
-import           Language.Marlowe.ACTUS.Utility.ANN.Annuity   (annuity)
-import           Prelude                                      hiding (Fractional, Num, (*), (+), (-), (/))
+import Data.Maybe (fromMaybe)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..), SCEF (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), DateOps (_lt), RoleSignOps (_r))
+import Language.Marlowe.ACTUS.Utility.ANN.Annuity (annuity)
+import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- Principal at Maturity (PAM)
 

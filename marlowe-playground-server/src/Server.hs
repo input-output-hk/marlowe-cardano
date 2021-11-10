@@ -11,50 +11,46 @@
 
 module Server where
 
-import           API
+import API
 import qualified Auth
-import           Auth.Types                                       (OAuthClientId (OAuthClientId),
-                                                                   OAuthClientSecret (OAuthClientSecret))
-import           Control.Monad.Except                             (ExceptT, runExceptT, throwError)
-import           Control.Monad.IO.Class                           (MonadIO, liftIO)
-import           Control.Monad.Logger                             (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
-import           Control.Monad.Reader                             (ReaderT, runReaderT)
-import           Data.Aeson                                       (FromJSON, ToJSON, eitherDecode, encode)
-import           Data.Aeson                                       as Aeson
-import           Data.Bits                                        (toIntegralSized)
-import qualified Data.ByteString.Lazy.Char8                       as BSL
-import qualified Data.HashMap.Strict                              as HM
-import           Data.Proxy                                       (Proxy (Proxy))
-import           Data.String                                      as S
-import           Data.Text                                        (Text)
-import qualified Data.Text                                        as Text
-import           Data.Time.LocalTime                              (LocalTime)
-import           Data.Time.Units                                  (Second, toMicroseconds)
-import qualified Data.Validation                                  as Validation
-import           GHC.Generics                                     (Generic)
-import           Language.Haskell.Interpreter                     (InterpreterError (CompilationErrors),
-                                                                   InterpreterResult)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType, RiskFactors, RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms)
-import           Language.Marlowe.ACTUS.Domain.Schedule           (CashFlow)
-import           Language.Marlowe.ACTUS.Generator.Analysis        (genProjectedCashflows)
-import           Language.Marlowe.ACTUS.Generator.GeneratorFs     (genFsContract)
-import           Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
-import           Language.Marlowe.Pretty                          (pretty)
-import           Network.HTTP.Client.Conduit                      (defaultManagerSettings, managerResponseTimeout,
-                                                                   responseTimeoutMicro)
-import           Network.HTTP.Conduit                             (newManager)
-import           Network.HTTP.Simple                              (getResponseBody, httpJSON)
-import           Network.Wai.Middleware.Cors                      (cors, corsRequestHeaders, simpleCorsResourcePolicy)
-import           Servant                                          (Application, Handler (Handler), Server, ServerError,
-                                                                   err400, errBody, hoistServer, serve, (:<|>) ((:<|>)),
-                                                                   (:>))
-import           Servant.Client                                   (ClientEnv, mkClientEnv, parseBaseUrl)
-import           System.Environment                               (lookupEnv)
-import           System.IO                                        (hPutStrLn, stderr)
-import qualified Web.JWT                                          as JWT
-import           Webghc.Client                                    (runscript)
-import           Webghc.Server                                    (CompileRequest)
+import Auth.Types (OAuthClientId (OAuthClientId), OAuthClientSecret (OAuthClientSecret))
+import Control.Monad.Except (ExceptT, runExceptT, throwError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Logger (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
+import Control.Monad.Reader (ReaderT, runReaderT)
+import Data.Aeson (FromJSON, ToJSON, eitherDecode, encode)
+import Data.Aeson as Aeson
+import Data.Bits (toIntegralSized)
+import qualified Data.ByteString.Lazy.Char8 as BSL
+import qualified Data.HashMap.Strict as HM
+import Data.Proxy (Proxy (Proxy))
+import Data.String as S
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Data.Time.LocalTime (LocalTime)
+import Data.Time.Units (Second, toMicroseconds)
+import qualified Data.Validation as Validation
+import GHC.Generics (Generic)
+import Language.Haskell.Interpreter (InterpreterError (CompilationErrors), InterpreterResult)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType, RiskFactors, RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms)
+import Language.Marlowe.ACTUS.Domain.Schedule (CashFlow)
+import Language.Marlowe.ACTUS.Generator.Analysis (genProjectedCashflows)
+import Language.Marlowe.ACTUS.Generator.GeneratorFs (genFsContract)
+import Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
+import Language.Marlowe.Pretty (pretty)
+import Network.HTTP.Client.Conduit (defaultManagerSettings, managerResponseTimeout, responseTimeoutMicro)
+import Network.HTTP.Conduit (newManager)
+import Network.HTTP.Simple (getResponseBody, httpJSON)
+import Network.Wai.Middleware.Cors (cors, corsRequestHeaders, simpleCorsResourcePolicy)
+import Servant (Application, Handler (Handler), Server, ServerError, err400, errBody, hoistServer, serve,
+                (:<|>) ((:<|>)), (:>))
+import Servant.Client (ClientEnv, mkClientEnv, parseBaseUrl)
+import System.Environment (lookupEnv)
+import System.IO (hPutStrLn, stderr)
+import qualified Web.JWT as JWT
+import Webghc.Client (runscript)
+import Webghc.Server (CompileRequest)
 
 genActusContract :: ContractTerms -> Handler String
 genActusContract terms =

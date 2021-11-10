@@ -18,53 +18,49 @@ import qualified API
 import qualified Auth
 import qualified ContractForDifferences
 import qualified ContractForDifferencesWithOracle
-import           Control.Applicative                          ((<|>))
-import           Control.Lens                                 (set, (&))
-import           Control.Monad.Reader                         (MonadReader)
+import Control.Applicative ((<|>))
+import Control.Lens (set, (&))
+import Control.Monad.Reader (MonadReader)
 import qualified CouponBondGuaranteed
-import           Data.Aeson                                   (encode)
-import qualified Data.ByteString                              as BS
-import qualified Data.ByteString.Char8                        as BS8
-import qualified Data.ByteString.Lazy.Char8                   as Char8
-import           Data.Monoid                                  ()
-import           Data.Proxy                                   (Proxy (Proxy))
-import qualified Data.Set                                     as Set ()
-import qualified Data.Text.Encoding                           as T ()
-import qualified Data.Text.IO                                 as T ()
+import Data.Aeson (encode)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy.Char8 as Char8
+import Data.Monoid ()
+import Data.Proxy (Proxy (Proxy))
+import qualified Data.Set as Set ()
+import qualified Data.Text.Encoding as T ()
+import qualified Data.Text.IO as T ()
 import qualified Escrow
 import qualified EscrowWithCollateral
 import qualified Example
-import           Language.Haskell.Interpreter                 (CompilationError, InterpreterError, InterpreterResult,
-                                                               SourceCode, Warning)
-import qualified Language.Marlowe                             as S
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
-import qualified Language.Marlowe.ACTUS.Domain.ContractTerms  as CT
-import           Language.Marlowe.ACTUS.Domain.Schedule       as SC (CashFlow)
-import           Language.Marlowe.Extended
-import           Language.Marlowe.SemanticsTypes              (State (..))
-import           Language.PureScript.Bridge                   (BridgePart, Language (Haskell), PSType, SumType,
-                                                               TypeInfo (TypeInfo), argonaut, buildBridge, equal,
-                                                               genericShow, mkSumType, order, psTypeParameters,
-                                                               typeModule, typeName, writePSTypes, (^==))
-import           Language.PureScript.Bridge.Builder           (BridgeData)
-import           Language.PureScript.Bridge.PSTypes           (psString)
-import           Language.PureScript.Bridge.TypeParameters    (A, B)
-import           Marlowe.Contracts                            (contractForDifferences, contractForDifferencesWithOracle,
-                                                               couponBondGuaranteed, escrow, escrowWithCollateral,
-                                                               example, swap, zeroCouponBond)
-import qualified Marlowe.Symbolic.Server                      as MS
-import qualified Marlowe.Symbolic.Types.Request               as MSReq
-import qualified Marlowe.Symbolic.Types.Response              as MSRes
+import Language.Haskell.Interpreter (CompilationError, InterpreterError, InterpreterResult, SourceCode, Warning)
+import qualified Language.Marlowe as S
+import Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
+import qualified Language.Marlowe.ACTUS.Domain.ContractTerms as CT
+import Language.Marlowe.ACTUS.Domain.Schedule as SC (CashFlow)
+import Language.Marlowe.Extended
+import Language.Marlowe.SemanticsTypes (State (..))
+import Language.PureScript.Bridge (BridgePart, Language (Haskell), PSType, SumType, TypeInfo (TypeInfo), argonaut,
+                                   buildBridge, equal, genericShow, mkSumType, order, psTypeParameters, typeModule,
+                                   typeName, writePSTypes, (^==))
+import Language.PureScript.Bridge.Builder (BridgeData)
+import Language.PureScript.Bridge.PSTypes (psString)
+import Language.PureScript.Bridge.TypeParameters (A, B)
+import Marlowe.Contracts (contractForDifferences, contractForDifferencesWithOracle, couponBondGuaranteed, escrow,
+                          escrowWithCollateral, example, swap, zeroCouponBond)
+import qualified Marlowe.Symbolic.Server as MS
+import qualified Marlowe.Symbolic.Types.Request as MSReq
+import qualified Marlowe.Symbolic.Types.Response as MSRes
 import qualified PSGenerator.Common
-import qualified PlutusTx.AssocMap                            as Map
-import           Servant                                      ((:<|>), (:>))
-import           Servant.PureScript                           (HasBridge, Settings, apiModuleName, defaultBridge,
-                                                               defaultSettings, languageBridge,
-                                                               writeAPIModuleWithSettings)
+import qualified PlutusTx.AssocMap as Map
+import Servant ((:<|>), (:>))
+import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
+                           writeAPIModuleWithSettings)
 import qualified Swap
-import           System.Directory                             (createDirectoryIfMissing)
-import           System.FilePath                              ((</>))
-import qualified Webghc.Server                                as Webghc
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath ((</>))
+import qualified Webghc.Server as Webghc
 import qualified ZeroCouponBond
 
 

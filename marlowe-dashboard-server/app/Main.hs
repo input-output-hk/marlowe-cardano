@@ -8,14 +8,13 @@ module Main
   )
 where
 
-import           Control.Monad.IO.Class   (MonadIO, liftIO)
-import           Control.Monad.Logger     (MonadLogger, logInfoN, runStderrLoggingT)
-import qualified Data.Text                as Text
-import           Network.Wai.Handler.Warp (HostPreference, defaultSettings, setHost, setPort)
-import           Options.Applicative      (CommandFields, Mod, Parser, argument, auto, command, customExecParser,
-                                           disambiguate, fullDesc, help, helper, idm, info, long, metavar, option,
-                                           prefs, progDesc, short, showDefault, showHelpOnEmpty, showHelpOnError, str,
-                                           strOption, subparser, value)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Logger (MonadLogger, logInfoN, runStderrLoggingT)
+import qualified Data.Text as Text
+import Network.Wai.Handler.Warp (HostPreference, defaultSettings, setHost, setPort)
+import Options.Applicative (CommandFields, Mod, Parser, argument, auto, command, customExecParser, disambiguate,
+                            fullDesc, help, helper, idm, info, long, metavar, option, prefs, progDesc, short,
+                            showDefault, showHelpOnEmpty, showHelpOnError, str, strOption, subparser, value)
 import qualified PSGenerator
 import qualified Webserver
 

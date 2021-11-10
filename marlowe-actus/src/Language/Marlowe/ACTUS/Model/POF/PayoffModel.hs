@@ -1,10 +1,8 @@
 module Language.Marlowe.ACTUS.Model.POF.PayoffModel where
 
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), FEB (FEB_A, FEB_N),
-                                                              PYTP (PYTP_A, PYTP_I, PYTP_N, PYTP_O))
-import           Language.Marlowe.ACTUS.Domain.Ops           (ActusNum (..), ActusOps (_abs, _max, _zero),
-                                                              RoleSignOps (_r))
-import           Prelude                                     hiding (Fractional, Num, (*), (+), (-), (/))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), FEB (FEB_A, FEB_N), PYTP (PYTP_A, PYTP_I, PYTP_N, PYTP_O))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (_abs, _max, _zero), RoleSignOps (_r))
+import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- Principal at Maturity (PAM)
 

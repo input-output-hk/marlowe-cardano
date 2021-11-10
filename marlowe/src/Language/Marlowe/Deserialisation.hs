@@ -1,7 +1,6 @@
 module Language.Marlowe.Deserialisation (byteStringToPositiveInt, getByteString, byteStringToInt, byteStringToList) where
 
-import           PlutusTx.Builtins (BuiltinByteString, divideInteger, indexByteString, lengthOfByteString,
-                                    sliceByteString)
+import PlutusTx.Builtins (BuiltinByteString, divideInteger, indexByteString, lengthOfByteString, sliceByteString)
 
 {-# INLINABLE unconsByte #-}
 -- | @unconsByte bs@ returns a tuple where the first element is the first byte

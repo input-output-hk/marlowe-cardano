@@ -14,42 +14,36 @@ module Language.Marlowe.ACTUS.Generator.GeneratorFs
   ( genFsContract )
 where
 
-import           Control.Monad.Reader
-import           Data.Foldable                                              (foldrM)
-import qualified Data.List                                                  as L (zip5)
-import           Data.Maybe                                                 (maybeToList)
-import           Data.Monoid                                                (Endo (Endo, appEndo))
-import           Data.String                                                (IsString (fromString))
-import           Data.Time                                                  (LocalTime)
-import           Data.Validation                                            (Validation (..))
-import           Language.Marlowe                                           (Action (..), Bound (..), Case (..),
-                                                                             ChoiceId (..), Contract (..),
-                                                                             Observation (..), Party (..), Slot (..),
-                                                                             Value (..), ValueId (ValueId))
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactors,
-                                                                             RiskFactorsMarlowe, RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState, ContractStateMarlowe,
-                                                                             ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms                (Assertion (..), AssertionContext (..),
-                                                                             Assertions (..), ContractTerms,
-                                                                             ContractTermsPoly (..), PRF (..),
-                                                                             TermValidationError (..))
-import qualified Language.Marlowe.ACTUS.Domain.Ops                          as O (ActusNum (..), YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
-                                                                             calculationDay)
-import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
-import           Language.Marlowe.ACTUS.Generator.Generator                 (invoice)
-import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, letval, letval', marloweTime,
-                                                                             timeToSlotNumber, toMarloweFixedPoint,
-                                                                             useval)
-import           Language.Marlowe.ACTUS.Model.APPL.Applicability            (validateTerms)
-import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
-import           Language.Marlowe.ACTUS.Model.POF.PayoffFs                  (payoffFs)
-import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        (schedule)
-import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        as S (maturity)
-import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (CtxSTF (..))
-import           Language.Marlowe.ACTUS.Model.STF.StateTransitionFs         as FS (stateTransition)
-import           Ledger.Value                                               (TokenName (TokenName))
+import Control.Monad.Reader
+import Data.Foldable (foldrM)
+import qualified Data.List as L (zip5)
+import Data.Maybe (maybeToList)
+import Data.Monoid (Endo (Endo, appEndo))
+import Data.String (IsString (fromString))
+import Data.Time (LocalTime)
+import Data.Validation (Validation (..))
+import Language.Marlowe (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..), Observation (..), Party (..),
+                         Slot (..), Value (..), ValueId (ValueId))
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors, RiskFactorsMarlowe,
+                                                     RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractState, ContractStateMarlowe, ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (Assertion (..), AssertionContext (..), Assertions (..),
+                                                    ContractTerms, ContractTermsPoly (..), PRF (..),
+                                                    TermValidationError (..))
+import qualified Language.Marlowe.ACTUS.Domain.Ops as O (ActusNum (..), YearFractionOps (_y))
+import Language.Marlowe.ACTUS.Domain.Schedule (CashFlow (..), ShiftedDay (..), calculationDay)
+import Language.Marlowe.ACTUS.Generator.Analysis (genProjectedCashflows)
+import Language.Marlowe.ACTUS.Generator.Generator (invoice)
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (constnt, letval, letval', marloweTime, timeToSlotNumber,
+                                                       toMarloweFixedPoint, useval)
+import Language.Marlowe.ACTUS.Model.APPL.Applicability (validateTerms)
+import Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
+import Language.Marlowe.ACTUS.Model.POF.PayoffFs (payoffFs)
+import Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule (schedule)
+import Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule as S (maturity)
+import Language.Marlowe.ACTUS.Model.STF.StateTransition (CtxSTF (..))
+import Language.Marlowe.ACTUS.Model.STF.StateTransitionFs as FS (stateTransition)
+import Ledger.Value (TokenName (TokenName))
 
 -- |'genFsContract' validatate the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point

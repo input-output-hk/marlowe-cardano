@@ -4,9 +4,9 @@
 
 module Language.Marlowe.ACTUS.Domain.BusinessEvents where
 
-import           Data.Aeson.Types (FromJSON, ToJSON)
-import           GHC.Generics     (Generic)
-import           Language.Marlowe (Observation, Value)
+import Data.Aeson.Types (FromJSON, ToJSON)
+import GHC.Generics (Generic)
+import Language.Marlowe (Observation, Value)
 
 {-| ACTUS event types
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json

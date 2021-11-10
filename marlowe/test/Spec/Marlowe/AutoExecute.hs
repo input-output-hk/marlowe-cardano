@@ -9,48 +9,47 @@ module Spec.Marlowe.AutoExecute
     )
 where
 
-import           Control.Exception                     (SomeException, catch)
-import           Control.Monad                         (void)
-import qualified Data.Map.Strict                       as Map
-import           Data.Maybe                            (isJust)
-import qualified Data.Text                             as T
-import qualified Data.Text.IO                          as T
-import           Data.Text.Lazy                        (toStrict)
-import           Language.Marlowe.Analysis.FSSemantics
-import           Language.Marlowe.Client
-import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsTypes
-import           Language.Marlowe.Util
-import           System.IO.Unsafe                      (unsafePerformIO)
+import Control.Exception (SomeException, catch)
+import Control.Monad (void)
+import qualified Data.Map.Strict as Map
+import Data.Maybe (isJust)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import Data.Text.Lazy (toStrict)
+import Language.Marlowe.Analysis.FSSemantics
+import Language.Marlowe.Client
+import Language.Marlowe.Semantics
+import Language.Marlowe.SemanticsTypes
+import Language.Marlowe.Util
+import System.IO.Unsafe (unsafePerformIO)
 
-import           Data.Aeson                            (decode, encode)
-import           Data.Aeson.Text                       (encodeToLazyText)
-import qualified Data.ByteString                       as BS
-import           Data.Either                           (isRight)
-import           Data.Ratio                            ((%))
-import           Data.String
-import           Data.UUID                             (UUID)
-import qualified Data.UUID                             as UUID
+import Data.Aeson (decode, encode)
+import Data.Aeson.Text (encodeToLazyText)
+import qualified Data.ByteString as BS
+import Data.Either (isRight)
+import Data.Ratio ((%))
+import Data.String
+import Data.UUID (UUID)
+import qualified Data.UUID as UUID
 
-import qualified Codec.CBOR.Write                      as Write
-import qualified Codec.Serialise                       as Serialise
-import           Language.Haskell.Interpreter          (Extension (OverloadedStrings), MonadInterpreter,
-                                                        OptionVal ((:=)), as, interpret, languageExtensions,
-                                                        runInterpreter, set, setImports)
-import           Plutus.Contract.Test                  as T
-import qualified Plutus.Trace.Emulator                 as Trace
-import qualified PlutusTx.AssocMap                     as AssocMap
-import           PlutusTx.Lattice
+import qualified Codec.CBOR.Write as Write
+import qualified Codec.Serialise as Serialise
+import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
+                                     languageExtensions, runInterpreter, set, setImports)
+import Plutus.Contract.Test as T
+import qualified Plutus.Trace.Emulator as Trace
+import qualified PlutusTx.AssocMap as AssocMap
+import PlutusTx.Lattice
 
-import           Ledger                                hiding (Value)
+import Ledger hiding (Value)
 import qualified Ledger
-import           Ledger.Ada                            (lovelaceValueOf)
-import           Ledger.Typed.Scripts                  (validatorScript)
-import qualified PlutusTx.Prelude                      as P
-import           Spec.Marlowe.Common
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.QuickCheck
+import Ledger.Ada (lovelaceValueOf)
+import Ledger.Typed.Scripts (validatorScript)
+import qualified PlutusTx.Prelude as P
+import Spec.Marlowe.Common
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
 
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Redundant if" -}

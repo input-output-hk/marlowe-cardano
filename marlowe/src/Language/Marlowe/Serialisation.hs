@@ -12,8 +12,8 @@
 
 module Language.Marlowe.Serialisation(positiveIntToByteString, packByteString, intToByteString, listToByteString) where
 
-import           PlutusTx.Builtins (BuiltinByteString, appendByteString, consByteString, divideInteger, emptyByteString,
-                                    lengthOfByteString, modInteger)
+import PlutusTx.Builtins (BuiltinByteString, appendByteString, consByteString, divideInteger, emptyByteString,
+                          lengthOfByteString, modInteger)
 
 {-# INLINABLE singletonByteString #-}
 -- | @singletonByteString n@ returns a single-byte 'BuiltinByteString' with the byte represented by

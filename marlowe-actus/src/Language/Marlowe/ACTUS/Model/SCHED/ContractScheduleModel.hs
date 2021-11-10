@@ -2,19 +2,19 @@
 {-# LANGUAGE RecordWildCards #-}
 module Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel where
 
-import           Control.Applicative                              (liftA2)
-import           Control.Monad                                    (liftM4)
-import           Data.Functor                                     ((<&>))
-import           Data.List                                        as L (find, nub)
-import           Data.Maybe                                       (fromMaybe, isJust, isNothing, maybeToList)
-import           Data.Time.Calendar                               (addDays)
-import           Data.Time.LocalTime                              (LocalTime (..), addLocalTime)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms, ContractTermsPoly (..), Cycle (..),
-                                                                   IPCB (IPCB_NTL), PPEF (..), PYTP (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..))
-import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf,
-                                                                   remove, (<+>), (<->))
+import Control.Applicative (liftA2)
+import Control.Monad (liftM4)
+import Data.Functor ((<&>))
+import Data.List as L (find, nub)
+import Data.Maybe (fromMaybe, isJust, isNothing, maybeToList)
+import Data.Time.Calendar (addDays)
+import Data.Time.LocalTime (LocalTime (..), addLocalTime)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, ContractTermsPoly (..), Cycle (..), IPCB (IPCB_NTL),
+                                                    PPEF (..), PYTP (..), SCEF (..))
+import Language.Marlowe.ACTUS.Domain.Schedule (ShiftedDay (..))
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDCWithCfg)
+import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf, remove, (<+>),
+                                                         (<->))
 
 -- Principal at Maturity (PAM)
 

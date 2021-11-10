@@ -7,15 +7,14 @@ module Language.Marlowe.ACTUS.Model.STF.StateTransition
   )
 where
 
-import           Control.Monad.Reader                                  (Reader, reader)
-import           Data.Maybe                                            (fromMaybe, maybeToList)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents          (EventType (..), RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState           (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms           (CT (..), ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                     (DateOps (..), RoleSignOps (..),
-                                                                        YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator      (inf', sup')
+import Control.Monad.Reader (Reader, reader)
+import Data.Maybe (fromMaybe, maybeToList)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..))
+import Language.Marlowe.ACTUS.Domain.Ops (DateOps (..), RoleSignOps (..), YearFractionOps (_y))
+import Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
+import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf', sup')
 
 data CtxSTF a b = CtxSTF
   { contractTerms :: ContractTermsPoly a b

@@ -9,9 +9,9 @@ https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-applic
 module Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
 where
 
-import           Data.Validation                             (Validation (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, ContractTermsPoly (..),
-                                                              IPCB (IPCB_NTIED, IPCB_NTL), TermValidationError (..))
+import Data.Validation (Validation (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, ContractTermsPoly (..), IPCB (IPCB_NTIED, IPCB_NTL),
+                                                    TermValidationError (..))
 
 -- |Optional
 _X :: a -> ContractTerms -> b -> Validation [TermValidationError] ContractTerms

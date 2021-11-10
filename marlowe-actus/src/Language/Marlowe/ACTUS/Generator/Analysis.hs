@@ -14,23 +14,21 @@ module Language.Marlowe.ACTUS.Generator.Analysis
   )
 where
 
-import           Control.Applicative                                        ((<|>))
-import           Control.Monad.Reader                                       (runReader)
-import           Data.Functor                                               ((<&>))
-import qualified Data.List                                                  as L (groupBy)
-import           Data.Maybe                                                 (fromMaybe, isNothing)
-import           Data.Sort                                                  (sortOn)
-import           Data.Time                                                  (LocalTime)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactors)
-import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState, ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms                (CT (..), ContractTerms,
-                                                                             ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
-                                                                             calculationDay, paymentDay)
-import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
-import           Language.Marlowe.ACTUS.Model.POF.Payoff                    (payoff)
-import           Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule        as S (maturity, schedule)
-import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (CtxSTF (..), stateTransition)
+import Control.Applicative ((<|>))
+import Control.Monad.Reader (runReader)
+import Data.Functor ((<&>))
+import qualified Data.List as L (groupBy)
+import Data.Maybe (fromMaybe, isNothing)
+import Data.Sort (sortOn)
+import Data.Time (LocalTime)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors)
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractState, ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTerms, ContractTermsPoly (..))
+import Language.Marlowe.ACTUS.Domain.Schedule (CashFlow (..), ShiftedDay (..), calculationDay, paymentDay)
+import Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
+import Language.Marlowe.ACTUS.Model.POF.Payoff (payoff)
+import Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule as S (maturity, schedule)
+import Language.Marlowe.ACTUS.Model.STF.StateTransition (CtxSTF (..), stateTransition)
 
 -- |'genProjectedCashflows' generates a list of projected cashflows for
 -- given contract terms and provided risk factors. The function returns

@@ -5,11 +5,11 @@ module Language.Marlowe.ACTUS.Model.POF.Payoff
   ( payoff )
 where
 
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms  (CT (..), ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Ops            (ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
+import Language.Marlowe.ACTUS.Model.POF.PayoffModel
 
 -- |Generic payoff function for ACTUS contracts
 payoff :: (RoleSignOps a, YearFractionOps b a) =>

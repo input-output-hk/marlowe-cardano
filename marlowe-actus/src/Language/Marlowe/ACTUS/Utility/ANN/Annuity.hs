@@ -3,9 +3,9 @@ module Language.Marlowe.ACTUS.Utility.ANN.Annuity
   (annuity)
 where
 
-import           Data.List                         (foldl', tails)
-import           Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..))
-import           Prelude                           hiding (Fractional, Num, (*), (+), (-), (/))
+import Data.List (foldl', tails)
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..))
+import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |annuity amount function (A), as described in section 3.8 in the
 -- ACTUS reference v1.1

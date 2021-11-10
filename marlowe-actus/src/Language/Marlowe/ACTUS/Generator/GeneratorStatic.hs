@@ -11,17 +11,17 @@ module Language.Marlowe.ACTUS.Generator.GeneratorStatic
   ( genStaticContract )
 where
 
-import           Data.List                                       as L (foldl')
-import           Data.Time                                       (LocalTime)
-import           Data.Validation                                 (Validation (..))
-import           Language.Marlowe                                (Contract (..), Slot (..), Value (..))
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents    (EventType (..), RiskFactors)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms     (ContractTerms, TermValidationError (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule          (CashFlow (..))
-import           Language.Marlowe.ACTUS.Generator.Analysis       (genProjectedCashflows)
-import           Language.Marlowe.ACTUS.Generator.Generator      (invoice)
-import           Language.Marlowe.ACTUS.Generator.MarloweCompat  (timeToSlotNumber)
-import           Language.Marlowe.ACTUS.Model.APPL.Applicability (validateTerms)
+import Data.List as L (foldl')
+import Data.Time (LocalTime)
+import Data.Validation (Validation (..))
+import Language.Marlowe (Contract (..), Slot (..), Value (..))
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, TermValidationError (..))
+import Language.Marlowe.ACTUS.Domain.Schedule (CashFlow (..))
+import Language.Marlowe.ACTUS.Generator.Analysis (genProjectedCashflows)
+import Language.Marlowe.ACTUS.Generator.Generator (invoice)
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (timeToSlotNumber)
+import Language.Marlowe.ACTUS.Model.APPL.Applicability (validateTerms)
 
 -- |'genStaticContract' validates the contract terms in order to generate a
 -- Marlowe contract with risk factors known in advance. The contract therefore

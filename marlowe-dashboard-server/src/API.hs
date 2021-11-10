@@ -6,12 +6,11 @@
 
 module API where
 
-import           Data.Aeson            (FromJSON, ToJSON, Value)
-import           Data.Text             (Text)
-import           GHC.Generics          (Generic)
-import           Servant.API           (Capture, Get, Header, JSON, NoContent, PlainText, Post, Raw, ReqBody, (:<|>),
-                                        (:>))
-import           Servant.API.WebSocket (WebSocketPending)
+import Data.Aeson (FromJSON, ToJSON, Value)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Servant.API (Capture, Get, Header, JSON, NoContent, PlainText, Post, Raw, ReqBody, (:<|>), (:>))
+import Servant.API.WebSocket (WebSocketPending)
 
 type API = WebSocketAPI :<|> Raw
 

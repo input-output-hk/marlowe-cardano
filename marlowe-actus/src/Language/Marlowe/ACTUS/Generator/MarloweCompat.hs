@@ -4,12 +4,11 @@
 
 module Language.Marlowe.ACTUS.Generator.MarloweCompat where
 
-import           Data.String                       (IsString (fromString))
-import           Data.Time                         (Day, LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)
-import           Data.Time.Clock.System            (SystemTime (MkSystemTime), utcToSystemTime)
-import           Language.Marlowe                  (Contract (Let), Observation, Value (Constant, UseValue),
-                                                    ValueId (ValueId))
-import           Language.Marlowe.ACTUS.Domain.Ops (marloweFixedPoint)
+import Data.String (IsString (fromString))
+import Data.Time (Day, LocalTime (..), UTCTime (UTCTime), timeOfDayToTime)
+import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
+import Language.Marlowe (Contract (Let), Observation, Value (Constant, UseValue), ValueId (ValueId))
+import Language.Marlowe.ACTUS.Domain.Ops (marloweFixedPoint)
 
 useval :: String -> Integer -> Value Observation
 useval name t = UseValue $ ValueId $ fromString $ name ++ "_" ++ show t

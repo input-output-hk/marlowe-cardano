@@ -17,25 +17,25 @@ module Spec.Marlowe.ACTUS.TestFramework
   )
   where
 
-import           Control.Applicative                          ((<|>))
-import           Control.Monad                                (mzero)
-import           Data.Aeson
-import           Data.ByteString.Lazy                         as B (readFile)
-import           Data.Char                                    (toUpper)
-import           Data.List                                    as L (find)
-import           Data.Map                                     as Map (Map, elems, lookup)
-import           Data.Maybe                                   (fromJust, fromMaybe)
-import           Data.Time                                    (LocalTime (..))
-import           GHC.Generics                                 (Generic)
-import           GHC.Records                                  (getField)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents
-import           Language.Marlowe.ACTUS.Domain.ContractTerms  hiding (Assertion)
-import           Language.Marlowe.ACTUS.Domain.Schedule
-import           Language.Marlowe.ACTUS.Generator.Analysis
-import           Language.Marlowe.ACTUS.Utility.DateShift     (getFollowingBusinessDay)
-import           Test.Tasty
-import           Test.Tasty.HUnit                             (Assertion, assertBool, assertFailure, testCase)
-import           Text.Printf                                  (printf)
+import Control.Applicative ((<|>))
+import Control.Monad (mzero)
+import Data.Aeson
+import Data.ByteString.Lazy as B (readFile)
+import Data.Char (toUpper)
+import Data.List as L (find)
+import Data.Map as Map (Map, elems, lookup)
+import Data.Maybe (fromJust, fromMaybe)
+import Data.Time (LocalTime (..))
+import GHC.Generics (Generic)
+import GHC.Records (getField)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents
+import Language.Marlowe.ACTUS.Domain.ContractTerms hiding (Assertion)
+import Language.Marlowe.ACTUS.Domain.Schedule
+import Language.Marlowe.ACTUS.Generator.Analysis
+import Language.Marlowe.ACTUS.Utility.DateShift (getFollowingBusinessDay)
+import Test.Tasty
+import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
+import Text.Printf (printf)
 
 tests :: String -> [TestCase] -> TestTree
 tests n t = testGroup n [testCase (getField @"identifier" tc) (runTest tc) | tc <- t]

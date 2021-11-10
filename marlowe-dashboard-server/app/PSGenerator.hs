@@ -15,22 +15,22 @@ module PSGenerator
   )
 where
 
-import           API                                (HTTPAPI)
-import           Control.Applicative                ((<|>))
-import           Control.Lens                       (set, (&))
-import           Data.Monoid                        ()
-import           Data.Proxy                         (Proxy (Proxy))
-import qualified Data.Text.Encoding                 as T ()
-import qualified Data.Text.IO                       as T ()
-import           Language.PureScript.Bridge         (BridgePart, Language (Haskell), SumType, argonaut, buildBridge,
-                                                     typeName, writePSTypes, (^==))
-import           Language.PureScript.Bridge.PSTypes (psNumber, psString)
-import           Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
+import API (HTTPAPI)
+import Control.Applicative ((<|>))
+import Control.Lens (set, (&))
+import Data.Monoid ()
+import Data.Proxy (Proxy (Proxy))
+import qualified Data.Text.Encoding as T ()
+import qualified Data.Text.IO as T ()
+import Language.PureScript.Bridge (BridgePart, Language (Haskell), SumType, argonaut, buildBridge, typeName,
+                                   writePSTypes, (^==))
+import Language.PureScript.Bridge.PSTypes (psNumber, psString)
+import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import qualified PSGenerator.Common
-import           Plutus.V1.Ledger.Api               (PubKeyHash)
-import           Servant.PureScript                 (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings,
-                                                     languageBridge, writeAPIModuleWithSettings)
-import           WebSocket                          (StreamToClient, StreamToServer)
+import Plutus.V1.Ledger.Api (PubKeyHash)
+import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
+                           writeAPIModuleWithSettings)
+import WebSocket (StreamToClient, StreamToServer)
 
 doubleBridge :: BridgePart
 doubleBridge = typeName ^== "Double" >> return psNumber
