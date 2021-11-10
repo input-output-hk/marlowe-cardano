@@ -5,8 +5,7 @@ module Language.Marlowe.ACTUS.Domain.Ops where
 
 import           Data.Time                                   (LocalTime)
 import           Language.Marlowe                            (Observation (ValueGT, ValueLT),
-                                                              Value (AddValue, Cond, Constant, DivValue, MulValue, Scale, SubValue),
-                                                              (%))
+                                                              Value (AddValue, Cond, Constant, DivValue, MulValue, NegValue, SubValue))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), DCC (..))
 import           Language.Marlowe.ACTUS.Utility.YearFraction (yearFraction)
 
@@ -87,10 +86,30 @@ infixl 7  *, /
 infixl 6  +, -
 
 instance ActusNum (Value Observation) where
-    (+)                         = AddValue
-    (-)                         = SubValue
-    a * b                       = Scale (1 % marloweFixedPoint) $ MulValue a b
-    (Constant 0) / (Constant 0) = Constant 0 -- by convention in finance
-    (Constant x) / (Constant y) = Scale (marloweFixedPoint % 1) $ Constant $ div x y
-    x / (Constant y)            = Scale (marloweFixedPoint % y) x
-    x / y                       = DivValue x y
+  -- add
+  x + (Constant 0)            = x
+  (Constant 0) + y            = y
+  (Constant x) + (Constant y) = Constant (x Prelude.+ y)
+  x + y                       = AddValue x y
+
+  -- sub
+  x - (Constant 0)            = x
+  (Constant 0) - y            = NegValue y
+  (Constant x) - (Constant y) = Constant (x Prelude.- y)
+  x - y                       = SubValue x y
+
+  -- mul
+  (Constant 0) * _ = Constant 0
+  (Constant x) * (Constant y) = Constant (x Prelude.* y `div` marloweFixedPoint)
+  (Constant x) * y | x == marloweFixedPoint = y
+  (Constant x) * y | rem x marloweFixedPoint == 0 = MulValue (Constant (x `div` marloweFixedPoint)) y
+  x * (Constant y) | rem y marloweFixedPoint == 0 = MulValue x (Constant (y `div` marloweFixedPoint))
+  x * y = DivValue (MulValue x y) (Constant marloweFixedPoint)
+
+  -- div
+  (Constant 0) / _ = Constant 0
+  (Constant x) / (Constant y) = Constant $ x `div` (y Prelude.* marloweFixedPoint)
+  (Constant x) / y | rem x marloweFixedPoint == 0 = DivValue (Constant (x `div` marloweFixedPoint)) y
+  x / (Constant y) | y == marloweFixedPoint = x
+  x / (Constant y) | rem y marloweFixedPoint == 0 = DivValue x (Constant (y `div` marloweFixedPoint))
+  x / y = DivValue x y
