@@ -241,15 +241,16 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
                 checkContinuation = case txOutContract of
                     Close -> True
                     _ -> let
-                        totalIncome = foldMap collectDeposits inputs
-                        totalPayouts = foldMap snd payoutsByParty
-                        finalBalance = inputBalance + totalIncome - totalPayouts
+                        totalIncome = foldMap collectDeposits inputs -- 300
+                        totalPayouts = foldMap snd payoutsByParty -- 70
+                        finalBalance = inputBalance + totalIncome - totalPayouts -- 520
                         outConstrs = OutputConstraint
                                     { ocDatum = marloweData
                                     , ocValue = finalBalance
                                     }
-                        in checkOwnOutputConstraint ctx outConstrs
-                        -- in checkOwnOutputConstraint ownInput marloweData finalBalance
+                        in checkOwnOutputConstraint ctx outConstrs -- 1500
+                        -- in checkOwnOutputConstraint1 ownInput marloweData finalBalance
+            -- preconditionsOk ~ 120, inputsOk ~ 220, payoutsOk ~ 120, checkContinuation ~ 2100
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousSlotIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"
@@ -263,10 +264,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     checkScriptOutput _ _ _ _ = False
 
     checkOwnOutputConstraint1 :: TxInInfo -> MarloweData -> Val.Value -> Bool
-    checkOwnOutputConstraint1 TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} ocDatum ocValue =
-        let hsh = findDatumHash (Datum $ PlutusTx.toBuiltinData ocDatum) scriptContextTxInfo
-        in traceIfFalse "L1" -- "Output constraint"
-        $ any (checkScriptOutput ownAddress hsh ocValue) allOutputs
+    checkOwnOutputConstraint1 TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} datum ocValue =
+        traceIfFalse "L1" -- "Output constraint"
+        $ chk False allOutputs
+      where
+          hsh = findDatumHash (Datum $ PlutusTx.toBuiltinData datum) scriptContextTxInfo
+          chk found [] = found
+          chk found (out:rest) = let
+              foundSnd = checkScriptOutput ownAddress hsh ocValue out
+              in if found && foundSnd then traceError "EO" else chk found rest
 
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
