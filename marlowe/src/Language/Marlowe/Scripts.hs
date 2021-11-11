@@ -185,7 +185,7 @@ smallMarloweValidator
     -> [Input]
     -> ScriptContext
     -> Bool
-smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
     let slotConfig = def :: TimeSlot.SlotConfig
     let ownInput = case findOwnInput ctx of
             Just i -> i
@@ -210,7 +210,7 @@ smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptCont
         inputs (either other contracts or P2PKH).
         Then, we check scriptOutput to be correct.
      -}
-    let inputsOk = validateInputs params scriptContextTxInfo inputs
+    let inputsOk = validateInputs inputs
 
     -- total balance of all accounts in State
     -- accounts must be positive, and we checked it above
@@ -234,7 +234,7 @@ smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptCont
                     marloweState = txOutState }
 
                 payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
-                payoutsOk = payoutConstraints scriptContextTxInfo payoutsByParty
+                payoutsOk = payoutConstraints payoutsByParty
                 checkContinuation = case txOutContract of
                     Close -> True
                     _ -> let
@@ -268,8 +268,8 @@ smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptCont
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
 
-    validateInputs :: MarloweParams -> TxInfo -> [Input] -> Bool
-    validateInputs MarloweParams{rolesCurrency} scriptContextTxInfo inputs = all validateInputWitness inputs
+    validateInputs :: [Input] -> Bool
+    validateInputs inputs = all validateInputWitness inputs
       where
         validateInputWitness :: Input -> Bool
         validateInputWitness input =
@@ -290,16 +290,15 @@ smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptCont
     payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 
-    payoutConstraints :: TxInfo -> [(Party, Val.Value)] -> Bool
-    payoutConstraints scriptContextTxInfo payoutsByParty = all payoutToTxOut payoutsByParty
+    payoutConstraints :: [(Party, Val.Value)] -> Bool
+    payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
             PK pk  -> traceIfFalse "La" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
             Role role -> let
                 dataValue = Datum $ PlutusTx.toBuiltinData role
-                payoutScriptHash = rolePayoutValidatorHash params
                 hsh = findDatumHash dataValue scriptContextTxInfo
-                addr = Ledger.scriptHashAddress payoutScriptHash
+                addr = Ledger.scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "Lb" -- "MustPayToOtherScript"
                 $ any (checkOutput addr hsh value) allOutputs
 
