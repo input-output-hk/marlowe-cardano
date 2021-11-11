@@ -1,13 +1,17 @@
 module Marlowe.Holes.SemanticTest where
 
 import Prologue
+
+import Control.Monad.Error.Class (class MonadError)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Either (hush)
+import Data.Foldable (for_)
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (maybe')
 import Data.Tuple.Nested ((/\), type (/\))
+import Effect.Aff (Error)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Marlowe.Extended (toCore)
@@ -25,8 +29,8 @@ import Marlowe.Semantics
   )
 import Marlowe.Semantics as S
 import Marlowe.Template (TemplateContent(..), fillTemplate)
-import Test.Unit (Test, TestSuite, failure, success, suite, test)
-import Test.Unit.Assert (equal)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (fail, shouldEqual)
 import Text.Pretty (pretty)
 
 -- For the purposes of this test all transactions can happen in slot 0
@@ -232,27 +236,37 @@ extendedToSemanticAndTerm extendedContract = do
   termContract <- semanticToTerms semanticContract
   pure $ semanticContract /\ termContract
 
-shouldHaveSameOutput :: S.TransactionOutput -> T.TransactionOutput -> Test
+shouldHaveSameOutput
+  :: forall m
+   . MonadError Error m
+  => S.TransactionOutput
+  -> T.TransactionOutput
+  -> m Unit
 shouldHaveSameOutput (S.TransactionOutput o1) (T.TransactionOutput o2) = do
-  equal o1.txOutWarnings o2.txOutWarnings
-  equal o1.txOutPayments o2.txOutPayments
-  equal o1.txOutState o2.txOutState
-  equal (Just o1.txOutContract) (fromTerm o2.txOutContract)
+  shouldEqual o1.txOutWarnings o2.txOutWarnings
+  shouldEqual o1.txOutPayments o2.txOutPayments
+  shouldEqual o1.txOutState o2.txOutState
+  shouldEqual (Just o1.txOutContract) (fromTerm o2.txOutContract)
 
-shouldHaveSameOutput (S.Error e1) (T.SemanticError e2) = equal e1 e2
+shouldHaveSameOutput (S.Error e1) (T.SemanticError e2) = shouldEqual e1 e2
 
-shouldHaveSameOutput _ T.InvalidContract = failure "The contract is invalid"
+shouldHaveSameOutput _ T.InvalidContract = fail "The contract is invalid"
 
-shouldHaveSameOutput _ _ = failure "The outputs don't match"
+shouldHaveSameOutput _ _ = fail "The outputs don't match"
 
 -- initialSlot :: S.Contract -> Slot
 -- initialSlot = maybe zero (\(Slot slot) -> Slot (slot - fromInt 1)) <<< _.minTime <<< unwrap <<< timeouts
 -- This function test that given an extended contract with a list of transactions, the
 -- result of computing the transaction list is the same for the Semantic and the Term version
-testTransactionList :: EM.Contract -> List S.TransactionInput -> Test
+testTransactionList
+  :: forall m
+   . MonadError Error m
+  => EM.Contract
+  -> List S.TransactionInput
+  -> m Unit
 testTransactionList extendedContract inputs =
   maybe'
-    (\_ -> failure "could not instantiate contract")
+    (\_ -> fail "could not instantiate contract")
     testAllInputs
     (extendedToSemanticAndTerm extendedContract)
   where
@@ -263,7 +277,8 @@ testTransactionList extendedContract inputs =
     in
       testStep inputs state semanticContract termContract
 
-  testStep Nil _ semanticContract termContract = equal (Just semanticContract)
+  testStep Nil _ semanticContract termContract = shouldEqual
+    (Just semanticContract)
     (fromTerm termContract)
 
   testStep (input : rest) state semanticContract termContract = do
@@ -277,18 +292,14 @@ testTransactionList extendedContract inputs =
         o1.txOutState
         o1.txOutContract
         o2.txOutContract
-      _ -> success
+      _ -> pure unit
 
-testFlows :: EM.Contract -> ContractFlows -> TestSuite
-testFlows _ Nil = pure unit
-
-testFlows contract ((flowName /\ flow) : rest) = do
-  test flowName $ testTransactionList contract flow
-  testFlows contract rest
-
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Holes.Semantic" do
-    suite "Escrow flows" $ testFlows escrowContract escrowFlows
-    suite "Contract for differences" $ testFlows contractForDifferences
-      contractForDifferencesFlows
+  describe "Marlowe.Holes.Semantic" do
+    describe "Escrow flows" do
+      for_ escrowFlows \(name /\ flow) ->
+        it name $ testTransactionList escrowContract flow
+    describe "Contract for differences" do
+      for_ contractForDifferencesFlows \(name /\ flow) ->
+        it name $ testTransactionList contractForDifferences flow
