@@ -213,6 +213,7 @@ executable marlowe-cli
   other-modules:
     Language.Marlowe.CLI
     Language.Marlowe.CLI.Export
+    Language.Marlowe.CLI.Orphans
     Language.Marlowe.CLI.Types
     Paths_marlowe
   autogen-modules:
@@ -223,6 +224,7 @@ executable marlowe-cli
     base >= 4.9 && < 5,
     aeson -any,
     aeson-pretty -any,
+    base16-bytestring -any,
     bytestring -any,
     cardano-api -any,
     marlowe -any,
