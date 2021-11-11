@@ -197,6 +197,8 @@ derive instance newtypeElementId :: Newtype ElementId _
 
 foreign import createBlocklyInstance_ :: Effect Blockly
 
+-- TODO: Now that ActusBlockly is removed we should pass two Elements instead
+-- of two ElementIds.
 createBlocklyInstance :: String -> ElementId -> ElementId -> Toolbox -> Effect BlocklyState
 createBlocklyInstance rootBlockName (ElementId workspaceElementId) (ElementId blocksElementId) toolbox = do
   blockly <- createBlocklyInstance_
