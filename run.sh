@@ -97,6 +97,8 @@ cardano-cli transaction view --tx-body-file marlowe-close.tx
 # 14835 OutputConstraints, check everything, timeToSlot, redeemer [Input]
 # 14917 OutputConstraints, check everything, timeToSlot, redeemer [Input], with Scale
 
+# 7897 without computeTransaction => 14959 - 7897 = 7062 for Marlowe interpreter stuff
+
 ## First successfull spending addr_test1wpfxda7xxcx7w3dmtqrahx2fgp6nspll5putm7qpw6dz2vs0tgayn
 
 # Marlowe Pay

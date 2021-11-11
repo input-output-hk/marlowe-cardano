@@ -191,9 +191,12 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
             Just i -> i
             _      -> traceError "S0" {-"Can't find validation input"-}
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
+    let invervalClosureDiff True  = POSIXTime 0
+        invervalClosureDiff False = POSIXTime 1
     let (minTime, maxTime) =
             case txInfoValidRange scriptContextTxInfo of
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) c1) (Interval.UpperBound (Interval.Finite h) c2) ->
+                    (l + invervalClosureDiff c1, h - invervalClosureDiff c2)
                 _ -> traceError "Mr"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
@@ -219,7 +222,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     -- ensure that a contract TxOut has what it suppose to have
     let balancesOk = inputBalance == scriptInValue
 
-    let preconditionsOk = traceIfFalse "M2" $ positiveBalances && balancesOk && inputsOk
+    let preconditionsOk = traceIfFalse "M2" $ positiveBalances && balancesOk
 
     let txInput = TransactionInput {
             txInterval = interval,
@@ -247,7 +250,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
                                     }
                         in checkOwnOutputConstraint ctx outConstrs
                         -- in checkOwnOutputConstraint ownInput marloweData finalBalance
-            preconditionsOk && payoutsOk && checkContinuation
+            preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousSlotIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"
         Error (TEIntervalError (InvalidInterval _)) -> traceError "E3"
@@ -255,15 +258,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
         Error TEUselessTransaction -> traceError "E5"
 
   where
-    checkOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
+    checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
-    checkOutput _ _ _ _ = False
+    checkScriptOutput _ _ _ _ = False
 
     checkOwnOutputConstraint1 :: TxInInfo -> MarloweData -> Val.Value -> Bool
     checkOwnOutputConstraint1 TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} ocDatum ocValue =
         let hsh = findDatumHash (Datum $ PlutusTx.toBuiltinData ocDatum) scriptContextTxInfo
         in traceIfFalse "L1" -- "Output constraint"
-        $ any (checkOutput ownAddress hsh ocValue) allOutputs
+        $ any (checkScriptOutput ownAddress hsh ocValue) allOutputs
 
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
@@ -300,7 +303,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
                 hsh = findDatumHash dataValue scriptContextTxInfo
                 addr = Ledger.scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "Lb" -- "MustPayToOtherScript"
-                $ any (checkOutput addr hsh value) allOutputs
+                $ any (checkScriptOutput addr hsh value) allOutputs
 
 
 
