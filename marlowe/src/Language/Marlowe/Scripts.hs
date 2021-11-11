@@ -10,6 +10,7 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -40,7 +41,7 @@ import           Plutus.Contract.StateMachine     (StateMachine (..), Void)
 import qualified Plutus.Contract.StateMachine     as SM
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap                as AssocMap
-import qualified PlutusTx.Prelude                 as P
+import           PlutusTx.Prelude
 
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])
@@ -55,7 +56,7 @@ rolePayoutScript symbol = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]
 {-# INLINABLE rolePayoutValidator #-}
 rolePayoutValidator :: CurrencySymbol -> TokenName -> () -> ScriptContext -> Bool
 rolePayoutValidator currency role _ ctx =
-    Val.valueOf (valueSpent (scriptContextTxInfo ctx)) currency role P.> 0
+    Val.valueOf (valueSpent (scriptContextTxInfo ctx)) currency role > 0
 
 
 mkRolePayoutValidatorHash :: CurrencySymbol -> ValidatorHash
@@ -75,7 +76,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     (interval@(minSlot, maxSlot), inputs) = do
     let positiveBalances = validateBalances marloweState ||
             -- Avoid creating a too-big string literal
-            P.traceError ("M1")
+            traceError ("M1")
 
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
@@ -93,7 +94,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     -- ensure that a contract TxOut has what it suppose to have
     let balancesOk = inputBalance == scriptInValue
 
-    let preconditionsOk = P.traceIfFalse "M2" $ positiveBalances && balancesOk
+    let preconditionsOk = traceIfFalse "M2" $ positiveBalances && balancesOk
 
     let txInput = TransactionInput {
             txInterval = interval,
@@ -108,14 +109,14 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
                     marloweState = txOutState }
 
             let (outputsConstraints, finalBalance) = let
-                    payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
+                    payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
                     in case txOutContract of
-                        Close -> (payoutConstraints payoutsByParty, P.zero)
+                        Close -> (payoutConstraints payoutsByParty, zero)
                         _ -> let
                             outputsConstraints = payoutConstraints payoutsByParty
-                            totalIncome = P.foldMap collectDeposits inputs
-                            totalPayouts = P.foldMap snd payoutsByParty
-                            finalBalance = inputBalance P.+ totalIncome P.- totalPayouts
+                            totalIncome = foldMap collectDeposits inputs
+                            totalPayouts = foldMap snd payoutsByParty
+                            finalBalance = inputBalance + totalIncome - totalPayouts
                             in (outputsConstraints, finalBalance)
             -- TODO Push this use of time further down the code
             let range = TimeSlot.slotRangeToPOSIXTimeRange def $ Interval.interval minSlot maxSlot
@@ -128,18 +129,18 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
   where
     validateInputs :: MarloweParams -> [Input] -> TxConstraints Void Void
     validateInputs MarloweParams{rolesCurrency} inputs = let
-        (keys, roles) = P.foldMap validateInputWitness inputs
-        mustSpendSetOfRoleTokens = P.foldMap mustSpendRoleToken (AssocMap.keys roles)
-        in P.foldMap mustBeSignedBy keys P.<> mustSpendSetOfRoleTokens
+        (keys, roles) = foldMap validateInputWitness inputs
+        mustSpendSetOfRoleTokens = foldMap mustSpendRoleToken (AssocMap.keys roles)
+        in foldMap mustBeSignedBy keys <> mustSpendSetOfRoleTokens
       where
         validateInputWitness :: Input -> ([PubKeyHash], AssocMap.Map TokenName ())
         validateInputWitness input =
             case input of
                 IDeposit _ party _ _         -> validatePartyWitness party
                 IChoice (ChoiceId _ party) _ -> validatePartyWitness party
-                INotify                      -> (P.mempty, P.mempty)
+                INotify                      -> (mempty, mempty)
           where
-            validatePartyWitness (PK pk)     = ([pk], P.mempty)
+            validatePartyWitness (PK pk)     = ([pk], mempty)
             validatePartyWitness (Role role) = ([], AssocMap.singleton role ())
 
         mustSpendRoleToken :: TokenName -> TxConstraints Void Void
@@ -147,14 +148,14 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
 
     collectDeposits :: Input -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
-    collectDeposits _                                     = P.zero
+    collectDeposits _                                     = zero
 
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
     payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 
     payoutConstraints :: [(Party, Val.Value)] -> TxConstraints i0 o0
-    payoutConstraints payoutsByParty = P.foldMap payoutToTxOut payoutsByParty
+    payoutConstraints payoutsByParty = foldMap payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
             PK pk  -> mustPayToPubKey pk value
@@ -184,24 +185,23 @@ smallMarloweValidator
     -> [Input]
     -> ScriptContext
     -> Bool
-smallMarloweValidator params MarloweData{..} inputs ctx = do
+smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
     let slotConfig = def :: TimeSlot.SlotConfig
-    let txInfo = scriptContextTxInfo ctx
     let ownInput = case findOwnInput ctx of
             Just i -> i
-            _      -> P.traceError "S0"
-    let scriptInValue = maybe (P.traceError "S0" {-"Can't find validation input"-}) (txOutValue . txInInfoResolved) (findOwnInput ctx)
+            _      -> traceError "S0" {-"Can't find validation input"-}
+    let scriptInValue = txOutValue $ txInInfoResolved ownInput
     let (minTime, maxTime) =
-            case txInfoValidRange txInfo of
+            case txInfoValidRange scriptContextTxInfo of
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
-                _ -> P.traceError "Mr"
+                _ -> traceError "Mr"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
     let maxSlot = timeToSlot maxTime
     let interval = (minSlot, maxSlot)
     let positiveBalances = validateBalances marloweState ||
             -- Avoid creating a too-big string literal
-            P.traceError ("M1")
+            traceError ("M1")
 
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
@@ -210,16 +210,16 @@ smallMarloweValidator params MarloweData{..} inputs ctx = do
         inputs (either other contracts or P2PKH).
         Then, we check scriptOutput to be correct.
      -}
-    let inputsOk = validateInputs params txInfo inputs
+    let inputsOk = validateInputs params scriptContextTxInfo inputs
 
     -- total balance of all accounts in State
     -- accounts must be positive, and we checked it above
     let inputBalance = totalBalance (accounts marloweState)
 
     -- ensure that a contract TxOut has what it suppose to have
-    let balancesOk = inputBalance P.== scriptInValue
+    let balancesOk = inputBalance == scriptInValue
 
-    let preconditionsOk = P.traceIfFalse "M2" $ positiveBalances && balancesOk && inputsOk
+    let preconditionsOk = traceIfFalse "M2" $ positiveBalances && balancesOk && inputsOk
 
     let txInput = TransactionInput {
             txInterval = interval,
@@ -233,29 +233,38 @@ smallMarloweValidator params MarloweData{..} inputs ctx = do
                     marloweContract = txOutContract,
                     marloweState = txOutState }
 
-                payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
-                payoutsOk = payoutConstraints txInfo payoutsByParty
+                payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
+                payoutsOk = payoutConstraints scriptContextTxInfo payoutsByParty
                 checkContinuation = case txOutContract of
                     Close -> True
                     _ -> let
-                        totalIncome = P.foldMap collectDeposits inputs
-                        totalPayouts = P.foldMap snd payoutsByParty
-                        finalBalance = inputBalance P.+ totalIncome P.- totalPayouts
-                        outConstrs = OutputConstraint
-                                    { ocDatum = marloweData
-                                    , ocValue = finalBalance
-                                    }
-                        in checkOwnOutputConstraint ctx outConstrs
+                        totalIncome = foldMap collectDeposits inputs
+                        totalPayouts = foldMap snd payoutsByParty
+                        finalBalance = inputBalance + totalIncome - totalPayouts
+                        in checkOwnOutputConstraint ownInput marloweData finalBalance
             preconditionsOk && payoutsOk && checkContinuation
-        Error TEAmbiguousSlotIntervalError -> P.traceError "E1"
-        Error TEApplyNoMatchError -> P.traceError "E2"
-        Error (TEIntervalError (InvalidInterval _)) -> P.traceError "E3"
-        Error (TEIntervalError (IntervalInPastError _ _)) -> P.traceError "E4"
-        Error TEUselessTransaction -> P.traceError "E5"
+        Error TEAmbiguousSlotIntervalError -> traceError "E1"
+        Error TEApplyNoMatchError -> traceError "E2"
+        Error (TEIntervalError (InvalidInterval _)) -> traceError "E3"
+        Error (TEIntervalError (IntervalInPastError _ _)) -> traceError "E4"
+        Error TEUselessTransaction -> traceError "E5"
 
   where
+    checkOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
+                    txOutValue == value && hsh == Just svh && txOutAddress == addr
+    checkOutput _ _ _ _ = False
+
+    checkOwnOutputConstraint :: TxInInfo -> MarloweData -> Val.Value -> Bool
+    checkOwnOutputConstraint TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} ocDatum ocValue =
+        let hsh = findDatumHash (Datum $ PlutusTx.toBuiltinData ocDatum) scriptContextTxInfo
+        in traceIfFalse "L1" -- "Output constraint"
+        $ any (checkOutput ownAddress hsh ocValue) allOutputs
+
+    allOutputs :: [TxOut]
+    allOutputs = txInfoOutputs scriptContextTxInfo
+
     validateInputs :: MarloweParams -> TxInfo -> [Input] -> Bool
-    validateInputs MarloweParams{rolesCurrency} scriptContextTxInfo inputs = P.all validateInputWitness inputs
+    validateInputs MarloweParams{rolesCurrency} scriptContextTxInfo inputs = all validateInputWitness inputs
       where
         validateInputWitness :: Input -> Bool
         validateInputWitness input =
@@ -264,34 +273,30 @@ smallMarloweValidator params MarloweData{..} inputs ctx = do
                 IChoice (ChoiceId _ party) _ -> validatePartyWitness party
                 INotify                      -> True
           where
-            validatePartyWitness (PK pk)     = P.traceIfFalse "L4" $ scriptContextTxInfo `txSignedBy` pk
-            validatePartyWitness (Role role) = P.traceIfFalse "L5" -- "Spent value not OK"
+            validatePartyWitness (PK pk)     = traceIfFalse "L4" $ scriptContextTxInfo `txSignedBy` pk
+            validatePartyWitness (Role role) = traceIfFalse "L5" -- "Spent value not OK"
                                                $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
     collectDeposits :: Input -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
-    collectDeposits _                                     = P.zero
+    collectDeposits _                                     = zero
 
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
     payoutByParty (Payment _ (Party party) money) = AssocMap.singleton party money
     payoutByParty (Payment _ (Account _) _)       = AssocMap.empty
 
     payoutConstraints :: TxInfo -> [(Party, Val.Value)] -> Bool
-    payoutConstraints scriptContextTxInfo payoutsByParty = P.all payoutToTxOut payoutsByParty
+    payoutConstraints scriptContextTxInfo payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            PK pk  -> P.traceIfFalse "La" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
+            PK pk  -> traceIfFalse "La" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
             Role role -> let
                 dataValue = Datum $ PlutusTx.toBuiltinData role
                 payoutScriptHash = rolePayoutValidatorHash params
-                outs = txInfoOutputs scriptContextTxInfo
                 hsh = findDatumHash dataValue scriptContextTxInfo
                 addr = Ledger.scriptHashAddress payoutScriptHash
-                checkOutput TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
-                    txOutValue P.== value && hsh P.== Just svh && txOutAddress P.== addr
-                checkOutput _ = False
-                in P.traceIfFalse "Lb" -- "MustPayToOtherScript"
-                $ any checkOutput outs
+                in traceIfFalse "Lb" -- "MustPayToOtherScript"
+                $ any (checkOutput addr hsh value) allOutputs
 
 
 
