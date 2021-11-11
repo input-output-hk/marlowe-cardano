@@ -2,6 +2,7 @@
 module Marlowe.ContractTests where
 
 import Prologue
+
 import Control.Bind (bindFlipped)
 import Control.Monad.Gen (class MonadGen, chooseInt, elements, oneOf)
 import Control.Monad.Rec.Class (class MonadRec)
@@ -57,14 +58,14 @@ import Simulator.State (applyInput, getAllActions, moveToSlot, startSimulation)
 import Simulator.Types (ActionInput(..))
 import Test.QuickCheck (Result(..))
 import Test.QuickCheck.Gen (Gen)
-import Test.Unit (TestSuite, suite, test)
-import Test.Unit.Assert (equal)
-import Test.Unit.QuickCheck (quickCheck)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (shouldEqual)
+import Test.Spec.QuickCheck (quickCheck)
 import Text.Pretty (pretty)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Contract Tests" do
+  describe "Contract Tests" do
     examplesMatch
     escrowSimpleFlow
     exampleContractsHaveNoErrors
@@ -78,29 +79,29 @@ toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $
 contractToExtended :: String -> Maybe EM.Contract
 contractToExtended = fromTerm <=< hush <<< parseContract
 
-examplesMatch :: TestSuite
+examplesMatch :: Spec Unit
 examplesMatch =
-  suite "Purescript and Haskell examples match" do
-    test "Simple escrow"
-      $ equal (Just Escrow.fullExtendedContract)
+  describe "Purescript and Haskell examples match" do
+    it "Simple escrow"
+      $ shouldEqual (Just Escrow.fullExtendedContract)
           (contractToExtended Contracts.escrow)
-    test "Escrow with collateral"
-      $ equal (Just EscrowWithCollateral.fullExtendedContract)
+    it "Escrow with collateral"
+      $ shouldEqual (Just EscrowWithCollateral.fullExtendedContract)
           (contractToExtended Contracts.escrowWithCollateral)
-    test "Zero coupon bond"
-      $ equal (Just ZeroCouponBond.fullExtendedContract)
+    it "Zero coupon bond"
+      $ shouldEqual (Just ZeroCouponBond.fullExtendedContract)
           (contractToExtended Contracts.zeroCouponBond)
-    test "Coupon bond guaranteed"
-      $ equal (Just CouponBondGuaranteed.extendedContract)
+    it "Coupon bond guaranteed"
+      $ shouldEqual (Just CouponBondGuaranteed.extendedContract)
           (contractToExtended Contracts.couponBondGuaranteed)
-    test "Swap"
-      $ equal (Just Swap.fullExtendedContract)
+    it "Swap"
+      $ shouldEqual (Just Swap.fullExtendedContract)
           (contractToExtended Contracts.swap)
-    test "Contract for differences"
-      $ equal (Just ContractForDifferences.extendedContract)
+    it "Contract for differences"
+      $ shouldEqual (Just ContractForDifferences.extendedContract)
           (contractToExtended Contracts.contractForDifferences)
-    test "Contract for differences with oracle"
-      $ equal (Just ContractForDifferencesWithOracle.extendedContract)
+    it "Contract for differences with oracle"
+      $ shouldEqual (Just ContractForDifferencesWithOracle.extendedContract)
           (contractToExtended Contracts.contractForDifferencesWithOracle)
 
 seller :: Party
@@ -256,9 +257,9 @@ filledContractForDifferencesWithOracle =
 -- TODO:  We should combine this test with the ones defined in Marlowe.Holes.SemanticTest
 --       so that we can have a single definition of contracts and flows, and then test what we care in each one. In semantic
 --       test we care that the compute transaction of term and semantic are the same, in here we care about the output of the simulation.
-escrowSimpleFlow :: TestSuite
+escrowSimpleFlow :: Spec Unit
 escrowSimpleFlow =
-  test "Escrow" do
+  it "Escrow" do
     -- A simple test that runs the Escrow contract to completion
     let
       deposit = IDeposit seller buyer ada (BigInt.fromInt 450)
@@ -281,14 +282,14 @@ escrowSimpleFlow =
           (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning)
           finalState
         executionState ^. _transactionError
-    equal Nothing txError
-    equal (Just Close) (fromTerm =<< finalContract)
+    shouldEqual Nothing txError
+    shouldEqual (Just Close) (fromTerm =<< finalContract)
     pure unit
 
 --
-exampleContractsHaveNoErrors :: TestSuite
+exampleContractsHaveNoErrors :: Spec Unit
 exampleContractsHaveNoErrors =
-  suite "Provided Examples don't throw errors nor have warnings" do
+  describe "Provided Examples don't throw errors nor have warnings" do
     contractHasNoErrors "Simple Escrow" filledEscrow
     contractHasNoErrors "Escrow with collateral" filledEscrowWithCollateral
     contractHasNoErrors "Zero coupon bond" filledZeroCouponBond
@@ -300,9 +301,9 @@ exampleContractsHaveNoErrors =
 
 -- This is a property based test that checks that for a given contract, the possible actions available
 -- during the simulation don't throw errors nor warnings.
-contractHasNoErrors :: String -> Term T.Contract -> TestSuite
+contractHasNoErrors :: String -> Term T.Contract -> Spec Unit
 contractHasNoErrors contractName contract =
-  test contractName
+  it contractName
     $ quickCheck
     $ evalStateT property mkState
   where

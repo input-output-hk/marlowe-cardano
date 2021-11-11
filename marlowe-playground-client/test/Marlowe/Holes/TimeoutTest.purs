@@ -7,12 +7,12 @@ import Marlowe.Holes (fromTerm)
 import Marlowe.Semantics (timeouts)
 import Marlowe.Semantics as S
 import Test.QuickCheck (Result, (===))
-import Test.Unit (TestSuite, suite, test)
+import Test.Spec (Spec, describe, it)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Holes.Timeout" do
-    test "Term and Semantic contract has the same timeouts" $ contractQuickCheck
+  describe "Marlowe.Holes.Timeout" do
+    it "Term and Semantic contract has the same timeouts" $ contractQuickCheck
       (GenerationOptions { withHoles: false, withExtendedConstructs: false })
       sameTimeouts
 

@@ -1,6 +1,7 @@
 module Marlowe.DeinstantiatorTests where
 
 import Prologue
+
 import Data.BigInt.Argonaut (fromInt)
 import Data.Map as Map
 import Data.Maybe (maybe)
@@ -9,15 +10,15 @@ import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Extended (toCore)
-import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Semantics (Contract)
-import Test.Unit (TestSuite, suite, test)
-import Test.Unit.Assert (assertFalse, equal)
+import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (shouldEqual, shouldSatisfy)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Deinstantiator Tests" do
-    test "Escrow" do
+  describe "Deinstantiator Tests" do
+    it "Escrow" do
       let
         mFilledEscrow :: Maybe Contract
         mFilledEscrow =
@@ -39,11 +40,11 @@ all =
                 )
                 Escrow.contractTemplate.extendedContract
             )
-      assertFalse "Could not instantiate Escrow contract"
-        (mFilledEscrow == Nothing)
-      equal (Just Escrow.contractTemplate)
+      shouldSatisfy (mFilledEscrow == Nothing) not
+      shouldEqual
+        (Just Escrow.contractTemplate)
         (maybe Nothing findTemplate mFilledEscrow)
-    test "Zero Coupon Bond" do
+    it "Zero Coupon Bond" do
       let
         mFilledZeroCouponBond :: Maybe Contract
         mFilledZeroCouponBond =
@@ -64,7 +65,7 @@ all =
                 )
                 ZeroCouponBond.contractTemplate.extendedContract
             )
-      assertFalse "Could not instantiate Zero Coupon Bond contract"
-        (mFilledZeroCouponBond == Nothing)
-      equal (Just ZeroCouponBond.contractTemplate)
+      shouldSatisfy (mFilledZeroCouponBond == Nothing) not
+      shouldEqual
+        (Just ZeroCouponBond.contractTemplate)
         (maybe Nothing findTemplate mFilledZeroCouponBond)
