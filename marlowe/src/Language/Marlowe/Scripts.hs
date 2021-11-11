@@ -241,7 +241,12 @@ smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptCont
                         totalIncome = foldMap collectDeposits inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        in checkOwnOutputConstraint ownInput marloweData finalBalance
+                        outConstrs = OutputConstraint
+                                    { ocDatum = marloweData
+                                    , ocValue = finalBalance
+                                    }
+                        in checkOwnOutputConstraint ctx outConstrs
+                        -- in checkOwnOutputConstraint ownInput marloweData finalBalance
             preconditionsOk && payoutsOk && checkContinuation
         Error TEAmbiguousSlotIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"
@@ -254,8 +259,8 @@ smallMarloweValidator params MarloweData{..} inputs ctx@ScriptContext{scriptCont
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
     checkOutput _ _ _ _ = False
 
-    checkOwnOutputConstraint :: TxInInfo -> MarloweData -> Val.Value -> Bool
-    checkOwnOutputConstraint TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} ocDatum ocValue =
+    checkOwnOutputConstraint1 :: TxInInfo -> MarloweData -> Val.Value -> Bool
+    checkOwnOutputConstraint1 TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} ocDatum ocValue =
         let hsh = findDatumHash (Datum $ PlutusTx.toBuiltinData ocDatum) scriptContextTxInfo
         in traceIfFalse "L1" -- "Output constraint"
         $ any (checkOutput ownAddress hsh ocValue) allOutputs
