@@ -28,9 +28,8 @@ import           Control.Monad                   (void, when)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Language.Marlowe.CLI.Types      (DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Client         (defaultMarloweParams)
 import           Language.Marlowe.Scripts        (typedValidator1)
-import           Language.Marlowe.Semantics      (MarloweData (..))
+import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, Party (..), State (..), Token (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
 import           Ledger.Typed.Scripts            (validatorHash, validatorScript)
@@ -48,7 +47,8 @@ import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 buildMarlowe :: IsShelleyBasedEra era
-             => CostModelParams
+             => MarloweParams
+             -> CostModelParams
              -> NetworkId
              -> StakeAddressReference
              -> Contract
@@ -58,16 +58,17 @@ buildMarlowe :: IsShelleyBasedEra era
              -> SlotNo
              -> SlotNo
              -> MarloweInfo era
-buildMarlowe costModel network stake contract accountHash accountLovelace minimumSlot' minimumSlot maximumSlot =
+buildMarlowe marloweParams costModel network stake contract accountHash accountLovelace minimumSlot' minimumSlot maximumSlot =
   let
-    validatorInfo = buildValidator costModel network stake
+    validatorInfo = buildValidator marloweParams costModel network stake
     datumInfo     = buildDatum contract accountHash accountLovelace minimumSlot'
     redeemerInfo  = buildRedeemer minimumSlot maximumSlot
   in
     MarloweInfo{..}
 
 
-exportMarlowe :: CostModelParams
+exportMarlowe :: MarloweParams
+              -> CostModelParams
               -> NetworkId
               -> StakeAddressReference
               -> Contract
@@ -79,12 +80,12 @@ exportMarlowe :: CostModelParams
               -> FilePath
               -> Bool
               -> IO ()
-exportMarlowe costModel network stake contract accountHash accountLovelace minimumSlot' minimumSlot maximumSlot outputFile printStats =
+exportMarlowe marloweParams costModel network stake contract accountHash accountLovelace minimumSlot' minimumSlot maximumSlot outputFile printStats =
   do
     let
       marloweInfo@MarloweInfo{..} =
         buildMarlowe
-          costModel network stake
+          marloweParams costModel network stake
           contract accountHash accountLovelace minimumSlot'
           minimumSlot maximumSlot
       ValidatorInfo{..} = validatorInfo
@@ -103,13 +104,14 @@ exportMarlowe costModel network stake contract accountHash accountLovelace minim
 
 
 buildValidator :: IsShelleyBasedEra era
-               => CostModelParams
+               => MarloweParams
+               -> CostModelParams
                -> NetworkId
                -> StakeAddressReference
                -> ValidatorInfo era
-buildValidator costModel network stake =
+buildValidator marloweParams costModel network stake =
   let
-    viValidator = typedValidator1 defaultMarloweParams
+    viValidator = typedValidator1 marloweParams
     script = getValidator . validatorScript $ viValidator
     viScript = toCardanoApiScript script
     viBytes = SBS.toShort . LBS.toStrict . serialise $ script
@@ -125,27 +127,29 @@ buildValidator costModel network stake =
     ValidatorInfo{..}
 
 
-exportAddress :: NetworkId
+exportAddress :: MarloweParams
+              -> NetworkId
               -> StakeAddressReference
               -> IO ()
-exportAddress network stake =
+exportAddress marloweParams network stake =
   do
     let
-      ValidatorInfo{..} = buildValidator undefined network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
+      ValidatorInfo{..} = buildValidator marloweParams undefined network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
     putStrLn . T.unpack . serialiseAddress $ viAddress
 
 
-exportValidator :: CostModelParams
+exportValidator :: MarloweParams
+                -> CostModelParams
                 -> NetworkId
                 -> StakeAddressReference
                 -> FilePath
                 -> Bool
                 -> Bool
                 -> IO ()
-exportValidator costModel network stake outputFile printHash printStats =
+exportValidator marloweParams costModel network stake outputFile printHash printStats =
   do
     let
-      ValidatorInfo{..} = buildValidator costModel network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
+      ValidatorInfo{..} = buildValidator marloweParams costModel network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
     void
       $ writeFileTextEnvelope outputFile Nothing viScript
     putStrLn . T.unpack . serialiseAddress $ viAddress

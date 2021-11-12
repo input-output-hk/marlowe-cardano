@@ -1,8 +1,6 @@
 
 {-# LANGUAGE RecordWildCards #-}
 
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns  #-} -- FIXME: Remove this after error handling is implemented.
-
 
 module Language.Marlowe.CLI (
   mainCLI
@@ -18,9 +16,12 @@ import           Data.Version                    (Version, showVersion)
 import           Language.Marlowe.CLI.Export     (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
                                                   exportValidator)
 import           Language.Marlowe.CLI.Types      (Command (..))
+import           Language.Marlowe.Client         (defaultMarloweParams, marloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (Close))
-import           Plutus.V1.Ledger.Api            (defaultCostModelParams)
+import           Plutus.V1.Ledger.Api            (CurrencySymbol (..), defaultCostModelParams, toBuiltin)
 
+import qualified Data.ByteString.Base16          as Base16 (decode)
+import qualified Data.ByteString.Char8           as BS8 (pack)
 import qualified Data.Text                       as T (pack)
 import qualified Options.Applicative             as O
 
@@ -29,24 +30,24 @@ mainCLI :: Version
         -> IO ()
 mainCLI version =
   do
+    command <- O.execParser $ parser version
     let
       contract = Close
-      Just costModel = defaultCostModelParams -- FIXME: Implement error handling.
-    command <- O.execParser $ parser version
+      marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
+      network'       = fromMaybe Mainnet                        $ network       command
+      stake'         = fromMaybe NoStakeAddress                 $ stake         command
+    Just costModel <- pure defaultCostModelParams
     case command of
       Export{..}          -> exportMarlowe
-                               costModel (fromMaybe Mainnet network) (fromMaybe NoStakeAddress stake)
+                               marloweParams' costModel network' stake'
                                contract accountHash accountLovelace minimumSlot'
                                minimumSlot maximumSlot
                                outputFile
                                printStats
-      ExportAddress{..}   -> exportAddress
-                               (fromMaybe Mainnet network)
-                               (fromMaybe NoStakeAddress stake)
+      ExportAddress{}     -> exportAddress
+                               marloweParams' network' stake'
       ExportValidator{..} -> exportValidator
-                               costModel
-                               (fromMaybe Mainnet network)
-                               (fromMaybe NoStakeAddress stake)
+                               marloweParams' costModel network' stake'
                                validatorFile
                                printHash printStats
       ExportDatum{..}     -> exportDatum
@@ -102,6 +103,7 @@ exportMarloweOptions =
   Export
     <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"       <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet." )
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"       <> O.metavar "ADDRESS"      <> O.help "Stake address, if any."              )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency"      <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."   )
     <*> O.strOption                                        (O.long "datum-account-hash"  <> O.metavar "PUB_KEY_HASH" <> O.help "Public key hash for the account."    )
     <*> O.option parseLovelace                             (O.long "datum-account-value" <> O.metavar "LOVELACE"     <> O.help "Lovelace value for the account."     )
     <*> O.option parseSlotNo                               (O.long "datum-min-slot"      <> O.metavar "MIN_SLOT"     <> O.help "Minimum slot for the contract state.")
@@ -121,8 +123,9 @@ exportAddressCommand =
 exportAddressOptions :: O.Parser Command
 exportAddressOptions =
   ExportAddress
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic" <> O.metavar "INTEGER" <> O.help "Network magic, or omit for mainnet.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address" <> O.metavar "ADDRESS" <> O.help "Stake address, if any."             )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."             )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."     )
 
 
 exportValidatorCommand :: O.Mod O.CommandFields Command
@@ -135,11 +138,12 @@ exportValidatorCommand =
 exportValidatorOptions :: O.Parser Command
 exportValidatorOptions =
   ExportValidator
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"     <> O.help "Stake address, if any."             )
-    <*> O.strOption                                        (O.long "validator-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for validator."    )
-    <*> O.switch                                           (O.long "print-hash"                                <> O.help "Print validator hash."              )
-    <*> O.switch                                           (O.long "print-stats"                               <> O.help "Print statistics."                  )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."             )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."     )
+    <*> O.strOption                                        (O.long "validator-file" <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."    )
+    <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."              )
+    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                  )
 
 
 exportDatumCommand :: O.Mod O.CommandFields Command
@@ -194,3 +198,12 @@ parseLovelace = quantityToLovelace . Quantity <$> O.auto
 
 parseSlotNo :: O.ReadM SlotNo
 parseSlotNo = SlotNo <$> O.auto
+
+
+parseCurrencySymbol :: O.ReadM CurrencySymbol
+parseCurrencySymbol =
+  O.eitherReader
+    $ \s ->
+      case Base16.decode $ BS8.pack s of
+        Left  message  -> Left message
+        Right currency -> Right . CurrencySymbol . toBuiltin $ currency
