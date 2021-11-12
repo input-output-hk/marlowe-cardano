@@ -21,7 +21,15 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
       datum                    Export a datum to a JSON file.
       redeemer                 Export a redeemer to a JSON file.
 
-The [`export`](export.md) command writes a JSON file with sufficient information to run the contract on the blockchain.
+
+## Workflows
+
+The `marlowe-cli` tools supports both granular and monolithic workflows for creating the files and hashes needed to submit Marlowe contracts with `cardano-cli`.
+
+
+### Monolithic Workflow
+
+The [`export`](export.md) command writes a JSON file with sufficient information to run the contract on the blockchain. It contains the following information.
 
 *   Address
 *   Validator hash
@@ -29,24 +37,24 @@ The [`export`](export.md) command writes a JSON file with sufficient information
 *   Size in bytes
 *   Execution cost
 
-The [`address`](address.md), [`validator`](validator.md), [`datum`](datum.md), and [`redeemer`](redeemer.md) commands write the corresponding subset of information to a JSON file or to the console.
+The diagram below illusrates how the `export` command can be used in conjunction with [`jq`](https://stedolan.github.io/jq/manual/) and `cardano-cli`.
 
+![Marlowe workflow using `marlowe-cli`, `jq`, and `cardano-cli`.](workflow-jq.svg)
 
-## Running Marlowe on Testnet
-
-
-### Using the `export` command and the `jq` tool
-
-See [example-jq.sh](example-jq.sh).
+See [example](example.marlowe) for an example file containing this information for a simple contract, and see [example-jq.sh](example-jq.sh) for an example bash script embodying this workflow.
 
 ```diff
 - FIXME: Write a narrative tutorial for this example.
 ```
 
 
-### Using the `address`, `validator`, `datum`, and `redeemer` commands
+### Granular Workflow
 
-See [example.sh](example.sh).
+The [`address`](address.md), [`validator`](validator.md), [`datum`](datum.md), and [`redeemer`](redeemer.md) commands write the corresponding subset of information to a JSON file or to the console. These allows finer-grain access to the capabilities of the `export` command. The diagram below illustrates how these commands can be used in conjunction with `cardano-cli`.
+
+![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](workflow.svg)
+
+See [example.sh](example.sh) for an example bash script embodying this workflow.
 
 ```diff
 - FIXME: Write a narrative tutorial for this example.
