@@ -5,7 +5,7 @@ module Spec.Marlowe.ACTUS.Examples
     (tests)
 where
 
-import Data.Aeson (eitherDecode)
+import Data.Aeson (FromJSON (..), eitherDecode)
 import Data.ByteString.Lazy as B (readFile)
 import Data.Maybe (fromJust)
 import Data.Time.LocalTime
@@ -16,8 +16,14 @@ import Language.Marlowe.ACTUS.Domain.ContractTerms
 import Language.Marlowe.ACTUS.Generator.GeneratorFs
 import Language.Marlowe.ACTUS.Generator.GeneratorStatic
 import qualified Ledger.Value as Val
+import Spec.Marlowe.ACTUS.ContractTerms (actusJsonToContractTerms)
 import Test.Tasty
 import Test.Tasty.HUnit
+
+newtype ContractTermsWrapper = ContractTermsWrapper { unwrap :: ContractTerms }
+
+instance FromJSON ContractTermsWrapper where
+  parseJSON = fmap ContractTermsWrapper . actusJsonToContractTerms
 
 tests :: TestTree
 tests = testGroup "Marlowe represenation of sample ACTUS contracts"
@@ -327,7 +333,7 @@ ex_optns1 =
             }
 
 contractFromFile :: FilePath -> IO (Either String ContractTerms)
-contractFromFile f = eitherDecode <$> B.readFile f
+contractFromFile f = fmap unwrap . eitherDecode <$> B.readFile f
 
 defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
 defaultRiskFactors _ _ =
