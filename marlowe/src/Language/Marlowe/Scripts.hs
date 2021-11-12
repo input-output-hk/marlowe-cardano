@@ -195,6 +195,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
         invervalClosureDiff False = POSIXTime 1
     let (minTime, maxTime) =
             case txInfoValidRange scriptContextTxInfo of
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) c1) (Interval.UpperBound (Interval.Finite h) c2) ->
                     (l + invervalClosureDiff c1, h - invervalClosureDiff c2)
                 _ -> traceError "Mr"

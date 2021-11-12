@@ -81,13 +81,13 @@ main = do
                 , minSlot = 10 },
             marloweContract = contract
             }
-    let contract2 = When [Case (Deposit party party ada (Constant 12000000)) Close] 42127000 Close
+    let contract2 = When [Case (Deposit party party ada (Constant 12000000)) Close] 42294000 Close
     let md2 = MarloweData {
             marloweState = State
                 { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) 3000000
                 , choices  = AssocMap.empty
                 , boundValues = AssocMap.empty
-                , minSlot = 42126000 },
+                , minSlot = 42293000 },
             marloweContract = contract2
             }
     let datum = Datum $ PlutusTx.toBuiltinData md2
