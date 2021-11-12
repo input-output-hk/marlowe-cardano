@@ -138,7 +138,6 @@ exportValidatorOptions =
     <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet.")
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"     <> O.help "Stake address, if any."             )
     <*> O.strOption                                        (O.long "validator-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for validator."    )
-    <*> O.switch                                           (O.long "print-address"                             <> O.help "Print validator address."           )
     <*> O.switch                                           (O.long "print-hash"                                <> O.help "Print validator hash."              )
     <*> O.switch                                           (O.long "print-stats"                               <> O.help "Print statistics."                  )
 
@@ -157,7 +156,6 @@ exportDatumOptions =
     <*> O.option parseLovelace (O.long "account-value" <> O.metavar "LOVELACE"     <> O.help "Lovelace value for the account."     )
     <*> O.option parseSlotNo   (O.long "min-slot"      <> O.metavar "MIN_SLOT"     <> O.help "Minimum slot for the contract state.")
     <*> O.strOption            (O.long "datum-file"    <> O.metavar "OUTPUT_FILE"  <> O.help "JSON output file for datum."         )
-    <*> O.switch               (O.long "print-hash"                                <> O.help "Print datum hash."                   )
     <*> O.switch               (O.long "print-stats"                               <> O.help "Print statistics."                   )
 
 

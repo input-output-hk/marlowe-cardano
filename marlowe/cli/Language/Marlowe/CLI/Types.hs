@@ -13,15 +13,15 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import           Cardano.Api                  (AddressInEra, IsCardanoEra, Lovelace, NetworkId, SlotNo,
-                                               StakeAddressReference, serialiseAddress)
+import           Cardano.Api                  (AddressInEra, IsCardanoEra, Lovelace, NetworkId, PlutusScriptV1, Script,
+                                               SlotNo, StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
 import           Data.Aeson                   (ToJSON (..), Value, object, (.=))
 import           Data.ByteString.Short        (ShortByteString)
 import           GHC.Generics                 (Generic)
 import           Language.Marlowe.CLI.Orphans ()
 import           Language.Marlowe.Semantics   (MarloweData (..))
 import           Ledger.Typed.Scripts         (TypedValidator)
-import           Plutus.V1.Ledger.Api         (Datum, DatumHash, ExBudget, PubKeyHash, Redeemer, Script, ValidatorHash)
+import           Plutus.V1.Ledger.Api         (Datum, DatumHash, ExBudget, PubKeyHash, Redeemer, ValidatorHash)
 
 
 data MarloweInfo era =
@@ -46,7 +46,7 @@ data ValidatorInfo era =
   ValidatorInfo
   {
     viValidator :: TypedValidator MarloweData
-  , viScript    :: Script
+  , viScript    :: Script PlutusScriptV1
   , viBytes     :: ShortByteString
   , viHash      :: ValidatorHash
   , viAddress   :: AddressInEra era
@@ -61,7 +61,7 @@ instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
       [
         "address" .= serialiseAddress viAddress
       , "hash"    .= toJSON viHash
-      , "cborHex" .= toJSON viBytes
+      , "script"  .= toJSON (serialiseToTextEnvelope Nothing viScript)
       , "size"    .= toJSON viSize
       , "cost"    .= toJSON viCost
       ]
@@ -132,7 +132,6 @@ data Command =
       network       :: Maybe NetworkId
     , stake         :: Maybe StakeAddressReference
     , validatorFile :: FilePath
-    , printAddress  :: Bool
     , printHash     :: Bool
     , printStats    :: Bool
     }
@@ -142,7 +141,6 @@ data Command =
     , accountLovelace :: Lovelace
     , minimumSlot'    :: SlotNo
     , datumFile       :: FilePath
-    , printHash       :: Bool
     , printStats      :: Bool
     }
   | ExportRedeemer

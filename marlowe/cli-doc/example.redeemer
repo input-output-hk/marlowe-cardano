@@ -1,0 +1,19 @@
+{
+    "constructor": 0,
+    "fields": [
+        {
+            "constructor": 0,
+            "fields": [
+                {
+                    "int": 1000
+                },
+                {
+                    "int": 43500000
+                }
+            ]
+        },
+        {
+            "list": []
+        }
+    ]
+}
