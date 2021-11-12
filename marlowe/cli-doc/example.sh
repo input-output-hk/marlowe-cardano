@@ -36,8 +36,9 @@ REDEEMER_FILE=test.redeemer
 
 # Configure the contract.
 
-DATUM_LOVELACE=3000000
-DATUM_MIN_SLOT=10
+CONTRACT_FILE=example.contract
+STATE_FILE=example.state
+DATUM_LOVELACE=$(jq '.accounts | .[0] | .[1]' $STATE_FILE)
 REDEEMER_MIN_SLOT=1000
 REDEEMER_MAX_SLOT=43500000
 
@@ -46,19 +47,17 @@ REDEEMER_MAX_SLOT=43500000
 
 ADDRESS_S=$(marlowe-cli address --testnet-magic 1097911063)
 
-marlowe-cli validator --testnet-magic 1097911063 \
-                      --validator-file $PLUTUS_FILE
+marlowe-cli validator $MAGIC --out-file $PLUTUS_FILE
 
 DATUM_HASH=$(
-marlowe-cli datum --account-hash $PUBKEYHASH_P    \
-                  --account-value $DATUM_LOVELACE \
-                  --min-slot $DATUM_MIN_SLOT      \
-                  --datum-file $DATUM_FILE
+marlowe-cli datum --contract-file $CONTRACT_FILE \
+                  --state-file $STATE_FILE       \
+                  --out-file $DATUM_FILE
 )
 
 marlowe-cli redeemer --min-slot $REDEEMER_MIN_SLOT \
                      --max-slot $REDEEMER_MAX_SLOT \
-                     --redeemer-file $REDEEMER_FILE
+                     --out-file $REDEEMER_FILE
 
 
 # Find funds, and enter the selected UTxO as "TX_0".
@@ -85,7 +84,7 @@ cardano-cli transaction sign $MAGIC                          \
 cardano-cli transaction submit $MAGIC --tx-file tx.signed
 
 
-# Find the funding transaction.
+# Find the funding transaction, and enter its UTxO as "TX_1".
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
@@ -104,7 +103,7 @@ cardano-cli transaction build --alonzo-era $MAGIC                      \
                                 --tx-in-datum-file $DATUM_FILE         \
                                 --tx-in-redeemer-file $REDEEMER_FILE   \
                               --tx-in $TX_1#0                          \
-                              --tx-out $ADDRESS_P+3000000              \
+                              --tx-out $ADDRESS_P+$DATUM_LOVELACE      \
                               --change-address $ADDRESS_P              \
                               --tx-in-collateral $TX_1#0               \
                               --invalid-before $REDEEMER_MIN_SLOT      \

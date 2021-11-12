@@ -7,32 +7,29 @@ The `datum` command writes a Marlowe datum to a JSON file in the detailed schema
 
     $ marlowe-cli datum --help
     
-    Usage: marlowe-cli datum --account-hash PUB_KEY_HASH --account-value LOVELACE
-                             --min-slot MIN_SLOT --datum-file OUTPUT_FILE 
-                             [--print-stats]
+    Usage: marlowe-cli datum --contract-file CONTRACT_FILE --state-file STATE_FILE
+                             --out-file DATUM_FILE [--print-stats]
       Export a datum to a JSON file.
     
     Available options:
-      --account-hash PUB_KEY_HASH   Public key hash for the account.
-      --account-value LOVELACE      Lovelace value for the account.
-      --min-slot MIN_SLOT           Minimum slot for the contract state.
-      --datum-file OUTPUT_FILE      JSON output file for datum.
-      --print-stats                 Print statistics.
-      -h,--help                     Show this help text
+      --contract-file CONTRACT_FILE   JSON input file for the contract.
+      --state-file STATE_FILE         JSON input file for the contract state.
+      --out-file DATUM_FILE           JSON output file for datum.
+      --print-stats                   Print statistics.
+      -h,--help                       Show this help text
 
-The account hash corresponds to the public key of the actor withdrawing funds from the script and the account value corresponds to the amount withdrawn. The minimum slot is that of the [Marlowe state](../src/Language/Marlowe/SemanticsTypes.hs).
+See the `Contract` and `State` data types in [`Language.Marlowe.SemanticTypes`](../src/Language/Marlowe/SemanticsTypes.hs) for valid JSON to represent the contract and its state. The simplest contract is [`Close`](example.contract) and the [simplest state](example.state) is a public key for the actor withdrawing funds from the script and the amount withdrawn, along with a minimum slot number for the withdrawal.
 
 This command prints the hash of the datum on `stdout`. Optionally, it will print on `stderr` the size in bytes of the datum.
 
 
 ## Example
 
-The following command creates the datum [example.datum](example.datum), which can be used as `--tx-in-datum-file example.datum` in `cardano-cli transaction build`. It also prints the hash of the datum.
+The following command uses the close contract [example.contract](example.contract) and the simple state [example.state](example.state) to create the datum [example.datum](example.datum), which can be used as `--tx-in-datum-file example.datum` in `cardano-cli transaction build`. It also prints the hash of the datum.
 
-    $ marlowe-cli datum --account-hash 0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07 \
-                        --account-value 3000000                                                 \
-                        --min-slot 10                                                           \
-                        --datum-file example.datum
+    $ marlowe-cli datum --contract-file example.contract \
+                        --state-file example.state       \
+                        --out-file example.datum
     
     0c050b99438fcd2c65c54b062338f3692c212cbfb499cfe3ad6a9a07ce15dbc0
     
