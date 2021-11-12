@@ -44,7 +44,7 @@ The diagram below illusrates how the `export` command can be used in conjunction
 
 ![Marlowe workflow using `marlowe-cli`, `jq`, and `cardano-cli`.](diagrams/workflow-jq.svg)
 
-See [example](example.marlowe) for an example file containing this information for a simple contract, and see [example-jq.sh](example-jq.sh) for an example bash script embodying this workflow.
+See [example.marlowe](example.marlowe) for an example file containing this information for a simple contract, and see [example-jq.sh](example-jq.sh) for an example bash script embodying this workflow.
 
 ```diff
 - FIXME: Write a narrative tutorial for this example.
