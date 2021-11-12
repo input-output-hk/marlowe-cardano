@@ -39,7 +39,7 @@ The [`export`](export.md) command writes a JSON file with sufficient information
 
 The diagram below illusrates how the `export` command can be used in conjunction with [`jq`](https://stedolan.github.io/jq/manual/) and `cardano-cli`.
 
-![Marlowe workflow using `marlowe-cli`, `jq`, and `cardano-cli`.](workflow-jq.svg)
+![Marlowe workflow using `marlowe-cli`, `jq`, and `cardano-cli`.](diagrams/workflow-jq.svg)
 
 See [example](example.marlowe) for an example file containing this information for a simple contract, and see [example-jq.sh](example-jq.sh) for an example bash script embodying this workflow.
 
@@ -52,7 +52,7 @@ See [example](example.marlowe) for an example file containing this information f
 
 The [`address`](address.md), [`validator`](validator.md), [`datum`](datum.md), and [`redeemer`](redeemer.md) commands write the corresponding subset of information to a JSON file or to the console. These allows finer-grain access to the capabilities of the `export` command. The diagram below illustrates how these commands can be used in conjunction with `cardano-cli`.
 
-![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](workflow.svg)
+![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](diagrams/workflow.svg)
 
 See [example.sh](example.sh) for an example bash script embodying this workflow.
 
