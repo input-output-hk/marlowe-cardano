@@ -1,85 +1,148 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-echo 'Test'
+set -e
 
 export CARDANO_NODE_SOCKET_PATH=$(ps ax | grep -v grep | grep cardano-wallet | grep testnet | sed -E 's/(.*)node-socket //')
-
-# Check var it must be path for file of node socket and not empty
-echo $CARDANO_NODE_SOCKET_PATH
 export TESTNET_MAGIC=1097911063
-# Check connect if yor run Daedalus for Testnet
-cardano-cli get-tip --testnet-magic 1097911063
 
-cardano-cli query protocol-parameters --testnet-magic 1097911063 > testnet-params.json
+generate_address() {
+  cardano-cli query protocol-parameters --testnet-magic 1097911063 > testnet-params.json
 
-cardano-cli address key-gen --verification-key-file payment.vkey --signing-key-file payment.skey
+  cardano-cli address key-gen --verification-key-file payment.vkey --signing-key-file payment.skey
 
-cardano-cli stake-address key-gen --verification-key-file stake.vkey --signing-key-file stake.skey
+  cardano-cli stake-address key-gen --verification-key-file stake.vkey --signing-key-file stake.skey
 
-cardano-cli address build --payment-verification-key-file payment.vkey --stake-verification-key-file stake.vkey \
- --out-file payment.addr --testnet-magic 1097911063
+  cardano-cli address build --payment-verification-key-file payment.vkey --stake-verification-key-file stake.vkey \
+  --out-file payment.addr --testnet-magic 1097911063
+}
 
+NETWORK=testnet
+MAGIC="--testnet-magic 1097911063"
 
-# Marlowe Validator hash e66ca5140db1c3e4ddcb88f68ab7f6c622ae48ff0b8448ad819d5785
+cardano-cli query protocol-parameters $MAGIC --out-file $NETWORK.protocol
+CUR_SLOT=$(cardano-cli get-tip $MAGIC | jq -r '.slot')
 
-cardano-cli transaction build \
---alonzo-era \
---testnet-magic ${TESTNET_MAGIC} \
---tx-in 9931a9fb57b260a56c204528554560a6cf26faf2197bc41110fce21469e204fa#0 \
---tx-out $(cat payment.addr)+5000000 \
---change-address $(cat payment.addr) \
---out-file tx.build
+echo "Current slot ${CUR_SLOT}"
 
-cardano-cli transaction sign --tx-body-file tx.build --testnet-magic ${TESTNET_MAGIC} --signing-key-file payment.skey --out-file tx.signed
-cardano-cli transaction submit --tx-file tx.signed --testnet-magic ${TESTNET_MAGIC}
+PAYMENT_SKEY=payment.skey
+PAYMENT_VKEY=payment.vkey
+ADDRESS_P=$(cat payment.addr)
+PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
+MARLOWE_FILE=test.marlowe
+DATUM_LOVELACE=3000000
+DATUM_MIN_SLOT=10
+REDEEMER_MIN_SLOT=1000
+REDEEMER_MAX_SLOT=$((CUR_SLOT+1000))
 
-# Marlowe output
-cardano-cli transaction build \
---alonzo-era \
---testnet-magic ${TESTNET_MAGIC} \
---change-address $(cat payment.addr) \
---tx-in e8c2689665dbc44f815e2a315f674a2cf7f88250bf3182cd1021724c487d019f#0 \
---tx-out addr_test1wpq55y4zw6sjplwjh03m8h30chv2wyzwk84pwewv2l8djqcfzvpa0+3000000 \
---tx-out-datum-hash 6b80f9cad44433d6e5692ff389a8899a5d8cd6bb0485136a97f86e98eb850510 \
---protocol-params-file testnet-params.json \
---metadata-json-file metadata.json \
---out-file tx.build
+marlowe-cli export $MAGIC                                 \
+                    --datum-account-hash $PUBKEYHASH_P     \
+                    --datum-account-value $DATUM_LOVELACE  \
+                    --datum-min-slot $DATUM_MIN_SLOT       \
+                    --redeemer-min-slot $REDEEMER_MIN_SLOT \
+                    --redeemer-max-slot $REDEEMER_MAX_SLOT \
+                    --out-file $MARLOWE_FILE               \
+                    --print-stats
 
-cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address $(cat payment.addr)
-cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address addr_test1wpq55y4zw6sjplwjh03m8h30chv2wyzwk84pwewv2l8djqcfzvpa0
+ADDRESS_S=$(jq -r '.validator.address' $MARLOWE_FILE)
+PLUTUS_FILE=test.plutus
+DATUM_HASH=$(jq -r '.datum.hash' $MARLOWE_FILE)
+DATUM_FILE=test.datum
+jq '.datum.json' $MARLOWE_FILE > $DATUM_FILE
+REDEEMER_FILE=test.redeemer
+jq '.redeemer.json' $MARLOWE_FILE > $REDEEMER_FILE
+jq '.validator.script' $MARLOWE_FILE > $PLUTUS_FILE
 
-# Spend
-
-cardano-cli transaction build \
---alonzo-era \
---testnet-magic ${TESTNET_MAGIC} \
---invalid-before 5 \
---invalid-hereafter 43500000 \
---tx-in 09f960e983782278ab5b97b357b6cf71c278199d1e027d62281cd9f648bbb728#0 \
---tx-in 09f960e983782278ab5b97b357b6cf71c278199d1e027d62281cd9f648bbb728#1 \
---tx-in-script-file script.json  \
---tx-in-datum-file datum.json \
---tx-in-redeemer-file redeemer.json \
---tx-in-collateral e0ec3e100fa03dcbcc02ca3245b5770659065528642845c1d1d572401548b952#1 \
---tx-out $(cat payment.addr)+3000000 \
---change-address $(cat payment.addr) \
---protocol-params-file testnet-params.json \
---metadata-json-file metadata.json \
---out-file marlowe-close.tx
-
-cardano-cli transaction sign \
---tx-body-file marlowe-close.tx \
---testnet-magic ${TESTNET_MAGIC} \
---signing-key-file payment.skey \
---out-file marlowe-close.signed
-
-cardano-cli transaction submit --tx-file marlowe-close.signed --testnet-magic ${TESTNET_MAGIC}
+COLLATERAL_TX=e0ec3e100fa03dcbcc02ca3245b5770659065528642845c1d1d572401548b952#1
+# Create the contract, and extract the address, validator, datum hash, datum, and redeemer.
+create_contract_tx() {
+  # Find funds, and enter the selected UTxO as "TX_0".
 
 
-cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address $(cat payment.addr)
-cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address addr_test1wr7mml52pdlnmg2s4344ln4yx2nwvrg9utqtggqa0g0z6ccceyt9x
+  TX_0=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq -r 'keys | .[0]')
 
-cardano-cli transaction view --tx-body-file marlowe-close.tx
+
+  # # Fund the contract.
+
+  cardano-cli transaction build --alonzo-era $MAGIC                 \
+                                --tx-in $TX_0                    \
+                                --tx-out $ADDRESS_S+$DATUM_LOVELACE \
+                                  --tx-out-datum-hash $DATUM_HASH   \
+                                --change-address $ADDRESS_P         \
+                                --out-file tx.raw
+  cardano-cli transaction view --tx-body-file tx.raw
+}
+
+sign_submit() {
+  cardano-cli transaction sign $MAGIC                          \
+                              --tx-body-file tx.raw           \
+                              --signing-key-file payment.skey \
+                              --out-file tx.signed
+
+  cardano-cli transaction submit $MAGIC --tx-file tx.signed
+}
+
+redeem() {
+  FEE_UTXO=c821044a5af20861f47e7675a0da65690ba49703ec6411346dcecac69f3747b9#0
+  CONTRACT_UTXO=c821044a5af20861f47e7675a0da65690ba49703ec6411346dcecac69f3747b9#1
+
+  FUNDS=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq '.["'$FEE_UTXO'"].value.lovelace')
+
+  FEE=$(
+  cardano-cli transaction build --alonzo-era $MAGIC                      \
+                                --protocol-params-file $NETWORK.protocol \
+                                --tx-in $FEE_UTXO                         \
+                                --tx-in $CONTRACT_UTXO                          \
+                                --tx-in-script-file $PLUTUS_FILE       \
+                                --tx-in-datum-file $DATUM_FILE         \
+                                --tx-in-redeemer-file $REDEEMER_FILE \
+                                --tx-out $ADDRESS_P+3000000              \
+                                --change-address $ADDRESS_P              \
+                                --tx-in-collateral $COLLATERAL_TX               \
+                                --invalid-before $REDEEMER_MIN_SLOT      \
+                                --invalid-hereafter $REDEEMER_MAX_SLOT   \
+                                --out-file tx.raw                        \
+  | sed -e 's/^.* //'
+  )
+
+  NET=$((DATUM_LOVELACE + FUNDS - FEE))
+
+  echo "$DATUM_LOVELACE + $FUNDS - $FEE = $NET"
+
+  cardano-cli transaction build  \
+    --alonzo-era \
+    --testnet-magic ${TESTNET_MAGIC} \
+    --invalid-before $REDEEMER_MIN_SLOT      \
+    --invalid-hereafter $REDEEMER_MAX_SLOT   \
+    --tx-in $FEE_UTXO \
+    --tx-in $CONTRACT_UTXO \
+    --tx-in-script-file $PLUTUS_FILE  \
+    --tx-in-datum-file $DATUM_FILE \
+    --tx-in-redeemer-file $REDEEMER_FILE \
+    --tx-in-collateral $COLLATERAL_TX \
+    --tx-out $ADDRESS_P+$NET \
+    --change-address $ADDRESS_P \
+    --protocol-params-file $NETWORK.protocol \
+    --out-file tx.raw
+  cardano-cli transaction view --tx-body-file tx.raw
+}
+
+# cardano-cli transaction sign $MAGIC                          \
+#                              --tx-body-file tx.raw           \
+#                              --signing-key-file payment.skey \
+#                              --out-file tx.signed
+
+# cardano-cli transaction submit $MAGIC --tx-file tx.signed
+
+
+# # See that the transaction succeeded.
+
+# create_contract_tx
+# redeem
+# sign_submit
+
+cardano-cli query utxo $MAGIC --address $ADDRESS_S
+cardano-cli query utxo $MAGIC --address $ADDRESS_P
+
 
 ## MaxTxSizeUTxO 18055 16384
 # Size: 17621
@@ -100,52 +163,3 @@ cardano-cli transaction view --tx-body-file marlowe-close.tx
 # 7897 without computeTransaction => 14959 - 7897 = 7062 for Marlowe interpreter stuff
 
 ## First successfull spending addr_test1wpfxda7xxcx7w3dmtqrahx2fgp6nspll5putm7qpw6dz2vs0tgayn
-
-cardano-cli get-tip --testnet-magic 1097911063
-
-saddr="addr_test1wqkvngwt2lwt6cdp74t6k3zzah3m8h6w3ctmcyvwufux3ws82q2e6"
-
-# Marlowe Pay
-cardano-cli transaction build \
---alonzo-era \
---testnet-magic ${TESTNET_MAGIC} \
---change-address $(cat payment.addr) \
---tx-in 6304f892d594a06de7ffd005c8d74b5dca83f1d6aa194407b6f727d3fe0b6518#0 \
---tx-out ${saddr}+3000000 \
---tx-out-datum-hash d3829ca97bf76335473c2846e7152fef58f56745e9813fea2820d7535bef868b \
---protocol-params-file testnet-params.json \
---metadata-json-file metadata.json \
---out-file tx.build
-
-cardano-cli transaction sign --tx-body-file tx.build --testnet-magic ${TESTNET_MAGIC} --signing-key-file payment.skey --out-file tx.signed
-cardano-cli transaction submit --tx-file tx.signed --testnet-magic ${TESTNET_MAGIC}
-
-cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address $(cat payment.addr)
-cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address ${saddr}
-
-cardano-cli transaction view --tx-body-file marlowe-close.tx
-
-# Spend
-
-cardano-cli transaction build \
---alonzo-era \
---testnet-magic ${TESTNET_MAGIC} \
---invalid-before 42292000 \
---invalid-hereafter 42294000 \
---tx-in 07f7fa34d5fc038d6fc3465074a439abb6f77bfd1969ad64a8b5580f5959da5f#0 \
---tx-in 07f7fa34d5fc038d6fc3465074a439abb6f77bfd1969ad64a8b5580f5959da5f#1 \
---tx-in-script-file script.json  \
---tx-in-datum-file datum-deposit.json \
---tx-in-redeemer-file redeemer-deposit.json \
---tx-in-collateral e0ec3e100fa03dcbcc02ca3245b5770659065528642845c1d1d572401548b952#1 \
---tx-out $(cat payment.addr)+12000000 \
---change-address $(cat payment.addr) \
---protocol-params-file testnet-params.json \
---metadata-json-file metadata.json \
---out-file marlowe-close.tx
-
-cardano-cli transaction sign \
---tx-body-file marlowe-close.tx \
---testnet-magic ${TESTNET_MAGIC} \
---signing-key-file payment.skey \
---out-file marlowe-close.signed

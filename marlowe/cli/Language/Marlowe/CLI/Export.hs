@@ -220,8 +220,8 @@ buildRedeemer :: SlotNo
               -> RedeemerInfo
 buildRedeemer (SlotNo minimumSlot) (SlotNo maximumSlot) =
   let
-    inputs :: ((Integer, Integer), [Input])
-    inputs = ((fromIntegral minimumSlot, fromIntegral maximumSlot), [])
+    inputs :: [Input]
+    inputs = []
     riRedeemer = Redeemer . PlutusTx.toBuiltinData $ inputs
     riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
     riJson =
