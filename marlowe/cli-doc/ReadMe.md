@@ -31,10 +31,13 @@ The `marlowe-cli` tools supports both granular and monolithic workflows for crea
 
 The [`export`](export.md) command writes a JSON file with sufficient information to run the contract on the blockchain. It contains the following information.
 
-*   Address
+*   Script address
 *   Validator hash
-*   CBOR for its Plutus script
-*   Size in bytes
+*   Datum hash
+*   CBOR for Plutus script
+*   JSON and CBOR for datum.
+*   JSON and CBOR for redeemer.
+*   Size of the above CBOR in bytes
 *   Execution cost
 
 The diagram below illusrates how the `export` command can be used in conjunction with [`jq`](https://stedolan.github.io/jq/manual/) and `cardano-cli`.
