@@ -21,7 +21,8 @@ import           GHC.Generics                 (Generic)
 import           Language.Marlowe.CLI.Orphans ()
 import           Language.Marlowe.Semantics   (MarloweData (..))
 import           Ledger.Typed.Scripts         (TypedValidator)
-import           Plutus.V1.Ledger.Api         (Datum, DatumHash, ExBudget, PubKeyHash, Redeemer, ValidatorHash)
+import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, PubKeyHash, Redeemer,
+                                               ValidatorHash)
 
 
 data MarloweInfo era =
@@ -114,6 +115,7 @@ data Command =
     {
       network         :: Maybe NetworkId
     , stake           :: Maybe StakeAddressReference
+    , rolesCurrency   :: Maybe CurrencySymbol
     , accountHash     :: PubKeyHash
     , accountLovelace :: Lovelace
     , minimumSlot'    :: SlotNo
@@ -124,13 +126,15 @@ data Command =
     }
   | ExportAddress
     {
-      network :: Maybe NetworkId
-    , stake   :: Maybe StakeAddressReference
+      network       :: Maybe NetworkId
+    , stake         :: Maybe StakeAddressReference
+    , rolesCurrency :: Maybe CurrencySymbol
     }
   | ExportValidator
     {
       network       :: Maybe NetworkId
     , stake         :: Maybe StakeAddressReference
+    , rolesCurrency :: Maybe CurrencySymbol
     , validatorFile :: FilePath
     , printHash     :: Bool
     , printStats    :: Bool
