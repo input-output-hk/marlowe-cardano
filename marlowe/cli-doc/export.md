@@ -8,44 +8,44 @@ The `export` command writes a JSON file with comprehensive information about the
     $ marlowe-cli export --help
     
     Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS]
-                              --datum-account-hash PUB_KEY_HASH
-                              --datum-account-value LOVELACE
-                              --datum-min-slot MIN_SLOT
+                              [--roles-currency CURRENCY_SYMBOL]
+                              --contract-file CONTRACT_FILE --state-file STATE_FILE
                               --redeemer-min-slot SLOT_NUMBER
                               --redeemer-max-slot SLOT_NUMBER --out-file OUTPUT_FILE
                               [--print-stats]
       Export a Marlowe contract to a JSON file.
     
     Available options:
-      --testnet-magic INTEGER             Network magic, or omit for mainnet.
-      --stake-address ADDRESS             Stake address, if any.
-      --datum-account-hash PUB_KEY_HASH   Public key hash for the account.
-      --datum-account-value LOVELACE      Lovelace value for the account.
-      --datum-min-slot MIN_SLOT           Minimum slot for the contract state.
-      --redeemer-min-slot SLOT_NUMBER     Minimum slot for the redemption.
-      --redeemer-max-slot SLOT_NUMBER     Maximum slot for the redemption.
-      --out-file OUTPUT_FILE              JSON output file for contract.
-      --print-stats                       Print statistics.
-      -h,--help                           Show this help text
+      --testnet-magic INTEGER            Network magic, or omit for mainnet.
+      --stake-address ADDRESS            Stake address, if any.
+      --roles-currency CURRENCY_SYMBOL   The currency symbol for roles, if any.
+      --contract-file CONTRACT_FILE      JSON input file for the contract.
+      --state-file STATE_FILE            JSON input file for the contract state.
+      --redeemer-min-slot SLOT_NUMBER    Minimum slot for the redemption.
+      --redeemer-max-slot SLOT_NUMBER    Maximum slot for the redemption.
+      --out-file OUTPUT_FILE             JSON output file for contract.
+      --print-stats                      Print statistics.
+      -h,--help                          Show this help text
 
-The stake address can be omitted if no staking will be done at the script address.
+The stake address can be omitted if no staking will be done at the script address. If the currency symbol is omitted, then ADA is used as the currency for the Marlowe roles.
 
-For the datum, the account hash corresponds to the public key of the actor withdrawing funds from the script and the account value corresponds to the amount withdrawn. The minimum slot is that of the [Marlowe state](../src/Language/Marlowe/SemanticsTypes.hs).
+See the `Contract` and `State` data types in [`Language.Marlowe.SemanticTypes`](../src/Language/Marlowe/SemanticsTypes.hs) for valid JSON to represent the contract and its state. The simplest contract is [`Close`](example.contract) and the [simplest state](example.state) is a public key for the actor withdrawing funds from the script and the amount withdrawn, along with a minimum slot number for the withdrawal.
 
 For the redeemer, the minimum and maximum slot numbers generally should match the `--invalid-before` and `--invalid-hereafter` options of `cardano-cli transaction build`.
+
+Optionally, this command will print on `stderr` the size and cost of the contract.
 
 
 # Example
 
-The following command creates the JSON file [example.marlowe](example.marlowe) that contains address, validator, datum, and redeemer information for a Marlowe contract.
- 
-    $ marlowe-cli export --testnet-magic 1097911063                                                    \
-                         --datum-account-hash 0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07 \
-                         --datum-account-value 3000000                                                 \
-                         --datum-min-slot 10                                                           \
-                         --redeemer-min-slot 1000                                                      \
-                         --redeemer-max-slot 43500000                                                  \
-                         --out-file example.marlowe                                                    \
+The following command uses the close contract [example.contract](example.contract) and the simple state [example.state](example.state) to create the datum to create the JSON file [example.marlowe](example.marlowe) that contains address, validator, datum, and redeemer information for a Marlowe contract.
+
+    $ marlowe-cli export --testnet-magic 1097911063       \
+                         --contract-file example.contract \
+                         --state-file example.state       \
+                         --redeemer-min-slot 1000         \
+                         --redeemer-max-slot 43500000     \
+                         --out-file example.marlowe       \
                          --print-stats
     
     Validator cost: ExBudget {exBudgetCPU = ExCPU 50941703, exBudgetMemory = ExMemory 171200}

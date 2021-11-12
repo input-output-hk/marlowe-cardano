@@ -98,15 +98,15 @@ exportMarloweCommand =
 exportMarloweOptions :: O.Parser Command
 exportMarloweOptions =
   Export
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"       <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"       <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency"      <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."         )
-    <*> O.strOption                                        (O.long "contract-file"       <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
-    <*> O.strOption                                        (O.long "state-file"          <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
-    <*> O.option parseSlotNo                               (O.long "redeemer-min-slot"   <> O.metavar "SLOT_NUMBER"     <> O.help "Minimum slot for the redemption."       )
-    <*> O.option parseSlotNo                               (O.long "redeemer-max-slot"   <> O.metavar "SLOT_NUMBER"     <> O.help "Maximum slot for the redemption."       )
-    <*> O.strOption                                        (O.long "out-file"            <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
-    <*> O.switch                                           (O.long "print-stats"                                        <> O.help "Print statistics."                      )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"     <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"     <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency"    <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
+    <*> O.strOption                                        (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                                        (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> O.option parseSlotNo                               (O.long "redeemer-min-slot" <> O.metavar "SLOT_NUMBER"     <> O.help "Minimum slot for the redemption."       )
+    <*> O.option parseSlotNo                               (O.long "redeemer-max-slot" <> O.metavar "SLOT_NUMBER"     <> O.help "Maximum slot for the redemption."       )
+    <*> O.strOption                                        (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
+    <*> O.switch                                           (O.long "print-stats"                                      <> O.help "Print statistics."                      )
 
 
 exportAddressCommand :: O.Mod O.CommandFields Command
@@ -119,9 +119,9 @@ exportAddressCommand =
 exportAddressOptions :: O.Parser Command
 exportAddressOptions =
   ExportAddress
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."             )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."     )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."   )
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any.")
 
 
 exportValidatorCommand :: O.Mod O.CommandFields Command
@@ -134,12 +134,12 @@ exportValidatorCommand =
 exportValidatorOptions :: O.Parser Command
 exportValidatorOptions =
   ExportValidator
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet.")
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."             )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."     )
-    <*> O.strOption                                        (O.long "validator-file" <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."    )
-    <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."              )
-    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                  )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."   )
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any.")
+    <*> O.strOption                                        (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."       )
+    <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."                 )
+    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                     )
 
 
 exportDatumCommand :: O.Mod O.CommandFields Command
@@ -168,10 +168,10 @@ exportRedeemerCommand =
 exportRedeemerOptions :: O.Parser Command
 exportRedeemerOptions =
   ExportRedeemer
-    <$> O.option parseSlotNo (O.long "min-slot"      <> O.metavar "SLOT_NUMBER" <> O.help "Minimum slot for the redemption.")
-    <*> O.option parseSlotNo (O.long "max-slot"      <> O.metavar "SLOT_NUMBER" <> O.help "Maximum slot for the redemption.")
-    <*> O.strOption          (O.long "redeemer-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."  )
-    <*> O.switch             (O.long "print-stats"                              <> O.help "Print statistics."               )
+    <$> O.option parseSlotNo (O.long "min-slot"    <> O.metavar "SLOT_NUMBER" <> O.help "Minimum slot for the redemption.")
+    <*> O.option parseSlotNo (O.long "max-slot"    <> O.metavar "SLOT_NUMBER" <> O.help "Maximum slot for the redemption.")
+    <*> O.strOption          (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."  )
+    <*> O.switch             (O.long "print-stats"                            <> O.help "Print statistics."               )
 
 
 parseNetworkId :: O.ReadM NetworkId
