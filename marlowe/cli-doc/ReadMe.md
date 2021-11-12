@@ -37,9 +37,17 @@ The [`address`](address.md), [`validator`](validator.md), [`datum`](datum.md), a
 
 ### Using the `export` command and the `jq` tool
 
-See [example.sh](example-jq.sh). **FIXME: Write a narrative tutorial for this example.**
+See [example-jq.sh](example-jq.sh).
+
+```diff
+- FIXME: Write a narrative tutorial for this example.
+```
 
 
 ### Using the `address`, `validator`, `datum`, and `redeemer` commands
 
-See [example.sh](example.sh). **FIXME: Write a narrative tutorial for this example.**
+See [example.sh](example.sh).
+
+```diff
+- FIXME: Write a narrative tutorial for this example.
+```
