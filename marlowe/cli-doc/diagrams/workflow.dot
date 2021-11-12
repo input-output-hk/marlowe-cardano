@@ -1,0 +1,82 @@
+digraph {
+
+rankdir=LR
+
+
+Network       [label="Mainnet\nor Testnet"]
+StakeAddress  [label="Stake Address"      ]
+RolesCurrency [label="Currency\nfor Roles"]
+
+
+AddressCommand [label="marlowe-cli address", shape=box, fontname=monospace]
+
+
+Network       -> AddressCommand [label="--testnet-magic" , fontname=monospace, fontsize=10, style=dashed]
+StakeAddress  -> AddressCommand [label="--stake-address" , fontname=monospace, fontsize=10, style=dashed]
+RolesCurrency -> AddressCommand [label="--roles-currency", fontname=monospace, fontsize=10, style=dashed]
+
+
+ValidatorAddress [label="Validator\nAddress"]
+
+AddressCommand -> ValidatorAddress [label="/dev/stdout", fontname=monospace, fontsize=10]
+
+
+ValidatorCommand [label="marlowe-cli validator", shape=box, fontname=monospace]
+
+Network       -> ValidatorCommand [style=dashed]
+StakeAddress  -> ValidatorCommand [style=dashed]
+RolesCurrency -> ValidatorCommand [style=dashed]
+
+
+ValidatorFile [label="Marlowe Validator\nPlutus File", shape=tab]
+
+ValidatorCommand -> ValidatorAddress [label="/dev/stdout", fontname=monospace, fontsize=10]
+ValidatorCommand -> ValidatorFile    [label="--out-file" , fontname=monospace, fontsize=10]
+
+
+ContractFile [label="Marlowe Contract\nJSON File", shape=tab]
+StateFile    [label="Marlowe State\nJSON File"   , shape=tab]
+
+
+DatumCommand [label="marlowe-cli datum", shape=box, fontname=monospace]
+
+ContractFile -> DatumCommand [label="--contract-file", fontname=monospace, fontsize=10]
+StateFile    -> DatumCommand [label="--state-file"   , fontname=monospace, fontsize=10]
+
+
+DatumFile [label="Marlowe Datum\nJSON File", shape=tab]
+DatumHash [label="Marlowe Datum\nHash"                ]
+
+DatumCommand -> DatumFile [label="--out-file" , fontname=monospace, fontsize=10]
+DatumCommand -> DatumHash [label="/dev/stdout", fontname=monospace, fontsize=10]
+
+
+MinSlot [label="Minimum\nSlot"]
+MaxSlot [label="Maximum\nSlot"]
+
+
+RedeemerCommand [label="marlowe-cli redeemer", shape=box, fontname=monospace]
+
+MinSlot -> RedeemerCommand [label="--redeemer-min-slot", fontname=monospace, fontsize=10]
+MaxSlot -> RedeemerCommand [label="--redeemer-max-slot", fontname=monospace, fontsize=10]
+
+
+RedeemerFile [label="Marlowe Redeemer\nJSON File", shape=tab]
+
+RedeemerCommand -> RedeemerFile [label="--out-file", fontname=monospace, fontsize=10]
+
+
+CardanoCLI [label="cardano-cli transaction build", shape=box, fontname=monospace]
+
+ValidatorAddress -> CardanoCLI [label="--tx-out"             , fontname=monospace, fontsize=10]
+ValidatorFile    -> CardanoCLI [label="--tx-in-script-file"  , fontname=monospace, fontsize=10]
+DatumFile        -> CardanoCLI [label="--tx-in-datum-file"   , fontname=monospace, fontsize=10]
+RedeemerFile     -> CardanoCLI [label="--tx-in-redeemer-file", fontname=monospace, fontsize=10]
+DatumHash        -> CardanoCLI [label="--tx-out-datum-hash"  , fontname=monospace, fontsize=10]
+
+
+TxBodyFile [label="Tx Body\nFile", shape=tab]
+
+CardanoCLI -> TxBodyFile [label="--out-file", fontname=monospace, fontsize=10]
+
+}
