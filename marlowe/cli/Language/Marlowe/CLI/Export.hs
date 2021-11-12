@@ -17,33 +17,30 @@ module Language.Marlowe.CLI.Export (
 ) where
 
 
-import           Cardano.Api                     (AlonzoEra, IsShelleyBasedEra, Lovelace, NetworkId,
-                                                  PaymentCredential (..), Quantity (..), ScriptDataJsonSchema (..),
-                                                  SlotNo (..), StakeAddressReference (..), hashScript,
-                                                  lovelaceToQuantity, makeShelleyAddressInEra, scriptDataToJson,
+import           Cardano.Api                     (AlonzoEra, IsShelleyBasedEra, NetworkId, PaymentCredential (..),
+                                                  ScriptDataJsonSchema (..), SlotNo (..), StakeAddressReference (..),
+                                                  hashScript, makeShelleyAddressInEra, scriptDataToJson,
                                                   serialiseAddress, writeFileTextEnvelope)
 import           Cardano.Api.Shelley             (fromPlutusData)
 import           Codec.Serialise                 (serialise)
 import           Control.Monad                   (void, when)
+import           Data.Aeson                      (eitherDecodeFileStrict)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Language.Marlowe.CLI.Types      (DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
 import           Language.Marlowe.Scripts        (typedValidator1)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
-import           Language.Marlowe.SemanticsTypes (Contract (..), Input, Party (..), State (..), Token (..))
+import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
 import           Ledger.Typed.Scripts            (validatorHash, validatorScript)
-import           Plutus.V1.Ledger.Api            (CostModelParams, Datum (..), PubKeyHash, Redeemer (..),
-                                                  VerboseMode (..), adaSymbol, adaToken, evaluateScriptCounting,
-                                                  getValidator)
-import           Plutus.V1.Ledger.Slot           (Slot (..))
+import           Plutus.V1.Ledger.Api            (CostModelParams, Datum (..), Redeemer (..), VerboseMode (..),
+                                                  evaluateScriptCounting, getValidator)
 import           PlutusTx                        (builtinDataToData, toBuiltinData)
 import           System.IO                       (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
 import qualified Data.ByteString.Short           as SBS (length, toShort)
 import qualified Data.Text                       as T (unpack)
-import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 buildMarlowe :: IsShelleyBasedEra era
@@ -52,16 +49,14 @@ buildMarlowe :: IsShelleyBasedEra era
              -> NetworkId
              -> StakeAddressReference
              -> Contract
-             -> PubKeyHash
-             -> Lovelace
-             -> SlotNo
+             -> State
              -> SlotNo
              -> SlotNo
              -> MarloweInfo era
-buildMarlowe marloweParams costModel network stake contract accountHash accountLovelace minimumSlot' minimumSlot maximumSlot =
+buildMarlowe marloweParams costModel network stake contract state minimumSlot maximumSlot =
   let
     validatorInfo = buildValidator marloweParams costModel network stake
-    datumInfo     = buildDatum contract accountHash accountLovelace minimumSlot'
+    datumInfo     = buildDatum contract state
     redeemerInfo  = buildRedeemer minimumSlot maximumSlot
   in
     MarloweInfo{..}
@@ -71,22 +66,22 @@ exportMarlowe :: MarloweParams
               -> CostModelParams
               -> NetworkId
               -> StakeAddressReference
-              -> Contract
-              -> PubKeyHash
-              -> Lovelace
-              -> SlotNo
+              -> FilePath
+              -> FilePath
               -> SlotNo
               -> SlotNo
               -> FilePath
               -> Bool
               -> IO ()
-exportMarlowe marloweParams costModel network stake contract accountHash accountLovelace minimumSlot' minimumSlot maximumSlot outputFile printStats =
+exportMarlowe marloweParams costModel network stake contractFile stateFile minimumSlot maximumSlot outputFile printStats =
   do
+    Right contract <- eitherDecodeFileStrict contractFile
+    Right state    <- eitherDecodeFileStrict stateFile
     let
       marloweInfo@MarloweInfo{..} =
         buildMarlowe
           marloweParams costModel network stake
-          contract accountHash accountLovelace minimumSlot'
+          contract state
           minimumSlot maximumSlot
       ValidatorInfo{..} = validatorInfo
       DatumInfo{..}     = datumInfo
@@ -165,27 +160,11 @@ exportValidator marloweParams costModel network stake outputFile printHash print
 
 
 buildDatum :: Contract
-           -> PubKeyHash
-           -> Lovelace
-           -> SlotNo
+           -> State
            -> DatumInfo
-buildDatum contract accountHash accountLovelace (SlotNo minimumSlot) =
+buildDatum marloweContract marloweState =
   let
-    Quantity lovelace = lovelaceToQuantity accountLovelace
-    marloweData =
-      MarloweData
-      {
-        marloweState    = State
-                          {
-                            accounts    = AM.singleton
-                                            (PK accountHash, Token adaSymbol adaToken)
-                                            lovelace
-                          , choices     = AM.empty
-                          , boundValues = AM.empty
-                          , minSlot     = Slot . toInteger $ minimumSlot
-                          }
-      , marloweContract = contract
-      }
+    marloweData = MarloweData{..}
     diDatum = Datum . PlutusTx.toBuiltinData $ marloweData
     diBytes = SBS.toShort . LBS.toStrict . serialise $ diDatum
     diJson =
@@ -199,17 +178,17 @@ buildDatum contract accountHash accountLovelace (SlotNo minimumSlot) =
     DatumInfo{..}
 
 
-exportDatum :: Contract
-            -> PubKeyHash
-            -> Lovelace
-            -> SlotNo
+exportDatum :: FilePath
+            -> FilePath
             -> FilePath
             -> Bool
             -> IO ()
-exportDatum contract accountHash accountLovelace minimumSlot outputFile printStats =
+exportDatum contractFile stateFile outputFile printStats =
   do
+    Right contract <- eitherDecodeFileStrict contractFile
+    Right state <- eitherDecodeFileStrict stateFile
     let
-      DatumInfo{..} = buildDatum contract accountHash accountLovelace minimumSlot
+      DatumInfo{..} = buildDatum contract state
     LBS.writeFile outputFile
       $ encodePretty diJson
     print diHash

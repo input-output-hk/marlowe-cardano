@@ -13,16 +13,15 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import           Cardano.Api                  (AddressInEra, IsCardanoEra, Lovelace, NetworkId, PlutusScriptV1, Script,
-                                               SlotNo, StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
+import           Cardano.Api                  (AddressInEra, IsCardanoEra, NetworkId, PlutusScriptV1, Script, SlotNo,
+                                               StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
 import           Data.Aeson                   (ToJSON (..), Value, object, (.=))
 import           Data.ByteString.Short        (ShortByteString)
 import           GHC.Generics                 (Generic)
 import           Language.Marlowe.CLI.Orphans ()
 import           Language.Marlowe.Semantics   (MarloweData (..))
 import           Ledger.Typed.Scripts         (TypedValidator)
-import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, PubKeyHash, Redeemer,
-                                               ValidatorHash)
+import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
 
 data MarloweInfo era =
@@ -113,16 +112,15 @@ instance ToJSON RedeemerInfo where
 data Command =
     Export
     {
-      network         :: Maybe NetworkId
-    , stake           :: Maybe StakeAddressReference
-    , rolesCurrency   :: Maybe CurrencySymbol
-    , accountHash     :: PubKeyHash
-    , accountLovelace :: Lovelace
-    , minimumSlot'    :: SlotNo
-    , minimumSlot     :: SlotNo
-    , maximumSlot     :: SlotNo
-    , outputFile      :: FilePath
-    , printStats      :: Bool
+      network       :: Maybe NetworkId
+    , stake         :: Maybe StakeAddressReference
+    , rolesCurrency :: Maybe CurrencySymbol
+    , contractFile  :: FilePath
+    , stateFile     :: FilePath
+    , minimumSlot   :: SlotNo
+    , maximumSlot   :: SlotNo
+    , outputFile    :: FilePath
+    , printStats    :: Bool
     }
   | ExportAddress
     {
@@ -141,11 +139,10 @@ data Command =
     }
   | ExportDatum
     {
-      accountHash     :: PubKeyHash
-    , accountLovelace :: Lovelace
-    , minimumSlot'    :: SlotNo
-    , datumFile       :: FilePath
-    , printStats      :: Bool
+      contractFile :: FilePath
+    , stateFile    :: FilePath
+    , datumFile    :: FilePath
+    , printStats   :: Bool
     }
   | ExportRedeemer
     {
