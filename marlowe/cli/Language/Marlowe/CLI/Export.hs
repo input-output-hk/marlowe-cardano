@@ -41,9 +41,8 @@ import           Plutus.V1.Ledger.Slot           (Slot (..))
 import           PlutusTx                        (builtinDataToData, toBuiltinData)
 import           System.IO                       (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Base16          as Base16 (encode)
 import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
-import qualified Data.ByteString.Short           as SBS (fromShort, length, toShort)
+import qualified Data.ByteString.Short           as SBS (length, toShort)
 import qualified Data.Text                       as T (unpack)
 import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
@@ -111,13 +110,14 @@ buildValidator :: IsShelleyBasedEra era
 buildValidator costModel network stake =
   let
     viValidator = typedValidator1 defaultMarloweParams
-    viScript = getValidator . validatorScript $ viValidator
-    viBytes = SBS.toShort . LBS.toStrict . serialise $ viScript
+    script = getValidator . validatorScript $ viValidator
+    viScript = toCardanoApiScript script
+    viBytes = SBS.toShort . LBS.toStrict . serialise $ script
     viHash = validatorHash viValidator
     viAddress =
       makeShelleyAddressInEra
         network
-        (PaymentCredentialByScript . hashScript $ toCardanoApiScript viScript)
+        (PaymentCredentialByScript $ hashScript viScript)
         stake
     viSize = SBS.length viBytes
     (_, Right viCost) = evaluateScriptCounting Verbose costModel viBytes [] -- FIXME: Implement error handling.
@@ -132,7 +132,7 @@ exportAddress network stake =
   do
     let
       ValidatorInfo{..} = buildValidator undefined network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
-    hPutStrLn stderr . T.unpack . serialiseAddress $ viAddress
+    putStrLn . T.unpack . serialiseAddress $ viAddress
 
 
 exportValidator :: CostModelParams
@@ -147,8 +147,7 @@ exportValidator costModel network stake outputFile printHash printStats =
     let
       ValidatorInfo{..} = buildValidator costModel network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
     void
-      . writeFileTextEnvelope outputFile Nothing
-      $ toCardanoApiScript viScript
+      $ writeFileTextEnvelope outputFile Nothing viScript
     putStrLn . T.unpack . serialiseAddress $ viAddress
     when printHash
       $ do
@@ -246,7 +245,6 @@ exportRedeemer minimumSlot maximumSlot outputFile printStats =
       RedeemerInfo{..} = buildRedeemer minimumSlot maximumSlot
     LBS.writeFile outputFile
       $ encodePretty riJson
-    print $ Base16.encode $ SBS.fromShort riBytes
     when printStats
       $ do
         hPutStrLn stderr ""
