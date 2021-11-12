@@ -152,12 +152,6 @@ data PPEF = PPEF_N -- ^ No prepayment
           deriving stock (Show, Read, Eq, Ord, Generic)
           deriving anyclass (FromJSON, ToJSON)
 
-data CalendarType = NoCalendar
-                  | MondayToFriday
-                  | CustomCalendar {holidays :: [Day]}
-                  deriving stock (Show, Generic)
-                  deriving anyclass (FromJSON, ToJSON)
-
 -- |CyclePeriod
 data Period = P_D -- ^ Day
             | P_W -- ^ Week

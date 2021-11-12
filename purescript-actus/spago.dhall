@@ -2,6 +2,7 @@
 , dependencies =
   [ "arrays"
   , "const"
+  , "datetime"
   , "effect"
   , "foreign"
   , "identity"
@@ -9,6 +10,7 @@
   , "prelude"
   , "profunctor-lenses"
   , "record"
+  , "variant"
   ]
 , packages = ../packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
