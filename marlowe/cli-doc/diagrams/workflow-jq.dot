@@ -4,7 +4,7 @@ rankdir=LR
 
 
 Network       [label="Mainnet\nor Testnet"]
-StakeAddress  [label="Stake Address"      ]
+StakeAddress  [label="Stake\nAddress"     ]
 RolesCurrency [label="Currency\nfor Roles"]
 
 ContractFile  [label="Marlowe Contract\nJSON File", shape=tab]
