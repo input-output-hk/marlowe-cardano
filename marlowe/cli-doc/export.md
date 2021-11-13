@@ -7,25 +7,27 @@ The `export` command writes a JSON file with comprehensive information about the
 
     $ marlowe-cli export --help
     
-    Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS]
+    Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS] 
                               [--roles-currency CURRENCY_SYMBOL]
-                              --contract-file CONTRACT_FILE --state-file STATE_FILE
+                              --contract-file CONTRACT_FILE --state-file STATE_FILE 
+                              [--inputs-file INPUTS_FILE]
                               --redeemer-min-slot SLOT_NUMBER
                               --redeemer-max-slot SLOT_NUMBER --out-file OUTPUT_FILE
                               [--print-stats]
       Export a Marlowe contract to a JSON file.
     
     Available options:
-      --testnet-magic INTEGER            Network magic, or omit for mainnet.
-      --stake-address ADDRESS            Stake address, if any.
-      --roles-currency CURRENCY_SYMBOL   The currency symbol for roles, if any.
-      --contract-file CONTRACT_FILE      JSON input file for the contract.
-      --state-file STATE_FILE            JSON input file for the contract state.
-      --redeemer-min-slot SLOT_NUMBER    Minimum slot for the redemption.
-      --redeemer-max-slot SLOT_NUMBER    Maximum slot for the redemption.
-      --out-file OUTPUT_FILE             JSON output file for contract.
-      --print-stats                      Print statistics.
-      -h,--help                          Show this help text
+      --testnet-magic INTEGER             Network magic, or omit for mainnet.
+      --stake-address ADDRESS             Stake address, if any.
+      --roles-currency CURRENCY_SYMBOL    The currency symbol for roles, if any.
+      --contract-file CONTRACT_FILE       JSON input file for the contract.
+      --state-file STATE_FILE             JSON input file for the contract state.
+      --inputs-file INPUTS_FILE           JSON input file for redeemer inputs, if any.
+      --redeemer-min-slot SLOT_NUMBER     Minimum slot for the redemption.
+      --redeemer-max-slot SLOT_NUMBER     Maximum slot for the redemption.
+      --out-file OUTPUT_FILE              JSON output file for contract.
+      --print-stats                       Print statistics.
+      -h,--help                           Show this help text
 
 The stake address can be omitted if no staking will be done at the script address. If the currency symbol is omitted, then ADA is used as the currency for the Marlowe roles.
 
@@ -38,11 +40,12 @@ Optionally, this command will print on `stderr` the size and cost of the contrac
 
 # Example
 
-The following command uses the close contract [example.contract](example.contract) and the simple state [example.state](example.state) to create the datum to create the JSON file [example.marlowe](example.marlowe) that contains address, validator, datum, and redeemer information for a Marlowe contract.
+The following command uses the close contract [example.contract](example.contract), the simple state [example.state](example.state), and the inputs [example.inputs](example.inputs) to create the datum to create the JSON file [example.marlowe](example.marlowe) that contains address, validator, datum, and redeemer information for a Marlowe contract.
 
     $ marlowe-cli export --testnet-magic 1097911063       \
                          --contract-file example.contract \
                          --state-file example.state       \
+                         --inputs-file example.inputs     \
                          --redeemer-min-slot 1000         \
                          --redeemer-max-slot 43500000     \
                          --out-file example.marlowe       \

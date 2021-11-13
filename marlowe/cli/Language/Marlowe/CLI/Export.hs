@@ -28,7 +28,7 @@ import           Data.Aeson                      (eitherDecodeFileStrict)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Language.Marlowe.CLI.Types      (DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (typedValidator1)
+import           Language.Marlowe.Scripts        (MarloweInput, typedValidator1)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
@@ -50,14 +50,15 @@ buildMarlowe :: IsShelleyBasedEra era
              -> StakeAddressReference
              -> Contract
              -> State
+             -> [Input]
              -> SlotNo
              -> SlotNo
              -> MarloweInfo era
-buildMarlowe marloweParams costModel network stake contract state minimumSlot maximumSlot =
+buildMarlowe marloweParams costModel network stake contract state inputs minimumSlot maximumSlot =
   let
     validatorInfo = buildValidator marloweParams costModel network stake
     datumInfo     = buildDatum contract state
-    redeemerInfo  = buildRedeemer minimumSlot maximumSlot
+    redeemerInfo  = buildRedeemer inputs minimumSlot maximumSlot
   in
     MarloweInfo{..}
 
@@ -68,21 +69,23 @@ exportMarlowe :: MarloweParams
               -> StakeAddressReference
               -> FilePath
               -> FilePath
+              -> Maybe FilePath
               -> SlotNo
               -> SlotNo
               -> FilePath
               -> Bool
               -> IO ()
-exportMarlowe marloweParams costModel network stake contractFile stateFile minimumSlot maximumSlot outputFile printStats =
+exportMarlowe marloweParams costModel network stake contractFile stateFile inputsFile minimumSlot maximumSlot outputFile printStats =
   do
     Right contract <- eitherDecodeFileStrict contractFile
     Right state    <- eitherDecodeFileStrict stateFile
+    Right inputs   <- maybe (pure $ Right []) eitherDecodeFileStrict inputsFile
     let
       marloweInfo@MarloweInfo{..} =
         buildMarlowe
           marloweParams costModel network stake
           contract state
-          minimumSlot maximumSlot
+          inputs minimumSlot maximumSlot
       ValidatorInfo{..} = validatorInfo
       DatumInfo{..}     = datumInfo
       RedeemerInfo{..}  = redeemerInfo
@@ -165,13 +168,13 @@ buildDatum :: Contract
 buildDatum marloweContract marloweState =
   let
     marloweData = MarloweData{..}
-    diDatum = Datum . PlutusTx.toBuiltinData $ marloweData
+    marloweDatum = PlutusTx.toBuiltinData marloweData
+    diDatum = Datum marloweDatum
     diBytes = SBS.toShort . LBS.toStrict . serialise $ diDatum
     diJson =
       scriptDataToJson ScriptDataJsonDetailedSchema
         . fromPlutusData
-        . PlutusTx.builtinDataToData
-        $ PlutusTx.toBuiltinData marloweData
+        $ PlutusTx.builtinDataToData marloweDatum
     diHash = datumHash diDatum
     diSize = SBS.length diBytes
   in
@@ -198,34 +201,36 @@ exportDatum contractFile stateFile outputFile printStats =
         hPutStrLn stderr $ "Datum size: " ++ show diSize
 
 
-buildRedeemer :: SlotNo
+buildRedeemer :: [Input]
+              -> SlotNo
               -> SlotNo
               -> RedeemerInfo
-buildRedeemer (SlotNo minimumSlot) (SlotNo maximumSlot) =
+buildRedeemer inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
   let
-    inputs :: ((Integer, Integer), [Input])
-    inputs = ((fromIntegral minimumSlot, fromIntegral maximumSlot), [])
-    riRedeemer = Redeemer . PlutusTx.toBuiltinData $ inputs
+    input = ((fromIntegral minimumSlot, fromIntegral maximumSlot), inputs) :: MarloweInput
+    marloweRedeemer = PlutusTx.toBuiltinData input
+    riRedeemer = Redeemer marloweRedeemer
     riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
     riJson =
       scriptDataToJson ScriptDataJsonDetailedSchema
         . fromPlutusData
-        . PlutusTx.builtinDataToData
-        $ PlutusTx.toBuiltinData inputs
+        $ PlutusTx.builtinDataToData marloweRedeemer
     riSize = SBS.length riBytes
   in
     RedeemerInfo{..}
 
 
-exportRedeemer :: SlotNo
+exportRedeemer :: Maybe FilePath
+               -> SlotNo
                -> SlotNo
                -> FilePath
                -> Bool
                -> IO ()
-exportRedeemer minimumSlot maximumSlot outputFile printStats =
+exportRedeemer inputsFile minimumSlot maximumSlot outputFile printStats =
   do
+    Right inputs <- maybe (pure $ Right []) eitherDecodeFileStrict inputsFile
     let
-      RedeemerInfo{..} = buildRedeemer minimumSlot maximumSlot
+      RedeemerInfo{..} = buildRedeemer inputs minimumSlot maximumSlot
     LBS.writeFile outputFile
       $ encodePretty riJson
     when printStats

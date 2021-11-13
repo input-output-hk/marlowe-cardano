@@ -10,6 +10,7 @@ RolesCurrency [label="Currency\nfor Roles"]
 ContractFile  [label="Marlowe Contract\nJSON File", shape=tab]
 StateFile     [label="Marlowe State\nJSON File"   , shape=tab]
 
+InputsFile    [label="Marlowe Inputs\nJSON File", shape=tab]
 MinSlot       [label="Minimum\nSlot"]
 MaxSlot       [label="Maximum\nSlot"]
 
@@ -21,6 +22,7 @@ StakeAddress  -> ExportCommand [label="--stake-address"    , fontname=monospace,
 RolesCurrency -> ExportCommand [label="--roles-currency"   , fontname=monospace, fontsize=10, style=dashed]
 ContractFile  -> ExportCommand [label="--contract-file"    , fontname=monospace, fontsize=10]
 StateFile     -> ExportCommand [label="--state-file"       , fontname=monospace, fontsize=10]
+InputsFile    -> ExportCommand [label="--inputs-file"      , fontname=monospace, fontsize=10, style=dashed]
 MinSlot       -> ExportCommand [label="--redeemer-min-slot", fontname=monospace, fontsize=10]
 MaxSlot       -> ExportCommand [label="--redeemer-max-slot", fontname=monospace, fontsize=10]
 
