@@ -117,6 +117,7 @@ data Command =
     , rolesCurrency :: Maybe CurrencySymbol
     , contractFile  :: FilePath
     , stateFile     :: FilePath
+    , inputsFile    :: Maybe FilePath
     , minimumSlot   :: SlotNo
     , maximumSlot   :: SlotNo
     , outputFile    :: FilePath
@@ -146,7 +147,8 @@ data Command =
     }
   | ExportRedeemer
     {
-      minimumSlot  :: SlotNo
+      inputsFile   :: Maybe FilePath
+    , minimumSlot  :: SlotNo
     , maximumSlot  :: SlotNo
     , redeemerFile :: FilePath
     , printStats   :: Bool
