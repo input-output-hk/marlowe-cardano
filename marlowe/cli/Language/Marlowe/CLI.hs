@@ -1,5 +1,6 @@
 
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 
 module Language.Marlowe.CLI (
@@ -10,13 +11,16 @@ module Language.Marlowe.CLI (
 import           Cardano.Api                 (AsType (AsStakeAddress), NetworkId (..), NetworkMagic (..), SlotNo (..),
                                               StakeAddressReference (..), deserialiseAddress)
 import           Cardano.Api.Shelley         (StakeAddress (..), fromShelleyStakeCredential)
+import           Control.Monad.Except        (runExceptT, throwError)
 import           Data.Maybe                  (fromMaybe)
 import           Data.Version                (Version, showVersion)
 import           Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
                                               exportValidator)
-import           Language.Marlowe.CLI.Types  (Command (..))
+import           Language.Marlowe.CLI.Types  (CliError (..), Command (..))
 import           Language.Marlowe.Client     (defaultMarloweParams, marloweParams)
 import           Plutus.V1.Ledger.Api        (CurrencySymbol (..), defaultCostModelParams, toBuiltin)
+import           System.Exit                 (exitFailure)
+import           System.IO                   (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Base16      as Base16 (decode)
 import qualified Data.ByteString.Char8       as BS8 (pack)
@@ -33,28 +37,40 @@ mainCLI version =
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
       network'       = fromMaybe Mainnet                        $ network       command
       stake'         = fromMaybe NoStakeAddress                 $ stake         command
-    Just costModel <- pure defaultCostModelParams
-    case command of
-      Export{..}          -> exportMarlowe
-                               marloweParams' costModel network' stake'
-                               contractFile stateFile
-                               inputsFile minimumSlot maximumSlot
-                               outputFile
-                               printStats
-      ExportAddress{}     -> exportAddress
-                               marloweParams' network' stake'
-      ExportValidator{..} -> exportValidator
-                               marloweParams' costModel network' stake'
-                               validatorFile
-                               printHash printStats
-      ExportDatum{..}     -> exportDatum
-                               contractFile stateFile
-                               datumFile
-                               printStats
-      ExportRedeemer{..}  -> exportRedeemer
-                               inputsFile minimumSlot maximumSlot
-                               redeemerFile
-                               printStats
+    result <-
+      runExceptT
+        $ do
+          costModel <-
+            maybe
+              (throwError "Missing default cost model.")
+              pure
+              defaultCostModelParams
+          case command of
+            Export{..}          -> exportMarlowe
+                                     marloweParams' costModel network' stake'
+                                     contractFile stateFile
+                                     inputsFile minimumSlot maximumSlot
+                                     outputFile
+                                     printStats
+            ExportAddress{}     -> exportAddress
+                                     marloweParams' network' stake'
+            ExportValidator{..} -> exportValidator
+                                     marloweParams' costModel network' stake'
+                                     validatorFile
+                                     printHash printStats
+            ExportDatum{..}     -> exportDatum
+                                     contractFile stateFile
+                                     datumFile
+                                     printStats
+            ExportRedeemer{..}  -> exportRedeemer
+                                     inputsFile minimumSlot maximumSlot
+                                     redeemerFile
+                                     printStats
+    case result of
+      Right ()      -> return ()
+      Left  message -> do
+                         hPutStrLn stderr $ unCliError message
+                         exitFailure
 
 
 parser :: Version

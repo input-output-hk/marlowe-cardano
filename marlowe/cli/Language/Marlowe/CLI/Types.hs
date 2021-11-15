@@ -1,7 +1,8 @@
 
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecordWildCards            #-}
 
 
 module Language.Marlowe.CLI.Types (
@@ -10,6 +11,7 @@ module Language.Marlowe.CLI.Types (
 , ValidatorInfo(..)
 , DatumInfo(..)
 , RedeemerInfo(..)
+, CliError(..)
 ) where
 
 
@@ -17,11 +19,16 @@ import           Cardano.Api                  (AddressInEra, IsCardanoEra, Netwo
                                                StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
 import           Data.Aeson                   (ToJSON (..), Value, object, (.=))
 import           Data.ByteString.Short        (ShortByteString)
+import           Data.String                  (IsString)
 import           GHC.Generics                 (Generic)
 import           Language.Marlowe.CLI.Orphans ()
 import           Language.Marlowe.Semantics   (MarloweData (..))
 import           Ledger.Typed.Scripts         (TypedValidator)
 import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+
+
+newtype CliError = CliError {unCliError :: String}
+  deriving (Eq, IsString, Ord, Read, Show)
 
 
 data MarloweInfo era =
