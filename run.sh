@@ -28,31 +28,34 @@ PAYMENT_SKEY=payment.skey
 PAYMENT_VKEY=payment.vkey
 ADDRESS_P=$(cat payment.addr)
 PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
-MARLOWE_FILE=test.marlowe
-DATUM_LOVELACE=3000000
+CONTRACT_FILE=c1.contract
+STATE_FILE=c1.state
+DATUM_LOVELACE=$(jq '.accounts | .[0] | .[1]' $STATE_FILE)
 DATUM_MIN_SLOT=10
-REDEEMER_MIN_SLOT=1000
-REDEEMER_MAX_SLOT=$((CUR_SLOT+1000))
+REDEEMER_MIN_SLOT=44316000
+REDEEMER_MAX_SLOT=44317000 #$((CUR_SLOT+1000))
 
-marlowe-cli export $MAGIC                                 \
-                    --datum-account-hash $PUBKEYHASH_P     \
-                    --datum-account-value $DATUM_LOVELACE  \
-                    --datum-min-slot $DATUM_MIN_SLOT       \
-                    --redeemer-min-slot $REDEEMER_MIN_SLOT \
-                    --redeemer-max-slot $REDEEMER_MAX_SLOT \
-                    --out-file $MARLOWE_FILE               \
-                    --print-stats
 
-ADDRESS_S=$(jq -r '.validator.address' $MARLOWE_FILE)
+ADDRESS_S=$(marlowe-cli address --testnet-magic 1097911063)
+
 PLUTUS_FILE=test.plutus
-DATUM_HASH=$(jq -r '.datum.hash' $MARLOWE_FILE)
 DATUM_FILE=test.datum
-jq '.datum.json' $MARLOWE_FILE > $DATUM_FILE
 REDEEMER_FILE=test.redeemer
-jq '.redeemer.json' $MARLOWE_FILE > $REDEEMER_FILE
-jq '.validator.script' $MARLOWE_FILE > $PLUTUS_FILE
+
+DATUM_HASH=$(
+marlowe-cli datum --contract-file $CONTRACT_FILE \
+                  --state-file $STATE_FILE       \
+                  --out-file $DATUM_FILE
+)
+
+marlowe-cli validator $MAGIC --out-file $PLUTUS_FILE
+# marlowe-cli redeemer --min-slot $REDEEMER_MIN_SLOT \
+#                      --max-slot $REDEEMER_MAX_SLOT \
+#                      --out-file $REDEEMER_FILE
+
 
 COLLATERAL_TX=e0ec3e100fa03dcbcc02ca3245b5770659065528642845c1d1d572401548b952#1
+
 # Create the contract, and extract the address, validator, datum hash, datum, and redeemer.
 create_contract_tx() {
   # Find funds, and enter the selected UTxO as "TX_0".
@@ -82,8 +85,8 @@ sign_submit() {
 }
 
 redeem() {
-  FEE_UTXO=c821044a5af20861f47e7675a0da65690ba49703ec6411346dcecac69f3747b9#0
-  CONTRACT_UTXO=c821044a5af20861f47e7675a0da65690ba49703ec6411346dcecac69f3747b9#1
+  FEE_UTXO=19456bb108c0fa182dd7ab11c6ef927cbe36d6ebc743f5099a6209e26d8862f0#0
+  CONTRACT_UTXO=19456bb108c0fa182dd7ab11c6ef927cbe36d6ebc743f5099a6209e26d8862f0#1
 
   FUNDS=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq '.["'$FEE_UTXO'"].value.lovelace')
 
@@ -137,8 +140,8 @@ redeem() {
 # # See that the transaction succeeded.
 
 # create_contract_tx
-# redeem
-# sign_submit
+redeem
+sign_submit
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
