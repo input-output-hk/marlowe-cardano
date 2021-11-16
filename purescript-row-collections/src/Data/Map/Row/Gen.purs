@@ -2,14 +2,14 @@ module Data.Map.Row.Gen where
 
 import Prelude
 
-import Data.Map.Row (class RowListMaybe, RowMap, fromRecord)
+import Data.Map.Row (RowMap, class RowMapRecord, fromRecord)
 import Prim.RowList (class RowToList)
 import Test.QuickCheck.Gen (Gen)
 
 genRowMap
-  :: forall rl r r'
-   . RowToList r rl
-  => RowListMaybe rl r'
-  => Gen (Record r')
+  :: forall rl r rec
+   . RowMapRecord rl r rec
+  => RowToList r rl
+  => Gen (Record rec)
   -> Gen (RowMap r)
 genRowMap = map fromRecord

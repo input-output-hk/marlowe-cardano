@@ -2,19 +2,22 @@ module Test.Data.Map.Row where
 
 import Prelude
 
-import Data.Map.Row (RowMap, get, mapRecord, set, toRecord)
+import Data.Map.Row (RowMap, clear, fromRecord, get, modify, set, toRecord)
 import Data.Map.Row.Gen (genRowMap)
 import Data.Maybe (Maybe(..))
+import Data.String (toUpper)
 import Record as Record
 import Test.QuickCheck (class Arbitrary, arbitrary, (===))
 import Test.Spec (Spec, describe, it)
 import Test.Spec.QuickCheck (quickCheck)
 import Type.Proxy (Proxy(..))
 
-type Operational = RowMap
+type TestRow =
   ( foo :: Int
   , bar :: String
   )
+
+type Operational = RowMap TestRow
 
 type Denotational =
   { foo :: Maybe Int
@@ -36,8 +39,14 @@ spec :: Spec Unit
 spec = do
   describe "get@_foo" $ elimSpec (get _foo) (Record.get _foo)
   describe "get@_bar" $ elimSpec (get _bar) (Record.get _bar)
-  describe "set@_foo" $ termSpec2 (set _foo) (Record.set _foo)
-  describe "set@_bar" $ termSpec2 (set _bar) (Record.set _bar)
+  describe "set@_foo" $ termSpec2 (set _foo) Just (Record.set _foo)
+  describe "set@_bar" $ termSpec2 (set _bar) Just (Record.set _bar)
+  describe "clear@_foo" $ termSpec (clear _foo) (Record.set _foo Nothing)
+  describe "clear@_bar" $ termSpec (clear _bar) (Record.set _bar Nothing)
+  describe "modify@_foo" do
+    termSpec (modify _foo (mul 2)) (Record.modify _foo (map (mul 2)))
+  describe "modify@_bar" do
+    termSpec (modify _bar toUpper) (Record.modify _bar (map toUpper))
 
 elimSpec
   :: forall a
@@ -58,15 +67,16 @@ termSpec
 termSpec op den = do
   it "matches the denotational implementation" do
     quickCheck \(ArbitraryOperational operational) ->
-      op operational === mapRecord den operational
+      op operational === fromRecord (den (toRecord operational))
 
 termSpec2
-  :: forall a
+  :: forall a b
    . Arbitrary a
   => (a -> Operational -> Operational)
-  -> (Maybe a -> Denotational -> Denotational)
+  -> (a -> b)
+  -> (b -> Denotational -> Denotational)
   -> Spec Unit
-termSpec2 op den = do
+termSpec2 op adapt den = do
   it "matches the denotational implementation" do
     quickCheck \(ArbitraryOperational operational) a ->
-      op a operational === mapRecord (den (Just a)) operational
+      op a operational === fromRecord (den (adapt a) (toRecord operational))

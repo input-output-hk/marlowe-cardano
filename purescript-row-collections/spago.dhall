@@ -13,8 +13,10 @@ to generate this file without the comments in this block.
 { name = "my-project"
 , dependencies =
   [ "aff"
+  , "arrays"
   , "console"
   , "effect"
+  , "lists"
   , "maybe"
   , "prelude"
   , "psci-support"
@@ -23,6 +25,7 @@ to generate this file without the comments in this block.
   , "spec"
   , "spec-discovery"
   , "spec-quickcheck"
+  , "strings"
   , "unsafe-coerce"
   ]
 , packages = ./packages.dhall
