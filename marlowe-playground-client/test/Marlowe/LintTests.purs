@@ -30,12 +30,9 @@ all = do
     test "of AndObs with True constant" andObsSimplifiesWithTrue
     test "in OrObs" orObsSimplifies
     test "of OrObs with False constant" orObsSimplifiesWithFalse
-    test "of non-reduced Scale" nonReducedScaleSimplified
     test "of DivValue 0 / _" divZeroSimplified
     test "of DivValue by 0" divByZeroSimplified
     test "of DivValue with constant" divConstantSimplified
-    test "of Scale with constant" scaleConstantSimplified
-    test "of Scale with constant expression" scaleConstantExpressionSimplified
     test "Invalid bound in Case" unreachableCaseInvalidBound
   suite "Marlowe.Linter reports bad pratices" do
     test "Let shadowing" letShadowing
@@ -261,15 +258,6 @@ orObsSimplifiesWithFalse =
   in
     testObservationSimplificationWarning ifContract simplifiableExpression simplification
 
-nonReducedScaleSimplified :: Test
-nonReducedScaleSimplified =
-  let
-    simplifiableExpression = "(Scale (362%194) SlotIntervalStart)"
-
-    simplification = "(Scale (181%97) SlotIntervalStart)"
-  in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
-
 divZeroSimplified :: Test
 divZeroSimplified =
   let
@@ -294,24 +282,6 @@ divConstantSimplified =
     simplifiableExpression = "(DivValue (Constant 7) (Constant -3))"
 
     simplification = "(Constant -2)"
-  in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
-
-scaleConstantSimplified :: Test
-scaleConstantSimplified =
-  let
-    simplifiableExpression = "(Scale (7%3) (Constant 21))"
-
-    simplification = "(Constant 49)"
-  in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
-
-scaleConstantExpressionSimplified :: Test
-scaleConstantExpressionSimplified =
-  let
-    simplifiableExpression = "(Scale (1%3) (AddValue (Constant 9) (Constant 12)))"
-
-    simplification = "(Constant 7)"
   in
     testValueSimplificationWarning letContract simplifiableExpression simplification
 

@@ -14,7 +14,7 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Language.Haskell.Interpreter (CompilationError)
-import Marlowe.Semantics (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Rational(..), Slot(..), State(..), Token(..), Value(..), ValueId(..))
+import Marlowe.Semantics (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Slot(..), State(..), Token(..), Value(..), ValueId(..))
 import Node.Encoding (Encoding(UTF8))
 import Node.FS.Sync as FS
 import Test.Unit (TestSuite, Test, failure, success, suite, test)
@@ -61,7 +61,7 @@ serializationTest =
                       (Pay alicePk (Party bobRole) ada (Cond TrueObs (UseValue (ValueId "x")) (UseValue (ValueId "y"))) Close)
                   )
               , Case (Choice choiceId [ Bound (fromInt 0) (fromInt 1) ])
-                  ( If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` Scale (Rational (fromInt 1) (fromInt 10)) const))
+                  ( If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` const))
                       (Pay alicePk (Account alicePk) token (DivValue (AvailableMoney alicePk token) const) Close)
                       Close
                   )

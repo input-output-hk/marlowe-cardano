@@ -375,7 +375,6 @@ data Value
   | SubValue Value Value
   | MulValue Value Value
   | DivValue Value Value
-  | Scale Rational Value
   | ChoiceValue ChoiceId
   | SlotIntervalStart
   | SlotIntervalEnd
@@ -419,12 +418,6 @@ instance encodeJsonValue :: EncodeJson Value where
       { divide: lhs
       , by: rhs
       }
-  encodeJson (Scale (Rational n d) val) =
-    encodeJson
-      { multiply: val
-      , times: n
-      , divide_by: d
-      }
   encodeJson (ChoiceValue choiceId) =
     encodeJson
       { value_of_choice: choiceId
@@ -466,25 +459,17 @@ instance decodeJsonValue :: DecodeJson Value where
         multiply <- getProp "multiply"
         by <- getProp "by"
         times <- getProp "times"
-        divideBy <- getProp "divide_by"
         valueOfChoices <- getProp "value_of_choice"
         useValue <- getProp "use_value"
         if_ <- getProp "if"
         then_ <- getProp "then"
         else_ <- getProp "else"
-        let
-          timesConst =
-            times
-              >>= case _ of
-                  Constant v -> Just v
-                  _ -> Nothing
         pure
           $ (AvailableMoney <$> inAccount <*> amountOfToken)
           <|> (NegValue <$> negate)
           <|> (AddValue <$> add <*> and)
           <|> (SubValue <$> value <*> minus)
           <|> (DivValue <$> divide <*> by)
-          <|> (Scale <$> (Rational <$> timesConst <*> divideBy) <*> multiply)
           <|> (MulValue <$> multiply <*> times)
           <|> (ChoiceValue <$> valueOfChoices)
           <|> (UseValue <$> useValue)
@@ -1488,15 +1473,6 @@ evalValue env state value =
                       qIsEven = q `mod` fromInt 2 == fromInt 0
                     in
                       if qIsEven then q else q + signum n * signum d
-      Scale (Rational n d) rhs ->
-        let
-          nn = eval rhs * n
-
-          q = nn `div` d
-
-          r = nn `mod` d
-        in
-          if abs r * fromInt 2 < abs d then q else q + signum nn * signum d
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId (unwrap state).choices
       SlotIntervalStart -> view (_slotInterval <<< to ivFrom <<< to unwrap) env
       SlotIntervalEnd -> view (_slotInterval <<< to ivTo <<< to unwrap) env

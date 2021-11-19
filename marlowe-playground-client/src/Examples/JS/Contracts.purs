@@ -504,7 +504,7 @@ contractForDifferencesWithOracle =
 
     function recordEndPrice(name: ValueId, choiceId1: ChoiceId, choiceId2: ChoiceId,
         continuation: Contract): Contract {
-        return Let(name, Scale(1n, 10_000_000_000_000_000n, MulValue(priceBeginning, MulValue(ChoiceValue(choiceId1), ChoiceValue(choiceId2)))),
+        return Let(name, DivValue(MulValue(priceBeginning, MulValue(ChoiceValue(choiceId1), ChoiceValue(choiceId2))), (Constant 10_000_000_000_000_000n)),
             continuation);
     }
 
@@ -568,6 +568,6 @@ contractForDifferencesWithOracle =
                                                 refundAfterDifference(party, partyDeposit, counterparty, counterpartyDeposit, UseValue(increaseInPrice)))),
                                         refundBoth
                                     ))))))));
-    
+
     return contract;
 """

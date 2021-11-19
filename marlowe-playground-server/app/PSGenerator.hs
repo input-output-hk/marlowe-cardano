@@ -250,7 +250,7 @@ writePangramJson outputDir = do
                             (S.Pay alicePk (S.Party bobRole) ada (S.Cond S.TrueObs (S.UseValue (S.ValueId "x")) (S.UseValue (S.ValueId "y"))) S.Close)
                         )
                     , S.Case (S.Choice choiceId [ S.Bound 0 1 ])
-                        ( S.If (S.ChoseSomething choiceId `S.OrObs` (S.ChoiceValue choiceId `S.ValueEQ` S.Scale (1 S.% 10) const100))
+                        ( S.If (S.ChoseSomething choiceId `S.OrObs` (S.ChoiceValue choiceId `S.ValueEQ` const100))
                             (S.Pay alicePk (S.Account alicePk) token (S.DivValue (S.AvailableMoney alicePk token) const100) S.Close)
                             S.Close
                         )

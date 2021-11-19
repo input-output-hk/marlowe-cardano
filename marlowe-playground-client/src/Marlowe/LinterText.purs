@@ -137,7 +137,6 @@ warningType (Warning { warning }) = case warning of
   UndefinedChoice -> "UndefinedChoice"
   UndefinedUse -> "UndefinedUse"
   ShadowedLet -> "ShadowedLet"
-  DivisionByZero -> "DivisionByZero"
   (SimplifiableValue _ _) -> "SimplifiableValue"
   (SimplifiableObservation _ _) -> "SimplifiableObservation"
   (PayBeforeDeposit _) -> "PayBeforeDeposit"
