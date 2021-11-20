@@ -1,9 +1,17 @@
-module Test.Data.Map.Row where
+module Test.Data.Map.Heterogeneous where
 
 import Prelude
 
-import Data.Map.Row (RowMap, clear, fromRecord, get, modify, set, toRecord)
-import Data.Map.Row.Gen (genRowMap)
+import Data.Map.Heterogeneous
+  ( HMap
+  , clear
+  , fromRecord
+  , get
+  , modify
+  , set
+  , toRecord
+  )
+import Data.Map.Heterogeneous.Gen (genHMap)
 import Data.Maybe (Maybe(..))
 import Data.String (toUpper)
 import Record as Record
@@ -17,7 +25,7 @@ type TestRow =
   , bar :: String
   )
 
-type Operational = RowMap TestRow
+type Operational = HMap TestRow
 
 type Denotational =
   { foo :: Maybe Int
@@ -27,7 +35,7 @@ type Denotational =
 newtype ArbitraryOperational = ArbitraryOperational Operational
 
 instance arbitraryArbitraryOperational :: Arbitrary ArbitraryOperational where
-  arbitrary = ArbitraryOperational <$> genRowMap arbitrary
+  arbitrary = ArbitraryOperational <$> genHMap arbitrary
 
 _foo :: Proxy "foo"
 _foo = Proxy
