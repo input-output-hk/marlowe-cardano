@@ -44,11 +44,7 @@ The diagram below illusrates how the `export` command can be used in conjunction
 
 ![Marlowe workflow using `marlowe-cli`, `jq`, and `cardano-cli`.](diagrams/workflow-jq.svg)
 
-See [example.marlowe](example.marlowe) for an example file containing this information for a simple contract, and see [example-jq.sh](example-jq.sh) for an example bash script embodying this workflow.
-
-```diff
-- FIXME: Write a narrative tutorial for this example.
-```
+See [example.marlowe](example.marlowe) for an example file containing this information for a simple contract, and see [example-jq.sh](example-jq.sh) for an example bash script embodying this workflow. A tutorial for this workflow is available [here](tutorial-jq.md).
 
 
 ### Granular Workflow
@@ -57,8 +53,4 @@ The [`address`](address.md), [`validator`](validator.md), [`datum`](datum.md), a
 
 ![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](diagrams/workflow.svg)
 
-See [example.sh](example.sh) for an example bash script embodying this workflow.
-
-```diff
-- FIXME: Write a narrative tutorial for this example.
-```
+See [example.sh](example.sh) for an example bash script embodying this workflow. A tutorial for this workflow is available [here](tutorial.md).

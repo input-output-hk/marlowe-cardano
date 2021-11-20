@@ -45,7 +45,7 @@ REDEEMER_MAX_SLOT=43500000
 
 # Create the contract.
 
-ADDRESS_S=$(marlowe-cli address --testnet-magic 1097911063)
+ADDRESS_S=$(marlowe-cli address $MAGIC)
 
 marlowe-cli validator $MAGIC --out-file $PLUTUS_FILE
 
