@@ -33,48 +33,38 @@ cardano-cli transaction build \
 cardano-cli transaction sign --tx-body-file tx.build --testnet-magic ${TESTNET_MAGIC} --signing-key-file payment.skey --out-file tx.signed
 cardano-cli transaction submit --tx-file tx.signed --testnet-magic ${TESTNET_MAGIC}
 
-
+# Marlowe output
 cardano-cli transaction build \
 --alonzo-era \
 --testnet-magic ${TESTNET_MAGIC} \
 --change-address $(cat payment.addr) \
---tx-in 41a2d07e1eea34c17b0bda443512c4c8c82d836570f4133b749b6f0ac37f5f8f#0 \
---tx-in 6bc05f7dc3a7f8eae64ee53ffc676005c30fa81276452daa411e9942484456ac#0 \
---tx-out addr_test1wqqwzc3j8jrqfn0scn8ydm5mesla5xrg3mqpcmp8hjplt6q2ng95l+3000000 \
---tx-out-datum-hash 6b3d95fbfa8421475d74523bca4d9c433194812ae37ffb2a87ea2cb7cef2e99e \
---protocol-params-file testnet-params.json \
---metadata-json-file metadata.json \
---out-file tx.build
-
-
-# no constraints
-cardano-cli transaction build \
---alonzo-era \
---testnet-magic ${TESTNET_MAGIC} \
---change-address $(cat payment.addr) \
---tx-in 7e9951227de6875bafc1ca3f533068ceed31e322a5668f74913213f5d909ab44#0 \
---tx-out addr_test1wqqwzc3j8jrqfn0scn8ydm5mesla5xrg3mqpcmp8hjplt6q2ng95l+3000000 \
+--tx-in e8c2689665dbc44f815e2a315f674a2cf7f88250bf3182cd1021724c487d019f#0 \
+--tx-out addr_test1wpq55y4zw6sjplwjh03m8h30chv2wyzwk84pwewv2l8djqcfzvpa0+3000000 \
 --tx-out-datum-hash 6b80f9cad44433d6e5692ff389a8899a5d8cd6bb0485136a97f86e98eb850510 \
 --protocol-params-file testnet-params.json \
 --metadata-json-file metadata.json \
 --out-file tx.build
+
+cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address $(cat payment.addr)
+cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address addr_test1wpq55y4zw6sjplwjh03m8h30chv2wyzwk84pwewv2l8djqcfzvpa0
 
 # Spend
 
 cardano-cli transaction build \
 --alonzo-era \
 --testnet-magic ${TESTNET_MAGIC} \
---invalid-before 10000 \
---invalid-hereafter 43000000 \
---tx-in f19f90cd1b0a55606af579c13547c1770ce0a3fc950f1be2ba04ed4f249f82f1#0 \
---tx-in f19f90cd1b0a55606af579c13547c1770ce0a3fc950f1be2ba04ed4f249f82f1#1 \
+--invalid-before 5 \
+--invalid-hereafter 43500000 \
+--tx-in 09f960e983782278ab5b97b357b6cf71c278199d1e027d62281cd9f648bbb728#0 \
+--tx-in 09f960e983782278ab5b97b357b6cf71c278199d1e027d62281cd9f648bbb728#1 \
 --tx-in-script-file script.json  \
 --tx-in-datum-file datum.json \
 --tx-in-redeemer-file redeemer.json \
 --tx-in-collateral e0ec3e100fa03dcbcc02ca3245b5770659065528642845c1d1d572401548b952#1 \
---tx-out $(cat payment.addr)+69955230 \
+--tx-out $(cat payment.addr)+3000000 \
 --change-address $(cat payment.addr) \
 --protocol-params-file testnet-params.json \
+--metadata-json-file metadata.json \
 --out-file marlowe-close.tx
 
 cardano-cli transaction sign \
@@ -86,8 +76,8 @@ cardano-cli transaction sign \
 cardano-cli transaction submit --tx-file marlowe-close.signed --testnet-magic ${TESTNET_MAGIC}
 
 
-cardano-cli query utxo --address $(cat payment.addr) --testnet-magic $TESTNET_MAGIC
-cardano-cli query utxo --address addr_test1wrmw97nzdww7a035ny88zmpcswtxdmud6a4cndzt6l7zz8cyky7r9 --testnet-magic $TESTNET_MAGIC
+cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address $(cat payment.addr)
+cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address addr_test1wr7mml52pdlnmg2s4344ln4yx2nwvrg9utqtggqa0g0z6ccceyt9x
 
 cardano-cli transaction view --tx-body-file marlowe-close.tx
 
@@ -95,5 +85,67 @@ cardano-cli transaction view --tx-body-file marlowe-close.tx
 # Size: 17621
 # Size: 17522 fa29409229673ff4ae1f4de0374867e77f73a4ab3deebe25271f8275 -- reduces error strings
 # Size: 16793 484c4125ac40d2a47dfb9d6c09ef4c25f06df779284465cd6837696b -- remove constraints
+# Default Marlowe validator size: 18137 -> 18053 (eval Scale -84) -> 18053 (Eq Scale)
+
+# Simplified Marlowe: 16124 -> 16557
+# 15629 (no TxConstraints, no check output) 15983 (no check output), 17239 (with check output)
+# 17122
+# 15014 no TxConstraints, check everything
+# 9776 no computeTransaction
+# 14870 no TxConstraints, check everything, timeToSlot
+# 14854 OutputConstraints, check everything, timeToSlot
+# 14835 OutputConstraints, check everything, timeToSlot, redeemer [Input]
+# 14917 OutputConstraints, check everything, timeToSlot, redeemer [Input], with Scale
+
+# 7897 without computeTransaction => 14959 - 7897 = 7062 for Marlowe interpreter stuff
 
 ## First successfull spending addr_test1wpfxda7xxcx7w3dmtqrahx2fgp6nspll5putm7qpw6dz2vs0tgayn
+
+cardano-cli get-tip --testnet-magic 1097911063
+
+saddr="addr_test1wqkvngwt2lwt6cdp74t6k3zzah3m8h6w3ctmcyvwufux3ws82q2e6"
+
+# Marlowe Pay
+cardano-cli transaction build \
+--alonzo-era \
+--testnet-magic ${TESTNET_MAGIC} \
+--change-address $(cat payment.addr) \
+--tx-in 6304f892d594a06de7ffd005c8d74b5dca83f1d6aa194407b6f727d3fe0b6518#0 \
+--tx-out ${saddr}+3000000 \
+--tx-out-datum-hash d3829ca97bf76335473c2846e7152fef58f56745e9813fea2820d7535bef868b \
+--protocol-params-file testnet-params.json \
+--metadata-json-file metadata.json \
+--out-file tx.build
+
+cardano-cli transaction sign --tx-body-file tx.build --testnet-magic ${TESTNET_MAGIC} --signing-key-file payment.skey --out-file tx.signed
+cardano-cli transaction submit --tx-file tx.signed --testnet-magic ${TESTNET_MAGIC}
+
+cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address $(cat payment.addr)
+cardano-cli query utxo --testnet-magic $TESTNET_MAGIC --address ${saddr}
+
+cardano-cli transaction view --tx-body-file marlowe-close.tx
+
+# Spend
+
+cardano-cli transaction build \
+--alonzo-era \
+--testnet-magic ${TESTNET_MAGIC} \
+--invalid-before 42292000 \
+--invalid-hereafter 42294000 \
+--tx-in 07f7fa34d5fc038d6fc3465074a439abb6f77bfd1969ad64a8b5580f5959da5f#0 \
+--tx-in 07f7fa34d5fc038d6fc3465074a439abb6f77bfd1969ad64a8b5580f5959da5f#1 \
+--tx-in-script-file script.json  \
+--tx-in-datum-file datum-deposit.json \
+--tx-in-redeemer-file redeemer-deposit.json \
+--tx-in-collateral e0ec3e100fa03dcbcc02ca3245b5770659065528642845c1d1d572401548b952#1 \
+--tx-out $(cat payment.addr)+12000000 \
+--change-address $(cat payment.addr) \
+--protocol-params-file testnet-params.json \
+--metadata-json-file metadata.json \
+--out-file marlowe-close.tx
+
+cardano-cli transaction sign \
+--tx-body-file marlowe-close.tx \
+--testnet-magic ${TESTNET_MAGIC} \
+--signing-key-file payment.skey \
+--out-file marlowe-close.signed
