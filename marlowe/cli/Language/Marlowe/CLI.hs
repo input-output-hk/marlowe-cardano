@@ -25,7 +25,7 @@ module Language.Marlowe.CLI (
 import           Cardano.Api                 (AsType (AsStakeAddress), NetworkId (..), NetworkMagic (..), SlotNo (..),
                                               StakeAddressReference (..), deserialiseAddress)
 import           Cardano.Api.Shelley         (StakeAddress (..), fromShelleyStakeCredential)
-import           Control.Monad.Except        (runExceptT, throwError)
+import           Control.Monad.Except        (ExceptT, runExceptT, throwError)
 import           Data.Maybe                  (fromMaybe)
 import           Data.Version                (Version, showVersion)
 import           Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
@@ -42,10 +42,15 @@ import qualified Data.Text                   as T (pack)
 import qualified Options.Applicative         as O
 
 
+-- | Hardwired example.
+type Example = ExceptT CliError IO ()
+
+
 -- | Main entry point for Marlowe CLI tool.
 mainCLI :: Version  -- ^ The version of the tool.
+        -> Example  -- ^ Hardwired example.
         -> IO ()    -- ^ Action to run the tool.
-mainCLI version =
+mainCLI version example =
   do
     command <- O.execParser $ parser version
     let
@@ -81,6 +86,7 @@ mainCLI version =
                                      inputsFile minimumSlot maximumSlot
                                      redeemerFile
                                      printStats
+            Example             -> example
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -103,6 +109,7 @@ parser version =
               <> exportValidatorCommand
               <> exportDatumCommand
               <> exportRedeemerCommand
+              <> exampleCommand
             )
     )
     (
@@ -217,6 +224,14 @@ exportRedeemerOptions =
     <*> O.option parseSlotNo       (O.long "max-slot"    <> O.metavar "SLOT_NUMBER" <> O.help "Maximum slot for the redemption."            )
     <*> O.strOption                (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."              )
     <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                           )
+
+
+-- | Parser for the "example" command.
+exampleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+exampleCommand =
+  O.command "example"
+    $ O.info (pure Example O.<**> O.helper)
+    $ O.progDesc "Hardwired example."
 
 
 -- | Parser for network ID.

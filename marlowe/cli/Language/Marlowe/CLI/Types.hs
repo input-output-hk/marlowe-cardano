@@ -11,8 +11,8 @@
 -----------------------------------------------------------------------------
 
 
-
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
@@ -26,6 +26,7 @@ module Language.Marlowe.CLI.Types (
 , RedeemerInfo(..)
 -- * Exceptions
 , CliError(..)
+, liftCli
 -- * Marlowe CLI Commands
 , Command(..)
 ) where
@@ -33,7 +34,9 @@ module Language.Marlowe.CLI.Types (
 
 import           Cardano.Api                  (AddressInEra, IsCardanoEra, NetworkId, PlutusScriptV1, Script, SlotNo,
                                                StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
+import           Control.Monad.Except         (MonadError, liftEither)
 import           Data.Aeson                   (ToJSON (..), Value, object, (.=))
+import           Data.Bifunctor               (first)
 import           Data.ByteString.Short        (ShortByteString)
 import           Data.String                  (IsString)
 import           GHC.Generics                 (Generic)
@@ -46,6 +49,14 @@ import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash,
 -- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
   deriving (Eq, IsString, Ord, Read, Show)
+
+
+-- | Lift an "Either" result into the CLI.
+liftCli :: MonadError CliError m
+        => Show e
+        => Either e a  -- ^ The result.
+        -> m a         -- ^ The lifted result.
+liftCli = liftEither . first (CliError . show)
 
 
 -- | Comprehensive information about a Marlowe transaction.
@@ -188,4 +199,6 @@ data Command =
     , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
+    -- | Ad-hoc example.
+  | Example
     deriving (Eq, Generic, Show)

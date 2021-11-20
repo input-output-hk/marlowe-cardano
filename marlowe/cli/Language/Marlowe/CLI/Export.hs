@@ -20,6 +20,7 @@
 module Language.Marlowe.CLI.Export (
 -- * Contract and Transaction
   exportMarlowe
+, printMarlowe
 , buildMarlowe
 -- * Address
 , exportAddress
@@ -39,12 +40,13 @@ module Language.Marlowe.CLI.Export (
 import           Cardano.Api                     (AddressInEra, AlonzoEra, IsShelleyBasedEra, NetworkId,
                                                   PaymentCredential (..), ScriptDataJsonSchema (..), SlotNo (..),
                                                   StakeAddressReference (..), hashScript, makeShelleyAddressInEra,
-                                                  scriptDataToJson, serialiseAddress, writeFileTextEnvelope)
+                                                  scriptDataToJson, serialiseAddress, serialiseToTextEnvelope,
+                                                  writeFileTextEnvelope)
 import           Cardano.Api.Shelley             (fromPlutusData)
 import           Codec.Serialise                 (serialise)
 import           Control.Monad                   (void, when)
 import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
-import           Data.Aeson                      (FromJSON, eitherDecodeFileStrict)
+import           Data.Aeson                      (FromJSON, eitherDecodeFileStrict, encode)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Data.Bifunctor                  (first)
 import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
@@ -60,6 +62,7 @@ import           PlutusTx                        (builtinDataToData, toBuiltinDa
 import           System.IO                       (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
+import qualified Data.ByteString.Lazy.Char8      as LBS8 (unpack)
 import qualified Data.ByteString.Short           as SBS (length, toShort)
 import qualified Data.Text                       as T (unpack)
 
@@ -127,6 +130,62 @@ exportMarlowe marloweParams costModel network stake contractFile stateFile input
             hPutStrLn stderr $ "Datum size: " ++ show diSize
             hPutStrLn stderr $ "Redeemer size: " ++ show riSize
             hPutStrLn stderr $ "Total size: " ++ show (viSize + diSize + riSize)
+
+
+-- | Print information about a Marlowe contract and transaction.
+printMarlowe :: MonadError CliError m
+              => MonadIO m
+              => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> CostModelParams        -- ^ The cost model parameters.
+              -> NetworkId              -- ^ The network ID.
+              -> StakeAddressReference  -- ^ The stake address.
+              -> Contract               -- ^ The contract.
+              -> State                  -- ^ The contract's state.
+              -> [Input]                -- ^ The contract's input,
+              -> (SlotNo, SlotNo)       -- ^ The first and last valid slot for the tranasction.
+              -> m ()                   -- ^ Action to print the contract and transaction information.
+printMarlowe marloweParams costModel network stake contract state inputs (minimumSlot, maximumSlot) =
+  do
+    MarloweInfo{..} <-
+      liftEither
+        $ buildMarlowe
+            marloweParams costModel network stake
+            contract state
+            inputs minimumSlot maximumSlot
+    let
+      ValidatorInfo{..} = validatorInfo
+      DatumInfo{..}     = datumInfo
+      RedeemerInfo{..}  = redeemerInfo
+    liftIO
+      $ do
+        putStrLn ""
+        putStrLn $ "Contract: " ++ show contract
+        putStrLn ""
+        putStrLn $ "State: " ++ show state
+        putStrLn ""
+        putStrLn $ "Inputs: " ++ show inputs
+        putStrLn ""
+        putStrLn $ "Validator: " ++ LBS8.unpack (encode $ serialiseToTextEnvelope Nothing viScript)
+        putStrLn ""
+        putStrLn $ "Validator address: " ++ (T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra)) -- FIXME: Generalize eras.
+        putStrLn ""
+        putStrLn $ "Validator hash: " ++ show viHash
+        putStrLn ""
+        putStrLn $ "Validator size: " ++ show viSize
+        putStrLn ""
+        putStrLn $ "Validator cost: " ++ show viCost
+        putStrLn ""
+        putStrLn $ "Datum:" ++ LBS8.unpack (encode diJson)
+        putStrLn ""
+        putStrLn $ "Datum hash: " ++ show diHash
+        putStrLn ""
+        putStrLn $ "Datum size: " ++ show diSize
+        putStrLn ""
+        putStrLn $ "Redeemer: " ++ LBS8.unpack (encode riJson)
+        putStrLn ""
+        putStrLn $ "Redeemer size: " ++ show riSize
+        putStrLn ""
+        putStrLn $ "Total size: " ++ show (viSize + diSize + riSize)
 
 
 -- | Compute the address of a Marlowe contract.
