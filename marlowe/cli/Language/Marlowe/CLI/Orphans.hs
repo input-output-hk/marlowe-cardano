@@ -1,3 +1,15 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Orphan instances for Marlowe CLI tool.
+--
+-----------------------------------------------------------------------------
+
 
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 

@@ -1,3 +1,16 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Types for Marlowe CLI tool.
+--
+-----------------------------------------------------------------------------
+
+
 
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -6,12 +19,15 @@
 
 
 module Language.Marlowe.CLI.Types (
-  Command(..)
-, MarloweInfo(..)
+-- * Marlowe Transactions
+  MarloweInfo(..)
 , ValidatorInfo(..)
 , DatumInfo(..)
 , RedeemerInfo(..)
+-- * Exceptions
 , CliError(..)
+-- * Marlowe CLI Commands
+, Command(..)
 ) where
 
 
@@ -27,16 +43,18 @@ import           Ledger.Typed.Scripts         (TypedValidator)
 import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
 
+-- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
   deriving (Eq, IsString, Ord, Read, Show)
 
 
+-- | Comprehensive information about a Marlowe transaction.
 data MarloweInfo era =
   MarloweInfo
   {
-    validatorInfo :: ValidatorInfo era
-  , datumInfo     :: DatumInfo
-  , redeemerInfo  :: RedeemerInfo
+    validatorInfo :: ValidatorInfo era  -- ^ Validator information.
+  , datumInfo     :: DatumInfo          -- ^ Datum information.
+  , redeemerInfo  :: RedeemerInfo       -- ^ Redeemer information.
   }
     deriving (Eq, Generic, Show)
 
@@ -49,16 +67,18 @@ instance IsCardanoEra era => ToJSON (MarloweInfo era) where
       , "redeemer"  .= toJSON redeemerInfo
       ]
 
+
+-- | Information about Marlowe validator.
 data ValidatorInfo era =
   ValidatorInfo
   {
-    viValidator :: TypedValidator MarloweData
-  , viScript    :: Script PlutusScriptV1
-  , viBytes     :: ShortByteString
-  , viHash      :: ValidatorHash
-  , viAddress   :: AddressInEra era
-  , viSize      :: Int
-  , viCost      :: ExBudget
+    viValidator :: TypedValidator MarloweData  -- ^ The validator.
+  , viScript    :: Script PlutusScriptV1       -- ^ The Plutus script.
+  , viBytes     :: ShortByteString             -- ^ The serialisation of the validator.
+  , viHash      :: ValidatorHash               -- ^ The validator hash.
+  , viAddress   :: AddressInEra era            -- ^ The script address.
+  , viSize      :: Int                         -- ^ The script size, in bytes.
+  , viCost      :: ExBudget                    -- ^ The execution budget for the script.
   }
     deriving (Eq, Generic, Show)
 
@@ -74,14 +94,15 @@ instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
       ]
 
 
+-- | Information about Marlowe datum.
 data DatumInfo =
   DatumInfo
   {
-    diDatum :: Datum
-  , diBytes :: ShortByteString
-  , diJson  :: Value
-  , diHash  :: DatumHash
-  , diSize  :: Int
+    diDatum :: Datum            -- ^ The datum.
+  , diBytes :: ShortByteString  -- ^ The serialisation of the datum.
+  , diJson  :: Value            -- ^ The JSON representation of the datum.
+  , diHash  :: DatumHash        -- ^ The hash of the datum.
+  , diSize  :: Int              -- ^ The size of the datum, in bytes.
   }
     deriving (Eq, Generic, Show)
 
@@ -96,13 +117,14 @@ instance ToJSON DatumInfo where
       ]
 
 
+-- | Information about Marlowe redeemer.
 data RedeemerInfo =
   RedeemerInfo
   {
-    riRedeemer :: Redeemer
-  , riBytes    :: ShortByteString
-  , riJson     :: Value
-  , riSize     :: Int
+    riRedeemer :: Redeemer         -- ^ The redeemer.
+  , riBytes    :: ShortByteString  -- ^ The serialisation of the redeemer.
+  , riJson     :: Value            -- ^ The JSON representation of the redeemer.
+  , riSize     :: Int              -- ^ The size of the redeemer, in bytes.
   }
     deriving (Eq, Generic, Show)
 
@@ -116,48 +138,54 @@ instance ToJSON RedeemerInfo where
       ]
 
 
+-- | Marlowe CLI commands and options.
 data Command =
+    -- | Export comprehensive Marlowe contrac and transactiont information.
     Export
     {
-      network       :: Maybe NetworkId
-    , stake         :: Maybe StakeAddressReference
-    , rolesCurrency :: Maybe CurrencySymbol
-    , contractFile  :: FilePath
-    , stateFile     :: FilePath
-    , inputsFile    :: Maybe FilePath
-    , minimumSlot   :: SlotNo
-    , maximumSlot   :: SlotNo
-    , outputFile    :: FilePath
-    , printStats    :: Bool
+      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
+    , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
+    , inputsFile    :: Maybe FilePath               -- ^ The JSON file containing the contract's input, if any.
+    , minimumSlot   :: SlotNo                       -- ^ The first valid slot for the transaction.
+    , maximumSlot   :: SlotNo                       -- ^ The last valid slot for the tranasction.
+    , outputFile    :: FilePath                     -- ^ The output JSON file for Marlowe contract information.
+    , printStats    :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
     }
+    -- | Export the address for a Marlowe contract.
   | ExportAddress
     {
-      network       :: Maybe NetworkId
-    , stake         :: Maybe StakeAddressReference
-    , rolesCurrency :: Maybe CurrencySymbol
+      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     }
+    -- | Export the validator for a Marlowe contract.
   | ExportValidator
     {
-      network       :: Maybe NetworkId
-    , stake         :: Maybe StakeAddressReference
-    , rolesCurrency :: Maybe CurrencySymbol
-    , validatorFile :: FilePath
-    , printHash     :: Bool
-    , printStats    :: Bool
+      network       :: Maybe NetworkId              -- ^ The network ID, if any.
+    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , validatorFile :: FilePath                     -- ^ The output JSON file for the validator information.
+    , printHash     :: Bool                         -- ^ Whether to print the validator hash.
+    , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
     }
+    -- | Export the datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      contractFile :: FilePath
-    , stateFile    :: FilePath
-    , datumFile    :: FilePath
-    , printStats   :: Bool
+      contractFile :: FilePath  -- ^ The JSON file containing the contract.
+    , stateFile    :: FilePath  -- ^ The JSON file containing the contract's state.
+    , datumFile    :: FilePath  -- ^ The output JSON file for the datum.
+    , printStats   :: Bool      -- ^ Whether to print statistics about the datum.
     }
+    -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
     {
       inputsFile   :: Maybe FilePath
-    , minimumSlot  :: SlotNo
-    , maximumSlot  :: SlotNo
-    , redeemerFile :: FilePath
-    , printStats   :: Bool
+    , minimumSlot  :: SlotNo          -- ^ The first valid slot for the transaction.
+    , maximumSlot  :: SlotNo          -- ^ The last valid slot for the tranasction.
+    , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
+    , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
     deriving (Eq, Generic, Show)
