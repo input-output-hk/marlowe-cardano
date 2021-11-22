@@ -86,8 +86,8 @@ data FeeBasis
 
 data InterestCalculationBase
   = NotioalOutstanding
-  | NotionalAtInitialExchange
-  | NotionalLagged
+  | NotionalAtInitialExchange Number
+  | NotionalLagged AnchoredCycle
 
 data ScalingEffect
   = NoScaling

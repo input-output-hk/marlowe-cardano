@@ -11,12 +11,6 @@ type AmortizationDate r = (amortizationDate :: DateTime | r)
 type CollateralAmount :: Terms
 type CollateralAmount r = (collateralAmount :: Int | r)
 
-type ContractId :: Terms
-type ContractId r = (contractId :: String | r)
-
-type ContractRole :: Terms
-type ContractRole r = (contractRole :: Types.ContractRole | r)
-
 type ContractStructure :: Terms
 type ContractStructure r =
   (contractStructure :: (Array Types.ContractStructure) | r)
@@ -25,26 +19,8 @@ type CycleAnchorDateOfDividend :: Terms
 type CycleAnchorDateOfDividend r =
   (cycleAnchorDateOfDividend :: DateTime | r)
 
-type CycleAnchorDateOfInterestCalculationBase :: Terms
-type CycleAnchorDateOfInterestCalculationBase r =
-  ( cycleAnchorDateOfInterestCalculationBase :: DateTime
-  | r
-  )
-
-type CycleAnchorDateOfPrincipalRedemption :: Terms
-type CycleAnchorDateOfPrincipalRedemption r =
-  (cycleAnchorDateOfPrincipalRedemption :: DateTime | r)
-
 type CycleOfDividend :: Terms
 type CycleOfDividend r = (cycleOfDividend :: Types.Cycle | r)
-
-type CycleOfInterestCalculationBase :: Terms
-type CycleOfInterestCalculationBase r =
-  (cycleOfInterestCalculationBase :: Types.Cycle | r)
-
-type CycleOfPrincipalRedemption :: Terms
-type CycleOfPrincipalRedemption r =
-  (cycleOfPrincipalRedemption :: Types.Cycle | r)
 
 type DeliverySettlement :: Terms
 type DeliverySettlement r =
@@ -59,13 +35,6 @@ type ExerciseDate r = (exerciseDate :: DateTime | r)
 type FuturesPrice :: Terms
 type FuturesPrice r = (futuresPrice :: Number | r)
 
-type InterestCalculationBase :: Terms
-type InterestCalculationBase r =
-  (interestCalculationBase :: Types.InterestCalculationBase | r)
-
-type InterestCalculationBaseA :: Terms
-type InterestCalculationBaseA r = (interestCalculationBaseA :: Number | r)
-
 type InterestScalingMultiplier :: Terms
 type InterestScalingMultiplier r = (interestScalingMultiplier :: Number | r)
 
@@ -78,13 +47,6 @@ type MarketObjectCodeOfScalingIndex r =
 
 type NextDividendPaymentAmount :: Terms
 type NextDividendPaymentAmount r = (nextDividendPaymentAmount :: Number | r)
-
-type NextPrincipalRedemptionPayment :: Terms
-type NextPrincipalRedemptionPayment r =
-  (nextPrincipalRedemptionPayment :: Number | r)
-
-type NotionalPrincipal :: Terms
-type NotionalPrincipal r = (notionalPrincipal :: Number | r)
 
 type NotionalScalingMultiplier :: Terms
 type NotionalScalingMultiplier r = (notionalScalingMultiplier :: Number | r)
@@ -114,6 +76,3 @@ type SettlementCurrency r = (settlementCurrency :: String | r)
 
 type SettlementPeriod :: Terms
 type SettlementPeriod r = (settlementPeriod :: Types.Cycle | r)
-
-type StatusDate :: Terms
-type StatusDate r = (statusDate :: DateTime | r)

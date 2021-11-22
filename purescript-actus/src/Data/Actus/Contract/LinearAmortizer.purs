@@ -1,4 +1,4 @@
-module Data.Actus.Contract.PrincipalAtMaturity where
+module Data.Actus.Contract.LinearAmortizer where
 
 import Data.Actus.Contract (Contract)
 import Data.Actus.Types as Types
@@ -6,7 +6,7 @@ import Data.DateTime (DateTime)
 import Data.Map.Heterogeneous (HMap)
 import Data.Maybe (Maybe)
 
-type PrincipalAtMaturity = Contract
+type LinearAmortizer = Contract
   ( calendar :: Calendar
   , contractPerformance :: Types.ContractPerformance
   , fees :: Maybe Fees
@@ -35,15 +35,21 @@ type Interest =
   , nominalRate :: Number
   , dayCountConvention :: Types.DayCountConvention
   , paymentCycle :: Maybe Types.AnchoredCycle
+  , calculationBase :: Types.InterestCalculationBase
   }
 
 type NotionalPrincipal =
   { initialExchangeDate :: DateTime
   , premiumDiscountAtIED :: Maybe Number
-  , maturityDate :: DateTime
+  , maturityDate :: Maybe DateTime
   , notionalPrincipal :: Number
   , purchase :: Maybe Types.ContractEndEvent
   , termination :: Maybe Types.ContractEndEvent
+  , redemption ::
+      Maybe
+        { cycle :: Types.AnchoredCycle
+        , nextPayment :: Number
+        }
   , scaling ::
       Maybe
         { cycle :: Types.AnchoredCycle
