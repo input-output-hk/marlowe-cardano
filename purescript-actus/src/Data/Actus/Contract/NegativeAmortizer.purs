@@ -1,4 +1,4 @@
-module Data.Actus.Contract.LinearAmortizer where
+module Data.Actus.Contract.NegativeAmortizer where
 
 import Data.Actus.Contract (Contract)
 import Data.Actus.Types as Types
@@ -6,7 +6,7 @@ import Data.DateTime (DateTime)
 import Data.Map.Heterogeneous (HMap)
 import Data.Maybe (Maybe)
 
-type LinearAmortizer = Contract
+type NegativeAmortizer = Contract
   ( calendar :: Calendar
   , contractPerformance :: Types.ContractPerformance
   , fees :: Maybe Fees
@@ -46,7 +46,7 @@ type NotionalPrincipal =
   , purchase :: Maybe Types.ContractEndEvent
   , termination :: Maybe Types.ContractEndEvent
   , redemptionCycle :: Maybe Types.AnchoredCycle
-  , nextPayment :: Maybe Number
+  , nextPayment :: Number
   , scaling ::
       Maybe
         { cycle :: Types.AnchoredCycle
