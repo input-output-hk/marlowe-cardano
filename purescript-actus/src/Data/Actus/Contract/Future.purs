@@ -7,13 +7,15 @@ import Data.Interval.Duration.Iso (IsoDuration)
 import Data.Map.Heterogeneous (HMap)
 import Data.Maybe (Maybe)
 
-type Future = Contract
-  ( calendar :: Calendar
-  , contractPerformance :: Types.ContractPerformance
-  , contractStructure :: Types.ContractStructure
-  , notionalPrincipal :: NotionalPrincipal
-  , settlement :: Maybe Settlement
-  , futuresPrice :: Number
+newtype Future = Future
+  ( Contract
+      ( calendar :: Calendar
+      , contractPerformance :: Types.ContractPerformance
+      , contractStructure :: Types.ContractStructure
+      , notionalPrincipal :: NotionalPrincipal
+      , settlement :: Maybe Settlement
+      , futuresPrice :: Number
+      )
   )
 
 type Calendar = HMap

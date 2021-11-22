@@ -6,14 +6,16 @@ import Data.DateTime (DateTime)
 import Data.Map.Heterogeneous (HMap)
 import Data.Maybe (Maybe)
 
-type NegativeAmortizer = Contract
-  ( calendar :: Calendar
-  , contractPerformance :: Types.ContractPerformance
-  , fees :: Maybe Fees
-  , interest :: Interest
-  , notionalPrincipal :: NotionalPrincipal
-  , optionality :: Maybe Optionality
-  , rateReset :: Maybe RateReset
+newtype NegativeAmortizer = NegativeAmortizer
+  ( Contract
+      ( calendar :: Calendar
+      , contractPerformance :: Types.ContractPerformance
+      , fees :: Maybe Fees
+      , interest :: Interest
+      , notionalPrincipal :: NotionalPrincipal
+      , optionality :: Maybe Optionality
+      , rateReset :: Maybe RateReset
+      )
   )
 
 type Calendar = HMap
