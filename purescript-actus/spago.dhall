@@ -1,15 +1,12 @@
 { name = "actus"
 , dependencies =
-  [ "arrays"
-  , "const"
-  , "datetime"
+  [ "datetime"
   , "effect"
-  , "foreign"
-  , "identity"
+  , "heterogeneous-collections"
   , "maybe"
+  , "ordered-collections"
   , "prelude"
-  , "profunctor-lenses"
-  , "record"
+  , "these"
   , "variant"
   ]
 , packages = ../packages.dhall

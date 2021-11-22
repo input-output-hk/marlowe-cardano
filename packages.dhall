@@ -3,6 +3,8 @@ let upstream =
 
 let overrides = {=}
 
-let additions = {=}
+let additions =
+      { heterogeneous-collections = ./purescript-heterogeneous-collections/spago.dhall as Location
+      }
 
 in  upstream // overrides // additions

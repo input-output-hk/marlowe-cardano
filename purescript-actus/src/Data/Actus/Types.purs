@@ -1,11 +1,16 @@
 module Data.Actus.Types
   ( module ContractStructure
+  , AnchoredCycle
+  , BusinessDayConvention
+  , Calendar
+  , ContractEndEvent
   , ContractPerformance
   , ContractRole
   , Cycle
   , CycleStub
   , DayCountConvention
   , DeliverySettlement
+  , EndOfMonthConvention
   , FeeBasis
   , InterestCalculationBase
   , OptionExerciseType
@@ -15,127 +20,118 @@ module Data.Actus.Types
   , ScalingEffect
   ) where
 
-import Prelude
-
 import Data.Actus.ContractStructure
   ( ContractReference
   , ContractStructure
   , ReferenceRole
   , ReferenceType
   ) as ContractStructure
+import Data.DateTime (DateTime)
 import Data.Interval.Duration.Iso (IsoDuration)
-import Data.Variant (Variant)
+import Data.These (These)
 
-type ContractRole = Variant
-  ( realPositionAsset :: Unit
-  , realPositionLiability :: Unit
-  , receiveFirstLegl :: Unit
-  , payFirstLeg :: Unit
-  , receiveFix :: Unit
-  , payFix :: Unit
-  , buyer :: Unit
-  , seller :: Unit
-  , collateralPosition :: Unit
-  , closeOutNetting :: Unit
-  , underlying :: Unit
-  , underlyingPlus :: Unit
-  , underlyingMinus :: Unit
-  )
+data Calendar
+  = NoCalendar
+  | MondayToFriday
 
-type DayCountConvention = Variant
-  ( actualActual :: Unit
-  , actualThreeSixty :: Unit
-  , actualThreeSixtyFive :: Unit
-  , thirtyEThreeSixtyISDA :: Unit
-  , thirtyEThreeSixty :: Unit
-  , twentyEightEThreeThirtySix :: Unit
-  )
+data ContractRole
+  = RealPositionAsset
+  | RealPositionLiability
+  | ReceiveFirstLegl
+  | PayFirstLeg
+  | ReceiveFix
+  | PayFix
+  | Buyer
+  | Seller
+  | CollateralPosition
+  | CloseOutNetting
+  | Underlying
+  | UnderlyingPlus
+  | UnderlyingMinus
 
-type EndOfMonthConvention = Variant
-  ( sameDay :: Unit
-  , endOfMonth :: Unit
-  )
+data DayCountConvention
+  = ActualActual
+  | ActualThreeSixty
+  | ActualThreeSixtyFive
+  | ThirtyEThreeSixtyISDA
+  | ThirtyEThreeSixty
+  | TwentyEightEThreeThirtySix
 
-type BusinessDayConvention = Variant
-  ( noShift :: Unit
-  , shiftCalculateFollowing :: Unit
-  , shiftCalculateModifiedFollowing :: Unit
-  , calculateShiftFollowing :: Unit
-  , calculateShiftModifiedFollowing :: Unit
-  , shiftCalculatePreceding :: Unit
-  , shiftCalculateModifiedPreceding :: Unit
-  , calculateShiftPreceding :: Unit
-  , calculateShiftModifiedPreceding :: Unit
-  )
+data EndOfMonthConvention
+  = SameDay
+  | EndOfMonth
 
-type Calendar = Variant
-  ( noCalendar :: Unit
-  , mondayToFriday :: Unit
-  )
+data BusinessDayConvention
+  = NoShift
+  | ShiftCalculateFollowing
+  | ShiftCalculateModifiedFollowing
+  | CalculateShiftFollowing
+  | CalculateShiftModifiedFollowing
+  | ShiftCalculatePreceding
+  | ShiftCalculateModifiedPreceding
+  | CalculateShiftPreceding
+  | CalculateShiftModifiedPreceding
 
-type ContractPerformance = Variant
-  ( performant :: Unit
-  , delayed :: Unit
-  , delinquent :: Unit
-  , default :: Unit
-  , matured :: Unit
-  , terminated :: Unit
-  )
+data ContractPerformance
+  = Performant
+  | Delayed
+  | Delinquent
+  | Default
+  | Matured
+  | Terminated
 
-type FeeBasis = Variant
-  ( absoluteValue :: Unit
-  , nonimalValueOfTheUnderlying :: Unit
-  )
+data FeeBasis
+  = AbsoluteValue
+  | NonimalValueOfTheUnderlying
 
-type InterestCalculationBase = Variant
-  ( notioalOutstanding :: Unit
-  , notionalAtInitialExchange :: Unit
-  , notionalLagged :: Unit
-  )
+data InterestCalculationBase
+  = NotioalOutstanding
+  | NotionalAtInitialExchange
+  | NotionalLagged
 
-type ScalingEffect = Variant
-  ( noScaling :: Unit
-  , interestIsScaled :: Unit
-  , principalIsScaled :: Unit
-  , interestAndPrincipalIsScaled :: Unit
-  )
+data ScalingEffect
+  = NoScaling
+  | InterestIsScaled
+  | PrincipalIsScaled
+  | InterestAndPrincipalIsScaled
 
-type PenaltyType = Variant
-  ( noPenalty :: Unit
-  , fixedPenalty :: Unit
-  , relativePenalty :: Unit
-  , interestRateDifferential :: Unit
-  )
+data PenaltyType
+  = NoPenalty
+  | FixedPenalty
+  | RelativePenalty
+  | InterestRateDifferential
 
-type OptionType = Variant
-  ( call :: Unit
-  , put :: Unit
-  , callPut :: Unit
-  )
+data OptionType
+  = Call
+  | Put
+  | CallPut
 
-type OptionExerciseType = Variant
-  ( european :: Unit
-  , bermudan :: Unit
-  , american :: Unit
-  )
+data OptionExerciseType
+  = European
+  | Bermudan
+  | American
 
-type DeliverySettlement = Variant
-  ( cashSettlement :: Unit
-  , physicalSettlement :: Unit
-  )
+data DeliverySettlement
+  = CashSettlement
+  | PhysicalSettlement
 
-type PrepaymentEffect = Variant
-  ( noPrepayment :: Unit
-  , prepaymentReducesRedemptionAmount :: Unit
-  , prepaymentReducesMaturity :: Unit
-  )
+data PrepaymentEffect
+  = NoPrepayment
+  | PrepaymentReducesRedemptionAmount
+  | PrepaymentReducesMaturity
 
-type CycleStub = Variant
-  ( shortStub :: Unit
-  , longStub :: Unit
-  )
+data CycleStub
+  = ShortStub
+  | LongStub
 
 type Cycle =
   { duration :: IsoDuration
   , stub :: CycleStub
   }
+
+type ContractEndEvent =
+  { date :: DateTime
+  , priceAtEnd :: Number
+  }
+
+type AnchoredCycle = These DateTime Cycle
