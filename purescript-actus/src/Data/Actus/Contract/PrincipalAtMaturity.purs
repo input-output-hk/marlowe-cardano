@@ -1,35 +1,56 @@
 module Data.Actus.Contract.PrincipalAtMaturity where
 
-import Data.Actus.Contract (Contract)
 import Data.Actus.Types as Types
 import Data.DateTime (DateTime)
-import Data.Map.Heterogeneous (HMap)
 import Data.Maybe (Maybe)
 
-newtype PrincipalAtMaturity = PrincipalAtMaturity
-  ( Contract
-      ( calendar :: Calendar
+newtype Contract = Contract
+  ( Types.Contract
+      ( calendar :: Types.Calendar
       , contractPerformance :: Types.ContractPerformance
-      , fees :: Maybe Fees
+      , fees :: Maybe Types.Fees
       , interest :: Interest
       , notionalPrincipal :: NotionalPrincipal
-      , optionality :: Maybe Optionality
-      , rateReset :: Maybe RateReset
+      , optionality :: Maybe Types.LoanOptionality
+      , rateReset :: Maybe Types.LoanRateReset
       )
   )
 
-type Calendar = HMap
-  ( capitalizationEndDate :: Types.Calendar
-  , businessDayConvention :: Types.BusinessDayConvention
-  , endOfMonthConvention :: Types.EndOfMonthConvention
-  )
-
-type Fees =
-  { rate :: Number
-  , basis :: Types.FeeBasis
-  , accrued :: Maybe Number
-  , cycle :: Types.AnchoredCycle
-  }
+mkContract
+  :: DateTime
+  -> Types.ContractRole
+  -> String
+  -> Types.Calendar
+  -> Types.ContractPerformance
+  -> Maybe Types.Fees
+  -> Interest
+  -> NotionalPrincipal
+  -> Maybe Types.LoanOptionality
+  -> Maybe Types.LoanRateReset
+  -> Contract
+mkContract
+  statusDate
+  contractRole
+  contractId
+  calendar
+  contractPerformance
+  fees
+  interest
+  notionalPrincipal
+  optionality
+  rateReset =
+  Contract
+    { statusDate
+    , contractRole
+    , contractId
+    , calendar
+    , contractPerformance
+    , fees
+    , interest
+    , notionalPrincipal
+    , optionality
+    , rateReset
+    }
 
 type Interest =
   { accrued :: Number
@@ -39,6 +60,26 @@ type Interest =
   , paymentCycle :: Maybe Types.AnchoredCycle
   }
 
+mkInterest
+  :: Number
+  -> DateTime
+  -> Number
+  -> Types.DayCountConvention
+  -> Maybe Types.AnchoredCycle
+  -> Interest
+mkInterest
+  accrued
+  capitalizationEndDate
+  nominalRate
+  dayCountConvention
+  paymentCycle =
+  { accrued
+  , capitalizationEndDate
+  , nominalRate
+  , dayCountConvention
+  , paymentCycle
+  }
+
 type NotionalPrincipal =
   { initialExchangeDate :: DateTime
   , premiumDiscountAtIED :: Maybe Number
@@ -46,35 +87,31 @@ type NotionalPrincipal =
   , notionalPrincipal :: Number
   , purchase :: Maybe Types.ContractEndEvent
   , termination :: Maybe Types.ContractEndEvent
-  , scaling ::
-      Maybe
-        { cycle :: Types.AnchoredCycle
-        , effect :: Types.ScalingEffect
-        , marketObjectCodeOfIndex :: String
-        }
+  , scalingIndex :: Maybe Types.ScalingIndex
   }
 
-data Optionality =
-  Optionality
-    Types.PrepaymentEffect
-    ( HMap
-        ( cycle :: Maybe Types.AnchoredCycle
-        , penaltyType :: Types.PenaltyType
-        , penaltyRate :: Number
-        )
-    )
-
-type RateReset =
-  { cycle :: Types.AnchoredCycle
-  , rateSpread :: Number
-  , marketObjectCode :: String
-  , constraints ::
-      HMap
-        ( lifeCap :: Number
-        , lifeFloor :: Number
-        , periodCap :: Number
-        , periodFloor :: Number
-        )
-  , nextResetRate :: Maybe Number
-  , rateMultiplier :: Maybe Number
+mkNotionalPrincipal
+  :: DateTime
+  -> Maybe Number
+  -> DateTime
+  -> Number
+  -> Maybe Types.ContractEndEvent
+  -> Maybe Types.ContractEndEvent
+  -> Maybe Types.ScalingIndex
+  -> NotionalPrincipal
+mkNotionalPrincipal
+  initialExchangeDate
+  premiumDiscountAtIED
+  maturityDate
+  notionalPrincipal
+  purchase
+  termination
+  scalingIndex =
+  { initialExchangeDate
+  , premiumDiscountAtIED
+  , maturityDate
+  , notionalPrincipal
+  , purchase
+  , termination
+  , scalingIndex
   }

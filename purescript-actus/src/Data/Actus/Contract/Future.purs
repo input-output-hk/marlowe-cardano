@@ -1,28 +1,52 @@
 module Data.Actus.Contract.Future where
 
-import Data.Actus.Contract (Contract)
 import Data.Actus.Types as Types
 import Data.DateTime (DateTime)
-import Data.Interval.Duration.Iso (IsoDuration)
-import Data.Map.Heterogeneous (HMap)
 import Data.Maybe (Maybe)
 
-newtype Future = Future
-  ( Contract
-      ( calendar :: Calendar
+newtype Contract = Contract
+  ( Types.Contract
+      ( calendar :: Types.Calendar
       , contractPerformance :: Types.ContractPerformance
       , contractStructure :: Types.ContractStructure
-      , notionalPrincipal :: NotionalPrincipal
-      , settlement :: Maybe Settlement
       , futuresPrice :: Number
+      , notionalPrincipal :: NotionalPrincipal
+      , settlement :: Maybe Types.Settlement
       )
   )
 
-type Calendar = HMap
-  ( capitalizationEndDate :: Types.Calendar
-  , businessDayConvention :: Types.BusinessDayConvention
-  , endOfMonthConvention :: Types.EndOfMonthConvention
-  )
+mkContract
+  :: DateTime
+  -> Types.ContractRole
+  -> String
+  -> Types.Calendar
+  -> Types.ContractPerformance
+  -> Types.ContractStructure
+  -> NotionalPrincipal
+  -> Maybe Types.Settlement
+  -> Number
+  -> Contract
+mkContract
+  statusDate
+  contractRole
+  contractId
+  calendar
+  contractPerformance
+  contractStructure
+  notionalPrincipal
+  settlement
+  futuresPrice =
+  Contract
+    { statusDate
+    , contractRole
+    , contractId
+    , calendar
+    , contractPerformance
+    , contractStructure
+    , futuresPrice
+    , notionalPrincipal
+    , settlement
+    }
 
 type NotionalPrincipal =
   { maturityDate :: DateTime
@@ -30,9 +54,11 @@ type NotionalPrincipal =
   , termination :: Maybe Types.ContractEndEvent
   }
 
-type Settlement =
-  { exerciseAmount :: Number
-  , exerciseDate :: DateTime
-  , period :: Maybe IsoDuration
-  , deliverySettlement :: Maybe Types.DeliverySettlement
-  }
+mkNotionalPrincipal
+  :: DateTime
+  -> Maybe Types.ContractEndEvent
+  -> Maybe Types.ContractEndEvent
+  -> NotionalPrincipal
+mkNotionalPrincipal maturityDate purchase termination =
+  { maturityDate, purchase, termination }
+
