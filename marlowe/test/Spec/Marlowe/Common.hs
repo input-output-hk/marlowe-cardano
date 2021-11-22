@@ -9,7 +9,6 @@ import           Data.Map.Strict  (Map)
 import           Language.Marlowe
 import           Ledger           (pubKeyHash)
 import qualified Ledger
-import           Ledger.Value     (CurrencySymbol (..), TokenName (..))
 import qualified PlutusTx.Ratio   as P
 import           Test.QuickCheck
 import           Wallet           (PubKey (..))
@@ -335,12 +334,12 @@ pangramContract = let
     bobRole = Role "Bob"
     constant = Constant 100
     choiceId = ChoiceId "choice" alicePk
-    token = Token (CurrencySymbol "aa") (TokenName "name")
+    token = Token "10" "name"
     valueExpr = AddValue constant (SubValue constant (NegValue constant))
     in Assert TrueObs $ When
         [ Case (Deposit aliceAcc alicePk ada valueExpr)
             (Let (ValueId "x") valueExpr
-                (Pay aliceAcc (Party bobRole) ada (UseValue (ValueId "x")) Close))
+                (Pay aliceAcc (Party bobRole) ada (Cond TrueObs (UseValue (ValueId "x")) (UseValue (ValueId "y"))) Close))
         , Case (Choice choiceId [Bound 0 1, Bound 10 20])
             (If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` constant))
                 (Pay aliceAcc (Account aliceAcc) token (DivValue (AvailableMoney aliceAcc token) constant) Close)
