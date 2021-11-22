@@ -4,6 +4,7 @@
   , "effect"
   , "heterogeneous-collections"
   , "maybe"
+  , "newtype"
   , "ordered-collections"
   , "prelude"
   , "these"

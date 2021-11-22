@@ -97,7 +97,7 @@ instance eqHMapFieldsNil :: EqHMapFields Nil () where
 
 instance eqHMapFieldsCons ::
   ( EqHMapFields rl r'
-  , R.Lacks l r
+  , R.Lacks l r'
   , R.Cons l a r' r
   , IsSymbol l
   , Eq a
@@ -119,7 +119,7 @@ instance showHMapNil :: ShowHMapFields Nil () where
 
 instance showHMapCons ::
   ( ShowHMapFields rl r'
-  , R.Lacks l r
+  , R.Lacks l r'
   , R.Cons l a r' r
   , IsSymbol l
   , Show a

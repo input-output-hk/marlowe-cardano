@@ -5,9 +5,10 @@ module Data.Actus.ContractStructure
   , ContractStructure
   ) where
 
+import Prelude
+
 import Data.Map (SemigroupMap)
 import Data.Semigroup.Last (Last)
-import Data.Unit (Unit)
 import Data.Variant (Variant)
 
 type ReferenceRole = Variant
@@ -32,5 +33,9 @@ type ContractReference =
   , role :: ReferenceRole
   }
 
-newtype ContractStructure = ContractStructe
+newtype ContractStructure = ContractStructure
   (SemigroupMap String (Last ContractReference))
+
+derive instance eqContractStructure :: Eq ContractStructure
+instance showContractStructure :: Show ContractStructure where
+  show (ContractStructure map) = show map

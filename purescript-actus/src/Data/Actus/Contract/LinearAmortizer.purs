@@ -1,8 +1,12 @@
 module Data.Actus.Contract.LinearAmortizer where
 
+import Prelude
+
 import Data.Actus.Types as Types
 import Data.DateTime (DateTime)
+import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
+import Data.Newtype (class Newtype)
 
 newtype Contract = Contract
   ( Types.Contract
@@ -15,6 +19,10 @@ newtype Contract = Contract
       , rateReset :: Maybe Types.LoanRateReset
       )
   )
+
+derive instance eqContract :: Eq Contract
+derive instance newtypeContract :: Newtype Contract _
+derive instance genericContract :: Generic Contract _
 
 mkContract
   :: DateTime
