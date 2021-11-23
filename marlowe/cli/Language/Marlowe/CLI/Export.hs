@@ -28,7 +28,7 @@ import           Data.Aeson                      (eitherDecodeFileStrict)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Language.Marlowe.CLI.Types      (DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (MarloweInput, typedValidator1)
+import           Language.Marlowe.Scripts        (MarloweInput, marloweValidator2, typedValidator1)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
@@ -207,9 +207,8 @@ buildRedeemer :: [Input]
               -> RedeemerInfo
 buildRedeemer inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
   let
-    inputs :: [Input]
-    inputs = []
-    riRedeemer = Redeemer . PlutusTx.toBuiltinData $ inputs
+    marloweRedeemer = PlutusTx.toBuiltinData $ inputs
+    riRedeemer = Redeemer marloweRedeemer
     riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
     riJson =
       scriptDataToJson ScriptDataJsonDetailedSchema

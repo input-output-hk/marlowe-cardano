@@ -33,7 +33,7 @@ import           Ledger.Constraints
 import           Ledger.Constraints.OnChain
 import           Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval                  as Interval
-import           Ledger.Scripts                   (Validator)
+import           Ledger.Scripts                   (Validator, mkValidatorScript)
 import qualified Ledger.TimeSlot                  as TimeSlot
 import qualified Ledger.Typed.Scripts             as Scripts
 import qualified Ledger.Value                     as Val
@@ -338,6 +338,12 @@ typedValidator1 params = Scripts.mkTypedValidatorParam @MarloweData
     params
     where
         wrap = Scripts.wrapValidator
+
+
+marloweValidator2 :: MarloweParams -> Scripts.Validator
+marloweValidator2 params = let
+    wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
+    in mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
 
 
 mkMachineInstance :: MarloweParams -> SM.StateMachineInstance MarloweData MarloweInput
