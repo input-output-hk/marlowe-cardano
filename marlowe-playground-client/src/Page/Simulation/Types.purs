@@ -5,9 +5,9 @@ import Prologue
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.List.Types (NonEmptyList)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
@@ -31,7 +31,7 @@ data Action
   = HandleEditorMessage Monaco.Message
   -- marlowe actions
   | SetInitialSlot Slot
-  | SetIntegerTemplateParam IntegerTemplateType String BigInteger
+  | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | StartSimulation
   | MoveSlot Slot
   | SetSlot Slot
@@ -55,7 +55,7 @@ defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
   toEvent (SetInitialSlot _) = Just $ defaultEvent "SetInitialSlot"
-  toEvent (SetIntegerTemplateParam templateType key value) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent (MoveSlot _) = Just $ defaultEvent "MoveSlot"
   toEvent (SetSlot _) = Just $ defaultEvent "SetSlot"

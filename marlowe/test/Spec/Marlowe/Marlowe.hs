@@ -92,7 +92,6 @@ tests = testGroup "Marlowe"
     , testProperty "Value double negation" doubleNegation
     , testProperty "Values form abelian group" valuesFormAbelianGroup
     , testProperty "Values can be serialized to JSON" valueSerialization
-    , testProperty "Scale Value multiplies by a constant rational" scaleMulTest
     , testProperty "Multiply by zero" mulTest
     , testProperty "Divide zero and by zero" divZeroTest
     , testProperty "DivValue rounding" divisionRoundingTest
@@ -356,13 +355,6 @@ divisionRoundingTest = property $ do
     forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n P.% d)
     where
       halfEvenRound = P.round
-
-
-scaleMulTest :: Property
-scaleMulTest = property $ do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
-    forAll valueGen $ \a ->
-        eval (Scale (0 P.% 1) a) === 0 .&&. eval (Scale (1 P.% 1) a) === eval a
 
 
 mulTest :: Property

@@ -10,6 +10,7 @@ import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
 import Data.Lens ((^.))
+import Data.Maybe (maybe)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML)
 import Halogen.Classes (flex, flexCol, flexGrow, fullHeight, group, maxH70p, minH0, overflowHidden, paddingX)
@@ -17,8 +18,8 @@ import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
 import Halogen.HTML (HTML, button, div, option, section, select, slot, text)
 import Halogen.HTML.Events (onClick, onSelectedIndexChange)
-import Halogen.HTML.Properties (class_, classes, disabled, id_, title)
-import Halogen.HTML.Properties as HTML
+import Halogen.HTML.Properties (class_, classes, disabled, title)
+import Halogen.HTML.Properties as HP
 import Halogen.Monaco (monacoComponent)
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
 import Marlowe.Extended.Metadata (MetaData)
@@ -35,7 +36,7 @@ render ::
 render metadata state =
   div [ classes [ flex, flexCol, fullHeight, paddingX ] ]
     [ section [ classes [ minH0, flexGrow, overflowHidden ] ]
-        [ marloweEditor state ]
+        [ marloweEditor ]
     , section [ classes [ maxH70p ] ]
         [ renderSubmodule
             _bottomPanelState
@@ -77,9 +78,9 @@ sendToSimulatorButton ::
   State ->
   ComponentHTML Action ChildSlots m
 sendToSimulatorButton state =
-  div [ id_ "marloweSendToSimulator" ]
+  div [ HP.id "marloweSendToSimulator" ]
     [ button
-        [ onClick $ const $ Just SendToSimulator
+        [ onClick $ const SendToSimulator
         , disabled disabled'
         , classNames [ "btn" ]
         ]
@@ -98,7 +99,7 @@ sendToSimulatorButton state =
 viewAsBlocklyButton :: forall p. State -> HTML p Action
 viewAsBlocklyButton state =
   button
-    ( [ onClick $ const $ Just ViewAsBlockly
+    ( [ onClick $ const ViewAsBlockly
       , disabled disabled'
       , classNames [ "btn" ]
       ]
@@ -120,26 +121,20 @@ editorOptions :: forall p. State -> HTML p Action
 editorOptions state =
   div [ class_ (ClassName "editor-options") ]
     [ select
-        [ HTML.id_ "editor-options"
-        , HTML.value $ show $ state ^. _keybindings
-        , onSelectedIndexChange (\idx -> ChangeKeyBindings <$> toEnum idx)
+        [ HP.id "editor-options"
+        , HP.value $ show $ state ^. _keybindings
+        , onSelectedIndexChange (maybe DoNothing ChangeKeyBindings <<< toEnum)
         ]
         (map keybindingItem (upFromIncluding bottom))
     ]
   where
   keybindingItem item =
     if state ^. _keybindings == item then
-      option [ class_ (ClassName "selected-item"), HTML.value (show item) ] [ text $ show item ]
+      option [ class_ (ClassName "selected-item"), HP.value (show item) ] [ text $ show item ]
     else
-      option [ HTML.value (show item) ] [ text $ show item ]
+      option [ HP.value (show item) ] [ text $ show item ]
 
-marloweEditor ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
-marloweEditor state = slot _marloweEditorPageSlot unit component unit (Just <<< HandleEditorMessage)
+marloweEditor :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
+marloweEditor = slot _marloweEditorPageSlot unit component unit HandleEditorMessage
   where
-  setup editor = pure unit
-
-  component = monacoComponent $ MM.settings setup
+  component = monacoComponent $ MM.settings $ const $ pure unit

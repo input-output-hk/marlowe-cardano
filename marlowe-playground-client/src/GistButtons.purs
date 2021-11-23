@@ -13,14 +13,8 @@ import Halogen.HTML.Properties (classes, disabled)
 import Icons (Icon(..), icon)
 import MainFrame.Types (Action(..), State, _authStatus)
 import Network.RemoteData (RemoteData(..))
-import Prim.TypeError (class Warn, Text)
 
-authButton ::
-  forall p.
-  Warn (Text "We need to redesign the authButton modal after this task is done SCP-1512") =>
-  Action ->
-  State ->
-  HTML p Action
+authButton :: forall p. Action -> State -> HTML p Action
 authButton intendedAction state =
   let
     authStatus = state ^. (_authStatus <<< to (map (view authStatusAuthRole)))
@@ -42,7 +36,7 @@ authButton intendedAction state =
                   [ a
                       [ idPublishGist
                       , classes [ ClassName "auth-button" ]
-                      , onClick $ const $ Just $ OpenLoginPopup intendedAction
+                      , onClick $ const $ OpenLoginPopup intendedAction
                       ]
                       [ text "Login"
                       ]

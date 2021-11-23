@@ -1,7 +1,7 @@
 module Types where
 
 import Network.RemoteData (RemoteData)
-import Servant.PureScript.Ajax (AjaxError)
+import Servant.PureScript (AjaxError)
 
 data WarningAnalysisError
   = WarningAnalysisAjaxError AjaxError

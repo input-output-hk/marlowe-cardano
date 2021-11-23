@@ -12,11 +12,11 @@ import Prologue
 import API.Request (doGetRequest, doPostRequest, doPutRequest)
 import API.Url (toUrlPiece)
 import Control.Monad.Error.Class (class MonadError)
+import Data.Argonaut.Encode (class EncodeJson)
 import Effect.Aff.Class (class MonadAff)
-import Foreign.Generic (class Encode)
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types (ContractActivationArgs, ContractInstanceClientState, ContractSignatureResponse)
-import Servant.PureScript.Ajax (AjaxError)
+import Servant.PureScript (AjaxError)
 import Wallet.Emulator.Wallet (Wallet)
 import Wallet.Types (ContractInstanceId)
 
@@ -43,7 +43,7 @@ getContractInstanceClientState contractInstanceId = doGetRequest $ "/api/contrac
 
 invokeEndpoint ::
   forall d m.
-  Encode d =>
+  EncodeJson d =>
   MonadError AjaxError m =>
   MonadAff m =>
   ContractInstanceId -> String -> d -> m Unit

@@ -23,14 +23,14 @@ render state =
             [ classNames (secondaryButton <> [ "mr-small", "w-56", "text-base", "cursor-pointer" ])
             , onClick \_ ->
                 if has (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser) state then
-                  Just $ OpenModal OpenProject
+                  OpenModal OpenProject
                 else
-                  Just $ OpenModal $ GithubLogin (OpenModal OpenProject)
+                  OpenModal $ GithubLogin (OpenModal OpenProject)
             ]
             [ text "Open existing project" ]
         , button
             [ classNames (primaryButton <> [ "ml-small", "w-56", "text-base", "cursor-pointer" ])
-            , onClick ((const <<< Just <<< OpenModal) OpenDemo)
+            , onClick ((const <<< OpenModal) OpenDemo)
             ]
             [ text "Open an example" ]
         ]
@@ -43,7 +43,7 @@ render state =
         [ classNames [ "flex", "mb-8" ] ]
         [ div
             [ classNames (newProjectClasses <> [ "mr-24" ])
-            , onClick (const <<< Just $ NewProjectAction $ NewProject.CreateProject Javascript)
+            , onClick (const $ NewProjectAction $ NewProject.CreateProject Javascript)
             ]
             [ img [ src newProjectJavascriptIcon, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -51,7 +51,7 @@ render state =
             ]
         , div
             [ classNames (newProjectClasses <> [ "mr-24" ])
-            , onClick (const <<< Just $ NewProjectAction $ NewProject.CreateProject Haskell)
+            , onClick (const $ NewProjectAction $ NewProject.CreateProject Haskell)
             ]
             [ img [ src newProjectHaskellIcon, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -60,7 +60,7 @@ render state =
         , div [ classNames [ "border-0", "border-l", "border-black", "border-solid", "h-10", "mt-2" ] ] []
         , div
             [ classNames (newProjectClasses <> [ "ml-24", "mr-4" ])
-            , onClick (const <<< Just $ NewProjectAction $ NewProject.CreateProject Marlowe)
+            , onClick (const $ NewProjectAction $ NewProject.CreateProject Marlowe)
             ]
             [ img [ src marloweLogo, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -72,7 +72,7 @@ render state =
             ]
         , div
             [ classNames (newProjectClasses <> [ "ml-4", "mr-1" ])
-            , onClick (const <<< Just $ NewProjectAction $ NewProject.CreateProject Blockly)
+            , onClick (const $ NewProjectAction $ NewProject.CreateProject Blockly)
             ]
             [ img [ src newProjectBlocklyIcon, classNames [ "h-16", "mb-4" ] ]
             , text

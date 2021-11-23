@@ -53,7 +53,7 @@ The following outlines some essentials for actually working on the Marlowe Run c
 Apart from the `start` script introduced above there are a few scripts for the most frequent tasks during development. For example, in order to run a webpack server in development mode with automatic reloading use **webpack:server**:
 
 ```
-$ npm run webpack:server
+$ npm run build:webpack:dev
 ```
 
 This is the final step of the `start` script described above, and is all you need to get up and running subsequently if you have already installed the npm modules and generated the PureScript bridge code.

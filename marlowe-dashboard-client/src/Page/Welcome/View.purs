@@ -22,7 +22,7 @@ import Data.List (toUnfoldable) as List
 import Data.Map (values)
 import Data.Maybe (isJust)
 import Data.Newtype (unwrap)
-import Data.UUID (toString) as UUID
+import Data.UUID.Argonaut (toString) as UUID
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, a, br_, button, div, div_, h2, hr, iframe, img, main, p, p_, section, span_, text)
 import Halogen.HTML.Events.Extra (onClick_)
@@ -32,7 +32,6 @@ import Marlowe.PAB (PlutusAppId)
 import Network.RemoteData (isSuccess)
 import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWalletDetails, _walletId, _walletLibrary, _walletNicknameInput, _walletNicknameOrIdInput)
 import Page.Welcome.Types (Action(..), Card(..), State)
-import Prim.TypeError (class Warn, Text)
 
 welcomeScreen :: forall p. State -> HTML p Action
 welcomeScreen state =
@@ -77,12 +76,10 @@ welcomeCard state =
       ]
 
 ------------------------------------------------------------
-useWalletBox :: forall p. Warn (Text "We need to add the documentation link.") => State -> HTML p Action
+useWalletBox :: forall p. State -> HTML p Action
 useWalletBox state =
   let
     walletLibrary = state ^. _walletLibrary
-
-    remoteWalletDetails = state ^. _remoteWalletDetails
 
     walletNicknameOrIdInput = state ^. _walletNicknameOrIdInput
 
@@ -140,13 +137,6 @@ useWalletBox state =
               [ text "Docs" ]
           ]
       ]
-  where
-  walletList walletDetails =
-    a
-      [ classNames [ "block", "p-4", "hover:bg-black", "hover:text-white" ]
-      , onClick_ $ OpenUseWalletCardWithDetails walletDetails
-      ]
-      [ text $ walletDetails ^. _walletNickname ]
 
 gettingStartedBox :: forall p. HTML p Action
 gettingStartedBox =

@@ -32,4 +32,4 @@ render intendedAction state =
         ]
     ]
   where
-  onConfirm msg = onClick $ const $ Just $ ConfirmUnsavedNavigationAction intendedAction msg
+  onConfirm msg = onClick $ const $ ConfirmUnsavedNavigationAction intendedAction msg

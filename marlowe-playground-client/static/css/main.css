@@ -21,9 +21,9 @@
 @import './confirm_unsaved_navigation.css';
 @import './simulation.css';
 @import './save-as-modal.css';
-@import './../../web-common/static/popover.css';
-@import "../../web-common/static/icons.css";
-@import "../../web-common/static/progress-circular.css";
+@import '@WEB_COMMON_SRC@/static/popover.css';
+@import '@WEB_COMMON_SRC@/static/icons.css';
+@import '@WEB_COMMON_SRC@/static/progress-circular.css';
 
 
 /* @tailwind base; */

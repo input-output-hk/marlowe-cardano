@@ -12,7 +12,7 @@ import Component.Contacts.Types (WalletDetails, WalletLibrary, WalletNickname, W
 import Component.InputField.Types (Action, State) as InputField
 import Component.InputField.Types (class InputFieldError)
 import Marlowe.PAB (PlutusAppId)
-import Types (WebData)
+import Types (NotFoundWebData)
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so
@@ -31,7 +31,7 @@ type State
     , walletNicknameOrIdInput :: InputField.State WalletNicknameOrIdError
     , walletNicknameInput :: InputField.State WalletNicknameError
     , walletId :: PlutusAppId
-    , remoteWalletDetails :: WebData WalletDetails
+    , remoteWalletDetails :: NotFoundWebData WalletDetails
     , enteringDashboardState :: Boolean
     }
 

@@ -7,15 +7,16 @@ import Component.BottomPanel.Types as BP
 import Component.ConfirmUnsavedNavigation.Types (Action(..)) as ConfirmUnsavedNavigation
 import Component.Demos.Types (Action(..), Demo(..)) as Demos
 import Component.MetadataTab.State (carryMetadataAction)
-import Component.NewProject.Types (Action(..), State, emptyState) as NewProject
+import Component.NewProject.Types (Action(..), emptyState) as NewProject
 import Component.Projects.State (handleAction) as Projects
 import Component.Projects.Types (Action(..), State, _projects, emptyState) as Projects
 import Component.Projects.Types (Lang(..))
-import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
+import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk, asks, runReaderT)
+import Control.Monad.Reader (class MonadAsk)
 import Control.Monad.State (modify_)
+import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (either, hush, note)
 import Data.Foldable (fold, for_)
@@ -28,30 +29,26 @@ import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Env (Env)
-import Foreign.Generic (decodeJSON, encodeJSON)
 import Gist (Gist, _GistId, gistDescription, gistId)
 import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists
-import Halogen (Component, liftEffect, query, subscribe')
+import Halogen (Component, liftEffect, subscribe')
 import Halogen as H
 import Halogen.Analytics (withAnalytics)
 import Halogen.Extra (mapSubmodule)
-import Halogen.HTML (HTML)
 import Halogen.Monaco (KeyBindings(DefaultBindings))
 import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
-import Halogen.Query.EventSource (eventListenerEventSource)
+import Halogen.Query.Event (eventListener)
 import LoginPopup (openLoginPopup, informParentAndClose)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), Query(..), State, View(..), _actusBlocklySlot, _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _loadGistResult, _marloweEditorState, _newProject, _projectName, _projects, _rename, _saveAs, _showBottomPanel, _showModal, _simulationState, _view, _workflow, sessionToState, stateToSession)
+import MainFrame.Types (Action(..), ChildSlots, ModalView(..), Query(..), State, View(..), _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _loadGistResult, _marloweEditorState, _projectName, _projects, _rename, _saveAs, _showBottomPanel, _showModal, _simulationState, _view, _workflow, sessionToState, stateToSession)
 import MainFrame.View (render)
 import Marlowe (getApiGistsByGistId)
 import Marlowe as Server
-import Marlowe.ActusBlockly as AMB
 import Marlowe.Extended.Metadata (emptyContractMetadata, getHintsFromMetadata)
 import Marlowe.Gists (PlaygroundFiles, mkNewGist, playgroundFiles)
 import Network.RemoteData (RemoteData(..), _Success)
 import Network.RemoteData as RemoteData
-import Page.ActusBlockly as ActusBlockly
 import Page.BlocklyEditor.State as BlocklyEditor
 import Page.BlocklyEditor.Types (_marloweCode)
 import Page.BlocklyEditor.Types as BE
@@ -64,7 +61,6 @@ import Page.MarloweEditor.State as MarloweEditor
 import Page.MarloweEditor.Types as ME
 import Page.Simulation.State as Simulation
 import Page.Simulation.Types as ST
-import Prim.TypeError (class Warn, Text)
 import Rename.State (handleAction) as Rename
 import Rename.Types (Action(..), State, _projectName, emptyState) as Rename
 import Router (Route, SubRoute)
@@ -73,7 +69,7 @@ import Routing.Duplex as RD
 import Routing.Hash as Routing
 import SaveAs.State (handleAction) as SaveAs
 import SaveAs.Types (Action(..), State, _status, _projectName, emptyState) as SaveAs
-import Servant.PureScript.Ajax (AjaxError, ErrorDescription(..), errorToString, runAjaxError)
+import Servant.PureScript (AjaxError, printAjaxError)
 import SessionStorage as SessionStorage
 import StaticData (gistIdLocalStorageKey)
 import StaticData as StaticData
@@ -117,7 +113,7 @@ component ::
   forall m.
   MonadAff m =>
   MonadAsk Env m =>
-  Component HTML Query Unit Void m
+  Component Query Unit Void m
 component =
   H.mkComponent
     { initialState: const initialState
@@ -168,18 +164,6 @@ toProjects ::
   HalogenM Projects.State Projects.Action ChildSlots Void m a -> HalogenM State Action ChildSlots Void m a
 toProjects = mapSubmodule _projects ProjectsAction
 
-toNewProject ::
-  forall m a.
-  Functor m =>
-  HalogenM NewProject.State NewProject.Action ChildSlots Void m a -> HalogenM State Action ChildSlots Void m a
-toNewProject = mapSubmodule _newProject NewProjectAction
-
-toDemos ::
-  forall m a.
-  Functor m =>
-  HalogenM State Demos.Action ChildSlots Void m a -> HalogenM State Action ChildSlots Void m a
-toDemos = mapSubmodule identity DemosAction
-
 toRename ::
   forall m a.
   Functor m =>
@@ -211,13 +195,10 @@ handleSubRoute Router.JSEditor = selectView JSEditor
 
 handleSubRoute Router.Blockly = selectView BlocklyEditor
 
-handleSubRoute Router.ActusBlocklyEditor = selectView ActusBlocklyEditor
-
 -- This route is supposed to be called by the github oauth flow after a succesful login flow
 -- It is supposed to be run inside a popup window
 handleSubRoute Router.GithubAuthCallback = do
-  settings <- asks _.ajaxSettings
-  authResult <- runAjax $ runReaderT Server.getApiOauthStatus settings
+  authResult <- runAjax Server.getApiOauthStatus
   case authResult of
     (Success authStatus) -> liftEffect $ informParentAndClose $ view authStatusAuthRole authStatus
     -- TODO: is it worth showing a particular view for Failure, NotAsked and Loading?
@@ -293,20 +274,20 @@ handleAction Init = do
     Left _ -> handleRoute { subroute: Router.Home, gistId: Nothing }
   document <- liftEffect $ Web.document =<< Web.window
   subscribe' \sid ->
-    eventListenerEventSource keyup (toEventTarget document) (map (HandleKey sid) <<< KE.fromEvent)
+    eventListener keyup (toEventTarget document) (map (HandleKey sid) <<< KE.fromEvent)
   checkAuthStatus
   -- Load session data if available
   void
     $ runMaybeT do
         sessionJSON <- MaybeT $ liftEffect $ SessionStorage.getItem StaticData.sessionStorageKey
-        session <- hoistMaybe $ hush $ runExcept $ decodeJSON sessionJSON
+        session <- hoistMaybe $ hush $ parseDecodeJson sessionJSON
         let
           metadataHints = (getHintsFromMetadata (unwrap session).contractMetadata)
         H.modify_ $ sessionToState session
           <<< set (_haskellState <<< HE._metadataHintInfo) metadataHints
           <<< set (_javascriptState <<< JS._metadataHintInfo) (getHintsFromMetadata (unwrap session).contractMetadata)
 
-handleAction (HandleKey sid ev)
+handleAction (HandleKey _ ev)
   | KE.key ev == "Escape" = assign _showModal Nothing
   | KE.key ev == "Enter" = do
     modalView <- use _showModal
@@ -393,25 +374,6 @@ handleAction (ShowBottomPanel val) = do
   assign _showBottomPanel val
   pure unit
 
-handleAction (HandleActusBlocklyMessage ActusBlockly.Initialized) = pure unit
-
-handleAction (HandleActusBlocklyMessage (ActusBlockly.CurrentTerms flavour terms)) = do
-  let
-    parsedTermsEither = AMB.parseActusJsonCode terms
-  settings <- asks _.ajaxSettings
-  case parsedTermsEither of
-    Left e -> void $ query _actusBlocklySlot unit (ActusBlockly.SetError ("Couldn't parse contract-terms - " <> (show e)) unit)
-    Right parsedTerms -> do
-      result <- case flavour of
-        ActusBlockly.FS -> runAjax $ flip runReaderT settings $ (Server.postApiActusGenerate parsedTerms)
-        ActusBlockly.F -> runAjax $ flip runReaderT settings $ (Server.postApiActusGeneratestatic parsedTerms)
-      case result of
-        Success contractAST -> sendToSimulation contractAST
-        Failure e -> void $ query _actusBlocklySlot unit (ActusBlockly.SetError ("Server error! " <> (showErrorDescription (runAjaxError e).description)) unit)
-        _ -> void $ query _actusBlocklySlot unit (ActusBlockly.SetError "Unknown server error!" unit)
-
-handleAction (HandleActusBlocklyMessage ActusBlockly.CodeChange) = setUnsavedChangesForLanguage Actus true
-
 -- TODO: modify gist action type to take a gistid as a parameter
 -- https://github.com/input-output-hk/plutus/pull/2498#discussion_r533478042
 handleAction (ProjectsAction action@(Projects.LoadProject lang gistId)) = do
@@ -419,8 +381,7 @@ handleAction (ProjectsAction action@(Projects.LoadProject lang gistId)) = do
   res <-
     runExceptT
       $ do
-          settings <- asks _.ajaxSettings
-          gist <- flip runReaderT settings $ getApiGistsByGistId gistId
+          gist <- getApiGistsByGistId gistId
           lift $ loadGist gist
           pure gist
   case res of
@@ -465,7 +426,6 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
     Blockly ->
       for_ (Map.lookup "Example" StaticData.marloweContracts) \contents -> do
         toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject contents
-    _ -> pure unit
   selectView $ selectLanguageView lang
   modify_
     ( set _showModal Nothing
@@ -475,7 +435,7 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
 
 handleAction (NewProjectAction NewProject.Cancel) = fullHandleAction CloseModal
 
-handleAction (DemosAction action@(Demos.LoadDemo lang (Demos.Demo key))) = do
+handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
   modify_
     ( set _showModal Nothing
         <<< set _workflow (Just lang)
@@ -498,7 +458,6 @@ handleAction (DemosAction action@(Demos.LoadDemo lang (Demos.Demo key))) = do
     Blockly -> do
       for_ (preview (ix key) StaticData.marloweContracts) \contents -> do
         toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject contents
-    Actus -> pure unit
   where
   metadata = fromMaybe emptyContractMetadata $ Map.lookup key StaticData.demoFilesMetadata
 
@@ -591,7 +550,6 @@ selectLanguageView = case _ of
   Marlowe -> MarloweEditor
   Blockly -> BlocklyEditor
   Javascript -> JSEditor
-  Actus -> ActusBlocklyEditor
 
 routeToView :: Route -> Maybe View
 routeToView { subroute } = case subroute of
@@ -600,7 +558,6 @@ routeToView { subroute } = case subroute of
   Router.HaskellEditor -> Just HaskellEditor
   Router.MarloweEditor -> Just MarloweEditor
   Router.JSEditor -> Just JSEditor
-  Router.ActusBlocklyEditor -> Just ActusBlocklyEditor
   Router.Blockly -> Just BlocklyEditor
   Router.GithubAuthCallback -> Nothing
 
@@ -612,21 +569,6 @@ viewToRoute = case _ of
   HaskellEditor -> Router.HaskellEditor
   JSEditor -> Router.JSEditor
   BlocklyEditor -> Router.Blockly
-  ActusBlocklyEditor -> Router.ActusBlocklyEditor
-
-------------------------------------------------------------
-showErrorDescription :: ErrorDescription -> String
-showErrorDescription (DecodingError err@"(\"Unexpected token E in JSON at position 0\" : Nil)") = "BadResponse"
-
-showErrorDescription (DecodingError err) = "DecodingError: " <> err
-
-showErrorDescription NotFound = "NotFound"
-
-showErrorDescription (ResponseError status body) = "ResponseError: " <> show status <> " " <> body
-
-showErrorDescription (ResponseFormatError err) = "ResponseFormatError: " <> err
-
-showErrorDescription (ConnectionError err) = "ConnectionError: " <> err
 
 runAjax ::
   forall m a.
@@ -641,9 +583,8 @@ checkAuthStatus ::
   MonadAsk Env m =>
   HalogenM State Action ChildSlots Void m Unit
 checkAuthStatus = do
-  settings <- asks _.ajaxSettings
   assign _authStatus Loading
-  authResult <- runAjax $ runReaderT Server.getApiOauthStatus settings
+  authResult <- runAjax Server.getApiOauthStatus
   assign _authStatus authResult
 
 ------------------------------------------------------------
@@ -661,7 +602,7 @@ createFiles = do
 
     -- playground is a meta-data file that we currently just use as a tag to check if a gist is a marlowe playground gist
     playground = "{}"
-  metadata <- Just <$> encodeJSON <$> use _contractMetadata
+  metadata <- Just <$> encodeStringifyJson <$> use _contractMetadata
   workflow <- use _workflow
   let
     emptyFiles = (mempty :: PlaygroundFiles) { playground = playground, metadata = metadata }
@@ -678,14 +619,10 @@ createFiles = do
     Just Javascript -> do
       javascript <- pruneEmpty <$> toJavascriptEditor JavascriptEditor.editorGetValue
       pure $ emptyFiles { javascript = javascript }
-    Just Actus -> do
-      actus <- pruneEmpty <$> query _actusBlocklySlot unit (H.request ActusBlockly.GetWorkspace)
-      pure $ emptyFiles { actus = actus }
     Nothing -> mempty
 
 handleGistAction ::
   forall m.
-  Warn (Text "SCP-1591 Saving failure does not provide enough information") =>
   MonadAff m =>
   MonadAsk Env m =>
   GistAction -> HalogenM State Action ChildSlots Void m Unit
@@ -698,12 +635,11 @@ handleGistAction PublishOrUpdateGist = do
     $ runMaybeT do
         mGist <- use _gistId
         assign _createGistResult Loading
-        settings <- asks _.ajaxSettings
         newResult <-
           lift
             $ case mGist of
-                Nothing -> runAjax $ flip runReaderT settings $ Server.postApiGists newGist
-                Just gistId -> runAjax $ flip runReaderT settings $ Server.postApiGistsByGistId newGist gistId
+                Nothing -> runAjax $ Server.postApiGists newGist
+                Just gistId -> runAjax $ Server.postApiGistsByGistId newGist gistId
         assign _createGistResult newResult
         gistId <- hoistMaybe $ preview (_Success <<< gistId) newResult
         modify_
@@ -734,12 +670,11 @@ handleGistAction LoadGist = do
   res <-
     runExceptT
       $ do
-          settings <- asks _.ajaxSettings
           eGistId <- ExceptT $ note "Gist Id not set." <$> use _gistId
           assign _loadGistResult $ Right Loading
-          aGist <- lift $ runAjax $ flip runReaderT settings $ Server.getApiGistsByGistId eGistId
+          aGist <- lift $ runAjax $ Server.getApiGistsByGistId eGistId
           assign _loadGistResult $ Right aGist
-          gist <- ExceptT $ pure $ toEither (Left "Gist not loaded.") $ lmap errorToString aGist
+          gist <- ExceptT $ pure $ toEither (Left "Gist not loaded.") $ lmap printAjaxError aGist
           lift $ loadGist gist
           pure aGist
   assign _loadGistResult res
@@ -768,7 +703,6 @@ loadGist gist = do
     , blockly
     , haskell
     , javascript
-    , actus
     , metadata: mMetadataJSON
     } = playgroundFiles gist
 
@@ -776,7 +710,7 @@ loadGist gist = do
 
     gistId' = preview gistId gist
 
-    metadata = maybe emptyContractMetadata (either (const emptyContractMetadata) identity <<< runExcept <<< decodeJSON) mMetadataJSON
+    metadata = maybe emptyContractMetadata (either (const emptyContractMetadata) identity <<< parseDecodeJson) mMetadataJSON
 
     metadataHints = getHintsFromMetadata metadata
   -- Restore or reset all editors
@@ -785,9 +719,6 @@ loadGist gist = do
   toMarloweEditor $ MarloweEditor.handleAction $ ME.InitMarloweProject $ fromMaybe mempty marlowe
   toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject $ fromMaybe mempty blockly
   assign _contractMetadata metadata
-  -- Actus doesn't have a SetCode to reset for the moment, so we only set if present.
-  -- TODO add SetCode to Actus
-  for_ actus \xml -> query _actusBlocklySlot unit (ActusBlockly.LoadWorkspace xml unit)
   modify_
     ( set _gistId gistId'
         <<< set _projectName description
@@ -852,7 +783,6 @@ withAccidentalNavigationGuard handleAction' action = do
   -- What actions would result in losing the work.
   actionIsGuarded = case action of
     (ChangeView HomePage) -> true
-    (ChangeView ActusBlocklyEditor) -> true
     (NewProjectAction (NewProject.CreateProject _)) -> true
     (ProjectsAction (Projects.LoadProject _ _)) -> true
     (DemosAction (Demos.LoadDemo _ _)) -> true
@@ -871,8 +801,6 @@ selectView view = do
     Window.scroll 0 0 window
   case view of
     HomePage -> modify_ (set _workflow Nothing <<< set _hasUnsavedChanges false)
-    ActusBlocklyEditor -> do
-      void $ query _actusBlocklySlot unit (ActusBlockly.Resize unit)
     _ -> pure unit
 
 ------------------------------------------------------------
@@ -889,4 +817,4 @@ withSessionStorage handleAction' action = do
   when (preSession /= postSession)
     $ liftEffect
     $ SessionStorage.setItem StaticData.sessionStorageKey
-    $ encodeJSON postSession
+    $ encodeStringifyJson postSession

@@ -3,10 +3,10 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground plutus-pab marlowe-dashboard docs webCommon;
+  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purty purty-pre-commit purs spargo;
+  inherit (marlowe) purty-pre-commit;
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
@@ -70,7 +70,6 @@ let
     yq
     z3
     zlib
-    nodePackages.purescript-language-server
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
   # local build inputs ( -> ./nix/pkgs/default.nix )
@@ -88,20 +87,16 @@ let
     marlowe-dashboard.start-backend
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
-    plutus-pab.generate-purescript
-    plutus-pab.migrate
-    plutus-pab.start-backend
-    plutus-pab.start-all-servers
-    plutus-pab.start-all-servers-m
     purs
     purty
     spago
+    psa
+    purescript-language-server
     spago2nix
     stylish-haskell
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
-    webCommon.newComponent
   ]);
 
 in
@@ -125,6 +120,7 @@ haskell.project.shellFor {
   # Point to some source dependencies
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-    export WEB_COMMON_SRC="${webCommon.cleanSrc}"
+    export WEB_COMMON_SRC="${webCommon}"
+    export WEB_COMMON_PLAYGROUND_SRC="${webCommonPlayground}"
   '';
 }

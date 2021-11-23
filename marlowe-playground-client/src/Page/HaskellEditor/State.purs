@@ -7,8 +7,8 @@ import Prologue hiding (div)
 import CloseAnalysis (analyseClose)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State) as BottomPanel
-import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.Reader (class MonadAsk, asks, runReaderT)
+import Control.Monad.Except (runExceptT)
+import Control.Monad.Reader (class MonadAsk)
 import Data.Array (catMaybes)
 import Data.Either (hush)
 import Data.Foldable (for_)
@@ -35,13 +35,11 @@ import Monaco (IMarkerData, markerSeverity)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.HaskellEditor.Types (Action(..), BottomPanelView(..), State, _bottomPanelState, _compilationResult, _editorReady, _haskellEditorKeybindings, _metadataHintInfo)
-import Servant.PureScript.Ajax (AjaxError)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability)
 import StaticAnalysis.StaticTools (analyseContract)
-import StaticAnalysis.Types (AnalysisExecutionState(..), MultiStageAnalysisData(..), _analysisExecutionState, _analysisState, _templateContent)
+import StaticAnalysis.Types (AnalysisExecutionState(..), _analysisExecutionState, _analysisState, _templateContent)
 import StaticData (haskellBufferLocalStorageKey)
-import Types (WebData)
 import Webghc.Server (CompileRequest(..))
 
 toBottomPanel ::
@@ -57,6 +55,8 @@ handleAction ::
   MonadAsk Env m =>
   Action ->
   HalogenM State Action ChildSlots Void m Unit
+handleAction DoNothing = pure unit
+
 handleAction (HandleEditorMessage Monaco.EditorReady) = do
   editorSetTheme
   mContents <- liftEffect $ SessionStorage.getItem haskellBufferLocalStorageKey
@@ -80,13 +80,12 @@ handleAction (ChangeKeyBindings bindings) = do
   void $ query _haskellEditorSlot unit (Monaco.SetKeyBindings bindings unit)
 
 handleAction Compile = do
-  settings <- asks _.ajaxSettings
   mContents <- editorGetValue
   case mContents of
     Nothing -> pure unit
     Just code -> do
       assign _compilationResult Loading
-      result <- runAjax $ flip runReaderT settings $ postApiCompile (CompileRequest { code, implicitPrelude: true })
+      result <- RemoteData.fromEither <$> runExceptT (postApiCompile $ CompileRequest { code, implicitPrelude: true })
       assign _compilationResult result
       -- Update the error display.
       case result of
@@ -126,15 +125,11 @@ handleAction (SetIntegerTemplateParam templateType key value) = modifying (_anal
 
 handleAction (MetadataAction _) = pure unit
 
-handleAction AnalyseContract = analyze (WarningAnalysis Loading) $ analyseContract
+handleAction AnalyseContract = analyze analyseContract
 
-handleAction AnalyseReachabilityContract =
-  analyze (ReachabilityAnalysis AnalysisNotStarted)
-    $ analyseReachability
+handleAction AnalyseReachabilityContract = analyze analyseReachability
 
-handleAction AnalyseContractForCloseRefund =
-  analyze (CloseAnalysis AnalysisNotStarted)
-    $ analyseClose
+handleAction AnalyseContractForCloseRefund = analyze analyseClose
 
 handleAction ClearAnalysisResults = assign (_analysisState <<< _analysisExecutionState) NoneAsked
 
@@ -143,10 +138,9 @@ analyze ::
   forall m.
   MonadAff m =>
   MonadAsk Env m =>
-  AnalysisExecutionState ->
   (Contract -> HalogenM State Action ChildSlots Void m Unit) ->
   HalogenM State Action ChildSlots Void m Unit
-analyze initialAnalysisState doAnalyze = do
+analyze doAnalyze = do
   compilationResult <- use _compilationResult
   case compilationResult of
     Success (Right (InterpreterResult interpretedResult)) ->
@@ -155,12 +149,6 @@ analyze initialAnalysisState doAnalyze = do
       in
         for_ mContract doAnalyze
     _ -> pure unit
-
-runAjax ::
-  forall m a.
-  ExceptT AjaxError (HalogenM State Action ChildSlots Void m) a ->
-  HalogenM State Action ChildSlots Void m (WebData a)
-runAjax action = RemoteData.fromEither <$> runExceptT action
 
 editorSetTheme :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
 editorSetTheme = void $ query _haskellEditorSlot unit (Monaco.SetTheme HM.daylightTheme.name unit)

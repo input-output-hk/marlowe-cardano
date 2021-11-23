@@ -9,19 +9,18 @@ import Component.Contacts.Lenses (_cardSection, _companionAppId, _walletIdInput,
 import Component.Contacts.Types (Action(..), CardSection(..), State, WalletDetails, WalletIdError, WalletLibrary, WalletNicknameError)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
-import Component.InputField.Lenses (_value)
 import Component.InputField.State (validate)
 import Component.InputField.Types (State) as InputField
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
 import Component.WalletId.View as WalletId
 import Css as Css
-import Data.Lens (view, (^.))
+import Data.Lens ((^.))
 import Data.Map (isEmpty, toUnfoldable)
 import Data.Maybe (Maybe(..), isJust)
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Data.UUID (toString) as UUID
+import Data.UUID.Argonaut (toString) as UUID
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, text, ul)
 import Halogen.HTML.Events.Extra (onClick_)
@@ -112,8 +111,6 @@ walletDetailsCard currentWallet walletDetails =
 
     companionAppId = walletDetails ^. _companionAppId
 
-    companionAppIdString = UUID.toString $ unwrap companionAppId
-
     isCurrentWallet = walletNickname == currentWallet ^. _walletNickname
 
     copyWalletId = (ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<< unwrap)
@@ -153,10 +150,6 @@ walletDetailsCard currentWallet walletDetails =
 newWalletCard :: forall p. InputField.State WalletNicknameError -> InputField.State WalletIdError -> Maybe String -> Array (HTML p Action)
 newWalletCard walletNicknameInput walletIdInput mTokenName =
   let
-    walletNickname = view _value walletNicknameInput
-
-    walletIdString = view _value walletIdInput
-
     walletNicknameInputDisplayOptions =
       { additionalCss: mempty
       , id_: "newWalletNickname"

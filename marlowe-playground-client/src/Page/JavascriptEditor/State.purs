@@ -24,7 +24,6 @@ import Env (Env)
 import Examples.JS.Contracts as JSE
 import Halogen (Component, HalogenM, gets, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)
-import Halogen.HTML (HTML)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Halogen.Monaco (Message, Query, monacoComponent)
 import Language.Haskell.Monaco as HM
@@ -36,15 +35,14 @@ import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
 import Marlowe.Template (getPlaceholderIds, typeToLens, updateTemplateContent)
 import Monaco (IRange, getModel, isError, setValue)
-import Network.RemoteData (RemoteData(..))
 import Page.JavascriptEditor.Types (Action(..), BottomPanelView(..), CompilationState(..), State, _bottomPanelState, _compilationResult, _decorationIds, _editorReady, _keybindings, _metadataHintInfo)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability)
 import StaticAnalysis.StaticTools (analyseContract)
-import StaticAnalysis.Types (AnalysisExecutionState(..), MultiStageAnalysisData(..), _analysisExecutionState, _analysisState, _templateContent)
+import StaticAnalysis.Types (AnalysisExecutionState(..), _analysisExecutionState, _analysisState, _templateContent)
 import StaticData (jsBufferLocalStorageKey)
 import StaticData as StaticData
-import Text.Parsing.StringParser.Basic (lines)
+import Text.Extra (lines)
 
 toBottomPanel ::
   forall m a.
@@ -64,6 +62,8 @@ handleAction ::
   MonadAsk Env m =>
   Action ->
   HalogenM State Action ChildSlots Void m Unit
+handleAction DoNothing = pure unit
+
 handleAction (HandleEditorMessage Monaco.EditorReady) = do
   editorSetTheme
   mContents <- liftEffect $ SessionStorage.getItem jsBufferLocalStorageKey
@@ -104,14 +104,13 @@ handleAction (HandleEditorMessage (Monaco.TextChanged text)) = do
         if ((mContent == Nothing) || (mContent == Just prunedText)) then
           -- The case where `mContent == Just prunedText` is to prevent potential infinite loops, it should not happen
           assign _compilationResult NotCompiled
+        else if checkJSboilerplate text && checkDecorationPosition numLines mRangeHeader mRangeFooter then
+          ( do
+              liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedText
+              assign _compilationResult NotCompiled
+          )
         else
-          if checkJSboilerplate text && checkDecorationPosition numLines mRangeHeader mRangeFooter then
-            ( do
-                liftEffect $ SessionStorage.setItem jsBufferLocalStorageKey prunedText
-                assign _compilationResult NotCompiled
-            )
-          else
-            editorSetValue (fromMaybe "" mContent)
+          editorSetValue (fromMaybe "" mContent)
       Nothing -> editorSetValue prunedText
 
 handleAction (ChangeKeyBindings bindings) = do
@@ -169,15 +168,11 @@ handleAction (SetIntegerTemplateParam templateType key value) = modifying (_anal
 
 handleAction (MetadataAction _) = pure unit
 
-handleAction AnalyseContract = analyze (WarningAnalysis Loading) $ analyseContract
+handleAction AnalyseContract = analyze analyseContract
 
-handleAction AnalyseReachabilityContract =
-  analyze (ReachabilityAnalysis AnalysisNotStarted)
-    $ analyseReachability
+handleAction AnalyseReachabilityContract = analyze analyseReachability
 
-handleAction AnalyseContractForCloseRefund =
-  analyze (CloseAnalysis AnalysisNotStarted)
-    $ analyseClose
+handleAction AnalyseContractForCloseRefund = analyze analyseClose
 
 handleAction ClearAnalysisResults = assign (_analysisState <<< _analysisExecutionState) NoneAsked
 
@@ -186,10 +181,9 @@ analyze ::
   forall m.
   MonadAff m =>
   MonadAsk Env m =>
-  AnalysisExecutionState ->
   (Contract -> HalogenM State Action ChildSlots Void m Unit) ->
   HalogenM State Action ChildSlots Void m Unit
-analyze initialAnalysisState doAnalyze = do
+analyze doAnalyze = do
   compilationResult <- use _compilationResult
   case compilationResult of
     CompiledSuccessfully (InterpreterResult interpretedResult) -> doAnalyze interpretedResult.result
@@ -199,7 +193,7 @@ decorationHeader :: String
 decorationHeader =
   """import {
     PK, Role, Account, Party, ada, AvailableMoney, Constant, ConstantParam,
-    NegValue, AddValue, SubValue, MulValue, DivValue, Scale, ChoiceValue, SlotIntervalStart,
+    NegValue, AddValue, SubValue, MulValue, DivValue, ChoiceValue, SlotIntervalStart,
     SlotIntervalEnd, UseValue, Cond, AndObs, OrObs, NotObs, ChoseSomething,
     ValueGE, ValueGT, ValueLT, ValueLE, ValueEQ, TrueObs, FalseObs, Deposit,
     Choice, Notify, Close, Pay, If, When, Let, Assert, SomeNumber, AccountId,
@@ -289,7 +283,7 @@ editorGetValue = do
 editorSetTheme :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
 editorSetTheme = void $ query _jsEditorSlot unit (Monaco.SetTheme HM.daylightTheme.name unit)
 
-mkEditor :: forall m. MonadEffect m => MonadAff m => Component HTML Query Unit Message m
+mkEditor :: forall m. MonadEffect m => MonadAff m => Component Query Unit Message m
 mkEditor = monacoComponent $ JSM.settings setup
   where
   setup editor =
@@ -299,8 +293,6 @@ mkEditor = monacoComponent $ JSM.settings setup
         contents = fromMaybe JSE.example mContents
 
         decoratedContent = joinWith "\n" [ decorationHeader, contents, decorationFooter ]
-
-        numLines = Array.length $ lines decoratedContent
       model <- getModel editor
       setValue model decoratedContent
       pure unit

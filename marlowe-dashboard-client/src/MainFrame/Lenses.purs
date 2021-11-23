@@ -12,7 +12,7 @@ import Prologue
 import Data.Lens (Lens', Traversal')
 import Data.Lens.Prism.Either (_Left, _Right)
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Time.Duration (Minutes)
 import MainFrame.Types (State, WebSocketStatus)
 import Marlowe.Semantics (Slot)
@@ -21,19 +21,19 @@ import Page.Welcome.Types (State) as Welcome
 import Toast.Types (State) as Toast
 
 _webSocketStatus :: Lens' State WebSocketStatus
-_webSocketStatus = prop (SProxy :: SProxy "webSocketStatus")
+_webSocketStatus = prop (Proxy :: _ "webSocketStatus")
 
 _currentSlot :: Lens' State Slot
-_currentSlot = prop (SProxy :: SProxy "currentSlot")
+_currentSlot = prop (Proxy :: _ "currentSlot")
 
 _tzOffset :: Lens' State Minutes
-_tzOffset = prop (SProxy :: SProxy "tzOffset")
+_tzOffset = prop (Proxy :: _ "tzOffset")
 
 _subState :: Lens' State (Either Welcome.State Dashboard.State)
-_subState = prop (SProxy :: SProxy "subState")
+_subState = prop (Proxy :: _ "subState")
 
 _toast :: Lens' State Toast.State
-_toast = prop (SProxy :: SProxy "toast")
+_toast = prop (Proxy :: _ "toast")
 
 ------------------------------------------------------------
 _welcomeState :: Traversal' State Welcome.State

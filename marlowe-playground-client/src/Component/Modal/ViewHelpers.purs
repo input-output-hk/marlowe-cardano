@@ -3,7 +3,6 @@ module Component.Modal.ViewHelpers
   ) where
 
 import Prologue hiding (div)
-import Halogen (ComponentHTML)
 import Halogen.Classes (closeModal)
 import Halogen.HTML (ClassName(ClassName), HTML, div, h2, img, text)
 import Halogen.HTML.Events (onClick)
@@ -24,6 +23,6 @@ modalHeader title mCloseAction =
   closeWidget = case mCloseAction of
     Nothing -> []
     Just closeAction ->
-      [ div [ class_ (ClassName "modal-close"), onClick $ const $ Just closeAction ]
+      [ div [ class_ (ClassName "modal-close"), onClick $ const closeAction ]
           [ img [ src closeModal ] ]
       ]

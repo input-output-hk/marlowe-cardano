@@ -11,7 +11,6 @@ import Halogen.HTML.Properties (class_, classes, disabled, placeholder, value)
 import Icons (Icon(..), icon)
 import MainFrame.Types (ChildSlots)
 import Network.RemoteData (RemoteData(..), isFailure, isLoading)
-import Prim.TypeError (class Warn, Text)
 import SaveAs.Types (Action(..), State, _projectName, _status)
 
 handleAction ::
@@ -22,12 +21,7 @@ handleAction (ChangeInput newName) = assign _projectName newName
 
 handleAction _ = pure unit
 
-render ::
-  forall m.
-  Warn (Text "We need to redesing the error message") =>
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
+render :: forall m. MonadAff m => State -> ComponentHTML Action ChildSlots m
 render state =
   div [ classes if isFailure' then [ ClassName "modal-error" ] else [] ]
     [ div [ classes [ spaceTop, spaceLeft ] ]
@@ -37,19 +31,19 @@ render state =
         [ input
             [ classes [ spaceBottom, fullWidth, textSm, border, borderBlue300 ]
             , value (state ^. _projectName)
-            , onValueInput (Just <<< ChangeInput)
+            , onValueInput ChangeInput
             , placeholder "Type a name for your project"
             ]
         , div [ classes [ textRight ] ]
             [ button
                 [ classes [ btn, btnSecondary, uppercase, spaceRight ]
-                , onClick $ const $ Just Cancel
+                , onClick $ const Cancel
                 ]
                 [ text "Cancel" ]
             , button
                 [ classes [ btn, uppercase ]
                 , disabled $ isEmpty || isLoading'
-                , onClick $ const $ Just SaveProject
+                , onClick $ const SaveProject
                 ]
                 if isLoading' then [ icon Spinner ] else [ text "Save" ]
             ]

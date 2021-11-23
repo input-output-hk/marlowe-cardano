@@ -21,7 +21,7 @@ import Marlowe.Extended.Metadata (MetaData)
 import Page.MarloweEditor.Types (Action(..), BottomPanelView(..), State, _editorErrors, _editorWarnings, _hasHoles, _metadataHintInfo, _showErrorDetail, contractHasErrors)
 import StaticAnalysis.BottomPanel (analysisResultPane, analyzeButton, clearButton)
 import StaticAnalysis.Types (_analysisExecutionState, _analysisState, isCloseAnalysisLoading, isNoneAsked, isReachabilityLoading, isStaticLoading)
-import Text.Parsing.StringParser.Basic (lines)
+import Text.Extra (lines)
 
 panelContents ::
   forall m.
@@ -80,7 +80,7 @@ panelContents state _ MarloweWarningsView =
   renderWarning warning =
     [ span_ $ [ text warning.message ]
     , a
-        [ onClick $ const $ Just $ MoveToPosition warning.startLineNumber warning.startColumn
+        [ onClick $ const $ MoveToPosition warning.startLineNumber warning.startColumn
         , classes [ underline, justifySelfEnd ]
         ]
         [ text $ show warning.startLineNumber ]
@@ -105,7 +105,7 @@ panelContents state _ MarloweErrorsView =
   renderError error =
     [ div [ classes [ minW0, overflowXScroll ] ]
         ( [ a
-              [ onClick $ const $ Just $ ShowErrorDetail (state ^. (_showErrorDetail <<< to not)) ]
+              [ onClick $ const $ ShowErrorDetail (state ^. (_showErrorDetail <<< to not)) ]
               [ text $ (if state ^. _showErrorDetail then "- " else "+ ") <> error.firstLine ]
           ]
             <> if (state ^. _showErrorDetail) then
@@ -114,7 +114,7 @@ panelContents state _ MarloweErrorsView =
                 []
         )
     , a
-        [ onClick $ const $ Just $ MoveToPosition error.startLineNumber error.startColumn
+        [ onClick $ const $ MoveToPosition error.startLineNumber error.startColumn
         , class_ underline
         ]
         [ text $ show error.startLineNumber ]

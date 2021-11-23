@@ -5,13 +5,13 @@ import Component.Blockly.Types (blocklyRef)
 import Halogen (ClassName(..))
 import Halogen.Classes (fullHeight, fullWidth)
 import Halogen.HTML (HTML, div, text)
-import Halogen.HTML.Properties (class_, classes, id_, ref)
+import Halogen.HTML.Properties (class_, classes, id, ref)
 
 render :: forall r p action. { errorMessage :: Maybe String | r } -> HTML p action
 render state =
   div
     [ ref blocklyRef
-    , id_ "blocklyWorkspace"
+    , id "blocklyWorkspace"
     , classes [ fullHeight, fullWidth ]
     ]
     [ errorMessage state.errorMessage ]

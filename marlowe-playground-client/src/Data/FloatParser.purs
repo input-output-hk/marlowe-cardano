@@ -1,7 +1,7 @@
 module Data.FloatParser (parseFloat) where
 
 import Prologue
-import Global (isNaN)
+import Data.Number (isNaN)
 
 foreign import unsafeParseFloat :: String -> Number
 

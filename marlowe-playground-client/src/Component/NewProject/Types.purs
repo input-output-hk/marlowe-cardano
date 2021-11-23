@@ -5,7 +5,7 @@ import Analytics (class IsEvent)
 import Component.Projects.Types (Lang)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 
 data Action
   = CreateProject Lang
@@ -23,4 +23,4 @@ emptyState :: State
 emptyState = { error: Nothing }
 
 _error :: Lens' State (Maybe String)
-_error = prop (SProxy :: SProxy "error")
+_error = prop (Proxy :: _ "error")

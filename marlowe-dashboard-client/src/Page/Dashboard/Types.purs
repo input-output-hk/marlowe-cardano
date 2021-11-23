@@ -68,7 +68,6 @@ data Action
   | CloseCard
   | SetContractFilter ContractFilter
   | SelectContract (Maybe PlutusAppId)
-  | UpdateFromStorage
   | UpdateFollowerApps (Map MarloweParams MarloweData)
   | UpdateContract PlutusAppId ContractHistory
   | RedeemPayments PlutusAppId
@@ -88,7 +87,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent CloseCard = Nothing
   toEvent (SetContractFilter _) = Just $ defaultEvent "FilterContracts"
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
-  toEvent UpdateFromStorage = Nothing
   toEvent (UpdateFollowerApps _) = Nothing
   toEvent (UpdateContract _ _) = Nothing
   toEvent (RedeemPayments _) = Nothing

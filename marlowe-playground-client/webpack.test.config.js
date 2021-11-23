@@ -31,16 +31,22 @@ module.exports = {
                 test: /\.purs$/,
                 use: [
                     {
-                        loader: "purs-loader",
+                        loader: 'purs-loader',
                         options: {
+                            psc: "psa",
+                            pscArgs: {
+                                strict: true,
+                                censorLib: true,
+                                stash: true,
+                                isLib: ["generated", ".spago"],
+                            },
                             src: [
-                                "src/**/*.purs",
-                                "generated/**/*.purs",
-                                ".spago/*/*/src/**/*.purs",
-                                "web-common/**/*.purs",
-                                "web-common-marlowe/**/*.purs",
-                                "web-common-playground/**/*.purs",
-                                "test/**/*.purs"
+                                '.spago/*/*/src/**/*.purs',
+                                'src/**/*.purs',
+                                'test/**/*.purs',
+                                'generated/**/*.purs',
+                                "web-common-marlowe/src/**/*.purs",
+                                `${process.env.WEB_COMMON_PLAYGROUND_SRC}/src/**/*.purs`,
                             ],
                         }
                     }

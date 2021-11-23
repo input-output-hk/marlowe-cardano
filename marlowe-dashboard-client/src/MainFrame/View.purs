@@ -28,6 +28,6 @@ render state =
             ]
           Right _ ->
             [ renderSubmodule _dashboardState DashboardAction (dashboardScreen { currentSlot, tzOffset }) state
-            , renderSubmodule _dashboardState DashboardAction (dashboardCard currentSlot) state
+            , renderSubmodule _dashboardState DashboardAction dashboardCard state
             ]
       <> [ renderSubmodule _toast ToastAction renderToast state ]

@@ -14,6 +14,7 @@ import Data.Lens (assign, use)
 import Data.List (List(..), any, catMaybes, fromFoldable, null)
 import Data.List.NonEmpty (fromList, head, tail, toList)
 import Data.Map (fromFoldableWith, lookup, unionWith)
+import Data.Map as Map
 import Data.Set (singleton, union)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
@@ -108,5 +109,5 @@ stepPrefixMap markUnreachable prefixMap contractPath = case lookup contractPath 
         markUnreachable
         pure Nothing
       else
-        pure $ Just $ unionWith union (initializePrefixMap tails) mempty
-  Nothing -> pure (Just mempty)
+        pure $ Just $ unionWith union (initializePrefixMap tails) Map.empty
+  Nothing -> pure (Just Map.empty)

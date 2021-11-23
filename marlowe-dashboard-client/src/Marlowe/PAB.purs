@@ -5,19 +5,19 @@ module Marlowe.PAB
   ) where
 
 import Prologue
-import Data.BigInteger (BigInteger, fromInt)
+import Data.Argonaut.Decode (class DecodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Generic.Rep (class Generic)
 import Data.Newtype (class Newtype)
-import Data.UUID (UUID)
-import Foreign.Class (class Encode, class Decode)
-import Foreign.Generic (defaultOptions, genericDecode, genericEncode)
+import Data.UUID.Argonaut (UUID)
 
 -- In the Marlowe PAB, transactions have a fixed cost of 10 lovelace; in the real node, transaction
 -- fees will vary, but this will serve as an approximation for now.
-transactionFee :: BigInteger
+transactionFee :: BigInt
 transactionFee = fromInt 10
 
-contractCreationFee :: BigInteger
+contractCreationFee :: BigInt
 contractCreationFee = transactionFee
 
 {-
@@ -39,8 +39,6 @@ derive instance genericPlutusAppId :: Generic PlutusAppId _
 
 -- note we need to encode this type, not to communicate with the PAB (we have the `ContractInstanceId`
 -- for that), but to save `WalletData` to local storage
-instance encodePlutusAppId :: Encode PlutusAppId where
-  encode value = genericEncode defaultOptions value
+derive newtype instance encodeJsonPlutusAppId :: EncodeJson PlutusAppId
 
-instance decodePlutusAppId :: Decode PlutusAppId where
-  decode value = genericDecode defaultOptions value
+derive newtype instance decodeJsonPlutusAppId :: DecodeJson PlutusAppId
