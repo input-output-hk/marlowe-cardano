@@ -2,6 +2,7 @@
 , dependencies =
   [ "datetime"
   , "effect"
+  , "enums"
   , "heterogeneous-collections"
   , "maybe"
   , "newtype"

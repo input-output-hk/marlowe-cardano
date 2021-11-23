@@ -10,7 +10,7 @@ module Language.Marlowe.ACTUS.Domain.ContractTerms where
 
 import Control.Applicative ((<|>))
 import Data.Aeson.Types (FromJSON, ToJSON)
-import Data.Time (Day, LocalTime)
+import Data.Time (LocalTime)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe as Marlowe (Observation, Value)
 

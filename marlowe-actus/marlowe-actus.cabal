@@ -32,14 +32,7 @@ library
     aeson -any,
     base -any,
     bytestring,
-    containers -any,
-    newtype-generics,
-    template-haskell -any,
-    plutus-tx -any,
-    plutus-contract -any,
     plutus-ledger,
-    text,
-    vector,
     marlowe -any,
     mtl -any,
     time -any,
@@ -87,38 +80,39 @@ test-suite marlowe-actus-test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
+        Spec.Marlowe.ACTUS.ContractTerms
         Spec.Marlowe.ACTUS.Examples
         Spec.Marlowe.ACTUS.TestFramework
         Spec.Marlowe.ACTUS.QCGenerator
         Spec.Marlowe.ACTUS.QCTests
     build-depends:
-        vector -any,
-        unordered-containers -any,
-        scientific -any,
-        extra -any,
-        utf8-string -any,
+        QuickCheck,
         aeson -any,
         base >=4.9 && <5,
+        bytestring -any,
+        cborg,
         containers -any,
+        extra -any,
         hedgehog -any,
         lens -any,
-        bytestring -any,
+        marlowe -any,
+        marlowe,
+        marlowe-actus,
+        plutus-contract -any,
+        plutus-ledger,
+        plutus-tx -any,
+        pretty-simple -any,
+        scientific -any,
         tasty -any,
         tasty-hunit -any,
         tasty-quickcheck -any,
-        text -any,
-        cborg,
-        plutus-ledger -any,
-        plutus-contract -any,
-        marlowe,
-        marlowe-actus,
-        plutus-tx -any,
         template-haskell -any,
-        marlowe -any,
+        text -any,
         time -any,
+        unordered-containers -any,
+        utf8-string -any,
         validation -any,
-        pretty-simple -any,
-        QuickCheck
+        vector -any,
   ghc-options:
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates

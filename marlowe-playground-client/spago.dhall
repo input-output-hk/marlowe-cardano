@@ -4,7 +4,8 @@ You can edit this file as you like.
 -}
 { name = "marlowe-playground-client"
 , dependencies =
-  [ "aff"
+  [ "actus"
+  , "aff"
   , "aff-promise"
   , "affjax"
   , "argonaut"
