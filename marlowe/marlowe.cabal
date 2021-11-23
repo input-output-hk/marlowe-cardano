@@ -228,6 +228,7 @@ executable marlowe-cli
     bytestring -any,
     cardano-api -any,
     marlowe -any,
+    mtl -any,
     optparse-applicative -any,
     plutus-ledger -any,
     plutus-ledger-api -any,

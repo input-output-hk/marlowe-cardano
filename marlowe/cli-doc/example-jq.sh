@@ -58,8 +58,8 @@ jq '.validator.script' $MARLOWE_FILE > $PLUTUS_FILE
 
 DATUM_HASH=$(jq -r '.datum.hash' $MARLOWE_FILE)
 
-DATUM_JSON_FILE=test.datum
-jq '.datum.json' $MARLOWE_FILE > $DATUM_JSON_FILE
+DATUM_FILE=test.datum
+jq '.datum.json' $MARLOWE_FILE > $DATUM_FILE
 
 REDEEMER_FILE=test.redeemer
 jq '.redeemer.json' $MARLOWE_FILE > $REDEEMER_FILE

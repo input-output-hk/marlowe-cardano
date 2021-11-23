@@ -1,34 +1,57 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Export information for Marlowe contracts and transactions.
+--
+-----------------------------------------------------------------------------
 
-{-# LANGUAGE RecordWildCards #-}
 
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns  #-} -- FIXME: Remove this after error handling is implemented.
+
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 
 module Language.Marlowe.CLI.Export (
+-- * Contract and Transaction
   exportMarlowe
-, exportAddress
-, exportValidator
-, exportDatum
-, exportRedeemer
+, printMarlowe
 , buildMarlowe
+-- * Address
+, exportAddress
+, buildAddress
+-- * Validator
+, exportValidator
 , buildValidator
+-- * Datum
+, exportDatum
 , buildDatum
+-- * Redeemer
+, exportRedeemer
 , buildRedeemer
 ) where
 
 
-import           Cardano.Api                     (AlonzoEra, IsShelleyBasedEra, NetworkId, PaymentCredential (..),
-                                                  ScriptDataJsonSchema (..), SlotNo (..), StakeAddressReference (..),
-                                                  hashScript, makeShelleyAddressInEra, scriptDataToJson,
-                                                  serialiseAddress, writeFileTextEnvelope)
+import           Cardano.Api                     (AddressInEra, AlonzoEra, IsShelleyBasedEra, NetworkId,
+                                                  PaymentCredential (..), ScriptDataJsonSchema (..), SlotNo (..),
+                                                  StakeAddressReference (..), hashScript, makeShelleyAddressInEra,
+                                                  scriptDataToJson, serialiseAddress, serialiseToTextEnvelope,
+                                                  writeFileTextEnvelope)
 import           Cardano.Api.Shelley             (fromPlutusData)
 import           Codec.Serialise                 (serialise)
 import           Control.Monad                   (void, when)
-import           Data.Aeson                      (eitherDecodeFileStrict)
+import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
+import           Data.Aeson                      (FromJSON, eitherDecodeFileStrict, encode)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
-import           Language.Marlowe.CLI.Types      (DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
+import           Data.Bifunctor                  (first)
+import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (MarloweInput, marloweValidator2, typedValidator1)
+import           Language.Marlowe.Scripts        (MarloweInput, typedValidator1)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
@@ -39,74 +62,174 @@ import           PlutusTx                        (builtinDataToData, toBuiltinDa
 import           System.IO                       (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
+import qualified Data.ByteString.Lazy.Char8      as LBS8 (unpack)
 import qualified Data.ByteString.Short           as SBS (length, toShort)
 import qualified Data.Text                       as T (unpack)
 
 
+-- | Build comprehensive information about a Marlowe contract and transaction.
 buildMarlowe :: IsShelleyBasedEra era
-             => MarloweParams
-             -> CostModelParams
-             -> NetworkId
-             -> StakeAddressReference
-             -> Contract
-             -> State
-             -> [Input]
-             -> SlotNo
-             -> SlotNo
-             -> MarloweInfo era
+             => MarloweParams                      -- ^ The Marlowe contract parameters.
+             -> CostModelParams                    -- ^ The cost model parameters.
+             -> NetworkId                          -- ^ The network ID.
+             -> StakeAddressReference              -- ^ The stake address.
+             -> Contract                           -- ^ The contract.
+             -> State                              -- ^ The contract's state.
+             -> [Input]                            -- ^ The contract's input,
+             -> SlotNo                             -- ^ The first valid slot for the transaction.
+             -> SlotNo                             -- ^ The last valid slot for the tranasction.
+             -> Either CliError (MarloweInfo era)  -- ^ The contract and transaction information, or an error message.
 buildMarlowe marloweParams costModel network stake contract state inputs minimumSlot maximumSlot =
-  let
-    validatorInfo = buildValidator marloweParams costModel network stake
-    datumInfo     = buildDatum contract state
-    redeemerInfo  = buildRedeemer inputs minimumSlot maximumSlot
-  in
-    MarloweInfo{..}
+  do
+    validatorInfo <- buildValidator marloweParams costModel network stake
+    let
+      datumInfo = buildDatum contract state
+      redeemerInfo = buildRedeemer inputs minimumSlot maximumSlot
+    pure MarloweInfo{..}
 
 
-exportMarlowe :: MarloweParams
-              -> CostModelParams
-              -> NetworkId
-              -> StakeAddressReference
-              -> FilePath
-              -> FilePath
-              -> Maybe FilePath
-              -> SlotNo
-              -> SlotNo
-              -> FilePath
-              -> Bool
-              -> IO ()
+-- | Export to a file the comprehensive information about a Marlowe contract and transaction.
+exportMarlowe :: MonadError CliError m
+              => MonadIO m
+              => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> CostModelParams        -- ^ The cost model parameters.
+              -> NetworkId              -- ^ The network ID.
+              -> StakeAddressReference  -- ^ The stake address.
+              -> FilePath               -- ^ The JSON file containing the contract.
+              -> FilePath               -- ^ The JSON file containing the contract's state.
+              -> Maybe FilePath         -- ^ The JSON file containing the contract's input, if any.
+              -> SlotNo                 -- ^ The first valid slot for the transaction.
+              -> SlotNo                 -- ^ The last valid slot for the tranasction.
+              -> FilePath               -- ^ The output JSON file for Marlowe contract information.
+              -> Bool                   -- ^ Whether to print statistics about the contract.
+              -> m ()                   -- ^ Action to export the contract and transaction information to a file.
 exportMarlowe marloweParams costModel network stake contractFile stateFile inputsFile minimumSlot maximumSlot outputFile printStats =
   do
-    Right contract <- eitherDecodeFileStrict contractFile
-    Right state    <- eitherDecodeFileStrict stateFile
-    Right inputs   <- maybe (pure $ Right []) eitherDecodeFileStrict inputsFile
+    contract <- decodeFileStrict contractFile
+    state    <- decodeFileStrict stateFile
+    inputs   <- maybe (pure []) decodeFileStrict inputsFile
+    marloweInfo@MarloweInfo{..} <-
+      liftEither
+        $ buildMarlowe
+            marloweParams costModel network stake
+            contract state
+            inputs minimumSlot maximumSlot
     let
-      marloweInfo@MarloweInfo{..} =
-        buildMarlowe
-          marloweParams costModel network stake
-          contract state
-          inputs minimumSlot maximumSlot
       ValidatorInfo{..} = validatorInfo
       DatumInfo{..}     = datumInfo
       RedeemerInfo{..}  = redeemerInfo
-    LBS.writeFile outputFile
-      $ encodePretty (marloweInfo :: MarloweInfo AlonzoEra) -- FIXME: Generalize eras.
-    when printStats
+    liftIO
       $ do
-        hPutStrLn stderr ""
-        hPutStrLn stderr $ "Validator cost: " ++ show viCost
-        hPutStrLn stderr $ "Validator size: " ++ show viSize
-        hPutStrLn stderr $ "Datum size: " ++ show diSize
-        hPutStrLn stderr $ "Redeemer size: " ++ show riSize
-        hPutStrLn stderr $ "Total size: " ++ show (viSize + diSize + riSize)
+        LBS.writeFile outputFile
+          $ encodePretty (marloweInfo :: MarloweInfo AlonzoEra) -- FIXME: Generalize eras.
+        when printStats
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Validator cost: " ++ show viCost
+            hPutStrLn stderr $ "Validator size: " ++ show viSize
+            hPutStrLn stderr $ "Datum size: " ++ show diSize
+            hPutStrLn stderr $ "Redeemer size: " ++ show riSize
+            hPutStrLn stderr $ "Total size: " ++ show (viSize + diSize + riSize)
 
 
+-- | Print information about a Marlowe contract and transaction.
+printMarlowe :: MonadError CliError m
+              => MonadIO m
+              => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> CostModelParams        -- ^ The cost model parameters.
+              -> NetworkId              -- ^ The network ID.
+              -> StakeAddressReference  -- ^ The stake address.
+              -> Contract               -- ^ The contract.
+              -> State                  -- ^ The contract's state.
+              -> [Input]                -- ^ The contract's input,
+              -> (SlotNo, SlotNo)       -- ^ The first and last valid slot for the tranasction.
+              -> m ()                   -- ^ Action to print the contract and transaction information.
+printMarlowe marloweParams costModel network stake contract state inputs (minimumSlot, maximumSlot) =
+  do
+    MarloweInfo{..} <-
+      liftEither
+        $ buildMarlowe
+            marloweParams costModel network stake
+            contract state
+            inputs minimumSlot maximumSlot
+    let
+      ValidatorInfo{..} = validatorInfo
+      DatumInfo{..}     = datumInfo
+      RedeemerInfo{..}  = redeemerInfo
+    liftIO
+      $ do
+        putStrLn ""
+        putStrLn $ "Contract: " ++ show contract
+        putStrLn ""
+        putStrLn $ "State: " ++ show state
+        putStrLn ""
+        putStrLn $ "Inputs: " ++ show inputs
+        putStrLn ""
+        putStrLn $ "Validator: " ++ LBS8.unpack (encode $ serialiseToTextEnvelope Nothing viScript)
+        putStrLn ""
+        putStrLn $ "Validator address: " ++ (T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra)) -- FIXME: Generalize eras.
+        putStrLn ""
+        putStrLn $ "Validator hash: " ++ show viHash
+        putStrLn ""
+        putStrLn $ "Validator size: " ++ show viSize
+        putStrLn ""
+        putStrLn $ "Validator cost: " ++ show viCost
+        putStrLn ""
+        putStrLn $ "Datum:" ++ LBS8.unpack (encode diJson)
+        putStrLn ""
+        putStrLn $ "Datum hash: " ++ show diHash
+        putStrLn ""
+        putStrLn $ "Datum size: " ++ show diSize
+        putStrLn ""
+        putStrLn $ "Redeemer: " ++ LBS8.unpack (encode riJson)
+        putStrLn ""
+        putStrLn $ "Redeemer size: " ++ show riSize
+        putStrLn ""
+        putStrLn $ "Total size: " ++ show (viSize + diSize + riSize)
+
+
+-- | Compute the address of a Marlowe contract.
+buildAddress :: IsShelleyBasedEra era
+             => MarloweParams          -- ^ The Marlowe contract parameters.
+             -> NetworkId              -- ^ The network ID.
+             -> StakeAddressReference  -- ^ The stake address.
+             -> AddressInEra era       -- ^ The script address.
+buildAddress marloweParams network stake =
+  let
+    viValidator = typedValidator1 marloweParams
+    script = getValidator . validatorScript $ viValidator
+    viScript = toCardanoApiScript script
+  in
+    makeShelleyAddressInEra
+      network
+      (PaymentCredentialByScript $ hashScript viScript)
+      stake
+
+
+-- | Print the address of a Marlowe contract.
+exportAddress :: MonadIO m
+              => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> NetworkId              -- ^ The network ID.
+              -> StakeAddressReference  -- ^ The stake address.
+              -> m ()                   -- ^ Action to print the script address.
+exportAddress marloweParams network stake =
+  let
+    address = buildAddress marloweParams network stake
+  in
+    liftIO
+      . putStrLn
+      . T.unpack
+      $ serialiseAddress (address :: AddressInEra AlonzoEra) -- FIXME: Generalize eras.
+
+
+
+-- | Build the validator information about a Marlowe contract.
 buildValidator :: IsShelleyBasedEra era
-               => MarloweParams
-               -> CostModelParams
-               -> NetworkId
-               -> StakeAddressReference
-               -> ValidatorInfo era
+               => MarloweParams                        -- ^ The Marlowe contract parameters.
+               -> CostModelParams                      -- ^ The cost model parameters.
+               -> NetworkId                            -- ^ The network ID.
+               -> StakeAddressReference                -- ^ The stake address.
+               -> Either CliError (ValidatorInfo era)  -- ^ The validator information, or an error message.
 buildValidator marloweParams costModel network stake =
   let
     viValidator = typedValidator1 marloweParams
@@ -120,51 +243,48 @@ buildValidator marloweParams costModel network stake =
         (PaymentCredentialByScript $ hashScript viScript)
         stake
     viSize = SBS.length viBytes
-    (_, Right viCost) = evaluateScriptCounting Verbose costModel viBytes [] -- FIXME: Implement error handling.
   in
-    ValidatorInfo{..}
+    case evaluateScriptCounting Verbose costModel viBytes [] of
+      (_, Right viCost) -> Right ValidatorInfo{..}
+      _                 -> Left $ CliError "Failed to evaluate cost of validator script."
 
 
-exportAddress :: MarloweParams
-              -> NetworkId
-              -> StakeAddressReference
-              -> IO ()
-exportAddress marloweParams network stake =
-  do
-    let
-      ValidatorInfo{..} = buildValidator marloweParams undefined network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
-    putStrLn . T.unpack . serialiseAddress $ viAddress
-
-
-exportValidator :: MarloweParams
-                -> CostModelParams
-                -> NetworkId
-                -> StakeAddressReference
-                -> FilePath
-                -> Bool
-                -> Bool
-                -> IO ()
+-- | Export to a file the validator information about a Marlowe contract.
+exportValidator :: MonadError CliError m
+                => MonadIO m
+                => MarloweParams          -- ^ The Marlowe contract parameters.
+                -> CostModelParams        -- ^ The cost model parameters.
+                -> NetworkId              -- ^ The network ID.
+                -> StakeAddressReference  -- ^ The stake address.
+                -> FilePath               -- ^ The output JSON file for the validator information.
+                -> Bool                   -- ^ Whether to print the validator hash.
+                -> Bool                   -- ^ Whether to print statistics about the validator.
+                -> m ()                   -- ^ Action to export the validator information to a file.
 exportValidator marloweParams costModel network stake outputFile printHash printStats =
   do
-    let
-      ValidatorInfo{..} = buildValidator marloweParams costModel network stake :: ValidatorInfo AlonzoEra -- FIXME: Generalize eras.
-    void
-      $ writeFileTextEnvelope outputFile Nothing viScript
-    putStrLn . T.unpack . serialiseAddress $ viAddress
-    when printHash
+    ValidatorInfo{..} <-
+      liftEither
+        $ buildValidator marloweParams costModel network stake
+    liftIO
       $ do
-        hPutStrLn stderr ""
-        hPutStrLn stderr $ "Validator hash: " ++ show viHash
-    when printStats
-      $ do
-        hPutStrLn stderr ""
-        hPutStrLn stderr $ "Validator size: " ++ show viSize
-        hPutStrLn stderr $ "Validator cost: " ++ show viCost
+        void
+          $ writeFileTextEnvelope outputFile Nothing viScript
+        putStrLn . T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra) -- FIXME: Generalize eras.
+        when printHash
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Validator hash: " ++ show viHash
+        when printStats
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Validator size: " ++ show viSize
+            hPutStrLn stderr $ "Validator cost: " ++ show viCost
 
 
-buildDatum :: Contract
-           -> State
-           -> DatumInfo
+-- | Build the datum information about a Marlowe transaction.
+buildDatum :: Contract   -- ^ The contract.
+           -> State      -- ^ The contract's state.
+           -> DatumInfo  -- ^ Information about the transaction datum.
 buildDatum marloweContract marloweState =
   let
     marloweData = MarloweData{..}
@@ -181,33 +301,40 @@ buildDatum marloweContract marloweState =
     DatumInfo{..}
 
 
-exportDatum :: FilePath
-            -> FilePath
-            -> FilePath
-            -> Bool
-            -> IO ()
+-- | Export to a file the datum information about a Marlowe transaction.
+exportDatum :: MonadError CliError m
+            => MonadIO m
+            => FilePath  -- ^ The JSON file containing the contract.
+            -> FilePath  -- ^ The JSON file containing the contract's state.
+            -> FilePath  -- ^ The output JSON file for the datum information.
+            -> Bool      -- ^ Whether to print statistics about the datum.
+            -> m ()      -- ^ Action to export the datum information to a file.
 exportDatum contractFile stateFile outputFile printStats =
   do
-    Right contract <- eitherDecodeFileStrict contractFile
-    Right state <- eitherDecodeFileStrict stateFile
+    contract <- decodeFileStrict contractFile
+    state    <- decodeFileStrict stateFile
     let
       DatumInfo{..} = buildDatum contract state
-    LBS.writeFile outputFile
-      $ encodePretty diJson
-    print diHash
-    when printStats
+    liftIO
       $ do
-        hPutStrLn stderr ""
-        hPutStrLn stderr $ "Datum size: " ++ show diSize
+        LBS.writeFile outputFile
+          $ encodePretty diJson
+        print diHash
+        when printStats
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Datum size: " ++ show diSize
 
 
-buildRedeemer :: [Input]
-              -> SlotNo
-              -> SlotNo
-              -> RedeemerInfo
+-- | Build the redeemer information about a Marlowe transaction.
+buildRedeemer :: [Input]       -- ^ The contract's input,
+              -> SlotNo        -- ^ The first valid slot for the transaction.
+              -> SlotNo        -- ^ The last valid slot for the tranasction.
+              -> RedeemerInfo  -- ^ Information about the transaction redeemer.
 buildRedeemer inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
   let
-    marloweRedeemer = PlutusTx.toBuiltinData $ inputs
+    input = ((fromIntegral minimumSlot, fromIntegral maximumSlot), inputs)
+    marloweRedeemer = PlutusTx.toBuiltinData (input :: MarloweInput)
     riRedeemer = Redeemer marloweRedeemer
     riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
     riJson =
@@ -219,20 +346,37 @@ buildRedeemer inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
     RedeemerInfo{..}
 
 
-exportRedeemer :: Maybe FilePath
-               -> SlotNo
-               -> SlotNo
-               -> FilePath
-               -> Bool
-               -> IO ()
+-- | Export to a file the redeemer information about a Marlowe transaction.
+exportRedeemer :: MonadError CliError m
+               => MonadIO m
+               => Maybe FilePath  -- ^ The file containing the contract's input, if any.
+               -> SlotNo          -- ^ The first valid slot for the transaction.
+               -> SlotNo          -- ^ The last valid slot for the tranasction.
+               -> FilePath        -- ^ The output JSON file for Marlowe contract information.
+               -> Bool            -- ^ Whether to print statistics on the contract.
+               -> m ()            -- ^ Action to export the redeemer information to a file.
 exportRedeemer inputsFile minimumSlot maximumSlot outputFile printStats =
   do
-    Right inputs <- maybe (pure $ Right []) eitherDecodeFileStrict inputsFile
+    inputs <- maybe (pure []) decodeFileStrict inputsFile
     let
       RedeemerInfo{..} = buildRedeemer inputs minimumSlot maximumSlot
-    LBS.writeFile outputFile
-      $ encodePretty riJson
-    when printStats
+    liftIO
       $ do
-        hPutStrLn stderr ""
-        hPutStrLn stderr $ "Redeemer size: " ++ show riSize
+        LBS.writeFile outputFile
+          $ encodePretty riJson
+        when printStats
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Redeemer size: " ++ show riSize
+
+
+-- | Decode a JSON file in an error monad.
+decodeFileStrict :: MonadError CliError m
+                 => MonadIO m
+                 => FromJSON a
+                 => FilePath -- ^ The JSON file.
+                 -> m a      -- ^ Action to decode the file.
+decodeFileStrict filePath =
+  do
+    result <- liftIO $ eitherDecodeFileStrict filePath
+    liftEither $ first CliError result
