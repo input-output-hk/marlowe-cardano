@@ -1,8 +1,8 @@
-module Data.Actus.Contract.NegativeAmortizer where
+module Actus.Contract.Annuity where
 
 import Prelude
 
-import Data.Actus.Types as Types
+import Actus.Types as Types
 import Data.DateTime (DateTime)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
@@ -60,6 +60,13 @@ mkContract
     , rateReset
     }
 
+type Fees =
+  { rate :: Number
+  , basis :: Types.FeeBasis
+  , accrued :: Maybe Number
+  , cycle :: Types.AnchoredCycle
+  }
+
 type Interest =
   { accrued :: Number
   , capitalizationEndDate :: DateTime
@@ -93,29 +100,32 @@ mkInterest
   }
 
 type NotionalPrincipal =
-  { initialExchangeDate :: DateTime
+  { ammortizationDate :: DateTime
+  , initialExchangeDate :: DateTime
   , premiumDiscountAtIED :: Maybe Number
   , maturityDate :: Maybe DateTime
   , notionalPrincipal :: Number
   , purchase :: Maybe Types.ContractEndEvent
   , termination :: Maybe Types.ContractEndEvent
   , redemptionCycle :: Maybe Types.AnchoredCycle
-  , nextPayment :: Number
+  , nextPayment :: Maybe Number
   , scalingIndex :: Maybe Types.ScalingIndex
   }
 
 mkNotionalPrincipal
   :: DateTime
+  -> DateTime
   -> Maybe Number
   -> Maybe DateTime
   -> Number
   -> Maybe Types.ContractEndEvent
   -> Maybe Types.ContractEndEvent
   -> Maybe Types.AnchoredCycle
-  -> Number
+  -> Maybe Number
   -> Maybe Types.ScalingIndex
   -> NotionalPrincipal
 mkNotionalPrincipal
+  ammortizationDate
   initialExchangeDate
   premiumDiscountAtIED
   maturityDate
@@ -125,7 +135,8 @@ mkNotionalPrincipal
   redemptionCycle
   nextPayment
   scalingIndex =
-  { initialExchangeDate
+  { ammortizationDate
+  , initialExchangeDate
   , premiumDiscountAtIED
   , maturityDate
   , notionalPrincipal

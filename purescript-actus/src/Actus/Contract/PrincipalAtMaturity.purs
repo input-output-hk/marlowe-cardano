@@ -1,8 +1,8 @@
-module Data.Actus.Contract.LinearAmortizer where
+module Actus.Contract.PrincipalAtMaturity where
 
 import Prelude
 
-import Data.Actus.Types as Types
+import Actus.Types as Types
 import Data.DateTime (DateTime)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
@@ -66,7 +66,6 @@ type Interest =
   , nominalRate :: Number
   , dayCountConvention :: Types.DayCountConvention
   , paymentCycle :: Maybe Types.AnchoredCycle
-  , calculationBase :: Types.InterestCalculationBase
   }
 
 mkInterest
@@ -75,44 +74,37 @@ mkInterest
   -> Number
   -> Types.DayCountConvention
   -> Maybe Types.AnchoredCycle
-  -> Types.InterestCalculationBase
   -> Interest
 mkInterest
   accrued
   capitalizationEndDate
   nominalRate
   dayCountConvention
-  paymentCycle
-  calculationBase =
+  paymentCycle =
   { accrued
   , capitalizationEndDate
   , nominalRate
   , dayCountConvention
   , paymentCycle
-  , calculationBase
   }
 
 type NotionalPrincipal =
   { initialExchangeDate :: DateTime
   , premiumDiscountAtIED :: Maybe Number
-  , maturityDate :: Maybe DateTime
+  , maturityDate :: DateTime
   , notionalPrincipal :: Number
   , purchase :: Maybe Types.ContractEndEvent
   , termination :: Maybe Types.ContractEndEvent
-  , redemptionCycle :: Maybe Types.AnchoredCycle
-  , nextPayment :: Maybe Number
   , scalingIndex :: Maybe Types.ScalingIndex
   }
 
 mkNotionalPrincipal
   :: DateTime
   -> Maybe Number
-  -> Maybe DateTime
+  -> DateTime
   -> Number
   -> Maybe Types.ContractEndEvent
   -> Maybe Types.ContractEndEvent
-  -> Maybe Types.AnchoredCycle
-  -> Maybe Number
   -> Maybe Types.ScalingIndex
   -> NotionalPrincipal
 mkNotionalPrincipal
@@ -122,8 +114,6 @@ mkNotionalPrincipal
   notionalPrincipal
   purchase
   termination
-  redemptionCycle
-  nextPayment
   scalingIndex =
   { initialExchangeDate
   , premiumDiscountAtIED
@@ -131,7 +121,5 @@ mkNotionalPrincipal
   , notionalPrincipal
   , purchase
   , termination
-  , redemptionCycle
-  , nextPayment
   , scalingIndex
   }

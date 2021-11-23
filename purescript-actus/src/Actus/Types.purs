@@ -1,4 +1,4 @@
-module Data.Actus.Types
+module Actus.Types
   ( module ContractStructure
   , AnchoredCycle
   , BusinessDayConvention(..)
@@ -38,7 +38,7 @@ module Data.Actus.Types
 
 import Prelude
 
-import Data.Actus.ContractStructure
+import Actus.ContractStructure
   ( ContractReference
   , ContractStructure
   , ReferenceRole

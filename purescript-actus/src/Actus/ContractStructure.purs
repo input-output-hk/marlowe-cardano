@@ -1,4 +1,4 @@
-module Data.Actus.ContractStructure
+module Actus.ContractStructure
   ( ReferenceRole
   , ReferenceType
   , ContractReference

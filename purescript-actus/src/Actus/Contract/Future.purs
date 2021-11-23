@@ -1,8 +1,8 @@
-module Data.Actus.Contract.Option where
+module Actus.Contract.Future where
 
 import Prelude
 
-import Data.Actus.Types as Types
+import Actus.Types as Types
 import Data.DateTime (DateTime)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
@@ -13,8 +13,8 @@ newtype Contract = Contract
       ( calendar :: Types.Calendar
       , contractPerformance :: Types.ContractPerformance
       , contractStructure :: Types.ContractStructure
+      , futuresPrice :: Number
       , notionalPrincipal :: NotionalPrincipal
-      , optionality :: Optionality
       , settlement :: Maybe Types.Settlement
       )
   )
@@ -31,8 +31,8 @@ mkContract
   -> Types.ContractPerformance
   -> Types.ContractStructure
   -> NotionalPrincipal
-  -> Optionality
   -> Maybe Types.Settlement
+  -> Number
   -> Contract
 mkContract
   statusDate
@@ -42,8 +42,8 @@ mkContract
   contractPerformance
   contractStructure
   notionalPrincipal
-  optionality
-  settlement =
+  settlement
+  futuresPrice =
   Contract
     { statusDate
     , contractRole
@@ -51,8 +51,8 @@ mkContract
     , calendar
     , contractPerformance
     , contractStructure
+    , futuresPrice
     , notionalPrincipal
-    , optionality
     , settlement
     }
 
@@ -69,32 +69,4 @@ mkNotionalPrincipal
   -> NotionalPrincipal
 mkNotionalPrincipal maturityDate purchase termination =
   { maturityDate, purchase, termination }
-
-type Optionality =
-  { optionExerciseType :: Types.OptionExerciseType
-  , optionExerciseEndDate :: DateTime
-  , optionStrike1 :: Number
-  , optionType :: Types.OptionType
-  , cycle :: Maybe Types.AnchoredCycle
-  }
-
-mkOptionality
-  :: Types.OptionExerciseType
-  -> DateTime
-  -> Number
-  -> Types.OptionType
-  -> Maybe Types.AnchoredCycle
-  -> Optionality
-mkOptionality
-  optionExerciseType
-  optionExerciseEndDate
-  optionStrike1
-  optionType
-  cycle =
-  { optionExerciseType
-  , optionExerciseEndDate
-  , optionStrike1
-  , optionType
-  , cycle
-  }
 
