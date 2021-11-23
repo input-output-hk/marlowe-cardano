@@ -8,7 +8,6 @@ import           Language.Marlowe.Serialisation  (intToByteString, listToByteStr
 import           Ledger                          (PubKeyHash (..), Slot (..))
 import           Ledger.Value                    (CurrencySymbol (..), TokenName (..))
 import           PlutusTx.Builtins               (BuiltinByteString, appendByteString)
-import           PlutusTx.Ratio                  (denominator, numerator)
 
 partyToByteString :: Party -> BuiltinByteString
 partyToByteString (PK (PubKeyHash x))  = positiveIntToByteString 0 `appendByteString` packByteString x
@@ -45,12 +44,11 @@ valueToByteString (AddValue lhs rhs) = positiveIntToByteString 3 `appendByteStri
 valueToByteString (SubValue lhs rhs) = positiveIntToByteString 4 `appendByteString` valueToByteString lhs `appendByteString` valueToByteString rhs
 valueToByteString (MulValue lhs rhs) = positiveIntToByteString 5 `appendByteString` valueToByteString lhs `appendByteString` valueToByteString rhs
 valueToByteString (DivValue lhs rhs) = positiveIntToByteString 6 `appendByteString` valueToByteString lhs `appendByteString` valueToByteString rhs
-valueToByteString (Scale r rhs) = positiveIntToByteString 7 `appendByteString` intToByteString (numerator r) `appendByteString` intToByteString (denominator r) `appendByteString` valueToByteString rhs
-valueToByteString (ChoiceValue choId) = positiveIntToByteString 8 `appendByteString` choiceIdToByteString choId
-valueToByteString SlotIntervalStart = positiveIntToByteString 9
-valueToByteString SlotIntervalEnd = positiveIntToByteString 10
-valueToByteString (UseValue valId) = positiveIntToByteString 11 `appendByteString` valueIdToByteString valId
-valueToByteString (Cond cond thn els) = positiveIntToByteString 12 `appendByteString` observationToByteString cond `appendByteString` valueToByteString thn `appendByteString` valueToByteString els
+valueToByteString (ChoiceValue choId) = positiveIntToByteString 7 `appendByteString` choiceIdToByteString choId
+valueToByteString SlotIntervalStart = positiveIntToByteString 8
+valueToByteString SlotIntervalEnd = positiveIntToByteString 9
+valueToByteString (UseValue valId) = positiveIntToByteString 10 `appendByteString` valueIdToByteString valId
+valueToByteString (Cond cond thn els) = positiveIntToByteString 11 `appendByteString` observationToByteString cond `appendByteString` valueToByteString thn `appendByteString` valueToByteString els
 
 payeeToByteString :: Payee -> BuiltinByteString
 payeeToByteString (Account accId) = positiveIntToByteString 0 `appendByteString` partyToByteString accId

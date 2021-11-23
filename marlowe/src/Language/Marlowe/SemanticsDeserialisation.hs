@@ -4,12 +4,11 @@ import           Language.Marlowe.Deserialisation (byteStringToInt, byteStringTo
                                                    getByteString)
 import           Language.Marlowe.SemanticsTypes  (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
                                                    Observation (..), Party (..), Payee (..), Token (..),
-                                                   Value (AddValue, AvailableMoney, ChoiceValue, Cond, Constant, DivValue, MulValue, NegValue, Scale, SlotIntervalEnd, SlotIntervalStart, SubValue, UseValue),
+                                                   Value (AddValue, AvailableMoney, ChoiceValue, Cond, Constant, DivValue, MulValue, NegValue, SlotIntervalEnd, SlotIntervalStart, SubValue, UseValue),
                                                    ValueId (..))
 import           Ledger                           (PubKeyHash (..), Slot (..))
 import           Ledger.Value                     (CurrencySymbol (..), TokenName (..))
 import           PlutusTx.Builtins                (BuiltinByteString)
-import           PlutusTx.Prelude                 ((%))
 
 byteStringToParty :: BuiltinByteString -> Maybe (Party, BuiltinByteString)
 byteStringToParty x = do (y, t1) <- byteStringToPositiveInt x
@@ -69,15 +68,11 @@ byteStringToValue x = do (y, t1) <- byteStringToPositiveInt x
                            4 -> withTwoVal t1 SubValue
                            5 -> withTwoVal t1 MulValue
                            6 -> withTwoVal t1 DivValue
-                           7 -> do (n, t2) <- byteStringToInt t1
-                                   (d, t3) <- byteStringToInt t2
-                                   (v, t4) <- byteStringToValue t3
-                                   return (Scale (n % d) v, t4)
-                           8 -> withChoiceId t1 ChoiceValue
-                           9 -> Just (SlotIntervalStart, t1)
-                           10 -> Just (SlotIntervalEnd, t1)
-                           11 -> withValueId t1 UseValue
-                           12 -> do (cond, t2) <- byteStringToObservation t1
+                           7 -> withChoiceId t1 ChoiceValue
+                           8 -> Just (SlotIntervalStart, t1)
+                           9 -> Just (SlotIntervalEnd, t1)
+                           10 -> withValueId t1 UseValue
+                           11 -> do (cond, t2) <- byteStringToObservation t1
                                     (thn, t3) <- byteStringToValue t2
                                     (els, t4) <- byteStringToValue t3
                                     return (Cond cond thn els, t4)
