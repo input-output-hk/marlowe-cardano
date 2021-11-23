@@ -27,7 +27,6 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (isNothing, maybe)
 import Data.Newtype (class Newtype)
-import Data.Ord (abs)
 import Data.Ord.Generic (genericCompare)
 import Data.Set (Set)
 import Data.Set as Set
@@ -37,7 +36,7 @@ import Marlowe.Extended as EM
 import Marlowe.Extended.Metadata (MetadataHintInfo, _choiceNames, _roles, _slotParameters, _valueParameters)
 import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Holes, Location(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Value(..), compareLocation, fromTerm, getHoles, getLocation, insertHole)
 import Marlowe.Holes as Holes
-import Marlowe.Semantics (Rational(..), Slot(..), emptyState, evalValue, makeEnvironment)
+import Marlowe.Semantics (Slot(..), emptyState, evalValue, makeEnvironment)
 import Marlowe.Semantics as S
 import Monaco (TextEdit)
 import Pretty (showPrettyMoney, showPrettyParty, showPrettyToken)
@@ -88,7 +87,6 @@ data WarningDetail
   | UndefinedChoice
   | UndefinedUse
   | ShadowedLet
-  | DivisionByZero
   | SimplifiableValue (Term Value) (Term Value)
   | SimplifiableObservation (Term Observation) (Term Observation)
   | PayBeforeDeposit S.AccountId
@@ -105,7 +103,6 @@ instance showWarningDetail :: Show WarningDetail where
   show UndefinedChoice = "The contract uses a ChoiceId that has not been input by a When, so (Constant 0) will be used"
   show UndefinedUse = "The contract uses a ValueId that has not been defined in a Let, so (Constant 0) will be used"
   show ShadowedLet = "Let is redefining a ValueId that already exists"
-  show DivisionByZero = "Scale construct divides by zero"
   show (SimplifiableValue oriVal newVal) = "The value \"" <> show oriVal <> "\" can be simplified to \"" <> show newVal <> "\""
   show (SimplifiableObservation oriVal newVal) = "The observation \"" <> show oriVal <> "\" can be simplified to \"" <> show newVal <> "\""
   show (PayBeforeDeposit account) = "The contract makes a payment from account " <> showPrettyParty account <> " before a deposit has been made"
@@ -651,31 +648,6 @@ lintValue env t@(Term (DivValue a b) pos) = do
       markSimplification constToVal SimplifiableValue a sa
       markSimplification constToVal SimplifiableValue b sb
       pure (ValueSimp pos false t)
-
-lintValue env t@(Term (Scale (TermWrapper r@(Rational a b) pos2) c) pos) = do
-  sc <- lintValue env c
-  if (b == zero) then do
-    addWarning DivisionByZero pos2
-    markSimplification constToVal SimplifiableValue c sc
-    pure (ValueSimp pos false t)
-  else
-    let
-      gcdv = gcd a b
-
-      na = a `div` gcdv
-
-      nb = b `div` gcdv
-
-      isSimp = (abs gcdv) > one
-    in
-      case sc of
-        (ConstantSimp _ _ v) -> pure (ConstantSimp pos true (evalValue (makeEnvironment zero zero) (emptyState (Slot zero)) (S.Scale r (S.Constant v))))
-        (ValueSimp _ _ _) -> do
-          if isSimp then
-            pure unit
-          else do
-            markSimplification constToVal SimplifiableValue c sc
-          pure (ValueSimp pos isSimp (Term (Scale (TermWrapper (Rational na nb) pos2) c) pos))
 
 lintValue env t@(Term (ChoiceValue choiceId@(ChoiceId choiceName party)) pos) = do
   addChoiceName choiceName

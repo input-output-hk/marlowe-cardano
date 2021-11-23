@@ -68,19 +68,19 @@ using *overloaded strings*) so that these can be input and read as used above,
 
 A Marlowe *account* holds amounts of multiple currencies and/or fungible
 and non-fungible tokens. A concrete amount is indexed by a ``Token``,
-which is a pair of a *currency symbol* and a *token name*, both given by a ``ByteString``. 
+which is a pair of a *currency symbol* and a *token name*, both given by a ``ByteString``.
 
 .. code:: haskell
 
    data Token = Token ByteString ByteString
 
-Cardano’s Ada token is 
+Cardano’s Ada token is
 
 .. code:: haskell
- 
+
    ada = Token adaSymbol adaToken
-   
-But you are free to create your own currencies and tokens using the native token facility of Cardano.   
+
+But you are free to create your own currencies and tokens using the native token facility of Cardano.
 You can think
 of an Account as used above, a map from ``Token`` to ``Integer`` and so all the accounts in a contracts can be modelled like this:
 
@@ -148,7 +148,6 @@ cases. First, looking at ``Value`` we have
               | SubValue Value Value
               | MulValue Value Value
               | DivValue Value Value
-              | Scale Rational Value
               | ChoiceValue ChoiceId
               | SlotIntervalStart
               | SlotIntervalEnd
@@ -163,10 +162,6 @@ pretty much self explanatory, but for completeness we have
    defined ``UseValue``.
 
 -  Arithmetic constants and operators.
-
--  ``Scale`` multiplies a ``Value`` by a rational constant, say, 2/3,
-   and rounds the result using 'half even' aka 'banking' rounding. So,
-   14/10 rounds to 1, both 15/10 and 25/10 rounds to 2.
 
 -  The start and end of the current *slot interval*; see below for
    further discussion of this.
@@ -231,7 +226,7 @@ Extended Marlowe
 ----------------
 
 Extended Marlowe adds templating functionality to Marlowe language, so that constants need not be “hard wired”
-into Marlowe contracts, but can be replaced by *parameters*. 
+into Marlowe contracts, but can be replaced by *parameters*.
 Objects in Extended Marlowe are called *templates* or *contract templates*.
 
 

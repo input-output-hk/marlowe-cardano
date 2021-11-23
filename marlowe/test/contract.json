@@ -28,7 +28,13 @@
               "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
             },
             "pay": {
-              "use_value": "x"
+              "if": true,
+              "then": {
+                "use_value": "x"
+              },
+              "else": {
+                "use_value": "y"
+              }
             }
           },
           "let": "x"
@@ -75,11 +81,7 @@
                   "choice_name": "choice"
                 }
               },
-              "equal_to": {
-                "divide_by": 10,
-                "multiply": 100,
-                "times": 1
-              }
+              "equal_to": 100
             }
           },
           "then": {
@@ -90,7 +92,7 @@
             },
             "then": "close",
             "token": {
-              "currency_symbol": "6161",
+              "currency_symbol": "10",
               "token_name": "name"
             },
             "from_account": {
@@ -100,7 +102,7 @@
               "by": 100,
               "divide": {
                 "amount_of_token": {
-                  "currency_symbol": "6161",
+                  "currency_symbol": "10",
                   "token_name": "name"
                 },
                 "in_account": {

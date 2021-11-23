@@ -84,9 +84,6 @@ type Value = { "amount_of_token": Token,
              , "times": Value }
            | { "divide": Value
              , "by": Value }
-           | { "multiply": Value
-             , "times": bignumber.BigNumber
-             , "divide_by": bignumber.BigNumber }
            | { "value_of_choice": ChoiceId }
            | "slot_interval_start"
            | "slot_interval_end"
@@ -155,18 +152,6 @@ export const DivValue =
     function (lhs : EValue, rhs : EValue) : Value {
         return { "divide": coerceValue(lhs),
                  "by": coerceValue(rhs) };
-    };
-
-export const Scale =
-    function (num : SomeNumber, den : SomeNumber, val : EValue) : Value {
-        var cden = coerceNumber(den);
-        if (cden <= (new bignumber.BigNumber(0))) {
-            throw(new Error("Denominator in scale must be strictly positve"));
-        } else {
-            return { "multiply": coerceValue(val),
-                    "times": coerceNumber(num),
-                    "divide_by": cden };
-        }
     };
 
 export const ChoiceValue =

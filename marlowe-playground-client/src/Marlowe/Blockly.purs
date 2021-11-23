@@ -29,8 +29,7 @@ import Data.TraversableWithIndex (forWithIndex)
 import Effect (Effect)
 import Foreign.Object as Object
 import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Timeout(..), Token(..), Value(..), ValueId(..))
-import Marlowe.Semantics (Rational(..))
-import Prologue (class Bounded, class Eq, class Ord, class Show, Either, Maybe(..), Tuple(..), Unit, bind, bottom, discard, map, negate, pure, show, unit, zero, ($), (<#>), (<$>), (<<<), (<>), (=<<), (==), (>), (>>=))
+import Prologue (class Bounded, class Eq, class Ord, class Show, Either, Maybe(..), Tuple(..), Unit, bind, bottom, discard, map, pure, show, unit, ($), (<#>), (<$>), (<<<), (<>), (=<<), (==), (>>=))
 import Record (merge)
 import Type.Proxy (Proxy(..))
 
@@ -1432,15 +1431,6 @@ instance blockToTermValue :: BlockToTerm Value where
     value1 <- valueToTerm "value1" b
     value2 <- valueToTerm "value2" b
     pure $ Term (DivValue value1 value2) (BlockId id)
-  blockToTerm b@({ type: "ScaleValueType", id }) = do
-    numerator <- fieldAsBigInt "numerator" b
-    denominator <- fieldAsBigInt "denominator" b
-    value <- valueToTerm "value" b
-    let
-      location = (BlockId id)
-
-      rational = TermWrapper (Rational numerator denominator) location
-    pure $ Term (Scale rational value) location
   blockToTerm b@({ type: "ChoiceValueValueType", id }) = do
     choiceName <- fieldAsString "choice_name" b
     party <- valueToTerm "party" b
@@ -1828,19 +1818,6 @@ instance toBlocklyValue :: ToBlockly Value where
     connectToOutput block input
     inputToBlockly newBlock workspace block "value1" v1
     inputToBlockly newBlock workspace block "value2" v2
-  toBlockly newBlock workspace input (Scale (TermWrapper (Rational n d) _) value) = do
-    block <- newBlock workspace (show ScaleValueType)
-    connectToOutput block input
-    -- this makes sure the `-` sign is always on the top
-    let
-      (Tuple fixedNumerator fixedDenominator) =
-        if d > zero then
-          Tuple n d
-        else
-          Tuple (-n) (-d)
-    setField block "numerator" (BigInt.toString fixedNumerator)
-    setField block "denominator" (BigInt.toString fixedDenominator)
-    inputToBlockly newBlock workspace block "value" value
   toBlockly newBlock workspace input (ChoiceValue (ChoiceId choiceName choiceOwner)) = do
     block <- newBlock workspace (show ChoiceValueValueType)
     connectToOutput block input

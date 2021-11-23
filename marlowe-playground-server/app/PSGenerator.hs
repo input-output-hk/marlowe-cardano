@@ -230,7 +230,7 @@ writePangramJson outputDir = do
 
     let
 
-        alicePk = S.PK "4ecde0775d081e45f06141416cbc3afed4c44a08c93ea31281e25c8fa03548b9"
+        alicePk = S.PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
 
         bobRole = S.Role "Bob"
 
@@ -249,8 +249,8 @@ writePangramJson outputDir = do
                         ( S.Let (S.ValueId "x") valueExpr
                             (S.Pay alicePk (S.Party bobRole) ada (S.Cond S.TrueObs (S.UseValue (S.ValueId "x")) (S.UseValue (S.ValueId "y"))) S.Close)
                         )
-                    , S.Case (S.Choice choiceId [ S.Bound 0 1 ])
-                        ( S.If (S.ChoseSomething choiceId `S.OrObs` (S.ChoiceValue choiceId `S.ValueEQ` S.Scale (1 S.% 10) const100))
+                    , S.Case (S.Choice choiceId [Bound 0 1, Bound 10 20])
+                        ( S.If (S.ChoseSomething choiceId `S.OrObs` (S.ChoiceValue choiceId `S.ValueEQ` const100))
                             (S.Pay alicePk (S.Account alicePk) token (S.DivValue (S.AvailableMoney alicePk token) const100) S.Close)
                             S.Close
                         )

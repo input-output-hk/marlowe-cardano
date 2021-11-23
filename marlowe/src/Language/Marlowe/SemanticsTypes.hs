@@ -31,7 +31,6 @@ import qualified Data.Aeson                  as JSON
 import qualified Data.Aeson.Extras           as JSON
 import           Data.Aeson.Types            hiding (Error, Value)
 import qualified Data.Foldable               as F
-import           Data.Scientific             (Scientific)
 import           Data.String                 (IsString (..))
 import           Data.Text                   (pack)
 import           Data.Text.Encoding          as Text (decodeUtf8, encodeUtf8)
@@ -46,7 +45,6 @@ import           PlutusTx.AssocMap           (Map)
 import qualified PlutusTx.AssocMap           as Map
 import           PlutusTx.Lift               (makeLift)
 import           PlutusTx.Prelude            hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
-import           PlutusTx.Ratio              (denominator, numerator)
 import           Prelude                     (mapM, (<$>))
 import qualified Prelude                     as Haskell
 
@@ -118,7 +116,6 @@ data Value a = AvailableMoney AccountId Token
            | SubValue (Value a) (Value a)
            | MulValue (Value a) (Value a)
            | DivValue (Value a) (Value a)
-           | Scale Rational (Value a)
            | ChoiceValue ChoiceId
            | SlotIntervalStart
            | SlotIntervalEnd
@@ -356,12 +353,8 @@ instance FromJSON (Value Observation) where
                   <*> (v .: "and"))
     <|> (SubValue <$> (v .: "value")
                   <*> (v .: "minus"))
-    <|> (do maybeDiv <- v .:? "divide_by"
-            case maybeDiv :: Maybe Scientific of
-              Nothing -> MulValue <$> (v .: "multiply")
-                                  <*> (v .: "times")
-              Just divi -> Scale <$> ((%) <$> (getInteger =<< (v .: "times")) <*> getInteger divi)
-                                 <*> (v .: "multiply"))
+    <|> MulValue  <$> (v .: "multiply")
+                  <*> (v .: "times")
     <|> (DivValue <$> (v .: "divide") <*> (v .: "by"))
     <|> (ChoiceValue <$> (v .: "value_of_choice"))
     <|> (UseValue <$> (v .: "use_value"))
@@ -396,13 +389,6 @@ instance ToJSON (Value Observation) where
       [ "divide" .= lhs
       , "by" .= rhs
       ]
-  toJSON (Scale rat v) = object
-      [ "multiply" .= v
-      , "times" .= num
-      , "divide_by" .= den
-      ]
-    where num = numerator rat
-          den = denominator rat
   toJSON (ChoiceValue choiceId) = object
       [ "value_of_choice" .= choiceId ]
   toJSON SlotIntervalStart = JSON.String $ pack "slot_interval_start"
@@ -630,7 +616,6 @@ instance Eq a => Eq (Value a) where
     SubValue val1 val2 == SubValue val3 val4 = val1 == val3 && val2 == val4
     MulValue val1 val2 == MulValue val3 val4 = val1 == val3 && val2 == val4
     DivValue val1 val2 == DivValue val3 val4 = val1 == val3 && val2 == val4
-    Scale s1 val1 == Scale s2 val2 = s1 == s2 && val1 == val2
     ChoiceValue cid1 == ChoiceValue cid2 = cid1 == cid2
     SlotIntervalStart == SlotIntervalStart = True
     SlotIntervalEnd   == SlotIntervalEnd   = True
@@ -711,8 +696,7 @@ makeIsDataIndexed ''Value [
     ('AddValue,3),
     ('SubValue,4),
     ('MulValue,5),
-    ('DivValue,12),
-    ('Scale,6),
+    ('DivValue,6),
     ('ChoiceValue,7),
     ('SlotIntervalStart, 8),
     ('SlotIntervalEnd,9),

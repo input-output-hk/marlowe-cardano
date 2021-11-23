@@ -27,7 +27,6 @@ instance semanticValueHasParties :: HasParties Semantic.Value where
   getParties (Semantic.SubValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Semantic.MulValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Semantic.DivValue lhs rhs) = getParties lhs <> getParties rhs
-  getParties (Semantic.Scale _ val) = getParties val
   getParties (Semantic.ChoiceValue choId) = getParties choId
   getParties Semantic.SlotIntervalStart = Set.empty
   getParties Semantic.SlotIntervalEnd = Set.empty
@@ -43,7 +42,6 @@ instance extendedValueHasParties :: HasParties Extended.Value where
   getParties (Extended.SubValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Extended.MulValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Extended.DivValue lhs rhs) = getParties lhs <> getParties rhs
-  getParties (Extended.Scale _ val) = getParties val
   getParties (Extended.ChoiceValue choId) = getParties choId
   getParties Extended.SlotIntervalStart = Set.empty
   getParties Extended.SlotIntervalEnd = Set.empty

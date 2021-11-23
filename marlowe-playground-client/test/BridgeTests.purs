@@ -14,7 +14,7 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Language.Haskell.Interpreter (CompilationError)
-import Marlowe.Semantics (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Rational(..), Slot(..), State(..), Token(..), Value(..), ValueId(..))
+import Marlowe.Semantics (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Slot(..), State(..), Token(..), Value(..), ValueId(..))
 import Node.Encoding (Encoding(UTF8))
 import Node.FS.Sync as FS
 import Test.Unit (TestSuite, Test, failure, success, suite, test)
@@ -41,7 +41,7 @@ serializationTest =
     let
       ada = Token "" ""
 
-      alicePk = PK "4ecde0775d081e45f06141416cbc3afed4c44a08c93ea31281e25c8fa03548b9"
+      alicePk = PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
 
       bobRole = Role "Bob"
 
@@ -60,8 +60,8 @@ serializationTest =
                   ( Let (ValueId "x") valueExpr
                       (Pay alicePk (Party bobRole) ada (Cond TrueObs (UseValue (ValueId "x")) (UseValue (ValueId "y"))) Close)
                   )
-              , Case (Choice choiceId [ Bound (fromInt 0) (fromInt 1) ])
-                  ( If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` Scale (Rational (fromInt 1) (fromInt 10)) const))
+              , Case (Choice choiceId [ Bound (fromInt 0) (fromInt 1), Bound (fromInt 10) (fromInt 20) ])
+                  ( If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` const))
                       (Pay alicePk (Account alicePk) token (DivValue (AvailableMoney alicePk token) const) Close)
                       Close
                   )

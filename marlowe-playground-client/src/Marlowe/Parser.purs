@@ -12,7 +12,7 @@ import Data.Show.Generic (genericShow)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Marlowe.Holes (AccountId, Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Timeout(SlotParam), Token(..), Value(..), ValueId(..), getLocation, mkHole)
 import Marlowe.Holes as H
-import Marlowe.Semantics (Rational(..), Slot(..))
+import Marlowe.Semantics (Slot(..))
 import Monaco (IRange)
 
 type HelperFunctions a
@@ -61,8 +61,6 @@ type HelperFunctions a
     , mkSubValue :: Term Value -> Term Value -> Value
     , mkMulValue :: Term Value -> Term Value -> Value
     , mkDivValue :: Term Value -> Term Value -> Value
-    , mkRational :: BigInt -> BigInt -> Rational
-    , mkScale :: TermWrapper Rational -> Term Value -> Value
     , mkChoiceValue :: ChoiceId -> Value
     , mkSlotIntervalStart :: Value
     , mkSlotIntervalEnd :: Value
@@ -126,8 +124,6 @@ helperFunctions =
   , mkSubValue: SubValue
   , mkMulValue: MulValue
   , mkDivValue: DivValue
-  , mkRational: Rational
-  , mkScale: Scale
   , mkChoiceValue: ChoiceValue
   , mkSlotIntervalStart: SlotIntervalStart
   , mkSlotIntervalEnd: SlotIntervalEnd

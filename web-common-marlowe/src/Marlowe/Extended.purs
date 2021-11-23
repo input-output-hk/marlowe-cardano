@@ -21,7 +21,7 @@ import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.Traversable (foldMap, traverse)
 import Data.Tuple (Tuple(..))
-import Marlowe.Semantics (Rational(..), caseConstantFrom, getProp, object, requireProp)
+import Marlowe.Semantics (caseConstantFrom, getProp, object, requireProp)
 import Marlowe.Semantics as S
 import Marlowe.Template (class Fillable, class Template, Placeholders(..), TemplateContent, fillTemplate, getPlaceholderIds)
 import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, pretty)
@@ -178,7 +178,6 @@ data Value
   | SubValue Value Value
   | MulValue Value Value
   | DivValue Value Value
-  | Scale S.Rational Value
   | ChoiceValue S.ChoiceId
   | SlotIntervalStart
   | SlotIntervalEnd
@@ -223,12 +222,6 @@ instance encodeJsonValue :: EncodeJson Value where
       { divide: lhs
       , by: rhs
       }
-  encodeJson (Scale (Rational n d) val) =
-    encodeJson
-      { multiply: val
-      , times: n
-      , divide_by: d
-      }
   encodeJson (ChoiceValue choiceId) =
     encodeJson
       { value_of_choice: choiceId
@@ -269,18 +262,11 @@ instance decodeJsonValue :: DecodeJson Value where
         multiply <- getProp "multiply"
         by <- getProp "by"
         times <- getProp "times"
-        divideBy <- getProp "divide_by"
         valueOfChoices <- getProp "value_of_choice"
         useValue <- getProp "use_value"
         if_ <- getProp "if"
         then_ <- getProp "then"
         else_ <- getProp "else"
-        let
-          timesConst =
-            times
-              >>= case _ of
-                  Constant v -> Just v
-                  _ -> Nothing
         pure
           $ (AvailableMoney <$> inAccount <*> amountOfToken)
           <|> (NegValue <$> negate)
@@ -288,7 +274,6 @@ instance decodeJsonValue :: DecodeJson Value where
           <|> (ConstantParam <$> constantParam)
           <|> (SubValue <$> value <*> minus)
           <|> (DivValue <$> divide <*> by)
-          <|> (Scale <$> (Rational <$> timesConst <*> divideBy) <*> multiply)
           <|> (MulValue <$> multiply <*> times)
           <|> (ChoiceValue <$> valueOfChoices)
           <|> (UseValue <$> useValue)
@@ -314,7 +299,6 @@ instance toCoreValue :: ToCore Value S.Value where
   toCore (SubValue lhs rhs) = S.SubValue <$> toCore lhs <*> toCore rhs
   toCore (MulValue lhs rhs) = S.MulValue <$> toCore lhs <*> toCore rhs
   toCore (DivValue lhs rhs) = S.DivValue <$> toCore lhs <*> toCore rhs
-  toCore (Scale f v) = S.Scale <$> pure f <*> toCore v
   toCore (ChoiceValue choId) = Just $ S.ChoiceValue choId
   toCore SlotIntervalStart = Just $ S.SlotIntervalStart
   toCore SlotIntervalEnd = Just $ S.SlotIntervalEnd
@@ -330,7 +314,6 @@ instance templateValue :: Template Value Placeholders where
   getPlaceholderIds (SubValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
   getPlaceholderIds (MulValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
   getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (Scale _ v) = getPlaceholderIds v
   getPlaceholderIds (ChoiceValue _) = mempty
   getPlaceholderIds SlotIntervalStart = mempty
   getPlaceholderIds SlotIntervalEnd = mempty
@@ -347,7 +330,6 @@ instance fillableValue :: Fillable Value TemplateContent where
     SubValue lhs rhs -> SubValue (go lhs) (go rhs)
     MulValue lhs rhs -> MulValue (go lhs) (go rhs)
     DivValue lhs rhs -> DivValue (go lhs) (go rhs)
-    Scale f v -> Scale f $ go v
     ChoiceValue _ -> val
     SlotIntervalStart -> val
     SlotIntervalEnd -> val
@@ -366,7 +348,6 @@ instance valueHasChoices :: HasChoices Value where
   getChoiceNames (SubValue lhs rhs) = getChoiceNames lhs <> getChoiceNames rhs
   getChoiceNames (MulValue lhs rhs) = getChoiceNames lhs <> getChoiceNames rhs
   getChoiceNames (DivValue lhs rhs) = getChoiceNames lhs <> getChoiceNames rhs
-  getChoiceNames (Scale _ val) = getChoiceNames val
   getChoiceNames (ChoiceValue choId) = getChoiceNames choId
   getChoiceNames SlotIntervalStart = Set.empty
   getChoiceNames SlotIntervalEnd = Set.empty

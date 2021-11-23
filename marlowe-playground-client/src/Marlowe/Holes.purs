@@ -32,7 +32,7 @@ import Data.Tuple.Nested ((/\), type (/\))
 import Effect.Exception.Unsafe (unsafeThrow)
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Semantics (class HasTimeout, CurrencySymbol, IntervalResult(..), PubKey, Rational(..), Timeouts(..), TokenName, _slotInterval, fixInterval, ivFrom, ivTo, timeouts)
+import Marlowe.Semantics (class HasTimeout, CurrencySymbol, IntervalResult(..), PubKey, Timeouts(..), TokenName, _slotInterval, fixInterval, ivFrom, ivTo, timeouts)
 import Marlowe.Semantics as S
 import Marlowe.Template (class Fillable, class Template, Placeholders(..), TemplateContent, fillTemplate, getPlaceholderIds)
 import Monaco (IRange)
@@ -120,7 +120,6 @@ data Argument
   | DataArgIndexed Int MarloweType
   | DefaultString String
   | DefaultNumber BigInt
-  | DefaultRational Rational
   | NewtypeArg
   | GenArg MarloweType
 
@@ -162,7 +161,6 @@ getMarloweConstructors ValueType =
     , (Tuple "SubValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
     , (Tuple "MulValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
     , (Tuple "DivValue" $ ArgumentArray [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ])
-    , (Tuple "Scale" $ ArgumentArray [ DefaultRational (Rational one one), DataArg ValueType ])
     , (Tuple "ChoiceValue" $ ArgumentArray [ GenArg ChoiceIdType ])
     , (Tuple "SlotIntervalStart" $ ArgumentArray [])
     , (Tuple "SlotIntervalEnd" $ ArgumentArray [])
@@ -273,8 +271,6 @@ constructMarloweType constructorName (MarloweHole { location }) m = case Map.loo
   showArgument (DefaultString arg) = "\"" <> arg <> "\""
 
   showArgument (DefaultNumber arg) = BigInt.toString arg
-
-  showArgument (DefaultRational arg) = show arg
 
   showArgument NewtypeArg = ""
 
@@ -470,10 +466,6 @@ instance termWrapperHasContractData :: HasContractData a => HasContractData (Ter
 
 mkDefaultTermWrapper :: forall a. a -> TermWrapper a
 mkDefaultTermWrapper a = TermWrapper a NoLocation
-
--- special case
-instance fromTermRational :: FromTerm Rational Rational where
-  fromTerm = pure
 
 -- a concrete type for holes only
 newtype MarloweHole
@@ -837,7 +829,6 @@ data Value
   | SubValue (Term Value) (Term Value)
   | MulValue (Term Value) (Term Value)
   | DivValue (Term Value) (Term Value)
-  | Scale (TermWrapper Rational) (Term Value)
   | ChoiceValue ChoiceId
   | SlotIntervalStart
   | SlotIntervalEnd
@@ -870,7 +861,6 @@ instance templateValue :: Template Value Placeholders where
   getPlaceholderIds (SubValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
   getPlaceholderIds (MulValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
   getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (Scale _ v) = getPlaceholderIds v
   getPlaceholderIds (ChoiceValue _) = mempty
   getPlaceholderIds SlotIntervalStart = mempty
   getPlaceholderIds SlotIntervalEnd = mempty
@@ -887,7 +877,6 @@ instance fillableValue :: Fillable Value TemplateContent where
     SubValue lhs rhs -> SubValue (go lhs) (go rhs)
     MulValue lhs rhs -> MulValue (go lhs) (go rhs)
     DivValue lhs rhs -> DivValue (go lhs) (go rhs)
-    Scale f v -> Scale f $ go v
     ChoiceValue _ -> val
     SlotIntervalStart -> val
     SlotIntervalEnd -> val
@@ -906,7 +895,6 @@ instance valueFromTerm :: FromTerm Value EM.Value where
   fromTerm (SubValue a b) = EM.SubValue <$> fromTerm a <*> fromTerm b
   fromTerm (MulValue a b) = EM.MulValue <$> fromTerm a <*> fromTerm b
   fromTerm (DivValue a b) = EM.DivValue <$> fromTerm a <*> fromTerm b
-  fromTerm (Scale a b) = EM.Scale <$> fromTerm a <*> fromTerm b
   fromTerm (ChoiceValue a) = EM.ChoiceValue <$> fromTerm a
   fromTerm SlotIntervalStart = pure EM.SlotIntervalStart
   fromTerm SlotIntervalEnd = pure EM.SlotIntervalEnd
@@ -928,7 +916,6 @@ instance valueHasContractData :: HasContractData Value where
   gatherContractData (SubValue a b) s = gatherContractData a s <> gatherContractData b s
   gatherContractData (MulValue a b) s = gatherContractData a s <> gatherContractData b s
   gatherContractData (DivValue a b) s = gatherContractData a s <> gatherContractData b s
-  gatherContractData (Scale _ a) s = gatherContractData a s
   gatherContractData (ChoiceValue a) s = gatherContractData a s
   gatherContractData (Cond c a b) s = gatherContractData c s <> gatherContractData a s <> gatherContractData b s
   gatherContractData _ s = s
