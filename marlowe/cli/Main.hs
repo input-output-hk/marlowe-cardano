@@ -54,7 +54,6 @@ example =
         $ Base16.decode "d7604c51452bf9c135d63c686ba306d268fcae8494c877e12c44c657"
     let
       party = PK ownPubKey
-      slotRange = (1000, 43000000)
       adatoken = Token adaSymbol adaToken
       testnet = Testnet $ NetworkMagic 1097911063
     Just costModelParams <- pure defaultCostModelParams
@@ -77,7 +76,6 @@ example =
       defaultMarloweParams costModelParams
       testnet NoStakeAddress
       contract1 state1 inputs1
-      slotRange
 
     liftIO $ putStrLn ""
     liftIO $ putStrLn ""
@@ -97,4 +95,3 @@ example =
       defaultMarloweParams costModelParams
       testnet NoStakeAddress
       contract2 state2 inputs2
-      slotRange

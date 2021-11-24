@@ -6,17 +6,18 @@ The `build-outgoing` command builds a transaction that spends from a Marlowe con
 ## Usage
 
     $ marlowe-cli build-outgoing --help
-    
+
     Usage: marlowe-cli build-outgoing [--testnet-magic INTEGER]
                                       --socket-path SOCKET_FILE
                                       --tx-in-script-file PLUTUS_FILE
                                       --tx-in-redeemer-file REDEEMER_FILE
                                       --tx-in-datum-file DATUM_FILE
-                                      --tx-in-marlowe TXID#TXIX [--tx-in TXID#TXIX] 
+                                      --tx-in-marlowe TXID#TXIX [--tx-in TXID#TXIX]
                                       [--tx-out ADDRESS+LOVELACE]
                                       --tx-in-collateral TXID#TXIX
-                                      --change-address ADDRESS --out-file FILE
-      Build a transaction that spends from to a Marlowe script.
+                                      --change-address ADDRESS --invalid-before SLOT
+                                      --invalid-hereafter SLOT --out-file FILE
+      Build a transaction that spends from a Marlowe script.
     
     Available options:
       --testnet-magic INTEGER              Network magic, or omit for mainnet.
@@ -29,5 +30,7 @@ The `build-outgoing` command builds a transaction that spends from a Marlowe con
       --tx-out ADDRESS+LOVELACE            Transaction output in ADDRESS+LOVELACE format.
       --tx-in-collateral TXID#TXIX         Collateral for transaction.
       --change-address ADDRESS             Address to receive ADA in excess of fee.
+      --invalid-before SLOT                Minimum slot for the redemption.
+      --invalid-hereafter SLOT             Maximum slot for the redemption.
       --out-file FILE                      Output file for transaction body.
       -h,--help                            Show this help text

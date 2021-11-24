@@ -8,7 +8,7 @@ The `build-simple` command builds a non-Marlowe transaction. This command is pro
     $ marlowe-cli build-simple --help
     
     Usage: marlowe-cli build-simple [--testnet-magic INTEGER]
-                                    --socket-path SOCKET_FILE [--tx-in TXID#TXIX] 
+                                    --socket-path SOCKET_FILE [--tx-in TXID#TXIX]
                                     [--tx-out ADDRESS+LOVELACE]
                                     --change-address ADDRESS --out-file FILE
       Build a non-Marlowe transaction.

@@ -67,11 +67,8 @@ import           Data.Maybe                                        (maybeToList)
 import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData)
 import           Language.Marlowe.CLI.Types                        (CliError (..), PayFromScript (..), PayToScript (..),
                                                                     liftCli, liftCliIO)
-import           Language.Marlowe.Scripts                          (MarloweInput)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import           Plutus.V1.Ledger.Api                              (Datum (..), Redeemer (..), toData)
-import           Plutus.V1.Ledger.Slot                             (Slot (..))
-import           PlutusTx                                          (fromBuiltinData)
 
 import qualified Data.Set                                          as S (empty, fromList)
 
@@ -142,22 +139,23 @@ buildContinuing :: MonadError CliError m
                 -> [(AddressAny, Value)]             -- ^ The transaction outputs.
                 -> TxIn                              -- ^ The collateral.
                 -> AddressAny                        -- ^ The change address.
+                -> SlotNo                            -- ^ The first valid slot for the transaction.
+                -> SlotNo                            -- ^ The last valid slot for the transaction.
                 -> FilePath                          -- ^ The output JSON file for the transaction body.
                 -> m TxId                            -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile txIn outputDatumFile outputValue inputs outputs collateral changeAddress bodyFile =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
-    slotRange <- extractSlotRange redeemer
     body <-
       buildBody connection
         (Just $ buildPayFromScript validator inputDatum redeemer txIn)
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
         inputs outputs (Just collateral) changeAddress
-        (Just slotRange)
+        (Just (minimumSlot, maximumSlot))
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     pure
@@ -176,34 +174,25 @@ buildOutgoing :: MonadError CliError m
               -> [(AddressAny, Value)]             -- ^ The transaction outputs.
               -> TxIn                              -- ^ The collateral.
               -> AddressAny                        -- ^ The change address.
+              -> SlotNo                            -- ^ The first valid slot for the transaction.
+              -> SlotNo                            -- ^ The last valid slot for the transaction.
               -> FilePath                          -- ^ The output JSON file for the transaction body.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile txIn inputs outputs collateral changeAddress bodyFile =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
-    slotRange <- extractSlotRange redeemer
     body <-
       buildBody connection
         (Just $ buildPayFromScript validator inputDatum redeemer txIn)
         Nothing
         inputs outputs (Just collateral) changeAddress
-        (Just slotRange)
+        (Just (minimumSlot, maximumSlot))
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     pure
       $ getTxId body
-
-
--- | Extract the valid slot range from the Marlowe redeemer.
-extractSlotRange :: MonadError CliError m
-                 => Redeemer            -- ^ The redeemer.
-                 -> m (SlotNo, SlotNo)  -- ^ Action to extract the slot range.
-extractSlotRange (Redeemer redeemer) =
-  case PlutusTx.fromBuiltinData redeemer :: Maybe MarloweInput of
-     Just ((Slot minimumSlot, Slot maximumSlot), _) -> pure (fromIntegral minimumSlot, fromIntegral maximumSlot)
-     Nothing                                        -> throwError "Failed to deserialise redeemer."
 
 
 -- | Collect information on paying from a script.

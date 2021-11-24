@@ -11,7 +11,7 @@ The `build-incoming` command builds a transaction that pays to a Marlowe contrac
                                       --socket-path SOCKET_FILE
                                       --script-address ADDRESS
                                       --tx-out-datum-file DATUM_FILE
-                                      --tx-out-value LOVELACE [--tx-in TXID#TXIX] 
+                                      --tx-out-value LOVELACE [--tx-in TXID#TXIX]
                                       [--tx-out ADDRESS+LOVELACE]
                                       --change-address ADDRESS --out-file FILE
       Build a transaction that pays to a Marlowe script.

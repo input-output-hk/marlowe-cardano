@@ -37,7 +37,7 @@ module Language.Marlowe.CLI.Export (
 
 
 import           Cardano.Api                     (AddressInEra, AlonzoEra, IsShelleyBasedEra, NetworkId,
-                                                  PaymentCredential (..), ScriptDataJsonSchema (..), SlotNo (..),
+                                                  PaymentCredential (..), ScriptDataJsonSchema (..),
                                                   StakeAddressReference (..), hashScript, makeShelleyAddressInEra,
                                                   scriptDataToJson, serialiseAddress, serialiseToTextEnvelope,
                                                   writeFileTextEnvelope)
@@ -50,7 +50,7 @@ import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Language.Marlowe.CLI.IO         (decodeFileStrict)
 import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (MarloweInput, typedValidator1)
+import           Language.Marlowe.Scripts        (typedValidator1)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
@@ -75,15 +75,13 @@ buildMarlowe :: IsShelleyBasedEra era
              -> Contract                           -- ^ The contract.
              -> State                              -- ^ The contract's state.
              -> [Input]                            -- ^ The contract's input,
-             -> SlotNo                             -- ^ The first valid slot for the transaction.
-             -> SlotNo                             -- ^ The last valid slot for the tranasction.
              -> Either CliError (MarloweInfo era)  -- ^ The contract and transaction information, or an error message.
-buildMarlowe marloweParams costModel network stake contract state inputs minimumSlot maximumSlot =
+buildMarlowe marloweParams costModel network stake contract state inputs =
   do
     validatorInfo <- buildValidator marloweParams costModel network stake
     let
       datumInfo = buildDatum contract state
-      redeemerInfo = buildRedeemer inputs minimumSlot maximumSlot
+      redeemerInfo = buildRedeemer inputs
     pure MarloweInfo{..}
 
 
@@ -97,12 +95,10 @@ exportMarlowe :: MonadError CliError m
               -> FilePath               -- ^ The JSON file containing the contract.
               -> FilePath               -- ^ The JSON file containing the contract's state.
               -> Maybe FilePath         -- ^ The JSON file containing the contract's input, if any.
-              -> SlotNo                 -- ^ The first valid slot for the transaction.
-              -> SlotNo                 -- ^ The last valid slot for the tranasction.
               -> FilePath               -- ^ The output JSON file for Marlowe contract information.
               -> Bool                   -- ^ Whether to print statistics about the contract.
               -> m ()                   -- ^ Action to export the contract and transaction information to a file.
-exportMarlowe marloweParams costModel network stake contractFile stateFile inputsFile minimumSlot maximumSlot outputFile printStats =
+exportMarlowe marloweParams costModel network stake contractFile stateFile inputsFile outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
@@ -112,7 +108,7 @@ exportMarlowe marloweParams costModel network stake contractFile stateFile input
         $ buildMarlowe
             marloweParams costModel network stake
             contract state
-            inputs minimumSlot maximumSlot
+            inputs
     let
       ValidatorInfo{..} = validatorInfo
       DatumInfo{..}     = datumInfo
@@ -141,16 +137,15 @@ printMarlowe :: MonadError CliError m
               -> Contract               -- ^ The contract.
               -> State                  -- ^ The contract's state.
               -> [Input]                -- ^ The contract's input,
-              -> (SlotNo, SlotNo)       -- ^ The first and last valid slot for the tranasction.
               -> m ()                   -- ^ Action to print the contract and transaction information.
-printMarlowe marloweParams costModel network stake contract state inputs (minimumSlot, maximumSlot) =
+printMarlowe marloweParams costModel network stake contract state inputs =
   do
     MarloweInfo{..} <-
       liftEither
         $ buildMarlowe
             marloweParams costModel network stake
             contract state
-            inputs minimumSlot maximumSlot
+            inputs
     let
       ValidatorInfo{..} = validatorInfo
       DatumInfo{..}     = datumInfo
@@ -327,13 +322,10 @@ exportDatum contractFile stateFile outputFile printStats =
 
 -- | Build the redeemer information about a Marlowe transaction.
 buildRedeemer :: [Input]       -- ^ The contract's input,
-              -> SlotNo        -- ^ The first valid slot for the transaction.
-              -> SlotNo        -- ^ The last valid slot for the tranasction.
               -> RedeemerInfo  -- ^ Information about the transaction redeemer.
-buildRedeemer inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
+buildRedeemer inputs =
   let
-    input = ((fromIntegral minimumSlot, fromIntegral maximumSlot), inputs)
-    marloweRedeemer = PlutusTx.toBuiltinData (input :: MarloweInput)
+    marloweRedeemer = PlutusTx.toBuiltinData inputs
     riRedeemer = Redeemer marloweRedeemer
     riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
     riJson =
@@ -349,16 +341,14 @@ buildRedeemer inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
 exportRedeemer :: MonadError CliError m
                => MonadIO m
                => Maybe FilePath  -- ^ The file containing the contract's input, if any.
-               -> SlotNo          -- ^ The first valid slot for the transaction.
-               -> SlotNo          -- ^ The last valid slot for the tranasction.
                -> FilePath        -- ^ The output JSON file for Marlowe contract information.
                -> Bool            -- ^ Whether to print statistics on the contract.
                -> m ()            -- ^ Action to export the redeemer information to a file.
-exportRedeemer inputsFile minimumSlot maximumSlot outputFile printStats =
+exportRedeemer inputsFile outputFile printStats =
   do
     inputs <- maybe (pure []) decodeFileStrict inputsFile
     let
-      RedeemerInfo{..} = buildRedeemer inputs minimumSlot maximumSlot
+      RedeemerInfo{..} = buildRedeemer inputs
     liftIO
       $ do
         LBS.writeFile outputFile

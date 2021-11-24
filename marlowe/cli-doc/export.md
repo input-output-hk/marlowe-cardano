@@ -10,9 +10,7 @@ The `export` command writes a JSON file with comprehensive information about the
     Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS] 
                               [--roles-currency CURRENCY_SYMBOL]
                               --contract-file CONTRACT_FILE --state-file STATE_FILE 
-                              [--inputs-file INPUTS_FILE]
-                              --redeemer-min-slot SLOT_NUMBER
-                              --redeemer-max-slot SLOT_NUMBER --out-file OUTPUT_FILE
+                              [--inputs-file INPUTS_FILE] --out-file OUTPUT_FILE
                               [--print-stats]
       Export a Marlowe contract to a JSON file.
     
@@ -23,8 +21,6 @@ The `export` command writes a JSON file with comprehensive information about the
       --contract-file CONTRACT_FILE       JSON input file for the contract.
       --state-file STATE_FILE             JSON input file for the contract state.
       --inputs-file INPUTS_FILE           JSON input file for redeemer inputs, if any.
-      --redeemer-min-slot SLOT_NUMBER     Minimum slot for the redemption.
-      --redeemer-max-slot SLOT_NUMBER     Maximum slot for the redemption.
       --out-file OUTPUT_FILE              JSON output file for contract.
       --print-stats                       Print statistics.
       -h,--help                           Show this help text
@@ -46,8 +42,6 @@ The following command uses the close contract [example.contract](example.contrac
                          --contract-file example.contract \
                          --state-file example.state       \
                          --inputs-file example.inputs     \
-                         --redeemer-min-slot 1000         \
-                         --redeemer-max-slot 43500000     \
                          --out-file example.marlowe       \
                          --print-stats
     
@@ -120,17 +114,7 @@ The following command uses the close contract [example.contract](example.contrac
         },
         "redeemer": {
             "json": {
-                "constructor": 0,
-                "fields": [
-                    {
-                        "constructor": 0,
-                        "fields": [
-                            { "int": 1000 },
-                            { "int": 43500000 }
-                        ]
-                    },
-                    { "list": [] }
-                ]
+                "list": []
             },
             "cboxHex": "d8799fd8799f1903e81a0297c1e0ff80ff",
             "size": 17

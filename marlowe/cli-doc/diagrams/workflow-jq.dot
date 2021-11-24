@@ -23,8 +23,6 @@ RolesCurrency -> ExportCommand [label="--roles-currency"   , fontname=monospace,
 ContractFile  -> ExportCommand [label="--contract-file"    , fontname=monospace, fontsize=10]
 StateFile     -> ExportCommand [label="--state-file"       , fontname=monospace, fontsize=10]
 InputsFile    -> ExportCommand [label="--inputs-file"      , fontname=monospace, fontsize=10, style=dashed]
-MinSlot       -> ExportCommand [label="--redeemer-min-slot", fontname=monospace, fontsize=10]
-MaxSlot       -> ExportCommand [label="--redeemer-max-slot", fontname=monospace, fontsize=10]
 
 
 MarloweFile [label="Marlowe\nJSON File", shape=tab]
@@ -50,13 +48,14 @@ JQ -> DatumHash
 JQ -> RedeemerFile
 
 
-CardanoCLI [label="cardano-cli transaction build", shape=box, fontname=monospace]
+CardanoCLI [label="marlowe-cli build", shape=box, fontname=monospace]
 
-ValidatorAddress -> CardanoCLI [label="--tx-out"             , fontname=monospace, fontsize=10]
+ValidatorAddress -> CardanoCLI [label="--script-address"     , fontname=monospace, fontsize=10]
 ValidatorFile    -> CardanoCLI [label="--tx-in-script-file"  , fontname=monospace, fontsize=10]
 DatumFile        -> CardanoCLI [label="--tx-in-datum-file"   , fontname=monospace, fontsize=10]
 RedeemerFile     -> CardanoCLI [label="--tx-in-redeemer-file", fontname=monospace, fontsize=10]
-DatumHash        -> CardanoCLI [label="--tx-out-datum-hash"  , fontname=monospace, fontsize=10]
+MinSlot          -> CardanoCLI [label="--invalid-before"     , fontname=monospace, fontsize=10]
+MaxSlot          -> CardanoCLI [label="--invalid-hereafter"  , fontname=monospace, fontsize=10]
 
 
 TxBodyFile [label="Tx Body\nFile", shape=tab]

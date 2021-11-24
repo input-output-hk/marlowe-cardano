@@ -36,18 +36,16 @@ MARLOWE_FILE=test.marlowe
 CONTRACT_FILE=example.contract
 STATE_FILE=example.state
 DATUM_LOVELACE=$(jq '.accounts | .[0] | .[1]' $STATE_FILE)
-REDEEMER_MIN_SLOT=1000
-REDEEMER_MAX_SLOT=43500000
+REDEEM_MIN_SLOT=1000
+REDEEM_MAX_SLOT=43500000
 
 
 # Create the contract, and extract the address, validator, datum hash, datum, and redeemer.
 
-marlowe-cli export $MAGIC                                 \
-                   --contract-file $CONTRACT_FILE         \
-                   --state-file $STATE_FILE               \
-                   --redeemer-min-slot $REDEEMER_MIN_SLOT \
-                   --redeemer-max-slot $REDEEMER_MAX_SLOT \
-                   --out-file $MARLOWE_FILE               \
+marlowe-cli export $MAGIC                         \
+                   --contract-file $CONTRACT_FILE \
+                   --state-file $STATE_FILE       \
+                   --out-file $MARLOWE_FILE       \
                    --print-stats
 
 ADDRESS_S=$(jq -r '.validator.address' $MARLOWE_FILE)
@@ -109,6 +107,8 @@ marlowe-cli build-outgoing $MAGIC                                  \
                            --tx-in-collateral $TX_1#0              \
                            --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
                            --change-address $ADDRESS_P             \
+                           --invalid-before $REDEEM_MIN_SLOT       \
+                           --invalid-hereafter $REDEEM_MAX_SLOT    \
                            --out-file tx.raw
 
 cardano-cli transaction sign $MAGIC                           \

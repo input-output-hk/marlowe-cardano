@@ -67,8 +67,8 @@ We will put 3 ADA into the account for the wallet, as recorded in the contract's
 
 We will redeem the ADA within a particular range of slots:
 
-    REDEEMER_MIN_SLOT=1000
-    REDEEMER_MAX_SLOT=43500000
+    REDEEM_MIN_SLOT=1000
+    REDEEM_MAX_SLOT=43500000
 
 
 ## Create the validator, datum, and redeemer.
@@ -78,8 +78,6 @@ We now create the Marlowe contract and transaction:
     $ marlowe-cli export $MAGIC                                 \
                          --contract-file $CONTRACT_FILE         \
                          --state-file $STATE_FILE               \
-                         --redeemer-min-slot $REDEEMER_MIN_SLOT \
-                         --redeemer-max-slot $REDEEMER_MAX_SLOT \
                          --out-file $MARLOWE_FILE               \
                          --print-stats
     
@@ -165,6 +163,8 @@ We now use the previously computed redeemer and datum to remove the funds from t
                                --tx-in-collateral $TX_1#0              \
                                --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
                                --change-address $ADDRESS_P             \
+                               --invalid-before $REDEEM_MIN_SLOT       \
+                               --invalid-hereafter $REDEEM_MAX_SLOT    \
                                --out-file tx.raw
     
     cardano-cli transaction sign $MAGIC                           \
