@@ -17,10 +17,11 @@ import API.Contract as API
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
 import Bridge (toBack, toFront)
+import Component.Contacts.Types (Wallet)
 import Control.Monad.Except (lift, runExceptT)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Lens (view)
 import Data.RawJson (RawJson)
-import Foreign.Generic (class Encode)
 import Halogen (HalogenM)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
@@ -29,7 +30,6 @@ import Plutus.Contract.Resumable (Request)
 import Plutus.PAB.Events.ContractInstanceState (PartiallyDecodedResponse)
 import Plutus.PAB.Webserver.Types (ContractActivationArgs(..), ContractInstanceClientState, ContractSignatureResponse)
 import Types (AjaxResponse)
-import Component.Contacts.Types (Wallet)
 
 -- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
@@ -40,13 +40,13 @@ class
   getContractInstanceCurrentState :: PlutusAppId -> m (AjaxResponse (PartiallyDecodedResponse ActiveEndpoint))
   getContractInstanceObservableState :: PlutusAppId -> m (AjaxResponse RawJson)
   getContractInstanceHooks :: PlutusAppId -> m (AjaxResponse (Array (Request ActiveEndpoint)))
-  invokeEndpoint :: forall d. Encode d => PlutusAppId -> String -> d -> m (AjaxResponse Unit)
+  invokeEndpoint :: forall d. EncodeJson d => PlutusAppId -> String -> d -> m (AjaxResponse Unit)
   getWalletContractInstances :: Wallet -> m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
   getAllContractInstances :: m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
   getContractDefinitions :: m (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
 
 instance monadContractAppM :: ManageContract AppM where
-  activateContract contractActivationId wallet = map toFront $ runExceptT $ API.activateContract $ ContractActivationArgs { caID: contractActivationId, caWallet: Just (toBack wallet) }
+  activateContract contractActivationId wallet = map (map toFront) $ runExceptT $ API.activateContract $ ContractActivationArgs { caID: contractActivationId, caWallet: Just (toBack wallet) }
   deactivateContract plutusAppId = runExceptT $ API.deactivateContract $ toBack plutusAppId
   getContractInstanceClientState plutusAppId = runExceptT $ API.getContractInstanceClientState $ toBack plutusAppId
   getContractInstanceCurrentState plutusAppId = do

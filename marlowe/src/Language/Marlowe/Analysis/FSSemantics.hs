@@ -188,13 +188,6 @@ symEvalVal (SubValue lhs rhs) symState = symEvalVal lhs symState -
                                          symEvalVal rhs symState
 symEvalVal (MulValue lhs rhs) symState = symEvalVal lhs symState *
                                          symEvalVal rhs symState
-symEvalVal (Scale s rhs) symState =
-  let (n, d) = (P.numerator s, P.denominator s)
-      nn = symEvalVal rhs symState * literal n
-      (q, r) = nn `sQuotRem` literal d in
-  ite (abs r * 2 .< literal (abs d)) q (q + signum nn * literal (signum d))
--- this implementation looks slightly different in Semantics.hs
--- It's semanticly equivalent, but here we want less `ite`s
 symEvalVal (DivValue lhs rhs) symState =
   let n = symEvalVal lhs symState
       d = symEvalVal rhs symState

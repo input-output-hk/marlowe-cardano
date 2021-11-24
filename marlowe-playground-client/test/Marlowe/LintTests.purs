@@ -9,7 +9,6 @@ import Data.Traversable (sequence_)
 import Data.Tuple.Nested (type (/\), (/\))
 import Marlowe.Linter (State(..), WarningDetail(..), lint)
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics as S
 import StaticData (marloweContracts)
 import Test.Unit (TestSuite, Test, suite, test, failure)
 import Test.Unit.Assert as Assert
@@ -31,12 +30,9 @@ all = do
     test "of AndObs with True constant" andObsSimplifiesWithTrue
     test "in OrObs" orObsSimplifies
     test "of OrObs with False constant" orObsSimplifiesWithFalse
-    test "of non-reduced Scale" nonReducedScaleSimplified
     test "of DivValue 0 / _" divZeroSimplified
     test "of DivValue by 0" divByZeroSimplified
     test "of DivValue with constant" divConstantSimplified
-    test "of Scale with constant" scaleConstantSimplified
-    test "of Scale with constant expression" scaleConstantExpressionSimplified
     test "Invalid bound in Case" unreachableCaseInvalidBound
   suite "Marlowe.Linter reports bad pratices" do
     test "Let shadowing" letShadowing
@@ -113,16 +109,13 @@ makeObservationSimplificationWarning simplifiableExpression simplification = "Th
 unCurry2 :: forall a b c. (a -> b -> c) -> (a /\ b) -> c
 unCurry2 f (a /\ b) = f a b
 
-testWarningWithState :: forall a. S.State -> (a -> Array String) -> (a -> String) -> a -> Test
-testWarningWithState state makeWarning composeExpression expression = case parseContract $ composeExpression expression of
+testWarning :: forall a. (a -> Array String) -> (a -> String) -> a -> Test
+testWarning makeWarning composeExpression expression = case parseContract $ composeExpression expression of
   Right contractTerm -> do
     let
       State st = lint Nil contractTerm
     Assert.equal (makeWarning expression) $ map show $ toUnfoldable $ st.warnings
   Left err -> failure (show err)
-
-testWarning :: forall a. (a -> Array String) -> (a -> String) -> a -> Test
-testWarning = testWarningWithState (S.emptyState zero)
 
 testSimplificationWarning :: (String -> String -> String) -> (String -> String) -> String -> String -> Test
 testSimplificationWarning f g simplifiableExpression simplification = testWarning (singleton <<< unCurry2 f) (g <<< fst) (simplifiableExpression /\ simplification)
@@ -136,11 +129,8 @@ testObservationSimplificationWarning = testSimplificationWarning makeObservation
 testWarningSimple :: String -> String -> Test
 testWarningSimple expression warning = testWarning (const [ warning ]) (const expression) unit
 
-testNoWarningWithState :: S.State -> String -> Test
-testNoWarningWithState state expression = testWarningWithState state (const []) (const expression) unit
-
 testNoWarning :: String -> Test
-testNoWarning = testNoWarningWithState (S.emptyState zero)
+testNoWarning expression = testWarning (const []) (const expression) unit
 
 letSimplifies :: Test
 letSimplifies =
@@ -268,15 +258,6 @@ orObsSimplifiesWithFalse =
   in
     testObservationSimplificationWarning ifContract simplifiableExpression simplification
 
-nonReducedScaleSimplified :: Test
-nonReducedScaleSimplified =
-  let
-    simplifiableExpression = "(Scale (362%194) SlotIntervalStart)"
-
-    simplification = "(Scale (181%97) SlotIntervalStart)"
-  in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
-
 divZeroSimplified :: Test
 divZeroSimplified =
   let
@@ -301,24 +282,6 @@ divConstantSimplified =
     simplifiableExpression = "(DivValue (Constant 7) (Constant -3))"
 
     simplification = "(Constant -2)"
-  in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
-
-scaleConstantSimplified :: Test
-scaleConstantSimplified =
-  let
-    simplifiableExpression = "(Scale (7%3) (Constant 21))"
-
-    simplification = "(Constant 49)"
-  in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
-
-scaleConstantExpressionSimplified :: Test
-scaleConstantExpressionSimplified =
-  let
-    simplifiableExpression = "(Scale (1%3) (AddValue (Constant 9) (Constant 12)))"
-
-    simplification = "(Constant 7)"
   in
     testValueSimplificationWarning letContract simplifiableExpression simplification
 

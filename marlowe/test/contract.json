@@ -25,10 +25,16 @@
               "token_name": ""
             },
             "from_account": {
-              "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+              "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
             },
             "pay": {
-              "use_value": "x"
+              "if": true,
+              "then": {
+                "use_value": "x"
+              },
+              "else": {
+                "use_value": "y"
+              }
             }
           },
           "let": "x"
@@ -44,14 +50,14 @@
             }
           },
           "party": {
-            "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+            "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
           },
           "of_token": {
             "currency_symbol": "",
             "token_name": ""
           },
           "into_account": {
-            "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+            "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
           }
         }
       },
@@ -61,7 +67,7 @@
             "either": {
               "chose_something_for": {
                 "choice_owner": {
-                  "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+                  "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
                 },
                 "choice_name": "choice"
               }
@@ -70,41 +76,37 @@
               "value": {
                 "value_of_choice": {
                   "choice_owner": {
-                    "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+                    "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
                   },
                   "choice_name": "choice"
                 }
               },
-              "equal_to": {
-                "divide_by": 10,
-                "multiply": 100,
-                "times": 1
-              }
+              "equal_to": 100
             }
           },
           "then": {
             "to": {
               "account": {
-                "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+                "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
               }
             },
             "then": "close",
             "token": {
-              "currency_symbol": "6161",
+              "currency_symbol": "10",
               "token_name": "name"
             },
             "from_account": {
-              "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+              "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
             },
             "pay": {
               "by": 100,
               "divide": {
                 "amount_of_token": {
-                  "currency_symbol": "6161",
+                  "currency_symbol": "10",
                   "token_name": "name"
                 },
                 "in_account": {
-                  "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+                  "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
                 }
               }
             }
@@ -114,7 +116,7 @@
         "case": {
           "for_choice": {
             "choice_owner": {
-              "pk_hash": "872cb83b5ee40eb23bfdab1772660c822a48d491"
+              "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
             },
             "choice_name": "choice"
           },

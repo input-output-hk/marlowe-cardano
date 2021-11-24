@@ -43,7 +43,8 @@ import           Language.Haskell.Interpreter          (Extension (OverloadedStr
 import           Language.Marlowe.Analysis.FSSemantics
 import           Language.Marlowe.Client
 import           Language.Marlowe.Deserialisation      (byteStringToInt, byteStringToList)
-import           Language.Marlowe.Scripts              (MarloweInput, mkMarloweStateMachineTransition, rolePayoutScript,
+import           Language.Marlowe.Scripts              (MarloweInput, marloweValidator2,
+                                                        mkMarloweStateMachineTransition, rolePayoutScript,
                                                         typedValidator, typedValidator1)
 import           Language.Marlowe.Semantics
 import           Language.Marlowe.SemanticsTypes
@@ -92,7 +93,6 @@ tests = testGroup "Marlowe"
     , testProperty "Value double negation" doubleNegation
     , testProperty "Values form abelian group" valuesFormAbelianGroup
     , testProperty "Values can be serialized to JSON" valueSerialization
-    , testProperty "Scale Value multiplies by a constant rational" scaleMulTest
     , testProperty "Multiply by zero" mulTest
     , testProperty "Divide zero and by zero" divZeroTest
     , testProperty "DivValue rounding" divisionRoundingTest
@@ -285,9 +285,17 @@ uniqueContractHash = do
 
 validatorSize :: IO ()
 validatorSize = do
-    let validator = Scripts.validatorScript $ typedValidator1 defaultMarloweParams
+    let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("Validator is too large " <> show vsize) (vsize < 15000)
+    let validator1 = Scripts.validatorScript $ typedValidator1 defaultMarloweParams
+    let vsize1 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator1
+    let validator2 = marloweValidator2 defaultMarloweParams
+    let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
+    print vsize
+    print vsize1
+    print vsize2
+    assertBool ("Validator is too large " <> show vsize) (vsize < 18000)
+    assertBool ("Validator is too large " <> show vsize2) (vsize2 < 14000)
 
 
 extractContractRolesTest :: IO ()
@@ -355,13 +363,6 @@ divisionRoundingTest = property $ do
     forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n P.% d)
     where
       halfEvenRound = P.round
-
-
-scaleMulTest :: Property
-scaleMulTest = property $ do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
-    forAll valueGen $ \a ->
-        eval (Scale (0 P.% 1) a) === 0 .&&. eval (Scale (1 P.% 1) a) === eval a
 
 
 mulTest :: Property

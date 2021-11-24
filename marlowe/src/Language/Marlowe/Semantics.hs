@@ -63,7 +63,6 @@ import qualified PlutusTx.AssocMap               as Map
 import qualified PlutusTx.Builtins               as Builtins
 import           PlutusTx.Lift                   (makeLift)
 import           PlutusTx.Prelude                hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
-import           PlutusTx.Ratio                  (denominator, numerator)
 import           Prelude                         (mapM, (<$>))
 import qualified Prelude                         as Haskell
 import           Text.PrettyPrint.Leijen         (comma, hang, lbrace, line, rbrace, space, text, (<>))
@@ -255,10 +254,6 @@ evalValue env state value = let
                                    else let -- reminder == 1/2
                                 qIsEven = q `Builtins.remainderInteger` 2 == 0
                                 in if qIsEven then q else q + signum n * signum d
-        Scale s rhs          -> let (n, d) = (numerator s, denominator s)
-                                    nn = eval rhs * n
-                                    (q, r) = nn `quotRem` d in
-                                if abs r * 2 < abs d then q else q + signum nn * signum d
         ChoiceValue choiceId ->
             case Map.lookup choiceId (choices state) of
                 Just x  -> x

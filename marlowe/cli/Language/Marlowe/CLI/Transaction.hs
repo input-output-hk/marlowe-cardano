@@ -32,7 +32,7 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     BalancedTxBody (..), BuildTx, BuildTxWith (..),
                                                                     CardanoEra (..), CardanoMode,
                                                                     CollateralSupportedInEra (..),
-                                                                    ConsensusModeIsMultiEra (..), EraInMode (..),
+                                                                    ConsensusModeIsMultiEra (..), CtxTx, EraInMode (..),
                                                                     ExecutionUnits (..), KeyWitnessInCtx (..),
                                                                     LocalNodeConnectInfo, MultiAssetSupportedInEra (..),
                                                                     PaymentKey, PlutusScript, PlutusScriptV1,
@@ -45,12 +45,12 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     SigningKey, SlotNo, TxAuxScripts (..), TxBody (..),
                                                                     TxBodyContent (..), TxBodyErrorAutoBalance (..),
                                                                     TxCertificates (..), TxExtraKeyWitnesses (..),
-                                                                    TxExtraScriptData (..), TxFee (..),
-                                                                    TxFeesExplicitInEra (..), TxId, TxIn, TxInMode (..),
-                                                                    TxInsCollateral (..), TxMetadataInEra (..),
-                                                                    TxMintValue (..), TxOut (..), TxOutDatumHash (..),
-                                                                    TxOutValue (..), TxScriptValidity (..),
-                                                                    TxUpdateProposal (..), TxValidityLowerBound (..),
+                                                                    TxFee (..), TxFeesExplicitInEra (..), TxId, TxIn,
+                                                                    TxInMode (..), TxInsCollateral (..),
+                                                                    TxMetadataInEra (..), TxMintValue (..), TxOut (..),
+                                                                    TxOutDatum (..), TxOutValue (..),
+                                                                    TxScriptValidity (..), TxUpdateProposal (..),
+                                                                    TxValidityLowerBound (..),
                                                                     TxValidityUpperBound (..), TxWithdrawals (..),
                                                                     ValidityLowerBoundSupportedInEra (..),
                                                                     ValidityNoUpperBoundSupportedInEra (..),
@@ -260,7 +260,6 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
                           )
       txMetadata        = TxMetadataNone
       txAuxScripts      = TxAuxScriptsNone
-      txExtraScriptData = BuildTxWith TxExtraScriptDataNone
       txExtraKeyWits    = TxExtraKeyWitnessesNone
       txProtocolParams  = BuildTxWith $ Just protocol
       txWithdrawals     = TxWithdrawalsNone
@@ -314,7 +313,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
                                                                                               TxOutValue MultiAssetInAlonzoEra
                                                                                                 $ value <> lovelaceToValue delta
                                                                                             )
-                                                                                            TxOutDatumHashNone
+                                                                                            TxOutDatumNone
           _                                                                            -> change
     -- Construct the body with correct execution units and fees.
     BalancedTxBody txBody _ _ <-
@@ -377,7 +376,7 @@ redeemScript PayFromScript{..} =
 
 -- | Compute the transaction output for paying to a script.
 payScript :: PayToScript AlonzoEra  -- ^ The payment information.
-          -> [TxOut AlonzoEra]      -- ^ The transaction input.
+          -> [TxOut CtxTx AlonzoEra]      -- ^ The transaction input.
 payScript PayToScript{..} =
   [
     TxOut
@@ -397,7 +396,7 @@ makeTxIn = (, BuildTxWith $ KeyWitness KeyWitnessForSpending)
 makeTxOut :: MonadError CliError m
           => AddressAny           -- ^ The output address.
           -> Value                -- ^ The output value.
-          -> m (TxOut AlonzoEra)  -- ^ Action for building the transaction output.
+          -> m (TxOut CtxTx AlonzoEra)  -- ^ Action for building the transaction output.
 makeTxOut address value =
   do
     address' <- asAlonzoAddress "Failed converting output address to Alonzo era." address
@@ -405,7 +404,7 @@ makeTxOut address value =
       $ TxOut
         address'
         (TxOutValue MultiAssetInAlonzoEra value)
-        TxOutDatumHashNone
+        TxOutDatumNone
 
 
 -- | Convert an address to Alonzo era.

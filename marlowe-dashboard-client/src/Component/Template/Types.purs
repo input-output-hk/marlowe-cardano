@@ -94,7 +94,7 @@ data Action
 instance actionIsEvent :: IsEvent Action where
   toEvent (SetContractSetupStage _) = Just $ defaultEvent "SetContractSetupStage"
   toEvent (SetTemplate _) = Just $ defaultEvent "SetTemplate"
-  toEvent (OpenCreateWalletCard tokenName) = Nothing
+  toEvent (OpenCreateWalletCard _) = Nothing
   toEvent (ContractNicknameInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent UpdateRoleWalletValidators = Nothing
   toEvent (RoleWalletInputAction _ inputFieldAction) = toEvent inputFieldAction

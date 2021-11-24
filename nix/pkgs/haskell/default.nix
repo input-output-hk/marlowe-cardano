@@ -54,7 +54,7 @@ let
   # Just the packages in the project
   projectPackages = haskell-nix.haskellLib.selectProjectPackages packages;
   projectPackagesAllHaddock = (haskell-nix.haskellLib.selectProjectPackages projectAllHaddock.hsPkgs) // {
-    inherit (projectAllHaddock.hsPkgs) plutus-core plutus-tx plutus-tx-plugin plutus-ledger-api plutus-pab plutus-contract plutus-chain-index plutus-ledger;
+    inherit (projectAllHaddock.hsPkgs) plutus-core plutus-tx plutus-tx-plugin plutus-ledger-api plutus-pab plutus-contract plutus-chain-index-core plutus-chain-index plutus-ledger;
   };
 
   extraPackages = import ./extra.nix {

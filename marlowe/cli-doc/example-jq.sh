@@ -15,15 +15,14 @@
 
 NETWORK=testnet
 MAGIC="--testnet-magic 1097911063"
-
-cardano-cli query protocol-parameters $MAGIC --out-file $NETWORK.protocol
+CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
 # Select the wallet.
 
 PAYMENT_SKEY=payment.skey
 PAYMENT_VKEY=payment.vkey
-ADDRESS_P=addr_test1qq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupcvluken35ncjnu0puetf5jvttedkze02d5kf890kquh60slacjyp
+ADDRESS_P=$(cardano-cli address build $MAGIC --payment-verification-key-file $PAYMENT_VKEY)
 PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 
 
@@ -69,21 +68,23 @@ jq '.redeemer.json' $MARLOWE_FILE > $REDEEMER_FILE
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
-TX_0=06f9f217094875b3208fcc2c2b6549055c351aff7a3525a4b1fea94cb2f7f0c0
+TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f
 
 
 # Fund the contract.
 
-cardano-cli transaction build --alonzo-era $MAGIC                 \
-                              --tx-in $TX_0#0                     \
-                              --tx-out $ADDRESS_S+$DATUM_LOVELACE \
-                                --tx-out-datum-hash $DATUM_HASH   \
-                              --change-address $ADDRESS_P         \
-                              --out-file tx.raw
+marlowe-cli build-incoming $MAGIC                                  \
+                           --socket-path $CARDANO_NODE_SOCKET_PATH \
+                           --script-address $ADDRESS_S             \
+                           --tx-out-datum-file $DATUM_FILE         \
+                           --tx-out-value $DATUM_LOVELACE          \
+                           --tx-in $TX_0#0                         \
+                           --change-address $ADDRESS_P             \
+                           --out-file tx.raw
 
-cardano-cli transaction sign $MAGIC                          \
-                             --tx-body-file tx.raw           \
-                             --signing-key-file payment.skey \
+cardano-cli transaction sign $MAGIC                           \
+                             --tx-body-file tx.raw            \
+                             --signing-key-file $PAYMENT_SKEY \
                              --out-file tx.signed
 
 cardano-cli transaction submit $MAGIC --tx-file tx.signed
@@ -93,49 +94,26 @@ cardano-cli transaction submit $MAGIC --tx-file tx.signed
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
-TX_1=ba3c61139c19d0067366338776cfbb3d8bf615abe0391871896ad62c5a7418db
-
-FUNDS=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq '.["'$TX_1#0'"].value.lovelace')
+TX_1=9c6d992735fd68ebf4e689ca75160007ffbdb584d4d908a1ab763d4d764eed13
 
 
 # Redeem the contract.
 
-FEE=$(
-cardano-cli transaction build --alonzo-era $MAGIC                      \
-                              --protocol-params-file $NETWORK.protocol \
-                              --tx-in $TX_1#1                          \
-                                --tx-in-script-file $PLUTUS_FILE       \
-                                --tx-in-datum-file $DATUM_FILE         \
-                                --tx-in-redeemer-file $REDEEMER_FILE   \
-                              --tx-in $TX_1#0                          \
-                              --tx-out $ADDRESS_P+$DATUM_LOVELACE      \
-                              --change-address $ADDRESS_P              \
-                              --tx-in-collateral $TX_1#0               \
-                              --invalid-before $REDEEMER_MIN_SLOT      \
-                              --invalid-hereafter $REDEEMER_MAX_SLOT   \
-                              --out-file tx.raw                        \
-| sed -e 's/^.* //'
-)
+marlowe-cli build-outgoing $MAGIC                                  \
+                           --socket-path $CARDANO_NODE_SOCKET_PATH \
+                           --tx-in-script-file $PLUTUS_FILE        \
+                           --tx-in-redeemer-file $REDEEMER_FILE    \
+                           --tx-in-datum-file $DATUM_FILE          \
+                           --tx-in-marlowe $TX_1#1                 \
+                           --tx-in $TX_1#0                         \
+                           --tx-in-collateral $TX_1#0              \
+                           --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
+                           --change-address $ADDRESS_P             \
+                           --out-file tx.raw
 
-NET=$((DATUM_LOVELACE + FUNDS - FEE))
-
-cardano-cli transaction build --alonzo-era $MAGIC                      \
-                              --protocol-params-file $NETWORK.protocol \
-                              --tx-in $TX_1#1                          \
-                                --tx-in-script-file $PLUTUS_FILE       \
-                                --tx-in-datum-file $DATUM_FILE         \
-                                --tx-in-redeemer-file $REDEEMER_FILE   \
-                              --tx-in $TX_1#0                          \
-                              --tx-out $ADDRESS_P+$NET                 \
-                              --change-address $ADDRESS_P              \
-                              --tx-in-collateral $TX_1#0               \
-                              --invalid-before $REDEEMER_MIN_SLOT      \
-                              --invalid-hereafter $REDEEMER_MAX_SLOT   \
-                              --out-file tx.raw
-
-cardano-cli transaction sign $MAGIC                          \
-                             --tx-body-file tx.raw           \
-                             --signing-key-file payment.skey \
+cardano-cli transaction sign $MAGIC                           \
+                             --tx-body-file tx.raw            \
+                             --signing-key-file $PAYMENT_SKEY \
                              --out-file tx.signed
 
 cardano-cli transaction submit $MAGIC --tx-file tx.signed
@@ -147,5 +125,4 @@ cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
-#### Voilà! See <https://testnet.cardanoscan.io/transaction/b4dc619a567370c59f6bbbab4234f96c96563ac26a40adafa7f66d661eb7875c>.
-
+#### Voilà! See <https://testnet.cardanoscan.io/transaction/0dbfbe3221882b1f70a555dce4f1e10b4a5afab67d7be7231d91eac5a25f8aac>.

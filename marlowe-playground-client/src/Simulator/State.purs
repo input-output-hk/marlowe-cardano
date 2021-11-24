@@ -24,9 +24,10 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap, wrap)
-import Data.NonEmpty (foldl1, (:|))
+import Data.NonEmpty ((:|))
 import Data.NonEmptyList.Extra (extendWith)
 import Data.NonEmptyList.Lens (_Tail)
+import Data.Semigroup.Foldable (foldl1)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Holes (Contract(..), Term(..), TransactionOutput(..), computeTransaction, fromTerm, reduceContractUntilQuiescent)
 import Marlowe.Holes as T
@@ -95,7 +96,7 @@ combineChoices (ChoiceInput choiceId1 bounds1 _) (ChoiceInput choiceId2 bounds2 
     where
     combinedBounds = bounds1 <> bounds2
 
-combineChoices a1 a2 = a2
+combineChoices _ a2 = a2
 
 simplifyActionInput :: ActionInput -> ActionInput
 simplifyActionInput (ChoiceInput choiceId bounds minBound) = ChoiceInput choiceId (simplifyBounds bounds) minBound
@@ -292,7 +293,7 @@ updateChoice ::
 updateChoice choiceId chosenNum = updateMarloweState (over (_executionState <<< _SimulationRunning <<< _possibleActions) (mapPartiesActionInput (doUpdate choiceId)))
   where
   doUpdate :: ChoiceId -> ActionInput -> ActionInput
-  doUpdate wantedChoiceId input@(ChoiceInput currentChoiceId bounds _)
+  doUpdate wantedChoiceId (ChoiceInput currentChoiceId bounds _)
     | wantedChoiceId == currentChoiceId = ChoiceInput choiceId bounds chosenNum
 
   doUpdate _ input = input
@@ -341,7 +342,7 @@ hasHistory state = case state ^. (_marloweState <<< _Tail) of
   Cons _ _ -> true
 
 evalObservation :: MarloweState -> Observation -> Boolean
-evalObservation state@{ executionState: SimulationRunning executionState } observation =
+evalObservation { executionState: SimulationRunning executionState } observation =
   let
     txInput = pendingTransactionInputs executionState
   in
@@ -351,7 +352,7 @@ evalObservation state@{ executionState: SimulationRunning executionState } obser
       -- Nothing should happen anyway because applying the input will fail later
       IntervalError _ -> false
 
-evalObservation state observation = false
+evalObservation _ _ = false
 
 nextTimeout :: MarloweState -> Maybe Slot
 nextTimeout state = do

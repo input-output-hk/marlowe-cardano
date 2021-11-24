@@ -40,7 +40,7 @@ modal state = case state ^. _showModal of
   modalContent = case _ of
     NewProject -> renderSubmodule _newProject NewProjectAction NewProject.render state
     OpenProject -> renderSubmodule _projects ProjectsAction Projects.render state
-    OpenDemo -> renderSubmodule identity DemosAction Demos.render state
+    OpenDemo -> renderSubmodule identity DemosAction (const Demos.render) state
     RenameProject -> renderSubmodule _rename RenameAction Rename.render state
     SaveProjectAs -> renderSubmodule _saveAs SaveAsAction SaveAs.render state
     (ConfirmUnsavedNavigation intendedAction) -> ConfirmUnsavedNavigation.render intendedAction state

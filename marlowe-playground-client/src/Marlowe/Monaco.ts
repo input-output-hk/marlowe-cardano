@@ -174,7 +174,6 @@ const marloweLexer = moo.compile({
         'SlotIntervalEnd',
         'UseValue',
         'Cond',
-        'Scale',
       ],
       TOKEN: ['Token'],
       PAYEE: ['Account', 'Party'],

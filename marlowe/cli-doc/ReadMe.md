@@ -29,13 +29,13 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
 
 Individual help pages:
 
-*   Export commands
+*   Creating validator, datum, and redeemer.
     *   [`marlowe-cli export`](export.md)
     *   [`marlowe-cli address`](address.md)
     *   [`marlowe-cli validator`](validator.md)
     *   [`marlowe-cli datum`](datum.md)
     *   [`marlowe-cli redeemer`](redeemer.md)
-*   Transaction-building commands
+*   Building transactions.
     *   [`marlowe-cli build-simple`](build-simple.md)
     *   [`marlowe-cli build-incoming`](build-incoming.md)
     *   [`marlowe-cli build-continuing`](build-continuing.md)

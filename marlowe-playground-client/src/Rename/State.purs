@@ -30,9 +30,9 @@ render state =
   div_
     [ modalHeader "Rename Project" Nothing
     , div [ classes [ modalContent ] ]
-        [ input [ class_ (ClassName "project-name-input"), value (state ^. _projectName), onValueChange (Just <<< ChangeInput) ]
+        [ input [ class_ (ClassName "project-name-input"), value (state ^. _projectName), onValueChange ChangeInput ]
         , button
-            [ onClick $ const $ Just SaveProject
+            [ onClick $ const SaveProject
             , classNames [ "btn" ]
             ]
             [ text "Save" ]

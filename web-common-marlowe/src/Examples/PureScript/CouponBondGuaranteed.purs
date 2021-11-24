@@ -5,7 +5,7 @@ module Examples.PureScript.CouponBondGuaranteed
   ) where
 
 import Prelude
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Examples.Metadata as Metadata
 import Marlowe.Extended (Action(..), Case(..), Contract(..), Payee(..), Timeout(..), Value(..))
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
@@ -35,7 +35,7 @@ principal = ConstantParam "Principal"
 instalment :: Value
 instalment = ConstantParam "Interest instalment"
 
-guaranteedAmount :: BigInteger -> Value
+guaranteedAmount :: BigInt -> Value
 guaranteedAmount instalments = AddValue (MulValue (Constant instalments) instalment) principal
 
 lastInstalment :: Value

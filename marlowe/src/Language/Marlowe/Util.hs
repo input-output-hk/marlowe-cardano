@@ -82,7 +82,6 @@ foldMapContract fcont fcase fobs fvalue contract =
         SubValue a b -> fvalue' a <> fvalue' b
         MulValue a b -> fvalue' a <> fvalue' b
         DivValue a b -> fvalue' a <> fvalue' b
-        Scale _ val  -> fvalue' val
         Cond obs a b -> fobs' obs <> fvalue' a <> fvalue' b
         _            -> mempty
 

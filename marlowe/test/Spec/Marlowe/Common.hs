@@ -9,7 +9,6 @@ import           Data.Map.Strict  (Map)
 import           Language.Marlowe
 import           Ledger           (pubKeyHash)
 import qualified Ledger
-import           Ledger.Value     (CurrencySymbol (..), TokenName (..))
 import qualified PlutusTx.Ratio   as P
 import           Test.QuickCheck
 import           Wallet           (PubKey (..))
@@ -124,7 +123,6 @@ valueGenSized s
                   , MulValue <$> valueGenSized (s `quot` 2) <*> valueGenSized (s `quot` 2)
                   , DivValue <$> valueGenSized (s `quot` 2) <*> valueGenSized (s `quot` 2)
                   , ChoiceValue <$> choiceIdGen
-                  , Scale <$> rationalGen <*> valueGenSized (s - 1)
                   , Cond  <$> observationGenSized (s `quot` 3)
                           <*> valueGenSized (s `quot` 2)
                           <*> valueGenSized (s `quot` 2)
@@ -162,7 +160,6 @@ shrinkValue value = case value of
                          ++ [MulValue val1 y | y <- shrinkValue val2])
     DivValue val1 val2 -> Constant 0 : val1 : val2 : ([DivValue x val2 | x <- shrinkValue val1]
                          ++ [DivValue val1 y | y <- shrinkValue val2])
-    Scale r val -> Constant 0 : val : [Scale r v | v <- shrinkValue val]
     Cond b val1 val2 -> Constant 0 : val1 : val2 : ([Cond x val1 val2 | x <- shrinkObservation b]
                          ++ [Cond b x val2 | x <- shrinkValue val1]
                          ++ [Cond b val1 y | y <- shrinkValue val2])
@@ -337,14 +334,14 @@ pangramContract = let
     bobRole = Role "Bob"
     constant = Constant 100
     choiceId = ChoiceId "choice" alicePk
-    token = Token (CurrencySymbol "aa") (TokenName "name")
+    token = Token "10" "name"
     valueExpr = AddValue constant (SubValue constant (NegValue constant))
     in Assert TrueObs $ When
         [ Case (Deposit aliceAcc alicePk ada valueExpr)
             (Let (ValueId "x") valueExpr
-                (Pay aliceAcc (Party bobRole) ada (UseValue (ValueId "x")) Close))
+                (Pay aliceAcc (Party bobRole) ada (Cond TrueObs (UseValue (ValueId "x")) (UseValue (ValueId "y"))) Close))
         , Case (Choice choiceId [Bound 0 1, Bound 10 20])
-            (If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` Scale (1 % 10) constant))
+            (If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` constant))
                 (Pay aliceAcc (Account aliceAcc) token (DivValue (AvailableMoney aliceAcc token) constant) Close)
                 Close)
         , Case (Notify (AndObs (SlotIntervalStart `ValueLT` SlotIntervalEnd) TrueObs)) Close

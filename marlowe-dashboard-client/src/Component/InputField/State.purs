@@ -2,8 +2,8 @@ module Component.InputField.State
   ( dummyState
   , mkInitialState
   , handleAction
-  , getBigIntegerValue
-  , formatBigIntegerValue
+  , getBigIntValue
+  , formatBigIntValue
   , validate
   ) where
 
@@ -13,8 +13,8 @@ import Component.InputField.Types (class InputFieldError, Action(..), State)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Array (head, last)
 import Data.Array (length, take) as Array
-import Data.BigInteger (BigInteger)
-import Data.BigInteger (fromInt, fromString) as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut (fromInt, fromString, toString) as BigInt
 import Data.Int (pow) as Int
 import Data.Lens (assign, set, use, view)
 import Data.Maybe (fromMaybe)
@@ -35,7 +35,7 @@ mkInitialState mNumberFormat =
   let
     initialValue = case mNumberFormat of
       Just DefaultFormat -> "0"
-      Just numberFormat -> formatBigIntegerValue numberFormat zero
+      Just numberFormat -> formatBigIntValue numberFormat zero
       _ -> mempty
   in
     { value: initialValue
@@ -63,9 +63,9 @@ handleAction (SetValueFromDropdown value) = do
 handleAction (FormatValue numberFormat) = do
   currentValue <- use _value
   let
-    bigIntegerValue = getBigIntegerValue numberFormat currentValue
+    bigIntegerValue = getBigIntValue numberFormat currentValue
 
-    formattedValue = formatBigIntegerValue numberFormat bigIntegerValue
+    formattedValue = formatBigIntValue numberFormat bigIntegerValue
   handleAction $ SetValue formattedValue
 
 handleAction (SetValidator validator) = assign _validator validator
@@ -82,25 +82,25 @@ handleAction Reset =
     <<< set _dropdownOpen false
 
 ------------------------------------------------------------
--- Numeric inputs are interpreted as BigIntegers, but are entered and stored in the state as
+-- Numeric inputs are interpreted as BigInts, but are entered and stored in the state as
 -- strings, partly because they are strings in the DOM, but mainly because we want to display them
 -- as numbers with a fixed number of decimal places (e.g. showing 2,500,001 lovelace as
--- "₳2.500001", or 120 cents as "$1.20"). To this end, we need functions to convert BigIntegers to
+-- "₳2.500001", or 120 cents as "$1.20"). To this end, we need functions to convert BigInts to
 -- suitably formatted strings, and back again. Two things to note about these functions:
 -- 1. The implementation of `getBitIntegerValue` is more convoluted than just parsing as a Number,
---    multplying up to account for the decimal places, and then converting to a BigInteger. This is
+--    multplying up to account for the decimal places, and then converting to a BigInt. This is
 --    because after the multiplication the value can easily get too large to handle as a Number. So
 --    instead we split the string into the decimal and fractional part, and parse both separately
---    as BigIntegers before stitching it all back together.
--- 2. It is tempting to put `formatBigIntegerValue` in the `Humanize` module, and use the standard
+--    as BigInts before stitching it all back together.
+-- 2. It is tempting to put `formatBigIntValue` in the `Humanize` module, and use the standard
 --    number formatter used there. And so that's what I tried first. But on playing around with it,
 --    it became apparent that this standard number formatter can't handle numbers beyond a certain
 --    size. And since we need a bespoke solution that's only used in this particular case, it seems
 --    better to just keep it in this module.
-getBigIntegerValue :: NumberFormat -> String -> BigInteger
-getBigIntegerValue DefaultFormat value = fromMaybe zero $ BigInteger.fromString value
+getBigIntValue :: NumberFormat -> String -> BigInt
+getBigIntValue DefaultFormat value = fromMaybe zero $ BigInt.fromString value
 
-getBigIntegerValue (DecimalFormat decimals _) value =
+getBigIntValue (DecimalFormat decimals _) value =
   let
     { isNegative, absoluteValue } =
       if String.take 1 value == "-" then
@@ -117,18 +117,18 @@ getBigIntegerValue (DecimalFormat decimals _) value =
     -- if zeros have been deleted from the end of the string, the fractional part will be wrong
     correctedFractionalString = String.take decimals $ rightPadTo decimals "0" fractionalString
 
-    multiplier = BigInteger.fromInt $ Int.pow 10 decimals
+    multiplier = BigInt.fromInt $ Int.pow 10 decimals
 
-    dec = fromMaybe zero $ BigInteger.fromString decimalString
+    dec = fromMaybe zero $ BigInt.fromString decimalString
 
-    frac = fromMaybe zero $ BigInteger.fromString $ String.take decimals $ correctedFractionalString
+    frac = fromMaybe zero $ BigInt.fromString $ String.take decimals $ correctedFractionalString
   in
     if isNegative then
       -((dec * multiplier) + frac)
     else
       (dec * multiplier) + frac
 
-getBigIntegerValue TimeFormat value = (BigInteger.fromInt 60) * (fromMaybe zero $ BigInteger.fromString value)
+getBigIntValue TimeFormat value = (BigInt.fromInt 60) * (fromMaybe zero $ BigInt.fromString value)
 
 -- The basic idea of this function is to take the default string representation (`show value`),
 -- split it where the decimal point is supposed to go, and join the two parts with a decimal point
@@ -140,16 +140,16 @@ getBigIntegerValue TimeFormat value = (BigInteger.fromInt 60) * (fromMaybe zero 
 -- 3. Small positive values will have no decimalString following the split, and the decimal string
 --    for small negative values will just be a minus sign, so a zero needs to be added in these
 --    cases.
-formatBigIntegerValue :: NumberFormat -> BigInteger -> String
-formatBigIntegerValue DefaultFormat value = show value
+formatBigIntValue :: NumberFormat -> BigInt -> String
+formatBigIntValue DefaultFormat value = BigInt.toString value
 
-formatBigIntegerValue (DecimalFormat decimals _) value =
+formatBigIntValue (DecimalFormat decimals _) value =
   let
     string =
       if value < zero then
-        "-" <> (leftPadTo decimals "0" $ String.drop 1 $ show value)
+        "-" <> (leftPadTo decimals "0" $ String.drop 1 $ BigInt.toString value)
       else
-        leftPadTo decimals "0" $ show value
+        leftPadTo decimals "0" $ BigInt.toString value
 
     len = String.length string
 
@@ -165,7 +165,7 @@ formatBigIntegerValue (DecimalFormat decimals _) value =
     else
       decimalString <> "." <> fractionalString
 
-formatBigIntegerValue TimeFormat value = show $ value / (BigInteger.fromInt 60)
+formatBigIntValue TimeFormat value = BigInt.toString $ value / (BigInt.fromInt 60)
 
 validate :: forall e. InputFieldError e => State e -> Maybe e
 validate state =

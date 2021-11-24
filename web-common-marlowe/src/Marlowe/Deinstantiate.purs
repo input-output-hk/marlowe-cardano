@@ -2,7 +2,7 @@ module Marlowe.Deinstantiate where
 
 import Prelude
 import Data.Array (filter, zipWith)
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (all)
 import Data.Generic.Rep (class Generic, Argument(..), Constructor(..), NoArguments, Product(..), Sum(..), from)
 import Data.Maybe (Maybe(..))
@@ -26,11 +26,11 @@ else instance genericIsInstanceOfSum2 :: (GenericIsInstanceOf a b, GenericIsInst
   genericIsInstanceOf' a (Inr c) = genericIsInstanceOf' a c
 
 instance genericIsInstanceOfConstantParam :: (GenericIsInstanceOf a b) => GenericIsInstanceOf (Constructor "Constant" a) (Constructor "ConstantParam" b) where
-  genericIsInstanceOf' (Constructor a) (Constructor b) = true
+  genericIsInstanceOf' (Constructor _) (Constructor _) = true
 else instance genericIsInstanceOfEqConstructor :: (GenericIsInstanceOf a b, IsSymbol nameA) => GenericIsInstanceOf (Constructor nameA a) (Constructor nameA b) where
   genericIsInstanceOf' (Constructor a) (Constructor b) = genericIsInstanceOf' a b
 else instance genericIsInstanceOfConstructor :: (IsSymbol nameA, IsSymbol nameB) => GenericIsInstanceOf (Constructor nameA a) (Constructor nameB b) where
-  genericIsInstanceOf' (Constructor a) (Constructor b) = false
+  genericIsInstanceOf' (Constructor _) (Constructor _) = false
 
 instance genericIsInstanceOfNoArguments :: GenericIsInstanceOf NoArguments NoArguments where
   genericIsInstanceOf' _ _ = true
@@ -48,8 +48,8 @@ genericIsInstanceOf a b = genericIsInstanceOf' (from a) (from b)
 instance isInstanceOfPayee :: IsInstanceOf S.Payee EM.Payee where
   isInstance a b = genericIsInstanceOf a b
 
-instance isInstanceOfBigIntegerString :: IsInstanceOf BigInteger String where
-  isInstance a b = false
+instance isInstanceOfBigIntString :: IsInstanceOf BigInt String where
+  isInstance _ _ = false
 
 instance isInstanceOfValue :: IsInstanceOf S.Value EM.Value where
   isInstance a b = genericIsInstanceOf a b
@@ -69,7 +69,7 @@ instance isInstanceOfArrayOfCase :: IsInstanceOf (Array S.Case) (Array EM.Case) 
 instance isInstanceOfSlotTimeout :: IsInstanceOf S.Slot EM.Timeout where
   isInstance _ (EM.SlotParam _) = true
   -- we don't check x == y here because then we get false negatives when resolving relative slots to absolutes
-  isInstance (S.Slot x) (EM.Slot y) = true
+  isInstance (S.Slot _) (EM.Slot _) = true
 
 instance isInstanceOfContract :: IsInstanceOf S.Contract EM.Contract where
   isInstance a b = genericIsInstanceOf a b

@@ -15,7 +15,7 @@ class
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
 -- satisfy the compiler
 instance mainFrameLoopAppM :: MainFrameLoop AppM where
-  callMainFrameAction toast = pure unit
+  callMainFrameAction _ = pure unit
 
 instance mainFrameLoopHalogenM :: MainFrameLoop (HalogenM state action slots Msg m) where
   callMainFrameAction action = raise $ MainFrameActionMsg action

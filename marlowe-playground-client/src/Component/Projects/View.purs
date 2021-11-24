@@ -3,8 +3,9 @@ module Component.Projects.View (render) where
 import Prologue hiding (div)
 import Component.Modal.ViewHelpers (modalHeader)
 import Component.Projects.Types (Action(..), Lang(..), State, _projects, modalIsLoading)
+import Data.Argonaut (decodeJson, fromString)
 import Data.Array (filter)
-import Data.DateTime.ISO as ISO
+import Data.DateTime.ISO (ISO)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
 import Data.Lens (to, (^.))
 import Data.List (fromFoldable)
@@ -19,8 +20,6 @@ import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Gists (fileExists, filenames, isPlaygroundGist)
 import Network.RemoteData (RemoteData(..))
-import Prim.TypeError (class Warn, Text)
-import Text.Parsing.Parser (runParser)
 
 render ::
   forall m.
@@ -50,7 +49,6 @@ render state =
 
 projectList ::
   forall p.
-  Warn (Text "SCP-1645: Only 30 projects are loading because of gist pagination. We should probably add infinite scrolling capabilities") =>
   Array Gist ->
   HTML p Action
 projectList gists =
@@ -79,11 +77,11 @@ projectList gists =
   loadLink :: Gist -> Lang -> Array ClassName -> Boolean -> HTML p Action
   loadLink gist lang style = case _ of
     false -> div [ classes ([ ClassName "language-link", ClassName "disabled" ] <> style) ] $ [ a_ $ [ text $ show lang ] ]
-    true -> div [ classes ([ ClassName "language-link" ] <> style) ] $ [ a [ onClick (const <<< Just $ LoadProject lang (gist ^. gistId)) ] $ [ text $ show lang ] ]
+    true -> div [ classes ([ ClassName "language-link" ] <> style) ] $ [ a [ onClick (const $ LoadProject lang (gist ^. gistId)) ] $ [ text $ show lang ] ]
 
 formatDate :: String -> String
-formatDate s = case runParser s ISO.parseISO of
-  Left err -> "Unknown Date"
+formatDate s = case decodeJson $ fromString s :: _ _ ISO of
+  Left _ -> "Unknown Date"
   Right iso ->
     format
       ( fromFoldable
