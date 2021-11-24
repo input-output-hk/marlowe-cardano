@@ -15,6 +15,7 @@
   "resolutions": {},
   "license": "Apache-2.0",
   "dependencies": {
+    "@emurgo/cardano-serialization-lib-browser": "^9.1.0",
     "@popperjs/core": "^2.9.2",
     "json-bigint": "^1.0.0",
     "uuid": "^8.3.2",

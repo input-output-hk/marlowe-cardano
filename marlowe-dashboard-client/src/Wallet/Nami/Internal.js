@@ -10,6 +10,7 @@ exports.getNamiAPI_ = function (just, nothing) {
 };
 
 exports.enable_ = function (cardano) {
+  window.testcbor = require("@emurgo/cardano-serialization-lib-browser");
   return cardano.enable().catch(function (err) {
     // For some reason, even if the enable function should return a promise to a boolean, instead
     // of returning false it throws an error object. The one with code -3 means it was denied access.

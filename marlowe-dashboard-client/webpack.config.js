@@ -122,4 +122,7 @@ module.exports = {
             filename: "[name].[contenthash].css",
         }),
     ],
+    experiments: {
+      asyncWebAssembly: true
+    }
 };

@@ -9,6 +9,7 @@ import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, createWallet, lookupWalletDetails)
 import Capability.MarloweStorage (class ManageMarloweStorage, clearAllLocalStorage, insertIntoWalletLibrary)
 import Capability.Toast (class Toast, addToast)
+import Cardano.Wasm (doStuff)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses (_companionAppId, _walletNickname)
@@ -37,6 +38,8 @@ import Toast.Types (ajaxErrorToast, errorToast, successToast)
 import Types (WebData)
 import Wallet.Nami (WalletConnectionError(..))
 import Wallet.Nami as Nami
+-- import Wallet.Yoroi (WalletConnectionError(..))
+-- import Wallet.Yoroi as Yoroi
 import Web.HTML (window)
 import Web.HTML.Location (reload)
 import Web.HTML.Window (location)
@@ -109,6 +112,9 @@ handleAction GenerateWallet = do
 
 handleAction ConnectNamiWallet = do
   mNamiAPI <- liftAff $ Nami.connect
+  -- mNamiAPI <- liftAff $ Yoroi.connect
+  str <- liftAff $ doStuff
+  traceM { message: "doStuff", str }
   case mNamiAPI of
     Left WalletNotInjected -> addToast $ errorToast "The wallet extension is not available." $ Just "Please make sure you have the wallet installed as a browser extension."
     Left AccessDenied -> addToast $ errorToast "Wallet access denied." $ Just "Please grant access to Marlowe Run in order to use the Nami wallet."
