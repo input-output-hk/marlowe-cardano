@@ -4,11 +4,17 @@ let
 
   pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
 
+  pab-examples-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-examples;
+
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
     mkdir $out
     ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
     ln -s ${./plutus-pab.yaml} plutus-pab.yaml
     ${marlowe-invoker}/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $out
+  '';
+
+  migrate = pkgs.writeShellScriptBin "plutus-pab-migrate" ''
+    $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.pab-examples-invoker)/bin/plutus-pab-examples --config=plutus-pab.yaml migrate
   '';
 
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
@@ -51,5 +57,5 @@ let
     });
 in
 {
-  inherit client marlowe-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker pab-examples-invoker pab-setup-invoker generate-purescript migrate generated-purescript start-backend;
 }
