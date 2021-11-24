@@ -104,7 +104,7 @@ mainCLI version example =
                                      scriptAddress
                                      outputDatumFile
                                      outputValue
-                                     inputs outputs collateral change
+                                     inputs outputs change
                                      bodyFile
                                      >>= printTxId
             BuildContinuing{..} -> buildContinuing
@@ -128,6 +128,7 @@ mainCLI version example =
                                      inputs outputs collateral change
                                      bodyFile
                                      >>= printTxId
+            Submit{}            -> pure ()
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -318,7 +319,6 @@ buildIncomingOptions =
     <*> O.option parseValue                    (O.long "tx-out-value"      <> O.metavar "LOVELACE"         <> O.help "Lovelace value paid to Marlowe contract."       )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."         )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
-    <*> O.option parseTxIn                     (O.long "tx-in-collateral"  <> O.metavar "TXID#TXIX"        <> O.help "Collateral for transaction."                    )
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."       )
     <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
 
@@ -356,7 +356,7 @@ buildOutgoingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildOutgoingCommand =
   O.command "build-outgoing"
     $ O.info (buildOutgoingOptions O.<**> O.helper)
-    $ O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
+    $ O.progDesc "Build a transaction that spends from a Marlowe script."
 
 
 -- | Parser for the "build-outgoing" options.
