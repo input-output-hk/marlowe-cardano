@@ -13,9 +13,11 @@
 
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 
 module Language.Marlowe.CLI.Types (
@@ -24,26 +26,38 @@ module Language.Marlowe.CLI.Types (
 , ValidatorInfo(..)
 , DatumInfo(..)
 , RedeemerInfo(..)
+-- * eUTxOs
+, PayFromScript(..)
+, PayToScript(..)
 -- * Exceptions
 , CliError(..)
 , liftCli
+, liftCliIO
 -- * Marlowe CLI Commands
 , Command(..)
 ) where
 
 
-import           Cardano.Api                  (AddressInEra, IsCardanoEra, NetworkId, PlutusScriptV1, Script, SlotNo,
-                                               StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
-import           Control.Monad.Except         (MonadError, liftEither)
-import           Data.Aeson                   (ToJSON (..), Value, object, (.=))
+import           Cardano.Api                  (AddressAny, AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
+                                               NetworkId, PlutusScript, PlutusScriptV1, PlutusScriptVersion (..),
+                                               Script (..), ScriptData, SlotNo, StakeAddressReference, TxIn,
+                                               deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
+                                               serialiseToTextEnvelope)
+import           Cardano.Api.Shelley          (PlutusScript (..))
+import           Codec.Serialise              (deserialise)
+import           Control.Monad                ((<=<))
+import           Control.Monad.Except         (MonadError, MonadIO, liftEither, liftIO)
+import           Data.Aeson                   (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
 import           Data.Bifunctor               (first)
 import           Data.ByteString.Short        (ShortByteString)
 import           Data.String                  (IsString)
 import           GHC.Generics                 (Generic)
 import           Language.Marlowe.CLI.Orphans ()
-import           Language.Marlowe.Semantics   (MarloweData (..))
-import           Ledger.Typed.Scripts         (TypedValidator)
 import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+
+import qualified Cardano.Api                  as Api (Value)
+import qualified Data.ByteString.Lazy         as LBS (fromStrict)
+import qualified Data.ByteString.Short        as SBS (fromShort)
 
 
 -- | Exception for Marlowe CLI.
@@ -51,12 +65,21 @@ newtype CliError = CliError {unCliError :: String}
   deriving (Eq, IsString, Ord, Read, Show)
 
 
--- | Lift an "Either" result into the CLI.
+-- | Lift an 'Either' result into the CLI.
 liftCli :: MonadError CliError m
         => Show e
         => Either e a  -- ^ The result.
         -> m a         -- ^ The lifted result.
 liftCli = liftEither . first (CliError . show)
+
+
+-- | Lift an 'IO' 'Either' result into the CLI.
+liftCliIO :: MonadError CliError m
+          => MonadIO m
+          => Show e
+          => IO (Either e a)  -- ^ Action for the result.
+          -> m a              -- ^ The lifted result.
+liftCliIO = liftCli <=< liftIO
 
 
 -- | Comprehensive information about a Marlowe transaction.
@@ -78,18 +101,27 @@ instance IsCardanoEra era => ToJSON (MarloweInfo era) where
       , "redeemer"  .= toJSON redeemerInfo
       ]
 
+instance FromJSON (MarloweInfo AlonzoEra) where  -- FIXME: Generalize eras.
+  parseJSON =
+    withObject "MarloweInfo"
+      $ \o ->
+        do
+          validatorInfo <- o .: "validator"
+          datumInfo     <- o .: "datum"
+          redeemerInfo  <- o .: "redeemer"
+          pure MarloweInfo{..}
+
 
 -- | Information about Marlowe validator.
 data ValidatorInfo era =
   ValidatorInfo
   {
-    viValidator :: TypedValidator MarloweData  -- ^ The validator.
-  , viScript    :: Script PlutusScriptV1       -- ^ The Plutus script.
-  , viBytes     :: ShortByteString             -- ^ The serialisation of the validator.
-  , viHash      :: ValidatorHash               -- ^ The validator hash.
-  , viAddress   :: AddressInEra era            -- ^ The script address.
-  , viSize      :: Int                         -- ^ The script size, in bytes.
-  , viCost      :: ExBudget                    -- ^ The execution budget for the script.
+    viScript  :: Script PlutusScriptV1       -- ^ The Plutus script.
+  , viBytes   :: ShortByteString             -- ^ The serialisation of the validator.
+  , viHash    :: ValidatorHash               -- ^ The validator hash.
+  , viAddress :: AddressInEra era            -- ^ The script address.
+  , viSize    :: Int                         -- ^ The script size, in bytes.
+  , viCost    :: ExBudget                    -- ^ The execution budget for the script.
   }
     deriving (Eq, Generic, Show)
 
@@ -103,6 +135,26 @@ instance IsCardanoEra era => ToJSON (ValidatorInfo era) where
       , "size"    .= toJSON viSize
       , "cost"    .= toJSON viCost
       ]
+
+instance FromJSON (ValidatorInfo AlonzoEra) where  -- FIXME: Generalize eras.
+  parseJSON =
+    withObject "ValidatorInfo"
+      $ \o ->
+        do
+          address   <- o .: "address"
+          viHash    <- o .: "hash"
+          script    <- o .: "script"
+          viSize    <- o .: "size"
+          viCost    <- o .: "cost"
+          viAddress <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) address of
+                         Just address' -> pure address'
+                         Nothing       -> fail "Failed deserialising address."
+          viScript <- case deserialiseFromTextEnvelope (AsScript AsPlutusScriptV1) script of
+                         Right script' -> pure script'
+                         Left message  -> fail $ show message
+          let
+            PlutusScript PlutusScriptV1 (PlutusScriptSerialised viBytes) = viScript
+          pure ValidatorInfo{..}
 
 
 -- | Information about Marlowe datum.
@@ -127,6 +179,19 @@ instance ToJSON DatumInfo where
       , "size"    .= toJSON diSize
       ]
 
+instance FromJSON DatumInfo where
+  parseJSON =
+    withObject "DatumInfo"
+      $ \o ->
+        do
+          diHash  <- o .: "hash"
+          diBytes <- o .: "cboxHex"
+          diJson  <- o .: "json"
+          diSize  <- o .: "size"
+          let
+            diDatum = deserialise . LBS.fromStrict $ SBS.fromShort diBytes
+          pure DatumInfo{..}
+
 
 -- | Information about Marlowe redeemer.
 data RedeemerInfo =
@@ -147,6 +212,41 @@ instance ToJSON RedeemerInfo where
       , "json"    .=        riJson
       , "size"    .= toJSON riSize
       ]
+
+instance FromJSON RedeemerInfo where
+  parseJSON =
+    withObject "RedeemerInfo"
+      $ \o ->
+        do
+          riBytes <- o .: "cboxHex"
+          riJson  <- o .: "json"
+          riSize  <- o .: "size"
+          let
+            riRedeemer = deserialise . LBS.fromStrict $ SBS.fromShort riBytes
+          pure RedeemerInfo{..}
+
+
+-- | Information required to redeem an eUTxO.
+data PayFromScript =
+  PayFromScript
+  {
+    txIn     :: TxIn
+  , script   :: PlutusScript PlutusScriptV1
+  , datum    :: Datum
+  , redeemer :: Redeemer
+  }
+    deriving (Eq, Generic, Show)
+
+
+-- | Information required to pay to a script.
+data PayToScript era =
+  PayToScript
+  {
+    address   :: AddressInEra era
+  , value     :: Api.Value
+  , datumHash :: Hash ScriptData
+  }
+    deriving (Eq, Generic, Show)
 
 
 -- | Marlowe CLI commands and options.
@@ -193,11 +293,65 @@ data Command =
     -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
     {
-      inputsFile   :: Maybe FilePath
+      inputsFile   :: Maybe FilePath  -- ^ The JSON file containing the contract's input, if any.
     , minimumSlot  :: SlotNo          -- ^ The first valid slot for the transaction.
     , maximumSlot  :: SlotNo          -- ^ The last valid slot for the tranasction.
     , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
+    }
+    -- | Build a transaction.
+  | BuildSimple
+    {
+      network    :: Maybe NetworkId              -- ^ The network ID, if any.
+    , socketPath :: FilePath
+    , inputs     :: [TxIn]
+    , outputs    :: [(AddressAny, Api.Value)]
+    , change     :: AddressAny
+    , bodyFile   :: FilePath
+    }
+  | BuildIncoming
+    {
+      network         :: Maybe NetworkId              -- ^ The network ID, if any.
+    , socketPath      :: FilePath
+    , scriptAddress   :: AddressAny
+    , outputDatumFile :: FilePath
+    , outputValue     :: Api.Value
+    , inputs          :: [TxIn]
+    , outputs         :: [(AddressAny, Api.Value)]
+    , collateral      :: TxIn
+    , change          :: AddressAny
+    , bodyFile        :: FilePath
+    }
+  | BuildContinuing
+    {
+      network         :: Maybe NetworkId              -- ^ The network ID, if any.
+    , socketPath      :: FilePath
+    , scriptAddress   :: AddressAny
+    , validatorFile   :: FilePath
+    , redeemerFile    :: FilePath
+    , inputDatumFile  :: FilePath
+    , inputTxIn       :: TxIn
+    , outputDatumFile :: FilePath
+    , outputValue     :: Api.Value
+    , inputs          :: [TxIn]
+    , outputs         :: [(AddressAny, Api.Value)]
+    , collateral      :: TxIn
+    , change          :: AddressAny
+    , bodyFile        :: FilePath
+    }
+  | BuildOutgoing
+    {
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , socketPath     :: FilePath
+    , validatorFile  :: FilePath
+    , redeemerFile   :: FilePath
+    , inputDatumFile :: FilePath
+    , inputTxIn      :: TxIn
+    , inputs         :: [TxIn]
+    , outputs        :: [(AddressAny, Api.Value)]
+    , collateral     :: TxIn
+    , change         :: AddressAny
+    , bodyFile       :: FilePath
     }
     -- | Ad-hoc example.
   | Example

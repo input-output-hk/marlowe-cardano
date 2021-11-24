@@ -18,12 +18,21 @@ module Language.Marlowe.CLI.Orphans (
 ) where
 
 
-import           Data.Aeson             (ToJSON (..))
-import           Data.ByteString.Short  (ShortByteString, fromShort)
+import           Data.Aeson             (FromJSON (..), ToJSON (..), withText)
+import           Data.ByteString.Short  (ShortByteString, fromShort, toShort)
 
-import qualified Data.ByteString.Base16 as Base16 (encode)
-import qualified Data.ByteString.Char8  as BS8 (unpack)
+import qualified Data.ByteString.Base16 as Base16 (decode, encode)
+import qualified Data.ByteString.Char8  as BS8 (pack, unpack)
+import qualified Data.Text              as T (unpack)
 
 
 instance ToJSON ShortByteString where
   toJSON = toJSON . BS8.unpack . Base16.encode . fromShort
+
+instance FromJSON ShortByteString where
+  parseJSON =
+    withText "ShortByteString"
+      $ \t ->
+        case Base16.decode . BS8.pack $ T.unpack t of
+          Right bytes   -> pure $ toShort bytes
+          Left  message -> fail message
