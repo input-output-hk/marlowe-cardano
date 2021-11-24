@@ -69,6 +69,7 @@ parseCurrencySymbol =
         Right currency -> Right . CurrencySymbol . toBuiltin $ currency
 
 
+-- | Parser for `TxIn`.
 parseTxIn :: O.ReadM TxIn
 parseTxIn =
   O.eitherReader -- FIXME: Use a monadic approach.
@@ -89,6 +90,7 @@ parseTxIn =
         pure $ TxIn txId'' txIx''
 
 
+-- | Parser for `TxId`.
 parseTxId :: O.ReadM TxId
 parseTxId =
   O.eitherReader
@@ -98,10 +100,12 @@ parseTxId =
         Just txId -> Right txId
 
 
+-- | Parser for `TxIx`.
 parseTxIx :: O.ReadM TxIx
 parseTxIx = TxIx <$> O.auto
 
 
+-- | Parser for `TxOut` information.
 parseTxOut :: O.ReadM (AddressAny, Value)  -- FIXME: Also parse the datum of the eUTxO.
 parseTxOut =
   O.eitherReader -- FIXME: Use a monadic approach.
@@ -122,10 +126,12 @@ parseTxOut =
         pure (address'', lovelaceToValue . quantityToLovelace . Quantity $ value'')
 
 
+-- | Parser for `Value`.
 parseValue :: O.ReadM Value
 parseValue = lovelaceToValue . quantityToLovelace . Quantity <$> O.auto
 
 
+-- | Parser for `AddressAny`.
 parseAddressAny :: O.ReadM AddressAny
 parseAddressAny =
   O.eitherReader

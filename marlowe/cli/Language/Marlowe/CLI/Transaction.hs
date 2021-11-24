@@ -76,14 +76,15 @@ import           PlutusTx                                          (fromBuiltinD
 import qualified Data.Set                                          as S (empty, fromList)
 
 
+-- | Build a non-Marlowe transaction.
 buildSimple :: MonadError CliError m
             => MonadIO m
-            => LocalNodeConnectInfo CardanoMode -- ^ The connection info for the local node.
-            -> [TxIn]
-            -> [(AddressAny, Value)]
-            -> AddressAny
-            -> FilePath
-            -> m TxId
+            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+            -> [TxIn]                            -- ^ The transaction inputs.
+            -> [(AddressAny, Value)]             -- ^ The transaction outputs.
+            -> AddressAny                        -- ^ The change address.
+            -> FilePath                          -- ^ The output JSON file for the transaction body.
+            -> m TxId                            -- ^ Action to build the transaction body.
 buildSimple connection inputs outputs changeAddress bodyFile =
   do
     body <-
@@ -98,19 +99,19 @@ buildSimple connection inputs outputs changeAddress bodyFile =
       $ getTxId body
 
 
+-- | Build a transaction paying into a Marlowe contract.
 buildIncoming :: MonadError CliError m
               => MonadIO m
-              => LocalNodeConnectInfo CardanoMode -- ^ The connection info for the local node.
-              -> AddressAny
-              -> FilePath
-              -> Value
-              -> [TxIn]
-              -> [(AddressAny, Value)]
-              -> TxIn
-              -> AddressAny
-              -> FilePath
-              -> m TxId
-buildIncoming connection scriptAddress outputDatumFile outputValue inputs outputs collateral changeAddress bodyFile =
+              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+              -> AddressAny                        -- ^ The script address.
+              -> FilePath                          -- ^ The file containing the datum for the payment to the script.
+              -> Value                             -- ^ The value to be paid to the script.
+              -> [TxIn]                            -- ^ The transaction inputs.
+              -> [(AddressAny, Value)]             -- ^ The transaction outputs.
+              -> AddressAny                        -- ^ The change address.
+              -> FilePath                          -- ^ The output JSON file for the transaction body.
+              -> m TxId                            -- ^ Action to build the transaction body.
+buildIncoming connection scriptAddress outputDatumFile outputValue inputs outputs changeAddress bodyFile =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
@@ -118,7 +119,7 @@ buildIncoming connection scriptAddress outputDatumFile outputValue inputs output
       buildBody connection
         Nothing
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
-        inputs outputs (Just collateral) changeAddress
+        inputs outputs Nothing changeAddress
         Nothing
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
@@ -126,22 +127,23 @@ buildIncoming connection scriptAddress outputDatumFile outputValue inputs output
       $ getTxId body
 
 
+-- | Build a transaction that spends from and pays to a Marlowe contract.
 buildContinuing :: MonadError CliError m
                 => MonadIO m
-                => LocalNodeConnectInfo CardanoMode -- ^ The connection info for the local node.
-                -> AddressAny
-                -> FilePath
-                -> FilePath
-                -> FilePath
-                -> TxIn
-                -> FilePath
-                -> Value
-                -> [TxIn]
-                -> [(AddressAny, Value)]
-                -> TxIn
-                -> AddressAny
-                -> FilePath
-                -> m TxId
+                => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+                -> AddressAny                        -- ^ The script address.
+                -> FilePath                          -- ^ The file containing the script validator.
+                -> FilePath                          -- ^ The file containing the redeemer.
+                -> FilePath                          -- ^ The file containing the datum for spending from the script.
+                -> TxIn                              -- ^ The script eUTxO to be spent.
+                -> FilePath                          -- ^ The file containing the datum for the payment to the script.
+                -> Value                             -- ^ The value to be paid to the script.
+                -> [TxIn]                            -- ^ The transaction inputs.
+                -> [(AddressAny, Value)]             -- ^ The transaction outputs.
+                -> TxIn                              -- ^ The collateral.
+                -> AddressAny                        -- ^ The change address.
+                -> FilePath                          -- ^ The output JSON file for the transaction body.
+                -> m TxId                            -- ^ Action to build the transaction body.
 buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile txIn outputDatumFile outputValue inputs outputs collateral changeAddress bodyFile =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
@@ -162,19 +164,20 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
       $ getTxId body
 
 
+-- | Build a transaction spending from a Marlowe contract.
 buildOutgoing :: MonadError CliError m
               => MonadIO m
-              => LocalNodeConnectInfo CardanoMode -- ^ The connection info for the local node.
-              -> FilePath
-              -> FilePath
-              -> FilePath
-              -> TxIn
-              -> [TxIn]
-              -> [(AddressAny, Value)]
-              -> TxIn
-              -> AddressAny
-              -> FilePath
-              -> m TxId
+              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+              -> FilePath                          -- ^ The file containing the script validator.
+              -> FilePath                          -- ^ The file containing the redeemer.
+              -> FilePath                          -- ^ The file containing the datum for spending from the script.
+              -> TxIn                              -- ^ The script eUTxO to be spent.
+              -> [TxIn]                            -- ^ The transaction inputs.
+              -> [(AddressAny, Value)]             -- ^ The transaction outputs.
+              -> TxIn                              -- ^ The collateral.
+              -> AddressAny                        -- ^ The change address.
+              -> FilePath                          -- ^ The output JSON file for the transaction body.
+              -> m TxId                            -- ^ Action to build the transaction body.
 buildOutgoing connection validatorFile redeemerFile inputDatumFile txIn inputs outputs collateral changeAddress bodyFile =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
@@ -193,28 +196,30 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile txIn inputs o
       $ getTxId body
 
 
+-- | Extract the valid slot range from the Marlowe redeemer.
 extractSlotRange :: MonadError CliError m
-                 => Redeemer
-                 -> m (SlotNo, SlotNo)
+                 => Redeemer            -- ^ The redeemer.
+                 -> m (SlotNo, SlotNo)  -- ^ Action to extract the slot range.
 extractSlotRange (Redeemer redeemer) =
   case PlutusTx.fromBuiltinData redeemer :: Maybe MarloweInput of
      Just ((Slot minimumSlot, Slot maximumSlot), _) -> pure (fromIntegral minimumSlot, fromIntegral maximumSlot)
      Nothing                                        -> throwError "Failed to deserialise redeemer."
 
 
-buildPayFromScript :: PlutusScript PlutusScriptV1
-                   -> Datum
-                   -> Redeemer
-                   -> TxIn
-                   -> PayFromScript
-buildPayFromScript script datum redeemer txIn =
-  PayFromScript{..}
+-- | Collect information on paying from a script.
+buildPayFromScript :: PlutusScript PlutusScriptV1  -- ^ The script.
+                   -> Datum                        -- ^ The datum.
+                   -> Redeemer                     -- ^ The redeemer.
+                   -> TxIn                         -- ^ The eUTxO to be spent.
+                   -> PayFromScript                -- ^ Payment information.
+buildPayFromScript script datum redeemer txIn = PayFromScript{..}
 
 
-buildPayToScript :: AddressInEra era
-                 -> Value
-                 -> Datum
-                 -> PayToScript era
+-- | Collect information on paying to a script.
+buildPayToScript :: AddressInEra era  -- ^ The script address.
+                 -> Value             -- ^ The value to be paid.
+                 -> Datum             -- ^ The datum.
+                 -> PayToScript era   -- ^ The payment information.
 buildPayToScript address value datum =
   let
     datumHash = hashScriptData . fromPlutusData $ toData datum
@@ -222,17 +227,18 @@ buildPayToScript address value datum =
     PayToScript{..}
 
 
+-- | Build a balanced transaction body.
 buildBody :: MonadError CliError m
           => MonadIO m
-          => LocalNodeConnectInfo CardanoMode -- ^ The connection info for the local node.
-          -> Maybe PayFromScript
-          -> Maybe (PayToScript AlonzoEra)
-          -> [TxIn]
-          -> [(AddressAny, Value)]
-          -> Maybe TxIn
-          -> AddressAny                       -- ^ The change address.
-          -> Maybe (SlotNo, SlotNo)
-          -> m (TxBody AlonzoEra)    -- ^ The action to buildBody the transaction.
+          => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+          -> Maybe PayFromScript               -- ^ Payment information from the script, if any.
+          -> Maybe (PayToScript AlonzoEra)     -- ^ Payment information to the script, if any.
+          -> [TxIn]                            -- ^ Transaction inputs.
+          -> [(AddressAny, Value)]             -- ^ Transaction outputs.
+          -> Maybe TxIn                        -- ^ Collateral, if any.
+          -> AddressAny                        -- ^ The change address.
+          -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
+          -> m (TxBody AlonzoEra)              -- ^ The action to build the transaction body.
 buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
@@ -329,10 +335,10 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
 -- | Sign and submit a transaction.
 submit :: MonadError CliError m
        => MonadIO m
-       => LocalNodeConnectInfo CardanoMode -- ^ The connection info for the local node.
-       -> TxBody AlonzoEra                 -- ^ The transaction body.
-       -> [SigningKey PaymentKey]          -- ^ The signing key.
-       -> m TxId                           -- ^ The action to submit the transaction.
+       => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+       -> TxBody AlonzoEra                  -- ^ The transaction body.
+       -> [SigningKey PaymentKey]           -- ^ The signing key.
+       -> m TxId                            -- ^ The action to submit the transaction.
 submit connection body signings =
   do
     let
@@ -349,8 +355,9 @@ submit connection body signings =
       SubmitFail reason -> throwError . CliError $ show reason
 
 
-redeemScript :: PayFromScript
-             -> [(TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]
+-- | Compute the transaction input for paying from a script.
+redeemScript :: PayFromScript                                                 -- ^ The payment information.
+             -> [(TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]  -- ^ The transaction input.
 redeemScript PayFromScript{..} =
   [
     (
@@ -368,8 +375,9 @@ redeemScript PayFromScript{..} =
   ]
 
 
-payScript :: PayToScript AlonzoEra
-          -> [TxOut AlonzoEra]
+-- | Compute the transaction output for paying to a script.
+payScript :: PayToScript AlonzoEra  -- ^ The payment information.
+          -> [TxOut AlonzoEra]      -- ^ The transaction input.
 payScript PayToScript{..} =
   [
     TxOut
@@ -379,15 +387,17 @@ payScript PayToScript{..} =
   ]
 
 
-makeTxIn :: TxIn
-         -> (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))
+-- | Compute transaction input for building a transaction.
+makeTxIn :: TxIn                                                        -- ^ The transaction input.
+         -> (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))  -- ^ The building for the transaction input.
 makeTxIn = (, BuildTxWith $ KeyWitness KeyWitnessForSpending)
 
 
+-- | Compute transaction output for building a transaction.
 makeTxOut :: MonadError CliError m
-          => AddressAny
-          -> Value
-          -> m (TxOut AlonzoEra)
+          => AddressAny           -- ^ The output address.
+          -> Value                -- ^ The output value.
+          -> m (TxOut AlonzoEra)  -- ^ Action for building the transaction output.
 makeTxOut address value =
   do
     address' <- asAlonzoAddress "Failed converting output address to Alonzo era." address

@@ -226,14 +226,14 @@ instance FromJSON RedeemerInfo where
           pure RedeemerInfo{..}
 
 
--- | Information required to redeem an eUTxO.
+-- | Information required to spend from a script.
 data PayFromScript =
   PayFromScript
   {
-    txIn     :: TxIn
-  , script   :: PlutusScript PlutusScriptV1
-  , datum    :: Datum
-  , redeemer :: Redeemer
+    txIn     :: TxIn                         -- ^ The eUTxO to be spent.
+  , script   :: PlutusScript PlutusScriptV1  -- ^ The script.
+  , datum    :: Datum                        -- ^ The datum.
+  , redeemer :: Redeemer                     -- ^ The redeemer.
   }
     deriving (Eq, Generic, Show)
 
@@ -242,9 +242,9 @@ data PayFromScript =
 data PayToScript era =
   PayToScript
   {
-    address   :: AddressInEra era
-  , value     :: Api.Value
-  , datumHash :: Hash ScriptData
+    address   :: AddressInEra era  -- ^ The script address.
+  , value     :: Api.Value         -- ^ The value to be paid.
+  , datumHash :: Hash ScriptData   -- ^ The datum hash.
   }
     deriving (Eq, Generic, Show)
 
@@ -299,59 +299,69 @@ data Command =
     , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
-    -- | Build a transaction.
+    -- | Build a non-Marlowe transaction.
   | BuildSimple
     {
-      network    :: Maybe NetworkId              -- ^ The network ID, if any.
-    , socketPath :: FilePath
-    , inputs     :: [TxIn]
-    , outputs    :: [(AddressAny, Api.Value)]
-    , change     :: AddressAny
-    , bodyFile   :: FilePath
+      network    :: Maybe NetworkId            -- ^ The network ID, if any.
+    , socketPath :: FilePath                   -- ^ The path to the node socket.
+    , inputs     :: [TxIn]                     -- ^ The transaction inputs.
+    , outputs    :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , change     :: AddressAny                 -- ^ The change address.
+    , bodyFile   :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
+    -- | Build a transaction paying into a Marlowe contract.
   | BuildIncoming
     {
-      network         :: Maybe NetworkId              -- ^ The network ID, if any.
-    , socketPath      :: FilePath
-    , scriptAddress   :: AddressAny
-    , outputDatumFile :: FilePath
-    , outputValue     :: Api.Value
-    , inputs          :: [TxIn]
-    , outputs         :: [(AddressAny, Api.Value)]
-    , collateral      :: TxIn
-    , change          :: AddressAny
-    , bodyFile        :: FilePath
+      network         :: Maybe NetworkId            -- ^ The network ID, if any.
+    , socketPath      :: FilePath                   -- ^ The path to the node socket.
+    , scriptAddress   :: AddressAny                 -- ^ The script address.
+    , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
+    , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
+    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
+    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , change          :: AddressAny                 -- ^ The change address.
+    , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
+    -- | Build a transaction that spends from and pays to a Marlowe contract.
   | BuildContinuing
     {
-      network         :: Maybe NetworkId              -- ^ The network ID, if any.
-    , socketPath      :: FilePath
-    , scriptAddress   :: AddressAny
-    , validatorFile   :: FilePath
-    , redeemerFile    :: FilePath
-    , inputDatumFile  :: FilePath
-    , inputTxIn       :: TxIn
-    , outputDatumFile :: FilePath
-    , outputValue     :: Api.Value
-    , inputs          :: [TxIn]
-    , outputs         :: [(AddressAny, Api.Value)]
-    , collateral      :: TxIn
-    , change          :: AddressAny
-    , bodyFile        :: FilePath
+      network         :: Maybe NetworkId            -- ^ The network ID, if any.
+    , socketPath      :: FilePath                   -- ^ The path to the node socket.
+    , scriptAddress   :: AddressAny                 -- ^ The script address.
+    , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
+    , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
+    , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
+    , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
+    , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
+    , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
+    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
+    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , collateral      :: TxIn                       -- ^ The collateral.
+    , change          :: AddressAny                 -- ^ The change address.
+    , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
+    -- | Build a transaction spending from a Marlowe contract.
   | BuildOutgoing
     {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , socketPath     :: FilePath
-    , validatorFile  :: FilePath
-    , redeemerFile   :: FilePath
-    , inputDatumFile :: FilePath
-    , inputTxIn      :: TxIn
-    , inputs         :: [TxIn]
-    , outputs        :: [(AddressAny, Api.Value)]
-    , collateral     :: TxIn
-    , change         :: AddressAny
-    , bodyFile       :: FilePath
+      network        :: Maybe NetworkId            -- ^ The network ID, if any.
+    , socketPath     :: FilePath                   -- ^ The path to the node socket.
+    , validatorFile  :: FilePath                   -- ^ The file containing the script validator.
+    , redeemerFile   :: FilePath                   -- ^ The file containing the redeemer.
+    , inputDatumFile :: FilePath                   -- ^ The file containing the datum for spending from the script.
+    , inputTxIn      :: TxIn                       -- ^ The script eUTxO to be spent.
+    , inputs         :: [TxIn]                     -- ^ The transaction inputs.
+    , outputs        :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , collateral     :: TxIn                       -- ^ The collateral.
+    , change         :: AddressAny                 -- ^ The change address.
+    , bodyFile       :: FilePath                   -- ^ The output JSON file for the transaction body.
+    }
+    -- | Submit a transaction.
+  | Submit
+    {
+      network         :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath      :: FilePath         -- ^ The path to the node socket.
+    , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
+    , bodyFile        :: FilePath         -- ^ The JSON file containing the transaction body.
     }
     -- | Ad-hoc example.
   | Example

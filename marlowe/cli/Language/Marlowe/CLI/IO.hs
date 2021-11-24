@@ -11,13 +11,7 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 
 module Language.Marlowe.CLI.IO (
@@ -49,10 +43,11 @@ decodeFileStrict filePath =
     liftEither $ first CliError result
 
 
+-- | Decode, in an error mondad, a JSON file containing built-in data.
 decodeFileBuiltinData :: MonadError CliError m
-                     => MonadIO m
-                     => FilePath
-                     -> m BuiltinData
+                      => MonadIO m
+                      => FilePath       -- ^ The JSON file.
+                      -> m BuiltinData  -- ^ Action to decode the data.
 decodeFileBuiltinData file =
   do
     value <- decodeFileStrict file

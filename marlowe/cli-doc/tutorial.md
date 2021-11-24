@@ -120,6 +120,10 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
                                     --tx-out-datum-hash $DATUM_HASH   \
                                   --change-address $ADDRESS_P         \
                                   --out-file tx.raw
+
+
+TxId "98b346b7ea356f6532cc95b9ef954f7924dfe7b92e06f4a82497d70aed9d23d2"
+
     
     cardano-cli transaction sign $MAGIC                          \
                                  --tx-body-file tx.raw           \

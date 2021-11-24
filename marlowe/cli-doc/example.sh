@@ -15,15 +15,14 @@
 
 NETWORK=testnet
 MAGIC="--testnet-magic 1097911063"
-
-cardano-cli query protocol-parameters $MAGIC --out-file $NETWORK.protocol
+CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
 # Select the wallet.
 
 PAYMENT_SKEY=payment.skey
 PAYMENT_VKEY=payment.vkey
-ADDRESS_P=addr_test1qq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupcvluken35ncjnu0puetf5jvttedkze02d5kf890kquh60slacjyp
+ADDRESS_P=$(cardano-cli address build $MAGIC --payment-verification-key-file $PAYMENT_VKEY)
 PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 
 
@@ -64,18 +63,20 @@ marlowe-cli redeemer --min-slot $REDEEMER_MIN_SLOT \
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
-TX_0=0faea72be3516b952e0552d9f8643386b969124e385073aa4e7729f92fe53a52
+TX_0=7dd1e67708e4448c84d978b94a9644c77c1b4a54f84abf5c66a7066ea9f0779f
 
 
 # Fund the contract.
 
-cardano-cli transaction build --alonzo-era $MAGIC                 \
-                              --tx-in $TX_0#0                     \
-                              --tx-out $ADDRESS_S+$DATUM_LOVELACE \
-                                --tx-out-datum-hash $DATUM_HASH   \
-                              --change-address $ADDRESS_P         \
-                              --out-file tx.raw
-
+marlowe-cli build-incoming $MAGIC                                  \
+                           --socket-path $CARDANO_NODE_SOCKET_PATH \
+                           --script-address $ADDRESS_S             \
+                           --tx-out-datum-file $DATUM_FILE         \
+                           --tx-out-value $DATUM_LOVELACE          \
+                           --tx-in $TX_0#0                         \
+                           --change-address $ADDRESS_P             \
+                           --out-file tx.raw
+            
 cardano-cli transaction sign $MAGIC                          \
                              --tx-body-file tx.raw           \
                              --signing-key-file payment.skey \
@@ -88,12 +89,28 @@ cardano-cli transaction submit $MAGIC --tx-file tx.signed
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
-TX_1=276633f3b74378f1c616e94dd3365ef67b99a5377f7f5a27938ee3febdab459f
+TX_1=a46185ce45d6ec97cf4be30164ea7f2946f6acf7396ed09f726d93d6b7856b5b
+
+
+cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
 FUNDS=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq '.["'$TX_1#0'"].value.lovelace')
+echo $FUNDS
 
 
 # Redeem the contract.
+
+marlowe-cli build-outgoing $MAGIC                                  \
+                           --socket-path $CARDANO_NODE_SOCKET_PATH \
+                           --tx-in-script-file $PLUTUS_FILE        \
+                           --tx-in-redeemer-file $REDEEMER_FILE    \
+                           --tx-in-datum-file $DATUM_FILE          \
+                           --tx-in-marlowe $TX_1#1                 \
+                           --tx-in $TX_1#0                         \
+                           --tx-in-collateral $TX_1#0              \
+                           --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
+                           --change-address $ADDRESS_P             \
+                           --out-file tx.raw
 
 FEE=$(
 cardano-cli transaction build --alonzo-era $MAGIC                      \
