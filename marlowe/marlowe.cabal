@@ -215,7 +215,10 @@ executable marlowe-cli
   other-modules:
     Language.Marlowe.CLI
     Language.Marlowe.CLI.Export
+    Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
+    Language.Marlowe.CLI.Parse
+    Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
     Paths_marlowe
   autogen-modules:
@@ -229,11 +232,14 @@ executable marlowe-cli
     base16-bytestring -any,
     bytestring -any,
     cardano-api -any,
+    containers -any,
     marlowe -any,
     mtl -any,
     optparse-applicative -any,
+    ouroboros-network -any,
     plutus-ledger -any,
     plutus-ledger-api -any,
     plutus-tx -any,
     serialise -any,
     text -any,
+    unordered-containers -any,

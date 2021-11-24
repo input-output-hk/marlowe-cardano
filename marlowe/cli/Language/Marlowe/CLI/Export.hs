@@ -46,9 +46,9 @@ import           Cardano.Api.Shelley             (fromPlutusData)
 import           Codec.Serialise                 (serialise)
 import           Control.Monad                   (void, when)
 import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
-import           Data.Aeson                      (FromJSON, eitherDecodeFileStrict, encode)
+import           Data.Aeson                      (encode)
 import           Data.Aeson.Encode.Pretty        (encodePretty)
-import           Data.Bifunctor                  (first)
+import           Language.Marlowe.CLI.IO         (decodeFileStrict)
 import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
 import           Language.Marlowe.Scripts        (MarloweInput, smallTypedValidator)
@@ -368,15 +368,3 @@ exportRedeemer inputsFile minimumSlot maximumSlot outputFile printStats =
           $ do
             hPutStrLn stderr ""
             hPutStrLn stderr $ "Redeemer size: " ++ show riSize
-
-
--- | Decode a JSON file in an error monad.
-decodeFileStrict :: MonadError CliError m
-                 => MonadIO m
-                 => FromJSON a
-                 => FilePath -- ^ The JSON file.
-                 -> m a      -- ^ Action to decode the file.
-decodeFileStrict filePath =
-  do
-    result <- liftIO $ eitherDecodeFileStrict filePath
-    liftEither $ first CliError result

@@ -11,7 +11,6 @@
 -----------------------------------------------------------------------------
 
 
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -22,24 +21,24 @@ module Language.Marlowe.CLI (
 ) where
 
 
-import           Cardano.Api                 (AsType (AsStakeAddress), NetworkId (..), NetworkMagic (..), SlotNo (..),
-                                              StakeAddressReference (..), deserialiseAddress)
-import           Cardano.Api.Shelley         (StakeAddress (..), fromShelleyStakeCredential)
-import           Control.Monad.Except        (ExceptT, runExceptT, throwError)
-import           Data.Maybe                  (fromMaybe)
-import           Data.Version                (Version, showVersion)
-import           Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
-                                              exportValidator)
-import           Language.Marlowe.CLI.Types  (CliError (..), Command (..))
-import           Language.Marlowe.Client     (defaultMarloweParams, marloweParams)
-import           Plutus.V1.Ledger.Api        (CurrencySymbol (..), defaultCostModelParams, toBuiltin)
-import           System.Exit                 (exitFailure)
-import           System.IO                   (hPutStrLn, stderr)
+import           Cardano.Api                      (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
+                                                   LocalNodeConnectInfo (..), NetworkId (..),
+                                                   StakeAddressReference (..))
+import           Control.Monad.Except             (ExceptT, liftIO, runExceptT, throwError)
+import           Data.Maybe                       (fromMaybe)
+import           Data.Version                     (Version, showVersion)
+import           Language.Marlowe.CLI.Export      (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
+                                                   exportValidator)
+import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseSlotNo,
+                                                   parseStakeAddressReference, parseTxIn, parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple)
+import           Language.Marlowe.CLI.Types       (CliError (..), Command (..))
+import           Language.Marlowe.Client          (defaultMarloweParams, marloweParams)
+import           Plutus.V1.Ledger.Api             (defaultCostModelParams)
+import           System.Exit                      (exitFailure)
+import           System.IO                        (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Base16      as Base16 (decode)
-import qualified Data.ByteString.Char8       as BS8 (pack)
-import qualified Data.Text                   as T (pack)
-import qualified Options.Applicative         as O
+import qualified Options.Applicative              as O
 
 
 -- | Hardwired example.
@@ -57,6 +56,14 @@ mainCLI version example =
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
       network'       = fromMaybe Mainnet                        $ network       command
       stake'         = fromMaybe NoStakeAddress                 $ stake         command
+      connection =
+        LocalNodeConnectInfo
+        {
+          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+        , localNodeNetworkId       = network'
+        , localNodeSocketPath      = socketPath command
+        }
+      printTxId = liftIO . putStrLn . ("TxId " ++) . show
     result <-
       runExceptT
         $ do
@@ -87,6 +94,40 @@ mainCLI version example =
                                      redeemerFile
                                      printStats
             Example             -> example
+            BuildSimple{..}     -> buildSimple
+                                     connection
+                                     inputs outputs change
+                                     bodyFile
+                                     >>= printTxId
+            BuildIncoming{..}   -> buildIncoming
+                                     connection
+                                     scriptAddress
+                                     outputDatumFile
+                                     outputValue
+                                     inputs outputs collateral change
+                                     bodyFile
+                                     >>= printTxId
+            BuildContinuing{..} -> buildContinuing
+                                     connection
+                                     scriptAddress
+                                     validatorFile
+                                     redeemerFile
+                                     inputDatumFile
+                                     inputTxIn
+                                     outputDatumFile
+                                     outputValue
+                                     inputs outputs collateral change
+                                     bodyFile
+                                     >>= printTxId
+            BuildOutgoing{..}   -> buildOutgoing
+                                     connection
+                                     validatorFile
+                                     redeemerFile
+                                     inputDatumFile
+                                     inputTxIn
+                                     inputs outputs collateral change
+                                     bodyFile
+                                     >>= printTxId
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -110,6 +151,10 @@ parser version =
               <> exportDatumCommand
               <> exportRedeemerCommand
               <> exampleCommand
+              <> buildSimpleCommand
+              <> buildIncomingCommand
+              <> buildContinuingCommand
+              <> buildOutgoingCommand
             )
     )
     (
@@ -234,31 +279,98 @@ exampleCommand =
     $ O.progDesc "Hardwired example."
 
 
--- | Parser for network ID.
-parseNetworkId :: O.ReadM NetworkId
-parseNetworkId = Testnet . NetworkMagic . toEnum <$> O.auto
+-- | Parser for the "build-simple" command.
+buildSimpleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+buildSimpleCommand =
+  O.command "build-simple"
+    $ O.info (buildSimpleOptions O.<**> O.helper)
+    $ O.progDesc "Build a non-Marlowe transaction."
 
 
--- | Parser for stake address reference.
-parseStakeAddressReference :: O.ReadM StakeAddressReference
-parseStakeAddressReference =
-  O.eitherReader
-    $ \s ->
-      case deserialiseAddress AsStakeAddress $ T.pack s of
-        Nothing                          -> Left "Invalid stake address."
-        Just (StakeAddress _ credential) -> Right . StakeAddressByValue $ fromShelleyStakeCredential credential
+-- | Parser for the "build-simple" options.
+buildSimpleOptions :: O.Parser Command -- ^ The parser.
+buildSimpleOptions =
+  BuildSimple
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"  <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."           )
+    <*> O.strOption                            (O.long "socket-path"    <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."     )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"          <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."        )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"         <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format.")
+    <*> O.option parseAddressAny               (O.long "change-address" <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."      )
+    <*> O.strOption                            (O.long "out-file"       <> O.metavar "FILE"             <> O.help "Output file for transaction body."             )
 
 
--- | Parser for slot number.
-parseSlotNo :: O.ReadM SlotNo
-parseSlotNo = SlotNo <$> O.auto
+-- | Parser for the "build-incoming" command.
+buildIncomingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+buildIncomingCommand =
+  O.command "build-incoming"
+    $ O.info (buildIncomingOptions O.<**> O.helper)
+    $ O.progDesc "Build a transaction that pays to a Marlowe script."
 
 
--- | Parser for currency symbol.
-parseCurrencySymbol :: O.ReadM CurrencySymbol
-parseCurrencySymbol =
-  O.eitherReader
-    $ \s ->
-      case Base16.decode $ BS8.pack s of
-        Left  message  -> Left message
-        Right currency -> Right . CurrencySymbol . toBuiltin $ currency
+-- | Parser for the "build-incoming" options.
+buildIncomingOptions :: O.Parser Command -- ^ The parser.
+buildIncomingOptions =
+  BuildIncoming
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"     <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
+    <*> O.strOption                            (O.long "socket-path"       <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
+    <*> O.option parseAddressAny               (O.long "script-address"    <> O.metavar "ADDRESS"          <> O.help "Address of the Marlowe contract."               )
+    <*> O.strOption                            (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file datum paid to Marlowe contract.")
+    <*> O.option parseValue                    (O.long "tx-out-value"      <> O.metavar "LOVELACE"         <> O.help "Lovelace value paid to Marlowe contract."       )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
+    <*> O.option parseTxIn                     (O.long "tx-in-collateral"  <> O.metavar "TXID#TXIX"        <> O.help "Collateral for transaction."                    )
+    <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."       )
+    <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
+
+
+-- | Parser for the "build-continuing" command.
+buildContinuingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+buildContinuingCommand =
+  O.command "build-continuing"
+    $ O.info (buildContinuingOptions O.<**> O.helper)
+    $ O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
+
+
+-- | Parser for the "build-continuing" options.
+buildContinuingOptions :: O.Parser Command -- ^ The parser.
+buildContinuingOptions =
+  BuildContinuing
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."             )
+    <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."       )
+    <*> O.option parseAddressAny               (O.long "script-address"      <> O.metavar "ADDRESS"          <> O.help "Address of the Marlowe contract."                )
+    <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."               )
+    <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"    <> O.help "Redeemer JSON file spent from Marlowe contract." )
+    <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file spent from Marlowe contract."    )
+    <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"        <> O.help "UTxO spent from Marlowe contract."               )
+    <*> O.strOption                            (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file datum paid to Marlowe contract." )
+    <*> O.option parseValue                    (O.long "tx-out-value"        <> O.metavar "LOVELACE"         <> O.help "Lovelace value paid to Marlowe contract."        )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."          )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format."  )
+    <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"        <> O.help "Collateral for transaction."                     )
+    <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."            )
+    <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"             <> O.help "Output file for transaction body."                   )
+
+
+-- | Parser for the "build-outgoing" command.
+buildOutgoingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+buildOutgoingCommand =
+  O.command "build-outgoing"
+    $ O.info (buildOutgoingOptions O.<**> O.helper)
+    $ O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
+
+
+-- | Parser for the "build-outgoing" options.
+buildOutgoingOptions :: O.Parser Command -- ^ The parser.
+buildOutgoingOptions =
+  BuildOutgoing
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."             )
+    <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."       )
+    <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."               )
+    <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"    <> O.help "Redeemer JSON file spent from Marlowe contract." )
+    <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file spent from Marlowe contract."    )
+    <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"        <> O.help "UTxO spent from Marlowe contract."               )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."          )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format."  )
+    <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"        <> O.help "Collateral for transaction."                     )
+    <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."            )
+    <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"             <> O.help "Output file for transaction body."                   )
