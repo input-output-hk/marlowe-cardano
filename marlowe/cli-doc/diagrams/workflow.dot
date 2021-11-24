@@ -59,8 +59,6 @@ MaxSlot    [label="Maximum\nSlot"]
 RedeemerCommand [label="marlowe-cli redeemer", shape=box, fontname=monospace]
 
 InputsFile -> RedeemerCommand [label="--inputs-file"      , fontname=monospace, fontsize=10, style=dashed]
-MinSlot    -> RedeemerCommand [label="--redeemer-min-slot", fontname=monospace, fontsize=10]
-MaxSlot    -> RedeemerCommand [label="--redeemer-max-slot", fontname=monospace, fontsize=10]
 
 
 RedeemerFile [label="Marlowe Redeemer\nJSON File", shape=tab]
@@ -68,13 +66,14 @@ RedeemerFile [label="Marlowe Redeemer\nJSON File", shape=tab]
 RedeemerCommand -> RedeemerFile [label="--out-file", fontname=monospace, fontsize=10]
 
 
-CardanoCLI [label="cardano-cli transaction build", shape=box, fontname=monospace]
+CardanoCLI [label="marlowe-cli build", shape=box, fontname=monospace]
 
-ValidatorAddress -> CardanoCLI [label="--tx-out"             , fontname=monospace, fontsize=10]
+ValidatorAddress -> CardanoCLI [label="--script-address"     , fontname=monospace, fontsize=10]
 ValidatorFile    -> CardanoCLI [label="--tx-in-script-file"  , fontname=monospace, fontsize=10]
 DatumFile        -> CardanoCLI [label="--tx-in-datum-file"   , fontname=monospace, fontsize=10]
 RedeemerFile     -> CardanoCLI [label="--tx-in-redeemer-file", fontname=monospace, fontsize=10]
-DatumHash        -> CardanoCLI [label="--tx-out-datum-hash"  , fontname=monospace, fontsize=10]
+MinSlot          -> CardanoCLI [label="--invalid-before"     , fontname=monospace, fontsize=10]
+MaxSlot          -> CardanoCLI [label="--invalid-hereafter"  , fontname=monospace, fontsize=10]
 
 
 TxBodyFile [label="Tx Body\nFile", shape=tab]

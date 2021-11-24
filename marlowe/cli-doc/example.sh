@@ -38,8 +38,8 @@ REDEEMER_FILE=test.redeemer
 CONTRACT_FILE=example.contract
 STATE_FILE=example.state
 DATUM_LOVELACE=$(jq '.accounts | .[0] | .[1]' $STATE_FILE)
-REDEEMER_MIN_SLOT=1000
-REDEEMER_MAX_SLOT=43500000
+REDEEM_MIN_SLOT=1000
+REDEEM_MAX_SLOT=43500000
 
 
 # Create the contract.
@@ -54,9 +54,7 @@ marlowe-cli datum --contract-file $CONTRACT_FILE \
                   --out-file $DATUM_FILE
 )
 
-marlowe-cli redeemer --min-slot $REDEEMER_MIN_SLOT \
-                     --max-slot $REDEEMER_MAX_SLOT \
-                     --out-file $REDEEMER_FILE
+marlowe-cli redeemer --out-file $REDEEM_FILE
 
 
 # Find funds, and enter the selected UTxO as "TX_0".
@@ -110,6 +108,8 @@ marlowe-cli build-outgoing $MAGIC                                  \
                            --tx-in-collateral $TX_1#0              \
                            --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
                            --change-address $ADDRESS_P             \
+                           --invalid-before $REDEEM_MIN_SLOT       \
+                           --invalid-hereafter $REDEEM_MAX_SLOT    \
                            --out-file tx.raw
 
 FEE=$(

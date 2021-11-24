@@ -260,8 +260,6 @@ data Command =
     , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
     , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
     , inputsFile    :: Maybe FilePath               -- ^ The JSON file containing the contract's input, if any.
-    , minimumSlot   :: SlotNo                       -- ^ The first valid slot for the transaction.
-    , maximumSlot   :: SlotNo                       -- ^ The last valid slot for the tranasction.
     , outputFile    :: FilePath                     -- ^ The output JSON file for Marlowe contract information.
     , printStats    :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
     }
@@ -294,8 +292,6 @@ data Command =
   | ExportRedeemer
     {
       inputsFile   :: Maybe FilePath  -- ^ The JSON file containing the contract's input, if any.
-    , minimumSlot  :: SlotNo          -- ^ The first valid slot for the transaction.
-    , maximumSlot  :: SlotNo          -- ^ The last valid slot for the tranasction.
     , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
@@ -338,6 +334,8 @@ data Command =
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , collateral      :: TxIn                       -- ^ The collateral.
     , change          :: AddressAny                 -- ^ The change address.
+    , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
+    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the tranasction.
     , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Build a transaction spending from a Marlowe contract.
@@ -353,6 +351,8 @@ data Command =
     , outputs        :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , collateral     :: TxIn                       -- ^ The collateral.
     , change         :: AddressAny                 -- ^ The change address.
+    , minimumSlot    :: SlotNo                     -- ^ The first valid slot for the transaction.
+    , maximumSlot    :: SlotNo                     -- ^ The last valid slot for the tranasction.
     , bodyFile       :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Submit a transaction.

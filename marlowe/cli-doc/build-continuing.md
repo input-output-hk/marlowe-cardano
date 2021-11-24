@@ -6,7 +6,7 @@ The `build-continuing` command builds a transaction that both pays to and spends
 ## Usage
 
     $ marlowe-cli build-continuing --help
-    
+
     Usage: marlowe-cli build-continuing [--testnet-magic INTEGER]
                                         --socket-path SOCKET_FILE
                                         --script-address ADDRESS
@@ -15,10 +15,12 @@ The `build-continuing` command builds a transaction that both pays to and spends
                                         --tx-in-datum-file DATUM_FILE
                                         --tx-in-marlowe TXID#TXIX
                                         --tx-out-datum-file DATUM_FILE
-                                        --tx-out-value LOVELACE [--tx-in TXID#TXIX] 
+                                        --tx-out-value LOVELACE [--tx-in TXID#TXIX]
                                         [--tx-out ADDRESS+LOVELACE]
                                         --tx-in-collateral TXID#TXIX
-                                        --change-address ADDRESS --out-file FILE
+                                        --change-address ADDRESS
+                                        --invalid-before SLOT
+                                        --invalid-hereafter SLOT --out-file FILE
       Build a transaction that both spends from and pays to a Marlowe script.
     
     Available options:
@@ -35,5 +37,7 @@ The `build-continuing` command builds a transaction that both pays to and spends
       --tx-out ADDRESS+LOVELACE            Transaction output in ADDRESS+LOVELACE format.
       --tx-in-collateral TXID#TXIX         Collateral for transaction.
       --change-address ADDRESS             Address to receive ADA in excess of fee.
+      --invalid-before SLOT                Minimum slot for the redemption.
+      --invalid-hereafter SLOT             Maximum slot for the redemption.
       --out-file FILE                      Output file for transaction body.
       -h,--help                            Show this help text
