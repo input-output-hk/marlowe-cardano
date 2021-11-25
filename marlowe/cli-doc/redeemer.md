@@ -7,7 +7,7 @@ The `redeemer` command writes a Marlowe redeemer to a JSON file in the detailed 
 
     $ marlowe-cli redeemer --help
     
-    Usage: marlowe-cli redeemer [--inputs-file INPUTS_FILE] --out-file OUTPUT_FILE 
+    Usage: marlowe-cli redeemer [--inputs-file INPUTS_FILE] --out-file OUTPUT_FILE
                                 [--print-stats]
       Export a redeemer to a JSON file.
     

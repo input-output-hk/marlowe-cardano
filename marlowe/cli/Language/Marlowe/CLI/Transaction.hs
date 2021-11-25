@@ -32,8 +32,8 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     BalancedTxBody (..), BuildTx, BuildTxWith (..),
                                                                     CardanoEra (..), CardanoMode,
                                                                     CollateralSupportedInEra (..),
-                                                                    ConsensusModeIsMultiEra (..), EraInMode (..),
-                                                                    ExecutionUnits (..), KeyWitnessInCtx (..),
+                                                                    ConsensusModeIsMultiEra (..), CtxTx, EraInMode (..),
+                                                                    ExecutionUnits (..), Hash, KeyWitnessInCtx (..),
                                                                     LocalNodeConnectInfo, MultiAssetSupportedInEra (..),
                                                                     PaymentKey, PlutusScript, PlutusScriptV1,
                                                                     PlutusScriptVersion (..), QueryInEra (..),
@@ -42,31 +42,33 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     ScriptDatum (..), ScriptLanguageInEra (..),
                                                                     ScriptWitness (..), ScriptWitnessInCtx (..),
                                                                     ShelleyBasedEra (..), ShelleyWitnessSigningKey (..),
-                                                                    SigningKey, SlotNo, TxAuxScripts (..), TxBody (..),
+                                                                    SlotNo, TxAuxScripts (..), TxBody (..),
                                                                     TxBodyContent (..), TxBodyErrorAutoBalance (..),
                                                                     TxCertificates (..), TxExtraKeyWitnesses (..),
-                                                                    TxExtraScriptData (..), TxFee (..),
+                                                                    TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
                                                                     TxFeesExplicitInEra (..), TxId, TxIn, TxInMode (..),
                                                                     TxInsCollateral (..), TxMetadataInEra (..),
-                                                                    TxMintValue (..), TxOut (..), TxOutDatumHash (..),
+                                                                    TxMintValue (..), TxOut (..), TxOutDatum (..),
                                                                     TxOutValue (..), TxScriptValidity (..),
                                                                     TxUpdateProposal (..), TxValidityLowerBound (..),
                                                                     TxValidityUpperBound (..), TxWithdrawals (..),
                                                                     ValidityLowerBoundSupportedInEra (..),
                                                                     ValidityNoUpperBoundSupportedInEra (..),
                                                                     ValidityUpperBoundSupportedInEra (..), Value,
-                                                                    WitCtxTxIn, Witness (..), anyAddressInEra, getTxId,
+                                                                    WitCtxTxIn, Witness (..), anyAddressInEra,
+                                                                    castVerificationKey, getTxId, getVerificationKey,
                                                                     hashScriptData, lovelaceToValue,
                                                                     makeTransactionBodyAutoBalance, queryNodeLocalState,
                                                                     readFileTextEnvelope, signShelleyTransaction,
-                                                                    submitTxToNodeLocal, writeFileTextEnvelope)
+                                                                    submitTxToNodeLocal, verificationKeyHash,
+                                                                    writeFileTextEnvelope)
 import           Cardano.Api.Shelley                               (fromPlutusData)
 import           Control.Monad                                     ((<=<))
 import           Control.Monad.Except                              (MonadError, MonadIO, liftIO, throwError)
 import           Data.Maybe                                        (maybeToList)
-import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData)
+import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData, readSigningKey)
 import           Language.Marlowe.CLI.Types                        (CliError (..), PayFromScript (..), PayToScript (..),
-                                                                    liftCli, liftCliIO)
+                                                                    SomePaymentSigningKey, liftCli, liftCliIO)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import           Plutus.V1.Ledger.Api                              (Datum (..), Redeemer (..), toData)
 
@@ -90,6 +92,7 @@ buildSimple connection inputs outputs changeAddress bodyFile =
         Nothing
         inputs outputs Nothing changeAddress
         Nothing
+        []
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     pure
@@ -118,6 +121,7 @@ buildIncoming connection scriptAddress outputDatumFile outputValue inputs output
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
         inputs outputs Nothing changeAddress
         Nothing
+        []
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     pure
@@ -132,6 +136,7 @@ buildContinuing :: MonadError CliError m
                 -> FilePath                          -- ^ The file containing the script validator.
                 -> FilePath                          -- ^ The file containing the redeemer.
                 -> FilePath                          -- ^ The file containing the datum for spending from the script.
+                -> [FilePath]                        -- ^ The files for required signing keys.
                 -> TxIn                              -- ^ The script eUTxO to be spent.
                 -> FilePath                          -- ^ The file containing the datum for the payment to the script.
                 -> Value                             -- ^ The value to be paid to the script.
@@ -143,19 +148,21 @@ buildContinuing :: MonadError CliError m
                 -> SlotNo                            -- ^ The last valid slot for the transaction.
                 -> FilePath                          -- ^ The output JSON file for the transaction body.
                 -> m TxId                            -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
+    keyHashes <- fmap hashSigningKey <$> mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
         (Just $ buildPayFromScript validator inputDatum redeemer txIn)
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
+        keyHashes
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     pure
@@ -169,6 +176,7 @@ buildOutgoing :: MonadError CliError m
               -> FilePath                          -- ^ The file containing the script validator.
               -> FilePath                          -- ^ The file containing the redeemer.
               -> FilePath                          -- ^ The file containing the datum for spending from the script.
+              -> [FilePath]                        -- ^ The files for required signing keys.
               -> TxIn                              -- ^ The script eUTxO to be spent.
               -> [TxIn]                            -- ^ The transaction inputs.
               -> [(AddressAny, Value)]             -- ^ The transaction outputs.
@@ -178,17 +186,19 @@ buildOutgoing :: MonadError CliError m
               -> SlotNo                            -- ^ The last valid slot for the transaction.
               -> FilePath                          -- ^ The output JSON file for the transaction body.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
+    keyHashes <- fmap hashSigningKey <$> mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
         (Just $ buildPayFromScript validator inputDatum redeemer txIn)
         Nothing
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
+        keyHashes
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     pure
@@ -216,6 +226,16 @@ buildPayToScript address value datum =
     PayToScript{..}
 
 
+-- | Hash a signing key.
+hashSigningKey :: SomePaymentSigningKey  -- ^ The key.
+               -> Hash PaymentKey        -- ^ The hash.
+hashSigningKey =
+  verificationKeyHash
+    . either
+        getVerificationKey
+        (castVerificationKey . getVerificationKey)
+
+
 -- | Build a balanced transaction body.
 buildBody :: MonadError CliError m
           => MonadIO m
@@ -227,8 +247,9 @@ buildBody :: MonadError CliError m
           -> Maybe TxIn                        -- ^ Collateral, if any.
           -> AddressAny                        -- ^ The change address.
           -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
+          -> [Hash PaymentKey]                 -- ^ The extra required signatures.
           -> m (TxBody AlonzoEra)              -- ^ The action to build the transaction body.
-buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange =
+buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
     start    <- queryAny    connection   QuerySystemStart
@@ -249,8 +270,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
                           )
       txMetadata        = TxMetadataNone
       txAuxScripts      = TxAuxScriptsNone
-      txExtraScriptData = BuildTxWith TxExtraScriptDataNone
-      txExtraKeyWits    = TxExtraKeyWitnessesNone
+      txExtraKeyWits    = TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra extraSigners
       txProtocolParams  = BuildTxWith $ Just protocol
       txWithdrawals     = TxWithdrawalsNone
       txCertificates    = TxCertificatesNone
@@ -303,7 +323,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
                                                                                               TxOutValue MultiAssetInAlonzoEra
                                                                                                 $ value <> lovelaceToValue delta
                                                                                             )
-                                                                                            TxOutDatumHashNone
+                                                                                            TxOutDatumNone
           _                                                                            -> change
     -- Construct the body with correct execution units and fees.
     BalancedTxBody txBody _ _ <-
@@ -325,15 +345,29 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
 submit :: MonadError CliError m
        => MonadIO m
        => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-       -> TxBody AlonzoEra                  -- ^ The transaction body.
-       -> [SigningKey PaymentKey]           -- ^ The signing key.
+       -> FilePath                          -- ^ The transaction body file.
+       -> [FilePath]                        -- ^ The signing key files.
        -> m TxId                            -- ^ The action to submit the transaction.
-submit connection body signings =
+submit connection bodyFile signingKeyFiles =
+  do
+    body <- liftCliIO $ readFileTextEnvelope (AsTxBody AsAlonzoEra) bodyFile
+    signings <- mapM readSigningKey signingKeyFiles
+    submitBody connection body signings
+
+
+-- | Sign and submit a transaction.
+submitBody :: MonadError CliError m
+           => MonadIO m
+           => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+           -> TxBody AlonzoEra                  -- ^ The transaction body.
+           -> [SomePaymentSigningKey]           -- ^ The signing keys.
+           -> m TxId                            -- ^ The action to submit the transaction.
+submitBody connection body signings =
   do
     let
       tx =
         signShelleyTransaction body
-          $ WitnessPaymentKey
+          $ either WitnessPaymentKey WitnessPaymentExtendedKey
           <$> signings
     result <-
       liftIO
@@ -366,7 +400,7 @@ redeemScript PayFromScript{..} =
 
 -- | Compute the transaction output for paying to a script.
 payScript :: PayToScript AlonzoEra  -- ^ The payment information.
-          -> [TxOut AlonzoEra]      -- ^ The transaction input.
+          -> [TxOut CtxTx AlonzoEra]      -- ^ The transaction input.
 payScript PayToScript{..} =
   [
     TxOut
@@ -386,7 +420,7 @@ makeTxIn = (, BuildTxWith $ KeyWitness KeyWitnessForSpending)
 makeTxOut :: MonadError CliError m
           => AddressAny           -- ^ The output address.
           -> Value                -- ^ The output value.
-          -> m (TxOut AlonzoEra)  -- ^ Action for building the transaction output.
+          -> m (TxOut CtxTx AlonzoEra)  -- ^ Action for building the transaction output.
 makeTxOut address value =
   do
     address' <- asAlonzoAddress "Failed converting output address to Alonzo era." address
@@ -394,7 +428,7 @@ makeTxOut address value =
       $ TxOut
         address'
         (TxOutValue MultiAssetInAlonzoEra value)
-        TxOutDatumHashNone
+        TxOutDatumNone
 
 
 -- | Convert an address to Alonzo era.

@@ -31,7 +31,7 @@ import           Language.Marlowe.CLI.Export      (exportAddress, exportDatum, e
                                                    exportValidator)
 import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseSlotNo,
                                                    parseStakeAddressReference, parseTxIn, parseTxOut, parseValue)
-import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple)
+import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
 import           Language.Marlowe.CLI.Types       (CliError (..), Command (..))
 import           Language.Marlowe.Client          (defaultMarloweParams, marloweParams)
 import           Plutus.V1.Ledger.Api             (defaultCostModelParams)
@@ -42,7 +42,7 @@ import qualified Options.Applicative              as O
 
 
 -- | Hardwired example.
-type Example = ExceptT CliError IO ()
+type Example = Bool -> ExceptT CliError IO ()
 
 
 -- | Main entry point for Marlowe CLI tool.
@@ -93,7 +93,6 @@ mainCLI version example =
                                      inputsFile
                                      redeemerFile
                                      printStats
-            Example             -> example
             BuildSimple{..}     -> buildSimple
                                      connection
                                      inputs outputs change
@@ -113,6 +112,7 @@ mainCLI version example =
                                      validatorFile
                                      redeemerFile
                                      inputDatumFile
+                                     signingKeyFiles
                                      inputTxIn
                                      outputDatumFile
                                      outputValue
@@ -125,12 +125,18 @@ mainCLI version example =
                                      validatorFile
                                      redeemerFile
                                      inputDatumFile
+                                     signingKeyFiles
                                      inputTxIn
                                      inputs outputs collateral change
                                      minimumSlot maximumSlot
                                      bodyFile
                                      >>= printTxId
-            Submit{}            -> pure ()
+            Submit{..}          -> submit
+                                     connection
+                                     bodyFile
+                                     signingKeyFiles
+                                     >>= printTxId
+            Example{..}         -> example writeFiles
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -153,11 +159,12 @@ parser version =
               <> exportValidatorCommand
               <> exportDatumCommand
               <> exportRedeemerCommand
-              <> exampleCommand
               <> buildSimpleCommand
               <> buildIncomingCommand
               <> buildContinuingCommand
               <> buildOutgoingCommand
+              <> submitCommand
+              <> exampleCommand
             )
     )
     (
@@ -270,14 +277,6 @@ exportRedeemerOptions =
     <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                           )
 
 
--- | Parser for the "example" command.
-exampleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
-exampleCommand =
-  O.command "example"
-    $ O.info (pure Example O.<**> O.helper)
-    $ O.progDesc "Hardwired example."
-
-
 -- | Parser for the "build-simple" command.
 buildSimpleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildSimpleCommand =
@@ -339,6 +338,7 @@ buildContinuingOptions =
     <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."              )
     <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"    <> O.help "Redeemer JSON file spent from Marlowe contract.")
     <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file spent from Marlowe contract."   )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"     <> O.help "Files containing required signing keys."        )
     <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"        <> O.help "UTxO spent from Marlowe contract."              )
     <*> O.strOption                            (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file datum paid to Marlowe contract.")
     <*> O.option parseValue                    (O.long "tx-out-value"        <> O.metavar "LOVELACE"         <> O.help "Lovelace value paid to Marlowe contract."       )
@@ -368,6 +368,7 @@ buildOutgoingOptions =
     <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."              )
     <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"    <> O.help "Redeemer JSON file spent from Marlowe contract.")
     <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file spent from Marlowe contract."   )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"     <> O.help "Files containing required signing keys."        )
     <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"        <> O.help "UTxO spent from Marlowe contract."              )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."         )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
@@ -376,3 +377,36 @@ buildOutgoingOptions =
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"             <> O.help "Minimum slot for the redemption."               )
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"             <> O.help "Maximum slot for the redemption."               )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
+
+
+-- | Parser for the "submit" command.
+submitCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+submitCommand =
+  O.command "submit"
+    $ O.info (submitOptions O.<**> O.helper)
+    $ O.progDesc "Submit a transaction body."
+
+
+-- | Parser for the "submit" options.
+submitOptions :: O.Parser Command
+submitOptions =
+  Submit
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet."            )
+    <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file."      )
+    <*> O.strOption                            (O.long "tx-body-file"    <> O.metavar "BODY_FILE"    <> O.help "File containing the transaction body."  )
+    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "Files containing required signing keys.")
+
+
+-- | Parser for the "example" command.
+exampleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+exampleCommand =
+  O.command "example"
+    $ O.info (exampleOptions O.<**> O.helper)
+    $ O.progDesc "Hardwired example."
+
+
+-- | Parser for the "example" options.
+exampleOptions :: O.Parser Command
+exampleOptions =
+  Example
+    <$> O.switch (O.long "write-files" <> O.help "Write example JSON files for states, contracts, and inputs.")

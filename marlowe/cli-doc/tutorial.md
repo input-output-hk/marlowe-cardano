@@ -118,12 +118,10 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
                                --change-address $ADDRESS_P             \
                                --out-file tx.raw
     
-    cardano-cli transaction sign $MAGIC                           \
-                                 --tx-body-file tx.raw            \
-                                 --signing-key-file $PAYMENT_SKEY \
-                                 --out-file tx.signed
-    
-    cardano-cli transaction submit $MAGIC --tx-file tx.signed
+    marlowe-cli submit $MAGIC                                  \
+                       --socket-path $CARDANO_NODE_SOCKET_PATH \
+                       --required-signer $PAYMENT_SKEY         \
+                       --tx-body-file tx.raw
 
 
 After the transaction is recorded on the blockchain, there are funds at the contract address with the data hash `DATUM_HASH`.
@@ -162,12 +160,10 @@ We now use the previously computed redeemer and datum to remove the funds from t
                                --invalid-hereafter $REDEEM_MAX_SLOT    \
                                --out-file tx.raw
     
-    cardano-cli transaction sign $MAGIC                           \
-                                 --tx-body-file tx.raw            \
-                                 --signing-key-file $PAYMENT_SKEY \
-                                 --out-file tx.signed
-    
-    cardano-cli transaction submit $MAGIC --tx-file tx.signed
+    marlowe-cli submit $MAGIC                                  \
+                       --socket-path $CARDANO_NODE_SOCKET_PATH \
+                       --required-signer $PAYMENT_SKEY         \
+                       --tx-body-file tx.raw
 
 
 After the transaction is recorded on the blockchain, we see that the funds were removed from the script address and are in the wallet.

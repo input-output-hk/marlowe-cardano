@@ -29,6 +29,9 @@ module Language.Marlowe.CLI.Types (
 -- * eUTxOs
 , PayFromScript(..)
 , PayToScript(..)
+-- * Keys
+, SomePaymentVerificationKey
+, SomePaymentSigningKey
 -- * Exceptions
 , CliError(..)
 , liftCli
@@ -39,10 +42,10 @@ module Language.Marlowe.CLI.Types (
 
 
 import           Cardano.Api                  (AddressAny, AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
-                                               NetworkId, PlutusScript, PlutusScriptV1, PlutusScriptVersion (..),
-                                               Script (..), ScriptData, SlotNo, StakeAddressReference, TxIn,
-                                               deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
-                                               serialiseToTextEnvelope)
+                                               NetworkId, PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
+                                               PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo,
+                                               StakeAddressReference, TxIn, VerificationKey, deserialiseAddress,
+                                               deserialiseFromTextEnvelope, serialiseAddress, serialiseToTextEnvelope)
 import           Cardano.Api.Shelley          (PlutusScript (..))
 import           Codec.Serialise              (deserialise)
 import           Control.Monad                ((<=<))
@@ -80,6 +83,14 @@ liftCliIO :: MonadError CliError m
           => IO (Either e a)  -- ^ Action for the result.
           -> m a              -- ^ The lifted result.
 liftCliIO = liftCli <=< liftIO
+
+
+-- | A payment key.
+type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (VerificationKey PaymentExtendedKey)
+
+
+-- | A payment signing key.
+type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentExtendedKey)
 
 
 -- | Comprehensive information about a Marlowe transaction.
@@ -327,6 +338,7 @@ data Command =
     , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
     , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
     , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
+    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
     , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
     , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
     , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
@@ -341,28 +353,32 @@ data Command =
     -- | Build a transaction spending from a Marlowe contract.
   | BuildOutgoing
     {
-      network        :: Maybe NetworkId            -- ^ The network ID, if any.
-    , socketPath     :: FilePath                   -- ^ The path to the node socket.
-    , validatorFile  :: FilePath                   -- ^ The file containing the script validator.
-    , redeemerFile   :: FilePath                   -- ^ The file containing the redeemer.
-    , inputDatumFile :: FilePath                   -- ^ The file containing the datum for spending from the script.
-    , inputTxIn      :: TxIn                       -- ^ The script eUTxO to be spent.
-    , inputs         :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs        :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , collateral     :: TxIn                       -- ^ The collateral.
-    , change         :: AddressAny                 -- ^ The change address.
-    , minimumSlot    :: SlotNo                     -- ^ The first valid slot for the transaction.
-    , maximumSlot    :: SlotNo                     -- ^ The last valid slot for the tranasction.
-    , bodyFile       :: FilePath                   -- ^ The output JSON file for the transaction body.
+      network         :: Maybe NetworkId            -- ^ The network ID, if any.
+    , socketPath      :: FilePath                   -- ^ The path to the node socket.
+    , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
+    , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
+    , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
+    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
+    , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
+    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
+    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , collateral      :: TxIn                       -- ^ The collateral.
+    , change          :: AddressAny                 -- ^ The change address.
+    , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
+    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the tranasction.
+    , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Submit a transaction.
   | Submit
     {
       network         :: Maybe NetworkId  -- ^ The network ID, if any.
     , socketPath      :: FilePath         -- ^ The path to the node socket.
-    , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
     , bodyFile        :: FilePath         -- ^ The JSON file containing the transaction body.
+    , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
     }
     -- | Ad-hoc example.
   | Example
+    {
+      writeFiles :: Bool  -- ^ Whether to serialise states, contracts and inputs to JSON.
+    }
     deriving (Eq, Generic, Show)

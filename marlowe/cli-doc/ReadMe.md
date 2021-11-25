@@ -2,6 +2,8 @@
 
 The `marlowe-cli` tool provides several utilities for serialising Marlowe contracts to validators, datums, and redeemers. It also computes hashes and addresses. It can be used in conjunction with [`cardano-cli`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md) to submit Marlowe transactions to the Cardano blockchain.
 
+An extended example showing the execution of a three-step contract is available in [extended-example.sh](extended-example.sh).
+
 
 ## Available Commands
 
@@ -20,11 +22,12 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
       validator                Export a validator to a JSON file.
       datum                    Export a datum to a JSON file.
       redeemer                 Export a redeemer to a JSON file.
-      example                  Hardwired example.
       build-simple             Build a non-Marlowe transaction.
       build-incoming           Build a transaction that pays to a Marlowe script.
       build-continuing         Build a transaction that both spends from and pays to a Marlowe script.
       build-outgoing           Build a transaction that spends from a Marlowe script.
+      submit                   Submit a transaction body.
+      example                  Hardwired example.
 
 
 Individual help pages:
@@ -40,6 +43,8 @@ Individual help pages:
     *   [`marlowe-cli build-incoming`](build-incoming.md)
     *   [`marlowe-cli build-continuing`](build-continuing.md)
     *   [`marlowe-cli build-outgoing`](build-outgoing.md)
+*   Submitting transactions.
+    *   [`marlowe-cli submit`](submit.md)
 
 
 ## Workflows for Building Marlowe Scripts, Datums, and Redeemers
