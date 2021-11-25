@@ -17,7 +17,7 @@ import API.Contract as API
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
 import Bridge (toBack, toFront)
-import Component.Contacts.Types (Wallet)
+import Component.Contacts.Types (WalletId)
 import Control.Monad.Except (lift, runExceptT)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Lens (view)
@@ -34,14 +34,14 @@ import Types (AjaxResponse)
 -- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
   Monad m <= ManageContract m where
-  activateContract :: MarloweContract -> Wallet -> m (AjaxResponse PlutusAppId)
+  activateContract :: MarloweContract -> WalletId -> m (AjaxResponse PlutusAppId)
   deactivateContract :: PlutusAppId -> m (AjaxResponse Unit)
   getContractInstanceClientState :: PlutusAppId -> m (AjaxResponse (ContractInstanceClientState MarloweContract))
   getContractInstanceCurrentState :: PlutusAppId -> m (AjaxResponse (PartiallyDecodedResponse ActiveEndpoint))
   getContractInstanceObservableState :: PlutusAppId -> m (AjaxResponse RawJson)
   getContractInstanceHooks :: PlutusAppId -> m (AjaxResponse (Array (Request ActiveEndpoint)))
   invokeEndpoint :: forall d. EncodeJson d => PlutusAppId -> String -> d -> m (AjaxResponse Unit)
-  getWalletContractInstances :: Wallet -> m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
+  getWalletContractInstances :: WalletId -> m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
   getAllContractInstances :: m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
   getContractDefinitions :: m (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
 

@@ -7,7 +7,7 @@ module Bridge
 
 import Prologue
 import Cardano.Wallet.Mock.Types (WalletInfo(..)) as Back
-import Component.Contacts.Types (Wallet(..), WalletInfo(..)) as Front
+import Component.Contacts.Types (WalletId(..), WalletInfo(..)) as Front
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Lens (Iso', iso)
@@ -106,12 +106,12 @@ instance currencySymbolBridge :: Bridge Back.CurrencySymbol String where
   toBack unCurrencySymbol = Back.CurrencySymbol { unCurrencySymbol }
 
 instance walletInfoBridge :: Bridge Back.WalletInfo Front.WalletInfo where
-  toFront (Back.WalletInfo { wiWallet, wiPubKeyHash }) = Front.WalletInfo { wallet: toFront wiWallet, pubKeyHash: toFront wiPubKeyHash }
-  toBack (Front.WalletInfo { wallet, pubKeyHash }) = Back.WalletInfo { wiWallet: toBack wallet, wiPubKeyHash: toBack pubKeyHash }
+  toFront (Back.WalletInfo { wiWallet, wiPubKeyHash }) = Front.WalletInfo { walletId: toFront wiWallet, pubKeyHash: toFront wiPubKeyHash }
+  toBack (Front.WalletInfo { walletId, pubKeyHash }) = Back.WalletInfo { wiWallet: toBack walletId, wiPubKeyHash: toBack pubKeyHash }
 
-instance walletBridge :: Bridge Back.Wallet Front.Wallet where
-  toFront (Back.Wallet { getWalletId }) = Front.Wallet getWalletId
-  toBack (Front.Wallet getWalletId) = Back.Wallet { getWalletId }
+instance walletBridge :: Bridge Back.Wallet Front.WalletId where
+  toFront (Back.Wallet { getWalletId }) = Front.WalletId getWalletId
+  toBack (Front.WalletId getWalletId) = Back.Wallet { getWalletId }
 
 -- TODO: Marlowe.Semantics.PubKeyHash is currently just an alias for String
 instance pubKeyHashBridge :: Bridge Back.PubKeyHash String where

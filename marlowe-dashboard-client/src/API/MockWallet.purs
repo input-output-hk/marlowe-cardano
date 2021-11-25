@@ -1,4 +1,7 @@
-module API.Wallet
+-- This module provides the API calls to access the MockWallet features of the PAB. It was developed
+-- for an initial integration point and could be reused for fast integration testing, but is not
+-- currently being used.
+module API.MockWallet
   ( createWallet
   , submitWalletTransaction
   , getWalletInfo

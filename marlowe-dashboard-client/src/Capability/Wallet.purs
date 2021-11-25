@@ -8,7 +8,7 @@ module Capability.Wallet
   ) where
 
 import Prologue
-import API.Wallet as API
+import API.MockWallet as API
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Control.Monad.Except (lift, runExceptT)
@@ -16,16 +16,16 @@ import Halogen (HalogenM)
 import Marlowe.Semantics (Assets)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
-import Component.Contacts.Types (Wallet, WalletInfo)
+import Component.Contacts.Types (WalletId, WalletInfo)
 
 -- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
   Monad m <= ManageWallet m where
   createWallet :: m (AjaxResponse WalletInfo)
-  submitWalletTransaction :: Wallet -> Tx -> m (AjaxResponse Unit)
-  getWalletInfo :: Wallet -> m (AjaxResponse WalletInfo)
-  getWalletTotalFunds :: Wallet -> m (AjaxResponse Assets)
-  signTransaction :: Wallet -> Tx -> m (AjaxResponse Tx)
+  submitWalletTransaction :: WalletId -> Tx -> m (AjaxResponse Unit)
+  getWalletInfo :: WalletId -> m (AjaxResponse WalletInfo)
+  getWalletTotalFunds :: WalletId -> m (AjaxResponse Assets)
+  signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
 instance monadWalletAppM :: ManageWallet AppM where
   createWallet = map (map toFront) $ runExceptT $ API.createWallet
