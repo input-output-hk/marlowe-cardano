@@ -7,9 +7,9 @@ The `export` command writes a JSON file with comprehensive information about the
 
     $ marlowe-cli export --help
     
-    Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS] 
+    Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS]
                               [--roles-currency CURRENCY_SYMBOL]
-                              --contract-file CONTRACT_FILE --state-file STATE_FILE 
+                              --contract-file CONTRACT_FILE --state-file STATE_FILE
                               [--inputs-file INPUTS_FILE] --out-file OUTPUT_FILE
                               [--print-stats]
       Export a Marlowe contract to a JSON file.

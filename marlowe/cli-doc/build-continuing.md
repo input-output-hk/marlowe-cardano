@@ -6,13 +6,14 @@ The `build-continuing` command builds a transaction that both pays to and spends
 ## Usage
 
     $ marlowe-cli build-continuing --help
-
+    
     Usage: marlowe-cli build-continuing [--testnet-magic INTEGER]
                                         --socket-path SOCKET_FILE
                                         --script-address ADDRESS
                                         --tx-in-script-file PLUTUS_FILE
                                         --tx-in-redeemer-file REDEEMER_FILE
                                         --tx-in-datum-file DATUM_FILE
+                                        [--required-signer SIGNING_FILE]
                                         --tx-in-marlowe TXID#TXIX
                                         --tx-out-datum-file DATUM_FILE
                                         --tx-out-value LOVELACE [--tx-in TXID#TXIX]
@@ -30,6 +31,7 @@ The `build-continuing` command builds a transaction that both pays to and spends
       --tx-in-script-file PLUTUS_FILE      Plutus file for Marlowe contract.
       --tx-in-redeemer-file REDEEMER_FILE  Redeemer JSON file spent from Marlowe contract.
       --tx-in-datum-file DATUM_FILE        Datum JSON file spent from Marlowe contract.
+      --required-signer SIGNING_FILE       Files containing required signing keys.
       --tx-in-marlowe TXID#TXIX            UTxO spent from Marlowe contract.
       --tx-out-datum-file DATUM_FILE       Datum JSON file datum paid to Marlowe contract.
       --tx-out-value LOVELACE              Lovelace value paid to Marlowe contract.

@@ -6,12 +6,13 @@ The `build-outgoing` command builds a transaction that spends from a Marlowe con
 ## Usage
 
     $ marlowe-cli build-outgoing --help
-
+    
     Usage: marlowe-cli build-outgoing [--testnet-magic INTEGER]
                                       --socket-path SOCKET_FILE
                                       --tx-in-script-file PLUTUS_FILE
                                       --tx-in-redeemer-file REDEEMER_FILE
                                       --tx-in-datum-file DATUM_FILE
+                                      [--required-signer SIGNING_FILE]
                                       --tx-in-marlowe TXID#TXIX [--tx-in TXID#TXIX]
                                       [--tx-out ADDRESS+LOVELACE]
                                       --tx-in-collateral TXID#TXIX
@@ -25,6 +26,7 @@ The `build-outgoing` command builds a transaction that spends from a Marlowe con
       --tx-in-script-file PLUTUS_FILE      Plutus file for Marlowe contract.
       --tx-in-redeemer-file REDEEMER_FILE  Redeemer JSON file spent from Marlowe contract.
       --tx-in-datum-file DATUM_FILE        Datum JSON file spent from Marlowe contract.
+      --required-signer SIGNING_FILE       Files containing required signing keys.
       --tx-in-marlowe TXID#TXIX            UTxO spent from Marlowe contract.
       --tx-in TXID#TXIX                    Transaction input in TxId#TxIx format.
       --tx-out ADDRESS+LOVELACE            Transaction output in ADDRESS+LOVELACE format.

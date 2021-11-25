@@ -1,0 +1,15 @@
+[
+    {
+        "that_deposits": 10000000,
+        "input_from_party": {
+            "pk_hash": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+        },
+        "of_token": {
+            "currency_symbol": "",
+            "token_name": ""
+        },
+        "into_account": {
+            "pk_hash": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+        }
+    }
+]
