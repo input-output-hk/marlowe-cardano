@@ -1,3 +1,4 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 module Language.Marlowe.SemanticsDeserialisation (byteStringToContract) where
 
 import           Language.Marlowe.Deserialisation (byteStringToInt, byteStringToList, byteStringToPositiveInt,
@@ -8,152 +9,468 @@ import           Language.Marlowe.SemanticsTypes  (Action (..), Bound (..), Case
                                                    ValueId (..))
 import           Ledger                           (PubKeyHash (..), Slot (..))
 import           Ledger.Value                     (CurrencySymbol (..), TokenName (..))
-import           PlutusTx.Builtins                (BuiltinByteString)
+import           PlutusTx.Prelude
+
+{-# INLINABLE byteStringToParty #-}
+{-# INLINABLE byteStringToChoiceId #-}
+{-# INLINABLE byteStringToValueId #-}
+{-# INLINABLE byteStringToToken #-}
+{-# INLINABLE byteStringToObservation #-}
+{-# INLINABLE byteStringToValue #-}
+{-# INLINABLE byteStringToPayee #-}
+{-# INLINABLE byteStringToBound #-}
+{-# INLINABLE byteStringToAction #-}
+{-# INLINABLE byteStringToCase #-}
+{-# INLINABLE byteStringToContract #-}
+
 
 byteStringToParty :: BuiltinByteString -> Maybe (Party, BuiltinByteString)
-byteStringToParty x = do (y, t1) <- byteStringToPositiveInt x
-                         case y of
-                           0 -> withByteString t1 (PK . PubKeyHash)
-                           1 -> withByteString t1 (Role . TokenName)
-                           _ -> Nothing
-  where withByteString bs f = do (z, t) <- getByteString bs
-                                 return (f z, t)
+byteStringToParty x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( case getByteString t1 of
+          Nothing -> Nothing
+          Just (z, t2) ->
+            ( if y == 0
+                then Just (PK (PubKeyHash z), t2)
+                else
+                  ( if y == 1
+                      then Just (Role (TokenName z), t2)
+                      else Nothing
+                  )
+            )
+      )
 
 byteStringToChoiceId :: BuiltinByteString -> Maybe (ChoiceId, BuiltinByteString)
-byteStringToChoiceId x = do (cn, t1) <- getByteString x
-                            (co, t2) <- byteStringToParty t1
-                            return (ChoiceId cn co, t2)
+byteStringToChoiceId x =
+  case getByteString x of
+    Nothing -> Nothing
+    Just (cn, t1) ->
+      ( case byteStringToParty t1 of
+          Nothing       -> Nothing
+          Just (co, t2) -> Just (ChoiceId cn co, t2)
+      )
 
 byteStringToValueId :: BuiltinByteString -> Maybe (ValueId, BuiltinByteString)
-byteStringToValueId x = do (n, t) <- getByteString x
-                           return (ValueId n, t)
+byteStringToValueId x = case getByteString x of
+  Nothing     -> Nothing
+  Just (n, t) -> Just (ValueId n, t)
 
 byteStringToToken :: BuiltinByteString -> Maybe (Token, BuiltinByteString)
-byteStringToToken x = do (cs, t1) <- getByteString x
-                         (tn, t2) <- getByteString t1
-                         return (Token (CurrencySymbol cs) (TokenName tn), t2)
+byteStringToToken x =
+  case getByteString x of
+    Nothing -> Nothing
+    Just (cs, t1) ->
+      ( case getByteString t1 of
+          Nothing       -> Nothing
+          Just (tn, t2) -> Just (Token (CurrencySymbol cs) (TokenName tn), t2)
+      )
 
 byteStringToObservation :: BuiltinByteString -> Maybe (Observation, BuiltinByteString)
-byteStringToObservation x = do (y, t1) <- byteStringToPositiveInt x
-                               case y of
-                                 0  -> withOneObs t1 NotObs
-                                 1  -> withTwoObs t1 AndObs
-                                 2  -> withTwoObs t1 OrObs
-                                 3  -> withChoiceId t1 ChoseSomething
-                                 4  -> Just (TrueObs, t1)
-                                 5  -> Just (FalseObs, t1)
-                                 6  -> withTwoValues t1 ValueGE
-                                 7  -> withTwoValues t1 ValueGT
-                                 8  -> withTwoValues t1 ValueLT
-                                 9  -> withTwoValues t1 ValueLE
-                                 10 -> withTwoValues t1 ValueEQ
-                                 _  -> Nothing
-  where withOneObs = withOne byteStringToObservation
-        withTwoObs = withTwo byteStringToObservation
-        withChoiceId = withOne byteStringToChoiceId
-        withTwoValues = withTwo byteStringToValue
-        withOne bsToOne bs f = do (z, t) <- bsToOne bs
-                                  return (f z, t)
-        withTwo bsToOne bs f = do (y, t1) <- bsToOne bs
-                                  (z, t2) <- bsToOne t1
-                                  return (f y z, t2)
+byteStringToObservation x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( if y < 6
+          then
+            ( if y < 3
+                then
+                  ( case byteStringToObservation t1 of
+                      Nothing -> Nothing
+                      Just (lhs, t2) ->
+                        ( if y < 1
+                            then Just (NotObs lhs, t2)
+                            else
+                              ( case byteStringToObservation t2 of
+                                  Nothing -> Nothing
+                                  Just (rhs, t3) ->
+                                    ( if y < 2
+                                        then
+                                          Just
+                                            (AndObs lhs rhs, t3)
+                                        else
+                                          Just
+                                            (OrObs lhs rhs, t3)
+                                    )
+                              )
+                        )
+                  )
+                else
+                  ( if y < 4
+                      then
+                        ( case byteStringToChoiceId t1 of
+                            Nothing -> Nothing
+                            Just (choId, t2) ->
+                              Just (ChoseSomething choId, t2)
+                        )
+                      else
+                        ( if y < 5
+                            then Just (TrueObs, t1)
+                            else Just (FalseObs, t1)
+                        )
+                  )
+            )
+          else
+            ( case byteStringToValue t1 of
+                Nothing -> Nothing
+                Just (lhs, t2) ->
+                  ( case byteStringToValue t2 of
+                      Nothing -> Nothing
+                      Just (rhs, t3) ->
+                        ( if y < 9
+                            then
+                              ( if y < 7
+                                  then Just (ValueGE lhs rhs, t3)
+                                  else
+                                    ( if y < 8
+                                        then
+                                          Just
+                                            (ValueGT lhs rhs, t3)
+                                        else
+                                          Just
+                                            (ValueLT lhs rhs, t3)
+                                    )
+                              )
+                            else
+                              ( if y < 10
+                                  then Just (ValueLE lhs rhs, t3)
+                                  else
+                                    ( if y == 10
+                                        then
+                                          Just
+                                            (ValueEQ lhs rhs, t3)
+                                        else Nothing
+                                    )
+                              )
+                        )
+                  )
+            )
+      )
 
 byteStringToValue :: BuiltinByteString -> Maybe (Value Observation, BuiltinByteString)
-byteStringToValue x = do (y, t1) <- byteStringToPositiveInt x
-                         case y of
-                           0 -> withAccTok t1 AvailableMoney
-                           1 -> withInteger t1 Constant
-                           2 -> withOneVal t1 NegValue
-                           3 -> withTwoVal t1 AddValue
-                           4 -> withTwoVal t1 SubValue
-                           5 -> withTwoVal t1 MulValue
-                           6 -> withTwoVal t1 DivValue
-                           7 -> withChoiceId t1 ChoiceValue
-                           8 -> Just (SlotIntervalStart, t1)
-                           9 -> Just (SlotIntervalEnd, t1)
-                           10 -> withValueId t1 UseValue
-                           11 -> do (cond, t2) <- byteStringToObservation t1
-                                    (thn, t3) <- byteStringToValue t2
-                                    (els, t4) <- byteStringToValue t3
-                                    return (Cond cond thn els, t4)
-                           _ -> Nothing
-  where withAccTok = withBoth byteStringToParty byteStringToToken
-        withInteger = withOne byteStringToInt
-        withOneVal = withOne byteStringToValue
-        withTwoVal = withTwo byteStringToValue
-        withChoiceId = withOne byteStringToChoiceId
-        withValueId = withOne byteStringToValueId
-        withOne bsToOne bs f = do (z, t) <- bsToOne bs
-                                  return (f z, t)
-        withTwo bsToOne = withBoth bsToOne bsToOne
-        withBoth bsToFst bsToSnd bs f = do (y, t1) <- bsToFst bs
-                                           (z, t2) <- bsToSnd t1
-                                           return (f y z, t2)
+byteStringToValue x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( if y < 7
+          then
+            ( if y < 3
+                then
+                  ( if y < 1
+                      then
+                        ( case byteStringToParty t1 of
+                            Nothing -> Nothing
+                            Just (accId, t2) ->
+                              ( case byteStringToToken t2 of
+                                  Nothing -> Nothing
+                                  Just (token, t3) ->
+                                    Just (AvailableMoney accId token, t3)
+                              )
+                        )
+                      else
+                        ( if y < 2
+                            then
+                              ( case byteStringToInt t1 of
+                                  Nothing -> Nothing
+                                  Just (amount, t2) ->
+                                    Just (Constant amount, t2)
+                              )
+                            else
+                              ( case byteStringToValue t1 of
+                                  Nothing -> Nothing
+                                  Just (subVal, t2) ->
+                                    Just (NegValue subVal, t2)
+                              )
+                        )
+                  )
+                else
+                  ( case byteStringToValue t1 of
+                      Nothing -> Nothing
+                      Just (lhs, t2) ->
+                        ( case byteStringToValue t2 of
+                            Nothing -> Nothing
+                            Just (rhs, t3) ->
+                              ( if y < 5
+                                  then
+                                    ( if y < 4
+                                        then
+                                          Just (AddValue lhs rhs, t3)
+                                        else
+                                          Just (SubValue lhs rhs, t3)
+                                    )
+                                  else
+                                    ( if y < 6
+                                        then
+                                          Just (MulValue lhs rhs, t3)
+                                        else
+                                          Just (DivValue lhs rhs, t3)
+                                    )
+                              )
+                        )
+                  )
+            )
+          else
+            ( if y < 9
+                then
+                  ( if y < 8
+                      then
+                        ( case byteStringToChoiceId t1 of
+                                Nothing          -> Nothing
+                                Just (choId, t2) -> Just (ChoiceValue choId, t2)
+                        )
+                      else Just (SlotIntervalStart, t1)
+                  )
+                else
+                  ( if y < 11
+                      then
+                        ( if y < 10
+                            then Just (SlotIntervalEnd, t1)
+                            else
+                              ( case byteStringToValueId t1 of
+                                  Nothing          -> Nothing
+                                  Just (valId, t2) -> Just (UseValue valId, t2)
+                              )
+                        )
+                      else
+                        ( if y == 11
+                            then
+                              ( case byteStringToObservation t1 of
+                                  Nothing -> Nothing
+                                  Just (obs, t2) ->
+                                    ( case byteStringToValue t2 of
+                                        Nothing -> Nothing
+                                        Just (thn, t3) ->
+                                          ( case byteStringToValue t3 of
+                                              Nothing        -> Nothing
+                                              Just (els, t4) -> Just (Cond obs thn els, t4)
+                                          )
+                                    )
+                              )
+                            else Nothing
+                        )
+                  )
+            )
+      )
 
 byteStringToPayee :: BuiltinByteString -> Maybe (Payee, BuiltinByteString)
-byteStringToPayee x = do (y, t1) <- byteStringToPositiveInt x
-                         case y of
-                           0 -> withParty t1 Account
-                           1 -> withParty t1 Party
-                           _ -> Nothing
-  where withParty = withOne byteStringToParty
-        withOne bsToOne bs f = do (z, t) <- bsToOne bs
-                                  return (f z, t)
+byteStringToPayee x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( case byteStringToParty t1 of
+          Nothing -> Nothing
+          Just (party, t2) ->
+            ( if y == 0
+                then Just (Account party, t2)
+                else
+                  ( if y == 1
+                      then Just (Party party, t2)
+                      else Nothing
+                  )
+            )
+      )
 
 byteStringToBound :: BuiltinByteString -> Maybe (Bound, BuiltinByteString)
-byteStringToBound x = do (l, bs1) <- byteStringToInt x
-                         (u, bs2) <- byteStringToInt bs1
-                         return (Bound l u, bs2)
+byteStringToBound x =
+  case byteStringToInt x of
+    Nothing -> Nothing
+    Just (l, bs1) ->
+      ( case byteStringToInt bs1 of
+          Nothing       -> Nothing
+          Just (u, bs2) -> Just (Bound l u, bs2)
+      )
 
 byteStringToAction :: BuiltinByteString -> Maybe (Action, BuiltinByteString)
-byteStringToAction x = do (y, t1) <- byteStringToPositiveInt x
-                          case y of
-                            0 -> do (accId, t2) <- byteStringToParty t1
-                                    (party, t3) <- byteStringToParty t2
-                                    (token, t4) <- byteStringToToken t3
-                                    (val, t5) <- byteStringToValue t4
-                                    return (Deposit accId party token val, t5)
-                            1 -> do (choId, t2) <- byteStringToChoiceId t1
-                                    (bounds, t3) <- byteStringToList byteStringToBound t2
-                                    return (Choice choId bounds, t3)
-                            2 -> do (obs, t2) <- byteStringToObservation t1
-                                    return (Notify obs, t2)
-                            _ -> Nothing
+byteStringToAction x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( if y < 2
+          then
+            ( if y < 1
+                then
+                  ( if y == 0
+                      then
+                        ( case byteStringToParty t1 of
+                            Nothing -> Nothing
+                            Just (accId, t2) ->
+                              ( case byteStringToParty t2 of
+                                  Nothing -> Nothing
+                                  Just (party, t3) ->
+                                    ( case byteStringToToken t3 of
+                                        Nothing -> Nothing
+                                        Just (token, t4) ->
+                                          ( case byteStringToValue t4 of
+                                              Nothing        -> Nothing
+                                              Just (val, t5) -> Just (Deposit accId party token val, t5)
+                                          )
+                                    )
+                              )
+                        )
+                      else Nothing
+                  )
+                else
+                  ( case byteStringToChoiceId t1 of
+                      Nothing -> Nothing
+                      Just (choId, t2) ->
+                        ( case byteStringToList
+                            byteStringToBound
+                            t2 of
+                            Nothing -> Nothing
+                            Just (boundList, t3) ->
+                              Just (Choice choId boundList, t3)
+                        )
+                  )
+            )
+          else
+            ( if y == 2
+                then
+                  ( case byteStringToObservation t1 of
+                      Nothing        -> Nothing
+                      Just (obs, t2) -> Just (Notify obs, t2)
+                  )
+                else Nothing
+            )
+      )
 
 byteStringToCase :: BuiltinByteString -> Maybe (Case Contract, BuiltinByteString)
-byteStringToCase x = do (y, t1) <- byteStringToPositiveInt x
-                        case y of
-                          0 -> do (action, t2) <- byteStringToAction t1
-                                  (cont, t3) <- byteStringToContract t2
-                                  return (Case action cont, t3)
-                          -- 1 -> do (action, t2) <- byteStringToAction t1
-                          --         (bs, t3) <- getByteString t2
-                          --         return (MerkleizedCase action bs, t3)
-                          _ -> Nothing
+byteStringToCase x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( if y < 1
+          then
+            ( if y == 0
+                then
+                  ( case byteStringToAction t1 of
+                      Nothing -> Nothing
+                      Just (action, t2) ->
+                        ( case byteStringToContract t2 of
+                            Nothing -> Nothing
+                            Just (cont, t3) ->
+                              Just (Case action cont, t3)
+                        )
+                  )
+                else Nothing
+            )
+          else
+            ( if y == 1
+                then
+                  ( case byteStringToAction t1 of
+                      Nothing -> Nothing
+                      Just (action, t2) ->
+                        ( case getByteString t2 of
+                            Nothing -> Nothing
+                            Just (bs, t3) ->
+                              Just (MerkleizedCase action bs, t3)
+                        )
+                  )
+                else Nothing
+            )
+      )
 
 byteStringToContract :: BuiltinByteString -> Maybe (Contract, BuiltinByteString)
-byteStringToContract x = do (y, t1) <- byteStringToPositiveInt x
-                            case y of
-                              0 -> Just (Close, t1)
-                              1 -> do (accId, t2) <- byteStringToParty t1
-                                      (payee, t3) <- byteStringToPayee t2
-                                      (token, t4) <- byteStringToToken t3
-                                      (val, t5) <- byteStringToValue t4
-                                      (cont, t6) <- byteStringToContract t5
-                                      return (Pay accId payee token val cont, t6)
-                              2 -> do (obs, t2) <- byteStringToObservation t1
-                                      (cont1, t3) <- byteStringToContract t2
-                                      (cont2, t4) <- byteStringToContract t3
-                                      return (If obs cont1 cont2, t4)
-                              3 -> do (caseList, t2) <- byteStringToList byteStringToCase t1
-                                      (timeout, t3) <- byteStringToInt t2
-                                      (cont, t4) <- byteStringToContract t3
-                                      return (When caseList (Slot timeout) cont, t4)
-                              4 -> do (valId, t2) <- byteStringToValueId t1
-                                      (val, t3) <- byteStringToValue t2
-                                      (cont, t4) <- byteStringToContract t3
-                                      return (Let valId val cont, t4)
-                              5 -> do (obs, t2) <- byteStringToObservation t1
-                                      (cont, t3) <- byteStringToContract t2
-                                      return (Assert obs cont, t3)
-                              _ -> Nothing
+byteStringToContract x =
+  case byteStringToPositiveInt x of
+    Nothing -> Nothing
+    Just (y, t1) ->
+      ( if y < 3
+          then
+            ( if y < 1
+                then
+                  ( if y == 0
+                      then Just (Close, t1)
+                      else Nothing
+                  )
+                else
+                  ( if y < 2
+                      then
+                        ( case byteStringToParty t1 of
+                            Nothing -> Nothing
+                            Just (accId, t2) ->
+                              ( case byteStringToPayee t2 of
+                                  Nothing -> Nothing
+                                  Just (payee, t3) ->
+                                    ( case byteStringToToken t3 of
+                                        Nothing -> Nothing
+                                        Just (token, t4) ->
+                                          ( case byteStringToValue t4 of
+                                              Nothing -> Nothing
+                                              Just (val, t5) ->
+                                                ( case byteStringToContract t5 of
+                                                    Nothing -> Nothing
+                                                    Just (cont, t6) ->
+                                                      Just (Pay accId payee token val cont, t6)
+                                                )
+                                          )
+                                    )
+                              )
+                        )
+                      else
+                        ( case byteStringToObservation t1 of
+                            Nothing -> Nothing
+                            Just (obs, t2) ->
+                              ( case byteStringToContract t2 of
+                                  Nothing -> Nothing
+                                  Just (cont1, t3) ->
+                                    ( case byteStringToContract t3 of
+                                        Nothing -> Nothing
+                                        Just (cont2, t4) ->
+                                          Just (If obs cont1 cont2, t4)
+                                    )
+                              )
+                        )
+                  )
+            )
+          else
+            ( if y < 5
+                then
+                  ( if y < 4
+                      then
+                        ( case byteStringToList
+                            byteStringToCase
+                            t1 of
+                            Nothing -> Nothing
+                            Just (caseList, t2) ->
+                              ( case byteStringToInt t2 of
+                                  Nothing -> Nothing
+                                  Just (timeout, t3) ->
+                                    ( case byteStringToContract t3 of
+                                        Nothing -> Nothing
+                                        Just (cont, t4) ->
+                                          Just (When caseList (Slot timeout) cont, t4)
+                                    )
+                              )
+                        )
+                      else
+                        ( case byteStringToValueId t1 of
+                            Nothing -> Nothing
+                            Just (valId, t2) ->
+                              ( case byteStringToValue t2 of
+                                  Nothing -> Nothing
+                                  Just (val, t3) ->
+                                    ( case byteStringToContract t3 of
+                                        Nothing -> Nothing
+                                        Just (cont, t4) ->
+                                          Just (Let valId val cont, t4)
+                                    )
+                              )
+                        )
+                  )
+                else
+                  ( if y == 5
+                      then
+                        ( case byteStringToObservation t1 of
+                            Nothing -> Nothing
+                            Just (obs, t2) ->
+                              ( case byteStringToContract t2 of
+                                  Nothing -> Nothing
+                                  Just (cont, t3) ->
+                                    Just (Assert obs cont, t3)
+                              )
+                        )
+                      else Nothing
+                  )
+            )
+      )

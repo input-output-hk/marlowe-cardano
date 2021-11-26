@@ -51,6 +51,8 @@ import qualified Prelude                     as Haskell
 
 {- Functions that used in Plutus Core must be inlineable,
    so their code is available for PlutusTx compiler -}
+{-# INLINABLE getAction #-}
+{-# INLINABLE getInputContent #-}
 {-# INLINABLE inBounds #-}
 {-# INLINABLE emptyState #-}
 
@@ -184,9 +186,13 @@ data Payee = Account AccountId
     datatype Case is mutually recurvive with @Contract@
 -}
 data Case a = Case Action a
+            | MerkleizedCase Action BuiltinByteString
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
+getAction :: Case a -> Action
+getAction (Case action _)           = action
+getAction (MerkleizedCase action _) = action
 
 {-| Marlowe has six ways of building contracts.
     Five of these – 'Pay', 'Let', 'If', 'When' and 'Assert' –
@@ -204,7 +210,6 @@ data Contract = Close
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (Pretty)
 
-
 {-| Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
 -}
 data State = State { accounts    :: Accounts
@@ -221,36 +226,68 @@ newtype Environment = Environment { slotInterval :: SlotInterval }
 
 {-| Input for a Marlowe contract. Correspond to expected 'Action's.
 -}
-data Input = IDeposit AccountId Party Token Integer
-           | IChoice ChoiceId ChosenNum
-           | INotify
+data InputContent = IDeposit AccountId Party Token Integer
+                  | IChoice ChoiceId ChosenNum
+                  | INotify
+  deriving stock (Haskell.Show,Haskell.Eq,Generic)
+  deriving anyclass (Pretty)
+
+data Input = NormalInput InputContent
+           | MerkleizedInput InputContent BuiltinByteString
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
 instance FromJSON Input where
-  parseJSON (String "input_notify") = return INotify
+  parseJSON (String "input_notify") = return (NormalInput INotify)
   parseJSON (Object v) =
-        (IDeposit <$> (v .: "into_account")
-                  <*> (v .: "input_from_party")
-                  <*> (v .: "of_token")
-                  <*> (v .: "that_deposits"))
-    <|> (IChoice <$> (v .: "for_choice_id")
-                 <*> (v .: "input_that_chooses_num"))
-  parseJSON _ = Haskell.fail "Contract must be either an object or a the string \"close\""
+        (MerkleizedInput <$> (IChoice <$> (v .: "for_choice_id")
+                                      <*> (v .: "input_that_chooses_num"))
+                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_continuation")))
+    <|> (MerkleizedInput <$> (IDeposit <$> (v .: "into_account")
+                                       <*> (v .: "input_from_party")
+                                       <*> (v .: "of_token")
+                                       <*> (v .: "that_deposits"))
+                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_continuation")))
+    <|> (MerkleizedInput INotify <$> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_notify")))
+    <|> (NormalInput <$> (IDeposit <$> (v .: "into_account")
+                                   <*> (v .: "input_from_party")
+                                   <*> (v .: "of_token")
+                                   <*> (v .: "that_deposits")))
+    <|> (NormalInput <$> (IChoice <$> (v .: "for_choice_id")
+                                  <*> (v .: "input_that_chooses_num")))
+  parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
 instance ToJSON Input where
-  toJSON (IDeposit accId party tok amount) = object
+  toJSON (NormalInput (IDeposit accId party tok amount)) = object
       [ "input_from_party" .= party
       , "that_deposits" .= amount
       , "of_token" .= tok
       , "into_account" .= accId
       ]
-  toJSON (IChoice choiceId chosenNum) = object
+  toJSON (NormalInput (IChoice choiceId chosenNum)) = object
       [ "input_that_chooses_num" .= chosenNum
       , "for_choice_id" .= choiceId
       ]
-  toJSON INotify = JSON.String $ pack "input_notify"
+  toJSON (NormalInput INotify) = JSON.String $ pack "input_notify"
+  toJSON (MerkleizedInput (IDeposit accId party tok amount) bs) = object
+      [ "input_from_party" .= party
+      , "that_deposits" .= amount
+      , "of_token" .= tok
+      , "into_account" .= accId
+      , "merkleized_continuation" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+      ]
+  toJSON (MerkleizedInput (IChoice choiceId chosenNum) bs) = object
+      [ "input_that_chooses_num" .= chosenNum
+      , "for_choice_id" .= choiceId
+      , "merkleized_continuation" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+      ]
+  toJSON (MerkleizedInput INotify bs) = object
+      [ "merkleized_notify" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+      ]
 
+getInputContent :: Input -> InputContent
+getInputContent (NormalInput inputContent)       = inputContent
+getInputContent (MerkleizedInput inputContent _) = inputContent
 
 {-| Slot interval errors.
     'InvalidInterval' means @slotStart > slotEnd@, and
@@ -353,8 +390,8 @@ instance FromJSON (Value Observation) where
                   <*> (v .: "and"))
     <|> (SubValue <$> (v .: "value")
                   <*> (v .: "minus"))
-    <|> MulValue  <$> (v .: "multiply")
-                  <*> (v .: "times")
+    <|> (MulValue <$> (v .: "multiply")
+                  <*> (v .: "times"))
     <|> (DivValue <$> (v .: "divide") <*> (v .: "by"))
     <|> (ChoiceValue <$> (v .: "value_of_choice"))
     <|> (UseValue <$> (v .: "use_value"))
@@ -512,13 +549,19 @@ instance ToJSON Payee where
 
 instance FromJSON a => FromJSON (Case a) where
   parseJSON = withObject "Case" (\v ->
-       Case <$> (v .: "case")
-            <*> (v .: "then")
+        (Case <$> (v .: "case")
+              <*> (v .: "then"))
+    <|> (MerkleizedCase <$> (v .: "case")
+                        <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_then")))
                                 )
 instance ToJSON a => ToJSON (Case a) where
   toJSON (Case act cont) = object
       [ "case" .= act
       , "then" .= cont
+      ]
+  toJSON (MerkleizedCase act bs) = object
+      [ "case" .= act
+      , "merkleized_then" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
       ]
 
 
@@ -605,7 +648,6 @@ instance Eq Payee where
     Party p1 == Party p2         = p1 == p2
     _ == _                       = False
 
-
 instance Eq a => Eq (Value a) where
     {-# INLINABLE (==) #-}
     AvailableMoney acc1 tok1 == AvailableMoney acc2 tok2 =
@@ -638,7 +680,6 @@ instance Eq Observation where
     FalseObs == FalseObs                       = True
     _ == _                                     = False
 
-
 instance Eq Action where
     {-# INLINABLE (==) #-}
     Deposit acc1 party1 tok1 val1 == Deposit acc2 party2 tok2 val2 =
@@ -651,6 +692,11 @@ instance Eq Action where
     Notify obs1 == Notify obs2 = obs1 == obs2
     _ == _ = False
 
+instance Eq a => Eq (Case a) where
+    {-# INLINABLE (==) #-}
+    Case acl cl == Case acr cr                       = acl == acr && cl == cr
+    MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr
+    _ == _                                           = False
 
 instance Eq Contract where
     {-# INLINABLE (==) #-}
@@ -662,15 +708,11 @@ instance Eq Contract where
     When cases1 timeout1 cont1 == When cases2 timeout2 cont2 =
         timeout1 == timeout2 && cont1 == cont2
         && length cases1 == length cases2
-        && let cases = zip cases1 cases2
-               checkCase (Case action1 cont1, Case action2 cont2) =
-                    action1 == action2 && cont1 == cont2
-           in all checkCase cases
+        && all id (zipWith (==) cases1 cases2)
     Let valId1 val1 cont1 == Let valId2 val2 cont2 =
         valId1 == valId2 && val1 == val2 && cont1 == cont2
     Assert obs1 cont1 == Assert obs2 cont2 = obs1 == obs2 && cont1 == cont2
     _ == _ = False
-
 
 instance Eq State where
     {-# INLINABLE (==) #-}
@@ -722,7 +764,7 @@ makeIsDataIndexed ''Bound [('Bound,0)]
 makeLift ''Action
 makeIsDataIndexed ''Action [('Deposit,0),('Choice,1),('Notify,2)]
 makeLift ''Case
-makeIsDataIndexed ''Case [('Case,0)]
+makeIsDataIndexed ''Case [('Case,0),('MerkleizedCase,1)]
 makeLift ''Payee
 makeIsDataIndexed ''Payee [('Account,0),('Party,1)]
 makeLift ''Contract
@@ -738,4 +780,6 @@ makeLift ''State
 makeIsDataIndexed ''State [('State,0)]
 makeLift ''Environment
 makeLift ''Input
-makeIsDataIndexed ''Input [('IDeposit,0),('IChoice,1),('INotify,2)]
+makeIsDataIndexed ''Input [('NormalInput,0),('MerkleizedInput,2)]
+makeLift ''InputContent
+makeIsDataIndexed ''InputContent [('IDeposit,0),('IChoice,1),('INotify,2)]

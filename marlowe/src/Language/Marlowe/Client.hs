@@ -41,7 +41,7 @@ import           GHC.Generics                    (Generic)
 import           Language.Marlowe.Scripts
 import           Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics      as Marlowe
-import           Language.Marlowe.SemanticsTypes hiding (Contract)
+import           Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
 import           Language.Marlowe.Util           (extractContractRoles)
 import           Ledger                          (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
@@ -339,7 +339,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
             PayDeposit acc p token amount -> do
                 logInfo @String $ "PayDeposit " <> show amount <> " at within slots " <> show slotRange
                 let payDeposit = do
-                        marloweData <- SM.runStep theClient (slotRange, [IDeposit acc p token amount])
+                        marloweData <- SM.runStep theClient (slotRange, [NormalInput $ IDeposit acc p token amount])
                         case marloweData of
                             SM.TransitionFailure e -> throwing _TransitionError e
                             SM.TransitionSuccess d -> continueWith d

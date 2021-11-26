@@ -64,7 +64,7 @@ actionToByteString (Notify obs) = positiveIntToByteString 2 `appendByteString` o
 
 caseToByteString :: Case Contract -> BuiltinByteString
 caseToByteString (Case action cont) = positiveIntToByteString 0 `appendByteString` actionToByteString action `appendByteString` contractToByteString cont
---caseToByteString (MerkleizedCase action bs) = positiveIntToByteString 1 `appendByteString` actionToByteString action `appendByteString` packByteString bs
+caseToByteString (MerkleizedCase action bs) = positiveIntToByteString 1 `appendByteString` actionToByteString action `appendByteString` packByteString bs
 
 contractToByteString :: Contract -> BuiltinByteString
 contractToByteString Close = positiveIntToByteString 0

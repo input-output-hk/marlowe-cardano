@@ -45,7 +45,7 @@ getAccountsDiff :: [Payment] -> [Input] -> AccountsDiff
 getAccountsDiff payments inputs =
     foldl' (\acc (p, m) -> addAccountsDiff p m acc) emptyAccountsDiff (incomes ++ outcomes)
   where
-    incomes  = [ (p, Val.singleton cur tok m) | IDeposit _ p (Token cur tok) m <- inputs ]
+    incomes  = [ (p, Val.singleton cur tok m) | IDeposit _ p (Token cur tok) m <- map getInputContent inputs ]
     outcomes = [ (p, P.negate m) | Payment _ (Party p) m  <- payments ]
 
 
@@ -65,7 +65,9 @@ foldMapContract fcont fcase fobs fvalue contract =
         Assert obs cont      -> fobs' obs <> go cont
   where
     go = foldMapContract fcont fcase fobs fvalue
-    fcase' cs@(Case _ cont) = fcase cs <> go cont
+    fcase' cs = fcase cs <> case cs of
+        Case _ cont        -> go cont
+        MerkleizedCase _ _ -> mempty
     fobs' obs = fobs obs <> case obs of
         AndObs a b  -> fobs' a <> fobs' b
         OrObs  a b  -> fobs' a <> fobs' b

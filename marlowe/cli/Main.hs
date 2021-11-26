@@ -26,8 +26,8 @@ import           Language.Marlowe.CLI            (mainCLI)
 import           Language.Marlowe.CLI.Export     (printMarlowe)
 import           Language.Marlowe.CLI.Types      (CliError (..), liftCli)
 import           Language.Marlowe.Client         (defaultMarloweParams)
-import           Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Input (..), Party (..),
-                                                  State (..), Token (..), Value (..))
+import           Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Input (..), InputContent (..),
+                                                  Party (..), State (..), Token (..), Value (..))
 import           Language.Marlowe.Util           (ada)
 import           Ledger.Ada                      (adaSymbol, adaToken)
 import           Paths_marlowe                   (version)
@@ -92,7 +92,7 @@ example =
         , minSlot     = 42293000
         }
       contract2 = When [Case (Deposit party party ada (Constant 12000000)) Close] 42294000 Close
-      inputs2 = [IDeposit party party adatoken 12000000]
+      inputs2 = [NormalInput $ IDeposit party party adatoken 12000000]
     printMarlowe
       defaultMarloweParams costModelParams
       testnet NoStakeAddress

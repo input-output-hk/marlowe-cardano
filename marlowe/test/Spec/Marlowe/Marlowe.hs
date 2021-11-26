@@ -151,10 +151,10 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [IDeposit alicePk alicePk ada 850])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 850])
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [IDeposit alicePk bobPk ada 1000])
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 1000])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -188,7 +188,7 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [IDeposit alicePk alicePk ada 1000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 1000])
     Trace.waitNSlots 2
     pure ()
 
@@ -231,8 +231,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         (pms, _) : _ -> do
 
             Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, pms, Nothing,
-                [ IChoice chId 256
-                , IDeposit "alice" "alice" ada 256
+                [ NormalInput $ IChoice chId 256
+                , NormalInput $ IDeposit "alice" "alice" ada 256
                 ])
             Trace.waitNSlots 17
 
@@ -240,7 +240,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Trace.callEndpoint @"follow" bobFollowHdl pms
             Trace.waitNSlots 2
 
-            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [INotify])
+            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [NormalInput INotify])
 
             Trace.waitNSlots 2
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)

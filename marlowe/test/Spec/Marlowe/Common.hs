@@ -266,6 +266,7 @@ caseRelGenSized s bn = Case <$> actionGenSized s <*> contractRelGenSized s bn
 shrinkCase :: Case Contract -> [Case Contract]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
+shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]
 
 
 contractRelGenSized :: Int -> Integer -> Gen Contract
