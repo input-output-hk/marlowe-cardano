@@ -2,8 +2,6 @@
 
 The `marlowe-cli` tool provides several utilities for serialising Marlowe contracts to validators, datums, and redeemers. It also computes hashes and addresses. It can be used in conjunction with [`cardano-cli`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md) to submit Marlowe transactions to the Cardano blockchain.
 
-An extended example showing the execution of a three-step contract is available in [extended-example.sh](extended-example.sh).
-
 
 ## Available Commands
 
@@ -79,3 +77,46 @@ The [`address`](address.md), [`validator`](validator.md), [`datum`](datum.md), a
 ![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](diagrams/workflow.svg)
 
 See [example.sh](example.sh) for an example bash script embodying this workflow. A tutorial for this workflow is available [here](tutorial.md).
+
+
+## Extended Example
+
+An extended example showing the execution of a three-step contract is available in [extended-example.sh](extended-example.sh). It runs the following contract:
+
+<table>
+<tr>
+<td>
+<ol>
+<li value="0">The contract is initially funded with 3 ADA.
+<li value="1">The sole party then deposits 10 ADA.
+<li value="2">The contract then permits 5 ADA to be payed back to the party.
+<li value="3">Finally, the contract closes and the remaining 8 ADA is withdrawn.
+</ol>
+<td>
+<td rowspan="2">
+<img alt="A Three-Step Marlowe Contract" src="extended-example.png"/>
+</td>
+</tr>
+<tr>
+<td>
+<pre>
+When
+    [Case
+        (Deposit
+            (PK "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07")
+            (PK "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07")
+            (Token "" "")
+            (Constant 10)
+        )
+        (Pay
+            (PK "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07")
+            (Account (PK "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"))
+            (Token "" "")
+            (Constant 5)
+            Close
+        )]
+    45000000 Close
+</pre>
+</td>
+</tr>
+</table>
