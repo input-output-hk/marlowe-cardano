@@ -1,19 +1,19 @@
 # Marlowe CLI: Build a Transaction that Pays to a Marlowe Contract
 
-The `build-incoming` command builds a transaction that pays to a Marlowe contract. This command can be used to initially fund a Marlowe contract.
+The `create` command builds a transaction that pays to a Marlowe contract. This command can be used to initially fund a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli build-incoming --help
+    $ marlowe-cli create --help
     
-    Usage: marlowe-cli build-incoming [--testnet-magic INTEGER]
-                                      --socket-path SOCKET_FILE
-                                      --script-address ADDRESS
-                                      --tx-out-datum-file DATUM_FILE
-                                      --tx-out-value LOVELACE [--tx-in TXID#TXIX]
-                                      [--tx-out ADDRESS+LOVELACE]
-                                      --change-address ADDRESS --out-file FILE
+    Usage: marlowe-cli create [--testnet-magic INTEGER]
+                              --socket-path SOCKET_FILE
+                              --script-address ADDRESS
+                              --tx-out-datum-file DATUM_FILE
+                              --tx-out-value LOVELACE [--tx-in TXID#TXIX]
+                              [--tx-out ADDRESS+LOVELACE]
+                              --change-address ADDRESS --out-file FILE
       Build a transaction that pays to a Marlowe script.
     
     Available options:

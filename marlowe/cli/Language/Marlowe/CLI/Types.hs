@@ -307,7 +307,7 @@ data Command =
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
     -- | Build a non-Marlowe transaction.
-  | BuildSimple
+  | BuildTransact
     {
       network    :: Maybe NetworkId            -- ^ The network ID, if any.
     , socketPath :: FilePath                   -- ^ The path to the node socket.
@@ -317,7 +317,7 @@ data Command =
     , bodyFile   :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Build a transaction paying into a Marlowe contract.
-  | BuildIncoming
+  | BuildCreate
     {
       network         :: Maybe NetworkId            -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
@@ -330,7 +330,7 @@ data Command =
     , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Build a transaction that spends from and pays to a Marlowe contract.
-  | BuildContinuing
+  | BuildAdvance
     {
       network         :: Maybe NetworkId            -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
@@ -351,7 +351,7 @@ data Command =
     , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Build a transaction spending from a Marlowe contract.
-  | BuildOutgoing
+  | BuildClose
     {
       network         :: Maybe NetworkId            -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.

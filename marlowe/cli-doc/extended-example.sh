@@ -80,14 +80,14 @@ TX_0=f878ffba37026081afba2408db8a534b29a27d2eb9535e8b0666d70b9967c455
 # Fund the contract by sending the initial funds and setting the initial state.
 
 TX_1=$(
-marlowe-cli build-incoming $MAGIC                                  \
-                           --socket-path $CARDANO_NODE_SOCKET_PATH \
-                           --script-address $ADDRESS_S             \
-                           --tx-out-datum-file example-2.datum     \
-                           --tx-out-value 3000000                  \
-                           --tx-in $TX_0#0                         \
-                           --change-address $ADDRESS_P             \
-                           --out-file tx.raw                       \
+marlowe-cli create $MAGIC                                  \
+                   --socket-path $CARDANO_NODE_SOCKET_PATH \
+                   --script-address $ADDRESS_S             \
+                   --tx-out-datum-file example-2.datum     \
+                   --tx-out-value 3000000                  \
+                   --tx-in $TX_0#0                         \
+                   --change-address $ADDRESS_P             \
+                   --out-file tx.raw                       \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId $TX_1
@@ -106,23 +106,23 @@ cardano-cli query utxo $MAGIC --address $ADDRESS_S
 # 1. Deposit 10 ADA.
 
 TX_2=$(
-marlowe-cli build-continuing $MAGIC                                   \
-                             --socket-path $CARDANO_NODE_SOCKET_PATH  \
-                             --script-address $ADDRESS_S              \
-                             --tx-in-script-file example.plutus       \
-                             --tx-in-redeemer-file example-2.redeemer \
-                             --tx-in-datum-file example-2.datum       \
-                             --required-signer $PAYMENT_SKEY          \
-                             --tx-in-marlowe $TX_1#1                  \
-                             --tx-in $TX_1#0                          \
-                             --tx-in-collateral $TX_1#0               \
-                             --tx-out-datum-file example-1.datum      \
-                             --tx-out-value 13000000                  \
-                             --tx-out $ADDRESS_P+50000000             \
-                             --change-address $ADDRESS_P              \
-                             --invalid-before $REDEEM_MIN_SLOT        \
-                             --invalid-hereafter $REDEEM_MAX_SLOT     \
-                             --out-file tx.raw                        \
+marlowe-cli advance $MAGIC                                   \
+                    --socket-path $CARDANO_NODE_SOCKET_PATH  \
+                    --script-address $ADDRESS_S              \
+                    --tx-in-script-file example.plutus       \
+                    --tx-in-redeemer-file example-2.redeemer \
+                    --tx-in-datum-file example-2.datum       \
+                    --required-signer $PAYMENT_SKEY          \
+                    --tx-in-marlowe $TX_1#1                  \
+                    --tx-in $TX_1#0                          \
+                    --tx-in-collateral $TX_1#0               \
+                    --tx-out-datum-file example-1.datum      \
+                    --tx-out-value 13000000                  \
+                    --tx-out $ADDRESS_P+50000000             \
+                    --change-address $ADDRESS_P              \
+                    --invalid-before $REDEEM_MIN_SLOT        \
+                    --invalid-hereafter $REDEEM_MAX_SLOT     \
+                    --out-file tx.raw                        \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId $TX_2
@@ -141,23 +141,23 @@ cardano-cli query utxo $MAGIC --address $ADDRESS_S
 ## 2. Pay 5 ADA back.
 
 TX_3=$(
-marlowe-cli build-continuing $MAGIC                                   \
-                             --socket-path $CARDANO_NODE_SOCKET_PATH  \
-                             --script-address $ADDRESS_S              \
-                             --tx-in-script-file example.plutus       \
-                             --tx-in-redeemer-file example-1.redeemer \
-                             --tx-in-datum-file example-1.datum       \
-                             --required-signer $PAYMENT_SKEY          \
-                             --tx-in-marlowe $TX_2#1                  \
-                             --tx-in $TX_2#0                          \
-                             --tx-in-collateral $TX_2#0               \
-                             --tx-out-datum-file example-0.datum      \
-                             --tx-out-value 8000000                   \
-                             --tx-out $ADDRESS_P+50000000             \
-                             --change-address $ADDRESS_P              \
-                             --invalid-before $REDEEM_MIN_SLOT        \
-                             --invalid-hereafter $REDEEM_MAX_SLOT     \
-                             --out-file tx.raw                        \
+marlowe-cli advance $MAGIC                                   \
+                    --socket-path $CARDANO_NODE_SOCKET_PATH  \
+                    --script-address $ADDRESS_S              \
+                    --tx-in-script-file example.plutus       \
+                    --tx-in-redeemer-file example-1.redeemer \
+                    --tx-in-datum-file example-1.datum       \
+                    --required-signer $PAYMENT_SKEY          \
+                    --tx-in-marlowe $TX_2#1                  \
+                    --tx-in $TX_2#0                          \
+                    --tx-in-collateral $TX_2#0               \
+                    --tx-out-datum-file example-0.datum      \
+                    --tx-out-value 8000000                   \
+                    --tx-out $ADDRESS_P+50000000             \
+                    --change-address $ADDRESS_P              \
+                    --invalid-before $REDEEM_MIN_SLOT        \
+                    --invalid-hereafter $REDEEM_MAX_SLOT     \
+                    --out-file tx.raw                        \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId $TX_3
@@ -173,19 +173,19 @@ marlowe-cli submit $MAGIC                                  \
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 TX_4=$(
-marlowe-cli build-outgoing $MAGIC                                  \
-                           --socket-path $CARDANO_NODE_SOCKET_PATH \
-                           --tx-in-script-file example.plutus      \
-                           --tx-in-redeemer-file example-0.redeemer\
-                           --tx-in-datum-file example-0.datum      \
-                           --tx-in-marlowe $TX_3#1                 \
-                           --tx-in $TX_3#0                         \
-                           --tx-in-collateral $TX_3#0              \
-                           --tx-out $ADDRESS_P+8000000             \
-                           --change-address $ADDRESS_P             \
-                           --invalid-before $REDEEM_MIN_SLOT       \
-                           --invalid-hereafter $REDEEM_MAX_SLOT    \
-                           --out-file tx.raw                       \
+marlowe-cli close $MAGIC                                  \
+                  --socket-path $CARDANO_NODE_SOCKET_PATH \
+                  --tx-in-script-file example.plutus      \
+                  --tx-in-redeemer-file example-0.redeemer\
+                  --tx-in-datum-file example-0.datum      \
+                  --tx-in-marlowe $TX_3#1                 \
+                  --tx-in $TX_3#0                         \
+                  --tx-in-collateral $TX_3#0              \
+                  --tx-out $ADDRESS_P+8000000             \
+                  --change-address $ADDRESS_P             \
+                  --invalid-before $REDEEM_MIN_SLOT       \
+                  --invalid-hereafter $REDEEM_MAX_SLOT    \
+                  --out-file tx.raw                       \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId $TX_4

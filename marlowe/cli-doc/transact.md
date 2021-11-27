@@ -1,16 +1,16 @@
 # Marlowe CLI: Build a Non-Marlowe Transaction
 
-The `build-simple` command builds a non-Marlowe transaction. This command is provided as a convenient alternative to using `cardano-cli transaction build`.
+The `transact` command builds a non-Marlowe transaction. This command is provided as a convenient alternative to using `cardano-cli transaction build`.
 
 
 ## Usage
 
-    $ marlowe-cli build-simple --help
+    $ marlowe-cli transact --help
     
-    Usage: marlowe-cli build-simple [--testnet-magic INTEGER]
-                                    --socket-path SOCKET_FILE [--tx-in TXID#TXIX]
-                                    [--tx-out ADDRESS+LOVELACE]
-                                    --change-address ADDRESS --out-file FILE
+    Usage: marlowe-cli transact [--testnet-magic INTEGER]
+                                --socket-path SOCKET_FILE [--tx-in TXID#TXIX]
+                                [--tx-out ADDRESS+LOVELACE]
+                                --change-address ADDRESS --out-file FILE
       Build a non-Marlowe transaction.
     
     Available options:

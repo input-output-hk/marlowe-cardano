@@ -1,23 +1,23 @@
 # Marlowe CLI: Build a Transaction that Spends from a Marlowe Contract
 
-The `build-outgoing` command builds a transaction that spends from a Marlowe contract. This command can be used to close a Marlowe contract.
+The `close` command builds a transaction that spends from a Marlowe contract. This command can be used to close a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli build-outgoing --help
+    $ marlowe-cli close --help
     
-    Usage: marlowe-cli build-outgoing [--testnet-magic INTEGER]
-                                      --socket-path SOCKET_FILE
-                                      --tx-in-script-file PLUTUS_FILE
-                                      --tx-in-redeemer-file REDEEMER_FILE
-                                      --tx-in-datum-file DATUM_FILE
-                                      [--required-signer SIGNING_FILE]
-                                      --tx-in-marlowe TXID#TXIX [--tx-in TXID#TXIX]
-                                      [--tx-out ADDRESS+LOVELACE]
-                                      --tx-in-collateral TXID#TXIX
-                                      --change-address ADDRESS --invalid-before SLOT
-                                      --invalid-hereafter SLOT --out-file FILE
+    Usage: marlowe-cli close [--testnet-magic INTEGER]
+                             --socket-path SOCKET_FILE
+                             --tx-in-script-file PLUTUS_FILE
+                             --tx-in-redeemer-file REDEEMER_FILE
+                             --tx-in-datum-file DATUM_FILE
+                             [--required-signer SIGNING_FILE]
+                             --tx-in-marlowe TXID#TXIX [--tx-in TXID#TXIX]
+                             [--tx-out ADDRESS+LOVELACE]
+                             --tx-in-collateral TXID#TXIX
+                             --change-address ADDRESS --invalid-before SLOT
+                             --invalid-hereafter SLOT --out-file FILE
       Build a transaction that spends from a Marlowe script.
     
     Available options:

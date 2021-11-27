@@ -109,14 +109,14 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
 
     TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f
     
-    marlowe-cli build-incoming $MAGIC                                  \
-                               --socket-path $CARDANO_NODE_SOCKET_PATH \
-                               --script-address $ADDRESS_S             \
-                               --tx-out-datum-file $DATUM_FILE         \
-                               --tx-out-value $DATUM_LOVELACE          \
-                               --tx-in $TX_0#0                         \
-                               --change-address $ADDRESS_P             \
-                               --out-file tx.raw
+    marlowe-cli create $MAGIC                                  \
+                       --socket-path $CARDANO_NODE_SOCKET_PATH \
+                       --script-address $ADDRESS_S             \
+                       --tx-out-datum-file $DATUM_FILE         \
+                       --tx-out-value $DATUM_LOVELACE          \
+                       --tx-in $TX_0#0                         \
+                       --change-address $ADDRESS_P             \
+                       --out-file tx.raw
     
     marlowe-cli submit $MAGIC                                  \
                        --socket-path $CARDANO_NODE_SOCKET_PATH \
@@ -146,19 +146,19 @@ We name the funding transaction as `TX_1`.
 
 We now use the previously computed redeemer and datum to remove the funds from the contract. This involves computing the fee, building the transaction, signing it, and submitting it.
 
-    marlowe-cli build-outgoing $MAGIC                                  \
-                               --socket-path $CARDANO_NODE_SOCKET_PATH \
-                               --tx-in-script-file $PLUTUS_FILE        \
-                               --tx-in-redeemer-file $REDEEMER_FILE    \
-                               --tx-in-datum-file $DATUM_FILE          \
-                               --tx-in-marlowe $TX_1#1                 \
-                               --tx-in $TX_1#0                         \
-                               --tx-in-collateral $TX_1#0              \
-                               --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
-                               --change-address $ADDRESS_P             \
-                               --invalid-before $REDEEM_MIN_SLOT       \
-                               --invalid-hereafter $REDEEM_MAX_SLOT    \
-                               --out-file tx.raw
+    marlowe-cli close $MAGIC                                  \
+                      --socket-path $CARDANO_NODE_SOCKET_PATH \
+                      --tx-in-script-file $PLUTUS_FILE        \
+                      --tx-in-redeemer-file $REDEEMER_FILE    \
+                      --tx-in-datum-file $DATUM_FILE          \
+                      --tx-in-marlowe $TX_1#1                 \
+                      --tx-in $TX_1#0                         \
+                      --tx-in-collateral $TX_1#0              \
+                      --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
+                      --change-address $ADDRESS_P             \
+                      --invalid-before $REDEEM_MIN_SLOT       \
+                      --invalid-hereafter $REDEEM_MAX_SLOT    \
+                      --out-file tx.raw
     
     marlowe-cli submit $MAGIC                                  \
                        --socket-path $CARDANO_NODE_SOCKET_PATH \

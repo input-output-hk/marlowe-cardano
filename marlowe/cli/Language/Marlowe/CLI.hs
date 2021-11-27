@@ -93,12 +93,12 @@ mainCLI version example =
                                      inputsFile
                                      redeemerFile
                                      printStats
-            BuildSimple{..}     -> buildSimple
+            BuildTransact{..}   -> buildSimple
                                      connection
                                      inputs outputs change
                                      bodyFile
                                      >>= printTxId
-            BuildIncoming{..}   -> buildIncoming
+            BuildCreate{..}     -> buildIncoming
                                      connection
                                      scriptAddress
                                      outputDatumFile
@@ -106,7 +106,7 @@ mainCLI version example =
                                      inputs outputs change
                                      bodyFile
                                      >>= printTxId
-            BuildContinuing{..} -> buildContinuing
+            BuildAdvance{..}    -> buildContinuing
                                      connection
                                      scriptAddress
                                      validatorFile
@@ -120,7 +120,7 @@ mainCLI version example =
                                      minimumSlot maximumSlot
                                      bodyFile
                                      >>= printTxId
-            BuildOutgoing{..}   -> buildOutgoing
+            BuildClose{..}      -> buildOutgoing
                                      connection
                                      validatorFile
                                      redeemerFile
@@ -277,18 +277,18 @@ exportRedeemerOptions =
     <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                           )
 
 
--- | Parser for the "build-simple" command.
+-- | Parser for the "transact" command.
 buildSimpleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildSimpleCommand =
-  O.command "build-simple"
+  O.command "transact"
     $ O.info (buildSimpleOptions O.<**> O.helper)
     $ O.progDesc "Build a non-Marlowe transaction."
 
 
--- | Parser for the "build-simple" options.
+-- | Parser for the "transact" options.
 buildSimpleOptions :: O.Parser Command -- ^ The parser.
 buildSimpleOptions =
-  BuildSimple
+  BuildTransact
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"  <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."           )
     <*> O.strOption                            (O.long "socket-path"    <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."     )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"          <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."        )
@@ -297,18 +297,18 @@ buildSimpleOptions =
     <*> O.strOption                            (O.long "out-file"       <> O.metavar "FILE"             <> O.help "Output file for transaction body."             )
 
 
--- | Parser for the "build-incoming" command.
+-- | Parser for the "create" command.
 buildIncomingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildIncomingCommand =
-  O.command "build-incoming"
+  O.command "create"
     $ O.info (buildIncomingOptions O.<**> O.helper)
     $ O.progDesc "Build a transaction that pays to a Marlowe script."
 
 
--- | Parser for the "build-incoming" options.
+-- | Parser for the "create" options.
 buildIncomingOptions :: O.Parser Command -- ^ The parser.
 buildIncomingOptions =
-  BuildIncoming
+  BuildCreate
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"     <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
     <*> O.strOption                            (O.long "socket-path"       <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
     <*> O.option parseAddressAny               (O.long "script-address"    <> O.metavar "ADDRESS"          <> O.help "Address of the Marlowe contract."               )
@@ -320,18 +320,18 @@ buildIncomingOptions =
     <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
 
 
--- | Parser for the "build-continuing" command.
+-- | Parser for the "advance" command.
 buildContinuingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildContinuingCommand =
-  O.command "build-continuing"
+  O.command "advance"
     $ O.info (buildContinuingOptions O.<**> O.helper)
     $ O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
 
 
--- | Parser for the "build-continuing" options.
+-- | Parser for the "advance" options.
 buildContinuingOptions :: O.Parser Command -- ^ The parser.
 buildContinuingOptions =
-  BuildContinuing
+  BuildAdvance
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
     <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
     <*> O.option parseAddressAny               (O.long "script-address"      <> O.metavar "ADDRESS"          <> O.help "Address of the Marlowe contract."               )
@@ -351,18 +351,18 @@ buildContinuingOptions =
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
 
 
--- | Parser for the "build-outgoing" command.
+-- | Parser for the "close" command.
 buildOutgoingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildOutgoingCommand =
-  O.command "build-outgoing"
+  O.command "close"
     $ O.info (buildOutgoingOptions O.<**> O.helper)
     $ O.progDesc "Build a transaction that spends from a Marlowe script."
 
 
--- | Parser for the "build-outgoing" options.
+-- | Parser for the "close" options.
 buildOutgoingOptions :: O.Parser Command -- ^ The parser.
 buildOutgoingOptions =
-  BuildOutgoing
+  BuildClose
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
     <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
     <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."              )

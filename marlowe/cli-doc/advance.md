@@ -1,27 +1,27 @@
 # Marlowe CLI: Build a Transaction that Pays to and Spends from a Marlowe Contract
 
-The `build-continuing` command builds a transaction that both pays to and spends from a Marlowe contract. This command can be used for continuing operation of a Marlowe contract.
+The `advance` command builds a transaction that both pays to and spends from a Marlowe contract. This command can be used for continuing operation of a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli build-continuing --help
+    $ marlowe-cli advance --help
     
-    Usage: marlowe-cli build-continuing [--testnet-magic INTEGER]
-                                        --socket-path SOCKET_FILE
-                                        --script-address ADDRESS
-                                        --tx-in-script-file PLUTUS_FILE
-                                        --tx-in-redeemer-file REDEEMER_FILE
-                                        --tx-in-datum-file DATUM_FILE
-                                        [--required-signer SIGNING_FILE]
-                                        --tx-in-marlowe TXID#TXIX
-                                        --tx-out-datum-file DATUM_FILE
-                                        --tx-out-value LOVELACE [--tx-in TXID#TXIX]
-                                        [--tx-out ADDRESS+LOVELACE]
-                                        --tx-in-collateral TXID#TXIX
-                                        --change-address ADDRESS
-                                        --invalid-before SLOT
-                                        --invalid-hereafter SLOT --out-file FILE
+    Usage: marlowe-cli advance [--testnet-magic INTEGER]
+                               --socket-path SOCKET_FILE
+                               --script-address ADDRESS
+                               --tx-in-script-file PLUTUS_FILE
+                               --tx-in-redeemer-file REDEEMER_FILE
+                               --tx-in-datum-file DATUM_FILE
+                               [--required-signer SIGNING_FILE]
+                               --tx-in-marlowe TXID#TXIX
+                               --tx-out-datum-file DATUM_FILE
+                               --tx-out-value LOVELACE [--tx-in TXID#TXIX]
+                               [--tx-out ADDRESS+LOVELACE]
+                               --tx-in-collateral TXID#TXIX
+                               --change-address ADDRESS
+                               --invalid-before SLOT
+                               --invalid-hereafter SLOT --out-file FILE
       Build a transaction that both spends from and pays to a Marlowe script.
     
     Available options:
