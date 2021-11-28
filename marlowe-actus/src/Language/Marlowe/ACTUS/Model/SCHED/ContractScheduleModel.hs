@@ -9,8 +9,9 @@ import           Data.List                                        as L (find, nu
 import           Data.Maybe                                       (fromMaybe, isJust, isNothing, maybeToList)
 import           Data.Time.Calendar                               (addDays)
 import           Data.Time.LocalTime                              (LocalTime (..), addLocalTime)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms, ContractTermsPoly (..), Cycle (..),
-                                                                   IPCB (IPCB_NTL), PPEF (..), PYTP (..), SCEF (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTermsPoly (..), Cycle (..), IPCB (IPCB_NTL),
+                                                                   PPEF (..), PYTP (..), SCEF (..))
+import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum, ActusOps (..))
 import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..))
 import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf,
@@ -18,7 +19,7 @@ import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecur
 
 -- Principal at Maturity (PAM)
 
-_SCHED_IED_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_IED_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IED_PAM
   ContractTermsPoly
     { scheduleConfig,
@@ -26,7 +27,7 @@ _SCHED_IED_PAM
     } = [applyBDCWithCfg scheduleConfig ied]
 _SCHED_IED_PAM _ = []
 
-_SCHED_MD_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_MD_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_MD_PAM
   ContractTermsPoly
     { scheduleConfig,
@@ -34,7 +35,7 @@ _SCHED_MD_PAM
     } = [applyBDCWithCfg scheduleConfig md]
 _SCHED_MD_PAM _ = []
 
-_SCHED_PP_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_PP_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_PP_PAM ContractTermsPoly {prepaymentEffect = Just PPEF_N} = []
 _SCHED_PP_PAM
   ContractTermsPoly
@@ -53,13 +54,13 @@ _SCHED_PP_PAM
     } = generateRecurrentScheduleWithCorrections (ied <+> opcl) opcl md scheduleConfig
 _SCHED_PP_PAM _ = []
 
-_SCHED_PY_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_PY_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_PY_PAM ContractTermsPoly {penaltyType = Just PYTP_O} = []
 _SCHED_PY_PAM ct                                            = _SCHED_PP_PAM ct
 
-_SCHED_FP_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_FP_PAM :: (ActusNum a, ActusOps a) => ContractTermsPoly a -> [ShiftedDay]
 _SCHED_FP_PAM ContractTermsPoly {feeRate = Nothing} = []
-_SCHED_FP_PAM ContractTermsPoly {feeRate = Just 0.0} = []
+_SCHED_FP_PAM ContractTermsPoly {feeRate = Just x} | x == _zero = []
 _SCHED_FP_PAM
   ContractTermsPoly
     { cycleAnchorDateOfFee = Just feanx,
@@ -77,7 +78,7 @@ _SCHED_FP_PAM
     } = generateRecurrentScheduleWithCorrections (ied <+> fecl) fecl {includeEndDay = True} md scheduleConfig
 _SCHED_FP_PAM _ = []
 
-_SCHED_PRD_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_PRD_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_PRD_PAM
   ContractTermsPoly
     { scheduleConfig,
@@ -85,7 +86,7 @@ _SCHED_PRD_PAM
     } = [applyBDCWithCfg scheduleConfig prd]
 _SCHED_PRD_PAM _ = []
 
-_SCHED_TD_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_TD_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_TD_PAM
   ContractTermsPoly
     { scheduleConfig,
@@ -93,7 +94,7 @@ _SCHED_TD_PAM
     } = [applyBDCWithCfg scheduleConfig td]
 _SCHED_TD_PAM _ = []
 
-_SCHED_IP_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_IP_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IP_PAM
   ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Just ipanx,
@@ -117,7 +118,7 @@ _SCHED_IP_PAM
      in filter (\d -> Just (calculationDay d) > ipced) s
 _SCHED_IP_PAM _ = []
 
-_SCHED_IPCI_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_IPCI_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IPCI_PAM
   ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Just ipanx,
@@ -141,7 +142,7 @@ _SCHED_IPCI_PAM
      in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
 _SCHED_IPCI_PAM _ = []
 
-_SCHED_RR_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_RR_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_RR_PAM
   ContractTermsPoly
     { cycleAnchorDateOfRateReset = Just rranx,
@@ -184,7 +185,7 @@ _SCHED_RR_PAM
     } = generateRecurrentScheduleWithCorrections (ied <+> rrcl) rrcl {includeEndDay = False} md scheduleConfig
 _SCHED_RR_PAM _ = []
 
-_SCHED_RRF_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_RRF_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_RRF_PAM
   ContractTermsPoly
     { cycleAnchorDateOfRateReset = Just rranx,
@@ -210,7 +211,7 @@ _SCHED_RRF_PAM
      in maybeToList (L.find (\ShiftedDay{..} -> calculationDay > statusDate) tt)
 _SCHED_RRF_PAM _ = []
 
-_SCHED_SC_PAM :: ContractTerms -> [ShiftedDay]
+_SCHED_SC_PAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_SC_PAM ContractTermsPoly {scalingEffect = Just SE_OOO} = []
 _SCHED_SC_PAM
   ContractTermsPoly
@@ -231,7 +232,7 @@ _SCHED_SC_PAM _ = []
 
 -- Linear Amortizer (LAM)
 
-_SCHED_PR_LAM :: ContractTerms -> [ShiftedDay]
+_SCHED_PR_LAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_PR_LAM
   ContractTermsPoly
     { cycleAnchorDateOfPrincipalRedemption = Just pranx,
@@ -249,7 +250,7 @@ _SCHED_PR_LAM
     } = generateRecurrentScheduleWithCorrections (ied <+> prcl) prcl {includeEndDay = False} md scheduleConfig
 _SCHED_PR_LAM _ = []
 
-_SCHED_MD_LAM :: ContractTerms -> [ShiftedDay]
+_SCHED_MD_LAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_MD_LAM
   ContractTermsPoly
     { maturityDate = Just md,
@@ -257,7 +258,7 @@ _SCHED_MD_LAM
     } = [applyBDCWithCfg scheduleConfig md]
 _SCHED_MD_LAM _ = []
 
-_SCHED_IPCB_LAM :: ContractTerms -> [ShiftedDay]
+_SCHED_IPCB_LAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IPCB_LAM ContractTermsPoly {..} | interestCalculationBase /= Just IPCB_NTL = []
 _SCHED_IPCB_LAM
   ContractTermsPoly
@@ -278,7 +279,7 @@ _SCHED_IPCB_LAM _ = []
 
 -- Negative Amortizer (NAM)
 
-_SCHED_IP_NAM :: ContractTerms -> [ShiftedDay]
+_SCHED_IP_NAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IP_NAM ContractTermsPoly {..} =
   let s
         | isNothing cycleAnchorDateOfPrincipalRedemption = liftA2 (<+>) initialExchangeDate cycleOfPrincipalRedemption
@@ -305,7 +306,7 @@ _SCHED_IP_NAM ContractTermsPoly {..} =
         | otherwise = result
    in fromMaybe [] result'
 
-_SCHED_IPCI_NAM :: ContractTerms -> [ShiftedDay]
+_SCHED_IPCI_NAM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IPCI_NAM ContractTermsPoly {..} =
   let s
         | isNothing cycleAnchorDateOfPrincipalRedemption = liftA2 (<+>) initialExchangeDate cycleOfPrincipalRedemption
@@ -335,7 +336,7 @@ _SCHED_IPCI_NAM ContractTermsPoly {..} =
 
 -- Annuity (ANN)
 
-_SCHED_PRF_ANN :: ContractTerms -> [ShiftedDay]
+_SCHED_PRF_ANN :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_PRF_ANN
   ct@ContractTermsPoly
     { cycleAnchorDateOfPrincipalRedemption = Just pranx,
@@ -352,7 +353,7 @@ _SCHED_PRF_ANN _ = []
 
 -- Stock (STK)
 
-_SCHED_DV_STK :: ContractTerms -> [ShiftedDay]
+_SCHED_DV_STK :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_DV_STK
   ContractTermsPoly
     { cycleAnchorDateOfDividend = Just dvanx,
@@ -372,7 +373,7 @@ _SCHED_DV_STK _ = []
 
 -- Options (OPTNS)
 
-_SCHED_XD_OPTNS :: ContractTerms -> [ShiftedDay]
+_SCHED_XD_OPTNS :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_XD_OPTNS
   ContractTermsPoly
     { exerciseDate = Just xd,
@@ -385,7 +386,7 @@ _SCHED_XD_OPTNS
     } = [applyBDCWithCfg scheduleConfig md]
 _SCHED_XD_OPTNS _ = []
 
-_SCHED_STD_OPTNS :: ContractTerms -> [ShiftedDay]
+_SCHED_STD_OPTNS :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_STD_OPTNS
   ContractTermsPoly
     { scheduleConfig,

@@ -1,5 +1,6 @@
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns   #-}
+{-# LANGUAGE RecordWildCards  #-}
 
 {-| = ACTUS contract schedules
 
@@ -18,23 +19,22 @@ import           Data.Ord                                                 (Down 
 import           Data.Sort                                                (sortOn)
 import           Data.Time                                                (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents             (EventType (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms              (CT (..), ContractTerms,
-                                                                           ContractTermsPoly (..), Cycle (..),
+import           Language.Marlowe.ACTUS.Domain.ContractTerms              (CT (..), ContractTermsPoly (..), Cycle (..),
                                                                            ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                        (YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Ops                        as O (ActusNum (..), ActusOps (..),
+                                                                                YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Domain.Schedule                   (ShiftedDay (..))
 import           Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel
 import           Language.Marlowe.ACTUS.Utility.DateShift                 (applyBDCWithCfg)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator         (applyEOMC,
                                                                            generateRecurrentScheduleWithCorrections,
                                                                            (<+>), (<->))
-import           Language.Marlowe.ACTUS.Utility.YearFraction              (yearFraction)
 
-schedule :: EventType -> ContractTerms -> [ShiftedDay]
+schedule :: (ActusNum a, ActusOps a, YearFractionOps LocalTime a) => EventType -> ContractTermsPoly a -> [ShiftedDay]
 schedule ev c = schedule' ev c { maturityDate = maturity c }
   where
 
-    schedule' :: EventType -> ContractTerms -> [ShiftedDay]
+    schedule' :: (ActusNum a, ActusOps a) => EventType -> ContractTermsPoly a -> [ShiftedDay]
     schedule' IED  ct@ContractTermsPoly{ contractType = PAM }   = _SCHED_IED_PAM ct
     schedule' MD   ct@ContractTermsPoly{ contractType = PAM }   = _SCHED_MD_PAM ct
     schedule' PP   ct@ContractTermsPoly{ contractType = PAM }   = _SCHED_PP_PAM ct
@@ -112,7 +112,7 @@ schedule ev c = schedule' ev c { maturityDate = maturity c }
 
     schedule' _ _                                               = []
 
-maturity :: ContractTerms -> Maybe LocalTime
+maturity :: (ActusNum a, ActusOps a, YearFractionOps LocalTime a) => ContractTermsPoly a -> Maybe LocalTime
 maturity ContractTermsPoly {contractType = PAM, ..} = maturityDate
 maturity ContractTermsPoly {contractType = LAM, maturityDate = md@(Just _)} = md
 maturity
@@ -133,9 +133,9 @@ maturity
                 f1 = (\ShiftedDay {..} -> calculationDay > statusDate <-> ipcl)
                 f2 = (\ShiftedDay {..} -> calculationDay == statusDate)
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f2 . filter f1 $ previousEvents
-             in (lastEventCalcDay, nt / prnxt)
-          | otherwise = (pranx, nt / prnxt - 1)
-        m = lastEvent <+> (prcl {n = n prcl * round remainingPeriods :: Integer})
+             in (lastEventCalcDay, nt O./ prnxt)
+          | otherwise = (pranx, nt O./ prnxt O.- _one)
+        m = lastEvent <+> (prcl {n = n prcl Prelude.* _toInteger remainingPeriods})
      in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity ContractTermsPoly {contractType = NAM, maturityDate = md@(Just _)} = md
 maturity
@@ -161,10 +161,10 @@ maturity
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f $ previousEvents
              in lastEventCalcDay
 
-        yLastEventPlusPRCL = yearFraction dcc lastEvent (lastEvent <+> prcl) Nothing
-        redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
-        remainingPeriods = ceiling (nt / redemptionPerCycle) - 1
-        m = lastEvent <+> prcl {n = n prcl * remainingPeriods}
+        yLastEventPlusPRCL = _y dcc lastEvent (lastEvent <+> prcl) Nothing
+        redemptionPerCycle = prnxt O.- (yLastEventPlusPRCL O.* ipnr O.* nt)
+        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one -- FIXME: ceiling
+        m = lastEvent <+> prcl {n = n prcl Prelude.* remainingPeriods}
      in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity
   ContractTermsPoly
@@ -189,8 +189,8 @@ maturity
             let previousEvents = generateRecurrentScheduleWithCorrections statusDate prcl pranx scheduleConfig
              in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > statusDate) $ previousEvents
         timeFromLastEventPlusOneCycle = _y dcc lastEvent (lastEvent <+> prcl) Nothing
-        redemptionPerCycle = prnxt - timeFromLastEventPlusOneCycle * ipnr * nt
-        remainingPeriods = (ceiling (nt / redemptionPerCycle) - 1) :: Integer
+        redemptionPerCycle = prnxt O.- timeFromLastEventPlusOneCycle O.* ipnr O.* nt
+        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one -- FIXME: ceiling
     in Just . calculationDay . applyBDCWithCfg scheduleConfig $ lastEvent <+> prcl { n = remainingPeriods }
 maturity
   ContractTermsPoly

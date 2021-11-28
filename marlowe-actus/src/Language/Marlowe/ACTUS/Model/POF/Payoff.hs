@@ -1,10 +1,12 @@
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns   #-}
+{-# LANGUAGE RecordWildCards  #-}
 
 module Language.Marlowe.ACTUS.Model.POF.Payoff
   ( payoff )
 where
 
+import           Data.Time.LocalTime                          (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms  (CT (..), ContractTermsPoly (..))
@@ -12,13 +14,13 @@ import           Language.Marlowe.ACTUS.Domain.Ops            (ActusOps (..), Ro
 import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
 
 -- |Generic payoff function for ACTUS contracts
-payoff :: (RoleSignOps a, YearFractionOps b a) =>
-     EventType             -- ^ Event type
-  -> RiskFactorsPoly a     -- ^ Risk factors
-  -> ContractTermsPoly a b -- ^ Contract terms
-  -> ContractStatePoly a b -- ^ Contract state
-  -> b                     -- ^ Time
-  -> a                     -- ^ Payoff amount
+payoff :: (RoleSignOps a, YearFractionOps LocalTime a) =>
+     EventType           -- ^ Event type
+  -> RiskFactorsPoly a   -- ^ Risk factors
+  -> ContractTermsPoly a -- ^ Contract terms
+  -> ContractStatePoly a -- ^ Contract state
+  -> LocalTime           -- ^ Time
+  -> a                   -- ^ Payoff amount
 -- IED
 payoff
   IED

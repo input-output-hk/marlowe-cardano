@@ -4,8 +4,7 @@
 module Language.Marlowe.ACTUS.Domain.Ops where
 
 import           Data.Time                                   (LocalTime)
-import           Language.Marlowe                            (Observation (ValueGT, ValueLT),
-                                                              Value (AddValue, Cond, Constant, DivValue, MulValue, NegValue, SubValue))
+import           Language.Marlowe                            (Observation (ValueGT, ValueLT), Value (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms (CR (..), DCC (..))
 import           Language.Marlowe.ACTUS.Utility.YearFraction (yearFraction)
 
@@ -18,8 +17,10 @@ class ActusOps a where
     _abs  :: a -> a
     _zero :: a
     _one  :: a
+    _fromInteger :: Integer -> a
+    _toInteger :: a -> Integer
 
-class ActusNum a where
+class Eq a => ActusNum a where
     (+) :: a -> a -> a
     (-) :: a -> a -> a
     (*) :: a -> a -> a
@@ -59,6 +60,8 @@ instance ActusOps Double where
     _abs  = abs
     _zero = 0.0
     _one  = 1.0
+    _fromInteger = fromInteger
+    _toInteger = ceiling
 
 instance ActusNum Double where
     a + b       = a Prelude.+ b
@@ -67,6 +70,9 @@ instance ActusNum Double where
     a / b       = a Prelude./ b
 
 instance DateOps LocalTime Double where
+    _lt a b = if a < b then _one else _zero
+
+instance DateOps LocalTime (Value Observation) where
     _lt a b = if a < b then _one else _zero
 
 instance YearFractionOps LocalTime Double where
@@ -78,6 +84,24 @@ instance ActusOps (Value Observation) where
     _abs a = _max a (SubValue _zero a)
     _zero = Constant 0
     _one  = Constant marloweFixedPoint
+    _fromInteger n = Constant $ n Prelude.* marloweFixedPoint
+    _toInteger (Constant a)         = a `div` marloweFixedPoint
+    _toInteger (NegValue a)         = -1 Prelude.* _toInteger a
+    _toInteger (AddValue a b)       = _toInteger a Prelude.+ _toInteger b
+    _toInteger (SubValue a b)       = _toInteger a Prelude.- _toInteger b
+    _toInteger (MulValue a b)       = _toInteger a Prelude.* _toInteger b
+    _toInteger (DivValue a b)       = _toInteger a `div`_toInteger b
+    -- ACTUS is implemented only for Fixed Schedules
+    -- that means schedules are known before the contract
+    -- is exectued, resp. the schedule do not depend on
+    -- riskfactors
+    _toInteger (UseValue _)         = error "UseValue cannot be converted"
+    _toInteger (ChoiceValue _)      = error "ChoiceValue cannot be converted"
+    _toInteger (AvailableMoney _ _) = error "AvailableMoney cannot be converted"
+    _toInteger Cond {}              = error "Cond cannot be conveted"
+    _toInteger SlotIntervalStart    = error "SlotIntervalStart cannot be converted"
+    _toInteger SlotIntervalEnd      = error "SlotIntervalEnd cannot be converted"
+    _toInteger (Scale _ _)          = undefined -- will be gone soon
 
 instance DateOps (Value Observation) (Value Observation) where
     _lt a b = Cond (ValueLT a b) _one _zero

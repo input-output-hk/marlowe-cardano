@@ -1,9 +1,11 @@
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns   #-}
+{-# LANGUAGE RecordWildCards  #-}
 
 module Language.Marlowe.ACTUS.Model.STF.StateTransitionModel where
 
 import           Data.Maybe                                   (fromMaybe)
+import           Data.Time.LocalTime                          (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents (RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..),
@@ -15,14 +17,14 @@ import           Prelude                                      hiding (Fractional
 
 -- Principal at Maturity (PAM)
 
-_STF_AD_PAM :: ActusNum a => ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_AD_PAM :: ActusNum a => ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_AD_PAM st@ContractStatePoly {..} t y_sd_t =
   st
     { ipac = ipac + y_sd_t * ipnr * nt,
       sd = t
     }
 
-_STF_IED_PAM :: (RoleSignOps a, DateOps b a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_IED_PAM :: (RoleSignOps a, DateOps LocalTime a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IED_PAM
   ContractTermsPoly
     { nominalInterestRate,
@@ -59,7 +61,7 @@ _STF_IED_PAM
           }
 _STF_IED_PAM _ st _ _ = st
 
-_STF_MD_PAM :: ActusOps a => ContractStatePoly a b -> b -> ContractStatePoly a b
+_STF_MD_PAM :: ActusOps a => ContractStatePoly a -> LocalTime -> ContractStatePoly a
 _STF_MD_PAM st t =
   st
     { nt = _zero,
@@ -68,14 +70,14 @@ _STF_MD_PAM st t =
       sd = t
     }
 
-_STF_PP_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_PP_PAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_PP_PAM ct st@ContractStatePoly {..} RiskFactorsPoly {..} t y_sd_t y_tfpminus_t y_tfpminus_tfpplus =
   let st' = _STF_PY_PAM ct st t y_sd_t y_tfpminus_t y_tfpminus_tfpplus
    in st'
         { nt = nt - pp_payoff
         }
 
-_STF_PY_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_PY_PAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_PY_PAM
   ContractTermsPoly
     { feeBasis = Just FEB_N,
@@ -110,7 +112,7 @@ _STF_PY_PAM
           }
 _STF_PY_PAM _ st _ _ _ _ = st
 
-_STF_FP_PAM :: (ActusNum a, ActusOps a) => ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_FP_PAM :: (ActusNum a, ActusOps a) => ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_FP_PAM st@ContractStatePoly {..} t y_sd_t =
   st
     { ipac = ipac + y_sd_t * ipnr * nt,
@@ -118,10 +120,10 @@ _STF_FP_PAM st@ContractStatePoly {..} t y_sd_t =
       sd = t
     }
 
-_STF_PRD_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_PRD_PAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_PRD_PAM = _STF_PY_PAM
 
-_STF_TD_PAM :: ActusOps a => ContractStatePoly a b -> b -> ContractStatePoly a b
+_STF_TD_PAM :: ActusOps a => ContractStatePoly a -> LocalTime -> ContractStatePoly a
 _STF_TD_PAM st t =
   st
     { nt = _zero,
@@ -131,7 +133,7 @@ _STF_TD_PAM st t =
       sd = t
     }
 
-_STF_IP_PAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_IP_PAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IP_PAM
   ContractTermsPoly
     { feeRate = Just fer
@@ -155,7 +157,7 @@ _STF_IP_PAM
         sd = t
       }
 
-_STF_IPCI_PAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_IPCI_PAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IPCI_PAM
   ct
   st@ContractStatePoly {..}
@@ -166,7 +168,7 @@ _STF_IPCI_PAM
           { nt = nt + ipac + y_sd_t * nt * ipnr
           }
 
-_STF_RR_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_RR_PAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_RR_PAM
   ct@ContractTermsPoly
     { feeBasis = Just FEB_N,
@@ -225,7 +227,7 @@ _STF_RR_PAM
           }
 _STF_RR_PAM _ st _ _ _ _ _ = st
 
-_STF_RRF_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_RRF_PAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_RRF_PAM
   ct@ContractTermsPoly
     { nextResetRate = rrnxt
@@ -240,7 +242,7 @@ _STF_RRF_PAM
           { ipnr = fromMaybe _zero rrnxt
           }
 
-_STF_SC_PAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_SC_PAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_SC_PAM
   ct@ContractTermsPoly
     { scalingEffect = Just scef,
@@ -270,12 +272,12 @@ _STF_SC_PAM
           }
 _STF_SC_PAM _ st _ _ _ _ _ = st
 
-_STF_CE_PAM :: ActusNum a => ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_CE_PAM :: ActusNum a => ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_CE_PAM = _STF_AD_PAM
 
 -- Linear Amortiser (LAM)
 
-_STF_IED_LAM :: (RoleSignOps a, Ord b) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_IED_LAM :: (RoleSignOps a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IED_LAM
   ct@ContractTermsPoly
     { notionalPrincipal = Just nt,
@@ -305,7 +307,7 @@ _STF_IED_LAM
           }
 _STF_IED_LAM _ st _ _ = st
 
-_STF_PR_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_PR_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_PR_LAM
   ct@ContractTermsPoly
     { feeRate = Just fer,
@@ -346,7 +348,7 @@ _STF_PR_LAM
             sd = t
           }
 
-_STF_MD_LAM :: ActusOps a => ContractStatePoly a b -> b -> ContractStatePoly a b
+_STF_MD_LAM :: ActusOps a => ContractStatePoly a -> LocalTime -> ContractStatePoly a
 _STF_MD_LAM st t =
   st
     { nt = _zero,
@@ -356,7 +358,7 @@ _STF_MD_LAM st t =
       sd = t
     }
 
-_STF_PP_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_PP_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_PP_LAM
   ct
   st@ContractStatePoly {..}
@@ -376,7 +378,7 @@ _STF_PP_LAM
             ipcb = ipcb'
           }
 
-_STF_PY_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_PY_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_PY_LAM
   ct@ContractTermsPoly
     { feeRate = Just fer,
@@ -415,7 +417,7 @@ _STF_PY_LAM
             sd = t
           }
 
-_STF_FP_LAM :: (ActusNum a, ActusOps a) => ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_FP_LAM :: (ActusNum a, ActusOps a) => ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_FP_LAM
   st@ContractStatePoly {..}
   t
@@ -426,10 +428,10 @@ _STF_FP_LAM
         sd = t
       }
 
-_STF_PRD_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_PRD_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_PRD_LAM = _STF_PY_LAM
 
-_STF_IPCI_LAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_IPCI_LAM :: (ActusOps a, ActusNum a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IPCI_LAM
   ct
   st@ContractStatePoly {..}
@@ -446,7 +448,7 @@ _STF_IPCI_LAM
             ipcb = ipcb'
           }
 
-_STF_IPCB_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_IPCB_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_IPCB_LAM
   ct
   st@ContractStatePoly {..}
@@ -459,7 +461,7 @@ _STF_IPCB_LAM
           { ipcb = nt
           }
 
-_STF_RR_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_RR_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_RR_LAM
   ct@ContractTermsPoly
     { lifeFloor = Just rrlf,
@@ -483,7 +485,7 @@ _STF_RR_LAM
           }
 _STF_RR_LAM _ st _ _ _ _ _ = st
 
-_STF_RRF_LAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_RRF_LAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_RRF_LAM
   ct@ContractTermsPoly
     { nextResetRate = rrnxt
@@ -498,7 +500,7 @@ _STF_RRF_LAM
           { ipnr = fromMaybe _zero rrnxt
           }
 
-_STF_SC_LAM :: (RoleSignOps a) => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> ContractStatePoly a b
+_STF_SC_LAM :: (RoleSignOps a) => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> ContractStatePoly a
 _STF_SC_LAM
   ct@ContractTermsPoly
     { scalingIndexAtContractDealDate = Just sccdd,
@@ -519,7 +521,7 @@ _STF_SC_LAM _ st _ _ _ _ _ = st
 
 -- Negative Amortizer (NAM)
 
-_STF_PR_NAM :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_PR_NAM :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_PR_NAM
   ct@ContractTermsPoly
     { contractRole
@@ -543,7 +545,7 @@ _STF_PR_NAM
 
 -- Annuity (ANN)
 
-_STF_RR_ANN :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> a -> a -> a -> [a] -> ContractStatePoly a b
+_STF_RR_ANN :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> a -> a -> [a] -> ContractStatePoly a
 _STF_RR_ANN
   ct@ContractTermsPoly
     { lifeFloor = Just rrlf,
@@ -579,7 +581,7 @@ _STF_RR_ANN
           }
 _STF_RR_ANN _ st _ _ _ _ _ _ = st
 
-_STF_RRF_ANN :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> [a] -> ContractStatePoly a b
+_STF_RRF_ANN :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> [a] -> ContractStatePoly a
 _STF_RRF_ANN
   ct@ContractTermsPoly
     { nextResetRate = Just rrnxt,
@@ -607,7 +609,7 @@ _STF_RRF_ANN
           }
 _STF_RRF_ANN _ st _ _ _ _ _ = st
 
-_STF_PRF_ANN :: RoleSignOps a => ContractTermsPoly a b -> ContractStatePoly a b -> b -> a -> a -> a -> a -> [a] -> ContractStatePoly a b
+_STF_PRF_ANN :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> a -> a -> a -> [a] -> ContractStatePoly a
 _STF_PRF_ANN
   ct@ContractTermsPoly
     { contractRole
@@ -635,7 +637,7 @@ _STF_PRF_ANN
             sd = t
           }
 
-_STF_XD_OPTNS :: (ActusNum a, ActusOps a) => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> ContractStatePoly a b
+_STF_XD_OPTNS :: (ActusNum a, ActusOps a) => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> ContractStatePoly a
 _STF_XD_OPTNS
   ContractTermsPoly
     { optionType = Just OPTP_C,
@@ -674,7 +676,7 @@ _STF_XD_OPTNS _ st _ t =
     { sd = t
     }
 
-_STF_XD_FUTUR :: ActusNum a => ContractTermsPoly a b -> ContractStatePoly a b -> RiskFactorsPoly a -> b -> ContractStatePoly a b
+_STF_XD_FUTUR :: ActusNum a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> ContractStatePoly a
 _STF_XD_FUTUR
   ContractTermsPoly
     { futuresPrice = Just pfut

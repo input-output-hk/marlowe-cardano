@@ -1,5 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TupleSections    #-}
 
 {-| = ACTUS Analysis
 
@@ -21,11 +22,12 @@ import qualified Data.List                                                  as L
 import           Data.Maybe                                                 (fromMaybe, isNothing)
 import           Data.Sort                                                  (sortOn)
 import           Data.Time                                                  (LocalTime)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactors)
-import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractState, ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms                (CT (..), ContractTerms,
-                                                                             ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
+import           Language.Marlowe.ACTUS.Domain.BusinessEvents               (EventType (..), RiskFactorsPoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractState                (ContractStatePoly (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms                (CT (..), ContractTermsPoly (..))
+import           Language.Marlowe.ACTUS.Domain.Ops                          (DateOps (..), RoleSignOps (..),
+                                                                             YearFractionOps)
+import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlowPoly (..), ShiftedDay (..),
                                                                              calculationDay, paymentDay)
 import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
 import           Language.Marlowe.ACTUS.Model.POF.Payoff                    (payoff)
@@ -36,13 +38,13 @@ import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (Ctx
 -- given contract terms and provided risk factors. The function returns
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
-genProjectedCashflows ::
-  (EventType -> LocalTime -> RiskFactors) -- ^ Risk factors as a function of event type and time
-  -> ContractTerms                        -- ^ ACTUS contract terms
-  -> [CashFlow]                           -- ^ List of projected cash flows
+genProjectedCashflows :: (DateOps LocalTime a, RoleSignOps a, YearFractionOps LocalTime a) =>
+  (EventType -> LocalTime -> RiskFactorsPoly a) -- ^ Risk factors as a function of event type and time
+  -> ContractTermsPoly a                        -- ^ ACTUS contract terms
+  -> [CashFlowPoly a]                           -- ^ List of projected cash flows
 genProjectedCashflows getRiskFactors ct =
   let genCashflow (ContractStatePoly {..}, ev, t, am) =
-        CashFlow
+        CashFlowPoly
           { tick = 0,
             cashContractId = contractId ct,
             cashParty = "party",
@@ -56,10 +58,10 @@ genProjectedCashflows getRiskFactors ct =
           }
    in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs getRiskFactors $ ct
 
-genProjectedPayoffs ::
-  (EventType -> LocalTime -> RiskFactors)             -- ^ Risk factors as a function of event type and time
-  -> ContractTerms                                    -- ^ ACTUS contract terms
-  -> [(ContractState, EventType, ShiftedDay, Double)] -- ^ List of projected payoffs
+genProjectedPayoffs :: (DateOps LocalTime a, RoleSignOps a, YearFractionOps LocalTime a) =>
+  (EventType -> LocalTime -> RiskFactorsPoly a)        -- ^ Risk factors as a function of event type and time
+  -> ContractTermsPoly a                               -- ^ ACTUS contract terms
+  -> [(ContractStatePoly a, EventType, ShiftedDay, a)] -- ^ List of projected payoffs
 genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
   let -- schedules
 
@@ -107,7 +109,7 @@ genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
     filtersSchedules (_, ShiftedDay {..}) | contractType == FUTUR = calculationDay > statusDate
     filtersSchedules (_, ShiftedDay {..}) = isNothing terminationDate || Just calculationDay <= terminationDate
 
-    filtersStates :: (ContractState, EventType, ShiftedDay) -> Bool
+    filtersStates :: (ContractStatePoly a, EventType, ShiftedDay) -> Bool
     filtersStates (_, ev, ShiftedDay {..}) =
       case contractType of
         PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate

@@ -1,5 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TupleSections    #-}
 
 {-| = ACTUS Generator
 
@@ -35,11 +36,11 @@ import           Language.Marlowe.ACTUS.Domain.ContractTerms                (Ass
                                                                              ContractTermsPoly (..),
                                                                              TermValidationError (..))
 import qualified Language.Marlowe.ACTUS.Domain.Ops                          as O (ActusNum (..), YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow (..), ShiftedDay (..),
-                                                                             calculationDay)
+import           Language.Marlowe.ACTUS.Domain.Schedule                     (CashFlow, CashFlowPoly (..),
+                                                                             ShiftedDay (..), calculationDay)
 import           Language.Marlowe.ACTUS.Generator.Analysis                  (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator                 (invoice)
-import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, marloweTime, timeToSlotNumber,
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat             (constnt, timeToSlotNumber,
                                                                              toMarloweFixedPoint, useval)
 import           Language.Marlowe.ACTUS.Model.APPL.Applicability            (validateTerms)
 import           Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel (initializeState)
@@ -70,7 +71,7 @@ genFsContract' rf ct =
             pof = payoffFs ev (riskFactorAt i) ct st sd (cashCalculationDay cf)
          in ora $ maybe cont (payoff i cf date cont) pof
 
-      stf :: Reader (CtxSTF Double LocalTime) ContractStateMarlowe -> (CashFlow, LocalTime, EventType, Integer) -> Reader (CtxSTF Double LocalTime) ContractStateMarlowe
+      stf :: Reader (CtxSTF Double) ContractStateMarlowe -> (CashFlow, LocalTime, EventType, Integer) -> Reader (CtxSTF Double) ContractStateMarlowe
       stf r (cf, sd, ev, i) = r >>= FS.stateTransition ev (riskFactorAt i) sd (cashCalculationDay cf)
 
       projectedCashflows = genProjectedCashflows rf ct
@@ -88,7 +89,7 @@ genFsContract' rf ct =
     prSchedule = calculationDay <$> schedule PR ct
     ipSchedule = calculationDay <$> schedule IP ct
 
-    initCtx :: CtxSTF Double LocalTime
+    initCtx :: CtxSTF Double
     initCtx = CtxSTF ct fpSchedule prSchedule ipSchedule (S.maturity ct)
 
     transform :: ContractState -> ContractStateMarlowe
@@ -102,11 +103,11 @@ genFsContract' rf ct =
           ipnr = constnt $ ipnr st,
           ipcb = constnt $ ipcb st,
           xa = constnt <$> xa st,
-          xd = marloweTime <$> xd st,
+          xd = xd st,
           prnxt = constnt $ prnxt st,
-          tmd = marloweTime <$> tmd st,
+          tmd = tmd st,
           prf = prf st,
-          sd = marloweTime $ sd st
+          sd = sd st
         }
 
     riskFactorAt :: Integer -> RiskFactorsMarlowe

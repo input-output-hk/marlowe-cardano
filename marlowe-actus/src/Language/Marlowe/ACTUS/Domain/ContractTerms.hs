@@ -357,7 +357,7 @@ instance FromJSON ContractStructure where
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-data ContractTermsPoly a b = ContractTermsPoly
+data ContractTermsPoly a = ContractTermsPoly
   { -- General
     contractId                               :: String
   , contractType                             :: CT
@@ -366,29 +366,29 @@ data ContractTermsPoly a b = ContractTermsPoly
   , settlementCurrency                       :: Maybe String
 
   -- Calendar
-  , initialExchangeDate                      :: Maybe b          -- ^ Initial Exchange Date
+  , initialExchangeDate                      :: Maybe LocalTime  -- ^ Initial Exchange Date
   , dayCountConvention                       :: Maybe DCC        -- ^ Day Count Convention
   , scheduleConfig                           :: ScheduleConfig
 
   -- Contract Identification
-  , statusDate                               :: b                -- ^ Status Date
+  , statusDate                               :: LocalTime        -- ^ Status Date
 
   -- Counterparty
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
 
   -- Fees
   , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
-  , cycleAnchorDateOfFee                     :: Maybe b          -- ^ Cycle Anchor Date Of Fee
+  , cycleAnchorDateOfFee                     :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Fee
   , feeAccrued                               :: Maybe a          -- ^ Fee Accrued
   , feeBasis                                 :: Maybe FEB        -- ^ Fee Basis
   , feeRate                                  :: Maybe a          -- ^ Fee Rate
 
   -- Interest
-  , cycleAnchorDateOfInterestPayment         :: Maybe b          -- ^ Cycle Anchor Date Of Interest Payment
+  , cycleAnchorDateOfInterestPayment         :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Interest Payment
   , cycleOfInterestPayment                   :: Maybe Cycle      -- ^ Cycle Of Interest Payment
   , accruedInterest                          :: Maybe a          -- ^ Accrued Interest
-  , capitalizationEndDate                    :: Maybe b          -- ^ Capitalization End Date
-  , cycleAnchorDateOfInterestCalculationBase :: Maybe b          -- ^ Cycle Anchor Date Of Interest Calculation Base
+  , capitalizationEndDate                    :: Maybe LocalTime  -- ^ Capitalization End Date
+  , cycleAnchorDateOfInterestCalculationBase :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Interest Calculation Base
   , cycleOfInterestCalculationBase           :: Maybe Cycle      -- ^ Cycle Of Interest Calculation Base
   , interestCalculationBase                  :: Maybe IPCB       -- ^ Interest Calculation Base
   , interestCalculationBaseA                 :: Maybe a          -- ^ Interest Calculation Base Amount
@@ -396,24 +396,24 @@ data ContractTermsPoly a b = ContractTermsPoly
   , interestScalingMultiplier                :: Maybe a          -- ^ Interest Scaling Multiplier
 
   -- Dates
-  , maturityDate                             :: Maybe b          -- ^ Maturity Date
-  , amortizationDate                         :: Maybe b          -- ^ Amortization Date
-  , exerciseDate                             :: Maybe b          -- ^ Exercise Date
+  , maturityDate                             :: Maybe LocalTime  -- ^ Maturity Date
+  , amortizationDate                         :: Maybe LocalTime  -- ^ Amortization Date
+  , exerciseDate                             :: Maybe LocalTime  -- ^ Exercise Date
 
   -- Notional Principal
   , notionalPrincipal                        :: Maybe a          -- ^ Notional Principal
   , premiumDiscountAtIED                     :: Maybe a          -- ^ Premium Discount At IED
-  , cycleAnchorDateOfPrincipalRedemption     :: Maybe b          -- ^ Cycle Anchor Date Of Principal Redemption
+  , cycleAnchorDateOfPrincipalRedemption     :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Principal Redemption
   , cycleOfPrincipalRedemption               :: Maybe Cycle      -- ^ Cycle Of Principal Redemption
   , nextPrincipalRedemptionPayment           :: Maybe a          -- ^ Next Principal Redemption Payment
-  , purchaseDate                             :: Maybe b          -- ^ Purchase Date
+  , purchaseDate                             :: Maybe LocalTime  -- ^ Purchase Date
   , priceAtPurchaseDate                      :: Maybe a          -- ^ Price At Purchase Date
-  , terminationDate                          :: Maybe b          -- ^ Termination Date
+  , terminationDate                          :: Maybe LocalTime  -- ^ Termination Date
   , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
 
   -- Scaling Index
   , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
-  , cycleAnchorDateOfScalingIndex            :: Maybe b          -- ^ Cycle Anchor Date Of Scaling Index
+  , cycleAnchorDateOfScalingIndex            :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Scaling Index
   , cycleOfScalingIndex                      :: Maybe Cycle      -- ^ Cycle Of Scaling Index
   , scalingEffect                            :: Maybe SCEF       -- ^ Scaling Effect
   , scalingIndexAtContractDealDate           :: Maybe a          -- ^ Scaling Index At Contract Deal Date
@@ -422,7 +422,7 @@ data ContractTermsPoly a b = ContractTermsPoly
 
   -- Optionality
   , cycleOfOptionality                       :: Maybe Cycle      -- ^ Cycle Of Optionality
-  , cycleAnchorDateOfOptionality             :: Maybe b          -- ^ Cycle Anchor Date Of Optionality
+  , cycleAnchorDateOfOptionality             :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Optionality
   , optionType                               :: Maybe OPTP       -- ^ Option Type
   , optionStrike1                            :: Maybe a          -- ^ Option Strike 1
   , optionExerciseType                       :: Maybe OPXT       -- ^ Option Exercise Type
@@ -440,7 +440,7 @@ data ContractTermsPoly a b = ContractTermsPoly
 
   -- Rate Reset
   , cycleOfRateReset                         :: Maybe Cycle      -- ^ Cycle Of Rate Reset
-  , cycleAnchorDateOfRateReset               :: Maybe b          -- ^ Cycle Anchor Date Of Rate Reset
+  , cycleAnchorDateOfRateReset               :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Rate Reset
   , nextResetRate                            :: Maybe a          -- ^ Next Reset Rate
   , rateSpread                               :: Maybe a          -- ^ Rate Spread
   , rateMultiplier                           :: Maybe a          -- ^ Rate Multiplier
@@ -452,7 +452,7 @@ data ContractTermsPoly a b = ContractTermsPoly
 
   -- Dividend
   , cycleOfDividend                          :: Maybe Cycle      -- ^ Cycle Of Dividend
-  , cycleAnchorDateOfDividend                :: Maybe b          -- ^ Cycle Anchor Date Of Dividend
+  , cycleAnchorDateOfDividend                :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Dividend
   , nextDividendPaymentAmount                :: Maybe a          -- ^ Next Dividend Payment Amount
 
   , enableSettlement                         :: Bool             -- ^ Enable settlement currency
@@ -546,8 +546,8 @@ instance FromJSON ContractTerms where
       (.!?) w s = w .:? s <|> (fmap read <$> w .:? s)
   parseJSON _ = mzero
 
-type ContractTerms = ContractTermsPoly Double LocalTime
-type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation) (Marlowe.Value Marlowe.Observation)
+type ContractTerms = ContractTermsPoly Double
+type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation)
 
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues ct@ContractTermsPoly {..} =

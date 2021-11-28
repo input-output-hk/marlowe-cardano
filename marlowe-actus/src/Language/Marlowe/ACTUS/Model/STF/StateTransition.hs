@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards  #-}
 
 module Language.Marlowe.ACTUS.Model.STF.StateTransition
   (
@@ -9,6 +10,7 @@ where
 
 import           Control.Monad.Reader                                  (Reader, reader)
 import           Data.Maybe                                            (fromMaybe, maybeToList)
+import           Data.Time.LocalTime                                   (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents          (EventType (..), RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractState           (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms           (CT (..), ContractTermsPoly (..))
@@ -17,21 +19,21 @@ import           Language.Marlowe.ACTUS.Domain.Ops                     (DateOps 
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator      (inf', sup')
 
-data CtxSTF a b = CtxSTF
-  { contractTerms :: ContractTermsPoly a b
-  , fpSchedule    :: [b]
-  , prSchedule    :: [b]
-  , ipSchedule    :: [b]
-  , maturity      :: Maybe b
+data CtxSTF a = CtxSTF
+  { contractTerms :: ContractTermsPoly a
+  , fpSchedule    :: [LocalTime]
+  , prSchedule    :: [LocalTime]
+  , ipSchedule    :: [LocalTime]
+  , maturity      :: Maybe LocalTime
   }
 
 -- |'stateTransition' updates the contract state based on the contract terms in the reader contrext
-stateTransition :: (RoleSignOps a, YearFractionOps b a, DateOps b a, Ord b) =>
-     EventType                                   -- ^ Event type
-  -> RiskFactorsPoly a                           -- ^ Risk factors
-  -> b                                           -- ^ Time
-  -> ContractStatePoly a b                       -- ^ Contract state
-  -> Reader (CtxSTF a b) (ContractStatePoly a b) -- ^ Updated contract state
+stateTransition :: (RoleSignOps a, YearFractionOps LocalTime a, DateOps LocalTime a) =>
+     EventType                               -- ^ Event type
+  -> RiskFactorsPoly a                       -- ^ Risk factors
+  -> LocalTime                               -- ^ Time
+  -> ContractStatePoly a                     -- ^ Contract state
+  -> Reader (CtxSTF a) (ContractStatePoly a) -- ^ Updated contract state
 stateTransition ev rf t st@ContractStatePoly{..} = reader stateTransition'
   where
     stateTransition' CtxSTF{..} = stf ev contractTerms

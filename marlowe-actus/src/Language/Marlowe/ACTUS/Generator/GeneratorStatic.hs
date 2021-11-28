@@ -17,7 +17,7 @@ import           Data.Validation                                 (Validation (..
 import           Language.Marlowe                                (Contract (..), Slot (..), Value (..))
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents    (EventType (..), RiskFactors)
 import           Language.Marlowe.ACTUS.Domain.ContractTerms     (ContractTerms, TermValidationError (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule          (CashFlow (..))
+import           Language.Marlowe.ACTUS.Domain.Schedule          (CashFlowPoly (..))
 import           Language.Marlowe.ACTUS.Generator.Analysis       (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator      (invoice)
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat  (timeToSlotNumber)
@@ -39,7 +39,7 @@ genStaticContract' ::
   -> Contract
 genStaticContract' rf ct =
   let cfs = genProjectedCashflows rf ct
-      gen CashFlow {..}
+      gen CashFlowPoly {..}
         | amount == 0.0 = id
         | amount > 0.0 =
           invoice
