@@ -13,8 +13,10 @@ import           Data.Validation                                  (Validation (.
 import           Language.Marlowe
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..), RiskFactors, RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms
+import           Language.Marlowe.ACTUS.Domain.Ops
 import           Language.Marlowe.ACTUS.Generator.GeneratorFs
 import           Language.Marlowe.ACTUS.Generator.GeneratorStatic
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat   (constnt)
 import           Language.Marlowe.Pretty
 import qualified Ledger.Value                                     as Val
 import           Test.Tasty
@@ -53,9 +55,9 @@ ex_pam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_pam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
           Failure _ -> assertFailure "Terms validation should not fail"
-          Success contract -> -- writeFile "pam1.marlowe" (show $ contract) >>
+          Success contract -> -- writeFile "pam1.marlowe" (show $ pretty contract) >>
             let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
                 ip = IDeposit (Role "party") "party" ada 200
                 redemption = IDeposit (Role "party") "party" ada 10000
@@ -114,7 +116,7 @@ ex_lam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_lam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
           Failure _ -> assertFailure "Terms validation should not fail"
           Success contract -> -- writeFile "lam1.marlowe" (show $ pretty contract) >>
             let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -175,7 +177,7 @@ ex_nam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_nam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
         Failure _ -> assertFailure "Terms validation should not fail"
         Success contract -> -- writeFile "nam1.marlowe" (show $ contract) >>
           let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -236,7 +238,7 @@ ex_ann1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_ann1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
         Failure _ -> assertFailure "Terms validation should not fail"
         Success contract -> -- writeFile "ann1.marlowe" (show $ pretty contract) >>
           let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
@@ -330,15 +332,15 @@ ex_optns1 =
 contractFromFile :: FilePath -> IO (Either String ContractTerms)
 contractFromFile f = eitherDecode <$> B.readFile f
 
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
+defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactorsPoly a
 defaultRiskFactors _ _ =
   RiskFactorsPoly
-    { o_rf_CURS = 1.0,
-      o_rf_RRMO = 1.0,
-      o_rf_SCMO = 1.0,
-      pp_payoff = 0.0,
-      xd_payoff = 0.0,
-      dv_payoff = 0.0
+    { o_rf_CURS = _one,
+      o_rf_RRMO = _one,
+      o_rf_SCMO = _one,
+      pp_payoff = _zero,
+      xd_payoff = _zero,
+      dv_payoff = _zero
     }
 
 -- |totalPayments calculates the sum of the payments provided as argument
@@ -347,3 +349,82 @@ totalPayments payee = sum . map m . filter f
   where
     m (Payment _ _ mon) = Val.valueOf mon "" ""
     f (Payment _ pay _) = pay == payee
+
+
+toMarlowe :: ContractTerms -> ContractTermsMarlowe
+toMarlowe ct =
+  ContractTermsPoly
+    { contractId = contractId ct,
+      contractType = contractType ct,
+      contractStructure = contractStructure ct,
+      contractRole = contractRole ct,
+      settlementCurrency = settlementCurrency ct,
+      initialExchangeDate = initialExchangeDate ct,
+      dayCountConvention = dayCountConvention ct,
+      scheduleConfig = scheduleConfig ct,
+      statusDate = statusDate ct,
+      contractPerformance = contractPerformance ct,
+      cycleOfFee = cycleOfFee ct,
+      cycleAnchorDateOfFee = cycleAnchorDateOfFee ct,
+      feeAccrued = constnt <$> feeAccrued ct,
+      feeBasis = feeBasis ct,
+      feeRate = constnt <$> feeRate ct,
+      cycleAnchorDateOfInterestPayment = cycleAnchorDateOfInterestPayment ct,
+      cycleOfInterestPayment = cycleOfInterestPayment ct,
+      accruedInterest = constnt <$> accruedInterest ct,
+      capitalizationEndDate = capitalizationEndDate ct,
+      cycleAnchorDateOfInterestCalculationBase = cycleAnchorDateOfInterestCalculationBase ct,
+      cycleOfInterestCalculationBase = cycleOfInterestCalculationBase ct,
+      interestCalculationBase = interestCalculationBase ct,
+      interestCalculationBaseA = constnt <$> interestCalculationBaseA ct,
+      nominalInterestRate = constnt <$> nominalInterestRate ct,
+      interestScalingMultiplier = constnt <$> interestScalingMultiplier ct,
+      notionalPrincipal = constnt <$> notionalPrincipal ct,
+      premiumDiscountAtIED = constnt <$> premiumDiscountAtIED ct,
+      maturityDate = maturityDate ct,
+      amortizationDate = amortizationDate ct,
+      exerciseDate = exerciseDate ct,
+      cycleAnchorDateOfPrincipalRedemption = cycleAnchorDateOfPrincipalRedemption ct,
+      cycleOfPrincipalRedemption = cycleOfPrincipalRedemption ct,
+      nextPrincipalRedemptionPayment = constnt <$> nextPrincipalRedemptionPayment ct,
+      purchaseDate = purchaseDate ct,
+      priceAtPurchaseDate = constnt <$> priceAtPurchaseDate ct,
+      terminationDate = terminationDate ct,
+      priceAtTerminationDate = constnt <$> priceAtTerminationDate ct,
+      scalingIndexAtStatusDate = constnt <$> scalingIndexAtStatusDate ct,
+      cycleAnchorDateOfScalingIndex = cycleAnchorDateOfScalingIndex ct,
+      cycleOfScalingIndex = cycleOfScalingIndex ct,
+      scalingEffect = scalingEffect ct,
+      scalingIndexAtContractDealDate = constnt <$> scalingIndexAtContractDealDate ct,
+      marketObjectCodeOfScalingIndex = marketObjectCodeOfScalingIndex ct,
+      notionalScalingMultiplier = constnt <$> notionalScalingMultiplier ct,
+      cycleOfOptionality = cycleOfOptionality ct,
+      cycleAnchorDateOfOptionality = cycleAnchorDateOfOptionality ct,
+      optionType = optionType ct,
+      optionStrike1 = constnt <$> optionStrike1 ct,
+      optionExerciseType = optionExerciseType ct,
+      settlementPeriod = settlementPeriod ct,
+      deliverySettlement = deliverySettlement ct,
+      exerciseAmount = constnt <$> exerciseAmount ct,
+      futuresPrice = constnt <$> futuresPrice ct,
+      penaltyRate = constnt <$> penaltyRate ct,
+      penaltyType = penaltyType ct,
+      prepaymentEffect = prepaymentEffect ct,
+      cycleOfRateReset = cycleOfRateReset ct,
+      cycleAnchorDateOfRateReset = cycleAnchorDateOfRateReset ct,
+      nextResetRate = constnt <$> nextResetRate ct,
+      rateSpread = constnt <$> rateSpread ct,
+      rateMultiplier = constnt <$> rateMultiplier ct,
+      periodFloor = constnt <$> periodFloor ct,
+      periodCap = constnt <$> periodCap ct,
+      lifeCap = constnt <$> lifeCap ct,
+      lifeFloor = constnt <$> lifeFloor ct,
+      marketObjectCodeOfRateReset = marketObjectCodeOfRateReset ct,
+      cycleOfDividend = cycleOfDividend ct,
+      cycleAnchorDateOfDividend = cycleAnchorDateOfDividend ct,
+      nextDividendPaymentAmount = constnt <$> nextDividendPaymentAmount ct,
+      enableSettlement = enableSettlement ct,
+      constraints = constraints ct,
+      collateralAmount = collateralAmount ct
+    }
+

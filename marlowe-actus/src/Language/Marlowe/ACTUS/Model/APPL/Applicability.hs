@@ -4,11 +4,11 @@ module Language.Marlowe.ACTUS.Model.APPL.Applicability where
 
 import           Data.Maybe                                           (isJust)
 import           Data.Validation
-import           Language.Marlowe.ACTUS.Domain.ContractTerms          (CT (..), ContractTerms, ContractTermsPoly (..),
+import           Language.Marlowe.ACTUS.Domain.ContractTerms          (CT (..), ContractTermsPoly (..),
                                                                        ScheduleConfig (..), TermValidationError (..))
 import           Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
 
-validateTerms :: ContractTerms -> Validation [TermValidationError] ContractTerms
+validateTerms :: ContractTermsPoly a -> Validation [TermValidationError] (ContractTermsPoly a)
 validateTerms ct@ContractTermsPoly {contractType = PAM, ..} =
   ct
     <$ _NN initialExchangeDate ct "initial exchange date"

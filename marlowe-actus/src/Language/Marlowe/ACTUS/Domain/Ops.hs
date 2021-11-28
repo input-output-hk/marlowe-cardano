@@ -78,6 +78,11 @@ instance DateOps LocalTime (Value Observation) where
 instance YearFractionOps LocalTime Double where
     _y = yearFraction
 
+instance YearFractionOps LocalTime (Value Observation) where
+    _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d
+      where
+        toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)
+
 instance ActusOps (Value Observation) where
     _min a b = Cond (ValueLT a b) a b
     _max a b = Cond (ValueGT a b) a b
