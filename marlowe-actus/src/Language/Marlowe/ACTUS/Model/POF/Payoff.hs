@@ -8,9 +8,10 @@ where
 import           Data.Time.LocalTime                          (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms  (CT (..), ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Ops            (ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
+import           Language.Marlowe.ACTUS.Domain.ContractTerms  (CT (..), ContractTermsPoly (..), FEB (..), PYTP (..))
+import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), ActusOps (..), RoleSignOps (..),
+                                                               YearFractionOps (_y))
+import           Prelude                                      hiding (Fractional, Num, (*), (+), (-), (/))
 
 -- |Generic payoff function for ACTUS contracts
 payoff :: (RoleSignOps a, YearFractionOps a) =>
@@ -32,7 +33,7 @@ payoff
       contractRole
     }
   _
-  _ = _POF_IED_PAM o_rf_CURS contractRole nt pdied
+  _ = _negate $ o_rf_CURS * _r contractRole * (nt + pdied)
 payoff
   IED
   RiskFactorsPoly
@@ -43,7 +44,7 @@ payoff
       contractRole
     }
   _
-  _ = _POF_IED_PAM o_rf_CURS contractRole nt _zero
+  _ = _negate $ o_rf_CURS * _r contractRole * nt
 -- PR
 payoff
   PR
@@ -59,7 +60,8 @@ payoff
       nsc,
       prnxt
     }
-  _ = _POF_PR_LAM o_rf_CURS contractRole nt nsc prnxt
+  _ = let redemption = prnxt - _r contractRole * _max _zero (_abs prnxt - _abs nt)
+       in o_rf_CURS * _r contractRole * nsc * redemption
 payoff
   PR
   RiskFactorsPoly
@@ -82,7 +84,9 @@ payoff
     }
   t | contractType `elem` [NAM, ANN] =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_PR_NAM o_rf_CURS contractRole nsc prnxt ipac y_sd_t ipnr ipcb nt
+        ra = prnxt - _r contractRole * (ipac + y_sd_t * ipnr * ipcb)
+        r = ra - _max _zero (ra - _abs nt)
+     in o_rf_CURS * _r contractRole * nsc * r
 -- MD
 payoff
   MD
@@ -91,7 +95,7 @@ payoff
     { contractType = OPTNS
     }
   _
-  _ = _POF_MD_OPTNS
+  _ = _zero
 payoff
   MD
   RiskFactorsPoly
@@ -104,17 +108,18 @@ payoff
       isc,
       ipac,
       feac
-    } _ = _POF_MD_PAM o_rf_CURS nsc nt isc ipac feac
+    }
+  _ = o_rf_CURS * (nsc * nt + isc * ipac + feac)
 -- PP
 payoff
   PP
   RiskFactorsPoly
     { o_rf_CURS,
-      dv_payoff
+      pp_payoff
     }
   _
   _
-  _ = _POF_PP_PAM o_rf_CURS dv_payoff
+  _ = o_rf_CURS * pp_payoff
 -- PY
 payoff
   PY
@@ -136,7 +141,12 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_PY_PAM pytp o_rf_CURS o_rf_RRMO pyrt contractRole nt ipnr y_sd_t
+     in
+        case pytp of
+          PYTP_A -> o_rf_CURS * _r contractRole * pyrt
+          PYTP_N -> let c = o_rf_CURS * _r contractRole * y_sd_t * nt in c * pyrt
+          PYTP_I -> let c = o_rf_CURS * _r contractRole * y_sd_t * nt in c * _max _zero (ipnr - o_rf_RRMO)
+          PYTP_O -> undefined
 -- FP
 payoff
   FP
@@ -157,7 +167,10 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_FP_PAM feb fer o_rf_CURS contractRole nt feac y_sd_t
+     in
+      case feb of
+        FEB_A -> _r contractRole * o_rf_CURS * fer
+        FEB_N -> o_rf_CURS * fer * y_sd_t * nt * feac
 -- PRD
 payoff
   PRD
@@ -179,7 +192,7 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_PRD_PAM o_rf_CURS contractRole pprd ipac ipnr nt y_sd_t
+     in _negate $ o_rf_CURS * _r contractRole * (pprd + ipac + y_sd_t * ipnr * nt)
 payoff
   PRD
   RiskFactorsPoly
@@ -200,7 +213,7 @@ payoff
     }
   t | contractType `elem` [LAM, NAM, ANN] =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_PRD_LAM o_rf_CURS contractRole pprd ipac ipnr ipcb y_sd_t
+     in _negate $ o_rf_CURS * _r contractRole * (pprd + ipac + y_sd_t * ipnr * ipcb)
 payoff
   PRD
   _
@@ -210,7 +223,7 @@ payoff
       contractRole
     }
   _
-  _ | contractType `elem` [STK, OPTNS, FUTUR] = _POF_PRD_STK contractRole pprd
+  _ | contractType `elem` [STK, OPTNS, FUTUR] = _negate $ _r contractRole * pprd
 -- TD
 payoff
   TD
@@ -232,7 +245,7 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_TD_PAM o_rf_CURS contractRole ptd ipac ipnr nt y_sd_t
+     in o_rf_CURS * _r contractRole * (ptd + ipac + y_sd_t * ipnr * nt)
 payoff
   TD
   _
@@ -242,7 +255,7 @@ payoff
       contractRole
     }
   _
-  _ = _POF_TD_STK contractRole ptd
+  _ = _r contractRole * ptd
 payoff
   TD
   RiskFactorsPoly
@@ -262,7 +275,7 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_TD_LAM o_rf_CURS contractRole ptd ipac ipnr ipcb y_sd_t
+     in o_rf_CURS * _r contractRole * (ptd + ipac + y_sd_t * ipnr * ipcb)
 -- IP
 payoff
   IP
@@ -283,7 +296,7 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_IP_PAM o_rf_CURS isc ipac ipnr nt y_sd_t
+     in o_rf_CURS * isc * (ipac + y_sd_t * ipnr * nt)
 payoff
   IP
   RiskFactorsPoly
@@ -302,7 +315,7 @@ payoff
     }
   t =
     let y_sd_t = _y dcc sd t maturityDate
-     in _POF_IP_LAM o_rf_CURS isc ipac ipnr ipcb y_sd_t
+     in o_rf_CURS * isc * (ipac + y_sd_t * ipnr * ipcb)
 -- DV
 payoff
   DV
@@ -315,7 +328,7 @@ payoff
       contractRole
     }
   _
-  _ = _POF_DV_STK contractRole o_rf_CURS dv_payoff
+  _ = o_rf_CURS * _r contractRole * dv_payoff
 -- STD
 payoff
   STD
@@ -329,5 +342,5 @@ payoff
   ContractStatePoly
     { xa = Just exerciseAmount
     }
-  _ | contractType `elem` [OPTNS, FUTUR] = _POF_STD_OPTNS contractRole o_rf_CURS exerciseAmount
+  _ | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * _r contractRole * exerciseAmount
 payoff _ _ _ _ _ = _zero

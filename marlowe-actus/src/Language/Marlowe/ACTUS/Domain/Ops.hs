@@ -19,6 +19,7 @@ class ActusOps a where
     _one  :: a
     _fromInteger :: Integer -> a
     _toInteger :: a -> Integer
+    _negate :: a -> a
 
 class Eq a => ActusNum a where
     (+) :: a -> a -> a
@@ -29,24 +30,21 @@ class Eq a => ActusNum a where
 class YearFractionOps b where
     _y :: DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> b
 
-_minusOne :: (ActusNum a, ActusOps a) => a
-_minusOne = _zero Language.Marlowe.ACTUS.Domain.Ops.- _one
-
 class (ActusNum a, ActusOps a) => RoleSignOps a where
     _r :: CR -> a
     _r CR_RPA = _one
-    _r CR_RPL = _minusOne
+    _r CR_RPL = _negate _one
     _r CR_CLO = _one
     _r CR_CNO = _one
     _r CR_COL = _one
     _r CR_LG  = _one
-    _r CR_ST  = _minusOne
+    _r CR_ST  = _negate _one
     _r CR_BUY = _one
-    _r CR_SEL = _minusOne
+    _r CR_SEL = _negate _one
     _r CR_RFL = _one
-    _r CR_PFL = _minusOne
+    _r CR_PFL = _negate _one
     _r CR_RF  = _one
-    _r CR_PF  = _minusOne
+    _r CR_PF  = _negate _one
 
 instance RoleSignOps Double
 instance RoleSignOps (Value Observation)
@@ -59,6 +57,7 @@ instance ActusOps Double where
     _one  = 1.0
     _fromInteger = fromInteger
     _toInteger = ceiling
+    _negate = negate
 
 instance ActusNum Double where
     a + b       = a Prelude.+ b
@@ -98,6 +97,7 @@ instance ActusOps (Value Observation) where
     _toInteger SlotIntervalStart    = error "SlotIntervalStart cannot be converted"
     _toInteger SlotIntervalEnd      = error "SlotIntervalEnd cannot be converted"
     _toInteger (Scale _ _)          = undefined -- will be gone soon
+    _negate a = NegValue a
 
 infixl 7  *, /
 infixl 6  +, -

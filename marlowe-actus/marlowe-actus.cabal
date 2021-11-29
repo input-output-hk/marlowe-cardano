@@ -62,7 +62,6 @@ library
     Language.Marlowe.ACTUS.Generator.GeneratorFs
     Language.Marlowe.ACTUS.Generator.GeneratorStatic
     Language.Marlowe.ACTUS.Generator.MarloweCompat
-    Language.Marlowe.ACTUS.Model.POF.PayoffModel
     Language.Marlowe.ACTUS.Model.POF.Payoff
     Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
     Language.Marlowe.ACTUS.Model.STF.StateTransition
