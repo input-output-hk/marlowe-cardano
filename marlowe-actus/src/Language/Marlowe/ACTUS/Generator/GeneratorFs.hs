@@ -29,13 +29,13 @@ import           Language.Marlowe.ACTUS.Generator.Generator      (invoice)
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat  (timeToSlotNumber)
 import           Language.Marlowe.ACTUS.Model.APPL.Applicability (validateTerms)
 
--- |'genFsContract' validatate the applicabilty of the contract terms in order
+-- |'genFsContract' validatates the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
 -- in time
 genFsContract ::
-     (EventType -> LocalTime -> RiskFactorsMarlowe)   -- ^ Risk factors per event and time
-  -> ContractTermsMarlowe                             -- ^ ACTUS contract terms
-  -> Validation [TermValidationError] Contract -- ^ Marlowe contract or applicabilty errors
+     (EventType -> LocalTime -> RiskFactorsMarlowe) -- ^ Risk factors per event and time
+  -> ContractTermsMarlowe                           -- ^ ACTUS contract terms
+  -> Validation [TermValidationError] Contract      -- ^ Marlowe contract or applicabilty errors
 genFsContract rf = fmap (genFsContract' rf) . validateTerms
 
 genFsContract' ::
@@ -71,4 +71,4 @@ genFsContract' rf ct =
    in foldl' (flip gen) Close $ reverse cfs
 
 scale :: CashFlowPoly (Value Observation) -> CashFlowPoly (Value Observation)
-scale cf@CashFlowPoly {..} = cf { amount = DivValue amount (Constant marloweFixedPoint) }
+scale cf@CashFlowPoly {..} = cf {amount = DivValue amount (Constant marloweFixedPoint)}
