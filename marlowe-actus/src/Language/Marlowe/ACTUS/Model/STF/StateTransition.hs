@@ -14,8 +14,7 @@ import           Data.Time.LocalTime                                   (LocalTim
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents          (EventType (..), RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractState           (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms           (CT (..), ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                     (DateOps (..), RoleSignOps (..),
-                                                                        YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Ops                     (RoleSignOps (..), YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator      (inf', sup')
 
@@ -28,7 +27,7 @@ data CtxSTF a = CtxSTF
   }
 
 -- |'stateTransition' updates the contract state based on the contract terms in the reader contrext
-stateTransition :: (RoleSignOps a, YearFractionOps LocalTime a, DateOps LocalTime a) =>
+stateTransition :: (RoleSignOps a, YearFractionOps LocalTime a) =>
      EventType                               -- ^ Event type
   -> RiskFactorsPoly a                       -- ^ Risk factors
   -> LocalTime                               -- ^ Time

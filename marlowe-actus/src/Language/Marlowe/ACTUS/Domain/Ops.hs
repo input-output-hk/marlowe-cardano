@@ -29,9 +29,6 @@ class Eq a => ActusNum a where
 class YearFractionOps a b where
     _y :: DCC -> a -> a -> Maybe a -> b
 
-class DateOps a b where
-    _lt :: a -> a -> b --returns pseudo-boolean
-
 _minusOne :: (ActusNum a, ActusOps a) => a
 _minusOne = _zero Language.Marlowe.ACTUS.Domain.Ops.- _one
 
@@ -69,12 +66,6 @@ instance ActusNum Double where
     a * b       = a Prelude.* b
     a / b       = a Prelude./ b
 
-instance DateOps LocalTime Double where
-    _lt a b = if a < b then _one else _zero
-
-instance DateOps LocalTime (Value Observation) where
-    _lt a b = if a < b then _one else _zero
-
 instance YearFractionOps LocalTime Double where
     _y = yearFraction
 
@@ -107,9 +98,6 @@ instance ActusOps (Value Observation) where
     _toInteger SlotIntervalStart    = error "SlotIntervalStart cannot be converted"
     _toInteger SlotIntervalEnd      = error "SlotIntervalEnd cannot be converted"
     _toInteger (Scale _ _)          = undefined -- will be gone soon
-
-instance DateOps (Value Observation) (Value Observation) where
-    _lt a b = Cond (ValueLT a b) _one _zero
 
 infixl 7  *, /
 infixl 6  +, -

@@ -10,8 +10,8 @@ import           Language.Marlowe.ACTUS.Domain.BusinessEvents (RiskFactorsPoly (
 import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms  (ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..),
                                                                SCEF (..))
-import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), ActusOps (..), DateOps (_lt),
-                                                               RoleSignOps (_r))
+import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), ActusOps (..), RoleSignOps (_r),
+                                                               YearFractionOps (..))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity   (annuity)
 import           Prelude                                      hiding (Fractional, Num, (*), (+), (-), (/))
 
@@ -24,7 +24,7 @@ _STF_AD_PAM st@ContractStatePoly {..} t y_sd_t =
       sd = t
     }
 
-_STF_IED_PAM :: (RoleSignOps a, DateOps LocalTime a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
+_STF_IED_PAM :: (YearFractionOps LocalTime a, RoleSignOps a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IED_PAM
   ContractTermsPoly
     { nominalInterestRate,
@@ -46,6 +46,7 @@ _STF_IED_PAM
     { nominalInterestRate,
       notionalPrincipal = Just nt,
       cycleAnchorDateOfInterestPayment = Just ipanx,
+      dayCountConvention = Just dcc,
       contractRole
     }
   st
@@ -56,7 +57,7 @@ _STF_IED_PAM
      in st
           { nt = nt',
             ipnr = ipnr',
-            ipac = _lt ipanx t * y_ipanx_t * nt' * ipnr',
+            ipac = let _Y = _y dcc ipanx t Nothing in _Y * y_ipanx_t * nt' * ipnr',
             sd = t
           }
 _STF_IED_PAM _ st _ _ = st
