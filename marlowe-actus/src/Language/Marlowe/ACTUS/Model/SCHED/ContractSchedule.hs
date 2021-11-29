@@ -162,7 +162,7 @@ maturity
 
         yLastEventPlusPRCL = _y dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt O.- (yLastEventPlusPRCL O.* ipnr O.* nt)
-        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one -- FIXME: ceiling
+        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one
         m = lastEvent <+> prcl {n = n prcl Prelude.* remainingPeriods}
      in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity
@@ -189,7 +189,7 @@ maturity
              in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > statusDate) $ previousEvents
         timeFromLastEventPlusOneCycle = _y dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt O.- timeFromLastEventPlusOneCycle O.* ipnr O.* nt
-        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one -- FIXME: ceiling
+        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one
     in Just . calculationDay . applyBDCWithCfg scheduleConfig $ lastEvent <+> prcl { n = remainingPeriods }
 maturity
   ContractTermsPoly
