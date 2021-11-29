@@ -64,7 +64,7 @@ import           Plutus.Contract.Types                     (_observableState)
 import qualified Plutus.Trace.Emulator                     as Trace
 import           Plutus.Trace.Emulator.Types               (instContractState)
 import qualified PlutusTx.AssocMap                         as AssocMap
-import           PlutusTx.Builtins                         (emptyByteString)
+import           PlutusTx.Builtins                         (emptyByteString, sha2_256)
 import           PlutusTx.Lattice
 import qualified PlutusTx.Prelude                          as P
 import           Spec.Marlowe.Common
@@ -108,6 +108,7 @@ tests = testGroup "Marlowe"
         , testProperty "Contract (de)serialisation roundtrip" contractBSRoundtripTest
         ]
     , zeroCouponBondTest
+    , merkleizedZeroCouponBondTest
     , errorHandlingTest
     , trustFundTest
     ]
@@ -155,6 +156,50 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 1000])
+    void $ Trace.waitNSlots 2
+
+    Trace.callEndpoint @"close" aliceHdl reqId
+    Trace.callEndpoint @"close" bobHdl reqId
+    void $ Trace.waitNSlots 2
+
+merkleizedZeroCouponBondTest :: TestTree
+merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkleized Zero Coupon Bond Contract"
+    (assertNoFailedTransactions
+    -- T..&&. emulatorLog (const False) ""
+    T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag alice) (const True) "contract should close"
+    T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
+    T..&&. walletFundsChange alice (lovelaceValueOf 150)
+    T..&&. walletFundsChange bob (lovelaceValueOf (-150))
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (OK reqId "close")) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (OK reqId "close")) "should be OK"
+    ) $ do
+    -- Init a contract
+    let alicePk = PK (walletPubKeyHash alice)
+        bobPk = PK (walletPubKeyHash bob)
+
+    let params = defaultMarloweParams
+
+    let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 850))
+                                                     (sha2_256 zeroCouponBondStage2)
+                                    ] (Slot 100) Close
+        zeroCouponBondStage2 = contractToByteString $ Pay alicePk (Party bobPk) ada (Constant 850)
+                                                         (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 1000))
+                                                                                (sha2_256 zeroCouponBondStage3)
+                                                               ] (Slot 200) Close)
+        zeroCouponBondStage3 = contractToByteString Close
+
+    bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
+    aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
+
+    Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBondStage1)
+    Trace.waitNSlots 2
+
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
+                                                 [MerkleizedInput (IDeposit alicePk alicePk ada 850) zeroCouponBondStage2])
+    Trace.waitNSlots 2
+
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
+                                               [MerkleizedInput (IDeposit alicePk bobPk ada 1000) zeroCouponBondStage3])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
