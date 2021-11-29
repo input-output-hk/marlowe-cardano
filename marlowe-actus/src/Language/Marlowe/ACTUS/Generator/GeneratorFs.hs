@@ -15,13 +15,14 @@ module Language.Marlowe.ACTUS.Generator.GeneratorFs
   ( genFsContract )
 where
 
+import           Data.List                                       (foldl')
 import           Data.Time                                       (LocalTime)
 import           Data.Validation                                 (Validation (..))
 import           Language.Marlowe                                (Contract (..), Observation (..), Slot (..),
                                                                   Value (..))
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents    (EventType (..), RiskFactorsMarlowe)
 import           Language.Marlowe.ACTUS.Domain.ContractTerms     (ContractTermsMarlowe, TermValidationError (..))
-import           Language.Marlowe.ACTUS.Domain.Ops               (ActusOps (..))
+import           Language.Marlowe.ACTUS.Domain.Ops               (ActusOps (..), marloweFixedPoint)
 import           Language.Marlowe.ACTUS.Domain.Schedule          (CashFlowPoly (..))
 import           Language.Marlowe.ACTUS.Generator.Analysis       (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.Generator      (invoice)
@@ -42,17 +43,32 @@ genFsContract' ::
   ContractTermsMarlowe ->
   Contract
 genFsContract' rf ct =
-  let projectedCashflows = genProjectedCashflows rf ct
+  let cfs = map scale $ genProjectedCashflows rf ct
 
       gen :: CashFlowPoly (Value Observation) -> Contract -> Contract
       gen CashFlowPoly {..} cont =
         let timeout = Slot $ timeToSlotNumber cashPaymentDay
          in If
-              (ValueGT amount _zero)
-              (invoice "party" "counterparty" amount timeout cont)
-              ( If
-                  (ValueLT amount _zero)
-                  (invoice "counterparty" "party" (NegValue amount) timeout cont)
+              (_zero `ValueLT` amount)
+              ( invoice
+                  "party"
+                  "counterparty"
+                  amount
+                  timeout
                   cont
               )
-   in foldr gen Close projectedCashflows
+              ( If
+                  (amount `ValueLT` _zero)
+                  ( invoice
+                      "counterparty"
+                      "party"
+                      (NegValue amount)
+                      timeout
+                      cont
+                  )
+                  cont
+              )
+   in foldl' (flip gen) Close $ reverse cfs
+
+scale :: CashFlowPoly (Value Observation) -> CashFlowPoly (Value Observation)
+scale cf@CashFlowPoly {..} = cf { amount = DivValue amount (Constant marloweFixedPoint) }
