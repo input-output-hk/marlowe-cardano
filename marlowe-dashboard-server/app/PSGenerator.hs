@@ -30,6 +30,7 @@ import qualified PSGenerator.Common
 import           Plutus.V1.Ledger.Api               (PubKeyHash)
 import           Servant.PureScript                 (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings,
                                                      languageBridge, writeAPIModuleWithSettings)
+import           Types                              (RestoreError, RestorePostData)
 import           WebSocket                          (StreamToClient, StreamToServer)
 
 doubleBridge :: BridgePart
@@ -60,6 +61,8 @@ myTypes :: [SumType 'Haskell]
 myTypes =
   [ equal . genericShow . argonaut $ mkSumType @StreamToServer,
     equal . genericShow . argonaut $ mkSumType @StreamToClient,
+    equal . genericShow . argonaut $ mkSumType @RestoreError,
+    equal . genericShow . argonaut $ mkSumType @RestorePostData,
     order . genericShow . argonaut $ mkSumType @PubKeyHash
   ]
 

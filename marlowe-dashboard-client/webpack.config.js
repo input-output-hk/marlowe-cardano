@@ -21,8 +21,14 @@ module.exports = {
             "/api": {
                 target: "http://localhost:9080",
             },
+            // FIXME: remove
             "/wallet": {
                 target: "http://localhost:9080",
+            },
+            // FIXME: Ask Shea how we should handle PAB+Run app. I think we might want to add prefix pab to ws and api
+            "/fixme": {
+                target: "http://localhost:8080",
+                pathRewrite: { '^/fixme': '/' },
             },
             "/ws": {
                 target: "ws://localhost:9080",

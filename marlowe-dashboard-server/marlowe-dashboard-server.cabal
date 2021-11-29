@@ -5,7 +5,7 @@ license: Apache-2.0
 license-files:
   LICENSE
   NOTICE
-author: David Smith
+author: David Smith, Hernán Rajchert
 category: Web
 build-type: Simple
 extra-source-files:
@@ -13,30 +13,36 @@ extra-source-files:
 
 source-repository head
     type: git
-    location: https://github.com/iohk/plutus
+    location: https://github.com/input-output-hk/marlowe-cardano
 
 library
     exposed-modules:
         Server
         API
         WebSocket
+        Types
     hs-source-dirs:
         src
     default-language: Haskell2010
     build-depends:
         aeson -any,
         base >=4.7 && <5,
+        bytestring -any,
+        cardano-addresses -any,
+        cardano-wallet-core -any,
         http-client -any,
         http-client-tls -any,
         monad-logger -any,
         mtl -any,
         playground-common -any,
+        regex-compat -any,
         servant >= 0.16,
         servant-client -any,
         servant-client-core -any,
         servant-server -any,
         servant-websockets -any,
         text -any,
+        text-class -any,
         wai-app-static -any,
         wai-cors -any,
         websockets -any,
