@@ -7,7 +7,7 @@ The implementation is a transliteration of the ACTUS specification v1.1
 
 -}
 
-module Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule
+module Language.Marlowe.ACTUS.Model.ContractSchedule
   ( schedule
   , maturity
   )

@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.POF.Payoff
+module Language.Marlowe.ACTUS.Model.Payoff
   ( payoff )
 where
 

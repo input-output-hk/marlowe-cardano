@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.STF.StateTransition
+module Language.Marlowe.ACTUS.Model.StateTransition
   (
     stateTransition
   , CtxSTF (..)

@@ -8,7 +8,7 @@ Note: initial states rely also on some schedules (and vice versa)
 
 -}
 
-module Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel
+module Language.Marlowe.ACTUS.Model.StateInitialization
   ( initializeState
   )
 where
@@ -21,7 +21,7 @@ import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), Cont
                                                                    FEB (..), IPCB (..), SCEF (..))
 import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum (..), ActusOps (..), RoleSignOps (_r),
                                                                    YearFractionOps (..))
-import           Language.Marlowe.ACTUS.Model.STF.StateTransition (CtxSTF (..))
+import           Language.Marlowe.ACTUS.Model.StateTransition     (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf', sup')
 

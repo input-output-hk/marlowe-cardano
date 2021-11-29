@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.APPL.Applicability where
+module Language.Marlowe.ACTUS.Model.Applicability where
 
 import           Data.Maybe                                  (isJust)
 import           Data.Validation                             (Validation (..))

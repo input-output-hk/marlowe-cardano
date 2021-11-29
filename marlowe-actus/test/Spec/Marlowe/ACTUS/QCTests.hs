@@ -6,14 +6,14 @@ module Spec.Marlowe.ACTUS.QCTests
   ( tests )
 where
 
-import           Data.Maybe                                      (isJust)
-import           Data.Time                                       (LocalTime)
-import           Data.Validation                                 as V
+import           Data.Maybe                                   (isJust)
+import           Data.Time                                    (LocalTime)
+import           Data.Validation                              as V
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents
 import           Language.Marlowe.ACTUS.Domain.ContractTerms
 import           Language.Marlowe.ACTUS.Domain.Schedule
 import           Language.Marlowe.ACTUS.Generator.Analysis
-import           Language.Marlowe.ACTUS.Model.APPL.Applicability
+import           Language.Marlowe.ACTUS.Model.Applicability
 import           Spec.Marlowe.ACTUS.QCGenerator
 import           Test.QuickCheck
 import           Test.Tasty
