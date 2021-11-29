@@ -26,8 +26,8 @@ class Eq a => ActusNum a where
     (*) :: a -> a -> a
     (/) :: a -> a -> a
 
-class YearFractionOps a b where
-    _y :: DCC -> a -> a -> Maybe a -> b
+class YearFractionOps b where
+    _y :: DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> b
 
 _minusOne :: (ActusNum a, ActusOps a) => a
 _minusOne = _zero Language.Marlowe.ACTUS.Domain.Ops.- _one
@@ -66,10 +66,10 @@ instance ActusNum Double where
     a * b       = a Prelude.* b
     a / b       = a Prelude./ b
 
-instance YearFractionOps LocalTime Double where
+instance YearFractionOps Double where
     _y = yearFraction
 
-instance YearFractionOps LocalTime (Value Observation) where
+instance YearFractionOps (Value Observation) where
     _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d
       where
         toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)

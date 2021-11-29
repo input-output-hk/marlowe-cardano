@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns   #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Language.Marlowe.ACTUS.Model.STF.StateTransitionModel where
 
@@ -24,7 +23,7 @@ _STF_AD_PAM st@ContractStatePoly {..} t y_sd_t =
       sd = t
     }
 
-_STF_IED_PAM :: (YearFractionOps LocalTime a, RoleSignOps a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
+_STF_IED_PAM :: (YearFractionOps a, RoleSignOps a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> a -> ContractStatePoly a
 _STF_IED_PAM
   ContractTermsPoly
     { nominalInterestRate,

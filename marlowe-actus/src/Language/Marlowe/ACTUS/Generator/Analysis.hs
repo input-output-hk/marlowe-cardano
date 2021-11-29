@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
-{-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 {-| = ACTUS Analysis
 
@@ -37,7 +36,7 @@ import           Language.Marlowe.ACTUS.Model.STF.StateTransition           (Ctx
 -- given contract terms and provided risk factors. The function returns
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
-genProjectedCashflows :: (RoleSignOps a, YearFractionOps LocalTime a) =>
+genProjectedCashflows :: (RoleSignOps a, YearFractionOps a) =>
   (EventType -> LocalTime -> RiskFactorsPoly a) -- ^ Risk factors as a function of event type and time
   -> ContractTermsPoly a                        -- ^ ACTUS contract terms
   -> [CashFlowPoly a]                           -- ^ List of projected cash flows
@@ -57,7 +56,7 @@ genProjectedCashflows getRiskFactors ct =
           }
    in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs getRiskFactors $ ct
 
-genProjectedPayoffs :: (RoleSignOps a, YearFractionOps LocalTime a) =>
+genProjectedPayoffs :: (RoleSignOps a, YearFractionOps a) =>
   (EventType -> LocalTime -> RiskFactorsPoly a)        -- ^ Risk factors as a function of event type and time
   -> ContractTermsPoly a                               -- ^ ACTUS contract terms
   -> [(ContractStatePoly a, EventType, ShiftedDay, a)] -- ^ List of projected payoffs

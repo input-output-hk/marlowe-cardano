@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns   #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {-| = ACTUS contract state initialization per t0
 
@@ -17,7 +16,6 @@ where
 import           Control.Applicative                              ((<|>))
 import           Control.Monad.Reader                             (Reader, reader)
 import           Data.Maybe                                       (fromMaybe, maybeToList)
-import           Data.Time.LocalTime                              (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.ContractState      (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..),
                                                                    FEB (..), IPCB (..), SCEF (..))
@@ -33,10 +31,10 @@ import           Prelude                                          hiding ((*), (
 
 -- |'initializeState' initializes the state variables at t0 based on the
 -- provided context
-initializeState :: (RoleSignOps a, YearFractionOps LocalTime a) => Reader (CtxSTF a) (ContractStatePoly a)
+initializeState :: (RoleSignOps a, YearFractionOps a) => Reader (CtxSTF a) (ContractStatePoly a)
 initializeState = reader initializeState'
   where
-    initializeState' :: (RoleSignOps a, YearFractionOps LocalTime a) => CtxSTF a -> ContractStatePoly a
+    initializeState' :: (RoleSignOps a, YearFractionOps a) => CtxSTF a -> ContractStatePoly a
     initializeState' CtxSTF {..} =
       ContractStatePoly
         { sd = t0,

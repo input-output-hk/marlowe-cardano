@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Language.Marlowe.ACTUS.Model.STF.StateTransition
   (
@@ -27,7 +26,7 @@ data CtxSTF a = CtxSTF
   }
 
 -- |'stateTransition' updates the contract state based on the contract terms in the reader contrext
-stateTransition :: (RoleSignOps a, YearFractionOps LocalTime a) =>
+stateTransition :: (RoleSignOps a, YearFractionOps a) =>
      EventType                               -- ^ Event type
   -> RiskFactorsPoly a                       -- ^ Risk factors
   -> LocalTime                               -- ^ Time

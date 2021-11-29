@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns   #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Language.Marlowe.ACTUS.Model.POF.Payoff
   ( payoff )
@@ -14,7 +13,7 @@ import           Language.Marlowe.ACTUS.Domain.Ops            (ActusOps (..), Ro
 import           Language.Marlowe.ACTUS.Model.POF.PayoffModel
 
 -- |Generic payoff function for ACTUS contracts
-payoff :: (RoleSignOps a, YearFractionOps LocalTime a) =>
+payoff :: (RoleSignOps a, YearFractionOps a) =>
      EventType           -- ^ Event type
   -> RiskFactorsPoly a   -- ^ Risk factors
   -> ContractTermsPoly a -- ^ Contract terms

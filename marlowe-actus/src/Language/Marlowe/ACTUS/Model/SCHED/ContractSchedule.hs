@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns   #-}
-{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {-| = ACTUS contract schedules
 
@@ -30,7 +29,7 @@ import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator         (apply
                                                                            generateRecurrentScheduleWithCorrections,
                                                                            (<+>), (<->))
 
-schedule :: (ActusNum a, ActusOps a, YearFractionOps LocalTime a) => EventType -> ContractTermsPoly a -> [ShiftedDay]
+schedule :: (ActusNum a, ActusOps a, YearFractionOps a) => EventType -> ContractTermsPoly a -> [ShiftedDay]
 schedule ev c = schedule' ev c { maturityDate = maturity c }
   where
 
@@ -112,7 +111,7 @@ schedule ev c = schedule' ev c { maturityDate = maturity c }
 
     schedule' _ _                                               = []
 
-maturity :: (ActusNum a, ActusOps a, YearFractionOps LocalTime a) => ContractTermsPoly a -> Maybe LocalTime
+maturity :: (ActusNum a, ActusOps a, YearFractionOps a) => ContractTermsPoly a -> Maybe LocalTime
 maturity ContractTermsPoly {contractType = PAM, ..} = maturityDate
 maturity ContractTermsPoly {contractType = LAM, maturityDate = md@(Just _)} = md
 maturity
