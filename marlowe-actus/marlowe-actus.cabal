@@ -67,7 +67,6 @@ library
     Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule
     Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel
     Language.Marlowe.ACTUS.Model.APPL.Applicability
-    Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
     Language.Marlowe.ACTUS.Utility.ANN.Annuity
     Language.Marlowe.ACTUS.Utility.DateShift
     Language.Marlowe.ACTUS.Utility.ScheduleGenerator
