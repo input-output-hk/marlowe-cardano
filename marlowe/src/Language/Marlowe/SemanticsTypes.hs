@@ -708,7 +708,7 @@ instance Eq Contract where
     When cases1 timeout1 cont1 == When cases2 timeout2 cont2 =
         timeout1 == timeout2 && cont1 == cont2
         && length cases1 == length cases2
-        && all id (zipWith (==) cases1 cases2)
+        && and (zipWith (==) cases1 cases2)
     Let valId1 val1 cont1 == Let valId2 val2 cont2 =
         valId1 == valId2 && val1 == val2 && cont1 == cont2
     Assert obs1 cont1 == Assert obs2 cont2 = obs1 == obs2 && cont1 == cont2
