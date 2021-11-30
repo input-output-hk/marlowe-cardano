@@ -5,6 +5,7 @@ on:
       - main # staging
       - production
       - deploy-hernan
+      - deploy-pablo
 jobs:
   deploy:
     runs-on: ubuntu-latest

@@ -27,6 +27,7 @@ declare -A ref_env_mapping=(
     [production]=production
     [main]=staging
     [deploy-hernan]=hernan
+    [deploy-pablo]=pablo
 )
 
 if [ ! -v 'ref_env_mapping[${ref}]' ]
