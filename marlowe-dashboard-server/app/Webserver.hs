@@ -5,11 +5,11 @@
 
 module Webserver where
 
-import           API                      (API)
-import           Data.Proxy               (Proxy (Proxy))
-import           Network.Wai.Handler.Warp as Warp
-import           Servant                  (serve)
-import qualified Server
+import           Data.Proxy                   (Proxy (Proxy))
+import           Marlowe.Run.Webserver.API    (API)
+import qualified Marlowe.Run.Webserver.Server as Server
+import           Network.Wai.Handler.Warp     as Warp
+import           Servant                      (serve)
 
 run :: FilePath -> Settings -> IO ()
 run staticPath settings = do

@@ -15,7 +15,6 @@ module PSGenerator
   )
 where
 
-import           API                                (HTTPAPI)
 import           Control.Applicative                ((<|>))
 import           Control.Lens                       (set, (&))
 import           Data.Monoid                        ()
@@ -26,12 +25,12 @@ import           Language.PureScript.Bridge         (BridgePart, Language (Haske
                                                      typeName, writePSTypes, (^==))
 import           Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import           Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
+import           Marlowe.Run.Webserver.API          (HTTPAPI)
+import           Marlowe.Run.Webserver.Types        (RestoreError, RestorePostData)
+import           Marlowe.Run.Webserver.WebSocket    (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
-import           Plutus.V1.Ledger.Api               (PubKeyHash)
 import           Servant.PureScript                 (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings,
                                                      languageBridge, writeAPIModuleWithSettings)
-import           Types                              (RestoreError, RestorePostData)
-import           WebSocket                          (StreamToClient, StreamToServer)
 
 doubleBridge :: BridgePart
 doubleBridge = typeName ^== "Double" >> return psNumber
@@ -42,6 +41,7 @@ dayBridge = typeName ^== "Day" >> return psString
 myBridge :: BridgePart
 myBridge =
   PSGenerator.Common.aesonBridge <|> PSGenerator.Common.containersBridge
+    <|> PSGenerator.Common.ledgerBridge
     <|> PSGenerator.Common.languageBridge
     <|> PSGenerator.Common.servantBridge
     <|> PSGenerator.Common.miscBridge
@@ -59,11 +59,15 @@ instance HasBridge MyBridge where
 
 myTypes :: [SumType 'Haskell]
 myTypes =
+    PSGenerator.Common.ledgerTypes <>
+    PSGenerator.Common.walletTypes <>
+    -- FIXME: this includes the EndpointDescription, probably they should be sepparated from the playground
+    PSGenerator.Common.playgroundTypes <>
+
   [ equal . genericShow . argonaut $ mkSumType @StreamToServer,
     equal . genericShow . argonaut $ mkSumType @StreamToClient,
-    equal . genericShow . argonaut $ mkSumType @RestoreError,
-    equal . genericShow . argonaut $ mkSumType @RestorePostData,
-    order . genericShow . argonaut $ mkSumType @PubKeyHash
+    equal . order . genericShow . argonaut $ mkSumType @RestoreError,
+    equal . genericShow . argonaut $ mkSumType @RestorePostData
   ]
 
 mySettings :: Settings

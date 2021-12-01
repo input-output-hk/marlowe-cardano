@@ -3,7 +3,7 @@
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module WebSocket where
+module Marlowe.Run.Webserver.WebSocket where
 
 import           Control.Monad                 (forever)
 import           Control.Monad.IO.Class        (MonadIO (liftIO))

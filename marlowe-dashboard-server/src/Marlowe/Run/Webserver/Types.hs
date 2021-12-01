@@ -4,7 +4,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Types where
+module Marlowe.Run.Webserver.Types where
 
 import qualified Data.Aeson       as Aeson
 import           Data.Aeson.Types (FromJSON, ToJSON, genericToJSON)

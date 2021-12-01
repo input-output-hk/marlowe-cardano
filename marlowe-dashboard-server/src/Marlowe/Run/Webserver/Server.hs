@@ -9,13 +9,13 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Server where
+module Marlowe.Run.Webserver.Server where
 
-import           API                                        (API)
 import           Cardano.Mnemonic                           (MkSomeMnemonicError, mkSomeMnemonic)
 import qualified Cardano.Wallet.Api.Client                  as WBE.Api
 import           Cardano.Wallet.Api.Types                   (ApiVerificationKeyShelley (..))
 import qualified Cardano.Wallet.Api.Types                   as WBE
+import           Marlowe.Run.Webserver.API                  (API)
 
 import           Cardano.Wallet.Api                         (WalletKeys)
 import           Cardano.Wallet.Mock.Types                  (WalletInfo (..))
@@ -41,6 +41,8 @@ import           Data.Text.Class                            (FromText (..))
 import qualified Data.Text.Encoding                         as Text
 import           GHC.Generics                               (Generic)
 import           Ledger                                     (PubKeyHash (..))
+import           Marlowe.Run.Webserver.Types                (RestoreError (..), RestorePostData (..))
+import qualified Marlowe.Run.Webserver.WebSocket            as WS
 import           Network.HTTP.Client                        (defaultManagerSettings, newManager)
 import           Network.Wai.Middleware.Cors                (cors, corsRequestHeaders, simpleCorsResourcePolicy)
 import           PlutusTx.Builtins.Internal                 (BuiltinByteString (..))
@@ -53,9 +55,7 @@ import           Servant.Client                             (BaseUrl (BaseUrl, b
                                                              mkClientEnv, runClientM)
 import           Text.Regex                                 (Regex)
 import qualified Text.Regex                                 as Regex
-import           Types                                      (RestoreError (..), RestorePostData (..))
 import qualified Wallet.Emulator.Wallet                     as Pab.Wallet
-import qualified WebSocket                                  as WS
 
 handlers :: FilePath -> Server API
 handlers staticPath =
