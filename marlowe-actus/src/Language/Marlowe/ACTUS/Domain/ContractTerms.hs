@@ -28,6 +28,7 @@ data CT = PAM   -- ^ Principal at maturity
         | STK   -- ^ Stock
         | OPTNS -- ^ Option
         | FUTUR -- ^ Future
+        | SWPPV -- ^ Plain Vanilla Swap
         deriving stock (Show, Read, Eq, Generic)
         deriving anyclass (FromJSON, ToJSON)
 
