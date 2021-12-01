@@ -354,14 +354,14 @@ untypedValidatorSize = do
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
-    extractContractRoles Close @=? mempty
-    extractContractRoles
+    extractNonMerkleizedContractRoles Close @=? mempty
+    extractNonMerkleizedContractRoles
         (Pay (Role "Alice") (Party (Role "Bob")) ada (Constant 1) Close)
             @=? Set.fromList ["Alice", "Bob"]
-    extractContractRoles
+    extractNonMerkleizedContractRoles
         (When [Case (Deposit (Role "Bob") (Role "Alice") ada (Constant 10)) Close] 10 Close)
             @=? Set.fromList ["Alice", "Bob"]
-    extractContractRoles
+    extractNonMerkleizedContractRoles
         (When [Case (Choice (ChoiceId "test" (Role "Alice")) [Bound 0 1]) Close] 10 Close)
             @=? Set.fromList ["Alice"]
 

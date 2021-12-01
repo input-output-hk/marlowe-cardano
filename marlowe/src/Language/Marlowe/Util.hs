@@ -50,12 +50,13 @@ getAccountsDiff payments inputs =
 
 
 foldMapContract :: Monoid m
-    => (Contract -> m)
+    => (P.BuiltinByteString -> Maybe Contract)
+    -> (Contract -> m)
     -> (Case Contract -> m)
     -> (Observation -> m)
     -> (Value Observation -> m)
     -> Contract -> m
-foldMapContract fcont fcase fobs fvalue contract =
+foldMapContract funmerk fcont fcase fobs fvalue contract =
     fcont contract <> case contract of
         Close                -> mempty
         Pay _ _ _ value cont -> fvalue' value <> go cont
@@ -64,10 +65,10 @@ foldMapContract fcont fcase fobs fvalue contract =
         Let _ value cont     -> fvalue value <> go cont
         Assert obs cont      -> fobs' obs <> go cont
   where
-    go = foldMapContract fcont fcase fobs fvalue
+    go = foldMapContract funmerk fcont fcase fobs fvalue
     fcase' cs = fcase cs <> case cs of
-        Case _ cont        -> go cont
-        MerkleizedCase _ _ -> mempty
+        Case _ cont            -> go cont
+        MerkleizedCase _ chash -> maybe mempty go (funmerk chash)
     fobs' obs = fobs obs <> case obs of
         AndObs a b  -> fobs' a <> fobs' b
         OrObs  a b  -> fobs' a <> fobs' b
@@ -88,12 +89,17 @@ foldMapContract fcont fcase fobs fvalue contract =
         _            -> mempty
 
 
-foldMapContractValue :: Monoid m => (Value Observation -> m) -> Contract -> m
-foldMapContractValue = foldMapContract (const mempty) (const mempty) (const mempty)
+foldMapNonMerkleizedContract :: Monoid m
+    => (Contract -> m)
+    -> (Case Contract -> m)
+    -> (Observation -> m)
+    -> (Value Observation -> m)
+    -> Contract -> m
+foldMapNonMerkleizedContract = foldMapContract (const Nothing)
 
 
-extractContractRoles :: Contract -> Set Val.TokenName
-extractContractRoles = foldMapContract extract extractCase (const mempty) (const mempty)
+extractNonMerkleizedContractRoles :: Contract -> Set Val.TokenName
+extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extractCase (const mempty) (const mempty)
   where
     extract (Pay from payee _ _ _) = fromParty from <> fromPayee payee
     extract _                      = mempty
