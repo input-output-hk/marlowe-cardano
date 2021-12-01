@@ -13,12 +13,17 @@ import           GHC.Generics     (Generic)
 
 
 data RestorePostData =
-    RestorePostData { getMnemonicPhrase :: [Text], getPassphrase :: Text }
+    RestorePostData
+        { getMnemonicPhrase :: [Text]
+        , getPassphrase     :: Text
+        , getWalletName     :: Text
+        }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
 data RestoreError =
     InvalidMnemonic
+    | CantFetchPubKeyHash
     | UnknownRestoreError
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON)

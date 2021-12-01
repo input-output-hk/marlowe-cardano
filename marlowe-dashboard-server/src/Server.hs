@@ -12,13 +12,17 @@
 module Server where
 
 import           API                                        (API)
-import           Cardano.Mnemonic                           (mkSomeMnemonic)
+import           Cardano.Mnemonic                           (MkSomeMnemonicError, mkSomeMnemonic)
+import qualified Cardano.Wallet.Api.Client                  as WBE.Api
+import           Cardano.Wallet.Api.Types                   (ApiVerificationKeyShelley (..))
+import qualified Cardano.Wallet.Api.Types                   as WBE
 
-import qualified Cardano.Wallet.Api.Client                  as Wallet.Api
-import qualified Cardano.Wallet.Api.Types                   as Wallet.Types
-import qualified Cardano.Wallet.Primitive.Types             as Wallet.Types
+import           Cardano.Wallet.Api                         (WalletKeys)
+import           Cardano.Wallet.Mock.Types                  (WalletInfo (..))
+import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
+import qualified Cardano.Wallet.Primitive.Types             as WBE
 
-import           Control.Monad.Except                       (ExceptT)
+import           Control.Monad.Except                       (ExceptT (ExceptT), runExceptT, withExceptT)
 import           Control.Monad.IO.Class                     (MonadIO, liftIO)
 import           Control.Monad.Logger                       (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
 import           Control.Monad.Reader                       (ReaderT, runReaderT)
@@ -36,18 +40,21 @@ import qualified Data.Text                                  as Text
 import           Data.Text.Class                            (FromText (..))
 import qualified Data.Text.Encoding                         as Text
 import           GHC.Generics                               (Generic)
+import           Ledger                                     (PubKeyHash (..))
 import           Network.HTTP.Client                        (defaultManagerSettings, newManager)
 import           Network.Wai.Middleware.Cors                (cors, corsRequestHeaders, simpleCorsResourcePolicy)
+import           PlutusTx.Builtins.Internal                 (BuiltinByteString (..))
 import           Servant                                    (Application, Handler (Handler), Server, ServerError,
                                                              errBody, hoistServer, serve, serveDirectoryFileServer,
                                                              (:<|>) ((:<|>)), (:>))
 import           Servant.Client                             (BaseUrl (BaseUrl, baseUrlHost, baseUrlPath, baseUrlPort, baseUrlScheme),
                                                              ClientEnv (manager), ClientError (FailureResponse),
-                                                             ClientM, ResponseF (responseBody), Scheme (Http),
+                                                             ClientM, ResponseF (responseBody), Scheme (Http), client,
                                                              mkClientEnv, runClientM)
 import           Text.Regex                                 (Regex)
 import qualified Text.Regex                                 as Regex
 import           Types                                      (RestoreError (..), RestorePostData (..))
+import qualified Wallet.Emulator.Wallet                     as Pab.Wallet
 import qualified WebSocket                                  as WS
 
 handlers :: FilePath -> Server API
@@ -71,55 +78,88 @@ callWBE client = do
         clientEnv = mkClientEnv manager baseUrl
     runClientM client clientEnv
 
-
-
-restoreWallet :: MonadIO m => RestorePostData -> m (Either RestoreError Text)
-restoreWallet d =
+restoreWallet :: MonadIO m => RestorePostData -> m (Either RestoreError WalletInfo)
+restoreWallet postData = runExceptT $ do
     let
-        phrase = getMnemonicPhrase d
-        passphrase = Text.unpack $ getPassphrase d
-        mMnemonic = Wallet.Types.ApiMnemonicT <$> mkSomeMnemonic @'[15, 18, 21, 24] phrase
-    in
-      case mMnemonic of
-        Left _ -> pure $ Left InvalidMnemonic
-        Right mnemonic -> do
-            liftIO $ putStrLn "Hello?"
+        phrase = getMnemonicPhrase postData
+
+    -- Try to decode the passphrase into a mnemonic or fail with InvalidMnemonic
+    mnemonic <- withExceptT (const InvalidMnemonic)
+        ( ExceptT $
+            pure (WBE.ApiMnemonicT <$> mkSomeMnemonic @'[15, 18, 21, 24] phrase)
+        )
+    -- Call the WBE trying to restore the wallet, and take error 409 Conflict as a success
+    walletId <- ExceptT $ createOrRestoreWallet postData mnemonic
+    pubKeyHash <- withExceptT (const CantFetchPubKeyHash) $
+        ExceptT $ liftIO $ getPubKeyHashFromWallet walletId
+    pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPubKeyHash = pubKeyHash }
+
+
+
+getPubKeyHashFromWallet ::
+    MonadIO m =>
+    WBE.WalletId ->
+    m (Either ClientError PubKeyHash)
+getPubKeyHashFromWallet walletId = let
+    -- This endpoint is not exposed directly by the WBE, I took this helper from the plutus-pab code.
+    getWalletKey :: WBE.ApiT WBE.WalletId -> WBE.ApiT WBE.Role -> WBE.ApiT WBE.DerivationIndex -> Maybe Bool -> ClientM WBE.ApiVerificationKeyShelley
+    getWalletKey :<|> _ :<|> _ :<|> _ = client (Proxy @("v2" :> WalletKeys))
+
+    makeRequest = liftIO $ callWBE $
+       getWalletKey
+        (WBE.ApiT walletId)
+        -- Role: External, to receive funds
+        (WBE.ApiT WBE.UtxoExternal)
+        -- DerivationIndex: first address
+        (WBE.ApiT (WBE.DerivationIndex 0))
+        -- Return hashed version
+        (Just True)
+
+    transformResponse = (fmap . fmap) (PubKeyHash . BuiltinByteString . fst . getApiVerificationKey)
+  in
+    transformResponse makeRequest
+
+createOrRestoreWallet ::
+    MonadIO m =>
+    RestorePostData ->
+    WBE.ApiMnemonicT '[15, 18, 21, 24] ->
+    m (Either RestoreError WBE.WalletId)
+createOrRestoreWallet postData mnemonic = do
+    let
+        passphrase = Text.unpack $ getPassphrase postData
+        walletName = getWalletName postData
+
+        walletPostData = WBE.WalletOrAccountPostData $ Left $ WBE.WalletPostData
+            Nothing
+            mnemonic
+            Nothing
+            (WBE.ApiT $ WBE.WalletName walletName)
+            (WBE.ApiT $ Passphrase $ fromString passphrase )
+
+    result <- liftIO $ callWBE $ WBE.Api.postWallet WBE.Api.walletClient walletPostData
+    case result of
+        Left (FailureResponse _ r) -> do
             let
-                walletPostData = Wallet.Types.WalletOrAccountPostData $ Left $ Wallet.Types.WalletPostData
-                    Nothing
-                    mnemonic
-                    Nothing
-                    -- FIXME: get this from parameter
-                    (Wallet.Types.ApiT $ Wallet.Types.WalletName "plutus-wallet")
-                    (Wallet.Types.ApiT $ Passphrase $ fromString passphrase )
-            result <- liftIO $ callWBE $ Wallet.Api.postWallet Wallet.Api.walletClient walletPostData
-            liftIO $ putStrLn "Called client: "
+                matchDuplicateWallet :: Regex
+                matchDuplicateWallet = Regex.mkRegex "wallet with the following id: ([a-z0-9]{40})"
 
-            -- liftIO $ putStrLn $ show $ toJSON <$> result
-            case result of
-                Left (FailureResponse _ r) -> do
-                    let
-                        matchDuplicateWallet :: Regex
-                        matchDuplicateWallet = Regex.mkRegex "wallet with the following id: ([a-z0-9]{40})"
-
-                        mWalletIdFromErr :: Maybe Wallet.Types.WalletId
-                        mWalletIdFromErr = do
-                            msg <- decodeError $ responseBody r
-                            matches <- Regex.matchRegex matchDuplicateWallet msg
-                            walletIdStr <- safeHead matches
-                            hush $ fromText $ Text.pack walletIdStr
-
-                    case mWalletIdFromErr of
-                        Just walletId -> pure $ Right $ Text.pack $ show walletId
-                        Nothing       -> pure $ Left UnknownRestoreError
-                    -- pure $ Left InvalidMnemonic
-                Left err -> do
-                    liftIO $ putStrLn "restoreWallet failed"
-                    liftIO $ putStrLn $ "Error: " <> show err
-                    pure $ Left UnknownRestoreError
-                Right (Wallet.Types.ApiWallet (Wallet.Types.ApiT walletId) _ _ _ _ _ _ _ _) -> do
-                    liftIO $ putStrLn $ "Restored wallet: " <> show walletId
-                    pure $ Right $ Text.pack $ show walletId
+                mWalletIdFromErr :: Maybe WBE.WalletId
+                mWalletIdFromErr = do
+                    msg <- decodeError $ responseBody r
+                    matches <- Regex.matchRegex matchDuplicateWallet msg
+                    walletIdStr <- safeHead matches
+                    hush $ fromText $ Text.pack walletIdStr
+            case mWalletIdFromErr of
+                Just walletId -> pure $ Right walletId
+                Nothing       -> pure $ Left UnknownRestoreError
+        Left err -> do
+            -- FIXME: How do we want to handle logging
+            liftIO $ putStrLn "restoreWallet failed"
+            liftIO $ putStrLn $ "Error: " <> show err
+            pure $ Left UnknownRestoreError
+        Right (WBE.ApiWallet (WBE.ApiT walletId) _ _ _ _ _ _ _ _) -> do
+            liftIO $ putStrLn $ "Restored wallet: " <> show walletId
+            pure $ Right walletId
 
 -- NOTE: This was copied from Cardano-wallet/Cardano.Cli and changed return type from Text to String
 decodeError
