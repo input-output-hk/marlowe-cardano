@@ -428,7 +428,7 @@ data ApplyAction = AppliedAction ApplyWarning State
                  | NotAppliedAction
   deriving stock (Haskell.Show)
 
--- | Try to apply a single input contentent to a single action
+-- | Try to apply a single input content to a single action
 applyAction :: Environment -> State -> InputContent -> Action -> ApplyAction
 applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
     if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
