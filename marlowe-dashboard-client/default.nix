@@ -4,6 +4,8 @@ let
 
   pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
 
+  marlowe-run-backend-invoker = haskell.packages.marlowe-dashboard-server.components.exes.marlowe-dashboard-server;
+
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
     mkdir $out
     ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
@@ -16,6 +18,7 @@ let
     rm -rf $generatedDir
     $(nix-build ../default.nix -A marlowe-dashboard.pab-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
     $(nix-build ../default.nix -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server psgenerator $generatedDir
   '';
 
   start-backend = pkgs.writeShellScriptBin "marlowe-pab-server" ''
@@ -51,5 +54,5 @@ let
     });
 in
 {
-  inherit client marlowe-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker marlowe-run-backend-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
 }
