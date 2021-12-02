@@ -46,5 +46,5 @@ restoreWallet { walletName, mnemonicPhrase } = do
     $ runExceptT
     $ doPostRequestWith
         { encode: encodeJson, decode: D.decode (D.either D.value D.value) }
-        "/fixme/api/wallet/restore"
+        "/api/wallet/restore"
         body

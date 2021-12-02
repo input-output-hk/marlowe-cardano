@@ -18,25 +18,25 @@ module.exports = {
         https: true,
         stats: "errors-warnings",
         proxy: {
-            "/api": {
+            "/pab/api": {
                 target: "http://localhost:9080",
+                pathRewrite: { '^/pab': '/' },
             },
-            // FIXME: remove
-            "/wallet": {
+            "/pab/wallet": {
                 target: "http://localhost:9080",
+                pathRewrite: { '^/pab': '/' },
             },
-            // FIXME: Ask Shea how we should handle PAB+Run app. I think we might want to add prefix pab to ws and api
-            "/fixme": {
-                target: "http://localhost:8080",
-                pathRewrite: { '^/fixme': '/' },
-            },
-            "/ws": {
+            "/pab/ws": {
                 target: "ws://localhost:9080",
                 ws: true,
+                pathRewrite: { '^/pab': '/' },
                 onError (err) {
                   console.log("Error with the WebSocket:", err);
                 },
             },
+            "/api": {
+                target: "http://localhost:8080",
+            }
         },
     },
     entry: "./entry.js",

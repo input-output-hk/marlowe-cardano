@@ -21,6 +21,5 @@ $ cabal run marlowe-dashboard-server -- webserver
 $ ghcid --command "cabal new-repl lib:marlowe-dashboard-server"
 ```
 
-This project can be built with nix for  uses cabal
 
 
