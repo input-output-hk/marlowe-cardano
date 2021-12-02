@@ -23,7 +23,6 @@ type API = WebSocketAPI
 type HTTPAPI = "api" :>
     ("version" :> Get '[PlainText, JSON] Text
     :<|> "wallet" :>
-        -- FIXME: WalletId does not implement toJSON
         ("restore" :> ReqBody '[ JSON] RestorePostData :> Post '[JSON] (Either RestoreError WalletInfo)
         )
     )
