@@ -12,7 +12,7 @@ In order to develop this application is recommended to be inside a `nix-shell` (
 
 ```bash
 # To do a build
-$ cabal build marlowe-dashboard-server
+$ cabal build exe:marlowe-dashboard-server
 
 # To build and run
 $ cabal run marlowe-dashboard-server -- webserver -c ./config.json
