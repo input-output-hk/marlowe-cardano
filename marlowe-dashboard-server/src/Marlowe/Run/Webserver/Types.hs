@@ -6,8 +6,7 @@
 
 module Marlowe.Run.Webserver.Types where
 
-import qualified Data.Aeson       as Aeson
-import           Data.Aeson.Types (FromJSON, ToJSON, genericToJSON)
+import           Data.Aeson.Types (FromJSON, ToJSON)
 import           Data.Text        (Text)
 import           GHC.Generics     (Generic)
 import           Servant.Client   (ClientEnv)

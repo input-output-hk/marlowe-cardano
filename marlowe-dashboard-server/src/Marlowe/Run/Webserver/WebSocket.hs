@@ -15,7 +15,6 @@ import           Data.UUID.V4                  (nextRandom)
 import           GHC.Generics                  (Generic)
 import qualified Network.WebSockets            as WS
 import           Network.WebSockets.Connection (Connection, PendingConnection, receiveData, withPingThread)
-import           Servant                       (Handler)
 
 handle :: MonadIO m => PendingConnection -> m ()
 handle pending = liftIO $ do

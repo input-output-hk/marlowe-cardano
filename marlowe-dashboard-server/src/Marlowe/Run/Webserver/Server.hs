@@ -15,7 +15,7 @@ module Marlowe.Run.Webserver.Server
  )
  where
 
-import           Cardano.Mnemonic                           (MkSomeMnemonicError, mkSomeMnemonic)
+import           Cardano.Mnemonic                           (mkSomeMnemonic)
 import qualified Cardano.Wallet.Api.Client                  as WBE.Api
 import           Cardano.Wallet.Api.Types                   (ApiVerificationKeyShelley (..))
 import qualified Cardano.Wallet.Api.Types                   as WBE
@@ -28,36 +28,26 @@ import qualified Cardano.Wallet.Primitive.Types             as WBE
 
 import           Control.Monad.Except                       (ExceptT (ExceptT), runExceptT, withExceptT)
 import           Control.Monad.IO.Class                     (MonadIO, liftIO)
-import           Control.Monad.Logger                       (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
-import           Control.Monad.Reader                       (MonadReader (ask), ReaderT, runReaderT)
-import           Data.Aeson                                 (FromJSON, ToJSON, eitherDecode, encode)
+import           Control.Monad.Reader                       (ReaderT, runReaderT)
 import           Data.Aeson                                 as Aeson
 import qualified Data.Aeson.Types                           as Aeson
 
 import           Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import           Control.Monad.Reader.Class
 import qualified Data.ByteString.Lazy                       as BL
-import           Data.Maybe                                 (fromMaybe)
 import           Data.Proxy                                 (Proxy (Proxy))
 import           Data.String                                as S
 import           Data.Text                                  (Text)
 import qualified Data.Text                                  as Text
 import           Data.Text.Class                            (FromText (..))
-import qualified Data.Text.Encoding                         as Text
-import           GHC.Generics                               (Generic)
 import           Ledger                                     (PubKeyHash (..))
 import           Marlowe.Run.Webserver.Types                (Env, RestoreError (..), RestorePostData (..))
 import qualified Marlowe.Run.Webserver.WebSocket            as WS
-import           Network.HTTP.Client                        (defaultManagerSettings, newManager)
-import           Network.Wai.Middleware.Cors                (cors, corsRequestHeaders, simpleCorsResourcePolicy)
 import           PlutusTx.Builtins.Internal                 (BuiltinByteString (..))
-import           Servant                                    (Application, Handler (Handler), Server, ServerError,
-                                                             errBody, hoistServer, serve, serveDirectoryFileServer,
-                                                             (:<|>) ((:<|>)), (:>))
-import           Servant.Client                             (BaseUrl (BaseUrl, baseUrlHost, baseUrlPath, baseUrlPort, baseUrlScheme),
-                                                             ClientEnv (manager), ClientError (FailureResponse),
-                                                             ClientM, ResponseF (responseBody), Scheme (Http), client,
-                                                             mkClientEnv, runClientM)
+import           Servant                                    (Handler (Handler), Server, ServerError, hoistServer,
+                                                             serveDirectoryFileServer, (:<|>) ((:<|>)), (:>))
+import           Servant.Client                             (ClientError (FailureResponse), ClientM,
+                                                             ResponseF (responseBody), client, runClientM)
 import           Text.Regex                                 (Regex)
 import qualified Text.Regex                                 as Regex
 import qualified Wallet.Emulator.Wallet                     as Pab.Wallet
