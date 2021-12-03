@@ -57,27 +57,16 @@ stateTransition ev rf t st@ContractStatePoly {..} = reader stateTransition'
         stf
           IED
           ContractTermsPoly
-            { contractType = LAM,
-              dayCountConvention = Just dcc,
-              cycleAnchorDateOfInterestPayment = Just ipanx,
-              maturityDate = md
-            } = _STF_IED_LAM contractTerms st t (_y dcc ipanx t md)
+            { contractType = SWPPV
+            } = _STF_IED_SWPPV contractTerms st t
         stf
           IED
           ContractTermsPoly
-            { contractType = NAM,
+            { contractType,
               dayCountConvention = Just dcc,
               cycleAnchorDateOfInterestPayment = Just ipanx,
               maturityDate = md
-            } = _STF_IED_LAM contractTerms st t (_y dcc ipanx t md)
-        stf
-          IED
-          ContractTermsPoly
-            { contractType = ANN,
-              dayCountConvention = Just dcc,
-              cycleAnchorDateOfInterestPayment = Just ipanx,
-              maturityDate = md
-            } = _STF_IED_LAM contractTerms st t (_y dcc ipanx t md)
+            } | contractType `elem` [LAM, NAM, ANN] = _STF_IED_LAM contractTerms st t (_y dcc ipanx t md)
         stf
           PR
           ContractTermsPoly
@@ -216,9 +205,26 @@ stateTransition ev rf t st@ContractStatePoly {..} = reader stateTransition'
         stf
           IP
           ContractTermsPoly
+            { contractType = SWPPV
+            } = st { ipac = _zero, sd = t }
+        stf
+          IP
+          ContractTermsPoly
             { dayCountConvention = Just dcc,
               maturityDate = md
             } = _STF_IP_PAM contractTerms st t (_y dcc sd t md)
+        stf
+          IPFX
+          ContractTermsPoly
+            { contractType = SWPPV,
+              dayCountConvention = Just dcc,
+              maturityDate
+            } = st { ipla = Just (_y dcc sd t maturityDate), ipac1 = Just _zero, sd = t }
+        stf
+          IPFL
+          ContractTermsPoly
+            { contractType = SWPPV
+            } = st { ipac2 = Just _zero, sd = t}
         stf
           IPCI
           ContractTermsPoly
@@ -296,6 +302,13 @@ stateTransition ev rf t st@ContractStatePoly {..} = reader stateTransition'
               dayCountConvention = Just dcc,
               maturityDate = md
             } = _STF_RR_ANN contractTerms st rf t (_y dcc sd t md) (_y dcc tfp_minus t md) (_y dcc tfp_minus tfp_plus md) (zipWith (\tn tm -> _y dcc tn tm md) prDatesAfterSd (tail prDatesAfterSd))
+        stf
+          RR
+          ContractTermsPoly
+            { contractType = SWPPV,
+              dayCountConvention = Just dcc,
+              maturityDate = md
+            } = _STF_RR_SWPPV contractTerms st rf t (_y dcc sd t md)
         stf
           RRF
           ContractTermsPoly
@@ -1057,6 +1070,48 @@ _STF_XD_FUTUR
     { xa = Just $ xd_payoff - pfut,
       sd = t
     }
-_STF_XD_FUTUR _ _ _ _ = undefined
+_STF_XD_FUTUR _ st _ _ = st
 
+-- SWPPV
+
+_STF_IED_SWPPV :: (RoleSignOps a) => ContractTermsPoly a -> ContractStatePoly a -> LocalTime -> ContractStatePoly a
+_STF_IED_SWPPV
+  ContractTermsPoly
+    { notionalPrincipal = Just nt,
+      nominalInterestRate2 = Just ipnr2,
+      contractRole
+    }
+  st
+  t =
+    st
+      { nt = _r contractRole * nt,
+        ipnr = ipnr2,
+        ipac = _zero,
+        ipac1 = Just _zero,
+        ipac2 = Just _zero,
+        sd = t
+      }
+_STF_IED_SWPPV _ st _ = st
+
+_STF_RR_SWPPV :: RoleSignOps a => ContractTermsPoly a -> ContractStatePoly a -> RiskFactorsPoly a -> LocalTime -> a -> ContractStatePoly a
+_STF_RR_SWPPV
+  ContractTermsPoly
+    { rateMultiplier = Just rrmlt,
+      rateSpread = Just rrsp,
+      nominalInterestRate = Just ipnr'
+    }
+  st@ContractStatePoly
+    { nt,
+      ipnr
+    }
+  RiskFactorsPoly {..}
+  t
+  y_sd_t = st
+          { ipac = y_sd_t * nt * (ipnr' - ipnr),
+            ipac1 = Just $ y_sd_t * nt * ipnr',
+            ipac2 = Just $ y_sd_t * nt * ipnr,
+            ipnr = rrmlt * o_rf_RRMO + rrsp,
+            sd = t
+          }
+_STF_RR_SWPPV _ st _ _ _ = st
 

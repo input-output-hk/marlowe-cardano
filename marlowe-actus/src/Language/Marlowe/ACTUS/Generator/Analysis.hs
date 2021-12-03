@@ -67,7 +67,7 @@ genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
         filter filtersSchedules . postProcessSchedule . sortOn (paymentDay . snd) $
           concatMap scheduleEvent eventTypes
         where
-          eventTypes = [IED, MD, RR, RRF, IP, PR, PRF, IPCB, IPCI, PRD, TD, SC, DV, XD, STD]
+          eventTypes = [IED, MD, IP, IPFX, IPFL, RR, RRF, PR, PRF, IPCB, IPCI, PRD, TD, SC, DV, XD, STD]
           scheduleEvent ev = (ev,) <$> schedule ev ct
 
       -- states
@@ -117,6 +117,7 @@ genProjectedPayoffs getRiskFactors ct@ContractTermsPoly {..} =
           let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
               b2 = let m = maturityDate <|> amortizationDate <|> mat in isNothing m || Just calculationDay <= m
            in b1 && b2
+        SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
         _ -> True
 
     postProcessSchedule :: [(EventType, ShiftedDay)] -> [(EventType, ShiftedDay)]

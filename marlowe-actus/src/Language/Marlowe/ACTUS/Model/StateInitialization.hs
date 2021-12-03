@@ -44,6 +44,9 @@ initializeState = reader initializeState'
           nt = notionalPrincipal contractTerms,
           ipnr = nominalInterestRate contractTerms,
           ipac = interestAccrued contractTerms,
+          ipac1 = interestAccrued1 contractTerms,
+          ipac2 = interestAccrued2 contractTerms,
+          ipla = Nothing,
           feac = feeAccrued contractTerms,
           nsc = notionalScaling contractTerms,
           isc = interestScaling contractTerms,
@@ -102,11 +105,26 @@ initializeState = reader initializeState'
             } | ied > t0 = _zero
         nominalInterestRate
           ContractTermsPoly
+            { contractType = SWPPV
+            , nominalInterestRate2 = Just ipnr2
+            } =
+            ipnr2
+        nominalInterestRate
+          ContractTermsPoly
             { nominalInterestRate = Just ipnr
             } =
             ipnr
         nominalInterestRate _ = _zero
 
+        interestAccrued
+          ContractTermsPoly
+            { contractType = SWPPV
+            , dayCountConvention = Just dcc
+            , nominalInterestRate = Just ipnr'
+            } =
+            let nt = notionalPrincipal contractTerms
+                ipnr = nominalInterestRate contractTerms
+             in _y dcc tMinusIP t0 maturity * nt * (ipnr' - ipnr)
         interestAccrued
           ContractTermsPoly
             { nominalInterestRate = Nothing
@@ -123,6 +141,26 @@ initializeState = reader initializeState'
                 ipnr = nominalInterestRate contractTerms
              in _y dcc tMinusIP t0 maturity * nt * ipnr
         interestAccrued _ = _zero
+
+        interestAccrued1
+          ContractTermsPoly
+            { contractType = SWPPV
+            , dayCountConvention = Just dcc
+            , nominalInterestRate = Just ipnr'
+            } =
+            let nt = notionalPrincipal contractTerms
+             in Just $ _y dcc tMinusIP t0 maturity * nt * ipnr'
+        interestAccrued1 _ = Nothing
+
+        interestAccrued2
+          ContractTermsPoly
+            { contractType = SWPPV
+            , dayCountConvention = Just dcc
+            } =
+            let nt = notionalPrincipal contractTerms
+                ipnr = nominalInterestRate contractTerms
+             in Just $ _y dcc tMinusIP t0 maturity * nt * ipnr
+        interestAccrued2 _ = Nothing
 
         nextPrincipalRedemptionPayment ContractTermsPoly {contractType = PAM} = _zero
         nextPrincipalRedemptionPayment ContractTermsPoly {nextPrincipalRedemptionPayment = Just prnxt} = prnxt

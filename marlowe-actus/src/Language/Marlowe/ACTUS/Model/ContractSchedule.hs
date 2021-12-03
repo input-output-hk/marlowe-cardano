@@ -24,7 +24,7 @@ import           Data.Time                                        (LocalTime)
 import           Data.Time.Calendar                               (addDays)
 import           Data.Time.LocalTime                              (LocalTime (..), addLocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..),
+import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..), DS (..),
                                                                    IPCB (..), PPEF (..), PYTP (..), SCEF (..),
                                                                    ScheduleConfig (..))
 import           Language.Marlowe.ACTUS.Domain.Ops                as O (ActusNum (..), ActusOps (..),
@@ -113,6 +113,15 @@ schedule ev c = schedule' ev c { maturityDate = maturity c }
     schedule' MD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
     schedule' XD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_XD_OPTNS ct { maturityDate = maturityDate c <|> maturityDate ct }
     schedule' STD  ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_STD_OPTNS c { maturityDate = maturityDate c <|> maturityDate ct }
+
+    schedule' PRD  ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_PRD_PAM ct
+    schedule' TD   ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_TD_PAM ct
+    schedule' IED  ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_IED_PAM ct
+    schedule' RR   ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_RR_SWPPV c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' IP   ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_IP_SWPPV c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' IPFX ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_IPFX_SWPPV c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' IPFL ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_IPFL_SWPPV c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' MD   ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
 
     schedule' _ _                                               = []
 
@@ -603,4 +612,109 @@ _SCHED_STD_OPTNS
     } = [applyBDCWithCfg scheduleConfig xd]
 _SCHED_STD_OPTNS _ = []
 
+_SCHED_IP_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_IP_SWPPV
+  ContractTermsPoly
+    { deliverySettlement = Just DS_D
+    } = []
+_SCHED_IP_SWPPV
+  ContractTermsPoly
+    { cycleOfInterestPayment = Nothing,
+      maturityDate = Just md,
+      scheduleConfig
+    } = [applyBDCWithCfg scheduleConfig md]
+_SCHED_IP_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Just ipanx,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IP_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Nothing,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IP_SWPPV _ = []
 
+_SCHED_IPFX_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_IPFX_SWPPV
+  ContractTermsPoly
+    { deliverySettlement = Just DS_S
+    } = []
+_SCHED_IPFX_SWPPV
+  ContractTermsPoly
+    { cycleOfInterestPayment = Nothing,
+      maturityDate = Just md,
+      scheduleConfig
+    } = [applyBDCWithCfg scheduleConfig md]
+_SCHED_IPFX_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Just ipanx,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IPFX_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Nothing,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IPFX_SWPPV _ = []
+
+_SCHED_IPFL_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_IPFL_SWPPV
+  ContractTermsPoly
+    { deliverySettlement = Just DS_S
+    } = []
+_SCHED_IPFL_SWPPV
+  ContractTermsPoly
+    { cycleOfInterestPayment = Nothing,
+      maturityDate = Just md,
+      scheduleConfig
+    } = [applyBDCWithCfg scheduleConfig md]
+_SCHED_IPFL_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Just ipanx,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IPFL_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Nothing,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IPFL_SWPPV _ = []
+
+_SCHED_RR_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_RR_SWPPV
+  ContractTermsPoly
+    { cycleAnchorDateOfRateReset = Just rranx,
+      cycleOfRateReset = Just rrcl,
+      maturityDate = Just md,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections rranx rrcl {includeEndDay = False} md scheduleConfig
+_SCHED_RR_SWPPV
+  ContractTermsPoly
+    { cycleOfRateReset = Just rrcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      scheduleConfig
+    } = generateRecurrentScheduleWithCorrections (ied <+> rrcl) rrcl {includeEndDay = False} md scheduleConfig
+_SCHED_RR_SWPPV
+  ContractTermsPoly
+    { cycleOfRateReset = Nothing,
+      cycleAnchorDateOfRateReset = Just rranx,
+      scheduleConfig
+    } = [applyBDCWithCfg scheduleConfig rranx]
+_SCHED_RR_SWPPV _ = []

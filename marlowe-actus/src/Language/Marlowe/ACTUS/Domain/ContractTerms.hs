@@ -394,6 +394,7 @@ data ContractTermsPoly a = ContractTermsPoly
   , interestCalculationBase                  :: Maybe IPCB       -- ^ Interest Calculation Base
   , interestCalculationBaseA                 :: Maybe a          -- ^ Interest Calculation Base Amount
   , nominalInterestRate                      :: Maybe a          -- ^ Nominal Interest Rate
+  , nominalInterestRate2                     :: Maybe a          -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
   , interestScalingMultiplier                :: Maybe a          -- ^ Interest Scaling Multiplier
 
   -- Dates
@@ -495,6 +496,7 @@ instance FromJSON ContractTerms where
       <*> v .:? "interestCalculationBase"
       <*> v .!? "interestCalculationBaseAmount"
       <*> v .!? "nominalInterestRate"
+      <*> v .!? "nominalInterestRate2"
       <*> v .!? "interestScalingMultiplier"
       <*> v .:? "maturityDate"
       <*> v .:? "amortizationDate"

@@ -24,6 +24,14 @@ payoff :: (RoleSignOps a, YearFractionOps a) =>
 -- IED
 payoff
   IED
+  _
+  ContractTermsPoly
+    { contractType = SWPPV
+    }
+  _
+  _ = _zero
+payoff
+  IED
   RiskFactorsPoly
     { o_rf_CURS
     }
@@ -87,12 +95,28 @@ payoff
         ra = prnxt - _r contractRole * (ipac + y_sd_t * ipnr * ipcb)
         r = ra - _max _zero (ra - _abs nt)
      in o_rf_CURS * _r contractRole * nsc * r
+payoff
+  PR
+  _
+  ContractTermsPoly
+    { contractType = SWPPV
+    }
+  _
+  _ = _zero
 -- MD
 payoff
   MD
   _
   ContractTermsPoly
     { contractType = OPTNS
+    }
+  _
+  _ = _zero
+payoff
+  MD
+  _
+  ContractTermsPoly
+    { contractType = SWPPV
     }
   _
   _ = _zero
@@ -223,7 +247,7 @@ payoff
       contractRole
     }
   _
-  _ | contractType `elem` [STK, OPTNS, FUTUR] = _negate $ _r contractRole * pprd
+  _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV] = _negate $ _r contractRole * pprd
 -- TD
 payoff
   TD
@@ -256,6 +280,17 @@ payoff
     }
   _
   _ = _r contractRole * ptd
+payoff
+  TD
+  RiskFactorsPoly
+    { o_rf_CURS
+    }
+  ContractTermsPoly
+    { contractType = SWPPV,
+      priceAtTerminationDate = Just ptd
+    }
+  _
+  _ = o_rf_CURS * ptd
 payoff
   TD
   RiskFactorsPoly
@@ -303,6 +338,26 @@ payoff
     { o_rf_CURS
     }
   ContractTermsPoly
+    { contractType = SWPPV,
+      dayCountConvention = Just dcc,
+      nominalInterestRate = Just ipnr',
+      maturityDate
+    }
+  ContractStatePoly
+    { nt,
+      ipac,
+      ipnr,
+      sd
+    }
+  t =
+    let y_sd_t = _y dcc sd t maturityDate
+     in o_rf_CURS * (ipac + y_sd_t * (ipnr' - ipnr) * nt)
+payoff
+  IP
+  RiskFactorsPoly
+    { o_rf_CURS
+    }
+  ContractTermsPoly
     { dayCountConvention = Just dcc,
       maturityDate
     }
@@ -316,6 +371,41 @@ payoff
   t =
     let y_sd_t = _y dcc sd t maturityDate
      in o_rf_CURS * isc * (ipac + y_sd_t * ipnr * ipcb)
+-- IPFX
+payoff
+  IPFX
+  RiskFactorsPoly
+    { o_rf_CURS
+    }
+  ContractTermsPoly
+    { contractType = SWPPV,
+      dayCountConvention = Just dcc,
+      nominalInterestRate = Just ipnr',
+      maturityDate
+    }
+  ContractStatePoly
+    { nt,
+      ipac1 = Just ipac1',
+      sd
+    }
+  t = let y_sd_t = _y dcc sd t maturityDate
+       in o_rf_CURS * (ipac1' + y_sd_t * ipnr' * nt)
+-- IPFL
+payoff
+  IPFL
+  RiskFactorsPoly
+    { o_rf_CURS
+    }
+  ContractTermsPoly
+    { contractType = SWPPV
+    }
+  ContractStatePoly
+    { nt,
+      ipnr,
+      ipac2 = Just ipac2',
+      ipla = Just lastInterestPeriod
+    }
+  _ = o_rf_CURS * (ipac2' - lastInterestPeriod * ipnr * nt)
 -- DV
 payoff
   DV
@@ -343,4 +433,13 @@ payoff
     { xa = Just exerciseAmount
     }
   _ | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * _r contractRole * exerciseAmount
+-- RR
+payoff
+  RR
+  _
+  ContractTermsPoly
+    { contractType = SWPPV
+    }
+  _
+  _ = _zero
 payoff _ _ _ _ _ = _zero

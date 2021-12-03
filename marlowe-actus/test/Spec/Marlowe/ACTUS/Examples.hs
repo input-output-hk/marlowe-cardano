@@ -17,7 +17,6 @@ import           Language.Marlowe.ACTUS.Domain.Ops
 import           Language.Marlowe.ACTUS.Generator.GeneratorFs
 import           Language.Marlowe.ACTUS.Generator.GeneratorStatic
 import           Language.Marlowe.ACTUS.Generator.MarloweCompat   (constnt)
-import           Language.Marlowe.Pretty
 import qualified Ledger.Value                                     as Val
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -378,6 +377,7 @@ toMarlowe ct =
       interestCalculationBase = interestCalculationBase ct,
       interestCalculationBaseA = constnt <$> interestCalculationBaseA ct,
       nominalInterestRate = constnt <$> nominalInterestRate ct,
+      nominalInterestRate2 = constnt <$> nominalInterestRate2 ct,
       interestScalingMultiplier = constnt <$> interestScalingMultiplier ct,
       notionalPrincipal = constnt <$> notionalPrincipal ct,
       premiumDiscountAtIED = constnt <$> premiumDiscountAtIED ct,

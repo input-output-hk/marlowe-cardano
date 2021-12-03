@@ -21,6 +21,9 @@ data ContractStatePoly a = ContractStatePoly
   , nt    :: a               -- ^ Notional Principal (NT): The outstanding nominal value
   , ipnr  :: a               -- ^ Nominal Interest Rate (IPNR) : The applicable nominal rate
   , ipac  :: a               -- ^ Accrued Interest (IPAC): The current value of accrued interest
+  , ipac1 :: Maybe a         -- ^ Accrued Interest (IPAC1): The current value of accrued interest of the first leg
+  , ipac2 :: Maybe a         -- ^ Accrued Interest (IPAC2): The current value of accrued interest of the second leg
+  , ipla  :: Maybe a         -- ^ Last Interst Period
   , feac  :: a               -- ^ Fee Accrued (FEAC): The current value of accrued fees
   , nsc   :: a               -- ^ Notional Scaling Multiplier (SCNT): The multiplier being applied to principal cash flows
   , isc   :: a               -- ^ InterestScalingMultiplier (SCIP): The multiplier being applied to interest cash flows
