@@ -23,8 +23,8 @@ data RestorePostData =
 
 data RestoreError =
     InvalidMnemonic
-    | CantFetchPubKeyHash
-    | UnknownRestoreError
+    | RestoreWalletError
+    | FetchPubKeyHashError
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON)
 

@@ -96,9 +96,10 @@ restoreWallet postData = runExceptT $ do
             pure (WBE.ApiMnemonicT <$> mkSomeMnemonic @'[15, 18, 21, 24] phrase)
         )
     -- Call the WBE trying to restore the wallet, and take error 409 Conflict as a success
-    walletId <- ExceptT $ createOrRestoreWallet postData mnemonic
+    walletId <- withExceptT (const RestoreWalletError)
+        (ExceptT $ createOrRestoreWallet postData mnemonic)
     -- Get the pubKeyHash of the first wallet derivation
-    pubKeyHash <- withExceptT (const CantFetchPubKeyHash) $
+    pubKeyHash <- withExceptT (const FetchPubKeyHashError) $
         ExceptT $ getPubKeyHashFromWallet walletId
     pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPubKeyHash = pubKeyHash }
 
@@ -131,7 +132,7 @@ createOrRestoreWallet ::
     MonadReader Env m =>
     RestorePostData ->
     WBE.ApiMnemonicT '[15, 18, 21, 24] ->
-    m (Either RestoreError WBE.WalletId)
+    m (Either ClientError WBE.WalletId)
 createOrRestoreWallet postData mnemonic = do
     let
         passphrase = Text.unpack $ getPassphrase postData
@@ -146,7 +147,7 @@ createOrRestoreWallet postData mnemonic = do
 
     result <- callWBE $ WBE.Api.postWallet WBE.Api.walletClient walletPostData
     case result of
-        Left (FailureResponse _ r) -> do
+        Left err@(FailureResponse _ r) -> do
             let
                 matchDuplicateWallet :: Regex
                 matchDuplicateWallet = Regex.mkRegex "wallet with the following id: ([a-z0-9]{40})"
@@ -159,12 +160,15 @@ createOrRestoreWallet postData mnemonic = do
                     hush $ fromText $ Text.pack walletIdStr
             case mWalletIdFromErr of
                 Just walletId -> pure $ Right walletId
-                Nothing       -> pure $ Left UnknownRestoreError
+                Nothing       ->  do
+                    liftIO $ putStrLn "restoreWallet failed"
+                    liftIO $ putStrLn $ "Error: " <> show err
+                    pure $ Left err
         Left err -> do
-            -- FIXME: How do we want to handle logging
+            -- FIXME: Define a better logging mechanism
             liftIO $ putStrLn "restoreWallet failed"
             liftIO $ putStrLn $ "Error: " <> show err
-            pure $ Left UnknownRestoreError
+            pure $ Left err
         Right (WBE.ApiWallet (WBE.ApiT walletId) _ _ _ _ _ _ _ _) -> do
             liftIO $ putStrLn $ "Restored wallet: " <> show walletId
             pure $ Right walletId
