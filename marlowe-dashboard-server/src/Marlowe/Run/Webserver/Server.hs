@@ -12,11 +12,10 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Webserver.Server
- (
-    handlers
-    ,initializeServerContext
-    , WBEConfig(..)
-    , AppConfig(..)
+ ( handlers
+ , initializeServerContext
+ , WBEConfig(..)
+ , AppConfig(..)
  )
  where
 
@@ -95,12 +94,15 @@ restoreWallet postData = runExceptT $ do
         ( ExceptT $
             pure (WBE.ApiMnemonicT <$> mkSomeMnemonic @'[15, 18, 21, 24] phrase)
         )
+
     -- Call the WBE trying to restore the wallet, and take error 409 Conflict as a success
     walletId <- withExceptT (const RestoreWalletError)
         (ExceptT $ createOrRestoreWallet postData mnemonic)
+
     -- Get the pubKeyHash of the first wallet derivation
     pubKeyHash <- withExceptT (const FetchPubKeyHashError) $
         ExceptT $ getPubKeyHashFromWallet walletId
+
     pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPubKeyHash = pubKeyHash }
 
 getPubKeyHashFromWallet ::
