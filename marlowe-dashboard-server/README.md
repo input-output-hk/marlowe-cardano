@@ -15,11 +15,21 @@ In order to develop this application is recommended to be inside a `nix-shell` (
 $ cabal build marlowe-dashboard-server
 
 # To build and run
-$ cabal run marlowe-dashboard-server -- webserver
+$ cabal run marlowe-dashboard-server -- webserver -c ./config.json
 
 # To have a fast compile loop
 $ ghcid --command "cabal new-repl lib:marlowe-dashboard-server"
 ```
 
+## Configuring
+
+This application is configured via a JSON file with the following structure.
+
+```json
+{
+    "getWbeConfig": { "_wbeHost": "localhost", "_wbePort": 8090 },
+    "getStaticPath": "../marlowe-dashboard-client/static"
+}
+```
 
 

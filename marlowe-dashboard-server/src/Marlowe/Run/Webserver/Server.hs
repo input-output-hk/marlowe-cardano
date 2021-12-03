@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -12,6 +14,9 @@
 module Marlowe.Run.Webserver.Server
  (
     handlers
+    ,initializeServerContext
+    , WBEConfig(..)
+    , AppConfig(..)
  )
  where
 
@@ -36,6 +41,8 @@ import           Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphr
 import           Control.Monad.Reader.Class
 import qualified Data.ByteString.Lazy                       as BL
 import           Data.Proxy                                 (Proxy (Proxy))
+import           GHC.Generics                               (Generic)
+
 import           Data.String                                as S
 import           Data.Text                                  (Text)
 import qualified Data.Text                                  as Text
@@ -178,3 +185,18 @@ safeHead (x:_) = Just x
 
 hush :: Either a b -> Maybe b
 hush = either (const Nothing) Just
+
+data WBEConfig = WBEConfig { _wbeHost :: String, _wbePort :: Int }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON)
+
+data AppConfig = AppConfig { getWbeConfig :: WBEConfig, getStaticPath :: FilePath }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON)
+
+initializeServerContext :: FilePath -> IO AppConfig
+initializeServerContext configPath = do
+    mConfig <- decodeFileStrict configPath
+    case mConfig of
+        Just config -> pure config
+        Nothing     -> ioError $ userError "Config file has invalid format"

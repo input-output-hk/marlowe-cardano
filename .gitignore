@@ -86,6 +86,7 @@ pkgs/.stack
 marlowe-playground-server/playground.yaml
 plutus-playground-server/playground.yaml
 plutus-pab/plutus-pab.yaml
+marlowe-dashboard-server/config.json
 
 # Misc
 .history/

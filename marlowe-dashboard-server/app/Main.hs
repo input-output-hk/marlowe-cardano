@@ -30,7 +30,7 @@ data Command
   = Webserver
       { _host   :: !HostPreference,
         _port   :: !Int,
-        _static :: !FilePath
+        _config :: !FilePath
       }
   | PSGenerator {_outputDir :: !FilePath}
   deriving (Show, Eq)
@@ -67,16 +67,14 @@ webserverCommandParser =
               <> showDefault
               <> value 8080
           )
-      _static <-
+      _config <-
         strOption
-          ( short 's' <> long "static-path" <> help "Location of static files to serve"
-              <> showDefault
-              <> value "."
+          ( short 'c' <> long "config" <> help "Location of the configuration file"
           )
       pure Webserver {..}
 
 runCommand :: (MonadIO m, MonadLogger m) => Command -> m ()
-runCommand Webserver {..} = liftIO $ Webserver.run _static settings
+runCommand Webserver {..} = liftIO $ Webserver.run _config settings
   where
     settings = setHost _host . setPort _port $ defaultSettings
 runCommand PSGenerator {..} = liftIO $ PSGenerator.generate _outputDir
