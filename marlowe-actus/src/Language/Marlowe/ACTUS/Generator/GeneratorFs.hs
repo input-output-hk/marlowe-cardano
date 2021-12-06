@@ -18,7 +18,7 @@ where
 import           Data.List                                      (foldl')
 import           Data.Time                                      (LocalTime)
 import           Data.Validation                                (Validation (..))
-import           Language.Marlowe                               (Contract (..), Observation (..), Slot (..), Value (..))
+import           Language.Marlowe
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents   (EventType (..), RiskFactorsMarlowe)
 import           Language.Marlowe.ACTUS.Domain.ContractTerms    (ContractTermsMarlowe, TermValidationError (..))
 import           Language.Marlowe.ACTUS.Domain.Ops              (ActusOps (..), marloweFixedPoint)
@@ -42,26 +42,46 @@ genFsContract' ::
   ContractTermsMarlowe ->
   Contract
 genFsContract' rf ct =
-  let cfs = map scale $ genProjectedCashflows rf ct
+  let cfs = genProjectedCashflows rf ct
 
       gen :: CashFlowPoly (Value Observation) -> Contract -> Contract
       gen CashFlowPoly {..} cont =
         let timeout = Slot $ timeToSlotNumber cashPaymentDay
+            -- a = reduce $ DivValue amount (Constant marloweFixedPoint)
+            a = DivValue amount (Constant marloweFixedPoint)
+           {-
+         in case a of
+              Constant x | x > 0 ->
+                invoice
+                  "party"
+                  "counterparty"
+                  a
+                  timeout
+                  cont
+              Constant x | x < 0 ->
+                invoice
+                  "counterparty"
+                  "party"
+                  (NegValue a)
+                  timeout
+                  cont
+              _ -> cont
+              -}
          in If
-              (_zero `ValueLT` amount)
+              (_zero `ValueLT` a)
               ( invoice
                   "party"
                   "counterparty"
-                  amount
+                  a
                   timeout
                   cont
               )
               ( If
-                  (amount `ValueLT` _zero)
+                  (a`ValueLT` _zero)
                   ( invoice
                       "counterparty"
                       "party"
-                      (NegValue amount)
+                      (NegValue a)
                       timeout
                       cont
                   )
@@ -69,5 +89,41 @@ genFsContract' rf ct =
               )
    in foldl' (flip gen) Close $ reverse cfs
 
-scale :: CashFlowPoly (Value Observation) -> CashFlowPoly (Value Observation)
-scale cf@CashFlowPoly {..} = cf {amount = DivValue amount (Constant marloweFixedPoint)}
+reduceObservation :: Observation -> Observation
+reduceObservation (AndObs a b)  = AndObs (reduceObservation a) (reduceObservation b)
+reduceObservation (OrObs a b)   = OrObs (reduceObservation a) (reduceObservation b)
+reduceObservation (NotObs a)    = NotObs (reduceObservation a)
+reduceObservation (ValueGE a b) = ValueGE (reduce a) (reduce b)
+reduceObservation (ValueGT a b) = ValueGT (reduce a) (reduce b)
+reduceObservation (ValueLE a b) = ValueLE (reduce a) (reduce b)
+reduceObservation (ValueLT a b) = ValueLT (reduce a) (reduce b)
+reduceObservation (ValueEQ a b) = ValueEQ (reduce a) (reduce b)
+reduceObservation x             = x
+
+reduce :: Value Observation -> Value Observation
+reduce (ChoiceValue i) = ChoiceValue i
+reduce (UseValue i) = UseValue i
+reduce (Constant i) = Constant i
+
+reduce (AddValue (Constant x) (Constant y)) = Constant $ x+y
+reduce (AddValue x y) = reduce $ AddValue (reduce x) (reduce y)
+
+reduce (SubValue (Constant x) (Constant y)) = Constant $ x-y
+reduce (SubValue x y) = reduce $ SubValue (reduce x) (reduce y)
+
+reduce (MulValue (Constant x) (Constant y)) = Constant $ x*y
+reduce (MulValue x y) = reduce $ MulValue (reduce x) (reduce y)
+
+reduce (DivValue (Constant x) (Constant y)) = Constant $ x `div` y
+reduce (DivValue x y) = reduce $ DivValue (reduce x) (reduce y)
+
+reduce (NegValue (Constant x)) = Constant $ -x
+reduce (NegValue v) = reduce $ NegValue (reduce v)
+
+reduce (Cond (ValueGT (Constant x) (Constant y)) a _) | x > y = reduce a
+reduce (Cond (ValueGT (Constant _) (Constant _)) _ b) = reduce b
+reduce (Cond (ValueLT (Constant x) (Constant y)) a _) | x < y = reduce a
+reduce (Cond (ValueLT (Constant _) (Constant _)) _ b) = reduce b
+
+reduce (Cond o a b) = reduce $ Cond (reduceObservation o) (reduce a) (reduce b)
+reduce x = x
