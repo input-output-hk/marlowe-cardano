@@ -2,8 +2,10 @@
 
 set -e
 
-export CARDANO_NODE_SOCKET_PATH=$(ps ax | grep -v grep | grep cardano-wallet | grep testnet | sed -E 's/(.*)node-socket //')
-export TESTNET_MAGIC=1097911063
+CARDANO_NODE_SOCKET_PATH=$(pgrep cardano-wallet | grep testnet | sed -E 's/(.*)node-socket //')
+export CARDANO_NODE_SOCKET_PATH
+TESTNET_MAGIC=1097911063
+export TESTNET_MAGIC
 
 generate_address() {
   cardano-cli query protocol-parameters --testnet-magic 1097911063 > testnet-params.json
@@ -24,14 +26,14 @@ CUR_SLOT=$(cardano-cli get-tip "$MAGIC" | jq -r '.slot')
 
 echo "Current slot ${CUR_SLOT}"
 
-PAYMENT_SKEY=payment.skey
-PAYMENT_VKEY=payment.vkey
+# PAYMENT_SKEY=payment.skey
+# PAYMENT_VKEY=payment.vkey
 ADDRESS_P=$(cat payment.addr)
-PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
+# PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 CONTRACT_FILE=c1.contract
 STATE_FILE=c1.state
 DATUM_LOVELACE=$(jq '.accounts | .[0] | .[1]' $STATE_FILE)
-DATUM_MIN_SLOT=10
+# DATUM_MIN_SLOT=10
 REDEEMER_MIN_SLOT=44316000
 REDEEMER_MAX_SLOT=44317000 #$((CUR_SLOT+1000))
 

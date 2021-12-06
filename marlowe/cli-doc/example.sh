@@ -21,10 +21,10 @@ cardano-cli query protocol-parameters "$MAGIC" --out-file $NETWORK.protocol
 
 # Select the wallet.
 
-PAYMENT_SKEY=payment.skey
-PAYMENT_VKEY=payment.vkey
+#PAYMENT_SKEY=payment.skey
+#PAYMENT_VKEY=payment.vkey
 ADDRESS_P=addr_test1qq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupcvluken35ncjnu0puetf5jvttedkze02d5kf890kquh60slacjyp
-PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
+#PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 
 
 # Set the file names.
