@@ -33,7 +33,6 @@ import           Ledger.Constraints
 import           Ledger.Constraints.OnChain
 import           Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval                  as Interval
-import           Ledger.Scripts                   (Validator, mkValidatorScript)
 import qualified Ledger.TimeSlot                  as TimeSlot
 import qualified Ledger.Typed.Scripts             as Scripts
 import qualified Ledger.Value                     as Val
@@ -45,6 +44,13 @@ import           PlutusTx.Prelude
 
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])
+
+data TypedMarloweValidator
+
+{- Type instances for small typed Marlowe validator -}
+instance Scripts.ValidatorTypes (TypedMarloweValidator) where
+    type instance RedeemerType (TypedMarloweValidator) = [Input]
+    type instance DatumType (TypedMarloweValidator) = MarloweData
 
 
 rolePayoutScript :: CurrencySymbol -> Validator
@@ -172,11 +178,6 @@ isFinal MarloweData{marloweContract=c} = isClose c
 mkValidator :: MarloweParams -> Scripts.ValidatorType MarloweStateMachine
 mkValidator p = SM.mkValidator $ SM.mkStateMachine Nothing (mkMarloweStateMachineTransition p) isFinal
 
-instance Scripts.ValidatorTypes (MarloweData) where
-    type instance RedeemerType (MarloweData) = [Input]
-    type instance DatumType (MarloweData) = MarloweData
-
-
 
 {-# INLINABLE smallMarloweValidator #-}
 smallMarloweValidator
@@ -189,23 +190,17 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     let slotConfig = def :: TimeSlot.SlotConfig
     let ownInput = case findOwnInput ctx of
             Just i -> i
-            _      -> traceError "S0" {-"Can't find validation input"-}
+            _      -> traceError "I0" {-"Can't find validation input"-}
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
-    let invervalClosureDiff True  = POSIXTime 0
-        invervalClosureDiff False = POSIXTime 1
     let (minTime, maxTime) =
             case txInfoValidRange scriptContextTxInfo of
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) c1) (Interval.UpperBound (Interval.Finite h) c2) ->
-                    (l + invervalClosureDiff c1, h - invervalClosureDiff c2)
-                _ -> traceError "Mr"
+                _ -> traceError "R0"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
     let maxSlot = timeToSlot maxTime
     let interval = (minSlot, maxSlot)
-    let positiveBalances = validateBalances marloweState ||
-            -- Avoid creating a too-big string literal
-            traceError ("M1")
+    let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
 
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
@@ -221,9 +216,9 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     let inputBalance = totalBalance (accounts marloweState)
 
     -- ensure that a contract TxOut has what it suppose to have
-    let balancesOk = inputBalance == scriptInValue
+    let balancesOk = traceIfFalse "B1" $ inputBalance == scriptInValue
 
-    let preconditionsOk = traceIfFalse "M2" $ positiveBalances && balancesOk
+    let preconditionsOk = positiveBalances && balancesOk
 
     let txInput = TransactionInput {
             txInterval = interval,
@@ -242,16 +237,14 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
                 checkContinuation = case txOutContract of
                     Close -> True
                     _ -> let
-                        totalIncome = foldMap collectDeposits inputs -- 300
-                        totalPayouts = foldMap snd payoutsByParty -- 70
-                        finalBalance = inputBalance + totalIncome - totalPayouts -- 520
+                        totalIncome = foldMap collectDeposits inputs
+                        totalPayouts = foldMap snd payoutsByParty
+                        finalBalance = inputBalance + totalIncome - totalPayouts
                         outConstrs = OutputConstraint
                                     { ocDatum = marloweData
                                     , ocValue = finalBalance
                                     }
-                        in checkOwnOutputConstraint ctx outConstrs -- 1500
-                        -- in checkOwnOutputConstraint1 ownInput marloweData finalBalance
-            -- preconditionsOk ~ 120, inputsOk ~ 220, payoutsOk ~ 120, checkContinuation ~ 2100
+                        in checkOwnOutputConstraint ctx outConstrs
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousSlotIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"
@@ -263,17 +256,6 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
     checkScriptOutput _ _ _ _ = False
-
-    checkOwnOutputConstraint1 :: TxInInfo -> MarloweData -> Val.Value -> Bool
-    checkOwnOutputConstraint1 TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} datum ocValue =
-        traceIfFalse "L1" -- "Output constraint"
-        $ chk False allOutputs
-      where
-          hsh = findDatumHash (Datum $ PlutusTx.toBuiltinData datum) scriptContextTxInfo
-          chk found [] = found
-          chk found (out:rest) = let
-              foundSnd = checkScriptOutput ownAddress hsh ocValue out
-              in if found && foundSnd then traceError "EO" else chk found rest
 
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
@@ -288,8 +270,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
                 IChoice (ChoiceId _ party) _ -> validatePartyWitness party
                 INotify                      -> True
           where
-            validatePartyWitness (PK pk)     = traceIfFalse "L4" $ scriptContextTxInfo `txSignedBy` pk
-            validatePartyWitness (Role role) = traceIfFalse "L5" -- "Spent value not OK"
+            validatePartyWitness (PK pk)     = traceIfFalse "S" $ scriptContextTxInfo `txSignedBy` pk
+            validatePartyWitness (Role role) = traceIfFalse "T" -- "Spent value not OK"
                                                $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
     collectDeposits :: Input -> Val.Value
@@ -304,13 +286,12 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     payoutConstraints payoutsByParty = all payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            PK pk  -> traceIfFalse "La" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
+            PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
             Role role -> let
                 dataValue = Datum $ PlutusTx.toBuiltinData role
                 hsh = findDatumHash dataValue scriptContextTxInfo
                 addr = Ledger.scriptHashAddress rolePayoutValidatorHash
-                in traceIfFalse "Lb" -- "MustPayToOtherScript"
-                $ any (checkScriptOutput addr hsh value) allOutputs
+                in traceIfFalse "R" $ any (checkScriptOutput addr hsh value) allOutputs
 
 
 
@@ -331,8 +312,8 @@ typedValidator params = Scripts.mkTypedValidator @MarloweStateMachine
         wrap = Scripts.wrapValidator @MarloweData @MarloweInput
 
 
-typedValidator1 :: MarloweParams -> Scripts.TypedValidator MarloweData
-typedValidator1 params = Scripts.mkTypedValidatorParam @MarloweData
+smallTypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
+smallTypedValidator params = Scripts.mkTypedValidatorParam @TypedMarloweValidator
     $$(PlutusTx.compile [|| smallMarloweValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
     params
@@ -340,8 +321,8 @@ typedValidator1 params = Scripts.mkTypedValidatorParam @MarloweData
         wrap = Scripts.wrapValidator
 
 
-marloweValidator2 :: MarloweParams -> Scripts.Validator
-marloweValidator2 params = let
+smallUntypedValidator :: MarloweParams -> Scripts.Validator
+smallUntypedValidator params = let
     wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
     in mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
 

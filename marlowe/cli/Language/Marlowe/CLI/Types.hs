@@ -41,7 +41,7 @@ import           Data.ByteString.Short        (ShortByteString)
 import           Data.String                  (IsString)
 import           GHC.Generics                 (Generic)
 import           Language.Marlowe.CLI.Orphans ()
-import           Language.Marlowe.Semantics   (MarloweData (..))
+import           Language.Marlowe.Scripts     (TypedMarloweValidator)
 import           Ledger.Typed.Scripts         (TypedValidator)
 import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
@@ -83,7 +83,7 @@ instance IsCardanoEra era => ToJSON (MarloweInfo era) where
 data ValidatorInfo era =
   ValidatorInfo
   {
-    viValidator :: TypedValidator MarloweData  -- ^ The validator.
+    viValidator :: TypedValidator TypedMarloweValidator  -- ^ The validator.
   , viScript    :: Script PlutusScriptV1       -- ^ The Plutus script.
   , viBytes     :: ShortByteString             -- ^ The serialisation of the validator.
   , viHash      :: ValidatorHash               -- ^ The validator hash.
