@@ -46,47 +46,46 @@ genFsContract' rf ct =
 
       gen :: CashFlowPoly (Value Observation) -> Contract -> Contract
       gen CashFlowPoly {..} cont =
-        let timeout = Slot $ timeToSlotNumber cashPaymentDay
-            -- a = reduce $ DivValue amount (Constant marloweFixedPoint)
-            a = DivValue amount (Constant marloweFixedPoint)
-           {-
+        let t = Slot $ timeToSlotNumber cashPaymentDay
+            a = reduce $ DivValue amount (Constant marloweFixedPoint)
          in case a of
-              Constant x | x > 0 ->
-                invoice
-                  "party"
-                  "counterparty"
-                  a
-                  timeout
-                  cont
-              Constant x | x < 0 ->
-                invoice
-                  "counterparty"
-                  "party"
-                  (NegValue a)
-                  timeout
-                  cont
-              _ -> cont
-              -}
-         in If
-              (_zero `ValueLT` a)
-              ( invoice
-                  "party"
-                  "counterparty"
-                  a
-                  timeout
-                  cont
-              )
-              ( If
-                  (a`ValueLT` _zero)
+              Constant x
+                | x > 0 ->
+                  invoice
+                    "party"
+                    "counterparty"
+                    a
+                    t
+                    cont
+              Constant x
+                | x < 0 ->
+                  invoice
+                    "counterparty"
+                    "party"
+                    (NegValue a)
+                    t
+                    cont
+              _ ->
+                If
+                  (_zero `ValueLT` a)
                   ( invoice
-                      "counterparty"
                       "party"
-                      (NegValue a)
-                      timeout
+                      "counterparty"
+                      a
+                      t
                       cont
                   )
-                  cont
-              )
+                  ( If
+                      (a `ValueLT` _zero)
+                      ( invoice
+                          "counterparty"
+                          "party"
+                          (NegValue a)
+                          t
+                          cont
+                      )
+                      cont
+                  )
    in foldl' (flip gen) Close $ reverse cfs
 
 reduceObservation :: Observation -> Observation
@@ -114,7 +113,18 @@ reduce (SubValue x y) = reduce $ SubValue (reduce x) (reduce y)
 reduce (MulValue (Constant x) (Constant y)) = Constant $ x*y
 reduce (MulValue x y) = reduce $ MulValue (reduce x) (reduce y)
 
-reduce (DivValue (Constant x) (Constant y)) = Constant $ x `div` y
+-- same as in Semantics
+reduce (DivValue (Constant n) (Constant d)) = Constant $
+  if n == 0 || d == 0 then 0
+  else let (q, r) = n `quotRem` d
+           ar = abs r * 2
+           ad = abs d
+        in if ar < ad then q -- reminder < 1/2
+           else if ar > ad then q + signum n * signum d -- reminder > 1/2
+                else let -- reminder == 1/2
+                         qIsEven = q `div` 2 == 0
+                      in if qIsEven then q else q + signum n * signum d
+
 reduce (DivValue x y) = reduce $ DivValue (reduce x) (reduce y)
 
 reduce (NegValue (Constant x)) = Constant $ -x
