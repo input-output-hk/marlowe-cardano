@@ -77,6 +77,8 @@ library
     Language.Marlowe.Deserialisation
     Language.Marlowe.Extended
     Language.Marlowe.Semantics
+    Language.Marlowe.SemanticsDeserialisation
+    Language.Marlowe.SemanticsSerialisation
     Language.Marlowe.SemanticsTypes
     Language.Marlowe.Client
     Language.Marlowe.Util

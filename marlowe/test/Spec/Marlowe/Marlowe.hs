@@ -11,67 +11,70 @@ module Spec.Marlowe.Marlowe
     )
 where
 
-import qualified Codec.CBOR.Write                      as Write
-import qualified Codec.Serialise                       as Serialise
-import           Control.Exception                     (SomeException, catch)
-import           Control.Lens                          ((&), (.~))
-import           Control.Monad                         (void)
-import           Control.Monad.Freer                   (run)
-import           Control.Monad.Freer.Error             (runError)
-import           Data.Aeson                            (decode, encode)
-import           Data.Aeson.Text                       (encodeToLazyText)
-import qualified Data.ByteString                       as BS
-import qualified Data.ByteString.Lazy                  as LB
-import qualified Data.ByteString.Short                 as SBS
-import           Data.Default                          (Default (..))
-import           Data.Either                           (fromRight, isRight)
-import qualified Data.Map.Strict                       as Map
-import           Data.Maybe                            (isJust, isNothing)
-import           Data.Monoid                           (First (..))
-import           Data.Ratio                            ((%))
-import           Data.Set                              (Set)
-import qualified Data.Set                              as Set
+import qualified Codec.CBOR.Write                          as Write
+import qualified Codec.Serialise                           as Serialise
+import           Control.Exception                         (SomeException, catch)
+import           Control.Lens                              ((&), (.~))
+import           Control.Monad                             (void)
+import           Control.Monad.Freer                       (run)
+import           Control.Monad.Freer.Error                 (runError)
+import           Data.Aeson                                (decode, encode)
+import           Data.Aeson.Text                           (encodeToLazyText)
+import qualified Data.ByteString                           as BS
+import qualified Data.ByteString.Lazy                      as LB
+import qualified Data.ByteString.Short                     as SBS
+import           Data.Default                              (Default (..))
+import           Data.Either                               (fromRight, isRight)
+import qualified Data.Map.Strict                           as Map
+import           Data.Maybe                                (isJust, isNothing)
+import           Data.Monoid                               (First (..))
+import           Data.Ratio                                ((%))
+import           Data.Set                                  (Set)
+import qualified Data.Set                                  as Set
 import           Data.String
-import qualified Data.Text                             as T
-import qualified Data.Text.IO                          as T
-import           Data.Text.Lazy                        (toStrict)
-import           Data.UUID                             (UUID)
-import qualified Data.UUID                             as UUID
-import           Language.Haskell.Interpreter          (Extension (OverloadedStrings), MonadInterpreter,
-                                                        OptionVal ((:=)), as, interpret, languageExtensions,
-                                                        runInterpreter, set, setImports)
+import qualified Data.Text                                 as T
+import qualified Data.Text.IO                              as T
+import           Data.Text.Lazy                            (toStrict)
+import           Data.UUID                                 (UUID)
+import qualified Data.UUID                                 as UUID
+import           Language.Haskell.Interpreter              (Extension (OverloadedStrings), MonadInterpreter,
+                                                            OptionVal ((:=)), as, interpret, languageExtensions,
+                                                            runInterpreter, set, setImports)
 import           Language.Marlowe.Analysis.FSSemantics
 import           Language.Marlowe.Client
-import           Language.Marlowe.Deserialisation      (byteStringToInt, byteStringToList)
-import           Language.Marlowe.Scripts              (MarloweInput, mkMarloweStateMachineTransition, rolePayoutScript,
-                                                        smallTypedValidator, smallUntypedValidator, typedValidator)
+import           Language.Marlowe.Deserialisation          (byteStringToInt, byteStringToList)
+import           Language.Marlowe.Scripts                  (MarloweInput, mkMarloweStateMachineTransition,
+                                                            rolePayoutScript, smallTypedValidator,
+                                                            smallUntypedValidator, typedValidator)
 import           Language.Marlowe.Semantics
+import           Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
+import           Language.Marlowe.SemanticsSerialisation   (contractToByteString)
 import           Language.Marlowe.SemanticsTypes
-import           Language.Marlowe.Serialisation        (intToByteString, listToByteString)
+import           Language.Marlowe.Serialisation            (intToByteString, listToByteString)
 import           Language.Marlowe.Util
-import           Ledger                                (Slot (..), pubKeyHash, validatorHash)
-import           Ledger.Ada                            (lovelaceValueOf)
-import           Ledger.Constraints.TxConstraints      (TxConstraints)
-import qualified Ledger.Typed.Scripts                  as Scripts
-import qualified Ledger.Value                          as Val
-import qualified Plutus.Contract.StateMachine          as SM
-import           Plutus.Contract.Test                  hiding ((.&&.))
-import qualified Plutus.Contract.Test                  as T
-import           Plutus.Contract.Types                 (_observableState)
-import qualified Plutus.Trace.Emulator                 as Trace
-import           Plutus.Trace.Emulator.Types           (instContractState)
-import qualified PlutusTx.AssocMap                     as AssocMap
-import           PlutusTx.Builtins                     (emptyByteString)
+import           Ledger                                    (Slot (..), pubKeyHash, validatorHash)
+import           Ledger.Ada                                (lovelaceValueOf)
+import           Ledger.Constraints.TxConstraints          (TxConstraints)
+import qualified Ledger.Typed.Scripts                      as Scripts
+import qualified Ledger.Value                              as Val
+import qualified Plutus.Contract.StateMachine              as SM
+import           Plutus.Contract.Test                      hiding ((.&&.))
+import qualified Plutus.Contract.Test                      as T
+import           Plutus.Contract.Types                     (_observableState)
+import qualified Plutus.Trace.Emulator                     as Trace
+import           Plutus.Trace.Emulator.Types               (instContractState)
+import qualified PlutusTx.AssocMap                         as AssocMap
+import           PlutusTx.Builtins                         (emptyByteString)
 import           PlutusTx.Lattice
-import qualified PlutusTx.Prelude                      as P
+import qualified PlutusTx.Prelude                          as P
 import           Spec.Marlowe.Common
-import qualified Streaming.Prelude                     as S
-import           System.IO.Unsafe                      (unsafePerformIO)
+import qualified Streaming.Prelude                         as S
+import           System.IO.Unsafe                          (unsafePerformIO)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
-import qualified Wallet.Emulator.Folds                 as Folds
-import           Wallet.Emulator.Stream                (foldEmulatorStreamM, takeUntilSlot)
+import qualified Wallet.Emulator.Folds                     as Folds
+import           Wallet.Emulator.Stream                    (foldEmulatorStreamM, takeUntilSlot)
 
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Redundant if" -}
@@ -98,6 +101,7 @@ tests = testGroup "Marlowe"
     , testGroup "ByteString ad-hoc (de)serialisation"
         [ testProperty "Integer (de)serialisation roundtrip" integerBSRoundtripTest
         , testProperty "Integer list (de)serialisation roundtrip" integerListBSRoundtripTest
+        , testProperty "Contract (de)serialisation roundtrip" contractBSRoundtripTest
         ]
     , zeroCouponBondTest
     , errorHandlingTest
@@ -537,8 +541,11 @@ prop_jsonLoops :: Property
 prop_jsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract jsonLoops
 
 integerBSRoundtripTest :: Property
-integerBSRoundtripTest = forAll (arbitrary :: Gen Integer) (\num -> byteStringToInt (intToByteString num) === Just (num, emptyByteString))
+integerBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen Integer) (\num -> byteStringToInt (intToByteString num) === Just (num, emptyByteString))
 
 integerListBSRoundtripTest :: Property
-integerListBSRoundtripTest = forAll (arbitrary :: Gen [Integer]) (\numList -> byteStringToList byteStringToInt (listToByteString intToByteString numList) === Just (numList, emptyByteString))
+integerListBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen [Integer]) (\numList -> byteStringToList byteStringToInt (listToByteString intToByteString numList) === Just (numList, emptyByteString))
+
+contractBSRoundtripTest :: Property
+contractBSRoundtripTest = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract (\contract -> byteStringToContract (contractToByteString contract) === Just (contract, emptyByteString))
 
