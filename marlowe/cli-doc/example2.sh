@@ -19,8 +19,8 @@ generate_address() {
 NETWORK=testnet
 MAGIC="--testnet-magic 1097911063"
 
-cardano-cli query protocol-parameters $MAGIC --out-file $NETWORK.protocol
-CUR_SLOT=$(cardano-cli get-tip $MAGIC | jq -r '.slot')
+cardano-cli query protocol-parameters "$MAGIC" --out-file $NETWORK.protocol
+CUR_SLOT=$(cardano-cli get-tip "$MAGIC" | jq -r '.slot')
 
 echo "Current slot ${CUR_SLOT}"
 
@@ -48,7 +48,7 @@ marlowe-cli datum --contract-file $CONTRACT_FILE \
                   --out-file $DATUM_FILE
 )
 
-marlowe-cli validator $MAGIC --out-file $PLUTUS_FILE
+marlowe-cli validator "$MAGIC" --out-file $PLUTUS_FILE
 # marlowe-cli redeemer --min-slot $REDEEMER_MIN_SLOT \
 #                      --max-slot $REDEEMER_MAX_SLOT \
 #                      --out-file $REDEEMER_FILE
@@ -61,45 +61,45 @@ create_contract_tx() {
   # Find funds, and enter the selected UTxO as "TX_0".
 
 
-  TX_0=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq -r 'keys | .[0]')
+  TX_0=$(cardano-cli query utxo "$MAGIC" --address "$ADDRESS_P" --out-file /dev/stdout | jq -r 'keys | .[0]')
 
 
   # # Fund the contract.
 
-  cardano-cli transaction build --alonzo-era $MAGIC                 \
-                                --tx-in $TX_0                    \
-                                --tx-out $ADDRESS_S+$DATUM_LOVELACE \
-                                  --tx-out-datum-hash $DATUM_HASH   \
-                                --change-address $ADDRESS_P         \
+  cardano-cli transaction build --alonzo-era "$MAGIC"                 \
+                                --tx-in "$TX_0"                    \
+                                --tx-out "$ADDRESS_S"+"$DATUM_LOVELACE" \
+                                  --tx-out-datum-hash "$DATUM_HASH"   \
+                                --change-address "$ADDRESS_P"         \
                                 --out-file tx.raw
   cardano-cli transaction view --tx-body-file tx.raw
 }
 
 sign_submit() {
-  cardano-cli transaction sign $MAGIC                          \
+  cardano-cli transaction sign "$MAGIC"                          \
                               --tx-body-file tx.raw           \
                               --signing-key-file payment.skey \
                               --out-file tx.signed
 
-  cardano-cli transaction submit $MAGIC --tx-file tx.signed
+  cardano-cli transaction submit "$MAGIC" --tx-file tx.signed
 }
 
 redeem() {
   FEE_UTXO=19456bb108c0fa182dd7ab11c6ef927cbe36d6ebc743f5099a6209e26d8862f0#0
   CONTRACT_UTXO=19456bb108c0fa182dd7ab11c6ef927cbe36d6ebc743f5099a6209e26d8862f0#1
 
-  FUNDS=$(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq '.["'$FEE_UTXO'"].value.lovelace')
+  FUNDS=$(cardano-cli query utxo "$MAGIC" --address "$ADDRESS_P" --out-file /dev/stdout | jq '.["'$FEE_UTXO'"].value.lovelace')
 
   FEE=$(
-  cardano-cli transaction build --alonzo-era $MAGIC                      \
+  cardano-cli transaction build --alonzo-era "$MAGIC"                      \
                                 --protocol-params-file $NETWORK.protocol \
                                 --tx-in $FEE_UTXO                         \
                                 --tx-in $CONTRACT_UTXO                          \
                                 --tx-in-script-file $PLUTUS_FILE       \
                                 --tx-in-datum-file $DATUM_FILE         \
                                 --tx-in-redeemer-file $REDEEMER_FILE \
-                                --tx-out $ADDRESS_P+3000000              \
-                                --change-address $ADDRESS_P              \
+                                --tx-out "$ADDRESS_P"+3000000              \
+                                --change-address "$ADDRESS_P"              \
                                 --tx-in-collateral $COLLATERAL_TX               \
                                 --invalid-before $REDEEMER_MIN_SLOT      \
                                 --invalid-hereafter $REDEEMER_MAX_SLOT   \
@@ -122,19 +122,19 @@ redeem() {
     --tx-in-datum-file $DATUM_FILE \
     --tx-in-redeemer-file $REDEEMER_FILE \
     --tx-in-collateral $COLLATERAL_TX \
-    --tx-out $ADDRESS_P+$NET \
-    --change-address $ADDRESS_P \
+    --tx-out "$ADDRESS_P"+$NET \
+    --change-address "$ADDRESS_P" \
     --protocol-params-file $NETWORK.protocol \
     --out-file tx.raw
   cardano-cli transaction view --tx-body-file tx.raw
 }
 
-# cardano-cli transaction sign $MAGIC                          \
+# cardano-cli transaction sign "$MAGIC"                          \
 #                              --tx-body-file tx.raw           \
 #                              --signing-key-file payment.skey \
 #                              --out-file tx.signed
 
-# cardano-cli transaction submit $MAGIC --tx-file tx.signed
+# cardano-cli transaction submit "$MAGIC" --tx-file tx.signed
 
 
 # # See that the transaction succeeded.
@@ -143,8 +143,8 @@ redeem() {
 redeem
 sign_submit
 
-cardano-cli query utxo $MAGIC --address $ADDRESS_S
-cardano-cli query utxo $MAGIC --address $ADDRESS_P
+cardano-cli query utxo "$MAGIC" --address "$ADDRESS_S"
+cardano-cli query utxo "$MAGIC" --address "$ADDRESS_P"
 
 
 ## MaxTxSizeUTxO 18055 16384
