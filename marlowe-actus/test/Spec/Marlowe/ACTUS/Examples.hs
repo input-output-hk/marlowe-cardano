@@ -424,7 +424,6 @@ toMarlowe ct =
       cycleAnchorDateOfDividend = cycleAnchorDateOfDividend ct,
       nextDividendPaymentAmount = constnt <$> nextDividendPaymentAmount ct,
       enableSettlement = enableSettlement ct,
-      constraints = constraints ct,
-      collateralAmount = collateralAmount ct
+      constraints = constraints ct
     }
 

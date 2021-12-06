@@ -459,7 +459,6 @@ data ContractTermsPoly a = ContractTermsPoly
 
   , enableSettlement                         :: Bool             -- ^ Enable settlement currency
   , constraints                              :: Maybe Assertions -- ^ Assertions
-  , collateralAmount                         :: Integer          -- ^ Collateral Amount
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON)
@@ -544,7 +543,6 @@ instance FromJSON ContractTerms where
       <*> v .:? "nextDividendPaymentAmount"
       <*> (fromMaybe False <$> (v .:? "enableSettlement"))
       <*> v .:? "constraints"
-      <*> (fromMaybe 0 <$> (v .:? "collateralAmount"))
     where
       (.!?) w s = w .:? s <|> (fmap read <$> w .:? s)
   parseJSON _ = mzero

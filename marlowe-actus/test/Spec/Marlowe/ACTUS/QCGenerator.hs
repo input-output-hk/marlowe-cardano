@@ -256,8 +256,7 @@ contractTermsGen' ct = do
         nextDividendPaymentAmount = Nothing,
         -- enable settlement currency
         enableSettlement = False,
-        constraints = Nothing,
-        collateralAmount = 0
+        constraints = Nothing
       }
 
 riskAtTGen :: Gen RiskFactors
