@@ -20,30 +20,25 @@ module Marlowe.Run.Webserver.Server
  where
 
 import           Cardano.Mnemonic                           (mkSomeMnemonic)
+import           Cardano.Prelude                            hiding (Handler)
 import qualified Cardano.Wallet.Api.Client                  as WBE.Api
 import           Cardano.Wallet.Api.Types                   (ApiVerificationKeyShelley (..))
 import qualified Cardano.Wallet.Api.Types                   as WBE
 import           Marlowe.Run.Webserver.API                  (API)
+import           Prelude                                    (userError)
 
 import           Cardano.Wallet.Api                         (WalletKeys)
 import           Cardano.Wallet.Mock.Types                  (WalletInfo (..))
 import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
 import qualified Cardano.Wallet.Primitive.Types             as WBE
 
-import           Control.Monad.Except                       (ExceptT (ExceptT), runExceptT, withExceptT)
-import           Control.Monad.IO.Class                     (MonadIO, liftIO)
-import           Control.Monad.Reader                       (ReaderT, runReaderT)
 import           Data.Aeson                                 as Aeson
 import qualified Data.Aeson.Types                           as Aeson
 
 import           Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
-import           Control.Monad.Reader.Class
 import qualified Data.ByteString.Lazy                       as BL
-import           Data.Proxy                                 (Proxy (Proxy))
-import           GHC.Generics                               (Generic)
 
 import           Data.String                                as S
-import           Data.Text                                  (Text)
 import qualified Data.Text                                  as Text
 import           Data.Text.Class                            (FromText (..))
 import           Ledger                                     (PubKeyHash (..))
@@ -157,40 +152,31 @@ createOrRestoreWallet postData mnemonic = do
                 mWalletIdFromErr :: Maybe WBE.WalletId
                 mWalletIdFromErr = do
                     msg <- decodeError $ responseBody r
-                    matches <- Regex.matchRegex matchDuplicateWallet msg
-                    walletIdStr <- safeHead matches
-                    hush $ fromText $ Text.pack walletIdStr
+                    matches <- Regex.matchRegex matchDuplicateWallet $ Text.unpack msg
+                    walletIdStr <- headMay matches
+                    rightToMaybe $ fromText $ Text.pack walletIdStr
             case mWalletIdFromErr of
                 Just walletId -> pure $ Right walletId
                 Nothing       ->  do
-                    liftIO $ putStrLn "restoreWallet failed"
-                    liftIO $ putStrLn $ "Error: " <> show err
+                    putStrLn ("restoreWallet failed" :: Text)
+                    putStrLn $ "Error: " <> (show err :: Text)
                     pure $ Left err
         Left err -> do
             -- FIXME: Define a better logging mechanism
-            liftIO $ putStrLn "restoreWallet failed"
-            liftIO $ putStrLn $ "Error: " <> show err
+            putStrLn ("restoreWallet failed" :: Text)
+            putStrLn $ "Error: " <> (show err :: Text)
             pure $ Left err
         Right (WBE.ApiWallet (WBE.ApiT walletId) _ _ _ _ _ _ _ _) -> do
-            liftIO $ putStrLn $ "Restored wallet: " <> show walletId
+            putStrLn $ "Restored wallet: " <> (show walletId :: Text)
             pure $ Right walletId
 
--- NOTE: This was copied from Cardano-wallet/Cardano.Cli and changed return type from Text to String
+-- NOTE: This was copied from Cardano-wallet/Cardano.Cli
 decodeError
     :: BL.ByteString
-    -> Maybe String
+    -> Maybe Text
 decodeError bytes = do
     obj <- Aeson.decode bytes
     Aeson.parseMaybe (Aeson.withObject "Error" (.: "message")) obj
-
--- NOTE: Coppied from plutus-apps/playground-common/Schema.hs with same note
--- We could take this from the `safe` package, but I don't think it's worth the extra dependency.
-safeHead :: [a] -> Maybe a
-safeHead []    = Nothing
-safeHead (x:_) = Just x
-
-hush :: Either a b -> Maybe b
-hush = either (const Nothing) Just
 
 data WBEConfig = WBEConfig { _wbeHost :: String, _wbePort :: Int }
     deriving stock (Eq, Generic, Show)

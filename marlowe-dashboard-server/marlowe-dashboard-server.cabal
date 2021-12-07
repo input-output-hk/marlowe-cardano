@@ -16,6 +16,7 @@ source-repository head
     location: https://github.com/input-output-hk/marlowe-cardano
 
 library
+    default-extensions: NoImplicitPrelude
     exposed-modules:
         Marlowe.Run.Webserver.Server
         Marlowe.Run.Webserver.API
@@ -31,6 +32,7 @@ library
         bytestring -any,
         cardano-addresses -any,
         cardano-wallet-core -any,
+        cardano-prelude -any,
         http-client -any,
         http-client-tls -any,
         monad-logger -any,

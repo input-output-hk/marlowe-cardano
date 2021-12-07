@@ -5,6 +5,7 @@
 
 module Marlowe.Run.Webserver.WebSocket where
 
+import           Cardano.Prelude
 import           Control.Monad                 (forever)
 import           Control.Monad.IO.Class        (MonadIO (liftIO))
 import           Data.Aeson                    (FromJSON)
