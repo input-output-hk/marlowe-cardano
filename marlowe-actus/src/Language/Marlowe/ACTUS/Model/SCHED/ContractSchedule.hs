@@ -110,6 +110,9 @@ schedule ev c = schedule' ev c { maturityDate = maturity c }
     schedule' XD   ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_XD_OPTNS ct { maturityDate = maturityDate c <|> maturityDate ct }
     schedule' STD  ct@ContractTermsPoly{ contractType = FUTUR } = _SCHED_STD_OPTNS c { maturityDate = maturityDate c <|> maturityDate ct }
 
+    schedule' PRD  ct@ContractTermsPoly{ contractType = COM }   = _SCHED_PRD_PAM ct
+    schedule' TD   ct@ContractTermsPoly{ contractType = COM }   = _SCHED_TD_PAM ct
+
     schedule' _ _                                               = []
 
 maturity :: ContractTerms -> Maybe LocalTime
