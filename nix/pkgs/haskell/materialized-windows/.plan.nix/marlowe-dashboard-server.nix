@@ -38,6 +38,7 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
+          (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
           (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
@@ -62,6 +63,7 @@
           ];
         buildable = true;
         modules = [
+          "Paths_marlowe_dashboard_server"
           "Marlowe/Run/Webserver/Server"
           "Marlowe/Run/Webserver/API"
           "Marlowe/Run/Webserver/WebSocket"
