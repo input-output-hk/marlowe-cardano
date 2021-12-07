@@ -7,7 +7,6 @@
 module Marlowe.Run.Webserver.API where
 
 import           Cardano.Prelude
-import           Data.Text                   (Text)
 import           Marlowe.Run.Webserver.Types (RestoreError, RestorePostData)
 import           Servant.API                 (Get, JSON, PlainText, Post, Raw, ReqBody, (:<|>), (:>))
 import           Servant.API.WebSocket       (WebSocketPending)

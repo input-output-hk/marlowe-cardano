@@ -6,14 +6,11 @@
 module Marlowe.Run.Webserver.WebSocket where
 
 import           Cardano.Prelude
-import           Control.Monad                 (forever)
-import           Control.Monad.IO.Class        (MonadIO (liftIO))
 import           Data.Aeson                    (FromJSON)
 import qualified Data.Aeson                    as JSON
 import           Data.Aeson.Types              (ToJSON)
 import           Data.UUID                     (UUID)
 import           Data.UUID.V4                  (nextRandom)
-import           GHC.Generics                  (Generic)
 import qualified Network.WebSockets            as WS
 import           Network.WebSockets.Connection (Connection, PendingConnection, receiveData, withPingThread)
 

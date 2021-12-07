@@ -8,8 +8,6 @@ module Marlowe.Run.Webserver.Types where
 
 import           Cardano.Prelude
 import           Data.Aeson.Types (FromJSON, ToJSON)
-import           Data.Text        (Text)
-import           GHC.Generics     (Generic)
 import           Servant.Client   (ClientEnv)
 
 
