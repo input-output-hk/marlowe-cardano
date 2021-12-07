@@ -41,9 +41,11 @@ import qualified Data.ByteString.Lazy                       as BL
 import           Data.String                                as S
 import qualified Data.Text                                  as Text
 import           Data.Text.Class                            (FromText (..))
+import           Data.Version                               (showVersion)
 import           Ledger                                     (PubKeyHash (..))
 import           Marlowe.Run.Webserver.Types                (Env, RestoreError (..), RestorePostData (..))
 import qualified Marlowe.Run.Webserver.WebSocket            as WS
+import qualified Paths_marlowe_dashboard_server             as Package.Paths
 import           PlutusTx.Builtins.Internal                 (BuiltinByteString (..))
 import           Servant                                    (Handler (Handler), Server, ServerError, hoistServer,
                                                              serveDirectoryFileServer, (:<|>) ((:<|>)), (:>))
@@ -52,7 +54,6 @@ import           Servant.Client                             (ClientError (Failur
 import           Text.Regex                                 (Regex)
 import qualified Text.Regex                                 as Regex
 import qualified Wallet.Emulator.Wallet                     as Pab.Wallet
-
 handlers :: FilePath -> Env -> Server API
 handlers staticPath env =
     hoistServer (Proxy @API) liftHandler
@@ -66,9 +67,8 @@ handlers staticPath env =
     liftHandler :: ReaderT Env (ExceptT ServerError IO) a -> Handler a
     liftHandler = Handler . flip runReaderT env
 
--- TODO: Can we get this from cabal somehow?
 handleVersion :: Applicative m => m Text
-handleVersion = pure "1.0.0.0"
+handleVersion = pure $ Text.pack $ showVersion Package.Paths.version
 
 callWBE :: MonadIO m => MonadReader Env m => ClientM a -> m (Either ClientError a)
 callWBE client = do
