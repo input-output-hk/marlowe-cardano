@@ -26,6 +26,7 @@ tests = testGroup "Marlowe represenation of sample ACTUS contracts"
   , testCase "NAM examples" ex_nam1
   , testCase "ANN examples" ex_ann1
   , testCase "OPTNS examples" ex_optns1
+  , testCase "COM examples" ex_com1
   ]
 
 -- |ex_pam1 defines a contract of type PAM
@@ -325,6 +326,61 @@ ex_optns1 =
               xd_payoff = 0.0,
               dv_payoff = 0.0
             }
+
+
+-- |ex_optns1 defines a contract of type OPTNS
+ex_com1 :: IO ()
+ex_com1 =
+  contractFromFile "test/Spec/Marlowe/ACTUS/ex_com1.json"
+    >>= either msg run
+  where
+    msg err = putStr err
+    run ct = case genStaticContract rf ct of
+      Failure _ -> assertFailure "Terms validation should not fail"
+      Success contract -> assertFailure "Success"
+          let principal = IDeposit (Role "counterparty") "counterparty" ada
+              ex = IDeposit (Role "party") "party" ada
+              out =
+                computeTransaction
+                  ( TransactionInput
+                      (0, 0)
+                      []
+                  )
+                  (emptyState 0)
+                  contract
+            in case out of
+                 Error e -> assertFailure e
+                 TransactionOutput txWarn txPay _ con -> do
+                   assertBool "Contract is in Close" $ con == Close
+                   assertBool "No warnings" $ null txWar
+
+                   assertBool "total payments to party" (totalPayments (Party "party") txPay == 10)
+                   let tc = totalPayments (Party "counterparty") txPay
+                   assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
+
+      where
+        rf :: EventType -> LocalTime -> RiskFactors
+        rf XD d
+          | d == (fromJust $ maturityDate ct) =
+            RiskFactorsPoly
+              { o_rf_CURS = 1.0,
+                o_rf_RRMO = 1.0,
+                o_rf_SCMO = 1.0,
+                pp_payoff = 0.0,
+                xd_payoff = 120.0,
+                dv_payoff = 0.0
+              }
+        rf _ _ =
+          RiskFactorsPoly
+            { o_rf_CURS = 1.0,
+              o_rf_RRMO = 1.0,
+              o_rf_SCMO = 1.0,
+              pp_payoff = 0.0,
+              xd_payoff = 0.0,
+              dv_payoff = 0.0
+            }
+
+
 
 contractFromFile :: FilePath -> IO (Either String ContractTerms)
 contractFromFile f = eitherDecode <$> B.readFile f
