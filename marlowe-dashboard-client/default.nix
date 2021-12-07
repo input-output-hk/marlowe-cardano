@@ -11,6 +11,7 @@ let
     ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
     ln -s ${./plutus-pab.yaml} plutus-pab.yaml
     ${marlowe-invoker}/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $out
+    ${marlowe-run-backend-invoker}/bin/marlowe-dashboard-server psgenerator $out
   '';
 
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
