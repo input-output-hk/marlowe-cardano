@@ -21,6 +21,8 @@ import           Control.Monad.Freer.Error                 (runError)
 import           Data.Aeson                                (decode, encode)
 import           Data.Aeson.Text                           (encodeToLazyText)
 import qualified Data.ByteString                           as BS
+import qualified Data.ByteString.Lazy                      as LB
+import qualified Data.ByteString.Short                     as SBS
 import           Data.Default                              (Default (..))
 import           Data.Either                               (fromRight, isRight)
 import qualified Data.Map.Strict                           as Map
@@ -42,7 +44,8 @@ import           Language.Marlowe.Analysis.FSSemantics
 import           Language.Marlowe.Client
 import           Language.Marlowe.Deserialisation          (byteStringToInt, byteStringToList)
 import           Language.Marlowe.Scripts                  (MarloweInput, mkMarloweStateMachineTransition,
-                                                            rolePayoutScript, typedValidator)
+                                                            rolePayoutScript, smallTypedValidator,
+                                                            smallUntypedValidator, typedValidator)
 import           Language.Marlowe.Semantics
 import           Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
 import           Language.Marlowe.SemanticsSerialisation   (contractToByteString)
@@ -286,8 +289,14 @@ uniqueContractHash = do
 validatorSize :: IO ()
 validatorSize = do
     let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
-    let vsize = BS.length $ Write.toStrictByteString (Serialise.encode validator)
-    assertBool ("Validator is too large " <> show vsize) (vsize < 1100000)
+    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
+    let validator1 = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
+    let vsize1 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator1
+    let validator2 = smallUntypedValidator defaultMarloweParams
+    let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
+    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18000)
+    assertBool ("smallTypedValidator is too large " <> show vsize1) (vsize1 < 15000)
+    assertBool ("smallUntypedValidator is too large " <> show vsize2) (vsize2 < 14000)
 
 
 extractContractRolesTest :: IO ()
