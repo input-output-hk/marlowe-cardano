@@ -12,7 +12,7 @@ This tutorial is embodied in the `bash` script [example-jq.sh](example-jq.sh).
 Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the path for the `bash` shell. Set the environment variable `CARDANO_NODE_SOCKET_PATH` to point to the location of the socket for the `cardano-node` service. In this tutorial, we use the public `testnet`:
 
     NETWORK=testnet
-    MAGIC="--testnet-magic 1097911063"
+    MAGIC=(--testnet-magic 1097911063)
     export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
@@ -22,7 +22,7 @@ Select a wallet for use in this tutorial and specify the files with the signing 
 
     PAYMENT_SKEY=payment.skey
     PAYMENT_VKEY=payment.vkey
-    ADDRESS_P=$(cardano-cli address build $MAGIC --payment-verification-key-file $PAYMENT_VKEY)
+    ADDRESS_P=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file $PAYMENT_VKEY)
     PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 
 
@@ -38,7 +38,7 @@ First, we choose names for the files containing the Marlowe information and the 
 We just use the simplest contract, `Close`, which is serialised in [example.contract](example.contract). We use JSON files for the contract and its current state:
 
     CONTRACT_FILE=example.contract
-    STATE_FILE=example.state
+    STATE_FILE=test.state
 
 We will put 3 ADA into the account for the wallet, as recorded in the contract's state:
 
@@ -75,7 +75,7 @@ We will redeem the ADA within a particular range of slots:
 
 We now create the Marlowe contract and transaction:
 
-    $ marlowe-cli export $MAGIC                                 \
+    $ marlowe-cli export "${MAGIC[@]}"                          \
                          --contract-file $CONTRACT_FILE         \
                          --state-file $STATE_FILE               \
                          --out-file $MARLOWE_FILE               \
@@ -104,7 +104,7 @@ We now extract the address, validator, datum, datum hash, and redeemer from the 
 
 Before running the contract, we need to put funds into it. Examine the UTxOs at the wallet address:
 
-    $ cardano-cli query utxo $MAGIC --address $ADDRESS_P
+    $ cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
     
                                TxHash                                 TxIx        Amount
     --------------------------------------------------------------------------------------
@@ -114,20 +114,19 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
 
     TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f#0
     
-    marlowe-cli create $MAGIC                                  \
-                       --socket-path $CARDANO_NODE_SOCKET_PATH \
-                       --script-address $ADDRESS_S             \
-                       --tx-out-datum-file $DATUM_FILE         \
-                       --tx-out-value $DATUM_LOVELACE          \
-                       --tx-in $TX_0                           \
-                       --change-address $ADDRESS_P             \
+    marlowe-cli create "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --script-address "$ADDRESS_S"             \
+                       --tx-out-datum-file $DATUM_FILE           \
+                       --tx-out-value $DATUM_LOVELACE            \
+                       --tx-in "$TX_0"                           \
+                       --change-address "$ADDRESS_P"             \
                        --out-file tx.raw
     
-    marlowe-cli submit $MAGIC                                  \
-                       --socket-path $CARDANO_NODE_SOCKET_PATH \
-                       --required-signer $PAYMENT_SKEY         \
-                       --tx-body-file tx.raw
-
+    marlowe-cli submit "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --tx-body-file tx.raw                     \
+                       --required-signer $PAYMENT_SKEY
 
 After the transaction is recorded on the blockchain, there are funds at the contract address with the data hash `DATUM_HASH`.
 
@@ -136,7 +135,7 @@ After the transaction is recorded on the blockchain, there are funds at the cont
     0c050b99438fcd2c65c54b062338f3692c212cbfb499cfe3ad6a9a07ce15dbc0
     
     
-    $ cardano-cli query utxo $MAGIC --address $ADDRESS_S
+    $ cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
     
                                TxHash                                 TxIx        Amount
     --------------------------------------------------------------------------------------
@@ -151,35 +150,34 @@ We name the funding transaction as `TX_1`.
 
 We now use the previously computed redeemer and datum to remove the funds from the contract. This involves computing the fee, building the transaction, signing it, and submitting it.
 
-    marlowe-cli close $MAGIC                                  \
-                --socket-path $CARDANO_NODE_SOCKET_PATH \
-                --tx-in-script-file $PLUTUS_FILE        \
-                --tx-in-redeemer-file $REDEEMER_FILE    \
-                --tx-in-datum-file $DATUM_FILE          \
-                --tx-in-marlowe $TX_1#1                 \
-                --tx-in $TX_1#0                         \
-                --tx-in-collateral $TX_1#0              \
-                --tx-out $ADDRESS_P+$DATUM_LOVELACE     \
-                --change-address $ADDRESS_P             \
-                --invalid-before $REDEEM_MIN_SLOT       \
-                --invalid-hereafter $REDEEM_MAX_SLOT    \
-                --out-file tx.raw
+    marlowe-cli close "${MAGIC[@]}"                             \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --tx-in-script-file $PLUTUS_FILE          \
+                      --tx-in-redeemer-file $REDEEMER_FILE      \
+                      --tx-in-datum-file $DATUM_FILE            \
+                      --tx-in-marlowe "$TX_1"#1                 \
+                      --tx-in "$TX_1"#0                         \
+                      --tx-in-collateral "$TX_1"#0              \
+                      --tx-out "$ADDRESS_P"+$DATUM_LOVELACE     \
+                      --change-address "$ADDRESS_P"             \
+                      --invalid-before $REDEEM_MIN_SLOT         \
+                      --invalid-hereafter $REDEEM_MAX_SLOT      \
+                      --out-file tx.raw
     
-    marlowe-cli submit $MAGIC                                  \
-                       --socket-path $CARDANO_NODE_SOCKET_PATH \
-                       --required-signer $PAYMENT_SKEY         \
-                       --tx-body-file tx.raw
-
+    marlowe-cli submit "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --tx-body-file tx.raw                     \
+                       --required-signer $PAYMENT_SKEY
 
 After the transaction is recorded on the blockchain, we see that the funds were removed from the script address and are in the wallet.
 
-    $ cardano-cli query utxo $MAGIC --address $ADDRESS_S
+    $ cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
     
                                TxHash                                 TxIx        Amount
     --------------------------------------------------------------------------------------
     
     
-    $ cardano-cli query utxo $MAGIC --address $ADDRESS_P
+    $ cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
     
                                TxHash                                 TxIx        Amount
     --------------------------------------------------------------------------------------

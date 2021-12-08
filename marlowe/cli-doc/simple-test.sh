@@ -22,8 +22,7 @@ set -ex
 # Select the network.
 
 NETWORK=testnet
-MAGIC_FLAG=--testnet-magic
-MAGIC_NUM=1097911063
+MAGIC=(--testnet-magic 1097911063)
 
 if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
 then
@@ -35,47 +34,46 @@ fi
 
 PAYMENT_SKEY=payment.skey
 PAYMENT_VKEY=payment.vkey
-ADDRESS_P=$(cardano-cli address build $MAGIC_FLAG $MAGIC_NUM --payment-verification-key-file $PAYMENT_VKEY)
+ADDRESS_P=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file $PAYMENT_VKEY)
 PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 
 
 # Find the contract address.
 
-ADDRESS_S=$(marlowe-cli address $MAGIC_FLAG $MAGIC_NUM)
+ADDRESS_S=$(marlowe-cli address "${MAGIC[@]}")
 echo "$ADDRESS_S"
 
 
 # Create the Plutus script for the validator.
 
-marlowe-cli validator $MAGIC_FLAG $MAGIC_NUM --out-file example.plutus
+marlowe-cli validator "${MAGIC[@]}" --out-file example.plutus
 
 
 # Generate the example contract, state, and inputs files for each step.
 
-marlowe-cli example --write-files > /dev/null
+marlowe-cli example "$PUBKEYHASH_P" --write-files > /dev/null
 for i in 0 1 2
 do
-  sed -e '/pk_hash/s/"d7604c[^"]*"$/"'"$PUBKEYHASH_P"'"/' \
-      -e   '/bytes/s/"d7604c[^"]*"$/"'"$PUBKEYHASH_P"'"/' \
-      -i example-$i.contract                              \
-      -i example-$i.state                                 \
-      -i example-$i.inputs
   marlowe-cli datum    --contract-file example-$i.contract \
                        --state-file    example-$i.state    \
                        --out-file      example-$i.datum
-  marlowe-cli redeemer --inputs-file   example-$i.inputs   \
-                       --out-file      example-$i.redeemer
 done
+for i in 0 1
+do
+  marlowe-cli redeemer --out-file   example-$i.redeemer
+done
+marlowe-cli redeemer --input-file example-2.input   \
+                     --out-file   example-2.redeemer
 
 
 # 0. Find some funds, and enter the selected UTxO as "TX_0".
 
 echo -e \\nFIND THE FUNDING UTXO\\n
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
 TX_0=$(
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM                               \
+cardano-cli query utxo "${MAGIC[@]}"                                        \
                        --address "$ADDRESS_P"                               \
                        --out-file /dev/stdout                               \
 | jq '. | to_entries[] | select(.value.value.lovelace >= 120000000) | .key' \
@@ -88,7 +86,7 @@ echo TxId '"'"$TX_0"'"'
 
 echo -e \\nEXISTING UTXOS AT SCRIPT\\n
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
 
 # Fund the contract by sending the initial funds and setting the initial state.
@@ -96,7 +94,7 @@ cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
 echo -e \\nCREATE THE CONTRACT\\n
 
 TX_1=$(
-marlowe-cli create $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli create "${MAGIC[@]}"                             \
                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                    --script-address "$ADDRESS_S"             \
                    --tx-out-datum-file example-2.datum       \
@@ -107,7 +105,7 @@ marlowe-cli create $MAGIC_FLAG $MAGIC_NUM                    \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli submit "${MAGIC[@]}"                             \
                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                    --required-signer $PAYMENT_SKEY           \
                    --tx-body-file tx.raw
@@ -116,13 +114,13 @@ marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
 # Wait until the transaction is appears on the blockchain.
 
 timeout 10m bash << EOI
-until (cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S" | grep "$TX_1" > /dev/null)
+until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S" | bash | grep "$TX_1" > /dev/null)
 do
   sleep 5s
 done
 EOI
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
 
 # 1. Deposit 10 ADA.
@@ -130,27 +128,27 @@ cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
 echo -e \\nDEPOSIT 10 ADA\\n
 
 TX_2=$(
-marlowe-cli advance $MAGIC_FLAG $MAGIC_NUM                     \
-                    --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                    --script-address "$ADDRESS_S"              \
-                    --tx-in-script-file example.plutus         \
-                    --tx-in-redeemer-file example-2.redeemer   \
-                    --tx-in-datum-file example-2.datum         \
-                    --required-signer $PAYMENT_SKEY            \
-                    --tx-in-marlowe "$TX_1"#1                  \
-                    --tx-in "$TX_1"#0                          \
-                    --tx-in-collateral "$TX_1"#0               \
-                    --tx-out-datum-file example-1.datum        \
-                    --tx-out-value 13000000                    \
-                    --tx-out "$ADDRESS_P"+50000000             \
-                    --change-address "$ADDRESS_P"              \
-                    --invalid-before    40000000               \
-                    --invalid-hereafter 80000000               \
-                    --out-file tx.raw                          \
+marlowe-cli advance "${MAGIC[@]}"                             \
+                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                    --script-address "$ADDRESS_S"             \
+                    --tx-in-script-file example.plutus        \
+                    --tx-in-redeemer-file example-2.redeemer  \
+                    --tx-in-datum-file example-2.datum        \
+                    --required-signer $PAYMENT_SKEY           \
+                    --tx-in-marlowe "$TX_1"#1                 \
+                    --tx-in "$TX_1"#0                         \
+                    --tx-in-collateral "$TX_1"#0              \
+                    --tx-out-datum-file example-1.datum       \
+                    --tx-out-value 13000000                   \
+                    --tx-out "$ADDRESS_P"+50000000            \
+                    --change-address "$ADDRESS_P"             \
+                    --invalid-before    40000000              \
+                    --invalid-hereafter 80000000              \
+                    --out-file tx.raw                         \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli submit "${MAGIC[@]}"                             \
                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                    --required-signer $PAYMENT_SKEY           \
                    --tx-body-file tx.raw
@@ -159,41 +157,41 @@ marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
 # Wait until the transaction is appears on the blockchain.
 
 timeout 10m bash << EOI
-until (cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S" | grep "$TX_2" > /dev/null)
+until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S" | bash | grep "$TX_2" > /dev/null)
 do
   sleep 5s
 done
 EOI
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
 
 ## 2. Pay 5 ADA back.
 
-echo -e \\nPAY 10 ADA BACK\\n
+echo -e \\nPAY 5 ADA BACK\\n
 
 TX_3=$(
-marlowe-cli advance $MAGIC_FLAG $MAGIC_NUM                     \
-                    --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                    --script-address "$ADDRESS_S"              \
-                    --tx-in-script-file example.plutus         \
-                    --tx-in-redeemer-file example-1.redeemer   \
-                    --tx-in-datum-file example-1.datum         \
-                    --required-signer $PAYMENT_SKEY            \
-                    --tx-in-marlowe "$TX_2"#1                  \
-                    --tx-in "$TX_2"#0                          \
-                    --tx-in-collateral "$TX_2"#0               \
-                    --tx-out-datum-file example-0.datum        \
-                    --tx-out-value 8000000                     \
-                    --tx-out "$ADDRESS_P"+50000000             \
-                    --change-address "$ADDRESS_P"              \
-                    --invalid-before    40000000               \
-                    --invalid-hereafter 80000000               \
-                    --out-file tx.raw                          \
+marlowe-cli advance "${MAGIC[@]}"                             \
+                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                    --script-address "$ADDRESS_S"             \
+                    --tx-in-script-file example.plutus        \
+                    --tx-in-redeemer-file example-1.redeemer  \
+                    --tx-in-datum-file example-1.datum        \
+                    --required-signer $PAYMENT_SKEY           \
+                    --tx-in-marlowe "$TX_2"#1                 \
+                    --tx-in "$TX_2"#0                         \
+                    --tx-in-collateral "$TX_2"#0              \
+                    --tx-out-datum-file example-0.datum       \
+                    --tx-out-value 8000000                    \
+                    --tx-out "$ADDRESS_P"+50000000            \
+                    --change-address "$ADDRESS_P"             \
+                    --invalid-before    40000000              \
+                    --invalid-hereafter 80000000              \
+                    --out-file tx.raw                         \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli submit "${MAGIC[@]}"                             \
                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                    --required-signer $PAYMENT_SKEY           \
                    --tx-body-file tx.raw
@@ -202,13 +200,13 @@ marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
 # Wait until the transaction is appears on the blockchain.
 
 timeout 10m bash << EOI
-until (cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S" | grep "$TX_3" > /dev/null)
+until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S" | bash | grep "$TX_3" > /dev/null)
 do
   sleep 5s
 done
 EOI
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
 
 # 3. Withdrawn the remaining 8 ADA.
@@ -216,7 +214,7 @@ cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
 echo -e \\nWITHDRAW THE REMAINING 8 ADA\\n
 
 TX_4=$(
-marlowe-cli close $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli close "${MAGIC[@]}"                             \
                   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                   --tx-in-script-file example.plutus        \
                   --tx-in-redeemer-file example-0.redeemer  \
@@ -232,7 +230,7 @@ marlowe-cli close $MAGIC_FLAG $MAGIC_NUM                    \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli submit "${MAGIC[@]}"                             \
                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                    --required-signer $PAYMENT_SKEY           \
                    --tx-body-file tx.raw
@@ -241,15 +239,15 @@ marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
 # See that the transaction succeeded.
 
 timeout 10m bash << EOI
-until (cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P" | grep "$TX_4" > /dev/null)
+until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" | bash | grep "$TX_4" > /dev/null)
 do
   sleep 5s
 done
 EOI
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
 echo -e \\nSUCCESS\\n
 
@@ -258,15 +256,15 @@ echo -e \\nSUCCESS\\n
 
 echo -e \\nCLEAN UP\\n
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P" --out-file /dev/stdout \
-| jq '. | to_entries[] | .key'                                                              \
-| sed -e 's/"//g;s/^/--tx-in /'                                                             \
-| xargs cardano-cli transaction build --alonzo-era $MAGIC_FLAG $MAGIC_NUM                   \
-                                      --change-address "$ADDRESS_P"                         \
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" --out-file /dev/stdout \
+| jq '. | to_entries[] | .key'                                                     \
+| sed -e 's/"//g;s/^/--tx-in /'                                                    \
+| xargs cardano-cli transaction build --alonzo-era "${MAGIC[@]}"                   \
+                                      --change-address "$ADDRESS_P"                \
                                       --out-file tx.raw
 
 TX_5=$(
-marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
+marlowe-cli submit "${MAGIC[@]}"                             \
                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                    --required-signer $PAYMENT_SKEY           \
                    --tx-body-file tx.raw                     \
@@ -274,10 +272,10 @@ marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
 )
 
 timeout 10m bash << EOI
-until (cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P" | grep "$TX_5" > /dev/null)
+until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" | bash | grep "$TX_5" > /dev/null)
 do
   sleep 5s
 done
 EOI
 
-cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"

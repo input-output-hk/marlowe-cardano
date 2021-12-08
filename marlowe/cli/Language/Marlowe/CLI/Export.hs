@@ -94,15 +94,15 @@ exportMarlowe :: MonadError CliError m
               -> StakeAddressReference  -- ^ The stake address.
               -> FilePath               -- ^ The JSON file containing the contract.
               -> FilePath               -- ^ The JSON file containing the contract's state.
-              -> Maybe FilePath         -- ^ The JSON file containing the contract's input, if any.
+              -> [FilePath]             -- ^ The JSON files containing the contract's inputs.
               -> FilePath               -- ^ The output JSON file for Marlowe contract information.
               -> Bool                   -- ^ Whether to print statistics about the contract.
               -> m ()                   -- ^ Action to export the contract and transaction information to a file.
-exportMarlowe marloweParams costModel network stake contractFile stateFile inputsFile outputFile printStats =
+exportMarlowe marloweParams costModel network stake contractFile stateFile inputFiles outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
-    inputs   <- maybe (pure []) decodeFileStrict inputsFile
+    inputs   <- mapM decodeFileStrict inputFiles
     marloweInfo@MarloweInfo{..} <-
       liftEither
         $ buildMarlowe
@@ -340,13 +340,13 @@ buildRedeemer inputs =
 -- | Export to a file the redeemer information about a Marlowe transaction.
 exportRedeemer :: MonadError CliError m
                => MonadIO m
-               => Maybe FilePath  -- ^ The file containing the contract's input, if any.
-               -> FilePath        -- ^ The output JSON file for Marlowe contract information.
-               -> Bool            -- ^ Whether to print statistics on the contract.
-               -> m ()            -- ^ Action to export the redeemer information to a file.
-exportRedeemer inputsFile outputFile printStats =
+               => [FilePath]  -- ^ The files containing the contract's inputs.
+               -> FilePath    -- ^ The output JSON file for Marlowe contract information.
+               -> Bool        -- ^ Whether to print statistics on the contract.
+               -> m ()        -- ^ Action to export the redeemer information to a file.
+exportRedeemer inputFiles outputFile printStats =
   do
-    inputs <- maybe (pure []) decodeFileStrict inputsFile
+    inputs <- mapM decodeFileStrict inputFiles
     let
       RedeemerInfo{..} = buildRedeemer inputs
     liftIO

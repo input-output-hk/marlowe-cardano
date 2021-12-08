@@ -270,7 +270,7 @@ data Command =
     , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
     , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
-    , inputsFile    :: Maybe FilePath               -- ^ The JSON file containing the contract's input, if any.
+    , inputFiles    :: [FilePath]                   -- ^ The JSON files containing the contract's input.
     , outputFile    :: FilePath                     -- ^ The output JSON file for Marlowe contract information.
     , printStats    :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
     }
@@ -302,7 +302,7 @@ data Command =
     -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
     {
-      inputsFile   :: Maybe FilePath  -- ^ The JSON file containing the contract's input, if any.
+      inputFiles   :: [FilePath]      -- ^ The JSON files containing the contract's input.
     , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
@@ -347,7 +347,7 @@ data Command =
     , collateral      :: TxIn                       -- ^ The collateral.
     , change          :: AddressAny                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
-    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the tranasction.
+    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Build a transaction spending from a Marlowe contract.
@@ -365,7 +365,7 @@ data Command =
     , collateral      :: TxIn                       -- ^ The collateral.
     , change          :: AddressAny                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
-    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the tranasction.
+    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
     }
     -- | Submit a transaction.
@@ -379,6 +379,7 @@ data Command =
     -- | Ad-hoc example.
   | Example
     {
-      writeFiles :: Bool  -- ^ Whether to serialise states, contracts and inputs to JSON.
+      pubKeyHash :: String  -- ^ The public key hash for the example party.
+    , writeFiles :: Bool    -- ^ Whether to serialise states, contracts and inputs to JSON.
     }
     deriving (Eq, Generic, Show)

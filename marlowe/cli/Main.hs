@@ -36,6 +36,7 @@ import           Ledger.Ada                      (adaSymbol, adaToken)
 import           Paths_marlowe                   (version)
 import           Plutus.V1.Ledger.Api            (PubKeyHash (..), defaultCostModelParams, toBuiltin)
 
+import qualified Data.ByteString.Char8           as BS8 (pack)
 import qualified Data.ByteString.Base16          as Base16 (decode)
 import qualified Data.ByteString.Lazy            as LBS (writeFile)
 import qualified PlutusTx.AssocMap               as AM (empty, singleton)
@@ -48,15 +49,17 @@ main = mainCLI version example
 
 -- | Hardwired example, which can be run by executing `marlowe-cli example`.
 example :: Bool                   -- ^ Whether to write example files.
+        -> String                 -- ^ The public key hash.
         -> ExceptT CliError IO () -- ^ Action to run the example.
-example writeFiles =
+example writeFiles ownPubKey' =
 
   do
 
     ownPubKey <-
       fmap (PubKeyHash . toBuiltin)
         . liftCli
-        $ Base16.decode "d7604c51452bf9c135d63c686ba306d268fcae8494c877e12c44c657"
+        . Base16.decode
+        $ BS8.pack ownPubKey'
     let
       party = PK ownPubKey :: Party
       adatoken = Token adaSymbol adaToken :: Token
@@ -89,9 +92,6 @@ example writeFiles =
         liftIO
           . LBS.writeFile "example-0.contract"
           $ encodePretty contract0
-        liftIO
-          . LBS.writeFile "example-0.inputs"
-          $ encodePretty inputs0
 
     liftIO $ putStrLn ""
     liftIO $ putStrLn ""
@@ -119,9 +119,6 @@ example writeFiles =
         liftIO
           . LBS.writeFile "example-1.contract"
           $ encodePretty contract1
-        liftIO
-          . LBS.writeFile "example-1.inputs"
-          $ encodePretty inputs1
 
     liftIO $ putStrLn ""
     liftIO $ putStrLn ""
@@ -150,5 +147,5 @@ example writeFiles =
           . LBS.writeFile "example-2.contract"
           $ encodePretty contract2
         liftIO
-          . LBS.writeFile "example-2.inputs"
-          $ encodePretty inputs2
+          . LBS.writeFile "example-2.input"
+          $ encodePretty (head inputs2)

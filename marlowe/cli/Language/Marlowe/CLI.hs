@@ -42,7 +42,7 @@ import qualified Options.Applicative              as O
 
 
 -- | Hardwired example.
-type Example = Bool -> ExceptT CliError IO ()
+type Example = Bool -> String -> ExceptT CliError IO ()
 
 
 -- | Main entry point for Marlowe CLI tool.
@@ -76,7 +76,7 @@ mainCLI version example =
             Export{..}          -> exportMarlowe
                                      marloweParams' costModel network' stake'
                                      contractFile stateFile
-                                     inputsFile
+                                     inputFiles
                                      outputFile
                                      printStats
             ExportAddress{}     -> exportAddress
@@ -90,7 +90,7 @@ mainCLI version example =
                                      datumFile
                                      printStats
             ExportRedeemer{..}  -> exportRedeemer
-                                     inputsFile
+                                     inputFiles
                                      redeemerFile
                                      printStats
             BuildTransact{..}   -> buildSimple
@@ -136,7 +136,7 @@ mainCLI version example =
                                      bodyFile
                                      signingKeyFiles
                                      >>= printTxId
-            Example{..}         -> example writeFiles
+            Example{..}         -> example writeFiles pubKeyHash
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -195,14 +195,14 @@ exportMarloweCommand =
 exportMarloweOptions :: O.Parser Command -- ^ The parser.
 exportMarloweOptions =
   Export
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"     <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."         )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"     <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                      )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency"    <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any."      )
-    <*> O.strOption                                        (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."           )
-    <*> O.strOption                                        (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state."     )
-    <*> (O.optional . O.strOption)                         (O.long "inputs-file"       <> O.metavar "INPUTS_FILE"     <> O.help "JSON input file for redeemer inputs, if any.")
-    <*> O.strOption                                        (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."              )
-    <*> O.switch                                           (O.long "print-stats"                                      <> O.help "Print statistics."                           )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"     <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"     <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency"    <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
+    <*> O.strOption                                        (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                                        (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> (O.many . O.strOption)                             (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
+    <*> O.strOption                                        (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
+    <*> O.switch                                           (O.long "print-stats"                                      <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "address" command.
@@ -272,9 +272,9 @@ exportRedeemerCommand =
 exportRedeemerOptions :: O.Parser Command
 exportRedeemerOptions =
   ExportRedeemer
-    <$> (O.optional . O.strOption) (O.long "inputs-file" <> O.metavar "INPUTS_FILE" <> O.help "JSON input file for redeemer inputs, if any.")
-    <*> O.strOption                (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."              )
-    <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                           )
+    <$> (O.many . O.strOption) (O.long "input-file" <> O.metavar "INPUT_FILE"  <> O.help "JSON input file for redeemer inputs.")
+    <*> O.strOption            (O.long "out-file"   <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
+    <*> O.switch               (O.long "print-stats"                           <> O.help "Print statistics."                   )
 
 
 -- | Parser for the "transact" command.
@@ -409,4 +409,5 @@ exampleCommand =
 exampleOptions :: O.Parser Command
 exampleOptions =
   Example
-    <$> O.switch (O.long "write-files" <> O.help "Write example JSON files for states, contracts, and inputs.")
+    <$> O.strArgument (O.metavar "PUBKEYHASH" <> O.help "The public key hash for the example party."                 )
+    <*> O.switch      (O.long "write-files"   <> O.help "Write example JSON files for states, contracts, and inputs.")

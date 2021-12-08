@@ -10,20 +10,20 @@ The `export` command writes a JSON file with comprehensive information about the
     Usage: marlowe-cli export [--testnet-magic INTEGER] [--stake-address ADDRESS]
                               [--roles-currency CURRENCY_SYMBOL]
                               --contract-file CONTRACT_FILE --state-file STATE_FILE
-                              [--inputs-file INPUTS_FILE] --out-file OUTPUT_FILE
+                              [--input-file INPUT_FILE] --out-file OUTPUT_FILE
                               [--print-stats]
       Export a Marlowe contract to a JSON file.
     
     Available options:
-      --testnet-magic INTEGER             Network magic, or omit for mainnet.
-      --stake-address ADDRESS             Stake address, if any.
-      --roles-currency CURRENCY_SYMBOL    The currency symbol for roles, if any.
-      --contract-file CONTRACT_FILE       JSON input file for the contract.
-      --state-file STATE_FILE             JSON input file for the contract state.
-      --inputs-file INPUTS_FILE           JSON input file for redeemer inputs, if any.
-      --out-file OUTPUT_FILE              JSON output file for contract.
-      --print-stats                       Print statistics.
-      -h,--help                           Show this help text
+      --testnet-magic INTEGER          Network magic, or omit for mainnet.
+      --stake-address ADDRESS          Stake address, if any.
+      --roles-currency CURRENCY_SYMBOL The currency symbol for roles, if any.
+      --contract-file CONTRACT_FILE    JSON input file for the contract.
+      --state-file STATE_FILE          JSON input file for the contract state.
+      --input-file INPUT_FILE          JSON input file for redeemer inputs.
+      --out-file OUTPUT_FILE           JSON output file for contract.
+      --print-stats                    Print statistics.
+      -h,--help                        Show this help text
 
 The stake address can be omitted if no staking will be done at the script address. If the currency symbol is omitted, then ADA is used as the currency for the Marlowe roles.
 
@@ -41,7 +41,6 @@ The following command uses the close contract [example.contract](example.contrac
     $ marlowe-cli export --testnet-magic 1097911063       \
                          --contract-file example.contract \
                          --state-file example.state       \
-                         --inputs-file example.inputs     \
                          --out-file example.marlowe       \
                          --print-stats
     
