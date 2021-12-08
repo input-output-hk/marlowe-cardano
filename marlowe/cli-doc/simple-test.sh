@@ -2,6 +2,19 @@
 
 
 # Simple end-to-end test of `marlowe-cli`.
+#
+#
+# The environment variable CARDANO_NODE_SOCKET_PATH must be set.
+#
+# The following tools must be on the path:
+#   marlowe-cli
+#   cardano-cli
+#   sed
+#   jq
+#   timeout
+#
+# This script exits with an error value if the end-to-end test fails.
+
 
 set -ex
 
@@ -10,7 +23,11 @@ set -ex
 
 NETWORK=testnet
 MAGIC="--testnet-magic 1097911063"
-CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
+
+if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
+then
+  export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
+fi
 
 
 # Select the wallet.
@@ -37,25 +54,45 @@ marlowe-cli validator $MAGIC --out-file example.plutus
 marlowe-cli example --write-files > /dev/null
 for i in 0 1 2
 do
+  sed -e '/pk_hash/s/"d7604c[^"]*"$/"'$PUBKEYHASH_P'"/' \
+      -e   '/bytes/s/"d7604c[^"]*"$/"'$PUBKEYHASH_P'"/' \
+      -i example-$i.contract                            \
+      -i example-$i.state                               \
+      -i example-$i.inputs
   marlowe-cli datum    --contract-file example-$i.contract \
                        --state-file    example-$i.state    \
                        --out-file      example-$i.datum
   marlowe-cli redeemer --inputs-file   example-$i.inputs   \
                        --out-file      example-$i.redeemer
 done
-sed -i -e s/d7604c51452bf9c135d63c686ba306d268fcae8494c877e12c44c657/$PUBKEYHASH_P/ example-[012].{contract,state,inputs,datum,redeemer}
 
 
 # 0. Find some funds, and enter the selected UTxO as "TX_0".
 
+echo -e \\nFIND THE FUNDING UTXO\\n
+
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
-#### FIXME: Discover this Tx automatically.
+TX_0=$(
+cardano-cli query utxo $MAGIC                                               \
+                       --address $ADDRESS_P                                 \
+                       --out-file /dev/stdout                               \
+| jq '. | to_entries[] | select(.value.value.lovelace >= 120000000) | .key' \
+| sed -n -e '1{s/"//g;p}'
+)
+echo TxId '"'$TX_0'"'
 
-TX_0=f878ffba37026081afba2408db8a534b29a27d2eb9535e8b0666d70b9967c455
+
+# Check the existing UTxOs at the script address.
+
+echo -e \\nEXISTING UTXOS AT SCRIPT\\n
+
+cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 
 # Fund the contract by sending the initial funds and setting the initial state.
+
+echo -e \\nCREATE THE CONTRACT\\n
 
 TX_1=$(
 marlowe-cli create $MAGIC                                  \
@@ -63,12 +100,11 @@ marlowe-cli create $MAGIC                                  \
                    --script-address $ADDRESS_S             \
                    --tx-out-datum-file example-2.datum     \
                    --tx-out-value 3000000                  \
-                   --tx-in $TX_0#0                         \
+                   --tx-in $TX_0                           \
                    --change-address $ADDRESS_P             \
                    --out-file tx.raw                       \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
-echo TxId $TX_1
 
 marlowe-cli submit $MAGIC                                  \
                    --socket-path $CARDANO_NODE_SOCKET_PATH \
@@ -78,12 +114,19 @@ marlowe-cli submit $MAGIC                                  \
 
 # Wait until the transaction is appears on the blockchain.
 
-#### FIXME: Automatically wait.
+timeout 10m bash << EOI
+until (cardano-cli query utxo $MAGIC --address $ADDRESS_S | grep $TX_1 > /dev/null)
+do
+  sleep 5s
+done
+EOI
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 
 # 1. Deposit 10 ADA.
+
+echo -e \\nDEPOSIT 10 ADA\\n
 
 TX_2=$(
 marlowe-cli advance $MAGIC                                   \
@@ -100,12 +143,11 @@ marlowe-cli advance $MAGIC                                   \
                     --tx-out-value 13000000                  \
                     --tx-out $ADDRESS_P+50000000             \
                     --change-address $ADDRESS_P              \
-                    --invalid-before $REDEEM_MIN_SLOT        \
-                    --invalid-hereafter $REDEEM_MAX_SLOT     \
+                    --invalid-before    40000000             \
+                    --invalid-hereafter 80000000             \
                     --out-file tx.raw                        \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
-echo TxId $TX_2
 
 marlowe-cli submit $MAGIC                                  \
                    --socket-path $CARDANO_NODE_SOCKET_PATH \
@@ -115,12 +157,19 @@ marlowe-cli submit $MAGIC                                  \
 
 # Wait until the transaction is appears on the blockchain.
 
-#### FIXME: Automatically wait.
+timeout 10m bash << EOI
+until (cardano-cli query utxo $MAGIC --address $ADDRESS_S | grep $TX_2 > /dev/null)
+do
+  sleep 5s
+done
+EOI
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 
 ## 2. Pay 5 ADA back.
+
+echo -e \\nPAY 10 ADA BACK\\n
 
 TX_3=$(
 marlowe-cli advance $MAGIC                                   \
@@ -137,12 +186,11 @@ marlowe-cli advance $MAGIC                                   \
                     --tx-out-value 8000000                   \
                     --tx-out $ADDRESS_P+50000000             \
                     --change-address $ADDRESS_P              \
-                    --invalid-before $REDEEM_MIN_SLOT        \
-                    --invalid-hereafter $REDEEM_MAX_SLOT     \
+                    --invalid-before    40000000             \
+                    --invalid-hereafter 80000000             \
                     --out-file tx.raw                        \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
-echo TxId $TX_3
 
 marlowe-cli submit $MAGIC                                  \
                    --socket-path $CARDANO_NODE_SOCKET_PATH \
@@ -150,11 +198,21 @@ marlowe-cli submit $MAGIC                                  \
                    --tx-body-file tx.raw
 
 
-# 3. Withdrawn the remaining 8 ADA.
+# Wait until the transaction is appears on the blockchain.
 
-#### FIXME: Automatically wait.
+timeout 10m bash << EOI
+until (cardano-cli query utxo $MAGIC --address $ADDRESS_S | grep $TX_3 > /dev/null)
+do
+  sleep 5s
+done
+EOI
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
+
+
+# 3. Withdrawn the remaining 8 ADA.
+
+echo -e \\nWITHDRAW THE REMAINING 8 ADA\\n
 
 TX_4=$(
 marlowe-cli close $MAGIC                                  \
@@ -167,12 +225,11 @@ marlowe-cli close $MAGIC                                  \
                   --tx-in-collateral $TX_3#0              \
                   --tx-out $ADDRESS_P+8000000             \
                   --change-address $ADDRESS_P             \
-                  --invalid-before $REDEEM_MIN_SLOT       \
-                  --invalid-hereafter $REDEEM_MAX_SLOT    \
+                  --invalid-before    40000000            \
+                  --invalid-hereafter 80000000            \
                   --out-file tx.raw                       \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
-echo TxId $TX_4
 
 marlowe-cli submit $MAGIC                                  \
                    --socket-path $CARDANO_NODE_SOCKET_PATH \
@@ -182,9 +239,42 @@ marlowe-cli submit $MAGIC                                  \
 
 # See that the transaction succeeded.
 
-#### FIXME: Automatically wait.
+timeout 10m bash << EOI
+until (cardano-cli query utxo $MAGIC --address $ADDRESS_P | grep $TX_4 > /dev/null)
+do
+  sleep 5s
+done
+EOI
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
+echo -e \\nSUCCESS\\n
+
+
+# Clean up.
+
+echo -e \\nCLEAN UP\\n
+
+cardano-cli transaction build --alonzo-era $MAGIC \
+  $(cardano-cli query utxo $MAGIC --address $ADDRESS_P --out-file /dev/stdout | jq '. | to_entries[] | .key' | sed -e 's/"//g;s/^/--tx-in /') \
+  --change-address $ADDRESS_P \
+  --out-file tx.raw
+
+TX_5=$(
+marlowe-cli submit $MAGIC                                  \
+                   --socket-path $CARDANO_NODE_SOCKET_PATH \
+                   --required-signer $PAYMENT_SKEY         \
+                   --tx-body-file tx.raw                   \
+| sed -e 's/^TxId \(.*\)$/\1/'
+)
+
+timeout 10m bash << EOI
+until (cardano-cli query utxo $MAGIC --address $ADDRESS_P | grep $TX_5 > /dev/null)
+do
+  sleep 5s
+done
+EOI
+
+cardano-cli query utxo $MAGIC --address $ADDRESS_P

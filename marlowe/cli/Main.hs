@@ -135,7 +135,7 @@ example writeFiles =
         , boundValues = AM.empty
         , minSlot     = 40_000_000
         }
-      contract2 = When [Case (Deposit party party ada (Constant 10_000_000)) contract1] 45_000_000 Close
+      contract2 = When [Case (Deposit party party ada (Constant 10_000_000)) contract1] 90_000_000 Close
       inputs2 = [IDeposit party party adatoken 10_000_000]
     printMarlowe
       defaultMarloweParams costModelParams

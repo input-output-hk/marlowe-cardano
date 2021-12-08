@@ -50,7 +50,7 @@ import           Data.Aeson.Encode.Pretty        (encodePretty)
 import           Language.Marlowe.CLI.IO         (decodeFileStrict)
 import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (typedValidator1)
+import           Language.Marlowe.Scripts        (smallTypedValidator)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript)
@@ -190,7 +190,7 @@ buildAddress :: IsShelleyBasedEra era
              -> AddressInEra era       -- ^ The script address.
 buildAddress marloweParams network stake =
   let
-    viValidator = typedValidator1 marloweParams
+    viValidator = smallTypedValidator marloweParams
     script = getValidator . validatorScript $ viValidator
     viScript = toCardanoApiScript script
   in
@@ -226,7 +226,7 @@ buildValidator :: IsShelleyBasedEra era
                -> Either CliError (ValidatorInfo era)  -- ^ The validator information, or an error message.
 buildValidator marloweParams costModel network stake =
   let
-    viValidator = typedValidator1 marloweParams
+    viValidator = smallTypedValidator marloweParams
     script = getValidator . validatorScript $ viValidator
     viScript = toCardanoApiScript script
     viBytes = SBS.toShort . LBS.toStrict . serialise $ script

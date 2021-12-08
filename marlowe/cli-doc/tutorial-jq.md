@@ -13,7 +13,7 @@ Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the
 
     NETWORK=testnet
     MAGIC="--testnet-magic 1097911063"
-    CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
+    export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
 ## 2. Select wallet.
@@ -68,7 +68,7 @@ We will put 3 ADA into the account for the wallet, as recorded in the contract's
 We will redeem the ADA within a particular range of slots:
 
     REDEEM_MIN_SLOT=1000
-    REDEEM_MAX_SLOT=43500000
+    REDEEM_MAX_SLOT=50000000
 
 
 ## Create the validator, datum, and redeemer.

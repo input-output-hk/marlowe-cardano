@@ -1,5 +1,5 @@
 {
-    "timeout": 45000000,
+    "timeout": 90000000,
     "when": [
         {
             "then": {

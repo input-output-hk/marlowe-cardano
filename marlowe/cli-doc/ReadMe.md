@@ -45,6 +45,20 @@ Individual help pages:
     *   [`marlowe-cli submit`](submit.md)
 
 
+## Installation
+
+Either install via using Nix and Cabal:
+
+    git clone https://github.com/input-output-hk/marlowe-cardano.git
+    nix-shell
+    cabal install exe:marlowe-cli
+
+or just using Cabal, if Cabal and GHC are already installed:
+
+    git clone https://github.com/input-output-hk/marlowe-cardano.git
+    cabal install exe:marlowe-cli
+
+
 ## Workflows for Building Marlowe Scripts, Datums, and Redeemers
 
 The `marlowe-cli` tools supports both granular and monolithic workflows for creating the files and hashes needed to submit Marlowe contracts with `cardano-cli`.
@@ -81,7 +95,7 @@ See [example.sh](example.sh) for an example bash script embodying this workflow.
 
 ## Extended Example
 
-An extended example showing the execution of a three-step contract is available in [extended-example.sh](extended-example.sh). It runs the following contract:
+An extended example showing the execution of a three-step contract is available in in a [tutorial](extended-tutorial.md) and in the script [extended-example.sh](extended-example.sh). It runs the following contract:
 
 <table>
 <tr>
@@ -120,3 +134,8 @@ When
 </td>
 </tr>
 </table>
+
+
+## Testing
+
+A automated test script is available at [simple-test.sh](simple-test.sh).

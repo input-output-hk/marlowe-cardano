@@ -26,7 +26,7 @@
 ####                 (Constant 5)
 ####                 Close
 ####             )]
-####         45000000 Close
+####         90000000 Close
 ####
 
 
@@ -34,7 +34,7 @@
 
 NETWORK=testnet
 MAGIC="--testnet-magic 1097911063"
-CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
+export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
 # Select the wallet.
@@ -61,20 +61,24 @@ marlowe-cli validator $MAGIC --out-file example.plutus
 marlowe-cli example --write-files > /dev/null
 for i in 0 1 2
 do
+  sed -e '/pk_hash/s/"d7604c[^"]*"$/"'$PUBKEYHASH_P'"/' \
+      -e   '/bytes/s/"d7604c[^"]*"$/"'$PUBKEYHASH_P'"/' \
+      -i example-$i.contract                            \
+      -i example-$i.state                               \
+      -i example-$i.inputs
   marlowe-cli datum    --contract-file example-$i.contract \
                        --state-file    example-$i.state    \
                        --out-file      example-$i.datum
   marlowe-cli redeemer --inputs-file   example-$i.inputs   \
                        --out-file      example-$i.redeemer
 done
-sed -i -e s/d7604c51452bf9c135d63c686ba306d268fcae8494c877e12c44c657/$PUBKEYHASH_P/ example-[012].{contract,state,inputs,datum,redeemer}
 
 
 # 0. Find some funds, and enter the selected UTxO as "TX_0".
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
-TX_0=f878ffba37026081afba2408db8a534b29a27d2eb9535e8b0666d70b9967c455
+TX_0=eea8f4cae07b0cd72c4996193edb4a87b5c0b8e04aa068f071bf7e16a5db0611
 
 
 # Fund the contract by sending the initial funds and setting the initial state.
@@ -120,8 +124,8 @@ marlowe-cli advance $MAGIC                                   \
                     --tx-out-value 13000000                  \
                     --tx-out $ADDRESS_P+50000000             \
                     --change-address $ADDRESS_P              \
-                    --invalid-before $REDEEM_MIN_SLOT        \
-                    --invalid-hereafter $REDEEM_MAX_SLOT     \
+                    --invalid-before    40000000             \
+                    --invalid-hereafter 80000000             \
                     --out-file tx.raw                        \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -155,8 +159,8 @@ marlowe-cli advance $MAGIC                                   \
                     --tx-out-value 8000000                   \
                     --tx-out $ADDRESS_P+50000000             \
                     --change-address $ADDRESS_P              \
-                    --invalid-before $REDEEM_MIN_SLOT        \
-                    --invalid-hereafter $REDEEM_MAX_SLOT     \
+                    --invalid-before    40000000             \
+                    --invalid-hereafter 80000000             \
                     --out-file tx.raw                        \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -183,8 +187,8 @@ marlowe-cli close $MAGIC                                  \
                   --tx-in-collateral $TX_3#0              \
                   --tx-out $ADDRESS_P+8000000             \
                   --change-address $ADDRESS_P             \
-                  --invalid-before $REDEEM_MIN_SLOT       \
-                  --invalid-hereafter $REDEEM_MAX_SLOT    \
+                  --invalid-before    40000000            \
+                  --invalid-hereafter 80000000            \
                   --out-file tx.raw                       \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -198,7 +202,13 @@ marlowe-cli submit $MAGIC                                  \
 
 # See that the transaction succeeded.
 
+timeout 5m bash << EOI
+until (cardano-cli query utxo $MAGIC --address $ADDRESS_P | grep $TX_4 > /dev/null)
+do
+  sleep 5s
+done
+EOI
+
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
-

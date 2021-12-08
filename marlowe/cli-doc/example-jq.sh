@@ -15,7 +15,7 @@
 
 NETWORK=testnet
 MAGIC="--testnet-magic 1097911063"
-CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
+export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
 # Select the wallet.
@@ -34,10 +34,32 @@ MARLOWE_FILE=test.marlowe
 # Configure the contract.
 
 CONTRACT_FILE=example.contract
-STATE_FILE=example.state
-DATUM_LOVELACE=$(jq '.accounts | .[0] | .[1]' $STATE_FILE)
+STATE_FILE=test.state
+DATUM_LOVELACE=3000000
 REDEEM_MIN_SLOT=1000
-REDEEM_MAX_SLOT=43500000
+REDEEM_MAX_SLOT=50000000
+
+cat << EOI > $STATE_FILE
+{
+    "choices": [],
+    "accounts": [
+        [
+            [
+                {
+                    "pk_hash": "$PUBKEYHASH_P"
+                },
+                {
+                    "currency_symbol": "",
+                    "token_name": ""
+                }
+            ],
+            $DATUM_LOVELACE
+        ]
+    ],
+    "minSlot": 10,
+    "boundValues": []
+}
+EOI
 
 
 # Create the contract, and extract the address, validator, datum hash, datum, and redeemer.
@@ -66,7 +88,7 @@ jq '.redeemer.json' $MARLOWE_FILE > $REDEEMER_FILE
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
-TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f
+TX_0=bcb0f4cd7d55fe08b01ffa797577128093ff82dd549faa1e5ef8487f84a215ac
 
 
 # Fund the contract.
@@ -85,14 +107,14 @@ cardano-cli transaction sign $MAGIC                           \
                              --signing-key-file $PAYMENT_SKEY \
                              --out-file tx.signed
 
-cardano-cli transaction submit "$MAGIC" --tx-file tx.signed
+cardano-cli transaction submit $MAGIC --tx-file tx.signed
 
 
 # Find the funding transaction, and enter its UTxO as "TX_1".
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
-TX_1=9c6d992735fd68ebf4e689ca75160007ffbdb584d4d908a1ab763d4d764eed13
+TX_1=59c44dd5ede7da887de1005d89b1694b1a38da6fd88cb4141614f2cfcd7ad179
 
 
 # Redeem the contract.
@@ -119,9 +141,10 @@ cardano-cli transaction sign $MAGIC                           \
 cardano-cli transaction submit $MAGIC --tx-file tx.signed
 
 
-# See that the transaction succeeded.
+# See that the transaction succeeded: i.e., the 3 ADA should have been removed from the script address and transferred to the wallet address.
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_S
 
 cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
+#### Voilà! See <https://testnet.cardanoscan.io/transaction/fed18b4927f869e92a2598b5b40b8c537008699116de98770ee741e3c03bdd3a>.
