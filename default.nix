@@ -28,6 +28,7 @@
 let
   inherit (packages) pkgs marlowe sources;
   inherit (marlowe) haskell;
+  inherit (haskell.packages.cardano-wallet.components.exes) cardano-wallet;
 in
 rec {
   inherit pkgs marlowe;
@@ -75,7 +76,7 @@ rec {
 
   # Packages needed for the bitte deployment
   bitte-packages = import ./bitte {
-    inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs sources;
+    inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs sources cardano-wallet;
     inherit (marlowe) cardano-node;
   };
 }
