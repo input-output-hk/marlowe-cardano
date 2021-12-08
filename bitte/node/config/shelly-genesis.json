@@ -1,0 +1,108 @@
+{
+    "maxLovelaceSupply": 45000000000000000,
+    "securityParam": 36,
+    "slotsPerKESPeriod": 129600,
+    "updateQuorum": 1,
+    "activeSlotsCoeff": 5.0e-2,
+    "protocolParams": {
+        "minUTxOValue": 1000000,
+        "eMax": 18,
+        "extraEntropy": {
+            "tag": "NeutralNonce"
+        },
+        "minFeeB": 155381,
+        "tau": 0.2,
+        "maxBlockBodySize": 65536,
+        "minPoolCost": 340000000,
+        "minFeeA": 44,
+        "maxTxSize": 16384,
+        "nOpt": 150,
+        "maxBlockHeaderSize": 1100,
+        "keyDeposit": 2000000,
+        "protocolVersion": {
+            "minor": 0,
+            "major": 2
+        },
+        "poolDeposit": 500000000,
+        "a0": 0.3,
+        "rho": 3.0e-3,
+        "decentralisationParam": 0.25
+    },
+    "networkMagic": 1564,
+    "initialFunds": {
+        "603b10d0399be24f3a936aac9fe2d6cd855519a8f46fb75fbf2e130848": 8919000000000000,
+        "004711b2924fd8bbb76585aa6235ac573dbe84c3d12a37f1e3d77d05e5103cd8664440115c2b37f382fdd5f62e906e130889f3fa72c00887b7": -901000000000000,
+        "60e878174265d7549ffb3ff1dd0f3fa793cc74b8296e9f0e2f81784acf": 8919000000000000,
+        "0022d02bb2c18dee38124b2418edb8ab27607285cc5c88684890941fe31e2ffc22c9b2a911d2091e2858d81819cefcc7b42d6372dc351e2de0": -901000000000000,
+        "60ae345cfe127dedaa3421395d7f763ae547defe42f76b8870cbfb0abb": 8919000000000000,
+        "00811875b508ec5efb7cec76361b95f87ef384024bd1a6f2ee3863b76fbe0a7b56ffcce35e3d5340123fadc8a70948cb1c51119d9a84002f82": -2703000000000000
+    },
+    "maxKESEvolutions": 62,
+    "networkId": "Testnet",
+    "genDelegs": {
+        "c6bce4e90430d8a511f259036c05ffffa3563be1456e9482e7d23a9d": {
+            "delegate": "b4db82221cac9791f39199014c179773f13619ae104008ad40befb61",
+            "vrf": "f89b3650b344d65a9860d7c1299e8c2bbd533b3b1c742186b09474d2200a8f39"
+        }
+    },
+    "slotLength": 1,
+    "systemStart": "2021-11-29T17:53:57Z",
+    "staking": {
+        "pools": {
+            "99223ad7dd700d48ad19c2a2a321e4661907d86f1a048fb4290e84e8": {
+                "publicKey": "99223ad7dd700d48ad19c2a2a321e4661907d86f1a048fb4290e84e8",
+                "cost": 0,
+                "metadata": null,
+                "vrf": "0b2123fb5f55990d41276fef7b604d2dd7b1e5a7120f70fa37bad249d95b7588",
+                "owners": [],
+                "pledge": 0,
+                "rewardAccount": {
+                    "network": "Testnet",
+                    "credential": {
+                        "key hash": "037ec3d148cd906b8eb1a634dfb6562d207070bcfb1c70d0b62810f8"
+                    }
+                },
+                "margin": 0.0,
+                "relays": []
+            },
+            "2da0ec0bf8aa46eaf1d186a0cdfb3eede7ceb3423988b0bfa6d613cb": {
+                "publicKey": "2da0ec0bf8aa46eaf1d186a0cdfb3eede7ceb3423988b0bfa6d613cb",
+                "cost": 0,
+                "metadata": null,
+                "vrf": "1c07fa67eefc8aca7934fd5b4dff23b47607426f6ae618453bc334c4c6e960eb",
+                "owners": [],
+                "pledge": 0,
+                "rewardAccount": {
+                    "network": "Testnet",
+                    "credential": {
+                        "key hash": "8ec4b0b374bc5ce14e2efedff90be749e3a6ac853dde592454e9dbf5"
+                    }
+                },
+                "margin": 0.0,
+                "relays": []
+            },
+            "db708115be9476539abdf01edcf13a7c69fa48a78db6ce028f759c89": {
+                "publicKey": "db708115be9476539abdf01edcf13a7c69fa48a78db6ce028f759c89",
+                "cost": 0,
+                "metadata": null,
+                "vrf": "f61cc427efd8f043c8d891d6b9909622d6e974f2b82bdf8ef8d8807a58caee69",
+                "owners": [],
+                "pledge": 0,
+                "rewardAccount": {
+                    "network": "Testnet",
+                    "credential": {
+                        "key hash": "042b7dc0f51c225991f61754ac5eb3a3496a1e89763733d1bb026ea7"
+                    }
+                },
+                "margin": 0.0,
+                "relays": []
+            }
+        },
+        "stake": {
+            "1e2ffc22c9b2a911d2091e2858d81819cefcc7b42d6372dc351e2de0": "2da0ec0bf8aa46eaf1d186a0cdfb3eede7ceb3423988b0bfa6d613cb",
+            "103cd8664440115c2b37f382fdd5f62e906e130889f3fa72c00887b7": "99223ad7dd700d48ad19c2a2a321e4661907d86f1a048fb4290e84e8",
+            "be0a7b56ffcce35e3d5340123fadc8a70948cb1c51119d9a84002f82": "db708115be9476539abdf01edcf13a7c69fa48a78db6ce028f759c89"
+        }
+    },
+    "epochLength": 7200
+}

@@ -1,4 +1,4 @@
-{ marlowe-playground, marlowe-pab, web-ghc, marlowe-dashboard, docs, pkgs, sources }:
+{ marlowe-playground, marlowe-pab, web-ghc, marlowe-dashboard, cardano-node, docs, pkgs, sources }:
 let
   staticSite = pkgs.callPackage (sources.plutus-apps + "/bitte/static-site.nix") { };
   playgroundStatic = pkgs.callPackage (sources.plutus-apps + "/bitte/playground-static.nix") { inherit staticSite; docs = docs.site; };
@@ -20,5 +20,9 @@ in
   marlowe-run-entrypoint = pkgs.callPackage ./pab.nix {
     pabExe = "${marlowe-pab}/bin/marlowe-pab";
     staticPkg = marlowe-dashboard.client;
+  };
+
+  node = pkgs.callPackage ./node {
+    inherit cardano-node;
   };
 }
