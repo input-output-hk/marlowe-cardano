@@ -1,8 +1,9 @@
 module Page.Welcome.Types
-  ( State
+  ( Action(..)
   , Card(..)
-  , Action(..)
+  , State
   , WalletNicknameOrIdError(..)
+  , WalletMnemonicError(..)
   ) where
 
 import Prologue
@@ -30,11 +31,13 @@ type State
     , walletLibrary :: WalletLibrary
     , walletNicknameOrIdInput :: InputField.State WalletNicknameOrIdError
     , walletNicknameInput :: InputField.State WalletNicknameError
+    , walletMnemonicInput :: InputField.State WalletMnemonicError
     , walletId :: PlutusAppId
     , remoteWalletDetails :: NotFoundWebData WalletDetails
     , enteringDashboardState :: Boolean
     }
 
+-- FIXME: Delete
 data WalletNicknameOrIdError
   = UnconfirmedWalletNicknameOrId
   | NonexistentWalletNicknameOrId
@@ -45,11 +48,26 @@ instance inputFieldErrorWalletNicknameOrIdError :: InputFieldError WalletNicknam
   inputErrorToString UnconfirmedWalletNicknameOrId = "Looking up wallet..."
   inputErrorToString NonexistentWalletNicknameOrId = "Wallet not found"
 
+data WalletMnemonicError
+  = MnemonicAmountOfWords
+  | InvalidMnemonicFromServer
+
+derive instance eqWalletMnemonicError :: Eq WalletMnemonicError
+
+instance inputFieldErrorWalletMnemonicError :: InputFieldError WalletMnemonicError where
+  inputErrorToString MnemonicAmountOfWords = "Mnemonic phrases have 24 words"
+  inputErrorToString InvalidMnemonicFromServer = "The phrase is an invalid mnemonic"
+
+-- TODO: When we implement another wallet connetctor, we should probably move this to
+-- Welcome.Testnet and split the Actions into general wallet logic and Testnet wallet logic
 data Card
   = GetStartedHelpCard
   | GenerateWalletHelpCard
+  -- FIXME: Remove or change
   | UseNewWalletCard
+  -- FIXME: Remove or change
   | UseWalletCard
+  | RestoreTestnetWalletCard
   | LocalWalletMissingCard
 
 derive instance eqCard :: Eq Card
@@ -58,6 +76,9 @@ data Action
   = OpenCard Card
   | CloseCard
   | GenerateWallet
+  | RestoreTestnetWallet
+  | WalletMnemonicInputAction (InputField.Action WalletMnemonicError)
+  -- FIXME: remove. Choose wallet or paste key
   | WalletNicknameOrIdInputAction (InputField.Action WalletNicknameOrIdError)
   | OpenUseWalletCardWithDetails WalletDetails
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
@@ -70,6 +91,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenCard _) = Nothing
   toEvent CloseCard = Nothing
   toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
+  toEvent RestoreTestnetWallet = Just $ defaultEvent "RestoreTestnetWallet"
+  toEvent (WalletMnemonicInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (WalletNicknameOrIdInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (OpenUseWalletCardWithDetails _) = Nothing
   toEvent (WalletNicknameInputAction inputFieldAction) = toEvent inputFieldAction

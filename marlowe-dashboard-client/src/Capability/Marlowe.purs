@@ -1,6 +1,7 @@
 module Capability.Marlowe
   ( class ManageMarlowe
   , createWallet
+  , restoreWallet
   , followContract
   , createPendingFollowerApp
   , followContractWithPendingFollowerApp
@@ -19,6 +20,7 @@ module Capability.Marlowe
 
 import Prologue
 import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicWallet, _observableState)
+import API.Marlowe.Run.TestnetWallet (RestoreWalletOptions)
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.Contract (activateContract, getContractInstanceClientState, getContractInstanceObservableState, getWalletContractInstances, invokeEndpoint) as Contract
@@ -26,9 +28,9 @@ import Capability.Contract (class ManageContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
-import Capability.Wallet (createWallet, getWalletInfo, getWalletTotalFunds) as Wallet
+import Capability.Wallet as Wallet
 import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _pubKeyHash, _walletId, _walletInfo)
-import Component.Contacts.Types (WalletId, WalletDetails, WalletInfo)
+import Component.Contacts.Types (WalletDetails, WalletId(..), WalletInfo)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError)
@@ -39,11 +41,12 @@ import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
 import Data.Newtype (unwrap, un)
-import Data.Traversable (traverse)
+import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
+import API.Marlowe.Run.TestnetWallet (RestoreError(..))
 import Marlowe.Semantics (Contract, MarloweData, MarloweParams, PubKeyHash, TokenName, TransactionInput)
 import MarloweContract (MarloweContract(..))
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToServer(..), ContractInstanceClientState)
@@ -57,6 +60,8 @@ import WebSocket.Support as WS
 class
   (ManageContract m, ManageMarloweStorage m, ManageWallet m) <= ManageMarlowe m where
   createWallet :: m (AjaxResponse WalletDetails)
+  -- FIXME: Probably change error type to Variant
+  restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletDetails)
   followContract :: WalletDetails -> MarloweParams -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createPendingFollowerApp :: WalletDetails -> m (AjaxResponse PlutusAppId)
   followContractWithPendingFollowerApp :: WalletDetails -> MarloweParams -> PlutusAppId -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
@@ -102,6 +107,29 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId <*> ajaxAssets
+  restoreWallet options = do
+    mWalletInfo <- Wallet.restoreWallet options
+    case mWalletInfo of
+      Left err -> pure $ Left err
+      Right walletInfo -> do
+        let
+          walletId = view _walletId walletInfo
+        -- create the WalletCompanion and MarloweApp for this wallet
+        -- FIXME: Errors
+        ajaxCompanionAppId <- lmap (const InvalidMnemonic) <$> Contract.activateContract WalletCompanion walletId
+        ajaxMarloweAppId <- lmap (const InvalidMnemonic) <$> Contract.activateContract MarloweApp walletId
+        -- FIXME: refactor into own fn
+        let
+          createWalletDetails companionAppId marloweAppId =
+            { walletNickname: ""
+            , companionAppId
+            , marloweAppId
+            , walletInfo
+            , assets: mempty
+            , previousCompanionAppState: Nothing
+            }
+        pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
+  -- TODO: Me quede aca.
   -- create a MarloweFollower app, call its "follow" endpoint with the given MarloweParams, and then
   -- return its PlutusAppId and observable state
   followContract walletDetails marloweParams =
@@ -252,6 +280,7 @@ sendWsMessage msg = do
 
 instance monadMarloweHalogenM :: (ManageMarlowe m) => ManageMarlowe (HalogenM state action slots msg m) where
   createWallet = lift createWallet
+  restoreWallet = lift <<< restoreWallet
   followContract walletDetails marloweParams = lift $ followContract walletDetails marloweParams
   createPendingFollowerApp = lift <<< createPendingFollowerApp
   followContractWithPendingFollowerApp walletDetails marloweParams followAppId = lift $ followContractWithPendingFollowerApp walletDetails marloweParams followAppId

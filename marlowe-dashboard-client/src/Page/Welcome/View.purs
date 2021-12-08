@@ -5,7 +5,6 @@ module Page.Welcome.View
 
 import Prologue hiding (div)
 import Clipboard (Action(..)) as Clipboard
-import Component.Contacts.Lenses (_walletNickname)
 import Component.Contacts.View (walletIdTip)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -14,23 +13,24 @@ import Component.InputField.State (validate)
 import Component.InputField.Types (InputDisplayOptions)
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
+import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.WalletId.View as WalletId
 import Css as Css
-import Data.Lens (view, (^.))
+import Data.Lens ((^.))
 import Data.List (foldMap)
-import Data.List (toUnfoldable) as List
-import Data.Map (values)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, isNothing)
 import Data.Newtype (unwrap)
 import Data.UUID.Argonaut (toString) as UUID
+import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, br_, button, div, div_, h2, hr, iframe, img, main, p, p_, section, span_, text)
+import Halogen.HTML (ComponentHTML, HTML, a, b_, br_, button, div, div_, h2, hr, iframe, img, main, p, p_, section, span_, text)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (disabled, href, src, title)
 import Images (marloweRunLogo)
+import MainFrame.Types (ChildSlots)
 import Marlowe.PAB (PlutusAppId)
 import Network.RemoteData (isSuccess)
-import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWalletDetails, _walletId, _walletLibrary, _walletNicknameInput, _walletNicknameOrIdInput)
+import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWalletDetails, _walletId, _walletMnemonicInput, _walletNicknameInput)
 import Page.Welcome.Types (Action(..), Card(..), State)
 
 welcomeScreen :: forall p. State -> HTML p Action
@@ -54,7 +54,7 @@ welcomeScreen state =
     , gettingStartedBox
     ]
 
-welcomeCard :: forall p. State -> HTML p Action
+welcomeCard :: forall m. MonadAff m => State -> ComponentHTML Action ChildSlots m
 welcomeCard state =
   let
     card = state ^. _card
@@ -72,71 +72,57 @@ welcomeCard state =
               GenerateWalletHelpCard -> generateWalletHelpCard
               UseNewWalletCard -> useNewWalletCard state
               UseWalletCard -> useWalletCard state
+              RestoreTestnetWalletCard -> restoreTestnetWalletCard state
               LocalWalletMissingCard -> localWalletMissingCard
       ]
 
 ------------------------------------------------------------
 useWalletBox :: forall p. State -> HTML p Action
 useWalletBox state =
-  let
-    walletLibrary = state ^. _walletLibrary
-
-    walletNicknameOrIdInput = state ^. _walletNicknameOrIdInput
-
-    walletNicknameOrIdInputDisplayOptions =
-      { additionalCss: mempty
-      , id_: "existingWallet"
-      , placeholder: "Choose wallet or paste key"
-      , readOnly: false
-      , numberFormat: Nothing
-      , valueOptions: List.toUnfoldable $ values $ view _walletNickname <$> walletLibrary
-      , after: Nothing
-      , before: Nothing
-      }
-  in
-    section
-      [ classNames [ "row-start-2", "lg:col-start-2", "bg-white", "rounded-lg", "shadow-lg", "p-8", "lg:p-12", "max-w-sm", "mx-auto", "lg:max-w-none", "lg:w-welcome-box", "space-y-4" ] ]
-      [ div [ classNames [ "p-2 pt-0" ] ]
-          [ img
-              [ classNames [ "mx-auto", "text-center" ]
-              , src marloweRunLogo
-              ]
-          ]
-      , p
-          [ classNames [ "text-center" ] ]
-          [ text "To begin using the Marlowe Run demo, generate a new demo wallet." ]
-      , button
-          [ classNames $ Css.primaryButton <> [ "w-full", "text-center" ]
-          , onClick_ GenerateWallet
-          ]
-          [ text "Generate demo wallet" ]
-      , a
-          [ classNames [ "block", "text-purple", "text-center", "font-semibold" ]
-          , onClick_ $ OpenCard GenerateWalletHelpCard
-          ]
-          [ text "Why do I need to do this?" ]
-      , hr [ classNames [ "max-w-xs", "mx-auto" ] ]
-      , p
-          [ classNames [ "text-center" ] ]
-          [ text "Or select an existing demo wallet from the list or paste in a demo wallet key." ]
-      , WalletNicknameOrIdInputAction <$> renderInput walletNicknameOrIdInputDisplayOptions walletNicknameOrIdInput
-      , div
-          [ classNames [ "pt-2", "flex", "justify-between" ] ]
-          [ a
-              [ classNames [ "flex", "font-bold" ]
-              , href "https://staging.marlowe-web.iohkdev.io"
-              ]
-              [ icon_ Icon.Previous
-              , text "Back to home page"
-              ]
-          , a
-              [ classNames [ "font-bold" ]
-              -- FIXME: add link to documentation
-              , href ""
-              ]
-              [ text "Docs" ]
-          ]
-      ]
+  section
+    [ classNames [ "row-start-2", "lg:col-start-2", "bg-white", "rounded-lg", "shadow-lg", "p-8", "lg:p-12", "max-w-sm", "mx-auto", "lg:max-w-none", "lg:w-welcome-box", "space-y-4" ] ]
+    [ div [ classNames [ "p-2 pt-0" ] ]
+        [ img
+            [ classNames [ "mx-auto", "text-center" ]
+            , src marloweRunLogo
+            ]
+        ]
+    , p
+        [ classNames [ "text-center" ] ]
+        [ text "To begin using the Marlowe Run demo, generate o restore a testnet wallet." ]
+    , button
+        [ classNames $ Css.primaryButton <> [ "w-full", "text-center" ]
+        , onClick_ GenerateWallet
+        ]
+        [ text "Generate testnet wallet" ]
+    , button
+        [ classNames $ Css.secondaryButton <> [ "w-full", "text-center" ]
+        , onClick_ $ OpenCard RestoreTestnetWalletCard
+        ]
+        [ text "Restore testnet wallet" ]
+    , a
+        [ classNames [ "block", "text-purple", "text-center", "font-semibold" ]
+        , onClick_ $ OpenCard GenerateWalletHelpCard
+        ]
+        [ text "Why do I need to do this?" ]
+    , hr [ classNames [ "max-w-xs", "mx-auto" ] ]
+    , div
+        [ classNames [ "pt-2", "flex", "justify-between" ] ]
+        [ a
+            [ classNames [ "flex", "font-bold" ]
+            , href "https://staging.marlowe-web.iohkdev.io"
+            ]
+            [ icon_ Icon.Previous
+            , text "Back to home page"
+            ]
+        , a
+            [ classNames [ "font-bold" ]
+            -- FIXME: add link to documentation
+            , href ""
+            ]
+            [ text "Docs" ]
+        ]
+    ]
 
 gettingStartedBox :: forall p. HTML p Action
 gettingStartedBox =
@@ -194,6 +180,7 @@ generateWalletHelpCard =
           [ classNames [ "font-semibold" ] ]
           [ text "Why generate a demo wallet?" ]
       , p_
+          -- FIXME: Change text to reflect new changes
           [ text "Demo wallets are used so you can play around with the app and all its incredible features without using your own tokens from your real wallet." ]
       , div
           [ classNames [ "flex" ] ]
@@ -206,6 +193,63 @@ generateWalletHelpCard =
       ]
   ]
 
+restoreTestnetWalletCard :: forall m. MonadAff m => State -> Array (ComponentHTML Action ChildSlots m)
+restoreTestnetWalletCard state =
+  let
+    enteringDashboardState = state ^. _enteringDashboardState
+
+    walletNicknameInput = state ^. _walletNicknameInput
+
+    walletMnemonicInput = state ^. _walletMnemonicInput
+
+    walletMnemonicDisplayOptions =
+      { additionalCss: mempty
+      , id_: "walletMnemonic"
+      , placeholder: "Enter the mnemonic phrase"
+      , readOnly: false
+      , numberFormat: Nothing
+      , valueOptions: mempty
+      , after: Nothing
+      , before:
+          Just
+            $ Label.render
+                Label.defaultInput { for = "walletMnemonic", text = "Mnemonic phrase" }
+      }
+  in
+    [ a
+        [ classNames [ "absolute", "top-4", "right-4" ]
+        , onClick_ CloseCard
+        ]
+        [ icon_ Icon.Close ]
+    , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
+        [ h2
+            [ classNames [ "font-bold" ] ]
+            [ text $ "Restore testnet wallet" ]
+        , WalletNicknameInputAction <$> renderInput (walletNicknameInputDisplayOptions false) walletNicknameInput
+        , WalletMnemonicInputAction <$> renderInput walletMnemonicDisplayOptions walletMnemonicInput
+        , p_
+            [ b_ [ text "IMPORTANT:" ]
+            , text "Do not use a real wallet phrase <read more>"
+            ]
+        , div
+            [ classNames [ "flex", "gap-4" ] ]
+            [ button
+                [ classNames $ Css.secondaryButton <> [ "flex-1" ]
+                , onClick_ CloseCard
+                ]
+                [ text "Cancel" ]
+            , loadingSubmitButton
+                { ref: "restore-wallet"
+                , caption: "Restore Wallet"
+                , styles: [ "flex-1" ]
+                , enabled: isNothing (validate walletNicknameInput) && not enteringDashboardState
+                , handler: RestoreTestnetWallet
+                }
+            ]
+        ]
+    ]
+
+-- FIXME: Remove or change
 useNewWalletCard :: forall p. State -> Array (HTML p Action)
 useNewWalletCard state =
   let
@@ -258,6 +302,7 @@ renderWalletId walletId =
       , walletIdTip
       ]
 
+-- FIXME: Remove or change
 useWalletCard :: forall p. State -> Array (HTML p Action)
 useWalletCard state =
   let

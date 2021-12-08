@@ -19,6 +19,7 @@ import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
+import Debug (traceM)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
@@ -162,6 +163,9 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                 Right companionAppState -> do
                   -- this check shouldn't be necessary, but at the moment we are getting too many update notifications
                   -- through the PAB - so until that bug is fixed, this will have to mask it
+                  traceM "companionAppState"
+                  when (view (_walletDetails <<< _previousCompanionAppState) dashboardState == Just companionAppState)
+                    $ traceM "Companion state is the same"
                   when (view (_walletDetails <<< _previousCompanionAppState) dashboardState /= Just companionAppState) do
                     assign (_dashboardState <<< _walletDetails <<< _previousCompanionAppState) (Just companionAppState)
                     {- [Workflow 2][5] Connect a wallet -}
