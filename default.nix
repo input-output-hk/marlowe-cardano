@@ -74,5 +74,8 @@ rec {
   inherit (sources) actus-tests;
 
   # Packages needed for the bitte deployment
-  bitte-packages = import ./bitte { inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs sources; };
+  bitte-packages = import ./bitte {
+    inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs sources;
+    inherit (marlowe) cardano-node;
+  };
 }
