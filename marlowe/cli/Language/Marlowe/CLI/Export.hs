@@ -120,7 +120,7 @@ exportMarlowe marloweParams costModel network stake contractFile stateFile input
         when printStats
           $ do
             hPutStrLn stderr ""
-            hPutStrLn stderr $ "Validator cost: " ++ show viCost
+            hPutStrLn stderr $ "Bare-validator cost: " ++ show viCost
             hPutStrLn stderr $ "Validator size: " ++ show viSize
             hPutStrLn stderr $ "Datum size: " ++ show diSize
             hPutStrLn stderr $ "Redeemer size: " ++ show riSize
