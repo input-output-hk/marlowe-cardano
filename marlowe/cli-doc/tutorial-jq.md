@@ -112,14 +112,14 @@ Before running the contract, we need to put funds into it. Examine the UTxOs at 
 
 Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and then build and submit the funding transaction:
 
-    TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f
+    TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f#0
     
     marlowe-cli create $MAGIC                                  \
                        --socket-path $CARDANO_NODE_SOCKET_PATH \
                        --script-address $ADDRESS_S             \
                        --tx-out-datum-file $DATUM_FILE         \
                        --tx-out-value $DATUM_LOVELACE          \
-                       --tx-in $TX_0#0                         \
+                       --tx-in $TX_0                           \
                        --change-address $ADDRESS_P             \
                        --out-file tx.raw
     

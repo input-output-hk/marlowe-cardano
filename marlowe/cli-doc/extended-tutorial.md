@@ -110,7 +110,7 @@ Before running the contract, we need to put funds into it. Examine the UTxOs at 
 
 Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and then build and submit the funding transaction:
 
-    TX_0=eea8f4cae07b0cd72c4996193edb4a87b5c0b8e04aa068f071bf7e16a5db0611
+    TX_0=eea8f4cae07b0cd72c4996193edb4a87b5c0b8e04aa068f071bf7e16a5db0611#0
 
 
 ## 7. Fund the contract by sending the initial funds and setting the initial state.
@@ -121,7 +121,7 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
                        --script-address $ADDRESS_S             \
                        --tx-out-datum-file example-2.datum     \
                        --tx-out-value 3000000                  \
-                       --tx-in $TX_0#0                         \
+                       --tx-in $TX_0                           \
                        --change-address $ADDRESS_P             \
                        --out-file tx.raw                       \
     | sed -e 's/^TxId "\(.*\)"$/\1/'

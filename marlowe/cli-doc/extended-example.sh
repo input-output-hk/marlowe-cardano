@@ -79,7 +79,7 @@ done
 
 cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P"
 
-TX_0=eea8f4cae07b0cd72c4996193edb4a87b5c0b8e04aa068f071bf7e16a5db0611
+TX_0=eea8f4cae07b0cd72c4996193edb4a87b5c0b8e04aa068f071bf7e16a5db0611#0
 
 
 # Fund the contract by sending the initial funds and setting the initial state.
@@ -90,7 +90,7 @@ marlowe-cli create $MAGIC_FLAG $MAGIC_NUM                    \
                    --script-address "$ADDRESS_S"             \
                    --tx-out-datum-file example-2.datum       \
                    --tx-out-value 3000000                    \
-                   --tx-in "$TX_0"#0                         \
+                   --tx-in "$TX_0"                           \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw                         \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
@@ -202,13 +202,6 @@ marlowe-cli submit $MAGIC_FLAG $MAGIC_NUM                    \
 
 
 # See that the transaction succeeded.
-
-timeout 5m bash << EOI
-until (cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P" | grep "$TX_4" > /dev/null)
-do
-  sleep 5s
-done
-EOI
 
 cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_S"
 

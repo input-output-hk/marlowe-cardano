@@ -81,7 +81,7 @@ marlowe-cli redeemer --out-file $REDEEMER_FILE
 
 cardano-cli query utxo $MAGIC_FLAG $MAGIC_NUM --address "$ADDRESS_P"
 
-TX_0=9bef4c036ef7bfb62f2be6412f82b14e750daecea3699f3639dfda33fe2f10a1
+TX_0=9bef4c036ef7bfb62f2be6412f82b14e750daecea3699f3639dfda33fe2f10a1#0
 
 
 # Fund the contract.
@@ -91,7 +91,7 @@ marlowe-cli create $MAGIC_FLAG $MAGIC_NUM                    \
                    --script-address "$ADDRESS_S"             \
                    --tx-out-datum-file $DATUM_FILE           \
                    --tx-out-value $DATUM_LOVELACE            \
-                   --tx-in "$TX_0"#0                         \
+                   --tx-in "$TX_0"                           \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw
 
