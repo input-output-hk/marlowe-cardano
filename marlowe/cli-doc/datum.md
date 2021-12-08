@@ -69,7 +69,7 @@ The following command uses the close contract [example.contract](example.contrac
                     },
                     { "map": [] },
                     { "map": [] },
-                    { "int": 10 }
+                    { "int": 40000000 }
                 ]
             },
             {

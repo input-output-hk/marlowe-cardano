@@ -27,7 +27,6 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
       submit                   Submit a transaction body.
       example                  Hardwired example.
 
-
 Individual help pages:
 
 *   Creating validator, datum, and redeemer.

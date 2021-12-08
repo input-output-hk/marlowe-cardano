@@ -48,7 +48,6 @@ When
 </table>
 
 
-
 ## 1. Select the network.
 
 Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the path for the `bash` shell. Set the environment variable `CARDANO_NODE_SOCKET_PATH` to point to the location of the socket for the `cardano-node` service. In this tutorial, we use the public `testnet`:
@@ -107,11 +106,7 @@ Because the contract has three steps, we generate three sets of contracts, state
 
 Before running the contract, we need to put funds into it. Examine the UTxOs at the wallet address:
 
-    $ cardano-cli query utxo $MAGIC --address $ADDRESS_P
-    
-                               TxHash                                 TxIx        Amount
-    --------------------------------------------------------------------------------------
-    3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f     0        980094849 lovelace + TxOutDatumNone
+    cardano-cli query utxo $MAGIC --address $ADDRESS_P
 
 Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and then build and submit the funding transaction:
 
