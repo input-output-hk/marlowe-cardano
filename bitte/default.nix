@@ -1,7 +1,28 @@
-{ marlowe-playground, marlowe-pab, web-ghc, marlowe-dashboard, cardano-node, docs, pkgs, sources }:
+{ marlowe-playground, marlowe-pab, web-ghc, marlowe-dashboard, cardano-node, cardano-wallet, docs, pkgs, sources }:
 let
   staticSite = pkgs.callPackage (sources.plutus-apps + "/bitte/static-site.nix") { };
   playgroundStatic = pkgs.callPackage (sources.plutus-apps + "/bitte/playground-static.nix") { inherit staticSite; docs = docs.site; };
+  wait-for-socket = pkgs.writeShellScriptBin "wait-for-socket" ''
+    set -eEuo pipefail
+
+    export PATH="${pkgs.lib.makeBinPath [ pkgs.coreutils pkgs.socat ]}"
+
+    sock_path="$1"
+    delay_iterations="''${2:-8}"
+
+    for ((i=0;i<delay_iterations;i++))
+    do
+      if socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
+      then
+        exit 0
+      fi
+      let delay=2**i
+      echo "Connecting to ''${sock_path} failed, sleeping for ''${delay} seconds" >&2
+      sleep "''${delay}"
+    done
+
+    socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
+  '';
 in
 {
   web-ghc-server-entrypoint = pkgs.callPackage ./web-ghc-server.nix {
@@ -25,4 +46,6 @@ in
   node = pkgs.callPackage ./node {
     inherit cardano-node;
   };
+
+  wbe = pkgs.callPackage ./wbe.nix { inherit cardano-wallet wait-for-socket; };
 }
