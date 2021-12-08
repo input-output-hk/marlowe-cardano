@@ -69,7 +69,7 @@ module.exports = {
                             bundle: !isDevelopment,
                             psc: "psa",
                             pscArgs: {
-                                strict: true,
+                                strict: false,
                                 censorLib: true,
                                 stash: isDevelopment,
                                 isLib: ["generated", ".spago"],
