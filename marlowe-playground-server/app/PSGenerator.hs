@@ -50,7 +50,7 @@ import           Language.PureScript.Bridge.Builder           (BridgeData)
 import           Language.PureScript.Bridge.CodeGenSwitches   (ForeignOptions (ForeignOptions), defaultSwitch,
                                                                genForeign)
 import           Language.PureScript.Bridge.PSTypes           (psNumber, psString)
-import           Language.PureScript.Bridge.TypeParameters    (A, B)
+import           Language.PureScript.Bridge.TypeParameters    (A)
 import           Marlowe.Contracts                            (contractForDifferences, contractForDifferencesWithOracle,
                                                                couponBondGuaranteed, escrow, escrowWithCollateral,
                                                                example, swap, zeroCouponBond)
@@ -160,7 +160,7 @@ myTypes =
     , (genericShow <*> mkSumType) (Proxy @MSRes.Response)
     , (genericShow <*> mkSumType) (Proxy @MSRes.Result)
     , mkSumType (Proxy @MSReq.Request)
-    , mkSumType (Proxy :: Proxy (CT.ContractTermsPoly A B))
+    , mkSumType (Proxy :: Proxy (CT.ContractTermsPoly A))
     , mkSumType (Proxy @CT.PYTP)
     , mkSumType (Proxy @CT.PPEF)
     , mkSumType (Proxy @CT.SCEF)
