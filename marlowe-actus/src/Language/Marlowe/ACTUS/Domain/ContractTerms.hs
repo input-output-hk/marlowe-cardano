@@ -550,6 +550,8 @@ instance FromJSON ContractTerms where
 type ContractTerms = ContractTermsPoly Double
 type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation)
 
+deriving instance FromJSON ContractTermsMarlowe
+
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues ct@ContractTermsPoly {..} =
   ct
