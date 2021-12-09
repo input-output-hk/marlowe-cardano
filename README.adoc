@@ -168,6 +168,12 @@ sandbox = true
 extra-sandbox-paths = /System/Library/Frameworks /System/Library/PrivateFrameworks /usr/lib /private/tmp /private/var/tmp /usr/bin/env
 ----
 
+Changes to `/etc/nix/nix.conf` may require a restart of the nix daemon in order to take affect. Restart the nix daemon by running the following commands:
+
+----
+sudo launchctl stop org.nixos.nix-daemon
+sudo launchctl start org.nixos.nix-daemon
+----
 
 [[nix-build-attributes]]
 === Which attributes to use to build different artifacts
