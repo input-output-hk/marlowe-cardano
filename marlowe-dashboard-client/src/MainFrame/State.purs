@@ -8,7 +8,7 @@ import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.PlutusApps.MarloweApp.Types (LastResult(..))
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
-import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _previousCompanionAppState, _wallet, _walletInfo)
+import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _previousCompanionAppState, _walletId, _walletInfo)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Foldable (for_)
@@ -108,11 +108,11 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       mDashboardState <- peruse _dashboardState
       for_ mDashboardState \dashboardState -> do
         let
-          wallet = view (_walletDetails <<< _walletInfo <<< _wallet) dashboardState
+          walletId = view (_walletDetails <<< _walletInfo <<< _walletId) dashboardState
 
           followAppIds :: Array PlutusAppId
           followAppIds = Set.toUnfoldable $ keys $ view _contracts dashboardState
-        subscribeToWallet wallet
+        subscribeToWallet walletId
         for followAppIds $ subscribeToPlutusApp
     (WS.WebSocketClosed closeEvent) -> do
       -- TODO: Consider whether we should show an error/warning when this happens. It might be more
@@ -254,7 +254,7 @@ handleAction (EnterWelcomeState walletLibrary walletDetails followerApps) = do
   let
     followerAppIds :: Array PlutusAppId
     followerAppIds = Set.toUnfoldable $ keys followerApps
-  unsubscribeFromWallet $ view (_walletInfo <<< _wallet) walletDetails
+  unsubscribeFromWallet $ view (_walletInfo <<< _walletId) walletDetails
   unsubscribeFromPlutusApp $ view _companionAppId walletDetails
   unsubscribeFromPlutusApp $ view _marloweAppId walletDetails
   for_ followerAppIds unsubscribeFromPlutusApp
@@ -278,7 +278,7 @@ handleAction (EnterDashboardState walletLibrary walletDetails) = do
       let
         followerAppIds :: Array PlutusAppId
         followerAppIds = Set.toUnfoldable $ keys followerApps
-      subscribeToWallet $ view (_walletInfo <<< _wallet) walletDetails
+      subscribeToWallet $ view (_walletInfo <<< _walletId) walletDetails
       subscribeToPlutusApp $ view _companionAppId walletDetails
       subscribeToPlutusApp $ view _marloweAppId walletDetails
       for_ followerAppIds subscribeToPlutusApp

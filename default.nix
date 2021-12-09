@@ -56,7 +56,7 @@ rec {
       inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
-    }) client pab-setup-invoker marlowe-invoker generated-purescript generate-purescript start-backend;
+    }) client pab-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
   };
 
   tests = import ./nix/tests/default.nix {

@@ -1,4 +1,6 @@
-module Main where
+module Main
+  ( main
+  ) where
 
 import Prologue
 import AppM (runAppM)
@@ -39,7 +41,7 @@ main = do
       void
         $ forkAff
         $ WS.runWebSocketManager
-            (WS.URI "/ws")
+            (WS.URI "/pab/ws")
             (\msg -> void $ forkAff $ driver.query $ ReceiveWebSocketMessage msg unit)
             wsManager
       -- This handler allows us to call an action in the MainFrame from a child component

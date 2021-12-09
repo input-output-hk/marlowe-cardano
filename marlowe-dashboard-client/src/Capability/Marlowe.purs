@@ -27,8 +27,8 @@ import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Capability.Wallet (createWallet, getWalletInfo, getWalletTotalFunds) as Wallet
-import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _pubKeyHash, _wallet, _walletInfo)
-import Component.Contacts.Types (Wallet, WalletDetails, WalletInfo)
+import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _pubKeyHash, _walletId, _walletInfo)
+import Component.Contacts.Types (WalletId, WalletDetails, WalletInfo)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError)
@@ -68,9 +68,9 @@ class
   getRoleContracts :: WalletDetails -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
   getFollowerApps :: WalletDetails -> m (DecodedAjaxResponse (Map PlutusAppId ContractHistory))
   subscribeToPlutusApp :: PlutusAppId -> m Unit
-  subscribeToWallet :: Wallet -> m Unit
+  subscribeToWallet :: WalletId -> m Unit
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
-  unsubscribeFromWallet :: Wallet -> m Unit
+  unsubscribeFromWallet :: WalletId -> m Unit
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
   createWallet = do
@@ -80,10 +80,10 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       Left ajaxError -> pure $ Left ajaxError
       Right walletInfo -> do
         let
-          wallet = view _wallet walletInfo
+          walletId = view _walletId walletInfo
         -- create the WalletCompanion and MarloweApp for this wallet
-        ajaxCompanionAppId <- Contract.activateContract WalletCompanion wallet
-        ajaxMarloweAppId <- Contract.activateContract MarloweApp wallet
+        ajaxCompanionAppId <- Contract.activateContract WalletCompanion walletId
+        ajaxMarloweAppId <- Contract.activateContract MarloweApp walletId
         -- get the wallet's current funds
         -- Note that, because it can take a moment for the initial demo funds to be added, at
         -- this point the funds might be zero. It doesn't matter though - if we connect this
@@ -91,7 +91,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         -- connect it, we don't need to know what they are.)
         -- TODO(?): Because of that, we could potentially forget about this call and just set
         -- assets to `mempty`.
-        ajaxAssets <- Wallet.getWalletTotalFunds wallet
+        ajaxAssets <- Wallet.getWalletTotalFunds walletId
         let
           createWalletDetails companionAppId marloweAppId assets =
             { walletNickname: ""
@@ -107,8 +107,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   followContract walletDetails marloweParams =
     runExceptT do
       let
-        wallet = view (_walletInfo <<< _wallet) walletDetails
-      followAppId <- withExceptT Left $ ExceptT $ Contract.activateContract MarloweFollower wallet
+        walletId = view (_walletInfo <<< _walletId) walletDetails
+      followAppId <- withExceptT Left $ ExceptT $ Contract.activateContract MarloweFollower walletId
       void $ withExceptT Left $ ExceptT $ Contract.invokeEndpoint followAppId "follow" marloweParams
       observableStateJson <- withExceptT Left $ ExceptT $ Contract.getContractInstanceObservableState followAppId
       observableState <-
@@ -121,9 +121,9 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   -- (this function is used for creating "placeholder" contracts before we know the MarloweParams)
   createPendingFollowerApp walletDetails =
     let
-      wallet = view (_walletInfo <<< _wallet) walletDetails
+      walletId = view (_walletInfo <<< _walletId) walletDetails
     in
-      Contract.activateContract MarloweFollower wallet
+      Contract.activateContract MarloweFollower walletId
   -- call the "follow" endpoint of a pending MarloweFollower app, and return its PlutusAppId and
   -- observable state (to call this function, we must already know its PlutusAppId, but we return
   -- it anyway because it is convenient to have this function return the same type as
@@ -206,8 +206,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   getFollowerApps walletDetails =
     runExceptT do
       let
-        wallet = view (_walletInfo <<< _wallet) walletDetails
-      runningApps <- withExceptT Left $ ExceptT $ Contract.getWalletContractInstances wallet
+        walletId = view (_walletInfo <<< _walletId) walletDetails
+      runningApps <- withExceptT Left $ ExceptT $ Contract.getWalletContractInstances walletId
       let
         followerApps = Array.filter (\cic -> view _cicDefinition cic == MarloweFollower) runningApps
       case traverse decodeFollowerAppState followerApps of

@@ -1,4 +1,7 @@
-module API.Wallet
+-- This module provides the API calls to access the MockWallet features of the PAB. It was developed
+-- for an initial integration point and could be reused for fast integration testing, but is not
+-- currently being used.
+module API.MockWallet
   ( createWallet
   , submitWalletTransaction
   , getWalletInfo
@@ -22,32 +25,32 @@ createWallet ::
   MonadError AjaxError m =>
   MonadAff m =>
   m WalletInfo
-createWallet = doEmptyPostRequest "/wallet/create"
+createWallet = doEmptyPostRequest "/pab/wallet/create"
 
 submitWalletTransaction ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   Wallet -> Tx -> m Unit
-submitWalletTransaction wallet tx = doPostRequest ("/wallet/" <> toUrlPiece wallet) tx
+submitWalletTransaction wallet tx = doPostRequest ("/pab/wallet/" <> toUrlPiece wallet) tx
 
 getWalletInfo ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   Wallet -> m WalletInfo
-getWalletInfo wallet = doGetRequest ("/wallet/" <> toUrlPiece wallet <> "/own-public-key")
+getWalletInfo wallet = doGetRequest ("/pab/wallet/" <> toUrlPiece wallet <> "/own-public-key")
 
 getWalletTotalFunds ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   Wallet -> m Value
-getWalletTotalFunds wallet = doGetRequest $ "/wallet/" <> toUrlPiece wallet <> "/total-funds"
+getWalletTotalFunds wallet = doGetRequest $ "/pab/wallet/" <> toUrlPiece wallet <> "/total-funds"
 
 signTransaction ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   Wallet -> Tx -> m Tx
-signTransaction wallet tx = doPostRequest ("/wallet/" <> toUrlPiece wallet <> "/sign") tx
+signTransaction wallet tx = doPostRequest ("/pab/wallet/" <> toUrlPiece wallet <> "/sign") tx

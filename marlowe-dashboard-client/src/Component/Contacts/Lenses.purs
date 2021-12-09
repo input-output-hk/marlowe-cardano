@@ -10,12 +10,12 @@ module Component.Contacts.Lenses
   , _walletInfo
   , _assets
   , _previousCompanionAppState
-  , _wallet
+  , _walletId
   , _pubKeyHash
   ) where
 
 import Prologue
-import Component.Contacts.Types (CardSection, State, Wallet, WalletIdError, WalletInfo, WalletLibrary, WalletNickname, WalletNicknameError, WalletDetails)
+import Component.Contacts.Types (CardSection, State, WalletId, WalletIdError, WalletInfo, WalletLibrary, WalletNickname, WalletNicknameError, WalletDetails)
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -61,8 +61,8 @@ _previousCompanionAppState :: Lens' WalletDetails (Maybe (Map MarloweParams Marl
 _previousCompanionAppState = prop (Proxy :: _ "previousCompanionAppState")
 
 ------------------------------------------------------------
-_wallet :: Lens' WalletInfo Wallet
-_wallet = _Newtype <<< prop (Proxy :: _ "wallet")
+_walletId :: Lens' WalletInfo WalletId
+_walletId = _Newtype <<< prop (Proxy :: _ "walletId")
 
 _pubKeyHash :: Lens' WalletInfo PubKeyHash
 _pubKeyHash = _Newtype <<< prop (Proxy :: _ "pubKeyHash")

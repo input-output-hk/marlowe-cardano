@@ -25,21 +25,21 @@ activateContract ::
   MonadError AjaxError m =>
   MonadAff m =>
   ContractActivationArgs MarloweContract -> m ContractInstanceId
-activateContract contractActivationArgs = doPostRequest "/api/contract/activate" contractActivationArgs
+activateContract contractActivationArgs = doPostRequest "/pab/api/contract/activate" contractActivationArgs
 
 deactivateContract ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   ContractInstanceId -> m Unit
-deactivateContract contractInstanceId = doPutRequest $ "/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/stop"
+deactivateContract contractInstanceId = doPutRequest $ "/pab/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/stop"
 
 getContractInstanceClientState ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   ContractInstanceId -> m (ContractInstanceClientState MarloweContract)
-getContractInstanceClientState contractInstanceId = doGetRequest $ "/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/status"
+getContractInstanceClientState contractInstanceId = doGetRequest $ "/pab/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/status"
 
 invokeEndpoint ::
   forall d m.
@@ -47,25 +47,25 @@ invokeEndpoint ::
   MonadError AjaxError m =>
   MonadAff m =>
   ContractInstanceId -> String -> d -> m Unit
-invokeEndpoint contractInstanceId endpoint payload = doPostRequest ("/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/endpoint/" <> endpoint) payload
+invokeEndpoint contractInstanceId endpoint payload = doPostRequest ("/pab/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/endpoint/" <> endpoint) payload
 
 getWalletContractInstances ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   Wallet -> m (Array (ContractInstanceClientState MarloweContract))
-getWalletContractInstances wallet = doGetRequest $ "/api/contract/instances/wallet/" <> toUrlPiece wallet
+getWalletContractInstances wallet = doGetRequest $ "/pab/api/contract/instances/wallet/" <> toUrlPiece wallet
 
 getAllContractInstances ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   m (Array (ContractInstanceClientState MarloweContract))
-getAllContractInstances = doGetRequest "/api/contract/instances"
+getAllContractInstances = doGetRequest "/pab/api/contract/instances"
 
 getContractDefinitions ::
   forall m.
   MonadError AjaxError m =>
   MonadAff m =>
   m (Array (ContractSignatureResponse MarloweContract))
-getContractDefinitions = doGetRequest "/api/contract/definitions"
+getContractDefinitions = doGetRequest "/pab/api/contract/definitions"

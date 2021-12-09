@@ -402,6 +402,7 @@
         "lens".flags.j = false;
         "x509".revision = (((hackage."x509")."1.7.5").revisions).default;
         "containers".revision = (((hackage."containers")."0.6.2.1").revisions).default;
+        "regex-compat".revision = (((hackage."regex-compat")."0.95.2.1").revisions).default;
         "semigroupoids".revision = (((hackage."semigroupoids")."5.3.4").revisions).default;
         "semigroupoids".flags.distributive = true;
         "semigroupoids".flags.comonad = true;
@@ -1083,6 +1084,7 @@
           "lens".components.setup.planned = lib.mkOverride 900 true;
           "x509".components.library.planned = lib.mkOverride 900 true;
           "io-streams".components.library.planned = lib.mkOverride 900 true;
+          "regex-compat".components.library.planned = lib.mkOverride 900 true;
           "semigroupoids".components.library.planned = lib.mkOverride 900 true;
           "iohk-monitoring".components.library.planned = lib.mkOverride 900 true;
           "insert-ordered-containers".components.library.planned = lib.mkOverride 900 true;

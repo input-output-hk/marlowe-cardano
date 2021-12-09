@@ -4,7 +4,7 @@ module Component.Contacts.Types
   , WalletNickname
   , WalletDetails
   , WalletInfo(..)
-  , Wallet(..)
+  , WalletId(..)
   , CardSection(..)
   , WalletNicknameError(..)
   , WalletIdError(..)
@@ -55,7 +55,7 @@ type WalletDetails
 -- its "own-public-key"
 newtype WalletInfo
   = WalletInfo
-  { wallet :: Wallet
+  { walletId :: WalletId
   , pubKeyHash :: PubKeyHash
   }
 
@@ -69,18 +69,18 @@ derive newtype instance encodeWalletInfo :: EncodeJson WalletInfo
 
 derive newtype instance decodeJsonWalletInfo :: DecodeJson WalletInfo
 
-newtype Wallet
-  = Wallet String
+newtype WalletId
+  = WalletId String
 
-derive instance newtypeWallet :: Newtype Wallet _
+derive instance newtypeWalletId :: Newtype WalletId _
 
-derive instance eqWallet :: Eq Wallet
+derive instance eqWalletId :: Eq WalletId
 
-derive instance genericWallet :: Generic Wallet _
+derive instance genericWalletId :: Generic WalletId _
 
-derive newtype instance encodeJsonWallet :: EncodeJson Wallet
+derive newtype instance encodeJsonWalletId :: EncodeJson WalletId
 
-derive newtype instance decodeJsonWallet :: DecodeJson Wallet
+derive newtype instance decodeJsonWalletId :: DecodeJson WalletId
 
 data CardSection
   = Home
