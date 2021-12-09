@@ -44,7 +44,6 @@ library
     mtl -any,
     time -any,
     sort -any,
-    pretty-simple -any,
     validation -any
   default-language: Haskell2010
   default-extensions: ExplicitForAll ScopedTypeVariables
