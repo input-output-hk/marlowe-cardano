@@ -218,6 +218,7 @@ executable marlowe-cli
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
     Language.Marlowe.CLI.Parse
+    Language.Marlowe.CLI.Run
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
     Paths_marlowe

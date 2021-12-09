@@ -376,6 +376,17 @@ data Command =
     , bodyFile        :: FilePath         -- ^ The JSON file containing the transaction body.
     , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
     }
+    -- Compute the next step in a contract.
+  | Compute
+    {
+      contractFile :: FilePath    -- ^ The JSON file containing the contract.
+    , stateFile    :: FilePath    -- ^ The JSON file containing the contract's state.
+    , inputFiles   :: [FilePath]  -- ^ The JSON files containing the contract's inputs.
+    , minimumSlot  :: SlotNo      -- ^ The first valid slot for the transaction.
+    , maximumSlot  :: SlotNo      -- ^ The last valid slot for the transaction.
+    , computeFile  :: FilePath    -- ^ The output JSON file with the results of the computation.
+    , printStats   :: Bool        -- ^ Whether to print statistics about the redeemer.
+    }
     -- | Ad-hoc example.
   | Example
     {

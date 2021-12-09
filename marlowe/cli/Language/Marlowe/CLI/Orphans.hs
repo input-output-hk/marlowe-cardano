@@ -11,6 +11,9 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 
@@ -18,12 +21,13 @@ module Language.Marlowe.CLI.Orphans (
 ) where
 
 
-import           Data.Aeson             (FromJSON (..), ToJSON (..), withText)
-import           Data.ByteString.Short  (ShortByteString, fromShort, toShort)
+import           Data.Aeson                 (FromJSON (..), ToJSON (..), object, withText, (.=))
+import           Data.ByteString.Short      (ShortByteString, fromShort, toShort)
+import           Language.Marlowe.Semantics (Payment (..), TransactionOutput (..))
 
-import qualified Data.ByteString.Base16 as Base16 (decode, encode)
-import qualified Data.ByteString.Char8  as BS8 (pack, unpack)
-import qualified Data.Text              as T (unpack)
+import qualified Data.ByteString.Base16     as Base16 (decode, encode)
+import qualified Data.ByteString.Char8      as BS8 (pack, unpack)
+import qualified Data.Text                  as T (unpack)
 
 
 instance ToJSON ShortByteString where
@@ -36,3 +40,29 @@ instance FromJSON ShortByteString where
         case Base16.decode . BS8.pack $ T.unpack t of
           Right bytes   -> pure $ toShort bytes
           Left  message -> fail message
+
+
+instance ToJSON TransactionOutput where
+  toJSON TransactionOutput{..} =
+    object
+      [
+        "payments" .= toJSON txOutPayments
+      , "state"    .= toJSON txOutState
+      , "contract" .= toJSON txOutContract
+      , "warnings" .= toJSON txOutWarnings
+      ]
+  toJSON (Error message) =
+    object
+      [
+        "error" .= toJSON message
+      ]
+
+
+instance ToJSON Payment where
+  toJSON (Payment accountId payee money) =
+    object
+      [
+        "accountId" .= toJSON accountId
+      , "payee"     .= toJSON payee
+      , "money"     .= toJSON money
+      ]

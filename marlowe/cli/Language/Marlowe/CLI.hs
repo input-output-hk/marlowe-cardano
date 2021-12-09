@@ -31,6 +31,7 @@ import           Language.Marlowe.CLI.Export      (exportAddress, exportDatum, e
                                                    exportValidator)
 import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseSlotNo,
                                                    parseStakeAddressReference, parseTxIn, parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Run         (computeMarlowe)
 import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
 import           Language.Marlowe.CLI.Types       (CliError (..), Command (..))
 import           Language.Marlowe.Client          (defaultMarloweParams, marloweParams)
@@ -136,6 +137,11 @@ mainCLI version example =
                                      bodyFile
                                      signingKeyFiles
                                      >>= printTxId
+            Compute{..}         -> computeMarlowe
+                                     contractFile stateFile
+                                     inputFiles minimumSlot maximumSlot
+                                     computeFile
+                                     printStats
             Example{..}         -> example writeFiles pubKeyHash
     case result of
       Right ()      -> return ()
@@ -164,6 +170,7 @@ parser version =
               <> buildContinuingCommand
               <> buildOutgoingCommand
               <> submitCommand
+              <> computeCommand
               <> exampleCommand
             )
     )
@@ -395,6 +402,27 @@ submitOptions =
     <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file."      )
     <*> O.strOption                            (O.long "tx-body-file"    <> O.metavar "BODY_FILE"    <> O.help "File containing the transaction body."  )
     <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "Files containing required signing keys.")
+
+
+-- | Parser for the "compute" command.
+computeCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+computeCommand =
+  O.command "compute"
+    $ O.info (computeOptions O.<**> O.helper)
+    $ O.progDesc "Compute a Marlowe contract to a JSON file."
+
+
+-- | Parser for the "compute" options.
+computeOptions :: O.Parser Command -- ^ The parser.
+computeOptions =
+  Compute
+    <$> O.strOption            (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption            (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> (O.many . O.strOption) (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
+    <*> O.option parseSlotNo   (O.long "invalid-before"    <> O.metavar "SLOT"            <> O.help "Minimum slot for the redemption."       )
+    <*> O.option parseSlotNo   (O.long "invalid-hereafter" <> O.metavar "SLOT"            <> O.help "Maximum slot for the redemption."       )
+    <*> O.strOption            (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
+    <*> O.switch               (O.long "print-stats"                                      <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "example" command.
