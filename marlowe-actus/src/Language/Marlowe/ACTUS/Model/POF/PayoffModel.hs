@@ -86,3 +86,9 @@ _POF_STD_OPTNS cntrl curs xa = curs * _r cntrl * xa
 
 -- Commodity (COM)
 
+_POF_PRD_COM :: RoleSignOps a => CR -> a -> a -> a
+_POF_PRD_COM cntrl pprd qt = _zero - _r cntrl * pprd * qt
+
+_POF_TD_COM :: RoleSignOps a => CR -> a -> a -> a
+_POF_TD_COM cntrl ptd qt = _r cntrl * ptd * qt
+

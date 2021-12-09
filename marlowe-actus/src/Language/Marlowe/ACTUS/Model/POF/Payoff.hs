@@ -204,12 +204,23 @@ payoff
   PRD
   _
   ContractTermsPoly
+    { contractType = COM,
+      priceAtPurchaseDate = Just pprd,
+      quantity = Just qt,
+      contractRole
+    }
+  _
+  _ = _POF_PRD_COM contractRole pprd qt
+payoff
+  PRD
+  _
+  ContractTermsPoly
     { contractType,
       priceAtPurchaseDate = Just pprd,
       contractRole
     }
   _
-  _ | contractType `elem` [STK, OPTNS, FUTUR, COM] = _POF_PRD_STK contractRole pprd
+  _ | contractType `elem` [STK, OPTNS, FUTUR] = _POF_PRD_STK contractRole pprd
 -- TD
 payoff
   TD
@@ -247,11 +258,12 @@ payoff
   _
   ContractTermsPoly
     { contractType = COM,
-      priceAtPurchaseDate = Just pprd,
+      priceAtTerminationDate = Just ptd,
+      quantity = Just qt,
       contractRole
     }
   _
-  _ = _POF_PRD_STK contractRole pprd
+  _ = _POF_TD_COM contractRole ptd qt
 payoff
   TD
   RiskFactorsPoly

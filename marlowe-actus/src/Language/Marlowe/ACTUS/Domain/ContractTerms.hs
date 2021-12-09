@@ -411,6 +411,7 @@ data ContractTermsPoly a b = ContractTermsPoly
   , priceAtPurchaseDate                      :: Maybe a          -- ^ Price At Purchase Date
   , terminationDate                          :: Maybe b          -- ^ Termination Date
   , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
+  , quantity                                 :: Maybe a          -- ^ Quantity
 
   -- Scaling Index
   , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
@@ -508,6 +509,7 @@ instance FromJSON ContractTerms where
       <*> v .!? "priceAtPurchaseDate"
       <*> v .:? "terminationDate"
       <*> v .!? "priceAtTerminationDate"
+      <*> v .!? "quantity"
       <*> v .:? "scalingIndexAtStatusDate"
       <*> v .:? "cycleAnchorDateOfScalingIndex"
       <*> v .:? "cycleOfScalingIndex"
