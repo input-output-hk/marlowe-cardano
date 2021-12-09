@@ -159,7 +159,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
             in
               -- if this is the wallet's WalletCompanion app...
               if (plutusAppId == walletCompanionAppId) then case parseDecodeJson $ unwrap rawJson of
-                Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
+                Left decodingError -> addToast $ decodingErrorToast "Failed to parse an update from the wallet companion." decodingError
                 Right companionAppState -> do
                   -- this check shouldn't be necessary, but at the moment we are getting too many update notifications
                   -- through the PAB - so until that bug is fixed, this will have to mask it
@@ -180,8 +180,11 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
               else do
                 -- if this is the wallet's MarloweApp...
                 if (plutusAppId == marloweAppId) then case parseDecodeJson $ unwrap rawJson of
-                  Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
+                  Left decodingError -> do
+                    traceM { msg: "failed to decode marlowe controller", rawJson, decodingError }
+                    addToast $ decodingErrorToast "Failed to parse an update from the marlowe controller." decodingError
                   Right lastResult -> do
+                    traceM { msg: "Last result!!!!", lastResult }
                     -- The MarloweApp capability keeps track of the requests it makes to see if this
                     -- new observable state is a WS response for an action that we made. If we refresh
                     -- we get the last observable state, and if we have two tabs open we can get
@@ -198,7 +201,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       _ -> pure unit
                 -- otherwise this should be one of the wallet's `MarloweFollower` apps
                 else case parseDecodeJson $ unwrap rawJson of
-                  Left decodingError -> addToast $ decodingErrorToast "Failed to parse contract update." decodingError
+                  Left decodingError -> addToast $ decodingErrorToast "Failed to parse an update from a contract." decodingError
                   Right contractHistory -> do
                     {- [Workflow 2][7] Connect a wallet -}
                     {- [Workflow 4][3] Start a contract -}

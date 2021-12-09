@@ -16,8 +16,8 @@ import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
-import Data.Argonaut.Encode.Aeson as E
 import Data.Argonaut.Encode.Aeson ((>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Map as Map
 import Data.Tuple (uncurry)
@@ -56,7 +56,7 @@ instance decodeJsonLastResult :: DecodeJson LastResult where
       $ Map.fromFoldable
           [ "OK" /\ D.content (uncurry OK <$> D.value)
           , "SomeError" /\ D.content (D.tuple $ SomeError </$\> D.value </*\> D.value </*\> D.value)
-          , "Unknown" /\ D.content (Unknown <$ D.null)
+          , "Unknown" /\ pure Unknown
           ]
 
 data MarloweError
