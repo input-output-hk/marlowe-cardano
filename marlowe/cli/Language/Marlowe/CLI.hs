@@ -24,6 +24,7 @@ module Language.Marlowe.CLI (
 import           Cardano.Api                      (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
                                                    LocalNodeConnectInfo (..), NetworkId (..),
                                                    StakeAddressReference (..))
+import           Cardano.Config.Git.Rev           (gitRev)
 import           Control.Monad.Except             (ExceptT, liftIO, runExceptT, throwError)
 import           Data.Maybe                       (fromMaybe)
 import           Data.Version                     (Version, showVersion)
@@ -39,6 +40,7 @@ import           Plutus.V1.Ledger.Api             (defaultCostModelParams)
 import           System.Exit                      (exitFailure)
 import           System.IO                        (hPutStrLn, stderr)
 
+import qualified Data.Text                        as T (unpack)
 import qualified Options.Applicative              as O
 
 
@@ -64,7 +66,7 @@ mainCLI version example =
         , localNodeNetworkId       = network'
         , localNodeSocketPath      = socketPath command
         }
-      printTxId = liftIO . putStrLn . ("TxId " ++) . show
+      printTxId = liftIO . putStrLn . ("TxId " <>) . show
     result <-
       runExceptT
         $ do
@@ -186,7 +188,7 @@ versionOption :: Version           -- ^ The tool version.
               -> O.Parser (a -> a) -- ^ The option parser.
 versionOption version =
   O.infoOption
-    ("marlowe-cli " ++ showVersion version) -- FIXME: Include git hash.
+    ("marlowe-cli " <> showVersion version <> " @ " <> T.unpack gitRev)
     (O.long "version" <> O.help "Show version.")
 
 

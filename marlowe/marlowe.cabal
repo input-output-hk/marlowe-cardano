@@ -233,6 +233,7 @@ executable marlowe-cli
     base16-bytestring -any,
     bytestring -any,
     cardano-api -any,
+    cardano-config -any,
     containers -any,
     marlowe -any,
     mtl -any,

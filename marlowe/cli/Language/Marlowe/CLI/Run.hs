@@ -23,7 +23,7 @@ module Language.Marlowe.CLI.Run (
 
 
 import           Cardano.Api                  (SlotNo (..))
-import           Control.Monad                (unless, when)
+import           Control.Monad                (forM_, unless, when)
 import           Control.Monad.Except         (MonadError, MonadIO, liftIO, throwError)
 import           Data.Aeson.Encode.Pretty     (encodePretty)
 import           Language.Marlowe.CLI.Export  (buildDatum)
@@ -72,12 +72,8 @@ computeMarlowe contractFile stateFile inputFiles (SlotNo minimumSlot) (SlotNo ma
                    unless (null txOutWarnings)
                      $ do
                        hPutStrLn stderr "Warnings:"
-                       sequence_
-                         [
-                           hPutStrLn stderr $ "  " <> show warning
-                         |
-                           warning <- txOutWarnings
-                         ]
+                       forM_ txOutWarnings
+                         $ hPutStrLn stderr . ("  " <>) . show
                    sequence_
                      [
                        do
@@ -96,4 +92,4 @@ computeMarlowe contractFile stateFile inputFiles (SlotNo minimumSlot) (SlotNo ma
                      |
                        (i, Payment accountId payee money) <- zip [1..] txOutPayments
                      ]
-                   hPutStrLn stderr $ "Datum size: " ++ show (diSize $ buildDatum txOutContract txOutState)
+                   hPutStrLn stderr $ "Datum size: " <> show (diSize $ buildDatum txOutContract txOutState)

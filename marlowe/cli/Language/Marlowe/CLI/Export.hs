@@ -120,11 +120,11 @@ exportMarlowe marloweParams costModel network stake contractFile stateFile input
         when printStats
           $ do
             hPutStrLn stderr ""
-            hPutStrLn stderr $ "Bare-validator cost: " ++ show viCost
-            hPutStrLn stderr $ "Validator size: " ++ show viSize
-            hPutStrLn stderr $ "Datum size: " ++ show diSize
-            hPutStrLn stderr $ "Redeemer size: " ++ show riSize
-            hPutStrLn stderr $ "Total size: " ++ show (viSize + diSize + riSize)
+            hPutStrLn stderr $ "Bare-validator cost: " <> show viCost
+            hPutStrLn stderr $ "Validator size: " <> show viSize
+            hPutStrLn stderr $ "Datum size: " <> show diSize
+            hPutStrLn stderr $ "Redeemer size: " <> show riSize
+            hPutStrLn stderr $ "Total size: " <> show (viSize + diSize + riSize)
 
 
 -- | Print information about a Marlowe contract and transaction.
@@ -153,33 +153,33 @@ printMarlowe marloweParams costModel network stake contract state inputs =
     liftIO
       $ do
         putStrLn ""
-        putStrLn $ "Contract: " ++ show contract
+        putStrLn $ "Contract: " <> show contract
         putStrLn ""
-        putStrLn $ "State: " ++ show state
+        putStrLn $ "State: " <> show state
         putStrLn ""
-        putStrLn $ "Inputs: " ++ show inputs
+        putStrLn $ "Inputs: " <> show inputs
         putStrLn ""
-        putStrLn $ "Validator: " ++ LBS8.unpack (encode $ serialiseToTextEnvelope Nothing viScript)
+        putStrLn $ "Validator: " <> LBS8.unpack (encode $ serialiseToTextEnvelope Nothing viScript)
         putStrLn ""
-        putStrLn $ "Validator address: " ++ (T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra)) -- FIXME: Generalize eras.
+        putStrLn $ "Validator address: " <> (T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra)) -- FIXME: Generalize eras.
         putStrLn ""
-        putStrLn $ "Validator hash: " ++ show viHash
+        putStrLn $ "Validator hash: " <> show viHash
         putStrLn ""
-        putStrLn $ "Validator size: " ++ show viSize
+        putStrLn $ "Validator size: " <> show viSize
         putStrLn ""
-        putStrLn $ "Validator cost: " ++ show viCost
+        putStrLn $ "Validator cost: " <> show viCost
         putStrLn ""
-        putStrLn $ "Datum:" ++ LBS8.unpack (encode diJson)
+        putStrLn $ "Datum:" <> LBS8.unpack (encode diJson)
         putStrLn ""
-        putStrLn $ "Datum hash: " ++ show diHash
+        putStrLn $ "Datum hash: " <> show diHash
         putStrLn ""
-        putStrLn $ "Datum size: " ++ show diSize
+        putStrLn $ "Datum size: " <> show diSize
         putStrLn ""
-        putStrLn $ "Redeemer: " ++ LBS8.unpack (encode riJson)
+        putStrLn $ "Redeemer: " <> LBS8.unpack (encode riJson)
         putStrLn ""
-        putStrLn $ "Redeemer size: " ++ show riSize
+        putStrLn $ "Redeemer size: " <> show riSize
         putStrLn ""
-        putStrLn $ "Total size: " ++ show (viSize + diSize + riSize)
+        putStrLn $ "Total size: " <> show (viSize + diSize + riSize)
 
 
 -- | Compute the address of a Marlowe contract.
@@ -267,12 +267,12 @@ exportValidator marloweParams costModel network stake outputFile printHash print
         when printHash
           $ do
             hPutStrLn stderr ""
-            hPutStrLn stderr $ "Validator hash: " ++ show viHash
+            hPutStrLn stderr $ "Validator hash: " <> show viHash
         when printStats
           $ do
             hPutStrLn stderr ""
-            hPutStrLn stderr $ "Validator size: " ++ show viSize
-            hPutStrLn stderr $ "Validator cost: " ++ show viCost
+            hPutStrLn stderr $ "Validator size: " <> show viSize
+            hPutStrLn stderr $ "Validator cost: " <> show viCost
 
 
 -- | Build the datum information about a Marlowe transaction.
@@ -317,7 +317,7 @@ exportDatum contractFile stateFile outputFile printStats =
         when printStats
           $ do
             hPutStrLn stderr ""
-            hPutStrLn stderr $ "Datum size: " ++ show diSize
+            hPutStrLn stderr $ "Datum size: " <> show diSize
 
 
 -- | Build the redeemer information about a Marlowe transaction.
@@ -356,4 +356,4 @@ exportRedeemer inputFiles outputFile printStats =
         when printStats
           $ do
             hPutStrLn stderr ""
-            hPutStrLn stderr $ "Redeemer size: " ++ show riSize
+            hPutStrLn stderr $ "Redeemer size: " <> show riSize
