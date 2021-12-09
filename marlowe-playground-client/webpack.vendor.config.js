@@ -9,6 +9,23 @@ module.exports = {
       "big-integer", "bignumber", "blockly", "bootstrap",
       "decimal.js", "json-bigint", "monaco-editor", "monaco-emacs",
       "monaco-vim", "moo", "nearley", "safe-eval",
+      // Most heavy libs: `du -hs output/* | sort -h`
+      // check `dist/vendor-dll-manifest.json`
+      // to get info about cached libs.
+      "./output/Affjax/index.js",
+      "./output/Data.Array/index.js",
+      "./output/Data.Array.NonEmpty/index.js",
+      "./output/Data.CodePoint.Unicode.Internal/index.js",
+      "./output/Data.Either.Nested/index.js",
+      "./output/Data.Functor.Product.Nested/index.js",
+      "./output/Data.Functor.Variant/index.js",
+      "./output/Data.Lens/index.js",
+      "./output/Data.CodePoint.Unicode.Internal.Casing",
+      "./output/Data.Tuple.Nested/index.js",
+      "./output/Halogen/index.js",
+      "./output/Halogen.HTML.Elements.Keyed/index.js",
+      "./output/Halogen.Hooks/index.js",
+      "./output/Prologue/index.js",
   ],
   externals: {
     "jquery": "jQuery"
