@@ -22,4 +22,4 @@ global.monacoExtraTypeScriptLibs = [
 
 import { BigNumber } from 'bignumber';
 
-require('./src/Main.purs').main();
+require('./output/Main/index.js').main();

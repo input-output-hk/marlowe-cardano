@@ -4,6 +4,7 @@
   "scripts": {
     "build:webpack": "webpack --progress --bail --mode=development --node-env=production",
     "build:webpack:dev": "webpack-cli serve --progress --inline --hot --mode=development --node-env=development",
+    "build:webpack:dev:vendor": "webpack --mode production --config webpack.vendor.config.js",
     "build:webpack:prod": "webpack --progress --bail --mode=production --node-env=production",
     "build:spago": "spago build --purs-args \"--strict --censor-lib --stash --is-lib=generated --is-lib=.spago\"",
     "build:spago:watch": "spago build --purs-args \"--strict --censor-lib --stash --is-lib=generated --is-lib=.spago\" --watch --clear-screen",
@@ -27,6 +28,7 @@
     "monaco-vim": "^0.1.7",
     "moo": "^0.5.1",
     "nearley": "^2.19.1",
+    "popper.js": "^1.16.1",
     "safe-eval": "^0.4.1",
     "xhr2": "^0.1.4"
   },

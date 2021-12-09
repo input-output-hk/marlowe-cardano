@@ -18,6 +18,8 @@ $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlow
 npm install
 # Install purescript depdendencies
 npm run build:spago
+# Precompile js dependencies bundle
+npm run build:webpack:dev:vendor
 ```
 
 Then run `npm run build:webpack:dev` for an auto-reloading dev build on https://localhost:8009
