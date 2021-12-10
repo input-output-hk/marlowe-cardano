@@ -1011,6 +1011,7 @@ actusContractToTerms raw = do
         , cycleOfInterestPayment: interestRateCycle
         , cycleAnchorDateOfInterestPayment: interestRateAnchor >>= identity
         , nominalInterestRate: interestRate
+        , nominalInterestRate2: interestRate
         , interestScalingMultiplier: Nothing
         , notionalScalingMultiplier: Nothing
         , accruedInterest: Nothing
