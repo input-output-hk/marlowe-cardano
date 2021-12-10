@@ -24,7 +24,7 @@ import           Data.Time                                        (LocalTime)
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..), RiskFactorsPoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractState      (ContractStatePoly (..))
 import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                (RoleSignOps (..), YearFractionOps)
+import           Language.Marlowe.ACTUS.Domain.Ops                (RoleSignOps (..), ScheduleOps (..), YearFractionOps)
 import           Language.Marlowe.ACTUS.Domain.Schedule           (CashFlowPoly (..), ShiftedDay (..), calculationDay,
                                                                    paymentDay)
 import           Language.Marlowe.ACTUS.Model.ContractSchedule    (maturity, schedule)
@@ -36,7 +36,7 @@ import           Language.Marlowe.ACTUS.Model.StateTransition     (CtxSTF (CtxST
 -- given contract terms and provided risk factors. The function returns
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
-genProjectedCashflows :: (RoleSignOps a, YearFractionOps a) =>
+genProjectedCashflows :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
   (EventType -> LocalTime -> RiskFactorsPoly a) -- ^ Risk factors as a function of event type and time
   -> ContractTermsPoly a                        -- ^ ACTUS contract terms
   -> [CashFlowPoly a]                           -- ^ List of projected cash flows
@@ -56,7 +56,7 @@ genProjectedCashflows rf ct =
           }
    in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs rf $ ct
 
-genProjectedPayoffs :: (RoleSignOps a, YearFractionOps a) =>
+genProjectedPayoffs :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
   (EventType -> LocalTime -> RiskFactorsPoly a)        -- ^ Risk factors as a function of event type and time
   -> ContractTermsPoly a                               -- ^ ACTUS contract terms
   -> [(EventType, ShiftedDay, ContractStatePoly a, a)] -- ^ List of projected payoffs

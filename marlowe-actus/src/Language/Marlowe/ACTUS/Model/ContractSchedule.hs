@@ -27,14 +27,14 @@ import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..
 import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..), DS (..),
                                                                    IPCB (..), PPEF (..), PYTP (..), SCEF (..),
                                                                    ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                as O (ActusNum (..), ActusOps (..),
-                                                                        YearFractionOps (_y))
+import           Language.Marlowe.ACTUS.Domain.Ops                as O (ActusNum (..), ActusOps (..), ScheduleOps (..),
+                                                                        YearFractionOps (..))
 import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..))
 import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (applyEOMC, generateRecurrentScheduleWithCorrections,
                                                                    inf, remove, (<+>), (<->))
 
-schedule :: (ActusNum a, ActusOps a, YearFractionOps a) => EventType -> ContractTermsPoly a -> [ShiftedDay]
+schedule :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) => EventType -> ContractTermsPoly a -> [ShiftedDay]
 schedule ev c = schedule' ev c { maturityDate = maturity c }
   where
 
@@ -125,7 +125,7 @@ schedule ev c = schedule' ev c { maturityDate = maturity c }
 
     schedule' _ _                                               = []
 
-maturity :: (ActusNum a, ActusOps a, YearFractionOps a) => ContractTermsPoly a -> Maybe LocalTime
+maturity :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) => ContractTermsPoly a -> Maybe LocalTime
 maturity ContractTermsPoly {contractType = PAM, ..} = maturityDate
 maturity ContractTermsPoly {contractType = LAM, maturityDate = md@(Just _)} = md
 maturity
@@ -148,7 +148,7 @@ maturity
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f2 . filter f1 $ previousEvents
              in (lastEventCalcDay, nt O./ prnxt)
           | otherwise = (pranx, nt O./ prnxt O.- _one)
-        m = lastEvent <+> (prcl {n = n prcl Prelude.* _toInteger remainingPeriods})
+        m = lastEvent <+> (prcl {n = n prcl Prelude.* _ceiling remainingPeriods})
      in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity ContractTermsPoly {contractType = NAM, maturityDate = md@(Just _)} = md
 maturity
@@ -176,7 +176,7 @@ maturity
 
         yLastEventPlusPRCL = _y dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt O.- (yLastEventPlusPRCL O.* ipnr O.* nt)
-        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one
+        remainingPeriods = _ceiling $ (nt O./ redemptionPerCycle) O.- _one
         m = lastEvent <+> prcl {n = n prcl Prelude.* remainingPeriods}
      in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
 maturity
@@ -203,7 +203,7 @@ maturity
              in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > statusDate) $ previousEvents
         timeFromLastEventPlusOneCycle = _y dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt O.- timeFromLastEventPlusOneCycle O.* ipnr O.* nt
-        remainingPeriods = _toInteger $ (nt O./ redemptionPerCycle) O.- _one
+        remainingPeriods = _ceiling $ (nt O./ redemptionPerCycle) O.- _one
     in Just . calculationDay . applyBDCWithCfg scheduleConfig $ lastEvent <+> prcl { n = remainingPeriods }
 maturity
   ContractTermsPoly

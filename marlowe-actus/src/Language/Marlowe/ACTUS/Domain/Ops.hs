@@ -18,7 +18,6 @@ class ActusOps a where
     _zero :: a
     _one  :: a
     _fromInteger :: Integer -> a
-    _toInteger :: a -> Integer
     _negate :: a -> a
 
 class Eq a => ActusNum a where
@@ -29,6 +28,9 @@ class Eq a => ActusNum a where
 
 class YearFractionOps b where
     _y :: DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> b
+
+class ScheduleOps b where
+    _ceiling :: b -> Integer
 
 class (ActusNum a, ActusOps a) => RoleSignOps a where
     _r :: CR -> a
@@ -56,7 +58,6 @@ instance ActusOps Double where
     _zero = 0.0
     _one  = 1.0
     _fromInteger = fromInteger
-    _toInteger = ceiling
     _negate = negate
 
 instance ActusNum Double where
@@ -68,10 +69,21 @@ instance ActusNum Double where
 instance YearFractionOps Double where
     _y = yearFraction
 
+instance ScheduleOps Double where
+    _ceiling = ceiling
+
 instance YearFractionOps (Value Observation) where
     _y a b c d = Constant . toMarloweFixedPoint $ yearFraction a b c d
       where
         toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint Prelude.*)
+
+instance ScheduleOps (Value Observation) where
+    _ceiling (Constant a) = a `div` marloweFixedPoint
+    -- ACTUS is implemented only for Fixed Schedules
+    -- that means schedules are known before the contract
+    -- is exectued, resp. the schedule do not depend on
+    -- riskfactors. _ceiling is needed to calculate
+    _ceiling _            = error "Precondition: Fixed schedules"
 
 instance ActusOps (Value Observation) where
     _min a b = Cond (ValueLT a b) a b
@@ -80,23 +92,6 @@ instance ActusOps (Value Observation) where
     _zero = Constant 0
     _one  = Constant marloweFixedPoint
     _fromInteger n = Constant $ n Prelude.* marloweFixedPoint
-    _toInteger (Constant a)         = a `div` marloweFixedPoint
-    _toInteger (NegValue a)         = -1 Prelude.* _toInteger a
-    _toInteger (AddValue a b)       = _toInteger a Prelude.+ _toInteger b
-    _toInteger (SubValue a b)       = _toInteger a Prelude.- _toInteger b
-    _toInteger (MulValue a b)       = _toInteger a Prelude.* _toInteger b
-    _toInteger (DivValue a b)       = _toInteger a `div`_toInteger b
-    -- ACTUS is implemented only for Fixed Schedules
-    -- that means schedules are known before the contract
-    -- is exectued, resp. the schedule do not depend on
-    -- riskfactors
-    _toInteger (UseValue _)         = error "UseValue cannot be converted"
-    _toInteger (ChoiceValue _)      = error "ChoiceValue cannot be converted"
-    _toInteger (AvailableMoney _ _) = error "AvailableMoney cannot be converted"
-    _toInteger Cond {}              = error "Cond cannot be conveted"
-    _toInteger SlotIntervalStart    = error "SlotIntervalStart cannot be converted"
-    _toInteger SlotIntervalEnd      = error "SlotIntervalEnd cannot be converted"
-    _toInteger (Scale _ _)          = undefined -- will be gone soon
     _negate a = NegValue a
 
 infixl 7  *, /
