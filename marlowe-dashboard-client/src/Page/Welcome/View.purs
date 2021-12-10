@@ -34,7 +34,7 @@ import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWa
 import Page.Welcome.Types (Action(..), Card(..), State)
 
 welcomeScreen :: forall p. State -> HTML p Action
-welcomeScreen state =
+welcomeScreen _ =
   main
     [ classNames
         [ "h-full"
@@ -50,7 +50,7 @@ welcomeScreen state =
         , "p-4"
         ]
     ]
-    [ useWalletBox state
+    [ useWalletBox
     , gettingStartedBox
     ]
 
@@ -77,8 +77,8 @@ welcomeCard state =
       ]
 
 ------------------------------------------------------------
-useWalletBox :: forall p. State -> HTML p Action
-useWalletBox state =
+useWalletBox :: forall p. HTML p Action
+useWalletBox =
   section
     [ classNames [ "row-start-2", "lg:col-start-2", "bg-white", "rounded-lg", "shadow-lg", "p-8", "lg:p-12", "max-w-sm", "mx-auto", "lg:max-w-none", "lg:w-welcome-box", "space-y-4" ] ]
     [ div [ classNames [ "p-2 pt-0" ] ]
