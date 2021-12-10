@@ -214,6 +214,11 @@ restoreTestnetWalletCard state =
             $ Label.render
                 Label.defaultInput { for = "walletMnemonic", text = "Mnemonic phrase" }
       }
+
+    submitButtonEnabled =
+      isNothing (validate walletNicknameInput)
+        && isNothing (validate walletMnemonicInput)
+        && not enteringDashboardState
   in
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
@@ -242,7 +247,7 @@ restoreTestnetWalletCard state =
                 { ref: "restore-wallet"
                 , caption: "Restore Wallet"
                 , styles: [ "flex-1" ]
-                , enabled: isNothing (validate walletNicknameInput) && not enteringDashboardState
+                , enabled: submitButtonEnabled
                 , handler: RestoreTestnetWallet
                 }
             ]
