@@ -123,7 +123,7 @@ that wallet: a `WalletCompanion` and a `MarloweApp`.
 - The `MarloweApp` is a control app, used to create Marlowe contracts, apply inputs, and redeem
   payments to this wallet.
 -}
--- FIXME: CHANGE LOGIC
+-- TODO: Button disable, re-enable it as part of SCP-3170.
 handleAction GenerateWallet = pure unit
 
 -- walletLibrary <- use _walletLibrary

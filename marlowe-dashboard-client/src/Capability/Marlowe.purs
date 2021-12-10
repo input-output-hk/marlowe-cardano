@@ -20,6 +20,7 @@ module Capability.Marlowe
 
 import Prologue
 import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicWallet, _observableState)
+import API.Marlowe.Run.TestnetWallet (RestoreError(..))
 import API.Marlowe.Run.TestnetWallet (RestoreWalletOptions)
 import AppM (AppM)
 import Bridge (toBack, toFront)
@@ -33,7 +34,7 @@ import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _pubKeyHash, _
 import Component.Contacts.Types (WalletDetails, WalletId(..), WalletInfo)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
-import Data.Argonaut.Decode (JsonDecodeError)
+import Data.Argonaut.Decode (JsonDecodeError, (.!=))
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (filter) as Array
 import Data.Array (find)
@@ -46,7 +47,6 @@ import Data.Tuple.Nested ((/\))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
-import API.Marlowe.Run.TestnetWallet (RestoreError(..))
 import Marlowe.Semantics (Contract, MarloweData, MarloweParams, PubKeyHash, TokenName, TransactionInput)
 import MarloweContract (MarloweContract(..))
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToServer(..), ContractInstanceClientState)
@@ -60,7 +60,6 @@ import WebSocket.Support as WS
 class
   (ManageContract m, ManageMarloweStorage m, ManageWallet m) <= ManageMarlowe m where
   createWallet :: m (AjaxResponse WalletDetails)
-  -- FIXME: Probably change error type to Variant
   restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletDetails)
   followContract :: WalletDetails -> MarloweParams -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createPendingFollowerApp :: WalletDetails -> m (AjaxResponse PlutusAppId)
@@ -78,6 +77,8 @@ class
   unsubscribeFromWallet :: WalletId -> m Unit
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
+  -- TODO: This code was meant for mock wallet, as part of SCP-3170 we should re-implement this
+  --       using the WBE.
   createWallet = do
     -- create the wallet itself
     ajaxWalletInfo <- Wallet.createWallet
@@ -115,10 +116,14 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         let
           walletId = view _walletId walletInfo
         -- create the WalletCompanion and MarloweApp for this wallet
-        -- FIXME: Errors
-        ajaxCompanionAppId <- lmap (const InvalidMnemonic) <$> Contract.activateContract WalletCompanion walletId
-        ajaxMarloweAppId <- lmap (const InvalidMnemonic) <$> Contract.activateContract MarloweApp walletId
-        -- FIXME: refactor into own fn
+        -- TODO: We had initial discussions for adding Variants for errors probably using Checked Exceptions.
+        -- Instead of the general ClientServerError we could encapsulate the type of error inside a context
+        -- (restoring the wallet, activating a wallet companion or marlowe app).
+        -- For the end users this wouldn't change too much their UX, but for production code it can be useful
+        -- to diagnose problems using a tool like sentry SCP-3171.
+        -- https://github.com/natefaubion/purescript-checked-exceptions
+        ajaxCompanionAppId <- lmap ClientServerError <$> Contract.activateContract WalletCompanion walletId
+        ajaxMarloweAppId <- lmap ClientServerError <$> Contract.activateContract MarloweApp walletId
         let
           createWalletDetails companionAppId marloweAppId =
             { walletNickname: ""
@@ -129,7 +134,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
-  -- TODO: Me quede aca.
   -- create a MarloweFollower app, call its "follow" endpoint with the given MarloweParams, and then
   -- return its PlutusAppId and observable state
   followContract walletDetails marloweParams =
