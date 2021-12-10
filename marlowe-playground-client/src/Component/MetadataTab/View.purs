@@ -69,13 +69,12 @@ import Marlowe.Extended.Metadata
   )
 
 onlyDescriptionRenderer
-  :: forall a b p
-   . (String -> String -> b)
-  -> (String -> b)
+  :: forall a p
+   . (String -> String -> a)
+  -> (String -> a)
   -> String
   -> String
   -> Boolean
-  -> (b -> a)
   -> String
   -> String
   -> Array (HTML p a)
@@ -85,7 +84,6 @@ onlyDescriptionRenderer
   key
   info
   needed
-  metadataAction
   typeNameTitle
   typeNameSmall =
   [ div [ class_ $ ClassName "metadata-prop-label" ]
@@ -96,7 +94,7 @@ onlyDescriptionRenderer
           , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
           , class_ $ ClassName "metadata-input"
           , value info
-          , onValueChange $ metadataAction <<< setAction key
+          , onValueChange $ setAction key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
@@ -106,7 +104,7 @@ onlyDescriptionRenderer
               , ClassName "align-top"
               , btn
               ]
-          , onClick $ const $ metadataAction $ deleteAction key
+          , onClick $ const $ deleteAction key
           ]
           [ text "-" ]
       ]
@@ -134,17 +132,15 @@ type FormattedNumberInfo
   }
 
 formattedNumberMetadataRenderer
-  :: forall a p
+  :: forall p
    . FormattedNumberInfo
   -> Boolean
-  -> (MetadataAction -> a)
   -> String
   -> String
-  -> Array (HTML p a)
+  -> Array (HTML p MetadataAction)
 formattedNumberMetadataRenderer
   { key, description, format, setFormat, setDescription, deleteInfo }
   needed
-  metadataAction
   typeNameTitle
   typeNameSmall =
   [ div [ class_ $ ClassName "metadata-prop-label" ]
@@ -152,8 +148,7 @@ formattedNumberMetadataRenderer
   , div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
       [ select
           [ class_ $ ClassName "metadata-input"
-          , onValueChange $ metadataAction <<< setFormat key <<<
-              setNumberFormatType
+          , onValueChange $ setFormat key <<< setNumberFormatType
           ]
           [ option
               [ value $ toString DefaultFormatType
@@ -175,7 +170,7 @@ formattedNumberMetadataRenderer
           , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
           , class_ $ ClassName "metadata-input"
           , value description
-          , onValueChange $ metadataAction <<< setDescription key
+          , onValueChange $ setDescription key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
@@ -185,7 +180,7 @@ formattedNumberMetadataRenderer
               , ClassName "align-top"
               , btn
               ]
-          , onClick $ const $ metadataAction $ deleteInfo key
+          , onClick $ const $ deleteInfo key
           ]
           [ text "-" ]
       ]
@@ -215,8 +210,7 @@ formattedNumberMetadataRenderer
                 , value $ if numDecimals == 0 then "" else show numDecimals
                 , required true
                 , min zero
-                , onValueChange $ metadataAction <<< setFormat key <<<
-                    setDecimals labelStr
+                , onValueChange $ setFormat key <<< setDecimals labelStr
                 ]
             ]
         , div [ class_ $ ClassName "metadata-prop-formattednum-col2" ]
@@ -226,8 +220,7 @@ formattedNumberMetadataRenderer
                     show key
                 , class_ $ ClassName "metadata-input"
                 , value labelStr
-                , onValueChange $ metadataAction <<< setFormat key <<<
-                    DecimalFormat numDecimals
+                , onValueChange $ setFormat key <<< DecimalFormat numDecimals
                 ]
             ]
         ]
@@ -251,14 +244,13 @@ formattedNumberMetadataRenderer
       labelStr
 
 choiceMetadataRenderer
-  :: forall a p
+  :: forall p
    . String
   -> ChoiceInfo
   -> Boolean
-  -> (MetadataAction -> a)
   -> String
   -> String
-  -> Array (HTML p a)
+  -> Array (HTML p MetadataAction)
 choiceMetadataRenderer key { choiceDescription, choiceFormat } =
   formattedNumberMetadataRenderer
     { key: key
@@ -270,14 +262,13 @@ choiceMetadataRenderer key { choiceDescription, choiceFormat } =
     }
 
 valueParameterMetadataRenderer
-  :: forall a p
+  :: forall p
    . String
   -> ValueParameterInfo
   -> Boolean
-  -> (MetadataAction -> a)
   -> String
   -> String
-  -> Array (HTML p a)
+  -> Array (HTML p MetadataAction)
 valueParameterMetadataRenderer
   key
   { valueParameterDescription, valueParameterFormat } =
@@ -291,24 +282,15 @@ valueParameterMetadataRenderer
     }
 
 metadataList
-  :: forall a b c p
-   . (b -> a)
-  -> Map String c
+  :: forall b c p
+   . Map String c
   -> Set String
-  -> ( String
-       -> c
-       -> Boolean
-       -> (b -> a)
-       -> String
-       -> String
-       -> Array (HTML p a)
-     )
+  -> (String -> c -> Boolean -> String -> String -> Array (HTML p b))
   -> String
   -> String
   -> (String -> b)
-  -> Array (HTML p a)
+  -> Array (HTML p b)
 metadataList
-  metadataAction
   metadataMap
   hintSet
   metadataRenderer
@@ -326,7 +308,6 @@ metadataList
             ( \(key /\ val) ->
                 ( case val of
                     Just (info /\ needed) -> metadataRenderer key info needed
-                      metadataAction
                       typeNameTitle
                       typeNameSmall
                     Nothing ->
@@ -342,8 +323,7 @@ metadataList
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ metadataAction
-                                  (setEmptyMetadata key)
+                              , onClick $ const $ (setEmptyMetadata key)
                               ]
                               [ text "+" ]
                           ]
@@ -375,24 +355,15 @@ metadataList
       )
 
 sortableMetadataList
-  :: forall a b c p
-   . (b -> a)
-  -> OMap String c
+  :: forall a c p
+   . OMap String c
   -> OSet String
-  -> ( String
-       -> c
-       -> Boolean
-       -> (b -> a)
-       -> String
-       -> String
-       -> Array (HTML p a)
-     )
+  -> (String -> c -> Boolean -> String -> String -> Array (HTML p a))
   -> String
   -> String
-  -> (String -> b)
+  -> (String -> a)
   -> Array (HTML p a)
 sortableMetadataList
-  metadataAction
   metadataMap
   hintSet
   metadataRenderer
@@ -410,7 +381,6 @@ sortableMetadataList
             ( \(key /\ val) ->
                 ( case val of
                     Just (info /\ needed) -> metadataRenderer key info needed
-                      metadataAction
                       typeNameTitle
                       typeNameSmall
                     Nothing ->
@@ -426,8 +396,7 @@ sortableMetadataList
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ metadataAction
-                                  (setEmptyMetadata key)
+                              , onClick $ const $ setEmptyMetadata key
                               ]
                               [ text "+" ]
                           ]
@@ -456,13 +425,8 @@ sortableMetadataList
       (map (\x -> Just (x /\ false)) metadataMap)
       (foldMap (\x -> OMap.singleton x Nothing) hintSet)
 
-metadataView
-  :: forall a p
-   . MetadataHintInfo
-  -> MetaData
-  -> (MetadataAction -> a)
-  -> HTML p a
-metadataView metadataHints metadata metadataAction =
+metadataView :: forall p. MetadataHintInfo -> MetaData -> HTML p MetadataAction
+metadataView metadataHints metadata =
   div [ classes [ ClassName "metadata-form" ] ]
     ( concat
         [ [ div [ class_ $ ClassName "metadata-mainprop-label" ]
@@ -470,8 +434,7 @@ metadataView metadataHints metadata metadataAction =
           , div [ class_ $ ClassName "metadata-mainprop-edit" ]
               [ select
                   [ class_ $ ClassName "metadata-input"
-                  , onValueChange $ metadataAction <<< SetContractType <<<
-                      initialsToContractType
+                  , onValueChange $ SetContractType <<< initialsToContractType
                   ]
                   do
                     ct <- contractTypeArray
@@ -492,7 +455,7 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract name"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractName
-                  , onValueChange $ metadataAction <<< SetContractName
+                  , onValueChange $ SetContractName
                   ]
               ]
           ]
@@ -504,8 +467,7 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractShortDescription
-                  , onValueChange $ metadataAction <<<
-                      SetContractShortDescription
+                  , onValueChange $ SetContractShortDescription
                   ]
               ]
           ]
@@ -517,8 +479,7 @@ metadataView metadataHints metadata metadataAction =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractLongDescription
-                  , onValueChange $ metadataAction <<<
-                      SetContractLongDescription
+                  , onValueChange $ SetContractLongDescription
                   ]
               ]
           ]
@@ -554,17 +515,15 @@ metadataView metadataHints metadata metadataAction =
     -> ( String
          -> c
          -> Boolean
-         -> (MetadataAction -> a)
          -> String
          -> String
-         -> Array (HTML p a)
+         -> Array (HTML p MetadataAction)
        )
     -> String
     -> String
     -> (String -> MetadataAction)
-    -> Array (HTML p a)
-  generateMetadataList mapLens setLens = metadataList metadataAction
-    (metadata ^. mapLens)
+    -> Array (HTML p MetadataAction)
+  generateMetadataList mapLens setLens = metadataList (metadata ^. mapLens)
     (metadataHints ^. setLens)
 
   generateSortableMetadataList
@@ -574,16 +533,15 @@ metadataView metadataHints metadata metadataAction =
     -> ( String
          -> c
          -> Boolean
-         -> (MetadataAction -> a)
          -> String
          -> String
-         -> Array (HTML p a)
+         -> Array (HTML p MetadataAction)
        )
     -> String
     -> String
     -> (String -> MetadataAction)
-    -> Array (HTML p a)
+    -> Array (HTML p MetadataAction)
   generateSortableMetadataList mapLens setLens = sortableMetadataList
-    metadataAction
     (metadata ^. mapLens)
     (metadataHints ^. setLens)
+

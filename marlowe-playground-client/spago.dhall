@@ -65,6 +65,7 @@ You can edit this file as you like.
   , "transformers"
   , "tuples"
   , "type-equality"
+  , "typelevel-prelude"
   , "unfoldable"
   , "web-common"
   , "web-dom"

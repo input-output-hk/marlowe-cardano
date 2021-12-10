@@ -6,22 +6,22 @@ import Auth (AuthStatus)
 import Component.Blockly.Types as Blockly
 import Component.ConfirmUnsavedNavigation.Types as ConfirmUnsavedNavigation
 import Component.Demos.Types as Demos
+import Component.MetadataTab.Types (MetadataAction)
 import Component.NewProject.Types as NewProject
 import Component.Projects.Types (Lang(..))
 import Component.Projects.Types as Projects
-import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Component.Tooltip.Types (ReferenceId)
+import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Data.Argonaut.Core (jsonNull)
 import Data.Argonaut.Decode ((.:), (.:?))
 import Data.Argonaut.Decode.Decoders (decodeJObject)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has, (^.))
 import Data.Lens.Record (prop)
 import Data.Maybe (maybe)
 import Data.Newtype (class Newtype)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Gist (Gist, GistId)
 import Gists.Types (GistAction)
 import Halogen (ClassName)
@@ -40,6 +40,7 @@ import Page.Simulation.Types as Simulation
 import Rename.Types as Rename
 import Router (Route)
 import SaveAs.Types as SaveAs
+import Type.Proxy (Proxy(..))
 import Types (WebData)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
@@ -147,6 +148,7 @@ type ChildSlots
   , simulationSlot :: H.Slot Simulation.Query Blockly.Message Unit
   , simulatorEditorSlot :: H.Slot Monaco.Query Monaco.Message Unit
   , marloweEditorPageSlot :: H.Slot Monaco.Query Monaco.Message Unit
+  , metadata :: forall query. H.Slot query MetadataAction Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , currencyInput :: forall query. H.Slot query BigInt String
@@ -241,8 +243,8 @@ _javascriptState = prop (Proxy :: _ "javascriptState")
 _simulationState :: Lens' State Simulation.State
 _simulationState = prop (Proxy :: _ "simulationState")
 
-_contractMetadata :: Lens' State MetaData
-_contractMetadata = prop (Proxy :: _ "contractMetadata")
+_contractMetadata :: forall a r. Lens' { contractMetadata :: a | r } a
+_contractMetadata = prop (Proxy :: Proxy "contractMetadata")
 
 _projects :: Lens' State Projects.State
 _projects = prop (Proxy :: _ "projects")

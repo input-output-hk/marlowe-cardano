@@ -1,9 +1,10 @@
 module MainFrame.State (component) where
 
 import Prologue hiding (div)
+
 import Auth (AuthRole(..), authStatusAuthRole, _GithubUser)
 import Component.Blockly.Types as Blockly
-import Component.BottomPanel.Types as BP
+import Component.BottomPanel.Types (Action(..)) as BP
 import Component.ConfirmUnsavedNavigation.Types (Action(..)) as ConfirmUnsavedNavigation
 import Component.Demos.Types (Action(..), Demo(..)) as Demos
 import Component.MetadataTab.State (carryMetadataAction)
@@ -25,7 +26,7 @@ import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
-import Data.Newtype (unwrap)
+import Data.Newtype (un, unwrap)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Env (Env)
@@ -46,6 +47,7 @@ import MainFrame.Types
   , ChildSlots
   , ModalView(..)
   , Query(..)
+  , Session(..)
   , State
   , View(..)
   , _authStatus
@@ -335,12 +337,11 @@ handleAction Init = do
           StaticData.sessionStorageKey
         session <- hoistMaybe $ hush $ parseDecodeJson sessionJSON
         let
-          metadataHints =
-            (getHintsFromMetadata (unwrap session).contractMetadata)
+          contractMetadata = un Session session # _.contractMetadata
+          metadataHints = getHintsFromMetadata contractMetadata
         H.modify_ $ sessionToState session
           <<< set (_haskellState <<< HE._metadataHintInfo) metadataHints
-          <<< set (_javascriptState <<< JS._metadataHintInfo)
-            (getHintsFromMetadata (unwrap session).contractMetadata)
+          <<< set (_javascriptState <<< JS._metadataHintInfo) metadataHints
 
 handleAction (HandleKey _ ev)
   | KE.key ev == "Escape" = assign _showModal Nothing

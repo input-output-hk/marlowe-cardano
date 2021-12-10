@@ -3,7 +3,7 @@ module Page.MarloweEditor.BottomPanel
   ) where
 
 import Prologue hiding (div)
-import Component.MetadataTab.View (metadataView)
+import Component.MetadataTab (render) as MetadataTab
 import Data.Array (drop, head)
 import Data.Array as Array
 import Data.Lens (to, (^.))
@@ -63,10 +63,12 @@ panelContents
   -> MetaData
   -> BottomPanelView
   -> ComponentHTML Action ChildSlots m
-panelContents state metadata MetadataView = metadataView
-  (state ^. _metadataHintInfo)
-  metadata
-  MetadataAction
+panelContents state metadata MetadataView =
+  MetadataTab.render
+    { metadata
+    , metadataHintInfo: state ^. _metadataHintInfo
+    }
+    MetadataAction
 
 panelContents state metadata StaticAnalysisView =
   section [ classes [ flex, flexCol ] ]

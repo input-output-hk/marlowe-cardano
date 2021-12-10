@@ -3,7 +3,7 @@ module Page.HaskellEditor.View where
 import Prologue hiding (div)
 import Component.BottomPanel.Types (Action(..)) as BottomPanel
 import Component.BottomPanel.View (render) as BottomPanel
-import Component.MetadataTab.View (metadataView)
+import Component.MetadataTab (render) as MetadataTab
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
@@ -254,10 +254,12 @@ panelContents state _ ErrorsView =
     Success (Left (CompilationErrors errors)) -> map compilationErrorPane errors
     _ -> [ text "No errors" ]
 
-panelContents state metadata MetadataView = metadataView
-  (state ^. _metadataHintInfo)
-  metadata
-  MetadataAction
+panelContents state metadata MetadataView =
+  MetadataTab.render
+    { metadataHintInfo: state ^. _metadataHintInfo
+    , metadata
+    }
+    MetadataAction
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
 compilationErrorPane (RawError error) = div_ [ text error ]
