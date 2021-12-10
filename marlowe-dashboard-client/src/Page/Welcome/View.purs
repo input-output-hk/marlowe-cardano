@@ -180,8 +180,7 @@ generateWalletHelpCard =
           [ classNames [ "font-semibold" ] ]
           [ text "Why generate a demo wallet?" ]
       , p_
-          -- FIXME: Change text to reflect new changes
-          [ text "Demo wallets are used so you can play around with the app and all its incredible features without using your own tokens from your real wallet." ]
+          [ text "We use a centralized server connected to a Testnet so you can play around with the app and all its incredible features without using your own tokens from your real wallet. Do not restore a wallet using a mnemonic phrase from a real wallet." ]
       , div
           [ classNames [ "flex" ] ]
           [ button
@@ -249,7 +248,7 @@ restoreTestnetWalletCard state =
         ]
     ]
 
--- FIXME: Remove or change
+-- TODO: Most likely remove or adapt all [Workflow 2][X] functionality
 useNewWalletCard :: forall p. State -> Array (HTML p Action)
 useNewWalletCard state =
   let
@@ -302,7 +301,7 @@ renderWalletId walletId =
       , walletIdTip
       ]
 
--- FIXME: Remove or change
+-- TODO: Most likely remove or adapt all [Workflow 2][X] functionality
 useWalletCard :: forall p. State -> Array (HTML p Action)
 useWalletCard state =
   let

@@ -26,7 +26,6 @@ import Data.Map (insert)
 import Data.Map as Map
 import Data.String (Pattern(..), split)
 import Data.UUID.Argonaut (emptyUUID) as UUID
-import Debug (traceM)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_, tell)
@@ -85,7 +84,8 @@ handleAction ::
   MonadClipboard m =>
   Action -> HalogenM State Action ChildSlots Msg m Unit
 handleAction (OpenCard card) = do
-  -- TODO: make cards real halogen components to encapsulate initialization logic
+  -- TODO: Refactor cards into real halogen components to encapsulate initialization logic. There are multiple
+  -- Reset calls spread over this file.
   case card of
     RestoreTestnetWalletCard -> do
       walletLibrary <- use _walletLibrary
@@ -117,7 +117,7 @@ that wallet: a `WalletCompanion` and a `MarloweApp`.
 - The `MarloweApp` is a control app, used to create Marlowe contracts, apply inputs, and redeem
   payments to this wallet.
 -}
--- TODO: Button disable, re-enable it as part of SCP-3170.
+-- TODO: This functionality is disabled, I'll re-enable it as part of SCP-3170.
 handleAction GenerateWallet = pure unit
 
 -- walletLibrary <- use _walletLibrary
@@ -148,11 +148,12 @@ handleAction RestoreTestnetWallet = do
       handleAction $ CloseCard
     Right walletDetails -> do
       tell _submitButtonSlot "restore-wallet" $ SubmitResult (Milliseconds 1200.0) (Right "Wallet restored")
-      traceM { msg: "oh yeas2", walletDetails }
       assign _remoteWalletDetails $ pure walletDetails
       -- TODO: SCP-3132 Fire logic to sync total funds
       handleAction $ ConnectWallet walletName
 
+-- TODO: We'll most likely won't need the [Workflow 2][X] connect wallet features, but I'll remove them
+--       once the new flow is fully functional.
 {- [Workflow 2][1] Connect a wallet
 If we are connecting a wallet that was selected by the user inputting a wallet nickname, then we
 will have a cache of it's `WalletDetails` in LocalStorage. But those details may well be out of
@@ -180,7 +181,6 @@ This action is triggered by clicking the confirmation button on the UseWalletCar
 UseNewWalletCard. It saves the wallet nickname to LocalStorage, and then calls the
 `MainFrame.EnterDashboardState` action.
 -}
--- FIXME: Probably remove
 handleAction (ConnectWallet walletNickname) = do
   assign _enteringDashboardState true
   remoteWalletDetails <- use _remoteWalletDetails

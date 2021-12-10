@@ -50,9 +50,7 @@ instance inputFieldErrorWalletMnemonicError :: InputFieldError WalletMnemonicErr
 data Card
   = GetStartedHelpCard
   | GenerateWalletHelpCard
-  -- FIXME: Remove or change
   | UseNewWalletCard
-  -- FIXME: Remove or change
   | UseWalletCard
   | RestoreTestnetWalletCard
   | LocalWalletMissingCard
