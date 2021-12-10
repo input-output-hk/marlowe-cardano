@@ -766,6 +766,7 @@ instance hasBlockDefinitionActusContract :: HasBlockDefinition ActusContractType
     STK -> Either.Left "Unsupported contract type"
     OPTNS -> Either.Left "Unsupported contract type"
     FUTUR -> Either.Left "Unsupported contract type"
+    SWPPV -> Either.Left "Unsupported contract type"
 
 instance hasBlockDefinitionValue :: HasBlockDefinition ActusValueType ActusValue where
   blockDefinition ActusDate g block = do

@@ -42,6 +42,7 @@ import           Language.Marlowe.ACTUS.Domain.Schedule           (CashFlow)
 import           Language.Marlowe.ACTUS.Generator.Analysis        (genProjectedCashflows)
 import           Language.Marlowe.ACTUS.Generator.GeneratorFs     (genFsContract)
 import           Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
+import           Language.Marlowe.ACTUS.Generator.MarloweCompat   (toMarlowe)
 import           Language.Marlowe.Pretty                          (pretty)
 import           Network.HTTP.Client.Conduit                      (defaultManagerSettings, managerResponseTimeout,
                                                                    responseTimeoutMicro)
@@ -58,9 +59,9 @@ import qualified Web.JWT                                          as JWT
 import           Webghc.Client                                    (runscript)
 import           Webghc.Server                                    (CompileRequest)
 
-genActusContract :: ContractTermsMarlowe -> Handler String
+genActusContract :: ContractTerms -> Handler String
 genActusContract terms =
-    case genFsContract defaultRiskFactors terms of
+    case genFsContract defaultRiskFactors (toMarlowe terms) of
         -- Should probably send this as a server error and handle it properly on the front end
         Validation.Failure errs -> pure (unlines . (:) "ACTUS Term Validation Failed:" . map ((++) "    " . show) $ errs)
         Validation.Success c -> pure . show . pretty $ c
