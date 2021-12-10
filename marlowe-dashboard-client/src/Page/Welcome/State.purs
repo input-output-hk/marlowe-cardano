@@ -7,25 +7,22 @@ module Page.Welcome.State
 import Prologue
 import API.Marlowe.Run.TestnetWallet (RestoreError(..))
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe (class ManageMarlowe, createWallet, lookupWalletDetails, restoreWallet)
+import Capability.Marlowe (class ManageMarlowe, lookupWalletDetails, restoreWallet)
 import Capability.MarloweStorage (class ManageMarloweStorage, clearAllLocalStorage, insertIntoWalletLibrary)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses (_companionAppId, _walletNickname)
-import Component.Contacts.State (parsePlutusAppId, walletNicknameError)
-import Component.Contacts.Types (WalletDetails, WalletLibrary, WalletNicknameError)
+import Component.Contacts.State (walletNicknameError)
+import Component.Contacts.Types (WalletLibrary, WalletNicknameError)
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Control.Monad.Reader (class MonadAsk)
-import Data.Array (length)
 import Data.Array as Array
-import Data.Bifunctor (lmap)
-import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, view, (^.))
-import Data.Map (filter, findMin, insert, lookup)
+import Data.Map (insert)
 import Data.Map as Map
 import Data.String (Pattern(..), split)
 import Data.UUID.Argonaut (emptyUUID) as UUID
@@ -39,10 +36,9 @@ import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
 import Network.RemoteData (RemoteData(..), fromEither)
-import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWalletDetails, _walletId, _walletLibrary, _walletMnemonicInput, _walletNicknameInput, _walletNicknameOrIdInput)
-import Page.Welcome.Types (Action(..), Card(..), State, WalletMnemonicError(..), WalletNicknameOrIdError(..))
-import Toast.Types (ajaxErrorToast, errorToast, successToast)
-import Types (NotFoundWebData)
+import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWalletDetails, _walletId, _walletLibrary, _walletMnemonicInput, _walletNicknameInput)
+import Page.Welcome.Types (Action(..), Card(..), State, WalletMnemonicError(..))
+import Toast.Types (errorToast, successToast)
 import Web.HTML (window)
 import Web.HTML.Location (reload)
 import Web.HTML.Window (location)
@@ -57,7 +53,6 @@ mkInitialState walletLibrary =
   { walletLibrary
   , card: Nothing
   , cardOpen: false
-  , walletNicknameOrIdInput: InputField.mkInitialState Nothing
   , walletNicknameInput: InputField.mkInitialState Nothing
   , walletMnemonicInput: InputField.mkInitialState Nothing
   , walletId: PlutusAppId UUID.emptyUUID
@@ -109,7 +104,6 @@ handleAction CloseCard = do
     <<< set _enteringDashboardState false
     <<< set _cardOpen false
     <<< set _walletId dummyState.walletId
-  handleAction $ WalletNicknameOrIdInputAction $ InputField.Reset
   handleAction $ WalletNicknameInputAction $ InputField.Reset
 
 {- [UC-WALLET-TESTNET-1][0] Create a new testnet wallet
@@ -156,63 +150,8 @@ handleAction RestoreTestnetWallet = do
       tell _submitButtonSlot "restore-wallet" $ SubmitResult (Milliseconds 1200.0) (Right "Wallet restored")
       traceM { msg: "oh yeas2", walletDetails }
       assign _remoteWalletDetails $ pure walletDetails
-      -- TODO: Fire logic to sync total funds
+      -- TODO: SCP-3132 Fire logic to sync total funds
       handleAction $ ConnectWallet walletName
-
-{- [Workflow 2][0] Connect a wallet
-The app lets you connect a wallet using an "omnibox" input, into which you can either enter a
-wallet nickname that you have saved in your browser's LocalStorage, or the appId of the wallet's
-`WalletCompanion` app. If you enter a valid appId, we lookup the details of a corresponding wallet
-in the PAB; if you enter a nickname, we have a cache of the details in LocalStorage. Either way,
-we then open up the UseWalletCard (or UseNewWalletCard), essentially a confirmation box for
-connecting this wallet.
-TODO: We currently use the appId of the wallet's `WalletCompanion` app as the "public" identifier
-for wallets: this is what is shown to the user, what they are told to copy and give to others, and
-what they need to enter into the "omnibox". This is because we need to know several things about
-each wallet (see the `WalletDetails` type), and in the initial stages of this app's development,
-it was possible to find out all of these things from just the appId of the `WalletCompanion`, and
-not possible to find out all of them from anything else.
-However, I realised recently that - with some PAB developments that have happened since, it should
-now be possible to determine the full `WalletDetails` given only the ID of the wallet itself. This
-might be preferable. The general strategy would be this: (1) use `Capability.Wallet.getWalletInfo`
-to get the wallet's pubKey and pubKeyHash; (2) use `Capability.Contract.getWalletContractInstances`
-to get all the contracts (i.e. PAB apps) running in that wallet; (3) search those apps for the
-wallet's `WalletCompanion` and `MarloweApp` (by checking their `cicDefinition`).
--}
-handleAction (WalletNicknameOrIdInputAction inputFieldAction) = do
-  toWalletNicknameOrIdInput $ InputField.handleAction inputFieldAction
-  case inputFieldAction of
-    InputField.SetValue walletNicknameOrId -> do
-      handleAction $ WalletNicknameOrIdInputAction $ InputField.SetValidator $ const Nothing
-      assign _remoteWalletDetails NotAsked
-      for_ (parsePlutusAppId walletNicknameOrId) \plutusAppId -> do
-        assign _remoteWalletDetails Loading
-        handleAction $ WalletNicknameOrIdInputAction $ InputField.SetValidator $ walletNicknameOrIdError Loading
-        ajaxWalletDetails <- lookupWalletDetails plutusAppId
-        assign _remoteWalletDetails $ fromEither ajaxWalletDetails
-        handleAction $ WalletNicknameOrIdInputAction $ InputField.SetValidator $ walletNicknameOrIdError $ fromEither ajaxWalletDetails
-        case ajaxWalletDetails of
-          Left _ -> pure unit -- feedback is shown in the view in this case
-          Right _ -> do
-            -- check whether this wallet ID is already in the walletLibrary ...
-            walletLibrary <- use _walletLibrary
-            assign _walletId plutusAppId
-            case findMin $ filter (\w -> w ^. _companionAppId == plutusAppId) walletLibrary of
-              Just { key } -> do
-                -- if so, open the UseWalletCard
-                handleAction $ WalletNicknameInputAction $ InputField.SetValue key
-                handleAction $ OpenCard UseWalletCard
-              Nothing -> do
-                -- otherwise open the UseNewWalletCard
-                handleAction $ WalletNicknameInputAction $ InputField.Reset
-                handleAction $ WalletNicknameInputAction $ InputField.SetValidator $ walletNicknameError walletLibrary
-                handleAction $ OpenCard UseNewWalletCard
-    InputField.SetValueFromDropdown walletNicknameOrId -> do
-      -- in this case we know it's a wallet nickname, and we want to open the use card
-      -- for the corresponding wallet
-      walletLibrary <- use _walletLibrary
-      for_ (lookup walletNicknameOrId walletLibrary) (handleAction <<< OpenUseWalletCardWithDetails)
-    _ -> pure unit
 
 {- [Workflow 2][1] Connect a wallet
 If we are connecting a wallet that was selected by the user inputting a wallet nickname, then we
@@ -228,7 +167,6 @@ handleAction (OpenUseWalletCardWithDetails walletDetails) = do
   case ajaxWalletDetails of
     Left _ -> handleAction $ OpenCard LocalWalletMissingCard
     Right _ -> do
-      handleAction $ WalletNicknameOrIdInputAction $ InputField.Reset
       handleAction $ WalletNicknameInputAction $ InputField.SetValue $ view _walletNickname walletDetails
       assign _walletId $ walletDetails ^. _companionAppId
       handleAction $ OpenCard UseWalletCard
@@ -271,13 +209,6 @@ handleAction (ClipboardAction clipboardAction) = do
   addToast $ successToast "Copied to clipboard"
 
 ------------------------------------------------------------
-toWalletNicknameOrIdInput ::
-  forall m msg slots.
-  Functor m =>
-  HalogenM (InputField.State WalletNicknameOrIdError) (InputField.Action WalletNicknameOrIdError) slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
-toWalletNicknameOrIdInput = mapSubmodule _walletNicknameOrIdInput WalletNicknameOrIdInputAction
-
 toWalletNicknameInput ::
   forall m msg slots.
   Functor m =>
@@ -291,10 +222,3 @@ toWalletMnemonicInput ::
   HalogenM (InputField.State WalletMnemonicError) (InputField.Action WalletMnemonicError) slots msg m Unit ->
   HalogenM State Action slots msg m Unit
 toWalletMnemonicInput = mapSubmodule _walletMnemonicInput WalletMnemonicInputAction
-
-------------------------------------------------------------
-walletNicknameOrIdError :: NotFoundWebData WalletDetails -> String -> Maybe WalletNicknameOrIdError
-walletNicknameOrIdError remoteWalletDetails _ = case remoteWalletDetails of
-  Loading -> Just UnconfirmedWalletNicknameOrId
-  Failure _ -> Just NonexistentWalletNicknameOrId
-  _ -> Nothing

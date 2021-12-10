@@ -2,7 +2,6 @@ module Page.Welcome.Types
   ( Action(..)
   , Card(..)
   , State
-  , WalletNicknameOrIdError(..)
   , WalletMnemonicError(..)
   ) where
 
@@ -29,24 +28,12 @@ type State
     -- from the right) - and that's much easier to do with media queries.
     , cardOpen :: Boolean
     , walletLibrary :: WalletLibrary
-    , walletNicknameOrIdInput :: InputField.State WalletNicknameOrIdError
     , walletNicknameInput :: InputField.State WalletNicknameError
     , walletMnemonicInput :: InputField.State WalletMnemonicError
     , walletId :: PlutusAppId
     , remoteWalletDetails :: NotFoundWebData WalletDetails
     , enteringDashboardState :: Boolean
     }
-
--- FIXME: Delete
-data WalletNicknameOrIdError
-  = UnconfirmedWalletNicknameOrId
-  | NonexistentWalletNicknameOrId
-
-derive instance eqWalletNicknameOrIdError :: Eq WalletNicknameOrIdError
-
-instance inputFieldErrorWalletNicknameOrIdError :: InputFieldError WalletNicknameOrIdError where
-  inputErrorToString UnconfirmedWalletNicknameOrId = "Looking up wallet..."
-  inputErrorToString NonexistentWalletNicknameOrId = "Wallet not found"
 
 data WalletMnemonicError
   = MnemonicAmountOfWords
@@ -78,8 +65,6 @@ data Action
   | GenerateWallet
   | RestoreTestnetWallet
   | WalletMnemonicInputAction (InputField.Action WalletMnemonicError)
-  -- FIXME: remove. Choose wallet or paste key
-  | WalletNicknameOrIdInputAction (InputField.Action WalletNicknameOrIdError)
   | OpenUseWalletCardWithDetails WalletDetails
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
   | ConnectWallet WalletNickname
@@ -93,7 +78,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
   toEvent RestoreTestnetWallet = Just $ defaultEvent "RestoreTestnetWallet"
   toEvent (WalletMnemonicInputAction inputFieldAction) = toEvent inputFieldAction
-  toEvent (WalletNicknameOrIdInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (OpenUseWalletCardWithDetails _) = Nothing
   toEvent (WalletNicknameInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
