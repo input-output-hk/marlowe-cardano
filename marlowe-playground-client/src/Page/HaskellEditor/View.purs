@@ -178,7 +178,7 @@ panelContents state _ ErrorsView =
     Success (Left (CompilationErrors errors)) -> map compilationErrorPane errors
     _ -> [ text "No errors" ]
 
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents state metadata MetadataView = MetadataAction <$> metadataView (state ^. _metadataHintInfo) metadata
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
 compilationErrorPane (RawError error) = div_ [ text error ]

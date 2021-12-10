@@ -25,7 +25,7 @@ panelContents ::
   MetaData ->
   BottomPanelView ->
   ComponentHTML Action ChildSlots m
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents state metadata MetadataView = MetadataAction <$> metadataView (state ^. _metadataHintInfo) metadata
 
 panelContents state metadata StaticAnalysisView =
   section [ classes [ flex, flexCol ] ]

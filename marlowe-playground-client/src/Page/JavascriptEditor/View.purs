@@ -180,7 +180,7 @@ panelContents state _ ErrorsView =
     JS.CompilationError err -> [ compilationErrorPane err ]
     _ -> [ text "No errors" ]
 
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents state metadata MetadataView = MetadataAction <$> metadataView (state ^. _metadataHintInfo) metadata
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
 compilationErrorPane (RawError error) = div_ [ text "There was an error when running the JavaScript code:", code_ [ pre_ [ text $ error ] ] ]
