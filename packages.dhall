@@ -5,6 +5,19 @@ let upstream =
       https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20211028/packages.dhall sha256:df6486e7fad6dbe724c4e2ee5eac65454843dce1f6e10dc35e0b1a8aa9720b26
 
 in  upstream
+  with
+    infinite-lists = mkPackage
+      [ "console"
+      , "control"
+      , "effect"
+      , "lazy"
+      , "maybe"
+      , "prelude"
+      , "psci-support"
+      , "tuples"
+      ]
+      "https://git@github.com/Thimoteus/purescript-infinite-lists"
+      "v3.2.0"
   with moldy =
       mkPackage
         [ "prelude"
