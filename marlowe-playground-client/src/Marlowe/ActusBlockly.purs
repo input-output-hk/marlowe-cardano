@@ -41,7 +41,7 @@ rootBlockName :: String
 rootBlockName = "root_contract"
 
 type ContractTerms
-  = ContractTermsPoly Number String
+  = ContractTermsPoly Number
 
 data ActusContractType
   = PaymentAtMaturity

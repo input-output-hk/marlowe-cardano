@@ -39,7 +39,7 @@ import           Language.Haskell.Interpreter                 (CompilationError,
 import qualified Language.Marlowe                             as S
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
 import qualified Language.Marlowe.ACTUS.Domain.ContractTerms  as CT
-import           Language.Marlowe.ACTUS.Domain.Schedule       as SC (CashFlow)
+import           Language.Marlowe.ACTUS.Domain.Schedule       as SC
 import           Language.Marlowe.Extended
 import           Language.Marlowe.SemanticsTypes              (State (..))
 import           Language.PureScript.Bridge                   (BridgePart, Language (Haskell), PSType, SumType,
@@ -210,7 +210,7 @@ myTypes =
     , mkSumType (Proxy @CT.Assertion)
     , mkSumType (Proxy @CT.Assertions)
     , mkSumType (Proxy @CT.AssertionContext)
-    , mkSumType (Proxy @SC.CashFlow)
+    , mkSumType (Proxy :: Proxy (SC.CashFlowPoly A))
     , mkSumType (Proxy @BV.EventType)
     , mkSumType (Proxy @Webghc.CompileRequest)
     ]
