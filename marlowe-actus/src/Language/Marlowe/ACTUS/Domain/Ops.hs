@@ -82,7 +82,7 @@ instance ScheduleOps (Value Observation) where
     -- ACTUS is implemented only for Fixed Schedules
     -- that means schedules are known before the contract
     -- is exectued, resp. the schedule do not depend on
-    -- riskfactors. _ceiling is needed to calculate
+    -- riskfactors
     _ceiling _            = error "Precondition: Fixed schedules"
 
 instance ActusOps (Value Observation) where
