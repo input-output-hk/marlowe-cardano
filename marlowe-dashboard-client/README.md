@@ -13,8 +13,8 @@ The [marlowe-pab](https://github.com/input-output-hk/marlowe-cardano/tree/master
 Marlowe Run requires a running instance of the Marlowe PAB to work:
 
 ```bash
-$ plutus-pab-migrate
-$ marlowe-pab-server
+[nix-shell] $ plutus-pab-migrate
+[nix-shell] $ marlowe-pab-server
 ```
 
 The first command (`plutus-pab-migrate`) initialises the database needed to run the Marlowe PAB. You should only need to do this once, but you might need to do it again if the PAB code changes in ways that require modifications to the database schema.
