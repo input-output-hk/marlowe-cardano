@@ -41,26 +41,28 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import           Cardano.Api                  (AddressAny, AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
-                                               NetworkId, PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
-                                               PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo,
-                                               StakeAddressReference, TxIn, VerificationKey, deserialiseAddress,
-                                               deserialiseFromTextEnvelope, serialiseAddress, serialiseToTextEnvelope)
-import           Cardano.Api.Shelley          (PlutusScript (..))
-import           Codec.Serialise              (deserialise)
-import           Control.Monad                ((<=<))
-import           Control.Monad.Except         (MonadError, MonadIO, liftEither, liftIO)
-import           Data.Aeson                   (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
-import           Data.Bifunctor               (first)
-import           Data.ByteString.Short        (ShortByteString)
-import           Data.String                  (IsString)
-import           GHC.Generics                 (Generic)
-import           Language.Marlowe.CLI.Orphans ()
-import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import           Cardano.Api                     (AddressAny, AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
+                                                  NetworkId, PaymentExtendedKey, PaymentKey, PlutusScript,
+                                                  PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData,
+                                                  SigningKey, SlotNo, StakeAddressReference, TxIn, VerificationKey,
+                                                  deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
+                                                  serialiseToTextEnvelope)
+import           Cardano.Api.Shelley             (PlutusScript (..))
+import           Codec.Serialise                 (deserialise)
+import           Control.Monad                   ((<=<))
+import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
+import           Data.Aeson                      (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
+import           Data.Bifunctor                  (first)
+import           Data.ByteString.Short           (ShortByteString)
+import           Data.String                     (IsString)
+import           GHC.Generics                    (Generic)
+import           Language.Marlowe.CLI.Orphans    ()
+import           Language.Marlowe.SemanticsTypes (AccountId, ChoiceName, ChosenNum, Party, Token)
+import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
-import qualified Cardano.Api                  as Api (Value)
-import qualified Data.ByteString.Lazy         as LBS (fromStrict)
-import qualified Data.ByteString.Short        as SBS (fromShort)
+import qualified Cardano.Api                     as Api (Value)
+import qualified Data.ByteString.Lazy            as LBS (fromStrict)
+import qualified Data.ByteString.Short           as SBS (fromShort)
 
 
 -- | Exception for Marlowe CLI.
@@ -376,7 +378,7 @@ data Command =
     , bodyFile        :: FilePath         -- ^ The JSON file containing the transaction body.
     , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
     }
-    -- Compute the next step in a contract.
+    -- | Compute the next step in a contract.
   | Compute
     {
       contractFile :: FilePath    -- ^ The JSON file containing the contract.
@@ -386,6 +388,28 @@ data Command =
     , maximumSlot  :: SlotNo      -- ^ The last valid slot for the transaction.
     , computeFile  :: FilePath    -- ^ The output JSON file with the results of the computation.
     , printStats   :: Bool        -- ^ Whether to print statistics about the redeemer.
+    }
+    -- Input a deposit to a contract.
+  | InputDeposit
+    {
+      account   :: AccountId  -- ^ The account for the deposit.
+    , party     :: Party      -- ^ The party making the deposit.
+    , token     :: Token      -- ^ The token being deposited.
+    , amount    :: Integer    -- ^ The amount of the token deposited.
+    , inputFile :: FilePath   -- ^ The output JSON file representing the input.
+    }
+    -- Input a choice to a contract.
+  | InputChoice
+    {
+      choiceName  :: ChoiceName -- ^ The name of the choice made.
+    , choiceParty :: Party      -- ^ The party making the choice.
+    , chosen      :: ChosenNum  -- ^ The number chosen.
+    , inputFile   :: FilePath   -- ^ The output JSON file representing the input.
+    }
+    -- Input a notification to a contract.
+  | InputNotify
+    {
+      inputFile :: FilePath  -- ^ The output JSON file representing the input.
     }
     -- | Ad-hoc example.
   | Example

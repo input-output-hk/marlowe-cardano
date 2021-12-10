@@ -11,6 +11,9 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE LambdaCase #-}
+
+
 module Language.Marlowe.CLI.Parse (
 -- * Parsers
   parseAddressAny
@@ -23,20 +26,26 @@ module Language.Marlowe.CLI.Parse (
 , parseTxIx
 , parseTxOut
 , parseValue
+, parseParty
+, parseToken
+, parseByteString
 ) where
 
 
-import           Cardano.Api            (AddressAny, AsType (AsAddressAny, AsStakeAddress, AsTxId), NetworkId (..),
-                                         NetworkMagic (..), Quantity (..), SlotNo (..), StakeAddressReference (..),
-                                         TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress,
-                                         deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace)
-import           Cardano.Api.Shelley    (StakeAddress (..), fromShelleyStakeCredential)
-import           Plutus.V1.Ledger.Api   (CurrencySymbol (..), toBuiltin)
+import           Cardano.Api                     (AddressAny, AsType (AsAddressAny, AsStakeAddress, AsTxId),
+                                                  NetworkId (..), NetworkMagic (..), Quantity (..), SlotNo (..),
+                                                  StakeAddressReference (..), TxId (..), TxIn (..), TxIx (..), Value,
+                                                  deserialiseAddress, deserialiseFromRawBytesHex, lovelaceToValue,
+                                                  quantityToLovelace)
+import           Cardano.Api.Shelley             (StakeAddress (..), fromShelleyStakeCredential)
+import           Language.Marlowe.SemanticsTypes (Party (..), Token (..))
+import           Plutus.V1.Ledger.Api            (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..),
+                                                  TokenName (..), toBuiltin)
 
-import qualified Data.ByteString.Base16 as Base16 (decode)
-import qualified Data.ByteString.Char8  as BS8 (pack)
-import qualified Data.Text              as T (pack)
-import qualified Options.Applicative    as O
+import qualified Data.ByteString.Base16          as Base16 (decode)
+import qualified Data.ByteString.Char8           as BS8 (pack)
+import qualified Data.Text                       as T (pack)
+import qualified Options.Applicative             as O
 
 
 -- | Parser for network ID.
@@ -61,12 +70,7 @@ parseSlotNo = SlotNo <$> O.auto
 
 -- | Parser for currency symbol.
 parseCurrencySymbol :: O.ReadM CurrencySymbol
-parseCurrencySymbol =
-  O.eitherReader
-    $ \s ->
-      case Base16.decode $ BS8.pack s of
-        Left  message  -> Left message
-        Right currency -> Right . CurrencySymbol . toBuiltin $ currency
+parseCurrencySymbol = CurrencySymbol <$> parseByteString
 
 
 -- | Parser for `TxIn`.
@@ -106,21 +110,21 @@ parseTxIx = TxIx <$> O.auto
 
 
 -- | Parser for `TxOut` information.
-parseTxOut :: O.ReadM (AddressAny, Value)  -- FIXME: Also parse the datum of the eUTxO.
+parseTxOut :: O.ReadM (AddressAny, Value)
 parseTxOut =
   O.eitherReader -- FIXME: Use a monadic approach.
     $ \s ->
       do
         (address, value) <-
            case break (== '+') s of
-             (_ , [])               -> Left "Missing transaction index."
+             (_ , [])               -> Left "Missing output value."
              (address', _ : value') -> Right (address', value')
         address'' <-
           case deserialiseAddress AsAddressAny $ T.pack address of
             Nothing         -> Left "Invalid address."
             Just address''' -> Right address'''
         value'' <-
-          case reads value of
+          case reads value of  -- FIXME: Also parse native tokens.
             [(value''', "")] -> Right value'''
             _                -> Left "Invalid value."
         pure (address'', lovelaceToValue . quantityToLovelace . Quantity $ value'')
@@ -139,3 +143,46 @@ parseAddressAny =
       case deserialiseAddress AsAddressAny $ T.pack s of
         Nothing      -> Left "Invalid address."
         Just address -> Right address
+
+
+-- | Parser for `Party`.
+parseParty :: O.ReadM Party
+parseParty =
+  O.eitherReader -- FIXME: Use a monadic approach.
+    $ \case
+      'P' : 'K' : '=' : pubKeyHash       -> case Base16.decode $ BS8.pack pubKeyHash of
+                                              Left  message     -> Left message
+                                              Right pubKeyHash' -> Right . PK . PubKeyHash . toBuiltin $ pubKeyHash'
+      'R' : 'o' : 'l' : 'e' : '=' : role -> Right . Role . TokenName . toBuiltin . BS8.pack $ role
+      _                                  -> Left "Invalid party."
+
+
+-- | Parser for `Token`.
+parseToken :: O.ReadM Token
+parseToken =
+  O.eitherReader -- FIXME: Use a monadic approach.
+    $ \s ->
+      do
+        (symbol, name) <-
+           case break (== '.') s of
+             (_ , [])             -> Left "Missing token name."
+             (symbol', _ : name') -> Right (symbol', name')
+        symbol'' <-
+          case Base16.decode $ BS8.pack symbol of
+            Left  message   -> Left message
+            Right symbol''' -> Right . CurrencySymbol . toBuiltin $ symbol'''
+        name'' <-
+          case reads name of
+            [(name''', "")] -> Right . TokenName . toBuiltin . BS8.pack $ name'''
+            _               -> Left "Invalid token name."
+        pure $ Token symbol'' name''
+
+
+-- | Parser for `BuiltinByteString`.
+parseByteString :: O.ReadM BuiltinByteString
+parseByteString =
+  O.eitherReader
+    $ \s ->
+      case Base16.decode $ BS8.pack s of
+        Left  message  -> Left message
+        Right currency -> Right . toBuiltin $ currency

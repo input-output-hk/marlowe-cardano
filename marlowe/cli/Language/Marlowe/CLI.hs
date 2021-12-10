@@ -30,9 +30,10 @@ import           Data.Maybe                       (fromMaybe)
 import           Data.Version                     (Version, showVersion)
 import           Language.Marlowe.CLI.Export      (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
                                                    exportValidator)
-import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseSlotNo,
-                                                   parseStakeAddressReference, parseTxIn, parseTxOut, parseValue)
-import           Language.Marlowe.CLI.Run         (computeMarlowe)
+import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseParty,
+                                                   parseSlotNo, parseStakeAddressReference, parseToken, parseTxIn,
+                                                   parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Run         (computeMarlowe, makeChoice, makeDeposit, makeNotification)
 import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
 import           Language.Marlowe.CLI.Types       (CliError (..), Command (..))
 import           Language.Marlowe.Client          (defaultMarloweParams, marloweParams)
@@ -144,6 +145,14 @@ mainCLI version example =
                                      inputFiles minimumSlot maximumSlot
                                      computeFile
                                      printStats
+            InputDeposit{..}    -> makeDeposit
+                                     account party token amount
+                                     inputFile
+            InputChoice{..}     -> makeChoice
+                                     choiceName choiceParty chosen
+                                     inputFile
+            InputNotify{..}     -> makeNotification
+                                     inputFile
             Example{..}         -> example writeFiles pubKeyHash
     case result of
       Right ()      -> return ()
@@ -171,6 +180,9 @@ parser version =
               <> buildIncomingCommand
               <> buildContinuingCommand
               <> buildOutgoingCommand
+              <> inputDepositCommand
+              <> inputChoiceCommand
+              <> inputNotifyCommand
               <> submitCommand
               <> computeCommand
               <> exampleCommand
@@ -411,7 +423,7 @@ computeCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 computeCommand =
   O.command "compute"
     $ O.info (computeOptions O.<**> O.helper)
-    $ O.progDesc "Compute a Marlowe contract to a JSON file."
+    $ O.progDesc "Compute a Marlowe contract and write the output to a JSON file."
 
 
 -- | Parser for the "compute" options.
@@ -425,6 +437,58 @@ computeOptions =
     <*> O.option parseSlotNo   (O.long "invalid-hereafter" <> O.metavar "SLOT"            <> O.help "Maximum slot for the redemption."       )
     <*> O.strOption            (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
     <*> O.switch               (O.long "print-stats"                                      <> O.help "Print statistics."                      )
+
+
+-- | Parser for the "deposit" command.
+inputDepositCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+inputDepositCommand =
+  O.command "deposit"
+    $ O.info (inputDepositOptions O.<**> O.helper)
+    $ O.progDesc "Create Marlowe input for a deposit."
+
+
+-- | Parser for the "deposit" options.
+inputDepositOptions :: O.Parser Command -- ^ The parser.
+inputDepositOptions =
+  InputDeposit
+    <$> O.option parseParty (O.long "deposit-account"  <> O.metavar "PARTY"       <> O.help "The account for the deposit."        )
+    <*> O.option parseParty (O.long "deposit-party"    <> O.metavar "PARTY"       <> O.help "The party making the deposit."       )
+    <*> O.option parseToken (O.long "deposit-token"    <> O.metavar "TOKEN"       <> O.help "The token being deposited."          )
+    <*> O.option O.auto     (O.long "deposit-amount"   <> O.metavar "INTEGER"     <> O.help "The amount of token being deposited.")
+    <*> O.strOption         (O.long "out-file"         <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+
+
+-- | Parser for the "choose" command.
+inputChoiceCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+inputChoiceCommand =
+  O.command "choose"
+    $ O.info (inputChoiceOptions O.<**> O.helper)
+    $ O.progDesc "Create Marlowe input for a choice."
+
+
+-- | Parser for the "choose" options.
+inputChoiceOptions :: O.Parser Command -- ^ The parser.
+inputChoiceOptions =
+  InputChoice
+    <$> O.strOption         (O.long "choice-name"   <> O.metavar "NAME"        <> O.help "The name of the choice made."        )
+    <*> O.option parseParty (O.long "choice-party"  <> O.metavar "PARTY"       <> O.help "The party making the choice."        )
+    <*> O.option O.auto     (O.long "choice-number" <> O.metavar "INTEGER"     <> O.help "The number chosen."                  )
+    <*> O.strOption         (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+
+
+-- | Parser for the "notify" command.
+inputNotifyCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+inputNotifyCommand =
+  O.command "notify"
+    $ O.info (inputNotifyOptions O.<**> O.helper)
+    $ O.progDesc "Create Marlowe input for a notification."
+
+
+-- | Parser for the "notify" options.
+inputNotifyOptions :: O.Parser Command -- ^ The parser.
+inputNotifyOptions =
+  InputNotify
+    <$> O.strOption (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
 
 
 -- | Parser for the "example" command.

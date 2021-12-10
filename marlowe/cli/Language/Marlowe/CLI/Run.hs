@@ -19,26 +19,32 @@
 module Language.Marlowe.CLI.Run (
 -- * Computation
   computeMarlowe
+-- * Input
+, makeDeposit
+, makeChoice
+, makeNotification
 ) where
 
 
-import           Cardano.Api                  (SlotNo (..))
-import           Control.Monad                (forM_, unless, when)
-import           Control.Monad.Except         (MonadError, MonadIO, liftIO, throwError)
-import           Data.Aeson.Encode.Pretty     (encodePretty)
-import           Language.Marlowe.CLI.Export  (buildDatum)
-import           Language.Marlowe.CLI.IO      (decodeFileStrict)
-import           Language.Marlowe.CLI.Orphans ()
-import           Language.Marlowe.CLI.Types   (CliError (..), DatumInfo (..))
-import           Language.Marlowe.Semantics   (Payment (..), TransactionInput (..), TransactionOutput (..),
-                                               computeTransaction)
-import           Plutus.V1.Ledger.Ada         (adaSymbol, fromValue, getAda)
-import           Plutus.V1.Ledger.Value       (Value (..))
-import           Prettyprinter.Extras         (Pretty (..))
-import           System.IO                    (hPutStrLn, stderr)
+import           Cardano.Api                     (SlotNo (..))
+import           Control.Monad                   (forM_, unless, when)
+import           Control.Monad.Except            (MonadError, MonadIO, liftIO, throwError)
+import           Data.Aeson.Encode.Pretty        (encodePretty)
+import           Language.Marlowe.CLI.Export     (buildDatum)
+import           Language.Marlowe.CLI.IO         (decodeFileStrict)
+import           Language.Marlowe.CLI.Orphans    ()
+import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..))
+import           Language.Marlowe.Semantics      (Payment (..), TransactionInput (..), TransactionOutput (..),
+                                                  computeTransaction)
+import           Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Input (..), Party,
+                                                  Token)
+import           Plutus.V1.Ledger.Ada            (adaSymbol, fromValue, getAda)
+import           Plutus.V1.Ledger.Value          (Value (..))
+import           Prettyprinter.Extras            (Pretty (..))
+import           System.IO                       (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Lazy         as LBS (writeFile)
-import qualified PlutusTx.AssocMap            as AM (toList)
+import qualified Data.ByteString.Lazy            as LBS (writeFile)
+import qualified PlutusTx.AssocMap               as AM (toList)
 
 
 -- | Compute the next step in a Marlowe contract.
@@ -93,3 +99,43 @@ computeMarlowe contractFile stateFile inputFiles (SlotNo minimumSlot) (SlotNo ma
                        (i, Payment accountId payee money) <- zip [1..] txOutPayments
                      ]
                    hPutStrLn stderr $ "Datum size: " <> show (diSize $ buildDatum txOutContract txOutState)
+
+
+-- | Serialise a deposit input to a file.
+makeDeposit :: MonadIO m
+            => AccountId  -- ^ The account for the deposit.
+            -> Party      -- ^ The party making the deposit.
+            -> Token      -- ^ The token being deposited.
+            -> Integer    -- ^ The amount of the token deposited.
+            -> FilePath   -- ^ The output JSON file representing the input.
+            -> m ()       -- ^ Action to write the input to the file.
+makeDeposit accountId party token amount outputFile =
+  liftIO
+    . LBS.writeFile outputFile
+    . encodePretty
+    $ IDeposit accountId party token amount
+
+
+-- | Serialise a choice input to a file.
+makeChoice :: MonadIO m
+           => ChoiceName  -- ^ The name of the choice made.
+           -> Party       -- ^ The party making the choice.
+           -> ChosenNum   -- ^ The number chosen.
+           -> FilePath    -- ^ The output JSON file representing the input.
+           -> m ()        -- ^ Action to write the input to the file.
+makeChoice name party chosen outputFile =
+  liftIO
+    . LBS.writeFile outputFile
+    . encodePretty
+    $ IChoice (ChoiceId name party) chosen
+
+
+-- | Serialise a notification input to a file.
+makeNotification :: MonadIO m
+                 => FilePath  -- ^ The output JSON file representing the input.
+                 -> m ()      -- ^ Action to write the input to the file.
+makeNotification outputFile=
+  liftIO
+    . LBS.writeFile outputFile
+    . encodePretty
+    $ INotify
