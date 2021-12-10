@@ -20,8 +20,7 @@ module Capability.Marlowe
 
 import Prologue
 import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicWallet, _observableState)
-import API.Marlowe.Run.TestnetWallet (RestoreError(..))
-import API.Marlowe.Run.TestnetWallet (RestoreWalletOptions)
+import API.Marlowe.Run.TestnetWallet (RestoreError(..), RestoreWalletOptions)
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.Contract (activateContract, getContractInstanceClientState, getContractInstanceObservableState, getWalletContractInstances, invokeEndpoint) as Contract
@@ -31,10 +30,10 @@ import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Capability.Wallet as Wallet
 import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _pubKeyHash, _walletId, _walletInfo)
-import Component.Contacts.Types (WalletDetails, WalletId(..), WalletInfo)
+import Component.Contacts.Types (WalletDetails, WalletId, WalletInfo)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
-import Data.Argonaut.Decode (JsonDecodeError, (.!=))
+import Data.Argonaut.Decode (JsonDecodeError)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (filter) as Array
 import Data.Array (find)
@@ -42,7 +41,7 @@ import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
 import Data.Newtype (unwrap, un)
-import Data.Traversable (for, traverse)
+import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
