@@ -92,6 +92,28 @@ stateBridge = do
     typeModule ^== "Language.Marlowe.SemanticsTypes"
     psState
 
+psObservation :: MonadReader BridgeData m => m PSType
+psObservation =
+    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Observation" <$>
+    psTypeParameters
+
+observationBridge :: BridgePart
+observationBridge = do
+    typeName ^== "Observation"
+    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    psObservation
+
+psValue :: MonadReader BridgeData m => m PSType
+psValue =
+    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Value" <$>
+    psTypeParameters
+
+valueBridge :: BridgePart
+valueBridge = do
+    typeName ^== "Value"
+    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    psValue
+
 psTransactionInput :: MonadReader BridgeData m => m PSType
 psTransactionInput =
     TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "TransactionInput" <$>
@@ -135,6 +157,8 @@ myBridge =
     timeBridge <|>
     contractBridge <|>
     stateBridge <|>
+    observationBridge <|>
+    valueBridge <|>
     transactionInputBridge <|>
     transactionWarningBridge <|>
     defaultBridge
