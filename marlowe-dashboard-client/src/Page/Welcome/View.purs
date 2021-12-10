@@ -228,6 +228,7 @@ restoreTestnetWalletCard state =
         , WalletMnemonicInputAction <$> renderInput walletMnemonicDisplayOptions walletMnemonicInput
         , p_
             [ b_ [ text "IMPORTANT:" ]
+            -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it
             , text "Do not use a real wallet phrase <read more>"
             ]
         , div
