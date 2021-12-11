@@ -17,7 +17,7 @@ data ShiftedDay = ShiftedDay
 
 type ShiftedSchedule = [ShiftedDay]
 
-data CashFlow = CashFlow
+data CashFlowPoly a = CashFlowPoly
   { tick               :: Integer,
     cashContractId     :: String,
     cashParty          :: String,
@@ -25,9 +25,11 @@ data CashFlow = CashFlow
     cashPaymentDay     :: LocalTime,
     cashCalculationDay :: LocalTime,
     cashEvent          :: EventType,
-    amount             :: Double,
-    notional           :: Double,
+    amount             :: a,
+    notional           :: a,
     currency           :: String
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+type CashFlow = CashFlowPoly Double

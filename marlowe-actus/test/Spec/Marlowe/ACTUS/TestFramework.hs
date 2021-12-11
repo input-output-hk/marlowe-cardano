@@ -88,7 +88,7 @@ tests n t = testGroup n [testCase (getField @"identifier" tc) (runTest tc) | tc 
     assertTestResults _ _             = assertFailure "Sizes differ"
 
     assertTestResult :: CashFlow -> TestResult -> IO ()
-    assertTestResult CashFlow {..} TestResult{eventDate, eventType, payoff} = do
+    assertTestResult CashFlowPoly {..} TestResult{eventDate, eventType, payoff} = do
         assertEqual cashEvent eventType
         assertEqual cashPaymentDay eventDate
         assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)

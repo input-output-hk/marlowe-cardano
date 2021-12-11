@@ -61,17 +61,11 @@ library
     Language.Marlowe.ACTUS.Generator.GeneratorFs
     Language.Marlowe.ACTUS.Generator.GeneratorStatic
     Language.Marlowe.ACTUS.Generator.MarloweCompat
-    Language.Marlowe.ACTUS.Model.POF.PayoffModel
-    Language.Marlowe.ACTUS.Model.POF.Payoff
-    Language.Marlowe.ACTUS.Model.POF.PayoffFs
-    Language.Marlowe.ACTUS.Model.STF.StateTransitionModel
-    Language.Marlowe.ACTUS.Model.STF.StateTransition
-    Language.Marlowe.ACTUS.Model.STF.StateTransitionFs
-    Language.Marlowe.ACTUS.Model.SCHED.ContractScheduleModel
-    Language.Marlowe.ACTUS.Model.SCHED.ContractSchedule
-    Language.Marlowe.ACTUS.Model.INIT.StateInitializationModel
-    Language.Marlowe.ACTUS.Model.APPL.Applicability
-    Language.Marlowe.ACTUS.Model.APPL.ApplicabilityModel
+    Language.Marlowe.ACTUS.Model.Applicability
+    Language.Marlowe.ACTUS.Model.ContractSchedule
+    Language.Marlowe.ACTUS.Model.StateInitialization
+    Language.Marlowe.ACTUS.Model.StateTransition
+    Language.Marlowe.ACTUS.Model.Payoff
     Language.Marlowe.ACTUS.Utility.ANN.Annuity
     Language.Marlowe.ACTUS.Utility.DateShift
     Language.Marlowe.ACTUS.Utility.ScheduleGenerator

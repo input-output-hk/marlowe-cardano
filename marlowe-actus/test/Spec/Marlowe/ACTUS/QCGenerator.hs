@@ -90,6 +90,7 @@ contractTermsGen' ct = do
   let sd = LocalTime (addDays (-2) $ localDay ied) (localTimeOfDay ied)
 
   interest <- percentage
+  interest2 <- percentage
   notional <- largeamount
   pdied <- zeroOr smallamount
 
@@ -229,6 +230,7 @@ contractTermsGen' ct = do
         cycleOfInterestPayment = Just interestPaymentCycle,
         cycleAnchorDateOfInterestPayment = interestPaymentAnchor,
         nominalInterestRate = Just interest,
+        nominalInterestRate2 = Just interest2,
         accruedInterest = accruedInterest,
         cycleOfPrincipalRedemption = case ct of
           PAM -> Nothing
@@ -254,8 +256,7 @@ contractTermsGen' ct = do
         nextDividendPaymentAmount = Nothing,
         -- enable settlement currency
         enableSettlement = False,
-        constraints = Nothing,
-        collateralAmount = 0
+        constraints = Nothing
       }
 
 riskAtTGen :: Gen RiskFactors

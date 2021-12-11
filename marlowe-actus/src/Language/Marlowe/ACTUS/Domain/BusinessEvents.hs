@@ -19,6 +19,8 @@ data EventType =
     | PY   -- ^ Penalty Payment
     | PP   -- ^ Principal Prepayment (unscheduled event)
     | IP   -- ^ Interest Payment
+    | IPFX -- ^ Interest Payment Fixed Leg
+    | IPFL -- ^ Interest Payment Floating Leg
     | IPCI -- ^ Interest Capitalization
     | CE   -- ^ Credit Event
     | RRF  -- ^ Rate Reset Fixing with Known Rate

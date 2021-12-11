@@ -23,6 +23,7 @@ main = do
   stkTests <- testCasesFromFile [] $ p ++ "actus-tests-stk.json"
   optnsTests <- testCasesFromFile [] $ p ++ "actus-tests-optns.json"
   futurTests <- testCasesFromFile [] $ p ++ "actus-tests-futur.json"
+  swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
 
   defaultMain $
     testGroup
@@ -36,6 +37,7 @@ main = do
           , Spec.Marlowe.ACTUS.TestFramework.tests "STK" stkTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "OPTNS" optnsTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "FUTUR" futurTests
+          , Spec.Marlowe.ACTUS.TestFramework.tests "SWPPV" swppvTests
           ],
         testGroup
           "ACTUS examples"

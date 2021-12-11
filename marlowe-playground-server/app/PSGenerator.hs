@@ -39,7 +39,7 @@ import           Language.Haskell.Interpreter                 (CompilationError,
 import qualified Language.Marlowe                             as S
 import           Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
 import qualified Language.Marlowe.ACTUS.Domain.ContractTerms  as CT
-import           Language.Marlowe.ACTUS.Domain.Schedule       as SC (CashFlow)
+import           Language.Marlowe.ACTUS.Domain.Schedule       as SC
 import           Language.Marlowe.Extended
 import           Language.Marlowe.SemanticsTypes              (State (..))
 import           Language.PureScript.Bridge                   (BridgePart, Language (Haskell), PSType, SumType,
@@ -48,7 +48,7 @@ import           Language.PureScript.Bridge                   (BridgePart, Langu
                                                                typeModule, typeName, writePSTypes, (^==))
 import           Language.PureScript.Bridge.Builder           (BridgeData)
 import           Language.PureScript.Bridge.PSTypes           (psString)
-import           Language.PureScript.Bridge.TypeParameters    (A, B)
+import           Language.PureScript.Bridge.TypeParameters    (A)
 import           Marlowe.Contracts                            (contractForDifferences, contractForDifferencesWithOracle,
                                                                couponBondGuaranteed, escrow, escrowWithCollateral,
                                                                example, swap, zeroCouponBond)
@@ -90,6 +90,28 @@ stateBridge = do
     typeModule ^== "Language.Marlowe.SemanticsTypes"
     psState
 
+psObservation :: MonadReader BridgeData m => m PSType
+psObservation =
+    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Observation" <$>
+    psTypeParameters
+
+observationBridge :: BridgePart
+observationBridge = do
+    typeName ^== "Observation"
+    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    psObservation
+
+psValue :: MonadReader BridgeData m => m PSType
+psValue =
+    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Value" <$>
+    psTypeParameters
+
+valueBridge :: BridgePart
+valueBridge = do
+    typeName ^== "Value"
+    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    psValue
+
 psTransactionInput :: MonadReader BridgeData m => m PSType
 psTransactionInput =
     TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "TransactionInput" <$>
@@ -130,6 +152,8 @@ myBridge =
     timeBridge <|>
     contractBridge <|>
     stateBridge <|>
+    observationBridge <|>
+    valueBridge <|>
     transactionInputBridge <|>
     transactionWarningBridge <|>
     defaultBridge
@@ -155,7 +179,7 @@ myTypes =
     , genericShow . argonaut $ mkSumType @MSRes.Response
     , genericShow . argonaut $ mkSumType @MSRes.Result
     , argonaut $ mkSumType @MSReq.Request
-    , argonaut $ mkSumType @(CT.ContractTermsPoly A B)
+    , argonaut $ mkSumType @(CT.ContractTermsPoly A)
     , equal . order . genericShow . argonaut $ mkSumType @CT.PYTP
     , equal . order . genericShow . argonaut $ mkSumType @CT.PPEF
     , equal . order . genericShow . argonaut $ mkSumType @CT.SCEF
@@ -182,7 +206,7 @@ myTypes =
     , argonaut $ mkSumType @CT.Assertions
     , argonaut $ mkSumType @CT.AssertionContext
     , argonaut $ mkSumType @Webghc.CompileRequest
-    , argonaut $ mkSumType @SC.CashFlow
+    , argonaut $ mkSumType @(SC.CashFlowPoly A)
     , equal . order . genericShow . argonaut $ mkSumType @BV.EventType
     ]
 
