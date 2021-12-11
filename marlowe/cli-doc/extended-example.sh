@@ -92,13 +92,10 @@ marlowe-cli create "${MAGIC[@]}"                             \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw                         \
                    --required-signer $PAYMENT_SKEY           \
-                   --submit                                  \
+                   --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_1"
-
-
-# Wait until the transaction is appears on the blockchain.
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
@@ -123,13 +120,10 @@ marlowe-cli advance "${MAGIC[@]}"                             \
                     --invalid-before    40000000              \
                     --invalid-hereafter 80000000              \
                     --out-file tx.raw                         \
-                    --submit                                  \
+                    --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_2"
-
-
-# Wait until the transaction is appears on the blockchain.
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
@@ -154,15 +148,15 @@ marlowe-cli advance "${MAGIC[@]}"                             \
                     --invalid-before    40000000              \
                     --invalid-hereafter 80000000              \
                     --out-file tx.raw                         \
-                    --submit                                  \
+                    --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_3"
 
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
+
 
 # 3. Withdrawn the remaining 8 ADA.
-
-cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
 TX_4=$(
 marlowe-cli close "${MAGIC[@]}"                             \
@@ -179,7 +173,7 @@ marlowe-cli close "${MAGIC[@]}"                             \
                   --invalid-hereafter 80000000              \
                   --out-file tx.raw                         \
                   --required-signer $PAYMENT_SKEY           \
-                  --submit                                  \
+                  --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_4"

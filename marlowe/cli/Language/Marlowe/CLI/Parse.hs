@@ -11,9 +11,6 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE LambdaCase #-}
-
-
 module Language.Marlowe.CLI.Parse (
 -- * Parsers
   parseAddressAny

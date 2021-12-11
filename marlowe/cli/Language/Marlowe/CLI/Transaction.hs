@@ -11,10 +11,11 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TupleSections      #-}
 
 
 module Language.Marlowe.CLI.Transaction (
@@ -46,13 +47,14 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     TxBodyContent (..), TxBodyErrorAutoBalance (..),
                                                                     TxCertificates (..), TxExtraKeyWitnesses (..),
                                                                     TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
-                                                                    TxFeesExplicitInEra (..), TxId, TxIn, TxInMode (..),
-                                                                    TxInsCollateral (..), TxMetadataInEra (..),
-                                                                    TxMintValue (..), TxOut (..), TxOutDatum (..),
-                                                                    TxOutValue (..), TxScriptValidity (..),
-                                                                    TxUpdateProposal (..), TxValidityLowerBound (..),
+                                                                    TxFeesExplicitInEra (..), TxId, TxIn (..),
+                                                                    TxInMode (..), TxInsCollateral (..), TxIx (..),
+                                                                    TxMetadataInEra (..), TxMintValue (..), TxOut (..),
+                                                                    TxOutDatum (..), TxOutValue (..),
+                                                                    TxScriptValidity (..), TxUpdateProposal (..),
+                                                                    TxValidityLowerBound (..),
                                                                     TxValidityUpperBound (..), TxWithdrawals (..),
-                                                                    ValidityLowerBoundSupportedInEra (..),
+                                                                    UTxO (..), ValidityLowerBoundSupportedInEra (..),
                                                                     ValidityNoUpperBoundSupportedInEra (..),
                                                                     ValidityUpperBoundSupportedInEra (..), Value,
                                                                     WitCtxTxIn, Witness (..), anyAddressInEra,
@@ -63,7 +65,8 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     submitTxToNodeLocal, verificationKeyHash,
                                                                     writeFileTextEnvelope)
 import           Cardano.Api.Shelley                               (fromPlutusData)
-import           Control.Monad                                     (void, when, (<=<))
+import           Control.Concurrent                                (threadDelay)
+import           Control.Monad                                     (forM_, when, (<=<))
 import           Control.Monad.Except                              (MonadError, MonadIO, liftIO, throwError)
 import           Data.Maybe                                        (maybeToList)
 import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData, liftCli, liftCliIO,
@@ -73,6 +76,7 @@ import           Language.Marlowe.CLI.Types                        (CliError (..
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import           Plutus.V1.Ledger.Api                              (Datum (..), Redeemer (..), toData)
 
+import qualified Data.Map.Strict                                   as M (keysSet)
 import qualified Data.Set                                          as S (empty, fromList)
 
 
@@ -85,9 +89,9 @@ buildSimple :: MonadError CliError m
             -> [(AddressAny, Value)]             -- ^ The transaction outputs.
             -> AddressAny                        -- ^ The change address.
             -> FilePath                          -- ^ The output file for the transaction body.
-            -> Bool                              -- ^ Whether to also submit the transaction.
+            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> m TxId                            -- ^ Action to build the transaction body.
-buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile doSubmit =
+buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout =
   do
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
@@ -99,8 +103,7 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile doS
         []
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
-    when doSubmit
-      . void
+    forM_ timeout
       $ submitBody connection body signingKeys
     pure
       $ getTxId body
@@ -118,9 +121,9 @@ buildIncoming :: MonadError CliError m
               -> [(AddressAny, Value)]             -- ^ The transaction outputs.
               -> AddressAny                        -- ^ The change address.
               -> FilePath                          -- ^ The output file for the transaction body.
-              -> Bool                              -- ^ Whether to also submit the transaction.
+              -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile doSubmit =
+buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
@@ -134,8 +137,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         []
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
-    when doSubmit
-      . void
+    forM_ timeout
       $ submitBody connection body signingKeys
     pure
       $ getTxId body
@@ -160,9 +162,9 @@ buildContinuing :: MonadError CliError m
                 -> SlotNo                            -- ^ The first valid slot for the transaction.
                 -> SlotNo                            -- ^ The last valid slot for the transaction.
                 -> FilePath                          -- ^ The output file for the transaction body.
-                -> Bool                              -- ^ Whether to also submit the transaction.
+                -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                 -> m TxId                            -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile doSubmit =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
@@ -179,8 +181,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         (hashSigningKey <$> signingKeys)
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
-    when doSubmit
-      . void
+    forM_ timeout
       $ submitBody connection body signingKeys
     pure
       $ getTxId body
@@ -202,9 +203,9 @@ buildOutgoing :: MonadError CliError m
               -> SlotNo                            -- ^ The first valid slot for the transaction.
               -> SlotNo                            -- ^ The last valid slot for the transaction.
               -> FilePath                          -- ^ The output file for the transaction body.
-              -> Bool                              -- ^ Whether to also submit the transaction.
+              -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile doSubmit =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
@@ -219,8 +220,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         (hashSigningKey <$> signingKeys)
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
-    when doSubmit
-      . void
+    forM_ timeout
       $ submitBody connection body signingKeys
     pure $ getTxId body
 
@@ -367,12 +367,13 @@ submit :: MonadError CliError m
        => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
        -> FilePath                          -- ^ The transaction body file.
        -> [FilePath]                        -- ^ The signing key files.
+       -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
        -> m TxId                            -- ^ The action to submit the transaction.
-submit connection bodyFile signingKeyFiles =
+submit connection bodyFile signingKeyFiles timeout =
   do
     body <- liftCliIO $ readFileTextEnvelope (AsTxBody AsAlonzoEra) bodyFile
     signings <- mapM readSigningKey signingKeyFiles
-    submitBody connection body signings
+    submitBody connection body signings timeout
 
 
 -- | Sign and submit a transaction.
@@ -381,8 +382,9 @@ submitBody :: MonadError CliError m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
            -> TxBody AlonzoEra                  -- ^ The transaction body.
            -> [SomePaymentSigningKey]           -- ^ The signing keys.
+           -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
            -> m TxId                            -- ^ The action to submit the transaction.
-submitBody connection body signings =
+submitBody connection body signings timeout =
   do
     let
       tx =
@@ -394,8 +396,39 @@ submitBody connection body signings =
         . submitTxToNodeLocal connection
         $ TxInMode tx AlonzoEraInCardanoMode
     case result of
-      SubmitSuccess     -> pure $ getTxId body
+      SubmitSuccess     -> do
+                             let
+                               txId = getTxId body
+                             when (timeout > 0)
+                               $ waitForUtxos connection timeout [TxIn txId $ TxIx 0]
+                             pure txId
       SubmitFail reason -> throwError . CliError $ show reason
+
+
+-- | Wait for transactions to be confirmed as UTxOs.
+waitForUtxos :: MonadError CliError m
+             => MonadIO m
+             => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+             -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
+             -> [TxIn]                            -- ^ The transactions to wait for.
+             -> m ()                              -- ^ Action to wait for the transaction confirmations.
+waitForUtxos connection timeout txIns =
+  let
+    pause = 5
+    txIns' = S.fromList txIns
+    go 0 = throwError "Timeout waiting for transaction to be confirmed."
+    go n = do
+             liftIO . threadDelay $ pause * 1_000_000
+             utxos <-
+               queryAlonzo connection
+                 . QueryUTxO
+                 . QueryUTxOByTxIn
+                 $ txIns'
+             if M.keysSet (unUTxO utxos) == txIns'
+               then pure ()
+               else go (n - 1 :: Int)
+  in
+    go . ceiling $ fromIntegral timeout / (fromIntegral pause :: Double)
 
 
 -- | Compute the transaction input for paying from a script.

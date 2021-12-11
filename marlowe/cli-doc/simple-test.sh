@@ -103,20 +103,10 @@ marlowe-cli create "${MAGIC[@]}"                             \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw                         \
                    --required-signer $PAYMENT_SKEY           \
-                   --submit                                  \
+                   --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_1"
-
-
-# Wait until the transaction is appears on the blockchain.
-
-timeout 10m bash << EOI
-until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S" | bash | grep "$TX_1" > /dev/null)
-do
-  sleep 5s
-done
-EOI
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
@@ -143,20 +133,10 @@ marlowe-cli advance "${MAGIC[@]}"                             \
                     --invalid-before    40000000              \
                     --invalid-hereafter 80000000              \
                     --out-file tx.raw                         \
-                    --submit                                  \
+                    --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_2"
-
-
-# Wait until the transaction is appears on the blockchain.
-
-timeout 10m bash << EOI
-until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S" | bash | grep "$TX_2" > /dev/null)
-do
-  sleep 5s
-done
-EOI
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
@@ -183,21 +163,10 @@ marlowe-cli advance "${MAGIC[@]}"                             \
                     --invalid-before    40000000              \
                     --invalid-hereafter 80000000              \
                     --out-file tx.raw                         \
-                    --submit                                  \
+                    --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_3"
-
-
-
-# Wait until the transaction is appears on the blockchain.
-
-timeout 10m bash << EOI
-until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S" | bash | grep "$TX_3" > /dev/null)
-do
-  sleep 5s
-done
-EOI
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
@@ -221,20 +190,13 @@ marlowe-cli close "${MAGIC[@]}"                             \
                   --invalid-hereafter 80000000              \
                   --out-file tx.raw                         \
                   --required-signer $PAYMENT_SKEY           \
-                  --submit                                  \
+                  --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_4"
 
 
 # See that the transaction succeeded.
-
-timeout 10m bash << EOI
-until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" | bash | grep "$TX_4" > /dev/null)
-do
-  sleep 5s
-done
-EOI
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
@@ -256,16 +218,9 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" --out-file /dev/stdo
                              --change-address "$ADDRESS_P"                         \
                              --out-file tx.raw                                     \
                              --required-signer $PAYMENT_SKEY                       \
-                             --submit                                              \
+                             --submit=600                                          \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_5"
-
-timeout 10m bash << EOI
-until (echo cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" | bash | grep "$TX_5" > /dev/null)
-do
-  sleep 5s
-done
-EOI
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"

@@ -80,7 +80,7 @@ marlowe-cli redeemer --out-file $REDEEMER_FILE
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
-TX_0=6a540b0dc93e5adb97b53db0fffb1e999551f4cd7e73d4dfe98b8354bf7d5138#0
+TX_0=11c48fd442b1ae7b9bb8d226af2858ac62e363130a55d607241895a427ff7e9d#0
 
 
 # Fund the contract.
@@ -94,14 +94,14 @@ marlowe-cli create "${MAGIC[@]}"                             \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw                         \
                    --required-signer $PAYMENT_SKEY           \
-                   --submit
+                   --submit=600
 
 
 # Find the funding transaction, and enter its UTxO as "TX_1".
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
-TX_1=1bba98896e7aaca69ea2a5a4ab508b7daa8cb1357a8db68b59722038eaa72971
+TX_1=899bb8925c2e64bca9bca90ad7bc80124192f0e3fee2dc39cfe15f7e7ab661ee
 
 
 # Redeem the contract.
@@ -120,7 +120,7 @@ marlowe-cli close "${MAGIC[@]}"                             \
                   --invalid-hereafter $REDEEM_MAX_SLOT      \
                   --out-file tx.raw                         \
                   --required-signer $PAYMENT_SKEY           \
-                  --submit
+                  --submit=600
 
 
 # See that the transaction succeeded: i.e., the 3 ADA should have been removed from the script address and transferred to the wallet address.

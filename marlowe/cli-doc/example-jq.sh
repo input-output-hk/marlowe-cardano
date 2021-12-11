@@ -100,7 +100,7 @@ marlowe-cli create "${MAGIC[@]}"                             \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw                         \
                    --required-signer $PAYMENT_SKEY           \
-                   --submit
+                   --submit=600
 
 
 # Find the funding transaction, and enter its UTxO as "TX_1".
@@ -126,7 +126,7 @@ marlowe-cli close "${MAGIC[@]}"                             \
                   --invalid-hereafter $REDEEM_MAX_SLOT      \
                   --out-file tx.raw                         \
                   --required-signer $PAYMENT_SKEY           \
-                  --submit
+                  --submit=600
 
 
 # See that the transaction succeeded: i.e., the 3 ADA should have been removed from the script address and transferred to the wallet address.

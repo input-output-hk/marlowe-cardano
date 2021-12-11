@@ -296,7 +296,7 @@ data Command =
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
+    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     }
     -- | Build a transaction paying into a Marlowe contract.
   | BuildCreate
@@ -311,7 +311,7 @@ data Command =
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
+    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     }
     -- | Build a transaction that spends from and pays to a Marlowe contract.
   | BuildAdvance
@@ -333,7 +333,7 @@ data Command =
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
+    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     }
     -- | Build a transaction spending from a Marlowe contract.
   | BuildClose
@@ -352,7 +352,7 @@ data Command =
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
+    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     }
     -- | Submit a transaction.
   | Submit
@@ -361,6 +361,7 @@ data Command =
     , socketPath      :: FilePath         -- ^ The path to the node socket.
     , bodyFile        :: FilePath         -- ^ The JSON file containing the transaction body.
     , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
+    , submitTimeout   :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     }
     -- | Compute the next step in a contract.
   | Compute
