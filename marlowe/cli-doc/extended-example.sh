@@ -67,7 +67,7 @@ do
 done
 for i in 0 1
 do
-  marlowe-cli redeemer --out-file   example-$i.redeemer
+  marlowe-cli redeemer --out-file example-$i.redeemer
 done
 marlowe-cli redeemer --input-file example-2.input   \
                      --out-file   example-2.redeemer
@@ -77,7 +77,7 @@ marlowe-cli redeemer --input-file example-2.input   \
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
-TX_0=eea8f4cae07b0cd72c4996193edb4a87b5c0b8e04aa068f071bf7e16a5db0611#0
+TX_0=1cf0ff648ca329858868feca90d4bd670d14eb08772af53ab6bea7f88d2651b3#0
 
 
 # Fund the contract by sending the initial funds and setting the initial state.
@@ -91,14 +91,11 @@ marlowe-cli create "${MAGIC[@]}"                             \
                    --tx-in "$TX_0"                           \
                    --change-address "$ADDRESS_P"             \
                    --out-file tx.raw                         \
+                   --required-signer $PAYMENT_SKEY           \
+                   --submit                                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_1"
-
-marlowe-cli submit "${MAGIC[@]}"                             \
-                   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                   --required-signer $PAYMENT_SKEY           \
-                   --tx-body-file tx.raw
 
 
 # Wait until the transaction is appears on the blockchain.
@@ -126,14 +123,10 @@ marlowe-cli advance "${MAGIC[@]}"                             \
                     --invalid-before    40000000              \
                     --invalid-hereafter 80000000              \
                     --out-file tx.raw                         \
+                    --submit                                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_2"
-
-marlowe-cli submit "${MAGIC[@]}"                             \
-                   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                   --required-signer $PAYMENT_SKEY           \
-                   --tx-body-file tx.raw
 
 
 # Wait until the transaction is appears on the blockchain.
@@ -161,14 +154,10 @@ marlowe-cli advance "${MAGIC[@]}"                             \
                     --invalid-before    40000000              \
                     --invalid-hereafter 80000000              \
                     --out-file tx.raw                         \
+                    --submit                                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_3"
-
-marlowe-cli submit "${MAGIC[@]}"                             \
-                   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                   --required-signer $PAYMENT_SKEY           \
-                   --tx-body-file tx.raw
 
 
 # 3. Withdrawn the remaining 8 ADA.
@@ -189,14 +178,11 @@ marlowe-cli close "${MAGIC[@]}"                             \
                   --invalid-before    40000000              \
                   --invalid-hereafter 80000000              \
                   --out-file tx.raw                         \
+                  --required-signer $PAYMENT_SKEY           \
+                  --submit                                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_4"
-
-marlowe-cli submit "${MAGIC[@]}"                             \
-                   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                   --required-signer $PAYMENT_SKEY           \
-                   --tx-body-file tx.raw
 
 
 # See that the transaction succeeded.

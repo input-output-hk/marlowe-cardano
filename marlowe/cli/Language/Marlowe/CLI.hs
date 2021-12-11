@@ -22,8 +22,10 @@ module Language.Marlowe.CLI (
 
 
 import           Cardano.Api                      (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
-                                                   LocalNodeConnectInfo (..), StakeAddressReference (..))
+                                                   LocalNodeConnectInfo (..), NetworkId (..),
+                                                   StakeAddressReference (..))
 import           Cardano.Config.Git.Rev           (gitRev)
+import           Control.Monad                    (when)
 import           Control.Monad.Except             (ExceptT, liftIO, runExceptT, throwError)
 import           Data.Maybe                       (fromMaybe)
 import           Data.Version                     (Version, showVersion)
@@ -58,17 +60,13 @@ mainCLI version example =
     result <-
       runExceptT
         $ do
-          network'<-
-            maybe
-              (throwError "Mainnet usage is not supported.")
-              pure
-              $ network command
           costModel <-
             maybe
               (throwError "Missing default cost model.")
               pure
               defaultCostModelParams
           let
+            network' = fromMaybe Mainnet $ network command
             marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
             stake'         = fromMaybe NoStakeAddress                 $ stake         command
             connection =
@@ -79,6 +77,7 @@ mainCLI version example =
               , localNodeSocketPath      = socketPath command
               }
             printTxId = liftIO . putStrLn . ("TxId " <>) . show
+            guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
           case command of
             Export{..}          -> exportMarlowe
                                      marloweParams' costModel network' stake'
@@ -100,48 +99,59 @@ mainCLI version example =
                                      inputFiles
                                      outputFile
                                      printStats
-            BuildTransact{..}   -> buildSimple
-                                     connection
-                                     inputs outputs change
-                                     bodyFile
+            BuildTransact{..}   -> guardMainnet
+                                     >> buildSimple
+                                       connection
+                                       signingKeyFiles
+                                       inputs outputs change
+                                       bodyFile
+                                       doSubmit
                                      >>= printTxId
-            BuildCreate{..}     -> buildIncoming
-                                     connection
-                                     scriptAddress
-                                     outputDatumFile
-                                     outputValue
-                                     inputs outputs change
-                                     bodyFile
+            BuildCreate{..}     -> guardMainnet
+                                     >> buildIncoming
+                                       connection
+                                       scriptAddress
+                                       signingKeyFiles
+                                       outputDatumFile
+                                       outputValue
+                                       inputs outputs change
+                                       bodyFile
+                                       doSubmit
                                      >>= printTxId
-            BuildAdvance{..}    -> buildContinuing
-                                     connection
-                                     scriptAddress
-                                     validatorFile
-                                     redeemerFile
-                                     inputDatumFile
-                                     signingKeyFiles
-                                     inputTxIn
-                                     outputDatumFile
-                                     outputValue
-                                     inputs outputs collateral change
-                                     minimumSlot maximumSlot
-                                     bodyFile
+            BuildAdvance{..}    -> guardMainnet
+                                     >> buildContinuing
+                                       connection
+                                       scriptAddress
+                                       validatorFile
+                                       redeemerFile
+                                       inputDatumFile
+                                       signingKeyFiles
+                                       inputTxIn
+                                       outputDatumFile
+                                       outputValue
+                                       inputs outputs collateral change
+                                       minimumSlot maximumSlot
+                                       bodyFile
+                                       doSubmit
                                      >>= printTxId
-            BuildClose{..}      -> buildOutgoing
-                                     connection
-                                     validatorFile
-                                     redeemerFile
-                                     inputDatumFile
-                                     signingKeyFiles
-                                     inputTxIn
-                                     inputs outputs collateral change
-                                     minimumSlot maximumSlot
-                                     bodyFile
+            BuildClose{..}      -> guardMainnet
+                                     >> buildOutgoing
+                                       connection
+                                       validatorFile
+                                       redeemerFile
+                                       inputDatumFile
+                                       signingKeyFiles
+                                       inputTxIn
+                                       inputs outputs collateral change
+                                       minimumSlot maximumSlot
+                                       bodyFile
+                                       doSubmit
                                      >>= printTxId
-            Submit{..}          -> submit
-                                     connection
-                                     bodyFile
-                                     signingKeyFiles
+            Submit{..}          -> guardMainnet
+                                     >> submit
+                                       connection
+                                       bodyFile
+                                       signingKeyFiles
                                      >>= printTxId
             Compute{..}         -> computeMarlowe
                                      contractFile stateFile
@@ -313,12 +323,14 @@ buildSimpleCommand =
 buildSimpleOptions :: O.Parser Command -- ^ The parser.
 buildSimpleOptions =
   BuildTransact
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"  <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."           )
-    <*> O.strOption                            (O.long "socket-path"    <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."     )
-    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"          <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."        )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"         <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format.")
-    <*> O.option parseAddressAny               (O.long "change-address" <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."      )
-    <*> O.strOption                            (O.long "out-file"       <> O.metavar "FILE"             <> O.help "Output file for transaction body."             )
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"   <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."           )
+    <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."     )
+    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."       )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"           <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."        )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format.")
+    <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."      )
+    <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."             )
+    <*> O.switch                               (O.long "submit"                                       <> O.help "Also submit the transaction."                  )
 
 
 -- | Parser for the "create" command.
@@ -336,12 +348,14 @@ buildIncomingOptions =
     <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"     <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."            )
     <*> O.strOption                            (O.long "socket-path"       <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."      )
     <*> O.option parseAddressAny               (O.long "script-address"    <> O.metavar "ADDRESS"       <> O.help "Address of the Marlowe contract."               )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"   <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."        )
     <*> O.strOption                            (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract.")
     <*> O.option parseLovelaceValue            (O.long "tx-out-value"      <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."       )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."         )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."       )
     <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."              )
+    <*> O.switch                               (O.long "submit"                                         <> O.help "Also submit the transaction."                   )
 
 
 -- | Parser for the "advance" command.
@@ -373,6 +387,7 @@ buildContinuingOptions =
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."               )
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."               )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."              )
+    <*> O.switch                               (O.long "submit"                                           <> O.help "Also submit the transaction."                   )
 
 
 -- | Parser for the "close" command.
@@ -401,6 +416,7 @@ buildOutgoingOptions =
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."               )
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."               )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."              )
+    <*> O.switch                               (O.long "submit"                                           <> O.help "Also submit the transaction."                   )
 
 
 -- | Parser for the "submit" command.

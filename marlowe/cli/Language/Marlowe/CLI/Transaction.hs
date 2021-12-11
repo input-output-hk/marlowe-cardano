@@ -63,7 +63,7 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     submitTxToNodeLocal, verificationKeyHash,
                                                                     writeFileTextEnvelope)
 import           Cardano.Api.Shelley                               (fromPlutusData)
-import           Control.Monad                                     ((<=<))
+import           Control.Monad                                     (void, when, (<=<))
 import           Control.Monad.Except                              (MonadError, MonadIO, liftIO, throwError)
 import           Data.Maybe                                        (maybeToList)
 import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData, liftCli, liftCliIO,
@@ -80,13 +80,16 @@ import qualified Data.Set                                          as S (empty, 
 buildSimple :: MonadError CliError m
             => MonadIO m
             => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+            -> [FilePath]                        -- ^ The files for required signing keys.
             -> [TxIn]                            -- ^ The transaction inputs.
             -> [(AddressAny, Value)]             -- ^ The transaction outputs.
             -> AddressAny                        -- ^ The change address.
             -> FilePath                          -- ^ The output file for the transaction body.
+            -> Bool                              -- ^ Whether to also submit the transaction.
             -> m TxId                            -- ^ Action to build the transaction body.
-buildSimple connection inputs outputs changeAddress bodyFile =
+buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile doSubmit =
   do
+    signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
         Nothing
@@ -96,6 +99,9 @@ buildSimple connection inputs outputs changeAddress bodyFile =
         []
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
+    when doSubmit
+      . void
+      $ submitBody connection body signingKeys
     pure
       $ getTxId body
 
@@ -105,17 +111,20 @@ buildIncoming :: MonadError CliError m
               => MonadIO m
               => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
               -> AddressAny                        -- ^ The script address.
+              -> [FilePath]                        -- ^ The files for required signing keys.
               -> FilePath                          -- ^ The file containing the datum for the payment to the script.
               -> Value                             -- ^ The value to be paid to the script.
               -> [TxIn]                            -- ^ The transaction inputs.
               -> [(AddressAny, Value)]             -- ^ The transaction outputs.
               -> AddressAny                        -- ^ The change address.
               -> FilePath                          -- ^ The output file for the transaction body.
+              -> Bool                              -- ^ Whether to also submit the transaction.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildIncoming connection scriptAddress outputDatumFile outputValue inputs outputs changeAddress bodyFile =
+buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile doSubmit =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
+    signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
         Nothing
@@ -125,6 +134,9 @@ buildIncoming connection scriptAddress outputDatumFile outputValue inputs output
         []
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
+    when doSubmit
+      . void
+      $ submitBody connection body signingKeys
     pure
       $ getTxId body
 
@@ -148,24 +160,28 @@ buildContinuing :: MonadError CliError m
                 -> SlotNo                            -- ^ The first valid slot for the transaction.
                 -> SlotNo                            -- ^ The last valid slot for the transaction.
                 -> FilePath                          -- ^ The output file for the transaction body.
+                -> Bool                              -- ^ Whether to also submit the transaction.
                 -> m TxId                            -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile doSubmit =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
-    keyHashes <- fmap hashSigningKey <$> mapM readSigningKey signingKeyFiles
+    signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
         (Just $ buildPayFromScript validator inputDatum redeemer txIn)
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
-        keyHashes
+        (hashSigningKey <$> signingKeys)
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
+    when doSubmit
+      . void
+      $ submitBody connection body signingKeys
     pure
       $ getTxId body
 
@@ -186,24 +202,27 @@ buildOutgoing :: MonadError CliError m
               -> SlotNo                            -- ^ The first valid slot for the transaction.
               -> SlotNo                            -- ^ The last valid slot for the transaction.
               -> FilePath                          -- ^ The output file for the transaction body.
+              -> Bool                              -- ^ Whether to also submit the transaction.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile doSubmit =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
     inputDatum <- Datum <$> decodeFileBuiltinData inputDatumFile
-    keyHashes <- fmap hashSigningKey <$> mapM readSigningKey signingKeyFiles
+    signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
         (Just $ buildPayFromScript validator inputDatum redeemer txIn)
         Nothing
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
-        keyHashes
+        (hashSigningKey <$> signingKeys)
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
-    pure
-      $ getTxId body
+    when doSubmit
+      . void
+      $ submitBody connection body signingKeys
+    pure $ getTxId body
 
 
 -- | Collect information on paying from a script.

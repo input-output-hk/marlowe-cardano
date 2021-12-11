@@ -289,12 +289,14 @@ data Command =
     -- | Build a non-Marlowe transaction.
   | BuildTransact
     {
-      network    :: Maybe NetworkId            -- ^ The network ID, if any.
-    , socketPath :: FilePath                   -- ^ The path to the node socket.
-    , inputs     :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs    :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , change     :: AddressAny                 -- ^ The change address.
-    , bodyFile   :: FilePath                   -- ^ The output file for the transaction body.
+      network         :: Maybe NetworkId            -- ^ The network ID, if any.
+    , socketPath      :: FilePath                   -- ^ The path to the node socket.
+    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
+    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
+    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
+    , change          :: AddressAny                 -- ^ The change address.
+    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
     }
     -- | Build a transaction paying into a Marlowe contract.
   | BuildCreate
@@ -302,12 +304,14 @@ data Command =
       network         :: Maybe NetworkId            -- ^ The network ID, if any.
     , socketPath      :: FilePath                   -- ^ The path to the node socket.
     , scriptAddress   :: AddressAny                 -- ^ The script address.
+    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
     , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
     , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
     }
     -- | Build a transaction that spends from and pays to a Marlowe contract.
   | BuildAdvance
@@ -329,6 +333,7 @@ data Command =
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
     }
     -- | Build a transaction spending from a Marlowe contract.
   | BuildClose
@@ -347,6 +352,7 @@ data Command =
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
+    , doSubmit        :: Bool                       -- ^ Whether to also submit the transaction.
     }
     -- | Submit a transaction.
   | Submit
