@@ -16,6 +16,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 
 module Language.Marlowe.CLI.Transaction (
@@ -45,7 +46,8 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     ShelleyBasedEra (..), ShelleyWitnessSigningKey (..),
                                                                     SlotNo, TxAuxScripts (..), TxBody (..),
                                                                     TxBodyContent (..), TxBodyErrorAutoBalance (..),
-                                                                    TxCertificates (..), TxExtraKeyWitnesses (..),
+                                                                    TxBodyScriptData (..), TxCertificates (..),
+                                                                    TxExtraKeyWitnesses (..),
                                                                     TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
                                                                     TxFeesExplicitInEra (..), TxId, TxIn (..),
                                                                     TxInMode (..), TxInsCollateral (..), TxIx (..),
@@ -61,10 +63,13 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     castVerificationKey, getTxId, getVerificationKey,
                                                                     hashScriptData, lovelaceToValue,
                                                                     makeTransactionBodyAutoBalance, queryNodeLocalState,
-                                                                    readFileTextEnvelope, signShelleyTransaction,
-                                                                    submitTxToNodeLocal, verificationKeyHash,
-                                                                    writeFileTextEnvelope)
-import           Cardano.Api.Shelley                               (fromPlutusData)
+                                                                    readFileTextEnvelope, serialiseToCBOR,
+                                                                    signShelleyTransaction, submitTxToNodeLocal,
+                                                                    verificationKeyHash, writeFileTextEnvelope)
+import           Cardano.Api.Shelley                               (TxBody (ShelleyTxBody), fromPlutusData,
+                                                                    protocolParamMaxTxExUnits, protocolParamMaxTxSize)
+import           Cardano.Ledger.Alonzo.Scripts                     (ExUnits (..))
+import           Cardano.Ledger.Alonzo.TxWitness                   (Redeemers (..))
 import           Control.Concurrent                                (threadDelay)
 import           Control.Monad                                     (forM_, when, (<=<))
 import           Control.Monad.Except                              (MonadError, MonadIO, liftIO, throwError)
@@ -75,8 +80,10 @@ import           Language.Marlowe.CLI.Types                        (CliError (..
                                                                     SomePaymentSigningKey)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import           Plutus.V1.Ledger.Api                              (Datum (..), Redeemer (..), toData)
+import           System.IO                                         (hPutStrLn, stderr)
 
-import qualified Data.Map.Strict                                   as M (keysSet)
+import qualified Data.ByteString                                   as BS (length)
+import qualified Data.Map.Strict                                   as M (elems, keysSet)
 import qualified Data.Set                                          as S (empty, fromList)
 
 
@@ -90,8 +97,9 @@ buildSimple :: MonadError CliError m
             -> AddressAny                        -- ^ The change address.
             -> FilePath                          -- ^ The output file for the transaction body.
             -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> Bool                              -- ^ Whether to print statistics about the transaction.
             -> m TxId                            -- ^ Action to build the transaction body.
-buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout =
+buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout printStats =
   do
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
@@ -101,6 +109,7 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
         inputs outputs Nothing changeAddress
         Nothing
         []
+        printStats
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
@@ -122,8 +131,9 @@ buildIncoming :: MonadError CliError m
               -> AddressAny                        -- ^ The change address.
               -> FilePath                          -- ^ The output file for the transaction body.
               -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Bool                              -- ^ Whether to print statistics about the transaction.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout =
+buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout printStats =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
@@ -135,6 +145,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         inputs outputs Nothing changeAddress
         Nothing
         []
+        printStats
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
@@ -163,8 +174,9 @@ buildContinuing :: MonadError CliError m
                 -> SlotNo                            -- ^ The last valid slot for the transaction.
                 -> FilePath                          -- ^ The output file for the transaction body.
                 -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+                -> Bool                              -- ^ Whether to print statistics about the transaction.
                 -> m TxId                            -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
@@ -179,6 +191,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
+        printStats
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
@@ -204,8 +217,9 @@ buildOutgoing :: MonadError CliError m
               -> SlotNo                            -- ^ The last valid slot for the transaction.
               -> FilePath                          -- ^ The output file for the transaction body.
               -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Bool                              -- ^ Whether to print statistics about the transaction.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
@@ -218,6 +232,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
+        printStats
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
@@ -268,8 +283,9 @@ buildBody :: MonadError CliError m
           -> AddressAny                        -- ^ The change address.
           -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
           -> [Hash PaymentKey]                 -- ^ The extra required signatures.
+          -> Bool                              -- ^ Whether to print statistics about the transaction.
           -> m (TxBody AlonzoEra)              -- ^ The action to build the transaction body.
-buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners =
+buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
     start    <- queryAny    connection   QuerySystemStart
@@ -346,7 +362,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
                                                                                             TxOutDatumNone
           _                                                                            -> change
     -- Construct the body with correct execution units and fees.
-    BalancedTxBody txBody _ _ <-
+    BalancedTxBody txBody _ lovelace <-
       liftCli
         $ makeTransactionBodyAutoBalance
             AlonzoEraInCardanoMode
@@ -358,7 +374,33 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
             (TxBodyContent{..} {txOuts = change' : txOuts})
             changeAddress'
             Nothing
+    when printStats
+      . liftIO
+      $ do
+        hPutStrLn stderr ""
+        hPutStrLn stderr $ "Fee: " <> show lovelace
+        let
+          size = BS.length $ serialiseToCBOR txBody
+          maxSize = fromIntegral $ protocolParamMaxTxSize protocol
+          fractionSize = 100 * size `div` maxSize
+        hPutStrLn stderr $ "Size: " <> show size <> " / " <> show maxSize <> " = " <> show fractionSize <> "%"
+        let
+          ExUnits memory steps = findExUnits txBody
+          maxExecutionUnits = protocolParamMaxTxExUnits protocol
+          fractionMemory = 100 * memory `div` maybe 0 executionMemory maxExecutionUnits
+          fractionSteps  = 100 * steps  `div` maybe 0 executionSteps  maxExecutionUnits
+        hPutStrLn stderr "Execution units:"
+        hPutStrLn stderr $ "  Memory: " <> show memory <> " / " <> show (maybe 0 executionMemory maxExecutionUnits) <> " = " <> show fractionMemory <> "%"
+        hPutStrLn stderr $ "  Steps: "  <> show steps  <> " / " <> show (maybe 0 executionSteps  maxExecutionUnits) <> " = " <> show fractionSteps  <> "%"
     return txBody
+
+
+-- | Total the execution units in a transaction.
+findExUnits :: TxBody AlonzoEra  -- ^ The transaction body.
+            -> ExUnits           -- ^ The execution units.
+findExUnits (ShelleyTxBody ShelleyBasedEraAlonzo  _ _ (TxBodyScriptData _ _ (Redeemers redeemers)) _ _) =
+  mconcat . fmap snd . M.elems $ redeemers
+findExUnits _ = mempty
 
 
 -- | Sign and submit a transaction.

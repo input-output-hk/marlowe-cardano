@@ -234,6 +234,7 @@ executable marlowe-cli
     bytestring -any,
     cardano-api -any,
     cardano-config -any,
+    cardano-ledger-alonzo -any,
     containers -any,
     marlowe -any,
     mtl -any,

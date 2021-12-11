@@ -297,6 +297,7 @@ data Command =
     , change          :: AddressAny                 -- ^ The change address.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
+    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     }
     -- | Build a transaction paying into a Marlowe contract.
   | BuildCreate
@@ -312,6 +313,7 @@ data Command =
     , change          :: AddressAny                 -- ^ The change address.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
+    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     }
     -- | Build a transaction that spends from and pays to a Marlowe contract.
   | BuildAdvance
@@ -334,6 +336,7 @@ data Command =
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
+    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     }
     -- | Build a transaction spending from a Marlowe contract.
   | BuildClose
@@ -353,6 +356,7 @@ data Command =
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
+    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     }
     -- | Submit a transaction.
   | Submit

@@ -68,20 +68,24 @@ EOI
 
 ADDRESS_S=$(marlowe-cli export-address "${MAGIC[@]}")
 
-marlowe-cli export-validator "${MAGIC[@]}" --out-file $PLUTUS_FILE
+marlowe-cli export-validator "${MAGIC[@]}"           \
+                             --out-file $PLUTUS_FILE \
+                             --print-stats
 
 marlowe-cli export-datum --contract-file $CONTRACT_FILE \
                          --state-file $STATE_FILE       \
-                         --out-file $DATUM_FILE
+                         --out-file $DATUM_FILE         \
+                         --print-stats
 
-marlowe-cli export-redeemer --out-file $REDEEMER_FILE
+marlowe-cli export-redeemer --out-file $REDEEMER_FILE \
+                            --print-stats
 
 
 # Find funds, and enter the selected UTxO as "TX_0".
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
-TX_0=8080194fcdb9bb9b542e25a086382b394d7a7a88691a957c7756cffa7a7a8ee9#0
+TX_0=bf614bcd838ddfe7246263fb6f9b0a28a34adee0e8d98d9e50e40e0125e752ed#0
 
 
 # Fund the contract.
@@ -95,6 +99,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
                                --change-address "$ADDRESS_P"             \
                                --out-file tx.raw                         \
                                --required-signer $PAYMENT_SKEY           \
+                               --print-stats                             \
                                --submit=600
 
 
@@ -102,7 +107,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
-TX_1=8521263f79d52292415d7c907b01d6b8c2fffbf9584470e351205b10d3a80d91
+TX_1=7c055eaefbb48a25284a629b34a64b9921a87e74d93aab0987c36a8e75e42d78
 
 
 # Redeem the contract.
@@ -121,6 +126,7 @@ marlowe-cli transaction-close "${MAGIC[@]}"                             \
                               --invalid-hereafter $REDEEM_MAX_SLOT      \
                               --out-file tx.raw                         \
                               --required-signer $PAYMENT_SKEY           \
+                              --print-stats                             \
                               --submit=600
 
 

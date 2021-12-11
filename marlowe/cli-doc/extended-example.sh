@@ -53,7 +53,9 @@ echo "$ADDRESS_S"
 
 # Create the Plutus script for the validator.
 
-marlowe-cli export-validator "${MAGIC[@]}" --out-file example.plutus
+marlowe-cli export-validator "${MAGIC[@]}"             \
+                             --out-file example.plutus \
+                             --print-stats
 
 
 # Generate the example contract, state, and inputs files for each step.
@@ -64,22 +66,25 @@ for i in 0 1 2
 do
   marlowe-cli export-datum --contract-file example-$i.contract \
                            --state-file    example-$i.state    \
-                           --out-file      example-$i.datum
+                           --out-file      example-$i.datum    \
+                           --print-stats
 done
 
 for i in 0 1
 do
-  marlowe-cli export-redeemer --out-file example-$i.redeemer
+  marlowe-cli export-redeemer --out-file example-$i.redeemer \
+                              --print-stats
 done
-marlowe-cli export-redeemer --input-file example-2.input \
-                            --out-file   example-2.redeemer
+marlowe-cli export-redeemer --input-file example-2.input    \
+                            --out-file   example-2.redeemer \
+                            --print-stats
 
 
 # 0. Find some funds, and enter the selected UTxO as "TX_0".
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
-TX_0=1cf0ff648ca329858868feca90d4bd670d14eb08772af53ab6bea7f88d2651b3#0
+TX_0=5ebf09462a66e9abb4ade3e5098bc3e21d587ce65e4d0f7b3eba0fb6af59d847#0
 
 
 # Fund the contract by sending the initial funds and setting the initial state.
@@ -94,6 +99,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
                                --change-address "$ADDRESS_P"             \
                                --out-file tx.raw                         \
                                --required-signer $PAYMENT_SKEY           \
+                               --print-stats                             \
                                --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -122,6 +128,7 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --invalid-before    40000000              \
                                 --invalid-hereafter 80000000              \
                                 --out-file tx.raw                         \
+                                --print-stats                             \
                                 --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -150,6 +157,7 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --invalid-before    40000000              \
                                 --invalid-hereafter 80000000              \
                                 --out-file tx.raw                         \
+                                --print-stats                             \
                                 --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -175,6 +183,7 @@ marlowe-cli transaction-close "${MAGIC[@]}"                             \
                               --invalid-hereafter 80000000              \
                               --out-file tx.raw                         \
                               --required-signer $PAYMENT_SKEY           \
+                              --print-stats                             \
                               --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )

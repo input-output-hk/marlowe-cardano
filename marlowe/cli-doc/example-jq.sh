@@ -86,7 +86,7 @@ jq '.redeemer.json' $MARLOWE_FILE > $REDEEMER_FILE
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
-TX_0=8c604edc821e3795fb2547a0ad2b42367a42f46a0ddc98b160545159e1a8fd0c#0
+TX_0=50b8713845c6a9cb2ffc7edee52c0ac6a1b2251862e12474685a49ee054154df#0
 
 
 # Fund the contract.
@@ -100,6 +100,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
                                --change-address "$ADDRESS_P"             \
                                --out-file tx.raw                         \
                                --required-signer $PAYMENT_SKEY           \
+                               --print-stats                             \
                                --submit=600
 
 
@@ -107,7 +108,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
-TX_1=f4561dfebda83edfd1bc3b34b3eaa2c7cf77eaf5dafdfac59a3d1ccea1cdcb86
+TX_1=05a7ee6ee589fe4e821ccb1cb142e0a56c69c7b238776191756bd00ce7d2be13
 
 
 # Redeem the contract.
@@ -126,6 +127,7 @@ marlowe-cli transaction-close "${MAGIC[@]}"                             \
                               --invalid-hereafter $REDEEM_MAX_SLOT      \
                               --out-file tx.raw                         \
                               --required-signer $PAYMENT_SKEY           \
+                              --print-stats                             \
                               --submit=600
 
 

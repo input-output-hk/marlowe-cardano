@@ -106,6 +106,7 @@ mainCLI version example =
                                        inputs outputs change
                                        bodyFile
                                        submitTimeout
+                                       printStats
                                      >>= printTxId
             BuildCreate{..}     -> guardMainnet
                                      >> buildIncoming
@@ -117,6 +118,7 @@ mainCLI version example =
                                        inputs outputs change
                                        bodyFile
                                        submitTimeout
+                                       printStats
                                      >>= printTxId
             BuildAdvance{..}    -> guardMainnet
                                      >> buildContinuing
@@ -133,6 +135,7 @@ mainCLI version example =
                                        minimumSlot maximumSlot
                                        bodyFile
                                        submitTimeout
+                                       printStats
                                      >>= printTxId
             BuildClose{..}      -> guardMainnet
                                      >> buildOutgoing
@@ -146,6 +149,7 @@ mainCLI version example =
                                        minimumSlot maximumSlot
                                        bodyFile
                                        submitTimeout
+                                       printStats
                                      >>= printTxId
             Submit{..}          -> guardMainnet
                                      >> submit
@@ -332,6 +336,7 @@ buildSimpleOptions =
     <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
+    <*> O.switch                               (O.long "print-stats"                                  <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "create" command.
@@ -357,6 +362,7 @@ buildIncomingOptions =
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"            <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
+    <*> O.switch                               (O.long "print-stats"                                    <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "advance" command.
@@ -389,6 +395,7 @@ buildContinuingOptions =
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."                       )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"              <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
+    <*> O.switch                               (O.long "print-stats"                                      <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "close" command.
@@ -418,6 +425,7 @@ buildOutgoingOptions =
     <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."                       )
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"              <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
+    <*> O.switch                               (O.long "print-stats"                                      <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "submit" command.
