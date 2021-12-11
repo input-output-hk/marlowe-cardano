@@ -194,10 +194,10 @@ parser version =
               <> buildIncomingCommand
               <> buildContinuingCommand
               <> buildOutgoingCommand
+              <> submitCommand
               <> inputDepositCommand
               <> inputChoiceCommand
               <> inputNotifyCommand
-              <> submitCommand
               <> computeCommand
               <> exampleCommand
             )
@@ -221,7 +221,7 @@ versionOption version =
 -- | Parser for the "export" command.
 exportMarloweCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 exportMarloweCommand =
-  O.command "export"
+  O.command "export-marlowe"
     $ O.info (exportMarloweOptions O.<**> O.helper)
     $ O.progDesc "Export a Marlowe contract to a JSON file."
 
@@ -243,7 +243,7 @@ exportMarloweOptions =
 -- | Parser for the "address" command.
 exportAddressCommand :: O.Mod O.CommandFields Command
 exportAddressCommand =
-  O.command "address"
+  O.command "export-address"
     . O.info (exportAddressOptions O.<**> O.helper)
     $ O.progDesc "Print a validator address."
 
@@ -260,7 +260,7 @@ exportAddressOptions =
 -- | Parser for the "validator" command.
 exportValidatorCommand :: O.Mod O.CommandFields Command
 exportValidatorCommand =
-  O.command "validator"
+  O.command "export-validator"
     . O.info (exportValidatorOptions O.<**> O.helper)
     $ O.progDesc "Export a validator to a JSON file."
 
@@ -280,7 +280,7 @@ exportValidatorOptions =
 -- | Parser for the "datum" command.
 exportDatumCommand :: O.Mod O.CommandFields Command
 exportDatumCommand =
-  O.command "datum"
+  O.command "export-datum"
     . O.info (exportDatumOptions O.<**> O.helper)
     $ O.progDesc "Export a datum to a JSON file."
 
@@ -298,7 +298,7 @@ exportDatumOptions =
 -- | Parser for the "redeemer" command.
 exportRedeemerCommand :: O.Mod O.CommandFields Command
 exportRedeemerCommand =
-  O.command "redeemer"
+  O.command "export-redeemer"
     . O.info (exportRedeemerOptions O.<**> O.helper)
     $ O.progDesc "Export a redeemer to a JSON file."
 
@@ -315,7 +315,7 @@ exportRedeemerOptions =
 -- | Parser for the "transact" command.
 buildSimpleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildSimpleCommand =
-  O.command "transact"
+  O.command "transaction-simple"
     $ O.info (buildSimpleOptions O.<**> O.helper)
     $ O.progDesc "Build a non-Marlowe transaction."
 
@@ -337,7 +337,7 @@ buildSimpleOptions =
 -- | Parser for the "create" command.
 buildIncomingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildIncomingCommand =
-  O.command "create"
+  O.command "transaction-create"
     $ O.info (buildIncomingOptions O.<**> O.helper)
     $ O.progDesc "Build a transaction that pays to a Marlowe script."
 
@@ -362,7 +362,7 @@ buildIncomingOptions =
 -- | Parser for the "advance" command.
 buildContinuingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildContinuingCommand =
-  O.command "advance"
+  O.command "transaction-advance"
     $ O.info (buildContinuingOptions O.<**> O.helper)
     $ O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
 
@@ -394,7 +394,7 @@ buildContinuingOptions =
 -- | Parser for the "close" command.
 buildOutgoingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildOutgoingCommand =
-  O.command "close"
+  O.command "transaction-close"
     $ O.info (buildOutgoingOptions O.<**> O.helper)
     $ O.progDesc "Build a transaction that spends from a Marlowe script."
 
@@ -423,7 +423,7 @@ buildOutgoingOptions =
 -- | Parser for the "submit" command.
 submitCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 submitCommand =
-  O.command "submit"
+  O.command "transaction-submit"
     $ O.info (submitOptions O.<**> O.helper)
     $ O.progDesc "Submit a transaction body."
 
@@ -463,7 +463,7 @@ computeOptions =
 -- | Parser for the "deposit" command.
 inputDepositCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 inputDepositCommand =
-  O.command "deposit"
+  O.command "input-deposit"
     $ O.info (inputDepositOptions O.<**> O.helper)
     $ O.progDesc "Create Marlowe input for a deposit."
 
@@ -482,7 +482,7 @@ inputDepositOptions =
 -- | Parser for the "choose" command.
 inputChoiceCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 inputChoiceCommand =
-  O.command "choose"
+  O.command "input-choose"
     $ O.info (inputChoiceOptions O.<**> O.helper)
     $ O.progDesc "Create Marlowe input for a choice."
 
@@ -500,7 +500,7 @@ inputChoiceOptions =
 -- | Parser for the "notify" command.
 inputNotifyCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 inputNotifyCommand =
-  O.command "notify"
+  O.command "input-notify"
     $ O.info (inputNotifyOptions O.<**> O.helper)
     $ O.progDesc "Create Marlowe input for a notification."
 

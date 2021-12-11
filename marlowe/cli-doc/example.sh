@@ -66,61 +66,62 @@ EOI
 
 # Create the contract.
 
-ADDRESS_S=$(marlowe-cli address "${MAGIC[@]}")
+ADDRESS_S=$(marlowe-cli export-address "${MAGIC[@]}")
 
-marlowe-cli validator "${MAGIC[@]}" --out-file $PLUTUS_FILE
-marlowe-cli datum --contract-file $CONTRACT_FILE \
-                  --state-file $STATE_FILE       \
-                  --out-file $DATUM_FILE
+marlowe-cli export-validator "${MAGIC[@]}" --out-file $PLUTUS_FILE
 
-marlowe-cli redeemer --out-file $REDEEMER_FILE
+marlowe-cli export-datum --contract-file $CONTRACT_FILE \
+                         --state-file $STATE_FILE       \
+                         --out-file $DATUM_FILE
+
+marlowe-cli export-redeemer --out-file $REDEEMER_FILE
 
 
 # Find funds, and enter the selected UTxO as "TX_0".
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P"
 
-TX_0=11c48fd442b1ae7b9bb8d226af2858ac62e363130a55d607241895a427ff7e9d#0
+TX_0=8080194fcdb9bb9b542e25a086382b394d7a7a88691a957c7756cffa7a7a8ee9#0
 
 
 # Fund the contract.
 
-marlowe-cli create "${MAGIC[@]}"                             \
-                   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                   --script-address "$ADDRESS_S"             \
-                   --tx-out-datum-file $DATUM_FILE           \
-                   --tx-out-value $DATUM_LOVELACE            \
-                   --tx-in "$TX_0"                           \
-                   --change-address "$ADDRESS_P"             \
-                   --out-file tx.raw                         \
-                   --required-signer $PAYMENT_SKEY           \
-                   --submit=600
+marlowe-cli transaction-create "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --script-address "$ADDRESS_S"             \
+                               --tx-out-datum-file $DATUM_FILE           \
+                               --tx-out-value $DATUM_LOVELACE            \
+                               --tx-in "$TX_0"                           \
+                               --change-address "$ADDRESS_P"             \
+                               --out-file tx.raw                         \
+                               --required-signer $PAYMENT_SKEY           \
+                               --submit=600
 
 
 # Find the funding transaction, and enter its UTxO as "TX_1".
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_S"
 
-TX_1=899bb8925c2e64bca9bca90ad7bc80124192f0e3fee2dc39cfe15f7e7ab661ee
+TX_1=8521263f79d52292415d7c907b01d6b8c2fffbf9584470e351205b10d3a80d91
 
 
 # Redeem the contract.
 
-marlowe-cli close "${MAGIC[@]}"                             \
-                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                  --tx-in-script-file $PLUTUS_FILE          \
-                  --tx-in-redeemer-file $REDEEMER_FILE      \
-                  --tx-in-datum-file $DATUM_FILE            \
-                  --tx-in-marlowe "$TX_1"#1                 \
-                  --tx-in "$TX_1"#0                         \
-                  --tx-in-collateral "$TX_1"#0              \
-                  --tx-out "$ADDRESS_P"+$DATUM_LOVELACE     \
-                  --change-address "$ADDRESS_P"             \
-                  --invalid-before $REDEEM_MIN_SLOT         \
-                  --invalid-hereafter $REDEEM_MAX_SLOT      \
-                  --out-file tx.raw                         \
-                  --required-signer $PAYMENT_SKEY           \
-                  --submit=600
+marlowe-cli transaction-close "${MAGIC[@]}"                             \
+                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                              --tx-in-script-file $PLUTUS_FILE          \
+                              --tx-in-redeemer-file $REDEEMER_FILE      \
+                              --tx-in-datum-file $DATUM_FILE            \
+                              --tx-in-marlowe "$TX_1"#1                 \
+                              --tx-in "$TX_1"#0                         \
+                              --tx-in-collateral "$TX_1"#0              \
+                              --tx-out "$ADDRESS_P"+$DATUM_LOVELACE     \
+                              --change-address "$ADDRESS_P"             \
+                              --invalid-before $REDEEM_MIN_SLOT         \
+                              --invalid-hereafter $REDEEM_MAX_SLOT      \
+                              --out-file tx.raw                         \
+                              --required-signer $PAYMENT_SKEY           \
+                              --submit=600
 
 
 # See that the transaction succeeded: i.e., the 3 ADA should have been removed from the script address and transferred to the wallet address.
