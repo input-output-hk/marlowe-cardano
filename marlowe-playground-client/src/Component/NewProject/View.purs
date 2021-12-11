@@ -35,7 +35,7 @@ render state =
   link lang =
     div
       [ classes [ ClassName "environment-selector" ]
-      , onClick (const <<< Just $ CreateProject lang)
+      , onClick (const $ CreateProject lang)
       ]
       [ img [ src $ langIcon lang ]
       , span [ classes [ textSm, fontSemibold ] ]
@@ -47,11 +47,9 @@ render state =
     Javascript -> newProjectJavascriptIcon
     Marlowe -> marloweLogo
     Blockly -> newProjectBlocklyIcon
-    _ -> "" -- The default should never happen but it's not checked at the type level
 
   langTitle = case _ of
     Haskell -> "Haskell Editor"
     Javascript -> "JS Editor"
     Marlowe -> "Marlowe"
     Blockly -> "Blockly"
-    _ -> ""

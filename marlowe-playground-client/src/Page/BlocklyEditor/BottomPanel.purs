@@ -75,7 +75,7 @@ panelContents state _ BlocklyWarningsView =
   renderWarning warning =
     [ span_ $ [ text $ show warning ]
     , a
-        [ onClick $ const $ Just $ SelectWarning warning
+        [ onClick $ const $ SelectWarning warning
         , classes [ underline, justifySelfEnd ]
         ]
         [ text $ "select block" ]

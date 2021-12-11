@@ -1,4 +1,3 @@
--- TODO: rename modules from BlocklyEditor -> MarloweBlocklyEditor
 module Page.BlocklyEditor.State where
 
 import Prologue
@@ -19,7 +18,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env)
 import Examples.Marlowe.Contracts (example) as ME
-import Halogen (HalogenM, modify_, query)
+import Halogen (HalogenM, modify_)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import MainFrame.Types (ChildSlots, _blocklySlot)
@@ -58,8 +57,8 @@ handleAction (HandleBlocklyMessage Blockly.BlocklyReady) = do
 handleAction (HandleBlocklyMessage Blockly.CodeChange) = processBlocklyCode
 
 handleAction (HandleBlocklyMessage (Blockly.BlockSelection selection)) = case mBlockDefinition of
-  Nothing -> void $ query _blocklySlot unit $ H.tell (Blockly.SetToolbox MB.toolbox)
-  Just definition -> void $ query _blocklySlot unit $ H.tell (Blockly.SetToolbox $ MB.toolboxWithHoles definition)
+  Nothing -> H.tell _blocklySlot unit $ Blockly.SetToolbox MB.toolbox
+  Just definition -> H.tell _blocklySlot unit $ Blockly.SetToolbox $ MB.toolboxWithHoles definition
   where
   mBlockDefinition = do
     { blockType } <- selection
@@ -74,10 +73,10 @@ handleAction (InitBlocklyProject code) = do
   --       Saving the code twice solves the problem but we are still firing 2 InitBlocklyProject
   --       when we start a new project, so we might want to revisit this later.
   liftEffect $ SessionStorage.setItem marloweBufferLocalStorageKey code
-  void $ query _blocklySlot unit $ H.tell $ Blockly.SetCode code
+  H.tell _blocklySlot unit $ Blockly.SetCode code
   processBlocklyCode
   -- Reset the toolbox
-  void $ query _blocklySlot unit $ H.tell (Blockly.SetToolbox MB.toolbox)
+  H.tell _blocklySlot unit $ Blockly.SetToolbox MB.toolbox
 
 handleAction SendToSimulator = pure unit
 
@@ -104,7 +103,7 @@ handleAction AnalyseContractForCloseRefund = runAnalysis $ analyseClose
 
 handleAction ClearAnalysisResults = assign (_analysisState <<< _analysisExecutionState) NoneAsked
 
-handleAction (SelectWarning warning) = void $ query _blocklySlot unit $ H.tell (Blockly.SelectWarning warning)
+handleAction (SelectWarning warning) = H.tell _blocklySlot unit $ Blockly.SelectWarning warning
 
 -- This function reads the Marlowe code from blockly and, process it and updates the component state
 processBlocklyCode ::
@@ -114,7 +113,7 @@ processBlocklyCode ::
 processBlocklyCode = do
   eContract <-
     runExceptT do
-      block <- ExceptT <<< map (note "Blockly Workspace is empty") $ query _blocklySlot unit $ H.request Blockly.GetBlockRepresentation
+      block <- ExceptT $ note "Blockly Workspace is empty" <$> H.request _blocklySlot unit Blockly.GetBlockRepresentation
       except $ MB.blockToContract block
   case eContract of
     Left e ->
@@ -157,7 +156,7 @@ runAnalysis ::
 runAnalysis doAnalyze =
   void
     $ runMaybeT do
-        block <- MaybeT $ query _blocklySlot unit $ H.request Blockly.GetBlockRepresentation
+        block <- MaybeT $ H.request _blocklySlot unit Blockly.GetBlockRepresentation
         -- FIXME: See if we can use runExceptT and show the error somewhere
         contract <- MaybeT $ pure $ Holes.fromTerm =<< (hush $ MB.blockToContract block)
         lift do
@@ -167,6 +166,6 @@ runAnalysis doAnalyze =
 editorGetValue :: forall state action msg m. HalogenM state action ChildSlots msg m (Maybe String)
 editorGetValue =
   runMaybeT do
-    block <- MaybeT $ query _blocklySlot unit $ H.request Blockly.GetBlockRepresentation
+    block <- MaybeT $ H.request _blocklySlot unit Blockly.GetBlockRepresentation
     contract <- hoistMaybe $ hush $ MB.blockToContract block
     pure $ show $ pretty $ contract

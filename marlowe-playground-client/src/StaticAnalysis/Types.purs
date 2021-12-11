@@ -2,14 +2,14 @@ module StaticAnalysis.Types where
 
 import Prologue
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)
 import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Tuple.Nested (type (/\))
 import Marlowe.Template (TemplateContent)
 import Marlowe.Semantics (AccountId, Case, Contract, Observation, Payee, Timeout, Token, Value, ValueId)
@@ -25,10 +25,10 @@ type AnalysisState
     }
 
 _templateContent :: forall s a. Lens' { templateContent :: a | s } a
-_templateContent = prop (SProxy :: SProxy "templateContent")
+_templateContent = prop (Proxy :: _ "templateContent")
 
 _analysisExecutionState :: forall s a. Lens' { analysisExecutionState :: a | s } a
-_analysisExecutionState = prop (SProxy :: SProxy "analysisExecutionState")
+_analysisExecutionState = prop (Proxy :: _ "analysisExecutionState")
 
 initAnalysisState :: AnalysisState
 initAnalysisState =
@@ -43,7 +43,7 @@ data AnalysisExecutionState
   | CloseAnalysis MultiStageAnalysisData
 
 _analysisState :: forall s. Lens' { analysisState :: AnalysisState | s } AnalysisState
-_analysisState = prop (SProxy :: SProxy "analysisState")
+_analysisState = prop (Proxy :: _ "analysisState")
 
 isStaticLoading :: AnalysisExecutionState -> Boolean
 isStaticLoading (WarningAnalysis remoteData) = isLoading remoteData

@@ -1,3 +1,5 @@
+# TODO synchronize this with plutus-apps (the import formatting has been
+# changed to something more sane and less merge-conflict-prone)
 ---
 steps:
   - simple_align:

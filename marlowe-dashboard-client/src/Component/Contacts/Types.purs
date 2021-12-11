@@ -16,21 +16,21 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.InputField.Types (Action, State) as InputField
 import Component.InputField.Types (class InputFieldError)
+import Data.Argonaut.Decode (class DecodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
-import Foreign.Class (class Encode, class Decode)
-import Foreign.Generic (defaultOptions, genericDecode, genericEncode)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
-import Types (WebData)
+import Types (NotFoundWebData)
 
 type State
   = { walletLibrary :: WalletLibrary
     , cardSection :: CardSection
     , walletNicknameInput :: InputField.State WalletNicknameError
     , walletIdInput :: InputField.State WalletIdError
-    , remoteWalletInfo :: WebData WalletInfo
+    , remoteWalletInfo :: NotFoundWebData WalletInfo
     }
 
 type WalletLibrary
@@ -65,11 +65,9 @@ derive instance eqWalletInfo :: Eq WalletInfo
 
 derive instance genericWalletInfo :: Generic WalletInfo _
 
-instance encodeWalletInfo :: Encode WalletInfo where
-  encode value = genericEncode defaultOptions value
+derive newtype instance encodeWalletInfo :: EncodeJson WalletInfo
 
-instance decodeWalletInfo :: Decode WalletInfo where
-  decode value = genericDecode defaultOptions value
+derive newtype instance decodeJsonWalletInfo :: DecodeJson WalletInfo
 
 newtype Wallet
   = Wallet String
@@ -80,11 +78,9 @@ derive instance eqWallet :: Eq Wallet
 
 derive instance genericWallet :: Generic Wallet _
 
-instance encodeWallet :: Encode Wallet where
-  encode value = genericEncode defaultOptions value
+derive newtype instance encodeJsonWallet :: EncodeJson Wallet
 
-instance decodeWallet :: Decode Wallet where
-  decode value = genericDecode defaultOptions value
+derive newtype instance decodeJsonWallet :: DecodeJson Wallet
 
 data CardSection
   = Home
@@ -128,7 +124,7 @@ data Action
   | CancelNewContactForRole
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
   | WalletIdInputAction (InputField.Action WalletIdError)
-  | SetRemoteWalletInfo (WebData WalletInfo)
+  | SetRemoteWalletInfo (NotFoundWebData WalletInfo)
   | ConnectWallet WalletNickname PlutusAppId
   | ClipboardAction Clipboard.Action
 

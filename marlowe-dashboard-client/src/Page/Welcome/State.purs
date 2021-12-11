@@ -17,10 +17,12 @@ import Component.Contacts.Types (WalletDetails, WalletLibrary, WalletNicknameErr
 import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
 import Control.Monad.Reader (class MonadAsk)
+import Data.Bifunctor (lmap)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, view, (^.))
 import Data.Map (filter, findMin, insert, lookup)
-import Data.UUID (emptyUUID) as UUID
+import Data.Map as Map
+import Data.UUID.Argonaut (emptyUUID) as UUID
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_)
@@ -33,14 +35,14 @@ import Network.RemoteData (RemoteData(..), fromEither)
 import Page.Welcome.Lenses (_card, _cardOpen, _enteringDashboardState, _remoteWalletDetails, _walletId, _walletLibrary, _walletNicknameInput, _walletNicknameOrIdInput)
 import Page.Welcome.Types (Action(..), Card(..), State, WalletNicknameOrIdError(..))
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
-import Types (WebData)
+import Types (NotFoundWebData)
 import Web.HTML (window)
 import Web.HTML.Location (reload)
 import Web.HTML.Window (location)
 
 -- see note [dummyState] in MainFrame.State
 dummyState :: State
-dummyState = mkInitialState mempty
+dummyState = mkInitialState Map.empty
 
 mkInitialState :: WalletLibrary -> State
 mkInitialState walletLibrary =
@@ -95,7 +97,7 @@ handleAction GenerateWallet = do
   walletLibrary <- use _walletLibrary
   assign _remoteWalletDetails Loading
   ajaxWalletDetails <- createWallet
-  assign _remoteWalletDetails $ fromEither ajaxWalletDetails
+  assign _remoteWalletDetails $ fromEither $ lmap Just $ ajaxWalletDetails
   case ajaxWalletDetails of
     Left ajaxError -> addToast $ ajaxErrorToast "Failed to generate wallet." ajaxError
     Right walletDetails -> do
@@ -137,13 +139,13 @@ handleAction (WalletNicknameOrIdInputAction inputFieldAction) = do
         assign _remoteWalletDetails $ fromEither ajaxWalletDetails
         handleAction $ WalletNicknameOrIdInputAction $ InputField.SetValidator $ walletNicknameOrIdError $ fromEither ajaxWalletDetails
         case ajaxWalletDetails of
-          Left ajaxError -> pure unit -- feedback is shown in the view in this case
-          Right walletDetails -> do
+          Left _ -> pure unit -- feedback is shown in the view in this case
+          Right _ -> do
             -- check whether this wallet ID is already in the walletLibrary ...
             walletLibrary <- use _walletLibrary
             assign _walletId plutusAppId
             case findMin $ filter (\w -> w ^. _companionAppId == plutusAppId) walletLibrary of
-              Just { key, value } -> do
+              Just { key } -> do
                 -- if so, open the UseWalletCard
                 handleAction $ WalletNicknameInputAction $ InputField.SetValue key
                 handleAction $ OpenCard UseWalletCard
@@ -171,7 +173,7 @@ handleAction (OpenUseWalletCardWithDetails walletDetails) = do
   ajaxWalletDetails <- lookupWalletDetails $ view _companionAppId walletDetails
   assign _remoteWalletDetails $ fromEither ajaxWalletDetails
   case ajaxWalletDetails of
-    Left ajaxError -> handleAction $ OpenCard LocalWalletMissingCard
+    Left _ -> handleAction $ OpenCard LocalWalletMissingCard
     Right _ -> do
       handleAction $ WalletNicknameOrIdInputAction $ InputField.Reset
       handleAction $ WalletNicknameInputAction $ InputField.SetValue $ view _walletNickname walletDetails
@@ -228,7 +230,7 @@ toWalletNicknameInput ::
 toWalletNicknameInput = mapSubmodule _walletNicknameInput WalletNicknameInputAction
 
 ------------------------------------------------------------
-walletNicknameOrIdError :: WebData WalletDetails -> String -> Maybe WalletNicknameOrIdError
+walletNicknameOrIdError :: NotFoundWebData WalletDetails -> String -> Maybe WalletNicknameOrIdError
 walletNicknameOrIdError remoteWalletDetails _ = case remoteWalletDetails of
   Loading -> Just UnconfirmedWalletNicknameOrId
   Failure _ -> Just NonexistentWalletNicknameOrId

@@ -4,7 +4,7 @@
     [
       {
         "choice_owner": {
-          "pk_hash": "4ecde0775d081e45f06141416cbc3afed4c44a08c93ea31281e25c8fa03548b9"
+          "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
         },
         "choice_name": "choice"
       },
@@ -25,7 +25,7 @@
     [
       [
         {
-          "pk_hash": "4ecde0775d081e45f06141416cbc3afed4c44a08c93ea31281e25c8fa03548b9"
+          "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
         },
         {
           "token_name": "name",

@@ -1,6 +1,7 @@
 /*eslint-env node*/
 'use strict';
 const safeEval = require('safe-eval')
+const JSONbig = require('json-bigint')
 
 exports.eval_ = function (left, right, model) {
   // include any libraries etc we want by providing a context. be careful!
@@ -21,7 +22,7 @@ exports.eval_ = function (left, right, model) {
                           if (slices.length > 1) { takeSlice = 1 };
                           var justCode = slices.slice(takeSlice).join('');
                           let res = safeEval(justCode, context)();
-                          return right(JSON.stringify(res));
+                          return right(JSONbig.stringify(res));
                         } catch (error) {
                           return left(error.toString());
                         }

@@ -35,11 +35,11 @@
     "easy-purescript-nix": {
       "flake": false,
       "locked": {
-        "lastModified": 1614069378,
-        "narHash": "sha256-OGLWGzLEnBsnX/4gW15Je5Z6EGrrq1AoSfniaOsSr0s=",
+        "lastModified": 1634991731,
+        "narHash": "sha256-uAS889Rpl//h0Ne2M7NyNk6tDFOkr9O3R8yny3qHKVk=",
         "owner": "justinwoo",
         "repo": "easy-purescript-nix",
-        "rev": "c2e49b4a94ee55df294212c561f2ac7225a8ebbf",
+        "rev": "7802db65618c2ead3a55121355816b4c41d276d9",
         "type": "github"
       },
       "original": {
@@ -180,11 +180,11 @@
     "plutus-apps": {
       "flake": false,
       "locked": {
-        "lastModified": 1634569763,
-        "narHash": "sha256-0Oxq5FAhkPa3/ZIA0HR4te4VMqj2HDdIMFJl4Z14xkU=",
+        "lastModified": 1636122782,
+        "narHash": "sha256-+T9TGzHEzyfixBysxLwy5VWVrL5xqKF5pcbRlHQr+wI=",
         "owner": "input-output-hk",
         "repo": "plutus-apps",
-        "rev": "0d966207d345f6e83f36af0a287f459a00261c2d",
+        "rev": "404af7ac3e27ebcb218c05f79d9a70ca966407c9",
         "type": "github"
       },
       "original": {
@@ -241,25 +241,9 @@
         "plutus-apps": "plutus-apps",
         "plutus-core": "plutus-core",
         "pre-commit-hooks-nix": "pre-commit-hooks-nix",
-        "spago2nix": "spago2nix",
         "sphinxcontrib-haddock": "sphinxcontrib-haddock",
-        "stackage-nix": "stackage-nix"
-      }
-    },
-    "spago2nix": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1620480713,
-        "narHash": "sha256-gvewQhhrK9FODgFWVMxZ//gsXB/O7/D7mY7D1PG/9ew=",
-        "owner": "justinwoo",
-        "repo": "spago2nix",
-        "rev": "a4622c3b27fca47e3276131a8ec4097a1d3c78a7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "justinwoo",
-        "repo": "spago2nix",
-        "type": "github"
+        "stackage-nix": "stackage-nix",
+        "web-common": "web-common"
       }
     },
     "sphinxcontrib-haddock": {
@@ -291,6 +275,22 @@
       "original": {
         "owner": "input-output-hk",
         "repo": "stackage.nix",
+        "type": "github"
+      }
+    },
+    "web-common": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1635526611,
+        "narHash": "sha256-qLUmwG7hKGbc3pFWkKSKFFE0uWxgPSrIUZspUwwEFCo=",
+        "owner": "input-output-hk",
+        "repo": "purescript-web-common",
+        "rev": "f1241ea27fc6acc78d093574e3707165b4ef9b3e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "purescript-web-common",
         "type": "github"
       }
     }

@@ -1,9 +1,12 @@
 module Env where
 
-import Servant.PureScript.Settings (SPSettings_)
-import Marlowe (SPParams_)
+import Marlowe (class HasSPSettings, SPSettings_)
 
 -- Application enviroment configuration
-type Env
-  = { ajaxSettings :: SPSettings_ SPParams_
-    }
+newtype Env
+  = Env
+  { ajaxSettings :: SPSettings_
+  }
+
+instance hasSPSettingsEnv :: HasSPSettings Env where
+  spSettings (Env { ajaxSettings }) = ajaxSettings

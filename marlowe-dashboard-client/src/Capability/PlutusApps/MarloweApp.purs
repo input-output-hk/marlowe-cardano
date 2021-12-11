@@ -21,23 +21,22 @@ import Capability.Contract (invokeEndpoint) as Contract
 import Capability.PlutusApps.MarloweApp.Lenses (_applyInputs, _create, _marloweAppEndpointMutex, _redeem, _requests)
 import Capability.PlutusApps.MarloweApp.Types (EndpointMutex, LastResult(..), MarloweAppEndpointMutexEnv)
 import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Argonaut.Core (Json)
+import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
 import Data.Foldable (elem)
-import Data.Json.JsonNTuple ((/\), type (/\)) as Json
 import Data.Lens (Lens', toArrayOf, traversed, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Data.Symbol (SProxy(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\), type (/\))
-import Data.UUID (UUID, genUUID)
+import Data.UUID.Argonaut (UUID, genUUID)
 import Effect (Effect)
 import Effect.AVar (AVar)
 import Effect.AVar as EAVar
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
-import Foreign.Generic (class Encode)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Contract, MarloweParams, SlotInterval(..), TokenName, TransactionInput(..), PubKeyHash)
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
@@ -45,6 +44,7 @@ import Plutus.V1.Ledger.Crypto (PubKeyHash) as Back
 import Plutus.V1.Ledger.Slot (Slot) as Back
 import Plutus.V1.Ledger.Value (TokenName) as Back
 import PlutusTx.AssocMap (Map) as Back
+import Type.Proxy (Proxy(..))
 import Types (AjaxResponse)
 import Wallet.Types (_EndpointDescription)
 
@@ -62,21 +62,30 @@ instance marloweAppM :: MarloweApp AppM where
       backRoles :: Back.Map Back.TokenName Back.PubKeyHash
       backRoles = toBack roles
 
-      payload = reqId Json./\ backRoles Json./\ contract
+      payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
     invokeMutexedEndpoint plutusAppId reqId "create" _create payload
   applyInputs plutusAppId marloweContractId (TransactionInput { interval: SlotInterval slotStart slotEnd, inputs }) = do
     reqId <- liftEffect genUUID
     let
-      backSlotInterval :: Back.Slot Json./\ Back.Slot
-      backSlotInterval = (toBack slotStart) Json./\ (toBack slotEnd)
+      backSlotInterval :: Back.Slot /\ Back.Slot
+      backSlotInterval = (toBack slotStart) /\ (toBack slotEnd)
 
-      payload = reqId Json./\ marloweContractId Json./\ Just backSlotInterval Json./\ inputs
+      payload =
+        [ encodeJson reqId
+        , encodeJson marloweContractId
+        , encodeJson backSlotInterval
+        , encodeJson inputs
+        ]
     invokeMutexedEndpoint plutusAppId reqId "apply-inputs" _applyInputs payload
   redeem plutusAppId marloweContractId tokenName pubKeyHash = do
     reqId <- liftEffect genUUID
     let
-      payload :: UUID Json./\ MarloweParams Json./\ Back.TokenName Json./\ Back.PubKeyHash
-      payload = reqId Json./\ marloweContractId Json./\ toBack tokenName Json./\ toBack pubKeyHash
+      payload =
+        [ encodeJson reqId
+        , encodeJson marloweContractId
+        , (encodeJson :: Back.TokenName -> Json) $ toBack tokenName
+        , (encodeJson :: Back.PubKeyHash -> Json) $ toBack pubKeyHash
+        ]
     invokeMutexedEndpoint plutusAppId reqId "redeem" _redeem payload
 
 createEndpointMutex :: Effect EndpointMutex
@@ -93,7 +102,7 @@ maxRequests = 15
 
 invokeMutexedEndpoint ::
   forall payload m env.
-  Encode payload =>
+  EncodeJson payload =>
   MonadAff m =>
   ManageContract m =>
   MonadAsk (MarloweAppEndpointMutexEnv env) m =>
@@ -192,9 +201,9 @@ onNewActiveEndpoints endpoints = do
       toArrayOf
         ( traversed
             <<< _ActiveEndpoint
-            <<< prop (SProxy :: SProxy "aeDescription")
+            <<< prop (Proxy :: _ "aeDescription")
             <<< _EndpointDescription
-            <<< prop (SProxy :: SProxy "getEndpointDescription")
+            <<< prop (Proxy :: _ "getEndpointDescription")
         )
         endpoints
 

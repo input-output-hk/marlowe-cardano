@@ -13,7 +13,7 @@ module Marlowe.Execution.State
 
 import Prologue
 import Data.Array as Array
-import Data.BigInteger (fromInt)
+import Data.BigInt.Argonaut (fromInt)
 import Data.Lens (view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
@@ -36,7 +36,7 @@ mkInitialState currentSlot contract =
 nextState :: TransactionInput -> State -> State
 nextState txInput { semanticState, contract, history } =
   let
-    TransactionInput { interval: SlotInterval minSlot maxSlot, inputs } = txInput
+    TransactionInput { interval: SlotInterval minSlot _, inputs } = txInput
 
     { txOutState, txOutContract, txOutPayments } = case computeTransaction txInput semanticState contract of
       (TransactionOutput { txOutState, txOutContract, txOutPayments }) -> { txOutState, txOutContract, txOutPayments }
@@ -168,7 +168,7 @@ extractNamedActions currentSlot { semanticState, contract } = extractActionsFrom
 extractActionsFromContract :: Slot -> Semantic.State -> Contract -> Array NamedAction
 extractActionsFromContract _ _ Close = mempty
 
-extractActionsFromContract currentSlot semanticState contract@(When cases timeout cont) = cases <#> \(Case action _) -> toNamedAction action
+extractActionsFromContract currentSlot semanticState contract@(When cases _ _) = cases <#> \(Case action _) -> toNamedAction action
   where
   toNamedAction (Deposit a p t v) =
     let
@@ -187,7 +187,7 @@ extractActionsFromContract currentSlot semanticState contract@(When cases timeou
 -- In reality other situations should never occur as contracts always reduce to When or Close
 -- however someone could in theory publish a contract that starts with another Contract constructor
 -- and we would want to enable moving forward with Evaluate
-extractActionsFromContract _ _ _ = [ Evaluate mempty ]
+extractActionsFromContract _ _ _ = [ Evaluate { bindings: Map.empty, payments: [] } ]
 
 -- This function expands the balances inside the Semantic.State to all participants and tokens,
 -- using zero if the participant does not have balance for that token.

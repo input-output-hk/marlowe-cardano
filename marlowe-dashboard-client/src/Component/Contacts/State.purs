@@ -23,15 +23,16 @@ import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
 import Control.Monad.Reader (class MonadAsk)
 import Data.Array (any)
-import Data.BigInteger (BigInteger)
-import Data.Char.Unicode (isAlphaNum)
+import Data.BigInt.Argonaut (BigInt)
+import Data.CodePoint.Unicode (isAlphaNum)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use)
 import Data.Map (isEmpty, filter, insert, lookup, member)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
+import Data.String (codePointFromChar)
 import Data.String.CodeUnits (toCharArray)
-import Data.UUID (emptyUUID, parseUUID)
+import Data.UUID.Argonaut (emptyUUID, parseUUID)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -44,7 +45,7 @@ import Marlowe.Semantics (Assets, Token(..))
 import Network.RemoteData (RemoteData(..), fromEither)
 import Page.Dashboard.Types (Action(..)) as Dashboard
 import Toast.Types (errorToast, successToast)
-import Types (WebData)
+import Types (NotFoundWebData)
 
 mkInitialState :: WalletLibrary -> State
 mkInitialState walletLibrary =
@@ -96,7 +97,6 @@ handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
 handleAction (SaveWallet mTokenName) = do
-  oldWalletLibrary <- use _walletLibrary
   walletNickname <- use (_walletNicknameInput <<< _value)
   walletIdString <- use (_walletIdInput <<< _value)
   remoteWalletInfo <- use _remoteWalletInfo
@@ -117,7 +117,6 @@ handleAction (SaveWallet mTokenName) = do
           }
       modifying _walletLibrary (insert walletNickname walletDetails)
       insertIntoWalletLibrary walletDetails
-      newWalletLibrary <- use _walletLibrary
       addToast $ successToast "Contact added"
       case mTokenName of
         -- if a tokenName was also passed, we are inside a template contract and we need to update role
@@ -192,7 +191,7 @@ toWalletIdInput = mapSubmodule _walletIdInput WalletIdInputAction
 adaToken :: Token
 adaToken = Token "" ""
 
-getAda :: Assets -> BigInteger
+getAda :: Assets -> BigInt
 getAda assets = fromMaybe zero $ lookup "" =<< lookup "" (unwrap assets)
 
 walletNicknameError :: WalletLibrary -> WalletNickname -> Maybe WalletNicknameError
@@ -201,13 +200,12 @@ walletNicknameError _ "" = Just EmptyWalletNickname
 walletNicknameError walletLibrary walletNickname =
   if member walletNickname walletLibrary then
     Just DuplicateWalletNickname
+  else if any (\char -> not $ isAlphaNum $ codePointFromChar char) $ toCharArray walletNickname then
+    Just BadWalletNickname
   else
-    if any (\char -> not $ isAlphaNum char) $ toCharArray walletNickname then
-      Just BadWalletNickname
-    else
-      Nothing
+    Nothing
 
-walletIdError :: WebData WalletInfo -> WalletLibrary -> String -> Maybe WalletIdError
+walletIdError :: NotFoundWebData WalletInfo -> WalletLibrary -> String -> Maybe WalletIdError
 walletIdError _ _ "" = Just EmptyWalletId
 
 walletIdError remoteDataWalletInfo walletLibrary walletIdString = case parsePlutusAppId walletIdString of

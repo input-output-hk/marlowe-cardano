@@ -54,4 +54,4 @@ data Action error
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
 instance actionIsEvent :: IsEvent (Action e) where
-  toEvent action = Nothing
+  toEvent _ = Nothing

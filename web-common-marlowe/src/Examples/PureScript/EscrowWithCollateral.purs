@@ -7,7 +7,7 @@ module Examples.PureScript.EscrowWithCollateral
   ) where
 
 import Prelude
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -30,7 +30,7 @@ fixedTimeoutContract =
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInteger
+defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
     [ "Collateral deposit by seller timeout" /\ fromInt 600
@@ -94,7 +94,7 @@ deposit timeout timeoutContinuation continuation =
     timeout
     timeoutContinuation
 
-choice :: ChoiceName -> Party -> BigInteger -> Contract -> Case
+choice :: ChoiceName -> Party -> BigInt -> Contract -> Case
 choice choiceName chooser choiceValue continuation =
   Case
     ( Choice (ChoiceId choiceName chooser)
@@ -102,7 +102,7 @@ choice choiceName chooser choiceValue continuation =
     )
     continuation
 
-choices :: Timeout -> Party -> Contract -> Array (BigInteger /\ ChoiceName /\ Contract) -> Contract
+choices :: Timeout -> Party -> Contract -> Array (BigInt /\ ChoiceName /\ Contract) -> Contract
 choices timeout chooser timeoutContinuation list =
   When
     ( do

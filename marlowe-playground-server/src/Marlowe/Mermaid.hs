@@ -114,7 +114,6 @@ valueShow (DivValue val1 val2) = "(" ++ valueShow val1 ++ " / " ++ valueShow val
 valueShow (ChoiceValue (ChoiceId id party)) = show party ++ " choice on " ++ show id
 valueShow (Cond obs val1 val2) = "(" ++ observationShow obs ++ " ? " ++ valueShow val1 ++ " : " ++ valueShow val2 ++ ")"
 valueShow (UseValue (ValueId id)) = show id
-valueShow (Scale fraction val) = "(" ++ show (numerator fraction) ++ " / " ++ show (denominator fraction) ++ " * " ++ valueShow val ++ ")"
 valueShow (AvailableMoney party _) = show party ++ "'s available money"
 valueShow SlotIntervalStart  = "slot interval start"
 valueShow SlotIntervalEnd  = "slot interval end"

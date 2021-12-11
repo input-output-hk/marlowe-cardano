@@ -11,15 +11,13 @@ import Halogen (ComponentHTML)
 import Halogen.Classes (marlowePlayLogo)
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
-import Halogen.HTML (HTML, a, div, div_, footer, h1, header, img, main, section, slot, span, text)
+import Halogen.HTML (HTML, a, div, div_, footer, h1, header, img, main, section, span, text)
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Properties (href, id_, src, target)
+import Halogen.HTML.Properties (href, id, src, target)
 import Home as Home
 import Icons (Icon(..), icon)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, View(..), _actusBlocklySlot, _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _marloweEditorState, _projectName, _simulationState, _view, hasGlobalLoading)
-import Marlowe.ActusBlockly as AMB
+import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, View(..), _authStatus, _blocklyEditorState, _contractMetadata, _createGistResult, _gistId, _hasUnsavedChanges, _haskellState, _javascriptState, _marloweEditorState, _projectName, _simulationState, _view, hasGlobalLoading)
 import Network.RemoteData (_Loading, _Success)
-import Page.ActusBlockly as ActusBlockly
 import Page.BlocklyEditor.View as BlocklyEditor
 import Page.HaskellEditor.View (otherActions, render) as HaskellEditor
 import Page.JavascriptEditor.View as JSEditor
@@ -37,20 +35,20 @@ render state =
           [ div [ classNames [ "flex", "items-center", "justify-between", "bg-gray-dark", "px-medium", "py-small" ] ]
               [ img
                   [ classNames [ "h-10", "cursor-pointer" ]
-                  , onClick $ const $ Just $ ChangeView HomePage
+                  , onClick $ const $ ChangeView HomePage
                   , src marlowePlayLogo
                   ]
               , projectTitle
               , div_
                   [ a [ href "./doc/marlowe/tutorials/index.html", target "_blank", classNames [ "font-semibold" ] ] [ text "Tutorial" ]
                   -- Link disabled as the Actus labs is not working properly. Future plans might include moving this functionality to Marlowe run
-                  -- , a [ onClick $ const $ Just $ ChangeView ActusBlocklyEditor, classNames [ "ml-medium", "font-semibold" ] ] [ text "Actus Labs" ]
+                  -- , a [ onClick $ const $ ChangeView ActusBlocklyEditor, classNames [ "ml-medium", "font-semibold" ] ] [ text "Actus Labs" ]
                   ]
               ]
           , topBar
           ]
       , main []
-          [ section [ id_ "main-panel" ] case state ^. _view of
+          [ section [ id "main-panel" ] case state ^. _view of
               HomePage -> [ Home.render state ]
               Simulation ->
                 [ renderSubmodule
@@ -86,10 +84,6 @@ render state =
                     BlocklyEditorAction
                     (BlocklyEditor.render (state ^. _contractMetadata))
                     state
-                ]
-              ActusBlocklyEditor ->
-                [ slot _actusBlocklySlot unit (ActusBlockly.blockly AMB.rootBlockName AMB.blockDefinitions AMB.toolbox) unit (Just <<< HandleActusBlocklyMessage)
-                , AMB.workspaceBlocks
                 ]
           ]
       , modal state
@@ -143,14 +137,13 @@ render state =
     HaskellEditor -> true
     JSEditor -> true
     BlocklyEditor -> true
-    ActusBlocklyEditor -> true
     Simulation -> true
     MarloweEditor -> true
     _ -> false
 
   otherActions HaskellEditor = [ renderSubmodule _haskellState HaskellAction HaskellEditor.otherActions state ]
 
-  otherActions Simulation = [ renderSubmodule _simulationState SimulationAction Simulation.otherActions state ]
+  otherActions Simulation = [ renderSubmodule _simulationState SimulationAction (const Simulation.otherActions) state ]
 
   otherActions JSEditor = [ renderSubmodule _javascriptState JavascriptAction JSEditor.otherActions state ]
 
@@ -181,7 +174,7 @@ menuBar state =
     ]
   where
   menuButton action name =
-    a [ onClick $ const $ Just action ]
+    a [ onClick $ const action ]
       [ span [] [ text name ]
       ]
 

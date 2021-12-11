@@ -1,7 +1,7 @@
 module Component.Transfer.Types where
 
 import Prologue
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Marlowe.Semantics (AccountId, Party, Token)
 
 -- Here's my justification for why this module should exist:
@@ -21,7 +21,7 @@ type Transfer
   = { sender :: Participant
     , recipient :: Participant
     , token :: Token
-    , quantity :: BigInteger
+    , quantity :: BigInt
     , termini :: Termini
     }
 

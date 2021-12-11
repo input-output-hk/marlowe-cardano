@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
 module MarloweContract(MarloweContract(..), handlers) where
 
@@ -15,7 +16,7 @@ import qualified Data.OpenApi                        as OpenApi
 import           Data.Text.Prettyprint.Doc           (Pretty (..), viaShow)
 import           GHC.Generics                        (Generic)
 import qualified Language.Marlowe.Client             as Marlowe
-import           Language.PureScript.Bridge          (equal, genericShow, mkSumType)
+import           Language.PureScript.Bridge          (argonaut, equal, genericShow, mkSumType, order)
 import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (contractHandler), HasDefinitions (..),
                                                       SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
@@ -45,7 +46,7 @@ instance HasDefinitions MarloweContract where
         MarloweFollower -> SomeBuiltin Marlowe.marloweFollowContract
 
 instance HasPSTypes MarloweContract where
-    psTypes p = [ (equal <*> (genericShow <*> mkSumType)) p ]
+    psTypes = [ order . equal . genericShow . argonaut $ mkSumType @MarloweContract ]
 
 handlers :: SimulatorEffectHandlers (Builtin MarloweContract)
 handlers =

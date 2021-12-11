@@ -6,7 +6,6 @@ module Page.Dashboard.View
 import Prologue hiding (Either(..), div)
 import Clipboard (Action(..)) as Clipboard
 import Component.ConfirmInput.View as ConfirmInput
-import Component.WalletId.View (defaultInput, render) as WalletId
 import Component.Contacts.Lenses (_assets, _companionAppId, _walletNickname, _walletLibrary)
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.Types (WalletDetails)
@@ -17,14 +16,16 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
+import Component.WalletId.View (defaultInput, render) as WalletId
 import Css as Css
+import Data.Compactable (compact)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
 import Data.Newtype (unwrap)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
-import Data.UUID (toString) as UUID
+import Data.UUID.Argonaut (toString) as UUID
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
@@ -32,7 +33,7 @@ import Halogen.Extra (mapComponentAction, renderSubmodule)
 import Halogen.HTML (HTML, a, button, div, div_, footer, h2, h3, h4, header, img, main, nav, p, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (href, id_, src)
+import Halogen.HTML.Properties (href, id, src)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
@@ -44,7 +45,6 @@ import Page.Contract.Types (State) as Contract
 import Page.Contract.View (contractPreviewCard, contractScreen)
 import Page.Dashboard.Lenses (_card, _cardOpen, _contactsState, _contractFilter, _menuOpen, _selectedContract, _selectedContractFollowerAppId, _templateState, _walletDetails)
 import Page.Dashboard.Types (Action(..), Card(..), ContractFilter(..), Input, State, WalletCompanionStatus(..))
-import Prim.TypeError (class Warn, Text)
 
 dashboardScreen :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
 dashboardScreen { currentSlot, tzOffset } state =
@@ -55,11 +55,7 @@ dashboardScreen { currentSlot, tzOffset } state =
 
     menuOpen = state ^. _menuOpen
 
-    card = state ^. _card
-
     cardOpen = state ^. _cardOpen
-
-    contractFilter = state ^. _contractFilter
 
     selectedContractFollowerAppId = state ^. _selectedContractFollowerAppId
 
@@ -93,10 +89,9 @@ dashboardScreen { currentSlot, tzOffset } state =
 dashboardCard ::
   forall m.
   MonadAff m =>
-  Slot ->
   State ->
   ComponentHTML Action ChildSlots m
-dashboardCard currentSlot state = case view _card state of
+dashboardCard state = case view _card state of
   Just card ->
     let
       cardOpen = state ^. _cardOpen
@@ -160,7 +155,7 @@ dashboardHeader walletNickname menuOpen =
             , tooltip "Tutorials" (RefId "tutorialsHeader") Bottom
             , a
                 [ classNames [ "ml-6", "font-bold", "text-sm" ]
-                , id_ "currentWalletHeader"
+                , id "currentWalletHeader"
                 , onClick_ $ OpenCard CurrentWalletCard
                 ]
                 [ span
@@ -184,7 +179,7 @@ dashboardHeader walletNickname menuOpen =
   navigation action icon' refId =
     a
       [ classNames [ "ml-6", "font-bold", "text-sm" ]
-      , id_ refId
+      , id refId
       , onClick_ action
       ]
       [ icon_ icon' ]
@@ -209,18 +204,17 @@ dashboardBreadcrumb mSelectedContractState =
   div [ classNames [ "border-b", "border-gray" ] ]
     [ nav [ classNames $ Css.maxWidthContainer <> [ "flex", "gap-2", "py-2" ] ]
         $ [ a
-              [ id_ "goToDashboard"
-              , onClick \_ ->
-                  if (isJust mSelectedContractState) then
-                    Just $ SelectContract Nothing
-                  else
-                    Nothing
-              , classNames
-                  $ if (isJust mSelectedContractState) then
-                      [ "text-lightpurple", "font-bold" ]
-                    else
-                      [ "cursor-default" ]
-              ]
+              ( compact
+                  [ Just $ id "goToDashboard"
+                  , mSelectedContractState $> onClick (const $ SelectContract Nothing)
+                  , Just
+                      $ classNames
+                          if (isJust mSelectedContractState) then
+                            [ "text-lightpurple", "font-bold" ]
+                          else
+                            [ "cursor-default" ]
+                  ]
+              )
               [ text "Dashboard" ]
           ]
         <> case mSelectedContractState of
@@ -249,7 +243,7 @@ dashboardFooter =
         ]
     ]
 
-dashboardLinks :: forall p. Warn (Text "We need to add the dashboard links.") => Array (HTML p Action)
+dashboardLinks :: forall p. Array (HTML p Action)
 dashboardLinks =
   -- FIXME: SCP-2589 Add link to Docs
   [ link "Docs" ""
@@ -317,21 +311,21 @@ contractNavigation contractFilter =
               [ a
                   [ classNames $ navItemClasses $ contractFilter == Running
                   , onClick_ $ SetContractFilter Running
-                  , id_ "runningContractsFilter"
+                  , id "runningContractsFilter"
                   ]
                   [ icon_ Icon.Running ]
               , tooltip "Running contracts" (RefId "runningContractsFilter") Right
               , a
                   [ classNames $ navItemClasses $ contractFilter == Completed
                   , onClick_ $ SetContractFilter Completed
-                  , id_ "completedContractsFilter"
+                  , id "completedContractsFilter"
                   ]
                   [ icon_ Icon.History ]
               , tooltip "Completed contracts" (RefId "completedContractsFilter") Right
               , a
                   [ classNames $ navItemClasses false
                   , onClick_ $ OpenCard ContractTemplateCard
-                  , id_ "newContractButton"
+                  , id "newContractButton"
                   ]
                   [ icon Icon.AddBox [ "text-purple" ] ]
               , tooltip "Create a new contract" (RefId "newContractButton") Right
@@ -344,7 +338,7 @@ contractNavigation contractFilter =
               [ a
                   [ classNames $ navItemClasses false
                   , onClick_ $ OpenCard TutorialsCard
-                  , id_ "tutorialsButton"
+                  , id "tutorialsButton"
                   ]
                   [ icon Icon.Help [ "text-purple" ] ]
               , tooltip "Tutorials" (RefId "tutorialsButton") Right
