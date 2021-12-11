@@ -105,6 +105,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
                                --change-address "$ADDRESS_P"             \
                                --out-file tx.raw                         \
                                --required-signer $PAYMENT_SKEY           \
+                               --print-stats                             \
                                --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -135,6 +136,7 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --invalid-before    40000000              \
                                 --invalid-hereafter 80000000              \
                                 --out-file tx.raw                         \
+                                --print-stats                             \
                                 --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -165,6 +167,7 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --invalid-before    40000000              \
                                 --invalid-hereafter 80000000              \
                                 --out-file tx.raw                         \
+                                --print-stats                             \
                                 --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -192,6 +195,7 @@ marlowe-cli transaction-close "${MAGIC[@]}"                             \
                               --invalid-hereafter 80000000              \
                               --out-file tx.raw                         \
                               --required-signer $PAYMENT_SKEY           \
+                              --print-stats                             \
                               --submit=600                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
@@ -220,6 +224,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" --out-file /dev/stdo
                                        --change-address "$ADDRESS_P"               \
                                        --out-file tx.raw                           \
                                        --required-signer $PAYMENT_SKEY             \
+                                       --print-stats                               \
                                        --submit=600                                \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )

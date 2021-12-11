@@ -75,11 +75,11 @@ We will redeem the ADA within a particular range of slots:
 
 We now create the Marlowe contract and transaction:
 
-    $ marlowe-cli export "${MAGIC[@]}"                          \
-                         --contract-file $CONTRACT_FILE         \
-                         --state-file $STATE_FILE               \
-                         --out-file $MARLOWE_FILE               \
-                         --print-stats
+    $ marlowe-cli export-marlowe "${MAGIC[@]}"                  \
+                                 --contract-file $CONTRACT_FILE \
+                                 --state-file $STATE_FILE       \
+                                 --out-file $MARLOWE_FILE       \
+                                 --print-stats
     
     Validator cost: ExBudget {exBudgetCPU = ExCPU 50941703, exBudgetMemory = ExMemory 171200}
     Validator size: 15887
@@ -114,19 +114,23 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
 
     TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f#0
     
-    marlowe-cli create "${MAGIC[@]}"                             \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --script-address "$ADDRESS_S"             \
-                       --tx-out-datum-file $DATUM_FILE           \
-                       --tx-out-value $DATUM_LOVELACE            \
-                       --tx-in "$TX_0"                           \
-                       --change-address "$ADDRESS_P"             \
-                       --out-file tx.raw
+    $ marlowe-cli transaction-create "${MAGIC[@]}"                             \
+                                     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                     --script-address "$ADDRESS_S"             \
+                                     --tx-out-datum-file $DATUM_FILE           \
+                                     --tx-out-value $DATUM_LOVELACE            \
+                                     --tx-in "$TX_0"                           \
+                                     --change-address "$ADDRESS_P"             \
+                                     --out-file tx.raw                         \
+                                     --required-signer $PAYMENT_SKEY           \
+                                     --print-stats                             \
+                                     --submit=600
     
-    marlowe-cli submit "${MAGIC[@]}"                             \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --tx-body-file tx.raw                     \
-                       --required-signer $PAYMENT_SKEY
+    Fee: Lovelace 168845
+    Size: 166 / 16384 = 1%
+    Execution units:
+      Memory: 0 / 12500000 = 0%
+      Steps: 0 / 10000000000 = 0%
 
 After the transaction is recorded on the blockchain, there are funds at the contract address with the data hash `DATUM_HASH`.
 
@@ -150,24 +154,28 @@ We name the funding transaction as `TX_1`.
 
 We now use the previously computed redeemer and datum to remove the funds from the contract. This involves computing the fee, building the transaction, signing it, and submitting it.
 
-    marlowe-cli close "${MAGIC[@]}"                             \
-                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                      --tx-in-script-file $PLUTUS_FILE          \
-                      --tx-in-redeemer-file $REDEEMER_FILE      \
-                      --tx-in-datum-file $DATUM_FILE            \
-                      --tx-in-marlowe "$TX_1"#1                 \
-                      --tx-in "$TX_1"#0                         \
-                      --tx-in-collateral "$TX_1"#0              \
-                      --tx-out "$ADDRESS_P"+$DATUM_LOVELACE     \
-                      --change-address "$ADDRESS_P"             \
-                      --invalid-before $REDEEM_MIN_SLOT         \
-                      --invalid-hereafter $REDEEM_MAX_SLOT      \
-                      --out-file tx.raw
+    $ marlowe-cli transaction-close "${MAGIC[@]}"                             \
+                                    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                                    --tx-in-script-file $PLUTUS_FILE          \
+                                    --tx-in-redeemer-file $REDEEMER_FILE      \
+                                    --tx-in-datum-file $DATUM_FILE            \
+                                    --tx-in-marlowe "$TX_1"#1                 \
+                                    --tx-in "$TX_1"#0                         \
+                                    --tx-in-collateral "$TX_1"#0              \
+                                    --tx-out "$ADDRESS_P"+$DATUM_LOVELACE     \
+                                    --change-address "$ADDRESS_P"             \
+                                    --invalid-before $REDEEM_MIN_SLOT         \
+                                    --invalid-hereafter $REDEEM_MAX_SLOT      \
+                                    --out-file tx.raw                         \
+                                    --required-signer $PAYMENT_SKEY           \
+                                    --print-stats                             \
+                                    --submit=600
     
-    marlowe-cli submit "${MAGIC[@]}"                             \
-                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                       --tx-body-file tx.raw                     \
-                       --required-signer $PAYMENT_SKEY
+    Fee: Lovelace 981699
+    Size: 14125 / 16384 = 86%
+    Execution units:
+      Memory: 2294062 / 12500000 = 18%
+      Steps: 793702300 / 10000000000 = 7%
 
 After the transaction is recorded on the blockchain, we see that the funds were removed from the script address and are in the wallet.
 
