@@ -22,8 +22,7 @@ module Language.Marlowe.CLI (
 
 
 import           Cardano.Api                      (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
-                                                   LocalNodeConnectInfo (..), NetworkId (..),
-                                                   StakeAddressReference (..))
+                                                   LocalNodeConnectInfo (..), StakeAddressReference (..))
 import           Cardano.Config.Git.Rev           (gitRev)
 import           Control.Monad.Except             (ExceptT, liftIO, runExceptT, throwError)
 import           Data.Maybe                       (fromMaybe)
@@ -56,26 +55,30 @@ mainCLI :: Version  -- ^ The version of the tool.
 mainCLI version example =
   do
     command <- O.execParser $ parser version
-    let
-      marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
-      network'       = fromMaybe Mainnet                        $ network       command
-      stake'         = fromMaybe NoStakeAddress                 $ stake         command
-      connection =
-        LocalNodeConnectInfo
-        {
-          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-        , localNodeNetworkId       = network'
-        , localNodeSocketPath      = socketPath command
-        }
-      printTxId = liftIO . putStrLn . ("TxId " <>) . show
     result <-
       runExceptT
         $ do
+          network'<-
+            maybe
+              (throwError "Mainnet usage is not supported.")
+              pure
+              $ network command
           costModel <-
             maybe
               (throwError "Missing default cost model.")
               pure
               defaultCostModelParams
+          let
+            marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
+            stake'         = fromMaybe NoStakeAddress                 $ stake         command
+            connection =
+              LocalNodeConnectInfo
+              {
+                localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+              , localNodeNetworkId       = network'
+              , localNodeSocketPath      = socketPath command
+              }
+            printTxId = liftIO . putStrLn . ("TxId " <>) . show
           case command of
             Export{..}          -> exportMarlowe
                                      marloweParams' costModel network' stake'
