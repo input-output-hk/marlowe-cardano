@@ -122,5 +122,4 @@ instance ActusNum (Value Observation) where
   (Constant 0) / _ = Constant 0
   (Constant x) / (Constant y) = Constant $ x `div` (y Prelude.* marloweFixedPoint)
   x / (Constant y) | y == marloweFixedPoint = x
-  x / (Constant y) | rem y marloweFixedPoint == 0 = DivValue x (Constant (y `div` marloweFixedPoint))
   x / y = DivValue x y
