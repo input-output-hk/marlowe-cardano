@@ -29,9 +29,9 @@ import           Data.Maybe                       (fromMaybe)
 import           Data.Version                     (Version, showVersion)
 import           Language.Marlowe.CLI.Export      (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
                                                    exportValidator)
-import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseParty,
-                                                   parseSlotNo, parseStakeAddressReference, parseToken, parseTxIn,
-                                                   parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseLovelaceValue,
+                                                   parseNetworkId, parseParty, parseSlotNo, parseStakeAddressReference,
+                                                   parseToken, parseTxIn, parseTxOut)
 import           Language.Marlowe.CLI.Run         (computeMarlowe, makeChoice, makeDeposit, makeNotification)
 import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
 import           Language.Marlowe.CLI.Types       (CliError (..), Command (..))
@@ -333,15 +333,15 @@ buildIncomingCommand =
 buildIncomingOptions :: O.Parser Command -- ^ The parser.
 buildIncomingOptions =
   BuildCreate
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"     <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
-    <*> O.strOption                            (O.long "socket-path"       <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
-    <*> O.option parseAddressAny               (O.long "script-address"    <> O.metavar "ADDRESS"          <> O.help "Address of the Marlowe contract."               )
-    <*> O.strOption                            (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file datum paid to Marlowe contract.")
-    <*> O.option parseValue                    (O.long "tx-out-value"      <> O.metavar "LOVELACE"         <> O.help "Lovelace value paid to Marlowe contract."       )
-    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."         )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
-    <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."       )
-    <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"     <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."            )
+    <*> O.strOption                            (O.long "socket-path"       <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."      )
+    <*> O.option parseAddressAny               (O.long "script-address"    <> O.metavar "ADDRESS"       <> O.help "Address of the Marlowe contract."               )
+    <*> O.strOption                            (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract.")
+    <*> O.option parseLovelaceValue            (O.long "tx-out-value"      <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."       )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
+    <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."       )
+    <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."              )
 
 
 -- | Parser for the "advance" command.
@@ -356,23 +356,23 @@ buildContinuingCommand =
 buildContinuingOptions :: O.Parser Command -- ^ The parser.
 buildContinuingOptions =
   BuildAdvance
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
-    <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
-    <*> O.option parseAddressAny               (O.long "script-address"      <> O.metavar "ADDRESS"          <> O.help "Address of the Marlowe contract."               )
-    <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."              )
-    <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"    <> O.help "Redeemer JSON file spent from Marlowe contract.")
-    <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file spent from Marlowe contract."   )
-    <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"     <> O.help "Files containing required signing keys."        )
-    <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"        <> O.help "UTxO spent from Marlowe contract."              )
-    <*> O.strOption                            (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file datum paid to Marlowe contract.")
-    <*> O.option parseValue                    (O.long "tx-out-value"        <> O.metavar "LOVELACE"         <> O.help "Lovelace value paid to Marlowe contract."       )
-    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."         )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
-    <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"        <> O.help "Collateral for transaction."                    )
-    <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."       )
-    <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"             <> O.help "Minimum slot for the redemption."               )
-    <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"             <> O.help "Maximum slot for the redemption."               )
-    <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."            )
+    <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."      )
+    <*> O.option parseAddressAny               (O.long "script-address"      <> O.metavar "ADDRESS"       <> O.help "Address of the Marlowe contract."               )
+    <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"   <> O.help "Plutus file for Marlowe contract."              )
+    <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE" <> O.help "Redeemer JSON file spent from Marlowe contract.")
+    <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file spent from Marlowe contract."   )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."        )
+    <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"     <> O.help "UTxO spent from Marlowe contract."              )
+    <*> O.strOption                            (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract.")
+    <*> O.option parseLovelaceValue            (O.long "tx-out-value"        <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."       )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
+    <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"     <> O.help "Collateral for transaction."                    )
+    <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."       )
+    <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."               )
+    <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."               )
+    <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."              )
 
 
 -- | Parser for the "close" command.
@@ -387,20 +387,20 @@ buildOutgoingCommand =
 buildOutgoingOptions :: O.Parser Command -- ^ The parser.
 buildOutgoingOptions =
   BuildClose
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"          <> O.help "Network magic, or omit for mainnet."            )
-    <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"      <> O.help "Location of the cardano-node socket file."      )
-    <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"      <> O.help "Plutus file for Marlowe contract."              )
-    <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE"    <> O.help "Redeemer JSON file spent from Marlowe contract.")
-    <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"       <> O.help "Datum JSON file spent from Marlowe contract."   )
-    <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"     <> O.help "Files containing required signing keys."        )
-    <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"        <> O.help "UTxO spent from Marlowe contract."              )
-    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"        <> O.help "Transaction input in TxId#TxIx format."         )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+LOVELACE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
-    <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"        <> O.help "Collateral for transaction."                    )
-    <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"          <> O.help "Address to receive ADA in excess of fee."       )
-    <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"             <> O.help "Minimum slot for the redemption."               )
-    <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"             <> O.help "Maximum slot for the redemption."               )
-    <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"             <> O.help "Output file for transaction body."              )
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"       <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."            )
+    <*> O.strOption                            (O.long "socket-path"         <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."      )
+    <*> O.strOption                            (O.long "tx-in-script-file"   <> O.metavar "PLUTUS_FILE"   <> O.help "Plutus file for Marlowe contract."              )
+    <*> O.strOption                            (O.long "tx-in-redeemer-file" <> O.metavar "REDEEMER_FILE" <> O.help "Redeemer JSON file spent from Marlowe contract.")
+    <*> O.strOption                            (O.long "tx-in-datum-file"    <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file spent from Marlowe contract."   )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."        )
+    <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"     <> O.help "UTxO spent from Marlowe contract."              )
+    <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format." )
+    <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"     <> O.help "Collateral for transaction."                    )
+    <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."       )
+    <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."               )
+    <*> O.option parseSlotNo                   (O.long "invalid-hereafter"   <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."               )
+    <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."              )
 
 
 -- | Parser for the "submit" command.
@@ -433,13 +433,13 @@ computeCommand =
 computeOptions :: O.Parser Command -- ^ The parser.
 computeOptions =
   Compute
-    <$> O.strOption                (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
-    <*> O.strOption                (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
-    <*> (O.many . O.strOption)     (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
-    <*> O.option parseSlotNo       (O.long "invalid-before"    <> O.metavar "SLOT"            <> O.help "Minimum slot for the redemption."       )
-    <*> O.option parseSlotNo       (O.long "invalid-hereafter" <> O.metavar "SLOT"            <> O.help "Maximum slot for the redemption."       )
-    <*> (O.optional . O.strOption) (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
-    <*> O.switch                   (O.long "print-stats"                                      <> O.help "Print statistics."                      )
+    <$> O.strOption                (O.long "contract-file"     <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                (O.long "state-file"        <> O.metavar "STATE_FILE"    <> O.help "JSON input file for the contract state.")
+    <*> (O.many . O.strOption)     (O.long "input-file"        <> O.metavar "INPUT_FILE"    <> O.help "JSON input file for redeemer inputs."   )
+    <*> O.option parseSlotNo       (O.long "invalid-before"    <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."       )
+    <*> O.option parseSlotNo       (O.long "invalid-hereafter" <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."       )
+    <*> (O.optional . O.strOption) (O.long "out-file"          <> O.metavar "OUTPUT_FILE"   <> O.help "JSON output file for contract."         )
+    <*> O.switch                   (O.long "print-stats"                                    <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "deposit" command.

@@ -242,6 +242,8 @@ executable marlowe-cli
     plutus-ledger -any,
     plutus-ledger-api -any,
     plutus-tx -any,
+    regex-posix -any,
     serialise -any,
+    split -any,
     text -any,
     unordered-containers -any,
