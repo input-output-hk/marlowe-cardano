@@ -90,15 +90,15 @@ mainCLI version example =
                                      marloweParams' network' stake'
             ExportValidator{..} -> exportValidator
                                      marloweParams' costModel network' stake'
-                                     validatorFile
+                                     outputFile
                                      printHash printStats
             ExportDatum{..}     -> exportDatum
                                      contractFile stateFile
-                                     datumFile
+                                     outputFile
                                      printStats
             ExportRedeemer{..}  -> exportRedeemer
                                      inputFiles
-                                     redeemerFile
+                                     outputFile
                                      printStats
             BuildTransact{..}   -> buildSimple
                                      connection
@@ -146,16 +146,16 @@ mainCLI version example =
             Compute{..}         -> computeMarlowe
                                      contractFile stateFile
                                      inputFiles minimumSlot maximumSlot
-                                     computeFile
+                                     outputFile
                                      printStats
             InputDeposit{..}    -> makeDeposit
                                      account party token amount
-                                     inputFile
+                                     outputFile
             InputChoice{..}     -> makeChoice
                                      choiceName choiceParty chosen
-                                     inputFile
+                                     outputFile
             InputNotify{..}     -> makeNotification
-                                     inputFile
+                                     outputFile
             Example{..}         -> example writeFiles pubKeyHash
     case result of
       Right ()      -> return ()
@@ -225,7 +225,7 @@ exportMarloweOptions =
     <*> O.strOption                                        (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
     <*> O.strOption                                        (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
     <*> (O.many . O.strOption)                             (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
-    <*> O.strOption                                        (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
     <*> O.switch                                           (O.long "print-stats"                                      <> O.help "Print statistics."                      )
 
 
@@ -261,7 +261,7 @@ exportValidatorOptions =
     <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."   )
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                )
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any.")
-    <*> O.strOption                                        (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."       )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."       )
     <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."                 )
     <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                     )
 
@@ -278,10 +278,10 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser Command
 exportDatumOptions =
   ExportDatum
-    <$> O.strOption (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
-    <*> O.strOption (O.long "state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON input file for the contract state.")
-    <*> O.strOption (O.long "out-file"      <> O.metavar "DATUM_FILE"    <> O.help "JSON output file for datum."            )
-    <*> O.switch    (O.long "print-stats"                                <> O.help "Print statistics."                      )
+    <$> O.strOption                (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                (O.long "state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON input file for the contract state.")
+    <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "DATUM_FILE"    <> O.help "JSON output file for datum."            )
+    <*> O.switch                   (O.long "print-stats"                                <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "redeemer" command.
@@ -296,9 +296,9 @@ exportRedeemerCommand =
 exportRedeemerOptions :: O.Parser Command
 exportRedeemerOptions =
   ExportRedeemer
-    <$> (O.many . O.strOption) (O.long "input-file" <> O.metavar "INPUT_FILE"  <> O.help "JSON input file for redeemer inputs.")
-    <*> O.strOption            (O.long "out-file"   <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
-    <*> O.switch               (O.long "print-stats"                           <> O.help "Print statistics."                   )
+    <$> (O.many . O.strOption)     (O.long "input-file" <> O.metavar "INPUT_FILE"  <> O.help "JSON input file for redeemer inputs.")
+    <*> (O.optional . O.strOption) (O.long "out-file"   <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
+    <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."                   )
 
 
 -- | Parser for the "transact" command.
@@ -433,13 +433,13 @@ computeCommand =
 computeOptions :: O.Parser Command -- ^ The parser.
 computeOptions =
   Compute
-    <$> O.strOption            (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
-    <*> O.strOption            (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
-    <*> (O.many . O.strOption) (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
-    <*> O.option parseSlotNo   (O.long "invalid-before"    <> O.metavar "SLOT"            <> O.help "Minimum slot for the redemption."       )
-    <*> O.option parseSlotNo   (O.long "invalid-hereafter" <> O.metavar "SLOT"            <> O.help "Maximum slot for the redemption."       )
-    <*> O.strOption            (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
-    <*> O.switch               (O.long "print-stats"                                      <> O.help "Print statistics."                      )
+    <$> O.strOption                (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> (O.many . O.strOption)     (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
+    <*> O.option parseSlotNo       (O.long "invalid-before"    <> O.metavar "SLOT"            <> O.help "Minimum slot for the redemption."       )
+    <*> O.option parseSlotNo       (O.long "invalid-hereafter" <> O.metavar "SLOT"            <> O.help "Maximum slot for the redemption."       )
+    <*> (O.optional . O.strOption) (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
+    <*> O.switch                   (O.long "print-stats"                                      <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "deposit" command.
@@ -454,11 +454,11 @@ inputDepositCommand =
 inputDepositOptions :: O.Parser Command -- ^ The parser.
 inputDepositOptions =
   InputDeposit
-    <$> O.option parseParty (O.long "deposit-account"  <> O.metavar "PARTY"       <> O.help "The account for the deposit."        )
-    <*> O.option parseParty (O.long "deposit-party"    <> O.metavar "PARTY"       <> O.help "The party making the deposit."       )
-    <*> O.option parseToken (O.long "deposit-token"    <> O.metavar "TOKEN"       <> O.help "The token being deposited."          )
-    <*> O.option O.auto     (O.long "deposit-amount"   <> O.metavar "INTEGER"     <> O.help "The amount of token being deposited.")
-    <*> O.strOption         (O.long "out-file"         <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+    <$> O.option parseParty        (O.long "deposit-account"  <> O.metavar "PARTY"       <> O.help "The account for the deposit."        )
+    <*> O.option parseParty        (O.long "deposit-party"    <> O.metavar "PARTY"       <> O.help "The party making the deposit."       )
+    <*> O.option parseToken        (O.long "deposit-token"    <> O.metavar "TOKEN"       <> O.help "The token being deposited."          )
+    <*> O.option O.auto            (O.long "deposit-amount"   <> O.metavar "INTEGER"     <> O.help "The amount of token being deposited.")
+    <*> (O.optional . O.strOption) (O.long "out-file"         <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
 
 
 -- | Parser for the "choose" command.
@@ -473,10 +473,10 @@ inputChoiceCommand =
 inputChoiceOptions :: O.Parser Command -- ^ The parser.
 inputChoiceOptions =
   InputChoice
-    <$> O.strOption         (O.long "choice-name"   <> O.metavar "NAME"        <> O.help "The name of the choice made."        )
-    <*> O.option parseParty (O.long "choice-party"  <> O.metavar "PARTY"       <> O.help "The party making the choice."        )
-    <*> O.option O.auto     (O.long "choice-number" <> O.metavar "INTEGER"     <> O.help "The number chosen."                  )
-    <*> O.strOption         (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+    <$> O.strOption                (O.long "choice-name"   <> O.metavar "NAME"        <> O.help "The name of the choice made."        )
+    <*> O.option parseParty        (O.long "choice-party"  <> O.metavar "PARTY"       <> O.help "The party making the choice."        )
+    <*> O.option O.auto            (O.long "choice-number" <> O.metavar "INTEGER"     <> O.help "The number chosen."                  )
+    <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
 
 
 -- | Parser for the "notify" command.
@@ -491,7 +491,7 @@ inputNotifyCommand =
 inputNotifyOptions :: O.Parser Command -- ^ The parser.
 inputNotifyOptions =
   InputNotify
-    <$> O.strOption (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+    <$> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
 
 
 -- | Parser for the "example" command.

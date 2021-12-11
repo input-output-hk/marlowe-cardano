@@ -66,9 +66,10 @@ import           Cardano.Api.Shelley                               (fromPlutusDa
 import           Control.Monad                                     ((<=<))
 import           Control.Monad.Except                              (MonadError, MonadIO, liftIO, throwError)
 import           Data.Maybe                                        (maybeToList)
-import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData, readSigningKey)
+import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData, liftCli, liftCliIO,
+                                                                    readSigningKey)
 import           Language.Marlowe.CLI.Types                        (CliError (..), PayFromScript (..), PayToScript (..),
-                                                                    SomePaymentSigningKey, liftCli, liftCliIO)
+                                                                    SomePaymentSigningKey)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import           Plutus.V1.Ledger.Api                              (Datum (..), Redeemer (..), toData)
 
@@ -82,7 +83,7 @@ buildSimple :: MonadError CliError m
             -> [TxIn]                            -- ^ The transaction inputs.
             -> [(AddressAny, Value)]             -- ^ The transaction outputs.
             -> AddressAny                        -- ^ The change address.
-            -> FilePath                          -- ^ The output JSON file for the transaction body.
+            -> FilePath                          -- ^ The output file for the transaction body.
             -> m TxId                            -- ^ Action to build the transaction body.
 buildSimple connection inputs outputs changeAddress bodyFile =
   do
@@ -109,7 +110,7 @@ buildIncoming :: MonadError CliError m
               -> [TxIn]                            -- ^ The transaction inputs.
               -> [(AddressAny, Value)]             -- ^ The transaction outputs.
               -> AddressAny                        -- ^ The change address.
-              -> FilePath                          -- ^ The output JSON file for the transaction body.
+              -> FilePath                          -- ^ The output file for the transaction body.
               -> m TxId                            -- ^ Action to build the transaction body.
 buildIncoming connection scriptAddress outputDatumFile outputValue inputs outputs changeAddress bodyFile =
   do
@@ -146,7 +147,7 @@ buildContinuing :: MonadError CliError m
                 -> AddressAny                        -- ^ The change address.
                 -> SlotNo                            -- ^ The first valid slot for the transaction.
                 -> SlotNo                            -- ^ The last valid slot for the transaction.
-                -> FilePath                          -- ^ The output JSON file for the transaction body.
+                -> FilePath                          -- ^ The output file for the transaction body.
                 -> m TxId                            -- ^ Action to build the transaction body.
 buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
   do
@@ -184,7 +185,7 @@ buildOutgoing :: MonadError CliError m
               -> AddressAny                        -- ^ The change address.
               -> SlotNo                            -- ^ The first valid slot for the transaction.
               -> SlotNo                            -- ^ The last valid slot for the transaction.
-              -> FilePath                          -- ^ The output JSON file for the transaction body.
+              -> FilePath                          -- ^ The output file for the transaction body.
               -> m TxId                            -- ^ Action to build the transaction body.
 buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile =
   do

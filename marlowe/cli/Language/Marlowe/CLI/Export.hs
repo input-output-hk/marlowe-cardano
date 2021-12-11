@@ -39,15 +39,13 @@ module Language.Marlowe.CLI.Export (
 import           Cardano.Api                     (AddressInEra, AlonzoEra, IsShelleyBasedEra, NetworkId,
                                                   PaymentCredential (..), ScriptDataJsonSchema (..),
                                                   StakeAddressReference (..), hashScript, makeShelleyAddressInEra,
-                                                  scriptDataToJson, serialiseAddress, serialiseToTextEnvelope,
-                                                  writeFileTextEnvelope)
+                                                  scriptDataToJson, serialiseAddress, serialiseToTextEnvelope)
 import           Cardano.Api.Shelley             (fromPlutusData)
 import           Codec.Serialise                 (serialise)
-import           Control.Monad                   (void, when)
+import           Control.Monad                   (when)
 import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
 import           Data.Aeson                      (encode)
-import           Data.Aeson.Encode.Pretty        (encodePretty)
-import           Language.Marlowe.CLI.IO         (decodeFileStrict)
+import           Language.Marlowe.CLI.IO         (decodeFileStrict, maybeWriteJson, maybeWriteTextEnvelope)
 import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
 import           Language.Marlowe.Scripts        (smallUntypedValidator)
@@ -59,7 +57,7 @@ import           Plutus.V1.Ledger.Api            (CostModelParams, Datum (..), R
 import           PlutusTx                        (builtinDataToData, toBuiltinData)
 import           System.IO                       (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Lazy            as LBS (toStrict, writeFile)
+import qualified Data.ByteString.Lazy            as LBS (toStrict)
 import qualified Data.ByteString.Lazy.Char8      as LBS8 (unpack)
 import qualified Data.ByteString.Short           as SBS (length, toShort)
 import qualified Data.Text                       as T (unpack)
@@ -94,7 +92,7 @@ exportMarlowe :: MonadError CliError m
               -> FilePath               -- ^ The JSON file containing the contract.
               -> FilePath               -- ^ The JSON file containing the contract's state.
               -> [FilePath]             -- ^ The JSON files containing the contract's inputs.
-              -> FilePath               -- ^ The output JSON file for Marlowe contract information.
+              -> Maybe FilePath         -- ^ The output JSON file for Marlowe contract information.
               -> Bool                   -- ^ Whether to print statistics about the contract.
               -> m ()                   -- ^ Action to export the contract and transaction information to a file.
 exportMarlowe marloweParams costModel network stake contractFile stateFile inputFiles outputFile printStats =
@@ -112,11 +110,9 @@ exportMarlowe marloweParams costModel network stake contractFile stateFile input
       ValidatorInfo{..} = validatorInfo
       DatumInfo{..}     = datumInfo
       RedeemerInfo{..}  = redeemerInfo
+    maybeWriteJson outputFile (marloweInfo :: MarloweInfo AlonzoEra) -- FIXME: Generalize eras.
     liftIO
-      $ do
-        LBS.writeFile outputFile
-          $ encodePretty (marloweInfo :: MarloweInfo AlonzoEra) -- FIXME: Generalize eras.
-        when printStats
+      . when printStats
           $ do
             hPutStrLn stderr ""
             hPutStrLn stderr $ "Bare-validator cost: " <> show viCost
@@ -249,7 +245,7 @@ exportValidator :: MonadError CliError m
                 -> CostModelParams        -- ^ The cost model parameters.
                 -> NetworkId              -- ^ The network ID.
                 -> StakeAddressReference  -- ^ The stake address.
-                -> FilePath               -- ^ The output JSON file for the validator information.
+                -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                 -> Bool                   -- ^ Whether to print the validator hash.
                 -> Bool                   -- ^ Whether to print statistics about the validator.
                 -> m ()                   -- ^ Action to export the validator information to a file.
@@ -258,11 +254,10 @@ exportValidator marloweParams costModel network stake outputFile printHash print
     ValidatorInfo{..} <-
       liftEither
         $ buildValidator marloweParams costModel network stake
+    maybeWriteTextEnvelope outputFile viScript
     liftIO
       $ do
-        void
-          $ writeFileTextEnvelope outputFile Nothing viScript
-        putStrLn . T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra) -- FIXME: Generalize eras.
+        hPutStrLn stderr . T.unpack $ serialiseAddress (viAddress :: AddressInEra AlonzoEra) -- FIXME: Generalize eras.
         when printHash
           $ do
             hPutStrLn stderr ""
@@ -297,21 +292,20 @@ buildDatum marloweContract marloweState =
 -- | Export to a file the datum information about a Marlowe transaction.
 exportDatum :: MonadError CliError m
             => MonadIO m
-            => FilePath  -- ^ The JSON file containing the contract.
-            -> FilePath  -- ^ The JSON file containing the contract's state.
-            -> FilePath  -- ^ The output JSON file for the datum information.
-            -> Bool      -- ^ Whether to print statistics about the datum.
-            -> m ()      -- ^ Action to export the datum information to a file.
+            => FilePath        -- ^ The JSON file containing the contract.
+            -> FilePath        -- ^ The JSON file containing the contract's state.
+            -> Maybe FilePath  -- ^ The output JSON file for the datum information.
+            -> Bool            -- ^ Whether to print statistics about the datum.
+            -> m ()            -- ^ Action to export the datum information to a file.
 exportDatum contractFile stateFile outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
     let
       DatumInfo{..} = buildDatum contract state
+    maybeWriteJson outputFile diJson
     liftIO
       $ do
-        LBS.writeFile outputFile
-          $ encodePretty diJson
         print diHash
         when printStats
           $ do
@@ -339,20 +333,18 @@ buildRedeemer inputs =
 -- | Export to a file the redeemer information about a Marlowe transaction.
 exportRedeemer :: MonadError CliError m
                => MonadIO m
-               => [FilePath]  -- ^ The files containing the contract's inputs.
-               -> FilePath    -- ^ The output JSON file for Marlowe contract information.
-               -> Bool        -- ^ Whether to print statistics on the contract.
-               -> m ()        -- ^ Action to export the redeemer information to a file.
+               => [FilePath]      -- ^ The files containing the contract's inputs.
+               -> Maybe FilePath  -- ^ The output JSON file for Marlowe contract information.
+               -> Bool            -- ^ Whether to print statistics on the contract.
+               -> m ()            -- ^ Action to export the redeemer information to a file.
 exportRedeemer inputFiles outputFile printStats =
   do
     inputs <- mapM decodeFileStrict inputFiles
     let
       RedeemerInfo{..} = buildRedeemer inputs
+    maybeWriteJson outputFile riJson
     liftIO
-      $ do
-        LBS.writeFile outputFile
-          $ encodePretty riJson
-        when printStats
+      . when printStats
           $ do
             hPutStrLn stderr ""
             hPutStrLn stderr $ "Redeemer size: " <> show riSize

@@ -34,8 +34,6 @@ module Language.Marlowe.CLI.Types (
 , SomePaymentSigningKey
 -- * Exceptions
 , CliError(..)
-, liftCli
-, liftCliIO
 -- * Marlowe CLI Commands
 , Command(..)
 ) where
@@ -49,10 +47,7 @@ import           Cardano.Api                     (AddressAny, AddressInEra, Alon
                                                   serialiseToTextEnvelope)
 import           Cardano.Api.Shelley             (PlutusScript (..))
 import           Codec.Serialise                 (deserialise)
-import           Control.Monad                   ((<=<))
-import           Control.Monad.Except            (MonadError, MonadIO, liftEither, liftIO)
 import           Data.Aeson                      (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
-import           Data.Bifunctor                  (first)
 import           Data.ByteString.Short           (ShortByteString)
 import           Data.String                     (IsString)
 import           GHC.Generics                    (Generic)
@@ -68,23 +63,6 @@ import qualified Data.ByteString.Short           as SBS (fromShort)
 -- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
   deriving (Eq, IsString, Ord, Read, Show)
-
-
--- | Lift an 'Either' result into the CLI.
-liftCli :: MonadError CliError m
-        => Show e
-        => Either e a  -- ^ The result.
-        -> m a         -- ^ The lifted result.
-liftCli = liftEither . first (CliError . show)
-
-
--- | Lift an 'IO' 'Either' result into the CLI.
-liftCliIO :: MonadError CliError m
-          => MonadIO m
-          => Show e
-          => IO (Either e a)  -- ^ Action for the result.
-          -> m a              -- ^ The lifted result.
-liftCliIO = liftCli <=< liftIO
 
 
 -- | A payment key.
@@ -273,7 +251,7 @@ data Command =
     , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
     , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
     , inputFiles    :: [FilePath]                   -- ^ The JSON files containing the contract's input.
-    , outputFile    :: FilePath                     -- ^ The output JSON file for Marlowe contract information.
+    , outputFile    :: Maybe FilePath               -- ^ The output JSON file for Marlowe contract information.
     , printStats    :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
     }
     -- | Export the address for a Marlowe contract.
@@ -289,24 +267,24 @@ data Command =
       network       :: Maybe NetworkId              -- ^ The network ID, if any.
     , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
     , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , validatorFile :: FilePath                     -- ^ The output JSON file for the validator information.
+    , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
     , printHash     :: Bool                         -- ^ Whether to print the validator hash.
     , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
     }
     -- | Export the datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      contractFile :: FilePath  -- ^ The JSON file containing the contract.
-    , stateFile    :: FilePath  -- ^ The JSON file containing the contract's state.
-    , datumFile    :: FilePath  -- ^ The output JSON file for the datum.
-    , printStats   :: Bool      -- ^ Whether to print statistics about the datum.
+      contractFile :: FilePath        -- ^ The JSON file containing the contract.
+    , stateFile    :: FilePath        -- ^ The JSON file containing the contract's state.
+    , outputFile   :: Maybe FilePath  -- ^ The output JSON file for the datum.
+    , printStats   :: Bool            -- ^ Whether to print statistics about the datum.
     }
     -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
     {
-      inputFiles   :: [FilePath]      -- ^ The JSON files containing the contract's input.
-    , redeemerFile :: FilePath        -- ^ The output JSON file for the redeemer.
-    , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
+      inputFiles :: [FilePath]      -- ^ The JSON files containing the contract's input.
+    , outputFile :: Maybe FilePath  -- ^ The output JSON file for the redeemer.
+    , printStats :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
     -- | Build a non-Marlowe transaction.
   | BuildTransact
@@ -316,7 +294,7 @@ data Command =
     , inputs     :: [TxIn]                     -- ^ The transaction inputs.
     , outputs    :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change     :: AddressAny                 -- ^ The change address.
-    , bodyFile   :: FilePath                   -- ^ The output JSON file for the transaction body.
+    , bodyFile   :: FilePath                   -- ^ The output file for the transaction body.
     }
     -- | Build a transaction paying into a Marlowe contract.
   | BuildCreate
@@ -329,7 +307,7 @@ data Command =
     , inputs          :: [TxIn]                     -- ^ The transaction inputs.
     , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
     , change          :: AddressAny                 -- ^ The change address.
-    , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
+    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     }
     -- | Build a transaction that spends from and pays to a Marlowe contract.
   | BuildAdvance
@@ -350,7 +328,7 @@ data Command =
     , change          :: AddressAny                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
-    , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
+    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     }
     -- | Build a transaction spending from a Marlowe contract.
   | BuildClose
@@ -368,7 +346,7 @@ data Command =
     , change          :: AddressAny                 -- ^ The change address.
     , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
-    , bodyFile        :: FilePath                   -- ^ The output JSON file for the transaction body.
+    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     }
     -- | Submit a transaction.
   | Submit
@@ -381,35 +359,35 @@ data Command =
     -- | Compute the next step in a contract.
   | Compute
     {
-      contractFile :: FilePath    -- ^ The JSON file containing the contract.
-    , stateFile    :: FilePath    -- ^ The JSON file containing the contract's state.
-    , inputFiles   :: [FilePath]  -- ^ The JSON files containing the contract's inputs.
-    , minimumSlot  :: SlotNo      -- ^ The first valid slot for the transaction.
-    , maximumSlot  :: SlotNo      -- ^ The last valid slot for the transaction.
-    , computeFile  :: FilePath    -- ^ The output JSON file with the results of the computation.
-    , printStats   :: Bool        -- ^ Whether to print statistics about the redeemer.
+      contractFile :: FilePath        -- ^ The JSON file containing the contract.
+    , stateFile    :: FilePath        -- ^ The JSON file containing the contract's state.
+    , inputFiles   :: [FilePath]      -- ^ The JSON files containing the contract's inputs.
+    , minimumSlot  :: SlotNo          -- ^ The first valid slot for the transaction.
+    , maximumSlot  :: SlotNo          -- ^ The last valid slot for the transaction.
+    , outputFile   :: Maybe FilePath  -- ^ The output JSON file with the results of the computation.
+    , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
     -- Input a deposit to a contract.
   | InputDeposit
     {
-      account   :: AccountId  -- ^ The account for the deposit.
-    , party     :: Party      -- ^ The party making the deposit.
-    , token     :: Token      -- ^ The token being deposited.
-    , amount    :: Integer    -- ^ The amount of the token deposited.
-    , inputFile :: FilePath   -- ^ The output JSON file representing the input.
+      account    :: AccountId       -- ^ The account for the deposit.
+    , party      :: Party           -- ^ The party making the deposit.
+    , token      :: Token           -- ^ The token being deposited.
+    , amount     :: Integer         -- ^ The amount of the token deposited.
+    , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
     }
     -- Input a choice to a contract.
   | InputChoice
     {
-      choiceName  :: ChoiceName -- ^ The name of the choice made.
-    , choiceParty :: Party      -- ^ The party making the choice.
-    , chosen      :: ChosenNum  -- ^ The number chosen.
-    , inputFile   :: FilePath   -- ^ The output JSON file representing the input.
+      choiceName  :: ChoiceName      -- ^ The name of the choice made.
+    , choiceParty :: Party           -- ^ The party making the choice.
+    , chosen      :: ChosenNum       -- ^ The number chosen.
+    , outputFile  :: Maybe FilePath  -- ^ The output JSON file representing the input.
     }
     -- Input a notification to a contract.
   | InputNotify
     {
-      inputFile :: FilePath  -- ^ The output JSON file representing the input.
+      outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
     }
     -- | Ad-hoc example.
   | Example
