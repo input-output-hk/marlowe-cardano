@@ -34,7 +34,8 @@
 
 NETWORK=testnet
 MAGIC=(--testnet-magic 1097911063)
-export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
+
+# Make sure that CARDANO_NODE_SOCKET_PATH is set. See <https://developers.cardano.org/docs/get-started/running-cardano/#querying-the-cardano-blockchain>.
 
 
 # Select the wallet.

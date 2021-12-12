@@ -50,11 +50,10 @@ When
 
 ## 1. Select the network.
 
-Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the path for the `bash` shell. Set the environment variable `CARDANO_NODE_SOCKET_PATH` to point to the location of the socket for the `cardano-node` service. In this tutorial, we use the public `testnet`:
+Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the path for the `bash` shell. Set the environment variable `CARDANO_NODE_SOCKET_PATH` to point to the location of the socket for the `cardano-node` service: see <https://developers.cardano.org/docs/get-started/running-cardano/#querying-the-cardano-blockchain>. In this tutorial, we use the public `testnet`:
 
     NETWORK=testnet
     MAGIC=(--testnet-magic 1097911063)
-    export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 
 ## 2. Select the wallet.
