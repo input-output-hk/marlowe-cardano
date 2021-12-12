@@ -216,16 +216,16 @@ echo -e \\nSUCCESS\\n
 echo -e \\nCLEAN UP\\n
 
 TX_5=$(
-cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" --out-file /dev/stdout \
-| jq '. | to_entries[] | .key'                                                     \
-| sed -e 's/"//g;s/^/--tx-in /'                                                    \
-| xargs marlowe-cli transaction-simple "${MAGIC[@]}"                               \
-                                       --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
-                                       --change-address "$ADDRESS_P"               \
-                                       --out-file tx.raw                           \
-                                       --required-signer $PAYMENT_SKEY             \
-                                       --print-stats                               \
-                                       --submit=600                                \
+cardano-cli query utxo "${MAGIC[@]}" --address "$ADDRESS_P" --out-file /dev/stdout         \
+| jq '. | to_entries[] | .key'                                                             \
+| sed -e 's/"//g;s/^/--tx-in /'                                                            \
+| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                               \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
+                                               --change-address "$ADDRESS_P"               \
+                                               --out-file tx.raw                           \
+                                               --required-signer $PAYMENT_SKEY             \
+                                               --print-stats                               \
+                                               --submit=600                                \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 echo TxId "$TX_5"
