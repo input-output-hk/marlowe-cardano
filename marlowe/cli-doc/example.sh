@@ -94,7 +94,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --script-address "$ADDRESS_S"             \
                                --tx-out-datum-file $DATUM_FILE           \
-                               --tx-out-value $DATUM_LOVELACE            \
+                               --tx-out-marlowe $DATUM_LOVELACE          \
                                --tx-in "$TX_0"                           \
                                --change-address "$ADDRESS_P"             \
                                --out-file tx.raw                         \

@@ -29,6 +29,7 @@ module Language.Marlowe.CLI.Run (
 import           Cardano.Api                     (SlotNo (..))
 import           Control.Monad                   (forM_, unless, when)
 import           Control.Monad.Except            (MonadError, MonadIO, liftIO, throwError)
+import           Data.Maybe                      (fromMaybe)
 import           Language.Marlowe.CLI.Export     (buildDatum)
 import           Language.Marlowe.CLI.IO         (decodeFileStrict, maybeWriteJson)
 import           Language.Marlowe.CLI.Orphans    ()
@@ -36,8 +37,8 @@ import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..))
 import           Language.Marlowe.Semantics      (Payment (..), TransactionInput (..), TransactionOutput (..),
                                                   computeTransaction)
 import           Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Input (..), Party,
-                                                  Token)
-import           Plutus.V1.Ledger.Ada            (adaSymbol, fromValue, getAda)
+                                                  Token (..))
+import           Plutus.V1.Ledger.Ada            (adaSymbol, adaToken, fromValue, getAda)
 import           Plutus.V1.Ledger.Value          (Value (..))
 import           Prettyprinter.Extras            (Pretty (..))
 import           System.IO                       (hPutStrLn, stderr)
@@ -103,13 +104,13 @@ computeMarlowe contractFile stateFile inputFiles (SlotNo minimumSlot) (SlotNo ma
 makeDeposit :: MonadIO m
             => AccountId       -- ^ The account for the deposit.
             -> Party           -- ^ The party making the deposit.
-            -> Token           -- ^ The token being deposited.
+            -> Maybe Token     -- ^ The token being deposited.
             -> Integer         -- ^ The amount of the token deposited.
             -> Maybe FilePath  -- ^ The output JSON file representing the input.
             -> m ()            -- ^ Action to write the input to the file.
 makeDeposit accountId party token amount outputFile =
   maybeWriteJson outputFile
-    $ IDeposit accountId party token amount
+    $ IDeposit accountId party (fromMaybe (Token adaSymbol adaToken) token) amount
 
 
 -- | Serialise a choice input to a file.

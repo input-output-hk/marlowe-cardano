@@ -16,7 +16,7 @@ The `transaction-advance` command builds a transaction that both pays to and spe
                                            [--required-signer SIGNING_FILE]
                                            --tx-in-marlowe TXID#TXIX
                                            --tx-out-datum-file DATUM_FILE
-                                           --tx-out-value LOVELACE
+                                           --tx-out-marlowe LOVELACE
                                            [--tx-in TXID#TXIX]
                                            [--tx-out ADDRESS+VALUE]
                                            --tx-in-collateral TXID#TXIX
@@ -24,6 +24,7 @@ The `transaction-advance` command builds a transaction that both pays to and spe
                                            --invalid-before SLOT
                                            --invalid-hereafter SLOT --out-file FILE
                                            [--submit SECONDS] [--print-stats]
+                                           [--script-invalid]
       Build a transaction that both spends from and pays to a Marlowe script.
     
     Available options:
@@ -36,7 +37,7 @@ The `transaction-advance` command builds a transaction that both pays to and spe
       --required-signer SIGNING_FILE       Files containing required signing keys.
       --tx-in-marlowe TXID#TXIX            UTxO spent from Marlowe contract.
       --tx-out-datum-file DATUM_FILE       Datum JSON file datum paid to Marlowe contract.
-      --tx-out-value LOVELACE              Lovelace value paid to Marlowe contract.
+      --tx-out-marlowe VALUE               Value paid to Marlowe contract.
       --tx-in TXID#TXIX                    Transaction input in TxId#TxIx format.
       --tx-out ADDRESS+VALUE               Transaction output in ADDRESS+VALUE format.
       --tx-in-collateral TXID#TXIX         Collateral for transaction.
@@ -46,6 +47,7 @@ The `transaction-advance` command builds a transaction that both pays to and spe
       --out-file FILE                      Output file for transaction body.
       --submit SECONDS                     Also submit the transaction, and wait for confirmation.
       --print-stats                        Print statistics.
+      --script-invalid                     Assert that the transaction is invalid.
       -h,--help                            Show this help text
 
 

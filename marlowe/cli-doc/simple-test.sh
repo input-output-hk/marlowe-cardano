@@ -100,7 +100,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --script-address "$ADDRESS_S"             \
                                --tx-out-datum-file example-2.datum       \
-                               --tx-out-value 3000000                    \
+                               --tx-out-marlowe 3000000                  \
                                --tx-in "$TX_0"                           \
                                --change-address "$ADDRESS_P"             \
                                --out-file tx.raw                         \
@@ -130,7 +130,7 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --tx-in "$TX_1"#0                         \
                                 --tx-in-collateral "$TX_1"#0              \
                                 --tx-out-datum-file example-1.datum       \
-                                --tx-out-value 13000000                   \
+                                --tx-out-marlowe 13000000                 \
                                 --tx-out "$ADDRESS_P"+50000000            \
                                 --change-address "$ADDRESS_P"             \
                                 --invalid-before    40000000              \
@@ -161,7 +161,7 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --tx-in "$TX_2"#0                         \
                                 --tx-in-collateral "$TX_2"#0              \
                                 --tx-out-datum-file example-0.datum       \
-                                --tx-out-value 8000000                    \
+                                --tx-out-marlowe 8000000                  \
                                 --tx-out "$ADDRESS_P"+50000000            \
                                 --change-address "$ADDRESS_P"             \
                                 --invalid-before    40000000              \

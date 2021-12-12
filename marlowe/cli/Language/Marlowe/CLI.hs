@@ -21,29 +21,33 @@ module Language.Marlowe.CLI (
 ) where
 
 
-import           Cardano.Api                      (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
-                                                   LocalNodeConnectInfo (..), NetworkId (..),
-                                                   StakeAddressReference (..))
-import           Cardano.Config.Git.Rev           (gitRev)
-import           Control.Monad                    (when)
-import           Control.Monad.Except             (ExceptT, liftIO, runExceptT, throwError)
-import           Data.Maybe                       (fromMaybe)
-import           Data.Version                     (Version, showVersion)
-import           Language.Marlowe.CLI.Export      (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
-                                                   exportValidator)
-import           Language.Marlowe.CLI.Parse       (parseAddressAny, parseCurrencySymbol, parseLovelaceValue,
-                                                   parseNetworkId, parseParty, parseSlotNo, parseStakeAddressReference,
-                                                   parseToken, parseTxIn, parseTxOut)
-import           Language.Marlowe.CLI.Run         (computeMarlowe, makeChoice, makeDeposit, makeNotification)
-import           Language.Marlowe.CLI.Transaction (buildContinuing, buildIncoming, buildOutgoing, buildSimple, submit)
-import           Language.Marlowe.CLI.Types       (CliError (..), Command (..))
-import           Language.Marlowe.Client          (defaultMarloweParams, marloweParams)
-import           Plutus.V1.Ledger.Api             (defaultCostModelParams)
-import           System.Exit                      (exitFailure)
-import           System.IO                        (hPutStrLn, stderr)
+import           Cardano.Api                          (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
+                                                       LocalNodeConnectInfo (..), NetworkId (..),
+                                                       StakeAddressReference (..))
+import           Cardano.Config.Git.Rev               (gitRev)
+import           Control.Monad                        (when)
+import           Control.Monad.Except                 (ExceptT, liftIO, runExceptT, throwError)
+import           Data.Maybe                           (fromMaybe)
+import           Data.Version                         (Version, showVersion)
+import           Language.Marlowe.CLI.Examples        (makeExample)
+import           Language.Marlowe.CLI.Export          (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
+                                                       exportValidator)
+import           Language.Marlowe.CLI.Parse           (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseParty,
+                                                       parseSlot, parseSlotNo, parseStakeAddressReference, parseToken,
+                                                       parseTxIn, parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Run             (computeMarlowe, makeChoice, makeDeposit, makeNotification)
+import           Language.Marlowe.CLI.Transaction     (buildContinuing, buildIncoming, buildOutgoing, buildSimple,
+                                                       submit)
+import           Language.Marlowe.CLI.Types           (CliError (..), Command (..))
+import           Language.Marlowe.Client              (defaultMarloweParams, marloweParams)
+import           Plutus.V1.Ledger.Api                 (defaultCostModelParams)
+import           System.Exit                          (exitFailure)
+import           System.IO                            (hPutStrLn, stderr)
 
-import qualified Data.Text                        as T (unpack)
-import qualified Options.Applicative              as O
+import qualified Data.Text                            as T (unpack)
+import qualified Language.Marlowe.CLI.Examples.Escrow as Example (makeEscrowContract)
+import qualified Language.Marlowe.CLI.Examples.Swap   as Example (makeSwapContract)
+import qualified Options.Applicative                  as O
 
 
 -- | Hardwired example.
@@ -107,6 +111,7 @@ mainCLI version example =
                                        bodyFile
                                        submitTimeout
                                        printStats
+                                       invalid
                                      >>= printTxId
             BuildCreate{..}     -> guardMainnet
                                      >> buildIncoming
@@ -119,6 +124,7 @@ mainCLI version example =
                                        bodyFile
                                        submitTimeout
                                        printStats
+                                       invalid
                                      >>= printTxId
             BuildAdvance{..}    -> guardMainnet
                                      >> buildContinuing
@@ -136,6 +142,7 @@ mainCLI version example =
                                        bodyFile
                                        submitTimeout
                                        printStats
+                                       invalid
                                      >>= printTxId
             BuildClose{..}      -> guardMainnet
                                      >> buildOutgoing
@@ -150,6 +157,7 @@ mainCLI version example =
                                        bodyFile
                                        submitTimeout
                                        printStats
+                                       invalid
                                      >>= printTxId
             Submit{..}          -> guardMainnet
                                      >> submit
@@ -171,6 +179,26 @@ mainCLI version example =
                                      outputFile
             InputNotify{..}     -> makeNotification
                                      outputFile
+            TemplateEscrow{..}  -> makeExample outputFile
+                                     $ Example.makeEscrowContract
+                                         price
+                                         seller
+                                         buyer
+                                         mediator
+                                         paymentDeadline
+                                         complaintDeadline
+                                         disputeDeadline
+                                         mediationDeadline
+            TemplateSwap{..}    -> makeExample outputFile
+                                     $ Example.makeSwapContract
+                                         aParty
+                                         aToken
+                                         aAmount
+                                         aTimeout
+                                         bParty
+                                         bToken
+                                         bAmount
+                                         bTimeout
             Example{..}         -> example writeFiles pubKeyHash
     case result of
       Right ()      -> return ()
@@ -203,6 +231,8 @@ parser version =
               <> inputChoiceCommand
               <> inputNotifyCommand
               <> computeCommand
+              <> templateEscrowCommand
+              <> templateSwapCommand
               <> exampleCommand
             )
     )
@@ -234,14 +264,14 @@ exportMarloweCommand =
 exportMarloweOptions :: O.Parser Command -- ^ The parser.
 exportMarloweOptions =
   Export
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"     <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"     <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency"    <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
-    <*> O.strOption                                        (O.long "contract-file"     <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
-    <*> O.strOption                                        (O.long "state-file"        <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
-    <*> (O.many . O.strOption)                             (O.long "input-file"        <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"          <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
-    <*> O.switch                                           (O.long "print-stats"                                      <> O.help "Print statistics."                      )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
+    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
+    <*> (O.many . O.strOption)                             (O.long "input-file"     <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
+    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "address" command.
@@ -311,9 +341,9 @@ exportRedeemerCommand =
 exportRedeemerOptions :: O.Parser Command
 exportRedeemerOptions =
   ExportRedeemer
-    <$> (O.many . O.strOption)     (O.long "input-file" <> O.metavar "INPUT_FILE"  <> O.help "JSON input file for redeemer inputs.")
-    <*> (O.optional . O.strOption) (O.long "out-file"   <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
-    <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."                   )
+    <$> (O.many . O.strOption)     (O.long "input-file"  <> O.metavar "INPUT_FILE"  <> O.help "JSON input file for redeemer inputs.")
+    <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
+    <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                   )
 
 
 -- | Parser for the "transact" command.
@@ -337,6 +367,7 @@ buildSimpleOptions =
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                  <> O.help "Print statistics."                                      )
+    <*> O.switch                               (O.long "script-invalid"                               <> O.help "Assert that the transaction is invalid."                )
 
 
 -- | Parser for the "create" command.
@@ -356,13 +387,14 @@ buildIncomingOptions =
     <*> O.option parseAddressAny               (O.long "script-address"    <> O.metavar "ADDRESS"       <> O.help "Address of the Marlowe contract."                       )
     <*> (O.many . O.strOption)                 (O.long "required-signer"   <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."                )
     <*> O.strOption                            (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract."        )
-    <*> O.option parseLovelaceValue            (O.long "tx-out-value"      <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."               )
+    <*> O.option parseValue                    (O.long "tx-out-marlowe"    <> O.metavar "VALUE"         <> O.help "Value paid to Marlowe contract."                        )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"            <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                    <> O.help "Print statistics."                                      )
+    <*> O.switch                               (O.long "script-invalid"                                 <> O.help "Assert that the transaction is invalid."                )
 
 
 -- | Parser for the "advance" command.
@@ -386,7 +418,7 @@ buildContinuingOptions =
     <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."                )
     <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"     <> O.help "UTxO spent from Marlowe contract."                      )
     <*> O.strOption                            (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract."        )
-    <*> O.option parseLovelaceValue            (O.long "tx-out-value"        <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."               )
+    <*> O.option parseValue                    (O.long "tx-out-marlowe"      <> O.metavar "VALUE"         <> O.help "Value paid to Marlowe contract."                        )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"     <> O.help "Collateral for transaction."                            )
@@ -396,6 +428,7 @@ buildContinuingOptions =
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"              <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                      <> O.help "Print statistics."                                      )
+    <*> O.switch                               (O.long "script-invalid"                                   <> O.help "Assert that the transaction is invalid."                )
 
 
 -- | Parser for the "close" command.
@@ -426,6 +459,7 @@ buildOutgoingOptions =
     <*> O.strOption                            (O.long "out-file"            <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"              <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
     <*> O.switch                               (O.long "print-stats"                                      <> O.help "Print statistics."                                      )
+    <*> O.switch                               (O.long "script-invalid"                                   <> O.help "Assert that the transaction is invalid."                )
 
 
 -- | Parser for the "submit" command.
@@ -440,11 +474,11 @@ submitCommand =
 submitOptions :: O.Parser Command
 submitOptions =
   Submit
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet."                     )
-    <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file."               )
-    <*> O.strOption                            (O.long "tx-body-file"    <> O.metavar "BODY_FILE"    <> O.help "File containing the transaction body."                   )
-    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "Files containing required signing keys."                 )
-    <*> (O.optional . O.option O.auto)         (O.long "timeout"         <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"   <> O.metavar "INTEGER"      <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"  <> O.help "Location of the cardano-node socket file."              )
+    <*> O.strOption                            (O.long "tx-body-file"    <> O.metavar "BODY_FILE"    <> O.help "File containing the transaction body."                  )
+    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "Files containing required signing keys."                )
+    <*> (O.optional . O.option O.auto)         (O.long "timeout"         <> O.metavar "SECONDS"      <> O.help "Also submit the transaction, and wait for confirmation.")
 
 
 -- | Parser for the "compute" command.
@@ -480,11 +514,11 @@ inputDepositCommand =
 inputDepositOptions :: O.Parser Command -- ^ The parser.
 inputDepositOptions =
   InputDeposit
-    <$> O.option parseParty        (O.long "deposit-account"  <> O.metavar "PARTY"       <> O.help "The account for the deposit."        )
-    <*> O.option parseParty        (O.long "deposit-party"    <> O.metavar "PARTY"       <> O.help "The party making the deposit."       )
-    <*> O.option parseToken        (O.long "deposit-token"    <> O.metavar "TOKEN"       <> O.help "The token being deposited."          )
-    <*> O.option O.auto            (O.long "deposit-amount"   <> O.metavar "INTEGER"     <> O.help "The amount of token being deposited.")
-    <*> (O.optional . O.strOption) (O.long "out-file"         <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+    <$> O.option parseParty                (O.long "deposit-account" <> O.metavar "PARTY"       <> O.help "The account for the deposit."          )
+    <*> O.option parseParty                (O.long "deposit-party"   <> O.metavar "PARTY"       <> O.help "The party making the deposit."         )
+    <*> (O.optional . O.option parseToken) (O.long "deposit-token"   <> O.metavar "TOKEN"       <> O.help "The token being deposited, if not Ada.")
+    <*> O.option O.auto                    (O.long "deposit-amount"  <> O.metavar "INTEGER"     <> O.help "The amount of token being deposited."  )
+    <*> (O.optional . O.strOption)         (O.long "out-file"        <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."  )
 
 
 -- | Parser for the "choose" command.
@@ -518,6 +552,52 @@ inputNotifyOptions :: O.Parser Command -- ^ The parser.
 inputNotifyOptions =
   InputNotify
     <$> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+
+
+-- | Parser for the "template-escrow" command.
+templateEscrowCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+templateEscrowCommand =
+  O.command "template-escrow"
+    $ O.info (templateEscrowOptions O.<**> O.helper)
+    $ O.progDesc "Template for a escrow contract."
+
+
+-- | Parser for the "template-escrow" options.
+templateEscrowOptions :: O.Parser Command
+templateEscrowOptions =
+  TemplateEscrow
+    <$> O.option O.auto            (O.long "price"              <> O.metavar "INTEGER"     <> O.help "The price of the sale, in lovelace."                )
+    <*> O.option parseParty        (O.long "seller"             <> O.metavar "PARTY"       <> O.help "The seller."                                        )
+    <*> O.option parseParty        (O.long "buyer"              <> O.metavar "PARTY"       <> O.help "The buyer."                                         )
+    <*> O.option parseParty        (O.long "mediator"           <> O.metavar "PARTY"       <> O.help "The mediator."                                      )
+    <*> O.option parseSlot         (O.long "payment-deadline"   <> O.metavar "SLOT"        <> O.help "The deadline for the buyer to pay."                 )
+    <*> O.option parseSlot         (O.long "complaint-deadline" <> O.metavar "SLOT"        <> O.help "The deadline for the buyer to complain."            )
+    <*> O.option parseSlot         (O.long "dispute-deadline"   <> O.metavar "SLOT"        <> O.help "The deadline for the seller to dispute a complaint.")
+    <*> O.option parseSlot         (O.long "mediation-deadline" <> O.metavar "SLOT"        <> O.help "The deadline for the mediator to decide."           )
+    <*> (O.optional . O.strOption) (O.long "out-file"           <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."               )
+
+
+-- | Parser for the "template-swap" command.
+templateSwapCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+templateSwapCommand =
+  O.command "template-swap"
+    $ O.info (templateSwapOptions O.<**> O.helper)
+    $ O.progDesc "Template for a swap contract."
+
+
+-- | Parser for the "template-swap" options.
+templateSwapOptions :: O.Parser Command
+templateSwapOptions =
+  TemplateSwap
+    <$> O.option parseParty        (O.long "a-party"   <> O.metavar "PARTY"       <> O.help "The first party."                           )
+    <*> O.option parseToken        (O.long "a-token"   <> O.metavar "TOKEN"       <> O.help "The first party's token."                   )
+    <*> O.option O.auto            (O.long "a-amount"  <> O.metavar "INTEGER"     <> O.help "The amount of the first party's token."     )
+    <*> O.option parseSlot         (O.long "a-timeout" <> O.metavar "SLOT"        <> O.help "The timeout for the first party's deposit." )
+    <*> O.option parseParty        (O.long "b-party"   <> O.metavar "PARTY"       <> O.help "The second party."                          )
+    <*> O.option parseToken        (O.long "b-token"   <> O.metavar "TOKEN"       <> O.help "The second party's token."                  )
+    <*> O.option O.auto            (O.long "b-amount"  <> O.metavar "INTEGER"     <> O.help "The amount of the second party's token."    )
+    <*> O.option parseSlot         (O.long "b-timeout" <> O.metavar "SLOT"        <> O.help "The timeout for the second party's deposit.")
+    <*> (O.optional . O.strOption) (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."       )
 
 
 -- | Parser for the "example" command.

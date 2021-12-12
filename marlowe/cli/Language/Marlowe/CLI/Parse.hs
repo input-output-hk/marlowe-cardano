@@ -14,18 +14,20 @@
 module Language.Marlowe.CLI.Parse (
 -- * Parsers
   parseAddressAny
+, parseByteString
 , parseCurrencySymbol
+, parseLovelaceValue
 , parseNetworkId
+, parseParty
+, parseSlot
 , parseSlotNo
 , parseStakeAddressReference
+, parseToken
 , parseTxId
 , parseTxIn
 , parseTxIx
 , parseTxOut
-, parseLovelaceValue
-, parseParty
-, parseToken
-, parseByteString
+, parseValue
 ) where
 
 
@@ -41,6 +43,7 @@ import           Data.List.Split                 (splitOn)
 import           Language.Marlowe.SemanticsTypes (Party (..), Token (..))
 import           Plutus.V1.Ledger.Api            (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..),
                                                   TokenName (..), toBuiltin)
+import           Plutus.V1.Ledger.Slot           (Slot (..))
 import           Text.Read                       (readEither)
 import           Text.Regex.Posix                ((=~))
 
@@ -68,6 +71,11 @@ parseStakeAddressReference =
 -- | Parser for slot number.
 parseSlotNo :: O.ReadM SlotNo
 parseSlotNo = SlotNo <$> O.auto
+
+
+-- | Parser for slot number.
+parseSlot :: O.ReadM Slot
+parseSlot = Slot <$> O.auto
 
 
 -- | Parser for currency symbol.
@@ -119,6 +127,19 @@ parseTxOut =
                                          tokens' <- mapM readAssetValueEither tokens
                                          pure (address', lovelace' <> mconcat tokens')
         _                           -> Left "Invalid transaction output."
+
+
+-- | Parser for `Value`.
+parseValue :: O.ReadM Value
+parseValue =
+  O.eitherReader
+    $ \s ->
+      case splitOn "+" s of
+        lovelace : tokens -> do
+                               lovelace' <- readLovelaceEither lovelace
+                               tokens' <- mapM readAssetValueEither tokens
+                               pure $ lovelace' <> mconcat tokens'
+        _                 -> Left "Invalid transaction output."
 
 
 -- | Parser for lovelace `Value`.

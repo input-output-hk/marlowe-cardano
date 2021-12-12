@@ -54,6 +54,7 @@ import           GHC.Generics                    (Generic)
 import           Language.Marlowe.CLI.Orphans    ()
 import           Language.Marlowe.SemanticsTypes (AccountId, ChoiceName, ChosenNum, Party, Token)
 import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import           Plutus.V1.Ledger.Slot           (Slot)
 
 import qualified Cardano.Api                     as Api (Value)
 import qualified Data.ByteString.Lazy            as LBS (fromStrict)
@@ -298,6 +299,7 @@ data Command =
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
+    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
     -- | Build a transaction paying into a Marlowe contract.
   | BuildCreate
@@ -314,6 +316,7 @@ data Command =
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
+    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
     -- | Build a transaction that spends from and pays to a Marlowe contract.
   | BuildAdvance
@@ -337,6 +340,7 @@ data Command =
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
+    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
     -- | Build a transaction spending from a Marlowe contract.
   | BuildClose
@@ -357,6 +361,7 @@ data Command =
     , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
     , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
+    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
     -- | Submit a transaction.
   | Submit
@@ -378,16 +383,16 @@ data Command =
     , outputFile   :: Maybe FilePath  -- ^ The output JSON file with the results of the computation.
     , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
-    -- Input a deposit to a contract.
+    -- | Input a deposit to a contract.
   | InputDeposit
     {
       account    :: AccountId       -- ^ The account for the deposit.
     , party      :: Party           -- ^ The party making the deposit.
-    , token      :: Token           -- ^ The token being deposited.
+    , token      :: Maybe Token     -- ^ The token being deposited, if not Ada.
     , amount     :: Integer         -- ^ The amount of the token deposited.
     , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
     }
-    -- Input a choice to a contract.
+    -- | Input a choice to a contract.
   | InputChoice
     {
       choiceName  :: ChoiceName      -- ^ The name of the choice made.
@@ -395,10 +400,36 @@ data Command =
     , chosen      :: ChosenNum       -- ^ The number chosen.
     , outputFile  :: Maybe FilePath  -- ^ The output JSON file representing the input.
     }
-    -- Input a notification to a contract.
+    -- | Input a notification to a contract.
   | InputNotify
     {
       outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
+    }
+    -- | Template for escrow contract.
+  | TemplateEscrow
+    {
+      price             :: Integer  -- ^ Price of the item for sale, in lovelace.
+    , seller            :: Party    -- ^ The seller.
+    , buyer             :: Party    -- ^ The buyer.
+    , mediator          :: Party    -- ^ The mediator.
+    , paymentDeadline   :: Slot     -- ^ The deadline for the buyer to pay.
+    , complaintDeadline :: Slot     -- ^ The deadline for the buyer to complain.
+    , disputeDeadline   :: Slot     -- ^ The deadline for the seller to dispute a complaint.
+    , mediationDeadline :: Slot     -- ^ The deadline for the mediator to decide.
+    , outputFile        :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
+    }
+    -- | Template for swap contract.
+  | TemplateSwap
+    {
+      aParty     :: Party           -- ^ First party.
+    , aToken     :: Token           -- ^ First party's token.
+    , aAmount    :: Integer         -- ^ Amount of first party's token.
+    , aTimeout   :: Slot            -- ^ Timeout for first party's deposit.
+    , bParty     :: Party           -- ^ Second party.
+    , bToken     :: Token           -- ^ Second party's token.
+    , bAmount    :: Integer         -- ^ Amount of second party's token.
+    , bTimeout   :: Slot            -- ^ Timeout for second party's deposit.
+    , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
     }
     -- | Ad-hoc example.
   | Example

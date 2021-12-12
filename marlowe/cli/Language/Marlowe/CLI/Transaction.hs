@@ -42,19 +42,20 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     QueryInMode (..), QueryInShelleyBasedEra (..),
                                                                     QueryUTxOFilter (..), ScriptDataSupportedInEra (..),
                                                                     ScriptDatum (..), ScriptLanguageInEra (..),
-                                                                    ScriptWitness (..), ScriptWitnessInCtx (..),
-                                                                    ShelleyBasedEra (..), ShelleyWitnessSigningKey (..),
-                                                                    SlotNo, TxAuxScripts (..), TxBody (..),
-                                                                    TxBodyContent (..), TxBodyErrorAutoBalance (..),
-                                                                    TxBodyScriptData (..), TxCertificates (..),
-                                                                    TxExtraKeyWitnesses (..),
+                                                                    ScriptValidity (ScriptInvalid), ScriptWitness (..),
+                                                                    ScriptWitnessInCtx (..), ShelleyBasedEra (..),
+                                                                    ShelleyWitnessSigningKey (..), SlotNo,
+                                                                    TxAuxScripts (..), TxBody (..), TxBodyContent (..),
+                                                                    TxBodyErrorAutoBalance (..), TxBodyScriptData (..),
+                                                                    TxCertificates (..), TxExtraKeyWitnesses (..),
                                                                     TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
                                                                     TxFeesExplicitInEra (..), TxId, TxIn (..),
                                                                     TxInMode (..), TxInsCollateral (..), TxIx (..),
                                                                     TxMetadataInEra (..), TxMintValue (..), TxOut (..),
                                                                     TxOutDatum (..), TxOutValue (..),
-                                                                    TxScriptValidity (..), TxUpdateProposal (..),
-                                                                    TxValidityLowerBound (..),
+                                                                    TxScriptValidity (..),
+                                                                    TxScriptValiditySupportedInEra (TxScriptValiditySupportedInAlonzoEra),
+                                                                    TxUpdateProposal (..), TxValidityLowerBound (..),
                                                                     TxValidityUpperBound (..), TxWithdrawals (..),
                                                                     UTxO (..), ValidityLowerBoundSupportedInEra (..),
                                                                     ValidityNoUpperBoundSupportedInEra (..),
@@ -98,8 +99,9 @@ buildSimple :: MonadError CliError m
             -> FilePath                          -- ^ The output file for the transaction body.
             -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> Bool                              -- ^ Whether to print statistics about the transaction.
+            -> Bool                              -- ^ Assertion that the transaction is invalid.
             -> m TxId                            -- ^ Action to build the transaction body.
-buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout printStats =
+buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout printStats invalid =
   do
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
@@ -110,10 +112,13 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
         Nothing
         []
         printStats
+        invalid
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
-      $ submitBody connection body signingKeys
+      $ if invalid
+          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else submitBody connection body signingKeys
     pure
       $ getTxId body
 
@@ -132,8 +137,9 @@ buildIncoming :: MonadError CliError m
               -> FilePath                          -- ^ The output file for the transaction body.
               -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                              -- ^ Whether to print statistics about the transaction.
+              -> Bool                              -- ^ Assertion that the transaction is invalid.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout printStats =
+buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout printStats invalid =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
@@ -146,10 +152,13 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         Nothing
         []
         printStats
+        invalid
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
-      $ submitBody connection body signingKeys
+      $ if invalid
+          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else submitBody connection body signingKeys
     pure
       $ getTxId body
 
@@ -175,8 +184,9 @@ buildContinuing :: MonadError CliError m
                 -> FilePath                          -- ^ The output file for the transaction body.
                 -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                 -> Bool                              -- ^ Whether to print statistics about the transaction.
+                -> Bool                              -- ^ Assertion that the transaction is invalid.
                 -> m TxId                            -- ^ Action to build the transaction body.
-buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats =
+buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
@@ -192,10 +202,13 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
         printStats
+        invalid
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
-      $ submitBody connection body signingKeys
+      $ if invalid
+          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else submitBody connection body signingKeys
     pure
       $ getTxId body
 
@@ -218,8 +231,9 @@ buildOutgoing :: MonadError CliError m
               -> FilePath                          -- ^ The output file for the transaction body.
               -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                              -- ^ Whether to print statistics about the transaction.
+              -> Bool                              -- ^ Assertion that the transaction is invalid.
               -> m TxId                            -- ^ Action to build the transaction body.
-buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats =
+buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
     redeemer <- Redeemer <$> decodeFileBuiltinData redeemerFile
@@ -233,10 +247,13 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
         printStats
+        invalid
     liftCliIO
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
-      $ submitBody connection body signingKeys
+      $ if invalid
+          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else submitBody connection body signingKeys
     pure $ getTxId body
 
 
@@ -284,8 +301,9 @@ buildBody :: MonadError CliError m
           -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
           -> [Hash PaymentKey]                 -- ^ The extra required signatures.
           -> Bool                              -- ^ Whether to print statistics about the transaction.
+          -> Bool                              -- ^ Assertion that the transaction is invalid.
           -> m (TxBody AlonzoEra)              -- ^ The action to build the transaction body.
-buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats =
+buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats invalid =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
     start    <- queryAny    connection   QuerySystemStart
@@ -312,7 +330,9 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
       txCertificates    = TxCertificatesNone
       txUpdateProposal  = TxUpdateProposalNone
       txMintValue       = TxMintNone
-      txScriptValidity  = TxScriptValidityNone
+      txScriptValidity  = if invalid
+                            then TxScriptValidity TxScriptValiditySupportedInAlonzoEra ScriptInvalid
+                            else TxScriptValidityNone
       scriptTxIn = maybe [] redeemScript payFromScript
       txIns = scriptTxIn <> fmap makeTxIn inputs
       scriptTxOut = maybe [] payScript payToScript

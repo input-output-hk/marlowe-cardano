@@ -17,6 +17,7 @@ The `transaction-create` command builds a transaction that pays to a Marlowe con
                                           [--tx-out ADDRESS+VALUE]
                                           --change-address ADDRESS --out-file FILE
                                           [--submit SECONDS] [--print-stats]
+                                          [--script-invalid]
       Build a transaction that pays to a Marlowe script.
     
     Available options:
@@ -32,6 +33,7 @@ The `transaction-create` command builds a transaction that pays to a Marlowe con
       --out-file FILE                 Output file for transaction body.
       --submit SECONDS                Also submit the transaction, and wait for confirmation.
       --print-stats                   Print statistics.
+      --script-invalid                Assert that the transaction is invalid.
       -h,--help                       Show this help text
 
 

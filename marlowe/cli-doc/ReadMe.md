@@ -29,7 +29,6 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
       input-choose             Create Marlowe input for a choice.
       input-notify             Create Marlowe input for a notification.
       compute                  Compute a Marlowe contract and write the output to a JSON file.
-      example                  Hardwired example.
 
 Individual help pages:
 

@@ -128,6 +128,9 @@
           buildable = true;
           modules = [
             "Language/Marlowe/CLI"
+            "Language/Marlowe/CLI/Examples"
+            "Language/Marlowe/CLI/Examples/Escrow"
+            "Language/Marlowe/CLI/Examples/Swap"
             "Language/Marlowe/CLI/Export"
             "Language/Marlowe/CLI/IO"
             "Language/Marlowe/CLI/Orphans"
