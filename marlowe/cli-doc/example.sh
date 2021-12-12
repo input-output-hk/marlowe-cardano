@@ -20,8 +20,8 @@ export CARDANO_NODE_SOCKET_PATH=$PWD/$NETWORK.socket
 
 # Select the wallet.
 
-PAYMENT_SKEY=payment.skey
-PAYMENT_VKEY=payment.vkey
+PAYMENT_SKEY=path/to/payment.skey
+PAYMENT_VKEY=path/to/payment.vkey
 ADDRESS_P=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file $PAYMENT_VKEY)
 PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 

@@ -61,8 +61,8 @@ Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the
 
 Select a wallet for use in this tutorial and specify the files with the signing and payment keys. The address of this wallet is stored in the environment variable `ADDRESS_P`.
 
-    PAYMENT_SKEY=payment.skey
-    PAYMENT_VKEY=payment.vkey
+    PAYMENT_SKEY=path/to/payment.skey
+    PAYMENT_VKEY=path/to/payment.vkey
     ADDRESS_P=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file $PAYMENT_VKEY)
     PUBKEYHASH_P=$(cardano-cli address key-hash --payment-verification-key-file $PAYMENT_VKEY)
 
