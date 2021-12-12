@@ -15,33 +15,42 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
       --version                Show version.
     
     Available commands:
-      export                   Export a Marlowe contract to a JSON file.
-      address                  Print a validator address.
-      validator                Export a validator to a JSON file.
-      datum                    Export a datum to a JSON file.
-      redeemer                 Export a redeemer to a JSON file.
-      transact                 Build a non-Marlowe transaction.
-      create                   Build a transaction that pays to a Marlowe script.
-      advance                  Build a transaction that both spends from and pays to a Marlowe script.
-      close                    Build a transaction that spends from a Marlowe script.
-      submit                   Submit a transaction body.
+      export-marlowe           Export a Marlowe contract to a JSON file.
+      export-address           Print a validator address.
+      export-validator         Export a validator to a JSON file.
+      export-datum             Export a datum to a JSON file.
+      export-redeemer          Export a redeemer to a JSON file.
+      transaction-simple       Build a non-Marlowe transaction.
+      transaction-create       Build a transaction that pays to a Marlowe script.
+      transaction-advance      Build a transaction that both spends from and pays to a Marlowe script.
+      transaction-close        Build a transaction that spends from a Marlowe script.
+      transaction-submit       Submit a transaction body.
+      input-deposit            Create Marlowe input for a deposit.
+      input-choose             Create Marlowe input for a choice.
+      input-notify             Create Marlowe input for a notification.
+      compute                  Compute a Marlowe contract and write the output to a JSON file.
       example                  Hardwired example.
 
 Individual help pages:
 
 *   Creating validator, datum, and redeemer.
-    *   [`marlowe-cli export`](export.md)
-    *   [`marlowe-cli address`](address.md)
-    *   [`marlowe-cli validator`](validator.md)
-    *   [`marlowe-cli datum`](datum.md)
-    *   [`marlowe-cli redeemer`](redeemer.md)
+    *   [`marlowe-cli export-marlowe`](export-marlowe.md)
+    *   [`marlowe-cli export-address`](export-address.md)
+    *   [`marlowe-cli export-validator`](export-validator.md)
+    *   [`marlowe-cli export-datum`](export-datum.md)
+    *   [`marlowe-cli export-redeemer`](export-redeemer.md)
 *   Building transactions.
-    *   [`marlowe-cli transact`](transact.md)
-    *   [`marlowe-cli create`](create.md)
-    *   [`marlowe-cli advance`](advance.md)
-    *   [`marlowe-cli close`](close.md)
+    *   [`marlowe-cli transaction-simple`](transaction-simple.md)
+    *   [`marlowe-cli transaction-create`](transaction-create.md)
+    *   [`marlowe-cli transaction-advance`](transaction-advance.md)
+    *   [`marlowe-cli transaction-close`](transaction-close.md)
+    *   [`marlowe-cli transaction-submit`](transaction-submit.md)
 *   Submitting transactions.
-    *   [`marlowe-cli submit`](submit.md)
+    *   [`input-deposit`](input-deposit.md)
+    *   [`input-choose`](input-choose.md)
+    *   [`input-notify`](input-notify.md)
+*   Computing steps of Marlowe contracts.
+    *   [`compute`](compute.md)
 
 
 ## Installation

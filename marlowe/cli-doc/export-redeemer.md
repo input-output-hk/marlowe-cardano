@@ -1,14 +1,14 @@
 # Marlowe CLI: Redeemer Information
 
-The `redeemer` command writes a Marlowe redeemer to a JSON file in the detailed schema format suitable for use with the `--tx-in-redeemer-file` option of `cardano-cli transaction build`.
+The `export-redeemer` command writes a Marlowe redeemer to a JSON file in the detailed schema format suitable for use with the `--tx-in-redeemer-file` option of `cardano-cli transaction build`.
 
 
 ## Options
 
-    $ marlowe-cli redeemer --help
+    $ marlowe-cli export-redeemer --help
     
-    Usage: marlowe-cli redeemer [--input-file INPUT_FILE] --out-file OUTPUT_FILE 
-                                [--print-stats]
+    Usage: marlowe-cli export-redeemer [--input-file INPUT_FILE]
+                                       [--out-file OUTPUT_FILE] [--print-stats]
       Export a redeemer to a JSON file.
     
     Available options:
@@ -17,8 +17,6 @@ The `redeemer` command writes a Marlowe redeemer to a JSON file in the detailed 
       --print-stats            Print statistics.
       -h,--help                Show this help text
 
-The minimum and maximum slot numbers generally should match the `--invalid-before` and `--invalid-hereafter` options of `cardano-cli transaction build`.
-
 Optionally, this command will print to `stderr` the size in bytes of the redeemer.
 
 
@@ -26,8 +24,11 @@ Optionally, this command will print to `stderr` the size in bytes of the redeeme
 
 The following command uses the inputs [example-2.input](example-2.input) to create the redeemer [example-2.redeemer](example-2.redeemer), which can be used as `--tx-in-redeemer-file example.redeemer` in `cardano-cli transaction`.
 
-    $ marlowe-cli redeemer --input-file example-2.input  \
-                           --out-file example-2.redeemer
+    $ marlowe-cli export-redeemer --input-file example-2.input  \
+                                  --out-file example-2.redeemer \
+                                  --print-stats
+    
+    Redeemer size: 85
     
     
     $ cat example-2.redeemer

@@ -332,7 +332,7 @@ buildSimpleOptions =
     <*> O.strOption                            (O.long "socket-path"     <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."              )
     <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."                )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"           <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
@@ -358,7 +358,7 @@ buildIncomingOptions =
     <*> O.strOption                            (O.long "tx-out-datum-file" <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract."        )
     <*> O.option parseLovelaceValue            (O.long "tx-out-value"      <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."               )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"             <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"            <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseAddressAny               (O.long "change-address"    <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.strOption                            (O.long "out-file"          <> O.metavar "FILE"          <> O.help "Output file for transaction body."                      )
     <*> (O.optional . O.option O.auto)         (O.long "submit"            <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation.")
@@ -388,7 +388,7 @@ buildContinuingOptions =
     <*> O.strOption                            (O.long "tx-out-datum-file"   <> O.metavar "DATUM_FILE"    <> O.help "Datum JSON file datum paid to Marlowe contract."        )
     <*> O.option parseLovelaceValue            (O.long "tx-out-value"        <> O.metavar "LOVELACE"      <> O.help "Lovelace value paid to Marlowe contract."               )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"     <> O.help "Collateral for transaction."                            )
     <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."                       )
@@ -418,7 +418,7 @@ buildOutgoingOptions =
     <*> (O.many . O.strOption)                 (O.long "required-signer"     <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."                )
     <*> O.option parseTxIn                     (O.long "tx-in-marlowe"       <> O.metavar "TXID#TXIX"     <> O.help "UTxO spent from Marlowe contract."                      )
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"               <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                 )
-    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+LOVELACE format."         )
+    <*> (O.many . O.option parseTxOut)         (O.long "tx-out"              <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."            )
     <*> O.option parseTxIn                     (O.long "tx-in-collateral"    <> O.metavar "TXID#TXIX"     <> O.help "Collateral for transaction."                            )
     <*> O.option parseAddressAny               (O.long "change-address"      <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."               )
     <*> O.option parseSlotNo                   (O.long "invalid-before"      <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."                       )
@@ -452,7 +452,7 @@ computeCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 computeCommand =
   O.command "compute"
     $ O.info (computeOptions O.<**> O.helper)
-    $ O.progDesc "Compute a Marlowe contract and write the output to a JSON file."
+    $ O.progDesc "Compute the next step of a Marlowe contract and write the output to a JSON file."
 
 
 -- | Parser for the "compute" options.
