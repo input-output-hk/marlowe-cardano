@@ -11,7 +11,7 @@
     "install:spago": "spago install",
     "docs": "spago docs",
     "repl": "spago repl",
-    "start": "marlowe-playground-generate-purs && npm install && npm run install:spago && npm run build:webpack:vendor:dev && npm run build:webpack:dev",
+    "start": "marlowe-playground-generate-purs && npm install && npm run install:spago && npm run build:webpack:dev:vendor && npm run build:webpack:dev",
     "test": "NODE_OPTIONS=\"--max-old-space-size=8192\" webpack --config webpack.test.config.js --mode=development && node --max-old-space-size=8192 dist/test.js"
   },
   "dependencies": {
