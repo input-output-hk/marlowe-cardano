@@ -1,8 +1,8 @@
 module Component.MetadataTab.View where
 
 import Prologue hiding (div, min)
-import Component.MetadataTab.Types (MetadataAction, metadataAction)
-import Contrib.Record (mkRecordProxies)
+import Component.MetadataTab.Types (labels, MetadataAction, MetadataActionRow, metadataAction)
+import Contrib.Type.Row.Aliases (class Cons') as Row.Aliases
 import Data.Array (concat, concatMap)
 import Data.Foldable (foldMap)
 import Data.Int as Int
@@ -20,22 +20,21 @@ import Halogen.HTML (ClassName(..), HTML, button, div, em_, h6_, input, option, 
 import Halogen.HTML.Events (onClick, onValueChange)
 import Halogen.HTML.Properties (InputType(..), class_, classes, min, placeholder, required, selected, type_, value)
 import Marlowe.Extended (contractTypeArray, contractTypeInitials, contractTypeName, initialsToContractType)
-import Marlowe.Extended.Metadata (ChoiceInfo, MetaData, MetadataHintInfo, NumberFormat(..), NumberFormatType(..), ValueParameterInfo, _choiceInfo, _choiceNames, _roleDescriptions, _roles, _slotParameterDescriptions, _slotParameters, _valueParameterInfo, _valueParameters, defaultForFormatType, fromString, getFormatType, isDecimalFormat, isDefaultFormat, toString, updateChoiceInfo, updateValueParameterInfo)
-import Type.Prelude (Proxy(..))
+import Marlowe.Extended.Metadata (ChoiceInfo, MetaData, MetadataHintInfo, NumberFormat(..), NumberFormatType(..), ValueParameterInfo, _choiceInfo, _choiceNames, _roleDescriptions, _roles, _slotParameterDescriptions, _slotParameters, _valueParameterInfo, _valueParameters, defaultForFormatType, fromString, getFormatType, isDecimalFormat, isDefaultFormat, toString)
+import Type.Prelude (Proxy)
 
-proxies ::
-  { choiceInfo :: Proxy "choiceInfo"
-  , contractLongDescription :: Proxy "contractLongDescription"
-  , contractName :: Proxy "contractName"
-  , contractShortDescription :: Proxy "contractShortDescription"
-  , contractType :: Proxy "contractType"
-  , roleDescriptions :: Proxy "roleDescriptions"
-  , slotParameterDescriptions :: Proxy "slotParameterDescriptions"
-  , valueParameterInfo :: Proxy "valueParameterInfo"
-  }
-proxies = mkRecordProxies (Proxy :: Proxy MetaData)
-
-onlyDescriptionRenderer :: forall a p. (String -> String -> a) -> (String -> a) -> String -> String -> Boolean -> String -> String -> Array (HTML p a)
+onlyDescriptionRenderer ::
+  forall a1 a2 delete p set.
+  Row.Aliases.Cons' set (String /\ String) a1 MetadataActionRow =>
+  Row.Aliases.Cons' delete String a2 MetadataActionRow =>
+  Proxy set ->
+  Proxy delete ->
+  String ->
+  String ->
+  Boolean ->
+  String ->
+  String ->
+  Array (HTML p MetadataAction)
 onlyDescriptionRenderer setAction deleteAction key info needed typeNameTitle typeNameSmall =
   [ div [ class_ $ ClassName "metadata-prop-label" ]
       [ text $ typeNameTitle <> " " <> show key <> ": " ]
@@ -45,13 +44,13 @@ onlyDescriptionRenderer setAction deleteAction key info needed typeNameTitle typ
           , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
           , class_ $ ClassName "metadata-input"
           , value info
-          , onValueChange $ setAction key
+          , onValueChange $ metadataAction setAction <<< (key /\ _)
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
           [ classes [ if needed then plusBtn else minusBtn, ClassName "align-top", btn ]
-          , onClick $ const $ deleteAction key
+          , onClick $ const $ metadataAction deleteAction key
           ]
           [ text "-" ]
       ]
@@ -153,40 +152,24 @@ formattedNumberMetadataRenderer { key, description, format, setFormat, setDescri
 
 choiceMetadataRenderer :: forall p. String -> ChoiceInfo -> Boolean -> String -> String -> Array (HTML p MetadataAction)
 choiceMetadataRenderer key { choiceDescription, choiceFormat } = do
-  let
-    choiceInfo = metadataAction proxies.choiceInfo
   formattedNumberMetadataRenderer
     { key: key
     , description: choiceDescription
     , format: choiceFormat
-    , setFormat:
-        \name format ->
-          choiceInfo
-            $ updateChoiceInfo (_ { choiceFormat = format }) name
-    , setDescription:
-        \name description ->
-          choiceInfo
-            $ updateChoiceInfo (_ { choiceDescription = description }) name
-    , deleteInfo: choiceInfo <<< Map.delete
+    , setFormat: \name -> metadataAction labels.setChoiceFormat <<< (name /\ _)
+    , setDescription: \name -> metadataAction labels.setChoiceDescription <<< (name /\ _)
+    , deleteInfo: metadataAction labels.deleteChoiceInfo
     }
 
 valueParameterMetadataRenderer :: forall p. String -> ValueParameterInfo -> Boolean -> String -> String -> Array (HTML p MetadataAction)
 valueParameterMetadataRenderer key { valueParameterDescription, valueParameterFormat } = do
-  let
-    valueParameterInfo = metadataAction proxies.valueParameterInfo
   formattedNumberMetadataRenderer
     { key: key
     , description: valueParameterDescription
     , format: valueParameterFormat
-    , setFormat:
-        \name format ->
-          valueParameterInfo
-            $ updateValueParameterInfo (_ { valueParameterFormat = format }) name
-    , setDescription:
-        \name description ->
-          valueParameterInfo
-            $ updateValueParameterInfo (_ { valueParameterDescription = description }) name
-    , deleteInfo: valueParameterInfo <<< OMap.delete
+    , setFormat: \name -> metadataAction labels.setValueParameterFormat <<< (name /\ _)
+    , setDescription: \name -> metadataAction labels.setValueParameterDescription <<< (name /\ _)
+    , deleteInfo: metadataAction labels.deleteValueParameterInfo
     }
 
 metadataList ::
@@ -294,7 +277,9 @@ metadataView metadataHints metadata =
           , div [ class_ $ ClassName "metadata-mainprop-edit" ]
               [ select
                   [ class_ $ ClassName "metadata-input"
-                  , onValueChange $ metadataAction proxies.contractType <<< const <<< initialsToContractType
+                  , onValueChange
+                      $ metadataAction labels.setContractType
+                      <<< initialsToContractType
                   ] do
                   ct <- contractTypeArray
                   pure
@@ -314,7 +299,7 @@ metadataView metadataHints metadata =
                   , placeholder "Contract name"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractName
-                  , onValueChange $ metadataAction proxies.contractName <<< const
+                  , onValueChange $ metadataAction labels.setContractName
                   ]
               ]
           ]
@@ -326,7 +311,7 @@ metadataView metadataHints metadata =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractShortDescription
-                  , onValueChange $ metadataAction proxies.contractShortDescription <<< const
+                  , onValueChange $ metadataAction labels.setContractShortDescription
                   ]
               ]
           ]
@@ -338,39 +323,41 @@ metadataView metadataHints metadata =
                   , placeholder "Contract description"
                   , class_ $ ClassName "metadata-input"
                   , value metadata.contractLongDescription
-                  , onValueChange $ metadataAction proxies.contractLongDescription <<< const
+                  , onValueChange $ metadataAction labels.setContractLongDescription
                   ]
               ]
           ]
         , generateMetadataList
             _roleDescriptions
             _roles
-            (onlyDescriptionRenderer setRoleDecription deleteRoleDescription)
+            (onlyDescriptionRenderer labels.setRoleDescription labels.deleteRoleDescription)
             "Role"
             "role"
-            (flip setRoleDecription mempty)
-        , generateMetadataList _choiceInfo _choiceNames choiceMetadataRenderer "Choice" "choice" (flip setChoiceDescription mempty)
-        , generateSortableMetadataList _slotParameterDescriptions _slotParameters (onlyDescriptionRenderer setSlotParameterDescription deleteSlotParameterDescription) "Slot parameter" "slot parameter" (flip setSlotParameterDescription mempty)
-        , generateSortableMetadataList _valueParameterInfo _valueParameters valueParameterMetadataRenderer "Value parameter" "value parameter" (flip setValueParameterDescription mempty)
+            (metadataAction labels.setRoleDescription <<< (_ /\ mempty))
+        , generateMetadataList
+            _choiceInfo
+            _choiceNames
+            choiceMetadataRenderer
+            "Choice"
+            "choice"
+            (metadataAction labels.setChoiceDescription <<< (_ /\ mempty))
+        , generateSortableMetadataList
+            _slotParameterDescriptions
+            _slotParameters
+            (onlyDescriptionRenderer labels.setSlotParameterDescription labels.deleteSlotParameterDescription)
+            "Slot parameter"
+            "slot parameter"
+            (metadataAction labels.setSlotParameterDescription <<< (_ /\ mempty))
+        , generateSortableMetadataList
+            _valueParameterInfo
+            _valueParameters
+            valueParameterMetadataRenderer
+            "Value parameter"
+            "value parameter"
+            (metadataAction labels.setValueParameterDescription <<< (_ /\ mempty))
         ]
     )
   where
-  setRoleDecription k = metadataAction proxies.roleDescriptions <<< Map.insert k
-
-  deleteRoleDescription = metadataAction proxies.roleDescriptions <<< Map.delete
-
-  setSlotParameterDescription k = metadataAction proxies.slotParameterDescriptions <<< OMap.insert k
-
-  deleteSlotParameterDescription = metadataAction proxies.slotParameterDescriptions <<< OMap.delete
-
-  setChoiceDescription name description =
-    metadataAction proxies.choiceInfo
-      $ updateChoiceInfo (_ { choiceDescription = description }) name
-
-  setValueParameterDescription name description =
-    metadataAction proxies.valueParameterInfo
-      $ updateValueParameterInfo (_ { valueParameterDescription = description }) name
-
   generateMetadataList ::
     forall c.
     Lens' MetaData (Map String c) ->
