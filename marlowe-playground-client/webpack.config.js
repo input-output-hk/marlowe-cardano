@@ -50,6 +50,18 @@ module.exports = {
         pathinfo: true,
         clean: true,
     },
+    optimization: isDevelopment? undefined : {
+        runtimeChunk: "single",
+        splitChunks: {
+            cacheGroups: {
+                vendor: {
+                    test: /[\\/]node_modules[\\/]/,
+                    name: "vendors",
+                    chunks: "all",
+                },
+            },
+        },
+    },
     module: {
         rules: [
             {
