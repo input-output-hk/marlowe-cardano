@@ -140,7 +140,7 @@ module.exports = {
             static: path.resolve(__dirname, "./static"),
             src: path.resolve(__dirname, "./src")
         },
-        extensions: [".purs", ".js", ".ts", ".tsx"],
+        extensions: [".js", ".ts", ".tsx"].concat(isDevelopment? []: [".purs"]),
         fallback: {
             vm: require.resolve("vm-browserify"),
         },
