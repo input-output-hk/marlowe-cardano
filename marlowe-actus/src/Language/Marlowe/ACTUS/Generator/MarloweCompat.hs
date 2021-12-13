@@ -63,6 +63,7 @@ toMarlowe ct =
       scheduleConfig = scheduleConfig ct,
       statusDate = statusDate ct,
       contractPerformance = contractPerformance ct,
+      creditEventTypeCovered = creditEventTypeCovered ct,
       cycleOfFee = cycleOfFee ct,
       cycleAnchorDateOfFee = cycleAnchorDateOfFee ct,
       feeAccrued = constnt <$> feeAccrued ct,

@@ -123,6 +123,13 @@ schedule ev c = schedule' ev c { maturityDate = maturity c }
     schedule' IPFL ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_IPFL_SWPPV c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
     schedule' MD   ct@ContractTermsPoly{ contractType = SWPPV } = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
 
+    schedule' PRD  ct@ContractTermsPoly{ contractType = CEG }   = _SCHED_PRD_PAM ct
+    schedule' MD   ct@ContractTermsPoly{ contractType = CEG }   = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+    schedule' XD   ct@ContractTermsPoly{ contractType = CEG }   = _SCHED_XD_CEG ct { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+
+    schedule' PRD  ct@ContractTermsPoly{ contractType = CEC }   = _SCHED_PRD_PAM ct
+    schedule' MD   ct@ContractTermsPoly{ contractType = CEC }   = _SCHED_MD_PAM c { maturityDate = maturityDate c <|> maturityDate ct } -- TODO
+
     schedule' _ _                                               = []
 
 maturity :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) => ContractTermsPoly a -> Maybe LocalTime
@@ -718,3 +725,6 @@ _SCHED_RR_SWPPV
       scheduleConfig
     } = [applyBDCWithCfg scheduleConfig rranx]
 _SCHED_RR_SWPPV _ = []
+
+_SCHED_XD_CEG :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_XD_CEG _ = []

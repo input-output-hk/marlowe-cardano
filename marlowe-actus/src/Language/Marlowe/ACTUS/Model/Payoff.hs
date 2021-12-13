@@ -126,21 +126,15 @@ payoff ev t st = reader payoff'
         -- Maturity (MD) --
         -------------------
         -- POF_MD_OPTNS
-        pof
-          MD
-          _
-          ContractTermsPoly
-            { contractType = OPTNS
-            }
-          _ = _zero
         -- POF_MD_SWPPV
+        -- POF_MD_CEG
         pof
           MD
           _
           ContractTermsPoly
-            { contractType = SWPPV
+            { contractType
             }
-          _ = _zero
+          _ | contractType `elem` [OPTNS, SWPPV, CEG] = _zero
         -- POF_IED_*
         pof
           MD
@@ -271,6 +265,7 @@ payoff ev t st = reader payoff'
         -- POF_PRD_OPTNS
         -- POF_PRD_FUTUR
         -- POF_PRD_SWPPV
+        -- POF_PRD_CEG
         pof
           PRD
           _
@@ -279,7 +274,7 @@ payoff ev t st = reader payoff'
               priceAtPurchaseDate = Just pprd,
               contractRole
             }
-          _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV] = _negate $ _r contractRole * pprd
+          _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV, CEG] = _negate $ _r contractRole * pprd
         ----------------------
         -- Termination (TD) --
         ----------------------

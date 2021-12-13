@@ -54,7 +54,7 @@ genProjectedCashflows rf ct =
             notional = nt,
             currency = fromMaybe "unknown" (settlementCurrency ct)
           }
-   in sortOn cashPaymentDay . fmap genCashflow . genProjectedPayoffs rf $ ct
+   in genCashflow <$> genProjectedPayoffs rf ct
 
 genProjectedPayoffs :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
   (EventType -> LocalTime -> RiskFactorsPoly a)        -- ^ Risk factors as a function of event type and time
@@ -92,7 +92,8 @@ genProjectedPayoffs rf ct@ContractTermsPoly {..} =
           calculatePayoff (ev, ShiftedDay {..}, st) = payoff ev calculationDay st
           ctx = CtxPOF ct rf
 
-   in zipWith (\(x, y, z) -> (x,y,z,)) states payoffs
+   in sortOn (\(_,y,_,_) -> y)
+        $ zipWith (\(x,y,z) -> (x,y,z,)) states payoffs
 
   where
     filtersSchedules :: (EventType, ShiftedDay) -> Bool
@@ -119,4 +120,3 @@ genProjectedPayoffs rf ct@ContractTermsPoly {..} =
            in b1 && b2
         SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
         _ -> True
-

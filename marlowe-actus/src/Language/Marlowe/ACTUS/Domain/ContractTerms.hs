@@ -29,6 +29,8 @@ data CT = PAM   -- ^ Principal at maturity
         | OPTNS -- ^ Option
         | FUTUR -- ^ Future
         | SWPPV -- ^ Plain Vanilla Swap
+        | CEG   -- ^ Guarantee
+        | CEC   -- ^ Collateral
         deriving stock (Show, Read, Eq, Generic)
         deriving anyclass (FromJSON, ToJSON)
 
@@ -119,6 +121,14 @@ data PRF = PRF_PF -- ^ Performant
          deriving stock (Show, Read, Eq, Generic)
 
 $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PRF)
+
+-- |CreditEventTypeCovered
+data CETC = CETC_DL -- ^ Delayed
+          | CETC_DQ -- ^ Delinquent
+          | CETC_DF -- ^ Default
+         deriving stock (Show, Read, Eq, Generic)
+
+$(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CETC)
 
 -- |FeeBasis
 data FEB = FEB_A -- ^ Absolute value
@@ -351,7 +361,7 @@ instance FromJSON ContractStructure where
       <*> v .: "referenceType"
       <*> v .: "referenceRole"
    where
-     obj (Object o) = o .: "marketObjectCode"
+     obj (Object o) = o .: "marketObjectCode" <|> o .: "contractIdentifier"
      obj _          = fail "Error parsing ContractStructure"
   parseJSON _ = mzero
 
@@ -376,6 +386,7 @@ data ContractTermsPoly a = ContractTermsPoly
 
   -- Counterparty
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
+  , creditEventTypeCovered                   :: Maybe CETC       -- ^ Credit Event Type Covered
 
   -- Fees
   , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
@@ -481,11 +492,12 @@ instance FromJSON ContractTerms where
            )
       <*> v .:  "statusDate"
       <*> v .:? "contractPerformance"
+      <*> v .:? "creditEventTypeCovered"
       <*> v .:? "cycleOfFee"
       <*> v .:? "cycleAnchorDateOfFee"
       <*> v .:? "feeAccrued"
       <*> v .:? "feeBasis"
-      <*> v .:? "feeRate"
+      <*> (v .:? "feeRate" <|> read <$> v.: "feeRate") -- strings in CEG test cases
       <*> v .:? "cycleAnchorDateOfInterestPayment"
       <*> v .:? "cycleOfInterestPayment"
       <*> v .!? "accruedInterest"
