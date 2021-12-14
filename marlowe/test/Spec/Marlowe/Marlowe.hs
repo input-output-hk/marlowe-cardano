@@ -180,13 +180,13 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     let params = defaultMarloweParams
 
     let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 850))
-                                                     (sha2_256 zeroCouponBondStage2)
+                                                     (sha2_256 (contractToByteString zeroCouponBondStage2))
                                     ] (Slot 100) Close
-        zeroCouponBondStage2 = contractToByteString $ Pay alicePk (Party bobPk) ada (Constant 850)
-                                                         (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 1000))
-                                                                                (sha2_256 zeroCouponBondStage3)
-                                                               ] (Slot 200) Close)
-        zeroCouponBondStage3 = contractToByteString Close
+        zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 850)
+                                  (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 1000))
+                                                         (sha2_256 (contractToByteString zeroCouponBondStage3))
+                                        ] (Slot 200) Close)
+        zeroCouponBondStage3 = Close
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
@@ -338,19 +338,19 @@ stateMachineValidatorSize :: IO ()
 stateMachineValidatorSize = do
     let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18000)
+    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18500)
 
 typedValidatorSize :: IO ()
 typedValidatorSize = do
     let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15000)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15500)
 
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = smallUntypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14000)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14500)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do

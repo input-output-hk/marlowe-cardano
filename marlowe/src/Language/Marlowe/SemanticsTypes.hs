@@ -233,7 +233,7 @@ data InputContent = IDeposit AccountId Party Token Integer
   deriving anyclass (Pretty)
 
 data Input = NormalInput InputContent
-           | MerkleizedInput InputContent BuiltinByteString
+           | MerkleizedInput InputContent Contract
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
@@ -242,13 +242,13 @@ instance FromJSON Input where
   parseJSON (Object v) =
         (MerkleizedInput <$> (IChoice <$> (v .: "for_choice_id")
                                       <*> (v .: "input_that_chooses_num"))
-                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_continuation")))
+                         <*> (v .: "merkleized_continuation"))
     <|> (MerkleizedInput <$> (IDeposit <$> (v .: "into_account")
                                        <*> (v .: "input_from_party")
                                        <*> (v .: "of_token")
                                        <*> (v .: "that_deposits"))
-                         <*> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_continuation")))
-    <|> (MerkleizedInput INotify <$> (toBuiltin <$> (JSON.decodeByteString =<< v .: "merkleized_notify")))
+                         <*> (v .: "merkleized_continuation"))
+    <|> (MerkleizedInput INotify <$> (v .: "merkleized_notify"))
     <|> (NormalInput <$> (IDeposit <$> (v .: "into_account")
                                    <*> (v .: "input_from_party")
                                    <*> (v .: "of_token")
@@ -269,20 +269,20 @@ instance ToJSON Input where
       , "for_choice_id" .= choiceId
       ]
   toJSON (NormalInput INotify) = JSON.String $ pack "input_notify"
-  toJSON (MerkleizedInput (IDeposit accId party tok amount) bs) = object
+  toJSON (MerkleizedInput (IDeposit accId party tok amount) continuation) = object
       [ "input_from_party" .= party
       , "that_deposits" .= amount
       , "of_token" .= tok
       , "into_account" .= accId
-      , "merkleized_continuation" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+      , "merkleized_continuation" .= continuation
       ]
-  toJSON (MerkleizedInput (IChoice choiceId chosenNum) bs) = object
+  toJSON (MerkleizedInput (IChoice choiceId chosenNum) continuation) = object
       [ "input_that_chooses_num" .= chosenNum
       , "for_choice_id" .= choiceId
-      , "merkleized_continuation" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+      , "merkleized_continuation" .= continuation
       ]
-  toJSON (MerkleizedInput INotify bs) = object
-      [ "merkleized_notify" .= (JSON.String $ JSON.encodeByteString $ fromBuiltin bs)
+  toJSON (MerkleizedInput INotify continuation) = object
+      [ "merkleized_notify" .= continuation
       ]
 
 getInputContent :: Input -> InputContent
