@@ -85,7 +85,11 @@ tests = testGroup "Marlowe"
     , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
     , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
     , testCase "State serializes into valid JSON" stateSerialization
-    , testCase "Validator size is reasonable" validatorSize
+    , testGroup "Validator size is reasonable"
+        [ testCase "StateMachine validator size" stateMachineValidatorSize
+        , testCase "Typed validator size" typedValidatorSize
+        , testCase "Untyped validator size" untypedValidatorSize
+        ]
     , testCase "Mul analysis" mulAnalysisTest
     , testCase "Div analysis" divAnalysisTest
     , testCase "Div tests" divTest
@@ -285,19 +289,23 @@ uniqueContractHash = do
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
 
-
-validatorSize :: IO ()
-validatorSize = do
+stateMachineValidatorSize :: IO ()
+stateMachineValidatorSize = do
     let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    let validator1 = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
-    let vsize1 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator1
-    let validator2 = smallUntypedValidator defaultMarloweParams
-    let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
     assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18000)
-    assertBool ("smallTypedValidator is too large " <> show vsize1) (vsize1 < 15000)
-    assertBool ("smallUntypedValidator is too large " <> show vsize2) (vsize2 < 14000)
 
+typedValidatorSize :: IO ()
+typedValidatorSize = do
+    let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
+    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15000)
+
+untypedValidatorSize :: IO ()
+untypedValidatorSize = do
+    let validator = smallUntypedValidator defaultMarloweParams
+    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14000)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
