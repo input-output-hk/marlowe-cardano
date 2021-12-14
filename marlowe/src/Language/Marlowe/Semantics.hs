@@ -412,8 +412,9 @@ reduceContractUntilQuiescent env state contract = let
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
-                newWarnings = if warning == ReduceNoWarning then warnings
-                              else warning : warnings
+                newWarnings = case warning of
+                                ReduceNoWarning -> warnings
+                                _               -> warning : warnings
                 newPayments  = case effect of
                     ReduceWithPayment payment -> payment : payments
                     ReduceNoPayment           -> payments
