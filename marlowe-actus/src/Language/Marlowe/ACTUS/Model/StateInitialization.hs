@@ -95,6 +95,11 @@ initializeState = reader initializeState'
             } | ied > t0 = _zero
         notionalPrincipal
           ct@ContractTermsPoly
+            { notionalPrincipal = Just nt,
+              coverageOfCreditEnhancement = Just cecv
+            } = _r (contractRole ct) * nt * cecv
+        notionalPrincipal
+          ct@ContractTermsPoly
             { notionalPrincipal = Just nt
             } = _r (contractRole ct) * nt
         notionalPrincipal _ = _zero

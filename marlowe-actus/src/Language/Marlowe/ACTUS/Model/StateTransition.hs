@@ -442,6 +442,29 @@ stateTransition ev t sn = reader stateTransition'
           st
             | contractType `elem` [PAM, LAM, NAM, ANN] =
               stf PY rf ct st
+        -- STF_PRD_CEG
+        stf
+          PRD
+          _
+          ContractTermsPoly
+            { contractType = CEG,
+              feeRate = Just fer
+            }
+          st = st
+                 { feac = fer,
+                   sd = t
+                 }
+        stf
+          PRD
+          _
+          ContractTermsPoly
+            { contractType = CEG,
+              feeAccrued = Just feac
+            }
+          st = st
+                 { feac = feac,
+                   sd = t
+                 }
         ----------------------
         -- Termination (TD) --
         ----------------------
@@ -980,6 +1003,22 @@ stateTransition ev t sn = reader stateTransition'
               { xa = Just $ xd_payoff - pfut,
                 sd = t
               }
+        -- STF_XD_CEG
+        stf
+          XD
+          RiskFactorsPoly
+            {
+            }
+          ContractTermsPoly
+            { contractType = CEG
+            }
+          st@ContractStatePoly
+            { nt
+            } =
+              st
+                { xa = Just nt,
+                  sd = t
+                }
         -----------------------
         -- Credit Event (CE) --
         -----------------------

@@ -387,6 +387,7 @@ data ContractTermsPoly a = ContractTermsPoly
   -- Counterparty
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
   , creditEventTypeCovered                   :: Maybe CETC       -- ^ Credit Event Type Covered
+  , coverageOfCreditEnhancement              :: Maybe a          -- ^ Coverage Of Credit Enhancement
 
   -- Fees
   , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
@@ -493,11 +494,12 @@ instance FromJSON ContractTerms where
       <*> v .:  "statusDate"
       <*> v .:? "contractPerformance"
       <*> v .:? "creditEventTypeCovered"
+      <*> v .!? "coverageOfCreditEnhancement"
       <*> v .:? "cycleOfFee"
       <*> v .:? "cycleAnchorDateOfFee"
       <*> v .:? "feeAccrued"
       <*> v .:? "feeBasis"
-      <*> (v .:? "feeRate" <|> read <$> v.: "feeRate") -- strings in CEG test cases
+      <*> v .!? "feeRate"
       <*> v .:? "cycleAnchorDateOfInterestPayment"
       <*> v .:? "cycleOfInterestPayment"
       <*> v .!? "accruedInterest"

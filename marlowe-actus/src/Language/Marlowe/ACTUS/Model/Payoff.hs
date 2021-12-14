@@ -461,7 +461,8 @@ payoff ev t st = reader payoff'
         ----------------------
         -- Settlement (STD) --
         ----------------------
-        -- POF_STD_*
+        -- POF_STD_OPTNS
+        -- POF_STD_FUTUR
         pof
           STD
           RiskFactorsPoly
@@ -474,6 +475,19 @@ payoff ev t st = reader payoff'
           ContractStatePoly
             { xa = Just exerciseAmount
             } | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * _r contractRole * exerciseAmount
+        -- POF_STD_CEG
+        pof
+          STD
+          RiskFactorsPoly
+            { o_rf_CURS
+            }
+          ContractTermsPoly
+            { contractType = CEG
+            }
+          ContractStatePoly
+            { xa = Just exerciseAmount,
+              feac
+            } = o_rf_CURS * (exerciseAmount + feac)
         -------------------------------
         -- Rate Reset (RR) --
         -------------------------------

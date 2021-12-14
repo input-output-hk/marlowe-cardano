@@ -24,6 +24,10 @@ main = do
   optnsTests <- testCasesFromFile [] $ p ++ "actus-tests-optns.json"
   futurTests <- testCasesFromFile [] $ p ++ "actus-tests-futur.json"
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
+  cegTests <- testCasesFromFile
+    [ "guarantee09", "guarantee10" , "guarantee11" , "guarantee12" , "guarantee13" , "guarantee14"
+    ] $ p ++ "actus-tests-ceg.json"
+  -- cecTests <- testCasesFromFile [] $ p ++ "actus-tests-cec.json"
 
   defaultMain $
     testGroup
@@ -38,6 +42,8 @@ main = do
           , Spec.Marlowe.ACTUS.TestFramework.tests "OPTNS" optnsTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "FUTUR" futurTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "SWPPV" swppvTests
+          , Spec.Marlowe.ACTUS.TestFramework.tests "CEG" cegTests
+          -- , Spec.Marlowe.ACTUS.TestFramework.tests "CEC" cecTests
           ],
         testGroup
           "ACTUS examples"

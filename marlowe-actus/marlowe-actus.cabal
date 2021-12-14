@@ -112,6 +112,8 @@ test-suite marlowe-actus-test
         time -any,
         validation -any,
         pretty-simple -any,
+        mtl -any,
+        sort -any,
         QuickCheck
   ghc-options:
     -Wall -Wnoncanonical-monad-instances

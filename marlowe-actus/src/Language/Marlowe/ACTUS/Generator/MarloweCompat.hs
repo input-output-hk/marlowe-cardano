@@ -64,6 +64,7 @@ toMarlowe ct =
       statusDate = statusDate ct,
       contractPerformance = contractPerformance ct,
       creditEventTypeCovered = creditEventTypeCovered ct,
+      coverageOfCreditEnhancement = constnt <$> coverageOfCreditEnhancement ct,
       cycleOfFee = cycleOfFee ct,
       cycleAnchorDateOfFee = cycleAnchorDateOfFee ct,
       feeAccrued = constnt <$> feeAccrued ct,
