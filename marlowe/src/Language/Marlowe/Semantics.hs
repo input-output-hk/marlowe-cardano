@@ -55,7 +55,7 @@ import           Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (.
                                                   Environment (..), Input (..), IntervalError (..), IntervalResult (..),
                                                   Money, Observation (..), Party, Payee (..), SlotInterval, State (..),
                                                   Token (..), Value (..), ValueId, inBounds)
-import           Ledger                          (Slot (..), ValidatorHash)
+import           Ledger                          (POSIXTime, Slot (..), ValidatorHash)
 import           Ledger.Value                    (CurrencySymbol (..))
 import qualified Ledger.Value                    as Val
 import           PlutusTx                        (makeIsDataIndexed)
@@ -205,7 +205,8 @@ data MarloweData = MarloweData {
 
 data MarloweParams = MarloweParams {
         rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol
+        rolesCurrency           :: CurrencySymbol,
+        slotConfig              :: (Integer, POSIXTime)  -- FIXME: This is a temporary fix, just to enable testing on different networks. It breaks `Language.Marlowe.Client`.
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (FromJSON,ToJSON)

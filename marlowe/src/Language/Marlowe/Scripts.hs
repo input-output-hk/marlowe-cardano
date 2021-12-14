@@ -186,8 +186,8 @@ smallMarloweValidator
     -> [Input]
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
-    let slotConfig = def :: TimeSlot.SlotConfig
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig = (scSlotLength, scSlotZeroTime)} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
+    let slotConfig = TimeSlot.SlotConfig{..}  -- FIXME: This is a temporary fix, just to enable testing on different networks.
     let ownInput = case findOwnInput ctx of
             Just i -> i
             _      -> traceError "I0" {-"Can't find validation input"-}
