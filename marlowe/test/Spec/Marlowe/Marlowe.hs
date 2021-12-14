@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -108,7 +109,9 @@ tests = testGroup "Marlowe"
         , testProperty "Contract (de)serialisation roundtrip" contractBSRoundtripTest
         ]
     , zeroCouponBondTest
+#ifndef DisableMerkleization
     , merkleizedZeroCouponBondTest
+#endif
     , errorHandlingTest
     , trustFundTest
     ]
