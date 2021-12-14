@@ -24,46 +24,51 @@
 
 module Language.Marlowe.Client where
 import           Control.Lens
-import           Control.Monad                   (forM_, void)
-import           Control.Monad.Error.Lens        (catching, throwing)
-import           Data.Aeson                      (FromJSON, ToJSON, parseJSON, toJSON)
-import qualified Data.List.NonEmpty              as NonEmpty
-import           Data.Map.Strict                 (Map)
-import qualified Data.Map.Strict                 as Map
-import           Data.Maybe                      (isNothing, maybeToList)
-import           Data.Monoid                     (First (..))
-import           Data.Semigroup.Generic          (GenericSemigroupMonoid (..))
-import qualified Data.Set                        as Set
-import qualified Data.Text                       as T
-import           Data.UUID                       (UUID)
-import           Data.Void                       (absurd)
-import           GHC.Generics                    (Generic)
+import           Control.Monad                    (forM_, void)
+import           Control.Monad.Error.Lens         (catching, throwing)
+import           Data.Aeson                       (FromJSON, ToJSON, parseJSON, toJSON)
+import           Data.Either                      (rights)
+import qualified Data.List.NonEmpty               as NonEmpty
+import           Data.Map.Strict                  (Map)
+import qualified Data.Map.Strict                  as Map
+import           Data.Maybe                       (isNothing, maybeToList)
+import           Data.Monoid                      (First (..))
+import           Data.Semigroup.Generic           (GenericSemigroupMonoid (..))
+import qualified Data.Set                         as Set
+import qualified Data.Text                        as T
+import           Data.UUID                        (UUID)
+import           Data.Void                        (absurd)
+import           GHC.Generics                     (Generic)
 import           Language.Marlowe.Scripts
 import           Language.Marlowe.Semantics
-import qualified Language.Marlowe.Semantics      as Marlowe
-import           Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
-import qualified Language.Marlowe.SemanticsTypes as Marlowe
-import           Language.Marlowe.Util           (extractNonMerkleizedContractRoles)
-import           Ledger                          (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
-                                                  TxOut (..), inScripts, txOutValue)
+import qualified Language.Marlowe.Semantics       as Marlowe
+import           Language.Marlowe.SemanticsTypes  hiding (Contract, getAction)
+import qualified Language.Marlowe.SemanticsTypes  as Marlowe
+import           Language.Marlowe.Util            (extractNonMerkleizedContractRoles)
+import           Ledger                           (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
+                                                   TxOut (..), inScripts, txOutValue)
 import qualified Ledger
-import           Ledger.Ada                      (adaSymbol, adaToken, adaValueOf)
-import           Ledger.Address                  (pubKeyHashAddress, scriptHashAddress)
+import           Ledger.Ada                       (adaSymbol, adaToken, adaValueOf)
+import           Ledger.Address                   (pubKeyHashAddress, scriptHashAddress)
 import           Ledger.Constraints
-import qualified Ledger.Constraints              as Constraints
-import           Ledger.Scripts                  (datumHash, unitRedeemer)
-import qualified Ledger.Typed.Scripts            as Scripts
-import           Ledger.Typed.Tx                 (TypedScriptTxOut (..), tyTxOutData)
-import qualified Ledger.Value                    as Val
-import           Plutus.ChainIndex               (_ValidTx, citxInputs, citxOutputs, citxTxId)
-import           Plutus.Contract                 as Contract
-import           Plutus.Contract.StateMachine    (AsSMContractError (..), StateMachineClient (..), Void,
-                                                  WaitingResult (..))
-import qualified Plutus.Contract.StateMachine    as SM
-import           Plutus.Contract.Wallet          (getUnspentOutput)
-import qualified Plutus.Contracts.Currency       as Currency
+import qualified Ledger.Constraints               as Constraints
+import           Ledger.Constraints.TxConstraints
+import           Ledger.Scripts                   (datumHash, unitRedeemer)
+import qualified Ledger.Tx                        as Tx
+import           Ledger.Typed.Scripts
+import qualified Ledger.Typed.Scripts             as Scripts
+import           Ledger.Typed.Tx                  (TypedScriptTxOut (..), tyTxOutData)
+import qualified Ledger.Typed.Tx                  as Typed
+import qualified Ledger.Value                     as Val
+import           Plutus.ChainIndex                (ChainIndexTx, _ValidTx, citxInputs, citxOutputs, citxTxId)
+import           Plutus.Contract                  as Contract
+import           Plutus.Contract.StateMachine     (AsSMContractError (..), StateMachineClient (..), Void,
+                                                   WaitingResult (..))
+import qualified Plutus.Contract.StateMachine     as SM
+import           Plutus.Contract.Wallet           (getUnspentOutput)
+import qualified Plutus.Contracts.Currency        as Currency
 import qualified PlutusTx
-import qualified PlutusTx.AssocMap               as AssocMap
+import qualified PlutusTx.AssocMap                as AssocMap
 
 type MarloweSchema =
         Endpoint "create" (UUID, AssocMap.Map Val.TokenName PubKeyHash, Marlowe.Contract)
@@ -243,16 +248,20 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         ownPubKey <- Contract.ownPubKeyHash
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners contract
         slot <- currentSlot
-        let StateMachineClient{scInstance} = mkMarloweClient params
+        -- let StateMachineClient{scInstance} = mkMarloweClient params
+        -- TODO uses minAdaTxOut
+        let minLovelaceDeposit = 2000000
         let marloweData = MarloweData {
                 marloweContract = contract,
                 marloweState = State
-                    { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) 1000000
+                    { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) minLovelaceDeposit
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
                     , minSlot = slot } }
         let payValue = adaValueOf 1
-        let SM.StateMachineInstance{SM.typedValidator} = scInstance
+        -- let SM.StateMachineInstance{SM.typedValidator} = scInstance
+        let typedValidator = {- Scripts.unsafeMkTypedValidator $ -} smallTypedValidator params
+        -- let typedValidator = Scripts.unsafeMkTypedValidator $ smallUntypedValidator params
         let tx = mustPayToTheScript marloweData payValue <> distributeRoleTokens
         let lookups = Constraints.typedValidatorLookups typedValidator <> lkps
         -- Create the Marlowe contract and pay the role tokens to the owners
@@ -261,7 +270,8 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         tell $ OK reqId "create"
         marlowePlutusContract
     apply = endpoint @"apply-inputs" $ \(reqId, params, slotInterval, inputs) -> catchError reqId "apply-inputs" $ do
-        _ <- applyInputs params slotInterval inputs
+        let typedValidator = smallTypedValidator params
+        _ <- applyInputs params typedValidator slotInterval inputs
         tell $ OK reqId "apply-inputs"
         marlowePlutusContract
     redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, pkh) -> catchError reqId "redeem" $ do
@@ -397,12 +407,12 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
 
 
 setupMarloweParams
-    :: forall s e i o.
+    :: forall s e i o a.
     (AsMarloweError e)
     => RoleOwners
     -> Marlowe.Contract
     -> Contract MarloweContractState s e
-        (MarloweParams, TxConstraints i o, ScriptLookups (SM.StateMachine MarloweData MarloweInput))
+        (MarloweParams, TxConstraints i o, ScriptLookups a)
 setupMarloweParams owners contract = mapError (review _MarloweError) $ do
     ownAddress <- pubKeyHashAddress <$> Contract.ownPubKeyHash
     let roles = extractNonMerkleizedContractRoles contract
@@ -496,22 +506,17 @@ canAutoExecuteContractForParty party = check
 
 applyInputs :: AsMarloweError e
     => MarloweParams
+    -> SmallTypedValidator
     -> Maybe SlotInterval
     -> [Input]
     -> Contract MarloweContractState MarloweSchema e MarloweData
-applyInputs params slotInterval inputs = mapError (review _MarloweError) $ do
+applyInputs params typedValidator slotInterval inputs = mapError (review _MarloweError) $ do
     slotRange <- case slotInterval of
             Just si -> pure si
             Nothing -> do
                 slot <- currentSlot
                 pure (slot, slot + defaultTxValidationRange)
-    let theClient = mkMarloweClient params
-    dat <- SM.runStep theClient (slotRange, inputs)
-    case dat of
-        SM.TransitionFailure e -> do
-            logError e
-            throwing _TransitionError e
-        SM.TransitionSuccess d -> return d
+    mkStep params typedValidator slotRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
@@ -608,3 +613,84 @@ findMarloweContractsOnChainByRoleCurrency curSym = do
             let marloweData = tyTxOutData ocsTxOut
             pure $ Just (params, marloweData)
         Nothing -> pure Nothing
+
+{-| Get the current on-chain state of the state machine instance.
+    Return Nothing if there is no state on chain.
+    Throws an @SMContractError@ if the number of outputs at the machine address is greater than one.
+-}
+getOnChainState ::
+    ( AsSMContractError e
+    )
+    => SmallTypedValidator
+    -> Ledger.Address
+    -> Contract w schema e (Maybe (OnChainState, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
+getOnChainState validator address = mapError (review _SMContractError) $ do
+    utxoTx <- utxosTxOutTxAt address
+    let states = getStates validator utxoTx
+    let err = SM.ChooserError "Error"
+    case states of
+        []      -> pure Nothing
+        [state] -> pure $ Just (state, fmap fst utxoTx)
+        _       -> throwing _SMContractError err
+
+data OnChainState =
+    OnChainState
+        { ocsTxOut    :: Typed.TypedScriptTxOut TypedMarloweValidator -- ^ Typed transaction output
+        , ocsTxOutRef :: Typed.TypedScriptTxOutRef TypedMarloweValidator -- ^ Typed UTXO
+        , ocsTx       :: ChainIndexTx -- ^ Transaction that produced the output
+        }
+
+getStates :: SmallTypedValidator
+    -> Map Tx.TxOutRef (Tx.ChainIndexTxOut, ChainIndexTx)
+    -> [OnChainState]
+getStates si refMap =
+    let lkp (ref, (out, tx)) = do
+            ocsTxOutRef <- Typed.typeScriptTxOutRef (\r -> fst <$> Map.lookup r refMap) si ref
+            ocsTxOut <- Typed.typeScriptTxOut si ref out
+            pure OnChainState{ocsTxOut, ocsTxOutRef, ocsTx = tx}
+    in rights $ fmap lkp $ Map.toList refMap
+
+
+mkStep ::
+    MarloweParams
+    -> SmallTypedValidator
+    -> SlotInterval
+    -> [Input]
+    -> Contract w MarloweSchema MarloweError MarloweData
+mkStep params typedValidator range input = do
+    maybeState <- getOnChainState typedValidator (validatorAddress typedValidator)
+    case maybeState of
+        Nothing -> throwing _ContractError $ OtherError "BBB"
+        Just (onChainState, utxo) -> do
+            let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=currentState, tyTxOutTxOut}, ocsTxOutRef} = onChainState
+                oldState = SM.State
+                    { SM.stateData = currentState
+                    , SM.stateValue = Ledger.txOutValue tyTxOutTxOut
+                    }
+                inputConstraints = [InputConstraint{icRedeemer=input, icTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef }]
+
+            case mkMarloweStateMachineTransition params oldState (range, input) of
+                Just (newConstraints, newState)  -> do
+                    let isFinal = isClose (marloweContract $ SM.stateData newState)
+                        lookups1 =
+                            Constraints.typedValidatorLookups typedValidator
+                            <> Constraints.unspentOutputs utxo
+                        outputConstraints =
+                            [ OutputConstraint
+                                { ocDatum = SM.stateData newState
+                                , ocValue = SM.stateValue newState
+                                }
+                            | not isFinal ]
+                    let smtConstraints = newConstraints
+                                    { txOwnInputs = inputConstraints
+                                    , txOwnOutputs = outputConstraints
+                                    }
+                    pk <- Contract.ownPubKeyHash
+                    let lookups:: ScriptLookups TypedMarloweValidator
+                        lookups = lookups1 { Constraints.slOwnPubkeyHash = Just pk }
+                    utx <- either (throwing _ConstraintResolutionError)
+                                pure
+                                (Constraints.mkTx lookups smtConstraints)
+                    submitTxConfirmed utx
+                    pure (SM.stateData newState)
+                Nothing -> throwing _ContractError $ OtherError "AAA"

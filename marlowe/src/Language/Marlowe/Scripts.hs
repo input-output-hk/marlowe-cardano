@@ -45,6 +45,10 @@ import           PlutusTx.Prelude
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])
 
+-- Yeah, I know
+type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
+type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
+
 data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
