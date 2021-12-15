@@ -169,6 +169,12 @@ plusBtn = ClassName "plus-btn"
 minusBtn :: ClassName
 minusBtn = ClassName "minus-btn"
 
+upBtn :: ClassName
+upBtn = ClassName "up-btn"
+
+downBtn :: ClassName
+downBtn = ClassName "down-btn"
+
 btn :: ClassName
 btn = ClassName "btn"
 

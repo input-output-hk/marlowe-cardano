@@ -22,8 +22,8 @@ instance purtyProblem ::
 -- | Pass a **value** which type carries a row (like `Record` or `Variant` or even `Proxy`)
 -- | to get record value back with lables proxies inside. For example:
 -- | ```
--- | fromValueLabels { a :: Int, b :: String } -> { a :: Proxy "a", b :: Proxy "b" }
--- | fromValueLabels (Proxy (a :: Int}) -> { a :: Proxy "a" }
+-- | fromRowLabels { a :: Int, b :: String } -> { a :: Proxy "a", b :: Proxy "b" }
+-- | fromRowLabels (Proxy (a :: Int}) -> { a :: Proxy "a" }
 -- | ```
 fromRowLabels :: forall r rl rout t. RL.RowToList r rl => HFoldlWithIndex LabelStep {} (Proxy rl) { | rout } => t r -> { | rout }
 fromRowLabels _ = hfoldlWithIndex LabelStep {} (Proxy :: Proxy rl)
@@ -33,8 +33,8 @@ fromRowLabels _ = hfoldlWithIndex LabelStep {} (Proxy :: Proxy rl)
 -- | proxies from a **type** like `Record` or `Variant`
 -- | so you don't have to provide an actual value. For example:
 -- | ```
--- | fromTypeLabels (Proxy { a :: Int, b :: String }) = { a :: Proxy "a", b :: Proxy "b" }
+-- | fromTypeRowLabels (Proxy { a :: Int, b :: String }) = { a :: Proxy "a", b :: Proxy "b" }
 -- | ```
--- | This function allows you to avoid defining row types separate from your `Record` or `Variant`.
+-- | This function allows you to avoid defining row types separately from your `Record` or `Variant`.
 fromTypeRowLabels :: forall proxy r rl rout t. RL.RowToList r rl => HFoldlWithIndex LabelStep {} (Proxy rl) { | rout } => proxy (t r) -> { | rout }
 fromTypeRowLabels _ = hfoldlWithIndex LabelStep {} (Proxy :: Proxy rl)
