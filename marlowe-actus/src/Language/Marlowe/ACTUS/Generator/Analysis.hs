@@ -44,18 +44,18 @@ genProjectedCashflows :: (RoleSignOps a, ScheduleOps a, YearFractionOps a) =>
   (EventType -> LocalTime -> RiskFactorsPoly a) -- ^ Risk factors as a function of event type and time
   -> ContractTermsPoly a                        -- ^ Contract terms
   -> [CashFlowPoly a]                           -- ^ List of projected cash flows
-genProjectedCashflows rf ct = genCashflow ct <$> genProjectedPayoffs'
-  where
-    genProjectedPayoffs' =
-      runReader
-        genProjectedPayoffs
-        $ CtxSTF
-          ct
-          (calculationDay <$> schedule FP ct) -- init & stf rely on the fee payment schedule
-          (calculationDay <$> schedule PR ct) -- init & stf rely on the principal redemption schedule
-          (calculationDay <$> schedule IP ct) -- init & stf rely on the interest payment schedule
-          (S.maturity ct)
-          rf
+genProjectedCashflows rf ct =
+  genCashflow ct
+    <$> ( runReader
+            genProjectedPayoffs
+            $ CtxSTF
+              ct
+              (calculationDay <$> schedule FP ct) -- init & stf rely on the fee payment schedule
+              (calculationDay <$> schedule PR ct) -- init & stf rely on the principal redemption schedule
+              (calculationDay <$> schedule IP ct) -- init & stf rely on the interest payment schedule
+              (S.maturity ct)
+              rf
+        )
 
 -- |Generate cash flows
 genCashflow ::
