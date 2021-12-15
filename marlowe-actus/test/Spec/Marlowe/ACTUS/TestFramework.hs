@@ -196,8 +196,8 @@ getMarketObjectCode (ReferenceId i)    = marketObjectCode i
 getMarketObjectCode (ReferenceTerms _) = Nothing
 
 getContractIdentifier :: Reference Double -> Maybe String
-getContractIdentifier (ReferenceId i)    = contractIdentifier i
-getContractIdentifier (ReferenceTerms _) = Nothing
+getContractIdentifier (ReferenceId i)                         = contractIdentifier i
+getContractIdentifier (ReferenceTerms ContractTermsPoly {..}) = Just contractId
 
 data DataObserved = DataObserved
   { identifier :: String
