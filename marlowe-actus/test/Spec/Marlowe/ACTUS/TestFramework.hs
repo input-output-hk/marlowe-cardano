@@ -65,7 +65,7 @@ tests n t =
                 observedKey RR = marketObjectCodeOfRateReset terms
                 observedKey SC = marketObjectCodeOfScalingIndex terms
                 observedKey DV = Just (fmap toUpper identifier ++ "_DV")
-                observedKey XD = Just . marketObjectCode . Prelude.head $ contractStructure terms
+                observedKey XD = marketObjectCode . Prelude.head $ (map reference $ contractStructure terms)
                 observedKey _  = settlementCurrency terms
 
                 v = fromMaybe 1.0 $ do
@@ -181,7 +181,7 @@ unscheduledEvents
       states = PRF_DF
     }
     | contractType `elem` [CEG, CEC]
-        && contractId `elem` map marketObjectCode contractStructure =
+        && Just contractId `elem` map (contractIdentifier . reference) contractStructure =
       let stn = last $ filter (\st -> sd st < time) sts
        in genStates
             [ (XD, ShiftedDay time time),

@@ -334,22 +334,28 @@ data ReferenceRole = UDL  -- ^ Underlying
   deriving stock (Eq, Read, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
--- |Market object code
-type MarketObjectCode = String
+-- |Reference object
+data Reference = Reference
+  {
+    marketObjectCode   :: Maybe String
+  , contractIdentifier :: Maybe String
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 -- |Contract structure
 data ContractStructure = ContractStructure
   {
-    marketObjectCode :: MarketObjectCode
-  , referenceType    :: ReferenceType
-  , referenceRole    :: ReferenceRole
+    reference     :: Reference
+  , referenceType :: ReferenceType
+  , referenceRole :: ReferenceRole
   }
   deriving stock (Show, Generic)
 
 instance ToJSON ContractStructure where
   toJSON ContractStructure{..} =
     object
-      [ "object" .= object [ "marketObjectCode" .= toJSON marketObjectCode ]
+      [ "object"        .= toJSON reference
       , "referenceType" .= toJSON referenceType
       , "referenceRole" .= toJSON referenceRole
       ]
@@ -357,12 +363,9 @@ instance ToJSON ContractStructure where
 instance FromJSON ContractStructure where
   parseJSON (Object v) =
     ContractStructure
-      <$> (v .: "object" >>= obj)
+      <$> v .: "object"
       <*> v .: "referenceType"
       <*> v .: "referenceRole"
-   where
-     obj (Object o) = o .: "marketObjectCode" <|> o .: "contractIdentifier"
-     obj _          = fail "Error parsing ContractStructure"
   parseJSON _ = mzero
 
 {-| ACTUS contract terms and attributes are defined in
