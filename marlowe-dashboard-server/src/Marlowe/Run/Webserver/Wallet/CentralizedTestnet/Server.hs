@@ -1,8 +1,10 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeOperators         #-}
+
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server
@@ -138,6 +140,6 @@ createOrRestoreWallet postData mnemonic = do
             putStrLn ("restoreWallet failed" :: Text)
             putStrLn $ "Error: " <> (show err :: Text)
             pure $ Left err
-        Right (WBE.ApiWallet (WBE.ApiT walletId) _ _ _ _ _ _ _ _) -> do
+        Right WBE.ApiWallet{WBE.id = WBE.ApiT walletId} -> do
             putStrLn $ "Restored wallet: " <> (show walletId :: Text)
             pure $ Right walletId

@@ -7,7 +7,6 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module PSGenerator
@@ -28,12 +27,12 @@ import           Language.PureScript.Bridge.PSTypes                    (psNumber
 import           Language.PureScript.Bridge.SumType                    (equal, genericShow, mkSumType, order)
 import           Marlowe.Run.Webserver.API                             (HTTPAPI)
 import           Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError, RestorePostData)
+import           Marlowe.Run.Webserver.Wallet.Types                    (GetTotalFunds)
 import           Marlowe.Run.Webserver.WebSocket                       (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
 import           Servant.PureScript                                    (HasBridge, Settings, apiModuleName,
                                                                         defaultBridge, defaultSettings, languageBridge,
                                                                         writeAPIModuleWithSettings)
-
 doubleBridge :: BridgePart
 doubleBridge = typeName ^== "Double" >> return psNumber
 
@@ -69,7 +68,8 @@ myTypes =
   [ equal . genericShow . argonaut $ mkSumType @StreamToServer,
     equal . genericShow . argonaut $ mkSumType @StreamToClient,
     equal . order . genericShow . argonaut $ mkSumType @RestoreError,
-    equal . genericShow . argonaut $ mkSumType @RestorePostData
+    equal . genericShow . argonaut $ mkSumType @RestorePostData,
+    equal . genericShow . argonaut $ mkSumType @GetTotalFunds
   ]
 
 mySettings :: Settings
