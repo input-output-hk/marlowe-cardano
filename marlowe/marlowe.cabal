@@ -50,6 +50,7 @@ library
   build-depends:
     aeson -any,
     base -any,
+    base16-bytestring -any,
     bytestring,
     containers -any,
     data-default -any,
@@ -62,8 +63,10 @@ library
     plutus-contract -any,
     plutus-core,
     plutus-ledger,
+    plutus-ledger-api -any,
     plutus-tx -any,
     plutus-use-cases,
+    serialise -any,
     text,
     sbv >= 8.4,
     scientific -any,
@@ -87,6 +90,7 @@ library
     Language.Marlowe.Serialisation
     Language.Marlowe.Pretty
     Language.Marlowe.Analysis.FSSemantics
+    Plutus.Debug
   other-modules:
 
 test-suite marlowe-test-long-running
@@ -217,6 +221,7 @@ executable marlowe-cli
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Examples.Escrow
     Language.Marlowe.CLI.Examples.Swap
+    Language.Marlowe.CLI.Examples.Trivial
     Language.Marlowe.CLI.Export
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
