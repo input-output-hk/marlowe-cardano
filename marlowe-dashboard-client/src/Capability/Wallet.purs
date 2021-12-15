@@ -9,8 +9,8 @@ module Capability.Wallet
   ) where
 
 import Prologue
-import API.Marlowe.Run.TestnetWallet (RestoreError, RestoreWalletOptions)
-import API.Marlowe.Run.TestnetWallet as TestnetAPI
+import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError, RestoreWalletOptions)
+import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
 import API.MockWallet as MockAPI
 import AppM (AppM)
 import Bridge (toBack, toFront)

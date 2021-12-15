@@ -1,4 +1,4 @@
-module API.Marlowe.Run.TestnetWallet
+module API.Marlowe.Run.Wallet.CentralizedTestnet
   ( restoreWallet
   , RestoreWalletOptions
   , RestoreError(..)
@@ -46,5 +46,5 @@ restoreWallet { walletName, mnemonicPhrase } = do
     $ runExceptT
     $ doPostRequestWith
         { encode: encodeJson, decode: D.decode (D.either D.value D.value) }
-        "/api/wallet/restore"
+        "/api/wallet/centralized-testnet/restore"
         body

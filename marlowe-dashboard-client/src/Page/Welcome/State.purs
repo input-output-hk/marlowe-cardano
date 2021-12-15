@@ -5,7 +5,7 @@ module Page.Welcome.State
   ) where
 
 import Prologue
-import API.Marlowe.Run.TestnetWallet (RestoreError(..))
+import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, lookupWalletDetails, restoreWallet)
 import Capability.MarloweStorage (class ManageMarloweStorage, clearAllLocalStorage, insertIntoWalletLibrary)
