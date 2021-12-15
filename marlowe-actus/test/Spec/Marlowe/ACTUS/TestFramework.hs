@@ -46,7 +46,8 @@ import           Text.Printf                                   (printf)
 
 tests :: String -> [TestCase] -> TestTree
 tests n t =
-  testGroup n
+  testGroup
+    n
     [testCase (getField @"identifier" tc) (runTest tc {terms = setDefaultContractTermValues (terms tc)}) | tc <- t]
   where
     runTest :: TestCase -> Assertion
@@ -65,7 +66,7 @@ tests n t =
                 observedKey RR = marketObjectCodeOfRateReset terms
                 observedKey SC = marketObjectCodeOfScalingIndex terms
                 observedKey DV = Just (fmap toUpper identifier ++ "_DV")
-                observedKey XD = marketObjectCode . Prelude.head $ (map reference $ contractStructure terms)
+                observedKey XD = Prelude.head $ map (getMarketObjectCode . reference) (contractStructure terms)
                 observedKey _  = settlementCurrency terms
 
                 v = fromMaybe 1.0 $ do
@@ -181,7 +182,7 @@ unscheduledEvents
       states = PRF_DF
     }
     | contractType `elem` [CEG, CEC]
-        && Just contractId `elem` map (contractIdentifier . reference) contractStructure =
+        && Just contractId `elem` map (getContractIdentifier . reference) contractStructure =
       let stn = last $ filter (\st -> sd st < time) sts
        in genStates
             [ (XD, ShiftedDay time time),
@@ -189,6 +190,14 @@ unscheduledEvents
             ]
             stn
 unscheduledEvents _ _ _ = return []
+
+getMarketObjectCode :: Reference Double -> Maybe String
+getMarketObjectCode (ReferenceId i)    = marketObjectCode i
+getMarketObjectCode (ReferenceTerms _) = Nothing
+
+getContractIdentifier :: Reference Double -> Maybe String
+getContractIdentifier (ReferenceId i)    = contractIdentifier i
+getContractIdentifier (ReferenceTerms _) = Nothing
 
 data DataObserved = DataObserved
   { identifier :: String

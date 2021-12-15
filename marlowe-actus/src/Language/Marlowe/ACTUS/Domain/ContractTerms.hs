@@ -11,8 +11,9 @@ module Language.Marlowe.ACTUS.Domain.ContractTerms where
 import           Control.Applicative ((<|>))
 import           Control.Monad       (guard, mzero)
 import           Data.Aeson.TH       (deriveJSON)
-import           Data.Aeson.Types    (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String),
-                                      defaultOptions, object, parseJSON, toJSON, (.:), (.:?), (.=))
+import           Data.Aeson.Types    (FromJSON, Options (..), Parser, SumEncoding (UntaggedValue), ToJSON,
+                                      Value (Null, Object, String), defaultOptions, genericParseJSON, object, parseJSON,
+                                      toJSON, (.:), (.:?), (.=))
 import           Data.Maybe          (fromMaybe)
 import           Data.Text           as T hiding (reverse, takeWhile)
 import           Data.Text.Read      as T
@@ -335,24 +336,30 @@ data ReferenceRole = UDL  -- ^ Underlying
   deriving anyclass (FromJSON, ToJSON)
 
 -- |Reference object
-data Reference = Reference
-  {
-    marketObjectCode   :: Maybe String
+data Identifier = Identifier
+  { marketObjectCode   :: Maybe String
   , contractIdentifier :: Maybe String
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+data Reference a = ReferenceTerms (ContractTermsPoly a)
+                 | ReferenceId Identifier
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
+
+instance FromJSON (Reference Double) where
+  parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
+
 -- |Contract structure
-data ContractStructure = ContractStructure
-  {
-    reference     :: Reference
+data ContractStructure a = ContractStructure
+  { reference     :: Reference a
   , referenceType :: ReferenceType
   , referenceRole :: ReferenceRole
   }
   deriving stock (Show, Generic)
 
-instance ToJSON ContractStructure where
+instance ToJSON a => ToJSON (ContractStructure a) where
   toJSON ContractStructure{..} =
     object
       [ "object"        .= toJSON reference
@@ -360,7 +367,7 @@ instance ToJSON ContractStructure where
       , "referenceRole" .= toJSON referenceRole
       ]
 
-instance FromJSON ContractStructure where
+instance FromJSON (ContractStructure Double) where
   parseJSON (Object v) =
     ContractStructure
       <$> v .: "object"
@@ -375,7 +382,7 @@ data ContractTermsPoly a = ContractTermsPoly
   { -- General
     contractId                               :: String
   , contractType                             :: CT
-  , contractStructure                        :: [ContractStructure]
+  , contractStructure                        :: [ContractStructure a]
   , contractRole                             :: CR
   , settlementCurrency                       :: Maybe String
 
