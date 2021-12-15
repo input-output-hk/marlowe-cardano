@@ -199,6 +199,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     let (minTime, maxTime) =
             case txInfoValidRange scriptContextTxInfo of
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
+                -- FIXME remove this when mockchain implementation updates to correct one as above
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) True) -> (l, h)
                 _ -> traceError "R0"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
