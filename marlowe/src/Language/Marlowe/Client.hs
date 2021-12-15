@@ -107,7 +107,7 @@ data PartyAction
              | WaitForTimeout Slot
              | WaitOtherActionUntil Slot
              | NotSure
-             | CloseContract [Payment]
+             | CloseContract
   deriving (Show)
 
 type RoleOwners = AssocMap.Map Val.TokenName PubKeyHash
@@ -382,13 +382,13 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                     Transition _ _ marloweData -> continueWith marloweData
                     InitialState _ marloweData -> continueWith marloweData
 
-            CloseContract payments -> do
+            CloseContract -> do
                 logInfo @String $ "CloseContract"
                 let closeContract = do
                         marloweData <- SM.runStep theClient (slotRange, [])
                         case marloweData of
                             SM.TransitionFailure e -> throwing _TransitionError e
-                            SM.TransitionSuccess d -> do
+                            SM.TransitionSuccess _ -> do
                                 tell $ OK reqId "auto"
                                 marlowePlutusContract
 
@@ -453,7 +453,7 @@ getAction :: MarloweSlotRange -> Party -> MarloweData -> PartyAction
 getAction slotRange party MarloweData{marloweContract,marloweState} = let
     env = Environment slotRange
     in case reduceContractUntilQuiescent env marloweState marloweContract of
-        ContractQuiescent _reduced _warnings payments state contract ->
+        ContractQuiescent _reduced _warnings _payments state contract ->
             -- here the contract is either When or Close
             case contract of
                 When [Case (Deposit acc depositParty tok value) _] _ _
@@ -464,7 +464,7 @@ getAction slotRange party MarloweData{marloweContract,marloweState} = let
                     | party /= depositParty    ->
                         WaitOtherActionUntil timeout
                 When [] timeout _ -> WaitForTimeout timeout
-                Close -> CloseContract payments
+                Close -> CloseContract
                 _ -> NotSure
         -- When timeout is in the slot range
         RRAmbiguousSlotIntervalError ->
