@@ -463,6 +463,39 @@ isValidAndFailsWhen oa hasErr (Case (Notify obs) cont:rest)
      contTrace <- isValidAndFailsWhen oa hasErr rest timeout timCont
                                       newPreviousMatch sState (pos + 1)
      return (ite (newCond .&& obsRes .&& sNot clashResult) newTrace contTrace)
+isValidAndFailsWhen oa hasErr (MerkleizedCase (Deposit accId party token val) _:rest)
+                    timeout timCont previousMatch sState pos =
+    let newPreviousMatch otherSymInput pmSymState =
+           let pmConcVal = symEvalVal val pmSymState in
+           case otherSymInput of
+             SymDeposit otherAccId otherParty otherToken otherConcVal ->
+               if (otherAccId == accId) && (otherParty == party)
+                  && (otherToken == token)
+               then (otherConcVal .== pmConcVal) .|| previousMatch otherSymInput pmSymState
+               else previousMatch otherSymInput pmSymState
+             _ -> previousMatch otherSymInput pmSymState in
+     isValidAndFailsWhen oa hasErr rest timeout timCont
+                         newPreviousMatch sState (pos + 1)
+isValidAndFailsWhen oa hasErr (MerkleizedCase (Choice choId bnds) _:rest)
+                    timeout timCont previousMatch sState pos =
+     let newPreviousMatch otherSymInput pmSymState =
+           case otherSymInput of
+             SymChoice otherChoId otherConcVal ->
+               if otherChoId == choId
+               then ensureBounds otherConcVal bnds .|| previousMatch otherSymInput pmSymState
+               else previousMatch otherSymInput pmSymState
+             _ -> previousMatch otherSymInput pmSymState in
+     isValidAndFailsWhen oa hasErr rest timeout timCont newPreviousMatch sState (pos + 1)
+isValidAndFailsWhen oa hasErr (MerkleizedCase (Notify obs) _:rest)
+                    timeout timCont previousMatch sState pos =
+     let newPreviousMatch otherSymInput pmSymState =
+           let pmObsRes = symEvalObs obs pmSymState in
+           case otherSymInput of
+             SymNotify -> pmObsRes .|| previousMatch otherSymInput pmSymState
+             _         -> previousMatch otherSymInput pmSymState in
+     isValidAndFailsWhen oa hasErr rest timeout timCont
+                         newPreviousMatch sState (pos + 1)
+
 
 --------------------------------------------------
 -- Wrapper - SBV handling and result extraction --
@@ -481,8 +514,9 @@ countWhens (Assert o c)        = countWhens c
 
 -- Same as countWhens but it starts with a Case list
 countWhensCaseList :: [Case Contract] -> Integer
-countWhensCaseList (Case uu c : tail) = max (countWhens c) (countWhensCaseList tail)
-countWhensCaseList []                 = 0
+countWhensCaseList (Case uu c : tail)           = max (countWhens c) (countWhensCaseList tail)
+countWhensCaseList (MerkleizedCase uu c : tail) = countWhensCaseList tail
+countWhensCaseList []                           = 0
 
 -- Main wrapper of the static analysis takes a Bool that indicates whether only
 -- assertions should be checked, a Contract, a paramTrace, and an optional
@@ -542,10 +576,14 @@ caseToInput :: [Case a] -> Integer -> Integer -> Input
 caseToInput [] _ _ = error "Wrong number of cases interpreting result"
 caseToInput (Case h _:t) c v
   | c > 1 = caseToInput t (c - 1) v
-  | c == 1 = case h of
+  | c == 1 = NormalInput $ case h of
                Deposit accId party tok _ -> IDeposit accId party tok v
                Choice choId _            -> IChoice choId v
                Notify _                  -> INotify
+  | otherwise = error "Negative case number"
+caseToInput (MerkleizedCase _ _:t) c v
+  | c > 1 = caseToInput t (c - 1) v
+  | c == 1 = error "Finding this counter example would have required finding a hash preimage"
   | otherwise = error "Negative case number"
 
 -- Given an input, state, and contract, it runs the semantics on the transaction,

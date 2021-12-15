@@ -4,14 +4,16 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 module Spec.Marlowe.Common where
 
-import           Data.Map.Strict  (Map)
+import           Data.Map.Strict                         (Map)
 
 import           Language.Marlowe
-import           Ledger           (pubKeyHash)
+import           Language.Marlowe.SemanticsSerialisation (contractToByteString)
+import           Ledger                                  (pubKeyHash)
 import qualified Ledger
-import qualified PlutusTx.Ratio   as P
+import           PlutusTx.Builtins                       (sha2_256)
+import qualified PlutusTx.Ratio                          as P
 import           Test.QuickCheck
-import           Wallet           (PubKey (..))
+import           Wallet                                  (PubKey (..))
 import           Wallet.Emulator
 
 newtype MarloweScenario = MarloweScenario { mlInitialBalances :: Map PubKey Ledger.Value }
@@ -260,12 +262,15 @@ shrinkAction action = case action of
 
 
 caseRelGenSized :: Int -> Integer -> Gen (Case Contract)
-caseRelGenSized s bn = Case <$> actionGenSized s <*> contractRelGenSized s bn
-
+caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
+                                 , (1, MerkleizedCase <$> actionGenSized s <*>
+                                                          (sha2_256 . contractToByteString <$> contractRelGenSized s bn))
+                                 ]
 
 shrinkCase :: Case Contract -> [Case Contract]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
+shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]
 
 
 contractRelGenSized :: Int -> Integer -> Gen Contract

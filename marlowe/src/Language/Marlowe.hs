@@ -14,7 +14,7 @@ where
 import           Language.Marlowe.Client
 import           Language.Marlowe.Pretty
 import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsTypes
+import           Language.Marlowe.SemanticsTypes hiding (getAction)
 import           Language.Marlowe.Util
 import           Ledger                          (Slot (..))
 import           Ledger.Ada                      (adaSymbol, adaToken)

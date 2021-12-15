@@ -41,9 +41,9 @@ import           GHC.Generics                    (Generic)
 import           Language.Marlowe.Scripts
 import           Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics      as Marlowe
-import           Language.Marlowe.SemanticsTypes hiding (Contract)
+import           Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
-import           Language.Marlowe.Util           (extractContractRoles)
+import           Language.Marlowe.Util           (extractNonMerkleizedContractRoles)
 import           Ledger                          (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
                                                   TxOut (..), inScripts, txOutValue)
 import qualified Ledger
@@ -339,7 +339,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
             PayDeposit acc p token amount -> do
                 logInfo @String $ "PayDeposit " <> show amount <> " at within slots " <> show slotRange
                 let payDeposit = do
-                        marloweData <- SM.runStep theClient (slotRange, [IDeposit acc p token amount])
+                        marloweData <- SM.runStep theClient (slotRange, [NormalInput $ IDeposit acc p token amount])
                         case marloweData of
                             SM.TransitionFailure e -> throwing _TransitionError e
                             SM.TransitionSuccess d -> continueWith d
@@ -390,7 +390,7 @@ setupMarloweParams
         (MarloweParams, TxConstraints i o, ScriptLookups (SM.StateMachine MarloweData MarloweInput))
 setupMarloweParams owners contract = mapError (review _MarloweError) $ do
     ownAddress <- pubKeyHashAddress <$> Contract.ownPubKeyHash
-    let roles = extractContractRoles contract
+    let roles = extractNonMerkleizedContractRoles contract
     if Set.null roles
     then do
         let params = MarloweParams
