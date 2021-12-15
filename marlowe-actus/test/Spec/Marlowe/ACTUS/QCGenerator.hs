@@ -171,6 +171,12 @@ contractTermsGen' ct = do
       { contractId = "0",
         contractType = ct,
         contractStructure = [],
+        scheduleConfig =
+          ScheduleConfig
+            { calendar = Just calendar,
+              endOfMonthConvention = Just eomc,
+              businessDayConvention = Just bdc
+            },
         initialExchangeDate = Just ied,
         statusDate = sd,
         maturityDate = Just maturityDate,
@@ -186,13 +192,10 @@ contractTermsGen' ct = do
         priceAtTerminationDate = priceAtTerminationDate <$ terminationDate,
         dayCountConvention = Just dcc,
         prepaymentEffect = Just ppef,
+        -- Counterparty
         contractPerformance = Just PRF_PF,
-        scheduleConfig =
-          ScheduleConfig
-            { calendar = Just calendar,
-              endOfMonthConvention = Just eomc,
-              businessDayConvention = Just bdc
-            },
+        creditEventTypeCovered = Just CETC_DF,
+        coverageOfCreditEnhancement = Nothing,
         -- Penalties
         penaltyRate = Just penaltyrate,
         penaltyType = Just penaltytype,
