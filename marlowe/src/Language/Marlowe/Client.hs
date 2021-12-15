@@ -240,6 +240,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
     catchError reqId endpointName handler = catching _MarloweError
         (void $ mapError (review _MarloweError) handler)
         (\er -> do
+            logWarn @String (show er)
             tell $ SomeError reqId endpointName er
             marlowePlutusContract)
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
@@ -258,11 +259,11 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
                     , minSlot = slot } }
-        let payValue = adaValueOf 1
+        let minAdaTxOut = adaValueOf 2
         -- let SM.StateMachineInstance{SM.typedValidator} = scInstance
         let typedValidator = {- Scripts.unsafeMkTypedValidator $ -} smallTypedValidator params
         -- let typedValidator = Scripts.unsafeMkTypedValidator $ smallUntypedValidator params
-        let tx = mustPayToTheScript marloweData payValue <> distributeRoleTokens
+        let tx = mustPayToTheScript marloweData minAdaTxOut <> distributeRoleTokens
         let lookups = Constraints.typedValidatorLookups typedValidator <> lkps
         -- Create the Marlowe contract and pay the role tokens to the owners
         utx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx lookups tx)
@@ -437,7 +438,8 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
             mintTx      = Constraints.mustSpendPubKeyOutput txOutRef
                             <> Constraints.mustMintValue (Currency.mintedValue theCurrency)
         let rolesSymbol = Ledger.scriptCurrencySymbol curVali
-        let giveToParty (role, pkh) = Constraints.mustPayToPubKey pkh (Val.singleton rolesSymbol role 1)
+        let minAdaTxOut = adaValueOf 2
+        let giveToParty (role, pkh) = Constraints.mustPayToPubKey pkh (Val.singleton rolesSymbol role 1 <> minAdaTxOut)
         let distributeRoleTokens = foldMap giveToParty (AssocMap.toList owners)
         let params = MarloweParams
                 { rolesCurrency = rolesSymbol
