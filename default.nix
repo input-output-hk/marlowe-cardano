@@ -38,7 +38,10 @@ rec {
 
   # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
   # we switch to flakes.
-  webCommon = pkgs.callPackage sources.web-common { inherit (marlowe.lib) gitignore-nix; };
+
+  # web-common is shared between purescript projects so we can pick any spago-packages.nix
+  webCommon = (pkgs.callPackage (import ./marlowe-playground-client/spago-packages.nix) { }).inputs.web-common;
+  # webCommon = pkgs.callPackage sources.web-common { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlutus = pkgs.callPackage (sources.plutus-apps + "/web-common-plutus") { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
 
