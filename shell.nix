@@ -120,7 +120,7 @@ haskell.project.shellFor {
   # Point to some source dependencies
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-    export WEB_COMMON_SRC="${webCommon}"
+    export WEB_COMMON_SRC="${webCommon.cleanSrc}"
     export WEB_COMMON_PLAYGROUND_SRC="${webCommonPlayground}"
   '';
 }

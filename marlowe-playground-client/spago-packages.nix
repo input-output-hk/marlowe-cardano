@@ -1229,18 +1229,6 @@ let
         installPhase = "ln -s $src $out";
       };
 
-    "string-parsers" = pkgs.stdenv.mkDerivation {
-        name = "string-parsers";
-        version = "v6.0.1";
-        src = pkgs.fetchgit {
-          url = "https://github.com/purescript-contrib/purescript-string-parsers.git";
-          rev = "7c3cad8ce7cd4d1036eeafa09af323dc7b8d367c";
-          sha256 = "143a2s56kbx3i0xi5wfqp28znr0hdydy902jla236i7kal5y098m";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
     "strings" = pkgs.stdenv.mkDerivation {
         name = "strings";
         version = "v5.0.0";
@@ -1435,11 +1423,11 @@ let
 
     "web-common" = pkgs.stdenv.mkDerivation {
         name = "web-common";
-        version = "v1.1.3";
+        version = "v1.2.0";
         src = pkgs.fetchgit {
           url = "https://github.com/input-output-hk/purescript-web-common";
-          rev = "f6ba33c8543e5c830592f86e94b3e89ca117e602";
-          sha256 = "10hsvndlvag0c89gwn6hmiiar45cifl1416b0psbvqjdjqbmhvv0";
+          rev = "9d79acdadefec29225d81cd2f546f24c69169390";
+          sha256 = "1jjw3wkn4sm9p7zdnrqhinlxgwjxib443dqwb3dx5gg91y9cig8w";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
