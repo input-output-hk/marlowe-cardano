@@ -236,6 +236,7 @@ data PayToScript era =
   {
     address   :: AddressInEra era  -- ^ The script address.
   , value     :: Api.Value         -- ^ The value to be paid.
+  , datumOut  :: ScriptData        -- ^ The datum.
   , datumHash :: Hash ScriptData   -- ^ The datum hash.
   }
     deriving (Eq, Generic, Show)
