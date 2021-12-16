@@ -27,7 +27,7 @@ Then run `npm run build:webpack:dev` for an auto-reloading dev build on https://
 ## Adding dependencies
 
 * Javascript dependencies are managed with npm, so add them to [package.json](./package.json)
-* purescript uses package sets managed by spago so if the package set doesn't contain a dependency you can add it to [packages.dhall](./packages.dhall)
+* purescript uses package sets managed by spago so if the package set doesn't contain a dependency you can add it to [../packages.dhall](../packages.dhall)
 
 Whenever you change `packages.dhall` you need to make sure that all dependencies can still properly be resolved and built.
 You can do so using the `update-client-deps` script:
