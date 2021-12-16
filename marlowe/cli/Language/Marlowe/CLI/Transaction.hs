@@ -273,8 +273,8 @@ buildPayToScript :: AddressInEra era  -- ^ The script address.
                  -> PayToScript era   -- ^ The payment information.
 buildPayToScript address value datum =
   let
-    datumOut  = fromPlutusData $ toData datum
-    datumHash = hashScriptData . fromPlutusData $ toData datum
+    datumOut  = fromPlutusData . toData $ datum
+    datumHash = hashScriptData datumOut
   in
     PayToScript{..}
 
