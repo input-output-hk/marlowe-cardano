@@ -5,7 +5,6 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Webserver.Wallet.Server
@@ -23,7 +22,6 @@ import           Marlowe.Run.Webserver.Wallet.API                       (API)
 import qualified Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server as CentralizedTestnet
 import           Marlowe.Run.Webserver.Wallet.Types                     (GetTotalFunds (..))
 import           Servant                                                (ServerT, (:<|>) ((:<|>)))
--- import Cardano.Wallet.Primitive.Types (WalletId)
 -- FIXME: I don't like to use a Emulator type here, but we'd need to publish some changes upstream to the PAB to fix this
 import           Wallet.Emulator                                        (WalletId (..))
 

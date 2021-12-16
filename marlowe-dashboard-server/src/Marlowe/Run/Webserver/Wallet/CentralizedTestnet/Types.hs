@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types where

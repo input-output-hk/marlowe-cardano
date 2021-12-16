@@ -12,6 +12,7 @@ module Component.Contacts.Types
   ) where
 
 import Prologue
+import API.Url (class ToUrlPiece)
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.InputField.Types (Action, State) as InputField
@@ -81,6 +82,8 @@ derive instance genericWalletId :: Generic WalletId _
 derive newtype instance encodeJsonWalletId :: EncodeJson WalletId
 
 derive newtype instance decodeJsonWalletId :: DecodeJson WalletId
+
+derive newtype instance toUrlPieceWalletId :: ToUrlPiece WalletId
 
 data CardSection
   = Home

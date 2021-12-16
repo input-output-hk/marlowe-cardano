@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server
