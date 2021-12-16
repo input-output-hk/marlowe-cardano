@@ -21,33 +21,35 @@ module Language.Marlowe.CLI (
 ) where
 
 
-import           Cardano.Api                          (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
-                                                       LocalNodeConnectInfo (..), NetworkId (..),
-                                                       StakeAddressReference (..))
-import           Cardano.Config.Git.Rev               (gitRev)
-import           Control.Monad                        (when)
-import           Control.Monad.Except                 (ExceptT, liftIO, runExceptT, throwError)
-import           Data.Maybe                           (fromMaybe)
-import           Data.Version                         (Version, showVersion)
-import           Language.Marlowe.CLI.Examples        (makeExample)
-import           Language.Marlowe.CLI.Export          (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
-                                                       exportValidator)
-import           Language.Marlowe.CLI.Parse           (parseAddressAny, parseCurrencySymbol, parseNetworkId, parseParty,
-                                                       parseSlot, parseSlotNo, parseStakeAddressReference, parseToken,
-                                                       parseTxIn, parseTxOut, parseValue)
-import           Language.Marlowe.CLI.Run             (computeMarlowe, makeChoice, makeDeposit, makeNotification)
-import           Language.Marlowe.CLI.Transaction     (buildContinuing, buildIncoming, buildOutgoing, buildSimple,
-                                                       submit)
-import           Language.Marlowe.CLI.Types           (CliError (..), Command (..))
-import           Language.Marlowe.Client              (defaultMarloweParams, marloweParams)
-import           Plutus.V1.Ledger.Api                 (defaultCostModelParams)
-import           System.Exit                          (exitFailure)
-import           System.IO                            (hPutStrLn, stderr)
+import           Cardano.Api                           (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
+                                                        LocalNodeConnectInfo (..), NetworkId (..),
+                                                        StakeAddressReference (..))
+import           Cardano.Config.Git.Rev                (gitRev)
+import           Control.Monad                         (when)
+import           Control.Monad.Except                  (ExceptT, liftIO, runExceptT, throwError)
+import           Data.Maybe                            (fromMaybe)
+import           Data.Version                          (Version, showVersion)
+import           Language.Marlowe.CLI.Examples         (makeExample)
+import           Language.Marlowe.CLI.Export           (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
+                                                        exportValidator)
+import           Language.Marlowe.CLI.Parse            (parseAddressAny, parseCurrencySymbol, parseNetworkId,
+                                                        parseParty, parseSlot, parseSlotNo, parseStakeAddressReference,
+                                                        parseToken, parseTxIn, parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Run              (computeMarlowe, makeChoice, makeDeposit, makeNotification)
+import           Language.Marlowe.CLI.Transaction      (buildContinuing, buildIncoming, buildOutgoing, buildSimple,
+                                                        submit)
+import           Language.Marlowe.CLI.Types            (CliError (..), Command (..))
+import           Language.Marlowe.Client               (defaultMarloweParams, marloweParams)
+import           Language.Marlowe.Semantics            (MarloweParams (slotConfig))
+import           Plutus.V1.Ledger.Api                  (POSIXTime (..), defaultCostModelParams)
+import           System.Exit                           (exitFailure)
+import           System.IO                             (hPutStrLn, stderr)
 
-import qualified Data.Text                            as T (unpack)
-import qualified Language.Marlowe.CLI.Examples.Escrow as Example (makeEscrowContract)
-import qualified Language.Marlowe.CLI.Examples.Swap   as Example (makeSwapContract)
-import qualified Options.Applicative                  as O
+import qualified Data.Text                             as T (unpack)
+import qualified Language.Marlowe.CLI.Examples.Escrow  as Example (makeEscrowContract)
+import qualified Language.Marlowe.CLI.Examples.Swap    as Example (makeSwapContract)
+import qualified Language.Marlowe.CLI.Examples.Trivial as Example (makeTrivialContract)
+import qualified Options.Applicative                   as O
 
 
 -- | Hardwired example.
@@ -71,7 +73,10 @@ mainCLI version example =
               defaultCostModelParams
           let
             network' = fromMaybe Mainnet $ network command
-            marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
+            marloweParams' = (maybe defaultMarloweParams marloweParams $ rolesCurrency command)
+                             {
+                               slotConfig = (slotLength command, POSIXTime $ slotZeroOffset command)
+                             }
             stake'         = fromMaybe NoStakeAddress                 $ stake         command
             connection =
               LocalNodeConnectInfo
@@ -264,14 +269,16 @@ exportMarloweCommand =
 exportMarloweOptions :: O.Parser Command -- ^ The parser.
 exportMarloweOptions =
   Export
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."    )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                 )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any." )
-    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."      )
-    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"      <> O.help "JSON input file for the contract state.")
-    <*> (O.many . O.strOption)                             (O.long "input-file"     <> O.metavar "INPUT_FILE"      <> O.help "JSON input file for redeemer inputs."   )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for contract."         )
-    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                      )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
+    <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
+    <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"                            <> O.help "JSON input file for the contract."                      )
+    <*> O.strOption                                        (O.long "state-file"     <> O.metavar "STATE_FILE"                               <> O.help "JSON input file for the contract state."                )
+    <*> (O.many . O.strOption)                             (O.long "input-file"     <> O.metavar "INPUT_FILE"                               <> O.help "JSON input file for redeemer inputs."                   )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                              <> O.help "JSON output file for contract."                         )
+    <*> O.switch                                           (O.long "print-stats"                                                            <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "address" command.
@@ -286,9 +293,11 @@ exportAddressCommand =
 exportAddressOptions :: O.Parser Command
 exportAddressOptions =
   ExportAddress
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."   )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any.")
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
+    <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
 
 
 -- | Parser for the "validator" command.
@@ -303,12 +312,14 @@ exportValidatorCommand =
 exportValidatorOptions :: O.Parser Command
 exportValidatorOptions =
   ExportValidator
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."   )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any.")
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."       )
-    <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."                 )
-    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                     )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
+    <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                              <> O.help "JSON output file for validator."                        )
+    <*> O.switch                                           (O.long "print-hash"                                                             <> O.help "Print validator hash."                                  )
+    <*> O.switch                                           (O.long "print-stats"                                                            <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "datum" command.

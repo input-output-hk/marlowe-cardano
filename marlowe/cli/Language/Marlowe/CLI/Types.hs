@@ -246,31 +246,37 @@ data Command =
     -- | Export comprehensive Marlowe contrac and transactiont information.
     Export
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , contractFile  :: FilePath                     -- ^ The JSON file containing the contract.
-    , stateFile     :: FilePath                     -- ^ The JSON file containing the contract's state.
-    , inputFiles    :: [FilePath]                   -- ^ The JSON files containing the contract's input.
-    , outputFile    :: Maybe FilePath               -- ^ The output JSON file for Marlowe contract information.
-    , printStats    :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
+    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , contractFile   :: FilePath                     -- ^ The JSON file containing the contract.
+    , stateFile      :: FilePath                     -- ^ The JSON file containing the contract's state.
+    , inputFiles     :: [FilePath]                   -- ^ The JSON files containing the contract's input.
+    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for Marlowe contract information.
+    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
     }
     -- | Export the address for a Marlowe contract.
   | ExportAddress
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
+    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     }
     -- | Export the validator for a Marlowe contract.
   | ExportValidator
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
-    , printHash     :: Bool                         -- ^ Whether to print the validator hash.
-    , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
+    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
+    , printHash      :: Bool                         -- ^ Whether to print the validator hash.
+    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
     }
     -- | Export the datum for a Marlowe contract transaction.
   | ExportDatum
