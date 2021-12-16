@@ -64,10 +64,17 @@
         buildable = true;
         modules = [
           "Paths_marlowe_dashboard_server"
+          "Marlowe/Run/Webserver/Wallet/API"
+          "Marlowe/Run/Webserver/Wallet/Server"
+          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/API"
+          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/Server"
           "Marlowe/Run/Webserver/Server"
           "Marlowe/Run/Webserver/API"
           "Marlowe/Run/Webserver/WebSocket"
           "Marlowe/Run/Webserver/Types"
+          "Marlowe/Run/Webserver/Wallet/Types"
+          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/Types"
+          "Marlowe/Run/Webserver/Wallet/Client"
           ];
         hsSourceDirs = [ "src" ];
         };
