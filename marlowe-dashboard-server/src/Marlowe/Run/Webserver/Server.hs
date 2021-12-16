@@ -75,6 +75,7 @@ callWBE client = do
     clientEnv <- ask
     liftIO $ runClientM client clientEnv
 
+-- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
 restoreWallet ::
      MonadIO m =>
      MonadReader Env m =>

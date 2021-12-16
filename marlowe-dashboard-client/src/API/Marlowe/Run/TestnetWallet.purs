@@ -1,7 +1,7 @@
 module API.Marlowe.Run.TestnetWallet
   ( restoreWallet
   , RestoreWalletOptions
-  , RestoreError
+  , RestoreError(..)
   ) where
 
 import Prologue

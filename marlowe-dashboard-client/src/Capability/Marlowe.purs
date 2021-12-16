@@ -1,6 +1,7 @@
 module Capability.Marlowe
   ( class ManageMarlowe
   , createWallet
+  , restoreWallet
   , followContract
   , createPendingFollowerApp
   , followContractWithPendingFollowerApp
@@ -19,6 +20,7 @@ module Capability.Marlowe
 
 import Prologue
 import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicWallet, _observableState)
+import API.Marlowe.Run.TestnetWallet (RestoreError(..), RestoreWalletOptions)
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.Contract (activateContract, getContractInstanceClientState, getContractInstanceObservableState, getWalletContractInstances, invokeEndpoint) as Contract
@@ -26,9 +28,9 @@ import Capability.Contract (class ManageContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
-import Capability.Wallet (createWallet, getWalletInfo, getWalletTotalFunds) as Wallet
+import Capability.Wallet as Wallet
 import Component.Contacts.Lenses (_companionAppId, _marloweAppId, _pubKeyHash, _walletId, _walletInfo)
-import Component.Contacts.Types (WalletId, WalletDetails, WalletInfo)
+import Component.Contacts.Types (WalletDetails, WalletId, WalletInfo)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError)
@@ -57,6 +59,7 @@ import WebSocket.Support as WS
 class
   (ManageContract m, ManageMarloweStorage m, ManageWallet m) <= ManageMarlowe m where
   createWallet :: m (AjaxResponse WalletDetails)
+  restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletDetails)
   followContract :: WalletDetails -> MarloweParams -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createPendingFollowerApp :: WalletDetails -> m (AjaxResponse PlutusAppId)
   followContractWithPendingFollowerApp :: WalletDetails -> MarloweParams -> PlutusAppId -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
@@ -73,6 +76,8 @@ class
   unsubscribeFromWallet :: WalletId -> m Unit
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
+  -- TODO: This code was meant for mock wallet, as part of SCP-3170 we should re-implement this
+  --       using the WBE.
   createWallet = do
     -- create the wallet itself
     ajaxWalletInfo <- Wallet.createWallet
@@ -102,6 +107,32 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId <*> ajaxAssets
+  restoreWallet options = do
+    mWalletInfo <- Wallet.restoreWallet options
+    case mWalletInfo of
+      Left err -> pure $ Left err
+      Right walletInfo -> do
+        let
+          walletId = view _walletId walletInfo
+        -- create the WalletCompanion and MarloweApp for this wallet
+        -- TODO: We had initial discussions for adding Variants for errors probably using Checked Exceptions.
+        -- Instead of the general ClientServerError we could encapsulate the type of error inside a context
+        -- (restoring the wallet, activating a wallet companion or marlowe app).
+        -- For the end users this wouldn't change too much their UX, but for production code it can be useful
+        -- to diagnose problems using a tool like sentry SCP-3171.
+        -- https://github.com/natefaubion/purescript-checked-exceptions
+        ajaxCompanionAppId <- lmap ClientServerError <$> Contract.activateContract WalletCompanion walletId
+        ajaxMarloweAppId <- lmap ClientServerError <$> Contract.activateContract MarloweApp walletId
+        let
+          createWalletDetails companionAppId marloweAppId =
+            { walletNickname: ""
+            , companionAppId
+            , marloweAppId
+            , walletInfo
+            , assets: mempty
+            , previousCompanionAppState: Nothing
+            }
+        pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
   -- create a MarloweFollower app, call its "follow" endpoint with the given MarloweParams, and then
   -- return its PlutusAppId and observable state
   followContract walletDetails marloweParams =
@@ -252,6 +283,7 @@ sendWsMessage msg = do
 
 instance monadMarloweHalogenM :: (ManageMarlowe m) => ManageMarlowe (HalogenM state action slots msg m) where
   createWallet = lift createWallet
+  restoreWallet = lift <<< restoreWallet
   followContract walletDetails marloweParams = lift $ followContract walletDetails marloweParams
   createPendingFollowerApp = lift <<< createPendingFollowerApp
   followContractWithPendingFollowerApp walletDetails marloweParams followAppId = lift $ followContractWithPendingFollowerApp walletDetails marloweParams followAppId

@@ -1,8 +1,8 @@
 module Page.Welcome.Types
-  ( State
+  ( Action(..)
   , Card(..)
-  , Action(..)
-  , WalletNicknameOrIdError(..)
+  , State
+  , WalletMnemonicError(..)
   ) where
 
 import Prologue
@@ -28,28 +28,31 @@ type State
     -- from the right) - and that's much easier to do with media queries.
     , cardOpen :: Boolean
     , walletLibrary :: WalletLibrary
-    , walletNicknameOrIdInput :: InputField.State WalletNicknameOrIdError
     , walletNicknameInput :: InputField.State WalletNicknameError
+    , walletMnemonicInput :: InputField.State WalletMnemonicError
     , walletId :: PlutusAppId
     , remoteWalletDetails :: NotFoundWebData WalletDetails
     , enteringDashboardState :: Boolean
     }
 
-data WalletNicknameOrIdError
-  = UnconfirmedWalletNicknameOrId
-  | NonexistentWalletNicknameOrId
+data WalletMnemonicError
+  = MnemonicAmountOfWords
+  | InvalidMnemonicFromServer
 
-derive instance eqWalletNicknameOrIdError :: Eq WalletNicknameOrIdError
+derive instance eqWalletMnemonicError :: Eq WalletMnemonicError
 
-instance inputFieldErrorWalletNicknameOrIdError :: InputFieldError WalletNicknameOrIdError where
-  inputErrorToString UnconfirmedWalletNicknameOrId = "Looking up wallet..."
-  inputErrorToString NonexistentWalletNicknameOrId = "Wallet not found"
+instance inputFieldErrorWalletMnemonicError :: InputFieldError WalletMnemonicError where
+  inputErrorToString MnemonicAmountOfWords = "Mnemonic phrases have 24 words"
+  inputErrorToString InvalidMnemonicFromServer = "The phrase is an invalid mnemonic"
 
+-- TODO: When we implement another wallet connetctor, we should probably move this to
+-- Welcome.Testnet and split the Actions into general wallet logic and Testnet wallet logic
 data Card
   = GetStartedHelpCard
   | GenerateWalletHelpCard
   | UseNewWalletCard
   | UseWalletCard
+  | RestoreTestnetWalletCard
   | LocalWalletMissingCard
 
 derive instance eqCard :: Eq Card
@@ -58,7 +61,8 @@ data Action
   = OpenCard Card
   | CloseCard
   | GenerateWallet
-  | WalletNicknameOrIdInputAction (InputField.Action WalletNicknameOrIdError)
+  | RestoreTestnetWallet
+  | WalletMnemonicInputAction (InputField.Action WalletMnemonicError)
   | OpenUseWalletCardWithDetails WalletDetails
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
   | ConnectWallet WalletNickname
@@ -70,7 +74,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenCard _) = Nothing
   toEvent CloseCard = Nothing
   toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
-  toEvent (WalletNicknameOrIdInputAction inputFieldAction) = toEvent inputFieldAction
+  toEvent RestoreTestnetWallet = Just $ defaultEvent "RestoreTestnetWallet"
+  toEvent (WalletMnemonicInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (OpenUseWalletCardWithDetails _) = Nothing
   toEvent (WalletNicknameInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"

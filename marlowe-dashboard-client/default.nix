@@ -24,7 +24,10 @@ let
 
   start-backend = pkgs.writeShellScriptBin "marlowe-pab-server" ''
     echo "marlowe-pab-server: for development use only"
-    $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml all-servers
+    (trap 'kill 0' SIGINT;
+      $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml webserver &
+      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./config.json
+    )
   '';
 
   cleanSrc = gitignore-nix.gitignoreSource ./.;

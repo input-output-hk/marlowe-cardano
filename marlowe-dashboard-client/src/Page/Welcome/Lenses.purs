@@ -1,22 +1,13 @@
-module Page.Welcome.Lenses
-  ( _card
-  , _cardOpen
-  , _walletLibrary
-  , _walletNicknameOrIdInput
-  , _walletNicknameInput
-  , _walletId
-  , _remoteWalletDetails
-  , _enteringDashboardState
-  ) where
+module Page.Welcome.Lenses where
 
 import Prologue
 import Component.Contacts.Types (WalletDetails, WalletLibrary, WalletNicknameError)
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
 import Marlowe.PAB (PlutusAppId)
-import Page.Welcome.Types (Card, State, WalletNicknameOrIdError)
+import Page.Welcome.Types (Card, State, WalletMnemonicError)
+import Type.Proxy (Proxy(..))
 import Types (NotFoundWebData)
 
 _card :: Lens' State (Maybe Card)
@@ -28,11 +19,11 @@ _cardOpen = prop (Proxy :: _ "cardOpen")
 _walletLibrary :: Lens' State WalletLibrary
 _walletLibrary = prop (Proxy :: _ "walletLibrary")
 
-_walletNicknameOrIdInput :: Lens' State (InputField.State WalletNicknameOrIdError)
-_walletNicknameOrIdInput = prop (Proxy :: _ "walletNicknameOrIdInput")
-
 _walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
 _walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
+
+_walletMnemonicInput :: Lens' State (InputField.State WalletMnemonicError)
+_walletMnemonicInput = prop (Proxy :: _ "walletMnemonicInput")
 
 _walletId :: Lens' State PlutusAppId
 _walletId = prop (Proxy :: _ "walletId")
