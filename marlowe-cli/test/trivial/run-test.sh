@@ -6,14 +6,15 @@
 
 # The environment variable CARDANO_NODE_SOCKET_PATH must be set to the path to the cardano node's socket.
 #
-# The environment variable TREASURY must be set to the location of the payment and signing keys for the parties involved.
-#
 # The following tools must be on the path:
 #   marlowe-cli
 #   cardano-cli
 #   sed
 #   jq
 #   xargs
+#
+# Signing and verification keys must be provided below for the "bystander" and "party" roles: to do this, set the
+# environment variables "BYSTANDER_PREFIX" and "PARTY_PREFIX" where they appear below.
 
 
 # This script exits with an error value if the end-to-end test fails.
@@ -25,9 +26,6 @@ set -e
 
 
 # Select the network.
-
-####NETWORK=private
-####MAGIC=(--testnet-magic 1564)
 
 MAGIC=(--testnet-magic 1097911063)
 SLOT_LENGTH=1000
@@ -108,6 +106,9 @@ marlowe-cli export-validator "${MAGIC[@]}"                \
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 echo
 echo "The tip is at slot $TIP."
+
+echo
+echo "The current POSIX time implies that the tip of the blockchain should be at slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
 
 
 # The contract has a minimum slot and a timeout.
