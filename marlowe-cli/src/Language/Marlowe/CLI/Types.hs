@@ -450,10 +450,3 @@ data Command =
     , bTimeout   :: Slot            -- ^ Timeout for second party's deposit.
     , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
     }
-    -- | Ad-hoc example.
-  | Example
-    {
-      pubKeyHash :: String  -- ^ The public key hash for the example party.
-    , writeFiles :: Bool    -- ^ Whether to serialise states, contracts and inputs to JSON.
-    }
-    deriving (Eq, Generic, Show)

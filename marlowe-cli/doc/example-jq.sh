@@ -14,6 +14,8 @@
 # Select the network.
 
 MAGIC=(--testnet-magic 1097911063)
+SLOT_LENGTH=1000
+SLOT_OFFSET=1594369216000
 
 # Make sure that CARDANO_NODE_SOCKET_PATH is set. See <https://developers.cardano.org/docs/get-started/running-cardano/#querying-the-cardano-blockchain>.
 
@@ -66,6 +68,8 @@ EOI
 
 marlowe-cli export-marlowe "${MAGIC[@]}"                  \
                            --contract-file $CONTRACT_FILE \
+                           --slot-length "$SLOT_LENGTH"   \
+                           --slot-offset "$SLOT_OFFSET"   \
                            --state-file $STATE_FILE       \
                            --out-file $MARLOWE_FILE       \
                            --print-stats

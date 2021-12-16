@@ -13,6 +13,8 @@ Make sure that `marlowe-cli`, `cardano-cli`, and `jq` have been installed on the
 
     NETWORK=testnet
     MAGIC=(--testnet-magic 1097911063)
+    SLOT_LENGTH=1000
+    SLOT_OFFSET=1594369216000
 
 
 ## 2. Select wallet.
@@ -73,8 +75,14 @@ We will redeem the ADA within a particular range of slots:
 
 We now create the Plutus script for the contract and compute its script address:
 
-    $ ADDRESS_S=$(marlowe-cli address "${MAGIC[@]}")
-      marlowe-cli export-validator "${MAGIC[@]}"           \
+    $ ADDRESS_S=$(
+      marlowe-cli export-address "${MAGIC[@]}" \
+                  --slot-length "$SLOT_LENGTH" \
+                  --slot-offset "$SLOT_OFFSET" \
+      )
+    $ marlowe-cli export-validator "${MAGIC[@]}"           \
+                                   --slot-length "$SLOT_LENGTH" \
+                                   --slot-offset "$SLOT_OFFSET" \
                                    --out-file $PLUTUS_FILE \
                                    --print-stats
     

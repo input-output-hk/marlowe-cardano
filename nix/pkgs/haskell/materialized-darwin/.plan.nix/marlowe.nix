@@ -35,6 +35,7 @@
         depends = [
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
@@ -47,8 +48,10 @@
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+          (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-use-cases" or (errorHandler.buildDepError "plutus-use-cases"))
+          (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."sbv" or (errorHandler.buildDepError "sbv"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
@@ -72,6 +75,7 @@
           "Language/Marlowe/Serialisation"
           "Language/Marlowe/Pretty"
           "Language/Marlowe/Analysis/FSSemantics"
+          "Plutus/Debug"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -100,50 +104,6 @@
           mainPath = ([
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "") ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) "";
-          };
-        "marlowe-cli" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."aeson-pretty" or (errorHandler.buildDepError "aeson-pretty"))
-            (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
-            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
-            (hsPkgs."cardano-config" or (errorHandler.buildDepError "cardano-config"))
-            (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
-            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
-            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
-            (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
-            (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
-            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-            (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
-            (hsPkgs."regex-posix" or (errorHandler.buildDepError "regex-posix"))
-            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
-            (hsPkgs."split" or (errorHandler.buildDepError "split"))
-            (hsPkgs."text" or (errorHandler.buildDepError "text"))
-            (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
-            ];
-          buildable = true;
-          modules = [
-            "Language/Marlowe/CLI"
-            "Language/Marlowe/CLI/Examples"
-            "Language/Marlowe/CLI/Examples/Escrow"
-            "Language/Marlowe/CLI/Examples/Swap"
-            "Language/Marlowe/CLI/Export"
-            "Language/Marlowe/CLI/IO"
-            "Language/Marlowe/CLI/Orphans"
-            "Language/Marlowe/CLI/Parse"
-            "Language/Marlowe/CLI/Run"
-            "Language/Marlowe/CLI/Transaction"
-            "Language/Marlowe/CLI/Types"
-            "Paths_marlowe"
-            ];
-          hsSourceDirs = [ "cli" ];
-          mainPath = [
-            "Main.hs"
-            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
           };
         };
       tests = {

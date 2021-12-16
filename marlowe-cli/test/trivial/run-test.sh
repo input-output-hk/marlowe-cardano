@@ -13,6 +13,7 @@
 #   cardano-cli
 #   sed
 #   jq
+#   xargs
 
 
 # This script exits with an error value if the end-to-end test fails.
@@ -387,9 +388,47 @@ echo "There is no UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 echo
+echo "Here is the UTxO at $BYSTANDER_NAME address:"
+cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+
+echo
 echo "Here is the UTxO at $PARTY_NAME address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
+
+# Clean up.
+
+echo
+echo "Clean up."
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" --out-file /dev/stdout \
+| jq '. | to_entries[] | .key'                                                             \
+| sed -e 's/"//g;s/^/--tx-in /'                                                            \
+| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                               \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
+                                               --change-address "$BYSTANDER_ADDRESS"       \
+                                               --out-file tx-5.raw                         \
+                                               --required-signer "$BYSTANDER_PAYMENT_SKEY" \
+                                               --print-stats                               \
+                                               --submit=600                                \
+| sed -e 's/^TxId "\(.*\)"$/\1/'
+
 echo
 echo "Here is the UTxO at $BYSTANDER_NAME address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" --out-file /dev/stdout \
+| jq '. | to_entries[] | .key'                                                             \
+| sed -e 's/"//g;s/^/--tx-in /'                                                            \
+| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                               \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
+                                               --change-address "$PARTY_ADDRESS"       \
+                                               --out-file tx-6.raw                         \
+                                               --required-signer "$PARTY_PAYMENT_SKEY" \
+                                               --print-stats                               \
+                                               --submit=600                                \
+| sed -e 's/^TxId "\(.*\)"$/\1/'
+
+echo
+echo "Here is the UTxO at $PARTY_NAME address:"
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"

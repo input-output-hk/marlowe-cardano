@@ -26,7 +26,7 @@ import           Cardano.Api                           (ConsensusModeParams (Car
                                                         StakeAddressReference (..))
 import           Cardano.Config.Git.Rev                (gitRev)
 import           Control.Monad                         (when)
-import           Control.Monad.Except                  (ExceptT, liftIO, runExceptT, throwError)
+import           Control.Monad.Except                  (liftIO, runExceptT, throwError)
 import           Data.Maybe                            (fromMaybe)
 import           Data.Version                          (Version, showVersion)
 import           Language.Marlowe.CLI.Examples         (makeExample)
@@ -52,15 +52,10 @@ import qualified Language.Marlowe.CLI.Examples.Trivial as Example (makeTrivialCo
 import qualified Options.Applicative                   as O
 
 
--- | Hardwired example.
-type Example = Bool -> String -> ExceptT CliError IO ()
-
-
 -- | Main entry point for Marlowe CLI tool.
 mainCLI :: Version  -- ^ The version of the tool.
-        -> Example  -- ^ Hardwired example.
         -> IO ()    -- ^ Action to run the tool.
-mainCLI version example =
+mainCLI version =
   do
     command <- O.execParser $ parser version
     result <-
@@ -213,7 +208,6 @@ mainCLI version example =
                                          bToken
                                          bAmount
                                          bTimeout
-            Example{..}         -> example writeFiles pubKeyHash
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -248,7 +242,6 @@ parser version =
               <> templateTrivialCommand
               <> templateEscrowCommand
               <> templateSwapCommand
-              <> exampleCommand
             )
     )
     (
@@ -641,19 +634,3 @@ templateSwapOptions =
     <*> O.option O.auto            (O.long "b-amount"  <> O.metavar "INTEGER"     <> O.help "The amount of the second party's token."    )
     <*> O.option parseSlot         (O.long "b-timeout" <> O.metavar "SLOT"        <> O.help "The timeout for the second party's deposit.")
     <*> (O.optional . O.strOption) (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."       )
-
-
--- | Parser for the "example" command.
-exampleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
-exampleCommand =
-  O.command "example"
-    $ O.info (exampleOptions O.<**> O.helper)
-    $ O.progDesc "Hardwired example."
-
-
--- | Parser for the "example" options.
-exampleOptions :: O.Parser Command
-exampleOptions =
-  Example
-    <$> O.strArgument (O.metavar "PUBKEYHASH" <> O.help "The public key hash for the example party."                 )
-    <*> O.switch      (O.long "write-files"   <> O.help "Write example JSON files for states, contracts, and inputs.")

@@ -1,0 +1,4 @@
+*.plutus
+*.skey
+*.vkey
+tx-*.*
