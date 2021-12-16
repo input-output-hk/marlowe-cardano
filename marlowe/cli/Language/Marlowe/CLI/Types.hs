@@ -412,6 +412,18 @@ data Command =
     {
       outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
     }
+    -- | Template for trivial contract.
+  | TemplateTrivial
+    {
+      bystander          :: Party           -- ^ The party providing the min-ADA.
+    , minAda             :: Integer         -- ^ Lovelace in the initial state.
+    , minSlot            :: Slot            -- ^ The minimum slot.
+    , party              :: Party           -- ^ The party.
+    , depositLovelace    :: Integer         -- ^ Lovelace in the deposit.
+    , withdrawalLovelace :: Integer         -- ^ Lovelace in the withdrawal.
+    , timeout            :: Slot            -- ^ The timeout.
+    , outputFile         :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
+    }
     -- | Template for escrow contract.
   | TemplateEscrow
     {

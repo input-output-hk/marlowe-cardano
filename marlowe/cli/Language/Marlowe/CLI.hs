@@ -184,6 +184,15 @@ mainCLI version example =
                                      outputFile
             InputNotify{..}     -> makeNotification
                                      outputFile
+            TemplateTrivial{..} -> makeExample outputFile
+                                     $ Example.makeTrivialContract
+                                         bystander
+                                         minAda
+                                         minSlot
+                                         party
+                                         depositLovelace
+                                         withdrawalLovelace
+                                         timeout
             TemplateEscrow{..}  -> makeExample outputFile
                                      $ Example.makeEscrowContract
                                          price
@@ -236,6 +245,7 @@ parser version =
               <> inputChoiceCommand
               <> inputNotifyCommand
               <> computeCommand
+              <> templateTrivialCommand
               <> templateEscrowCommand
               <> templateSwapCommand
               <> exampleCommand
@@ -565,15 +575,37 @@ inputNotifyOptions =
     <$> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
 
 
--- | Parser for the "template-escrow" command.
+-- | Parser for the "contract-trivial" command.
+templateTrivialCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+templateTrivialCommand =
+  O.command "contract-trivial"
+    $ O.info (templateTrivialOptions O.<**> O.helper)
+    $ O.progDesc "Template for a trivial contract."
+
+
+-- | Parser for the "contract-trivial" options.
+templateTrivialOptions :: O.Parser Command
+templateTrivialOptions =
+  TemplateTrivial
+    <$> O.option parseParty        (O.long "bystander"           <> O.metavar "PARTY"       <> O.help "The party providing the min-ADA."    )
+    <*> O.option O.auto            (O.long "minimum-ada"         <> O.metavar "INTEGER"     <> O.help "Lovelace in the initial state."      )
+    <*> O.option parseSlot         (O.long "minimum-slot"        <> O.metavar "SLOT"        <> O.help "The minimum slot."                   )
+    <*> O.option parseParty        (O.long "party"               <> O.metavar "PARTY"       <> O.help "The party."                          )
+    <*> O.option O.auto            (O.long "deposit-lovelace"    <> O.metavar "INTEGER"     <> O.help "Lovelace in the deposit."            )
+    <*> O.option O.auto            (O.long "withdrawal-lovelace" <> O.metavar "INTEGER"     <> O.help "Lovelace in the withdrawal."         )
+    <*> O.option parseSlot         (O.long "timeout"             <> O.metavar "SLOT"        <> O.help "The timeout."                        )
+    <*> (O.optional . O.strOption) (O.long "out-file"            <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
+
+
+-- | Parser for the "contract-escrow" command.
 templateEscrowCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 templateEscrowCommand =
-  O.command "template-escrow"
+  O.command "contract-escrow"
     $ O.info (templateEscrowOptions O.<**> O.helper)
     $ O.progDesc "Template for a escrow contract."
 
 
--- | Parser for the "template-escrow" options.
+-- | Parser for the "contract-escrow" options.
 templateEscrowOptions :: O.Parser Command
 templateEscrowOptions =
   TemplateEscrow
@@ -588,15 +620,15 @@ templateEscrowOptions =
     <*> (O.optional . O.strOption) (O.long "out-file"           <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."               )
 
 
--- | Parser for the "template-swap" command.
+-- | Parser for the "contract-swap" command.
 templateSwapCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 templateSwapCommand =
-  O.command "template-swap"
+  O.command "contract-swap"
     $ O.info (templateSwapOptions O.<**> O.helper)
     $ O.progDesc "Template for a swap contract."
 
 
--- | Parser for the "template-swap" options.
+-- | Parser for the "contract-swap" options.
 templateSwapOptions :: O.Parser Command
 templateSwapOptions =
   TemplateSwap
