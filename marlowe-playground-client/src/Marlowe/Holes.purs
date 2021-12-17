@@ -362,7 +362,7 @@ compareLocation (Range _) (BlockId _) = unsafeThrow "Invalid comparation of a Bl
 
 data Term a
   = Term a Location
-  | Hole String (Proxy a) Location
+  | Hole String Location
 
 derive instance genericTerm :: Generic (Term a) _
 
@@ -372,11 +372,11 @@ derive instance ordTerm :: Ord a => Ord (Term a)
 
 instance showTerm :: Show a => Show (Term a) where
   show (Term a _) = show a
-  show (Hole name _ _) = "?" <> name
+  show (Hole name _) = "?" <> name
 
 instance prettyTerm :: Pretty a => Pretty (Term a) where
   pretty (Term a _) = P.pretty a
-  pretty (Hole name _ _) = P.text $ "?" <> name
+  pretty (Hole name _) = P.text $ "?" <> name
 
 instance hasArgsTerm :: Args a => Args (Term a) where
   hasArgs (Term a _) = hasArgs a
@@ -386,7 +386,7 @@ instance hasArgsTerm :: Args a => Args (Term a) where
 
 instance templateTerm :: (Template a b, Monoid b) => Template (Term a) b where
   getPlaceholderIds (Term a _) = getPlaceholderIds a
-  getPlaceholderIds (Hole _ _ _) = mempty
+  getPlaceholderIds (Hole _ _) = mempty
 
 instance fillableTerm :: Fillable a b => Fillable (Term a) b where
   fillTemplate b (Term a loc) = Term (fillTemplate b a) loc
@@ -394,10 +394,10 @@ instance fillableTerm :: Fillable a b => Fillable (Term a) b where
 
 instance hasTimeoutTerm :: HasTimeout a => HasTimeout (Term a) where
   timeouts (Term a _) = timeouts a
-  timeouts (Hole _ _ _) = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts (Hole _ _) = Timeouts { maxTime: zero, minTime: Nothing }
 
 mkHole :: forall a. String -> Location -> Term a
-mkHole name range = Hole name Proxy range
+mkHole name range = Hole name range
 
 mkDefaultTerm :: forall a. a -> Term a
 mkDefaultTerm a = Term a NoLocation
@@ -434,7 +434,7 @@ instance termFromTerm :: FromTerm a b => FromTerm (Term a) b where
 getLocation :: forall a. Term a -> Location
 getLocation (Term _ location) = location
 
-getLocation (Hole _ _ location) = location
+getLocation (Hole _ location) = location
 
 -- A TermWrapper is like a Term but doesn't have a Hole constructor
 data TermWrapper a
@@ -510,9 +510,9 @@ isEmpty = Map.isEmpty <<< unwrap
 insertHole :: forall a. IsMarloweType a => Term a -> Holes -> Holes
 insertHole (Term _ _) m = m
 
-insertHole (Hole name proxy location) (Holes m) = Holes $ Map.alter f name m
+insertHole (Hole name location) (Holes m) = Holes $ Map.alter f name m
   where
-  marloweHole = MarloweHole { name, marloweType: (marloweType proxy), location }
+  marloweHole = MarloweHole { name, marloweType: marloweType (Proxy :: Proxy a), location }
 
   f v = Just (Set.insert marloweHole $ fromMaybe mempty v)
 
@@ -1268,7 +1268,7 @@ reduceContractUntilQuiescent env startState term@(Term startContract _) = do
     S.NotReduced /\ NotReduced -> Just (startState /\ term)
     _ -> Nothing
 
-reduceContractUntilQuiescent _ _ (Hole _ _ _) = Nothing
+reduceContractUntilQuiescent _ _ (Hole _ _) = Nothing
 
 -- This structure represents the result of doing a reduceContractStep and its a simplified view
 -- of the Semantic counterpart.
@@ -1293,7 +1293,7 @@ reduceContractStep env state contract = case contract of
         else
           cont2
     Nothing -> ReduceError "this function should not be called in a contract with holes"
-  When _ (Hole _ _ _) _ -> ReduceError "this function should not be called in a contract with holes"
+  When _ (Hole _ _) _ -> ReduceError "this function should not be called in a contract with holes"
   When _ (Term (SlotParam _) _) _ -> ReduceError "this function should not be called with slot params"
   When _ (Term (Slot timeout) _) nextContract ->
     let

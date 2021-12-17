@@ -71,7 +71,7 @@ handleQuery (SetCode code next) = do
     let
       contract =
         either
-          (const $ Hole blocklyState.rootBlockName Proxy NoLocation)
+          (const $ Hole blocklyState.rootBlockName NoLocation)
           identity
           $ Parser.parseContract (Text.stripParens code)
     -- Create the blocks temporarily disabling the blockly events until they settle

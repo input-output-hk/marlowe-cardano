@@ -31,7 +31,6 @@ import Foreign.Object as Object
 import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Payee(..), Term(..), TermWrapper(..), Timeout(..), Token(..), Value(..), ValueId(..))
 import Prologue (class Bounded, class Eq, class Ord, class Show, Either, Maybe(..), Tuple(..), Unit, bind, bottom, discard, map, pure, show, unit, ($), (<#>), (<$>), (<<<), (<>), (=<<), (==), (>>=))
 import Record (merge)
-import Type.Proxy (Proxy(..))
 
 rootBlockName :: String
 rootBlockName = "root_contract"
@@ -1243,7 +1242,7 @@ mkTermFromChild childToBlock attr block = case Object.lookup attr block.children
   -- FIXME: Check if I can use something relating to the term type `a` instead of
   --        attr to generate the hole name. That way I could rename the blockly attributes
   --        without problem
-  Nothing -> pure $ Hole attr Proxy (BlockId block.id)
+  Nothing -> pure $ Hole attr (BlockId block.id)
   Just child ->
     catchError
       (blockToTerm =<< childToBlock child)
@@ -1314,7 +1313,7 @@ fieldAsBigInt attr block =
 
 instance blockToTermContract :: BlockToTerm Contract where
   blockToTerm { type: "BaseContractType", children, id } = case Object.lookup "BaseContractType" children of
-    Nothing -> pure $ Hole "contract" Proxy (BlockId id)
+    Nothing -> pure $ Hole "contract" (BlockId id)
     Just child -> blockToTerm =<< asSingleStatement child
   blockToTerm { type: "CloseContractType", id } = pure $ Term Close (BlockId id)
   blockToTerm b@({ type: "PayContractType", id }) = do
@@ -1599,7 +1598,7 @@ nextBound :: NewBlockFunction -> Workspace -> Connection -> Array (Term Bound) -
 nextBound newBlock workspace fromConnection bounds = do
   case uncons bounds of
     Nothing -> pure unit
-    Just { head: (Hole _ _ _) } -> pure unit
+    Just { head: (Hole _ _) } -> pure unit
     Just { head: (Term (Bound from to) _), tail } -> do
       block <- newBlock workspace (show BoundsType)
       setField block "from" (BigInt.toString from)
@@ -1615,7 +1614,7 @@ instance toBlocklyBounds :: ToBlockly (Array (Term Bound)) where
   toBlockly newBlock workspace input bounds = do
     case uncons bounds of
       Nothing -> pure unit
-      Just { head: (Hole _ _ _) } -> pure unit
+      Just { head: (Hole _ _) } -> pure unit
       Just { head: (Term (Bound from to) _), tail } -> do
         block <- newBlock workspace (show BoundsType)
         setField block "from" (BigInt.toString from)
@@ -1660,7 +1659,7 @@ nextCase :: NewBlockFunction -> Workspace -> Connection -> Array (Term Case) -> 
 nextCase newBlock workspace fromConnection cases = do
   case uncons cases of
     Nothing -> pure unit
-    Just { head: (Hole _ _ _) } -> pure unit
+    Just { head: (Hole _ _) } -> pure unit
     Just { head: (Term (Case action contract) _), tail } -> do
       block <- oneCaseToBlockly newBlock workspace (Case action contract)
       let
@@ -1674,7 +1673,7 @@ instance toBlocklyCases :: ToBlockly (Array (Term Case)) where
   toBlockly newBlock workspace input cases = do
     case uncons cases of
       Nothing -> pure unit
-      Just { head: (Hole _ _ _) } -> pure unit
+      Just { head: (Hole _ _) } -> pure unit
       Just { head: (Term (Case action contract) _), tail } -> do
         block <- oneCaseToBlockly newBlock workspace (Case action contract)
         connectToPrevious block input
