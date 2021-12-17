@@ -65,6 +65,7 @@ toMarlowe ct =
       contractPerformance = contractPerformance ct,
       creditEventTypeCovered = creditEventTypeCovered ct,
       coverageOfCreditEnhancement = constnt <$> coverageOfCreditEnhancement ct,
+      guaranteedExposure = guaranteedExposure ct,
       cycleOfFee = cycleOfFee ct,
       cycleAnchorDateOfFee = cycleAnchorDateOfFee ct,
       feeAccrued = constnt <$> feeAccrued ct,

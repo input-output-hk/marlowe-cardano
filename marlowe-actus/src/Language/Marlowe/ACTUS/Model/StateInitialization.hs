@@ -1,5 +1,7 @@
-{-# LANGUAGE NamedFieldPuns  #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE NamedFieldPuns   #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-| = ACTUS contract state initialization per t0
 
@@ -15,16 +17,17 @@ where
 
 import           Control.Applicative                              ((<|>))
 import           Control.Monad.Reader                             (Reader, reader)
-import           Data.Maybe                                       (fromMaybe, maybeToList)
+import           Data.Maybe                                       (fromMaybe, mapMaybe, maybeToList)
+import           GHC.Records                                      (getField)
 import           Language.Marlowe.ACTUS.Domain.ContractState      (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..),
-                                                                   FEB (..), IPCB (..), SCEF (..))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CEGE (..), CT (..), ContractStructure (..),
+                                                                   ContractTermsPoly (..), Cycle (..), FEB (..),
+                                                                   IPCB (..), Reference (..), SCEF (..))
 import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum (..), ActusOps (..), RoleSignOps (_r),
                                                                    YearFractionOps (..))
 import           Language.Marlowe.ACTUS.Model.StateTransition     (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
 import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf', sup')
-
 import           Prelude                                          hiding ((*), (+), (-), (/))
 
 {-# ANN module "HLint: ignore Use camelCase" #-}
@@ -94,10 +97,35 @@ initializeState = reader initializeState'
             { initialExchangeDate = Just ied
             } | ied > t0 = _zero
         notionalPrincipal
-          ct@ContractTermsPoly
-            { notionalPrincipal = Just nt,
-              coverageOfCreditEnhancement = Just cecv
-            } = _r (contractRole ct) * nt * cecv
+          ContractTermsPoly
+            { contractType = CEG,
+              notionalPrincipal = Just nt,
+              coverageOfCreditEnhancement = Just cecv,
+              contractRole
+            } = _r contractRole * nt * cecv
+        notionalPrincipal
+          ContractTermsPoly
+            { contractType = CEG,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NO,
+              contractStructure,
+              contractRole
+            } | not (null contractStructure) =
+              let cts = mapMaybe referenceContractTerms contractStructure
+                  s = foldr (+) _zero $ mapMaybe (getField @"notionalPrincipal") cts
+               in _r contractRole * cecv * s
+        notionalPrincipal
+          ContractTermsPoly
+            { contractType = CEG,
+              coverageOfCreditEnhancement = Just cecv,
+              guaranteedExposure = Just CEGE_NI,
+              contractStructure,
+              contractRole
+            } | not (null contractStructure) =
+              let cts = mapMaybe referenceContractTerms contractStructure
+                  s = foldr (+) _zero $ mapMaybe (getField @"notionalPrincipal") cts
+                  i = foldr (+) _zero $ mapMaybe (getField @"accruedInterest") cts
+               in _r contractRole * cecv * s * i
         notionalPrincipal
           ct@ContractTermsPoly
             { notionalPrincipal = Just nt
@@ -239,3 +267,9 @@ initializeState = reader initializeState'
 
         contractPerformance ContractTermsPoly {contractPerformance = Just prf} = prf
         contractPerformance _                                                  = error "PRF is not set in ContractTerms"
+
+        referenceContractTerms :: ContractStructure a -> Maybe (ContractTermsPoly a)
+        referenceContractTerms ContractStructure {..} =
+          case reference of
+            ReferenceTerms rt -> Just rt
+            ReferenceId _     -> Nothing

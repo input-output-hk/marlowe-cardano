@@ -131,6 +131,13 @@ data CETC = CETC_DL -- ^ Delayed
 
 $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CETC)
 
+-- |GuaranteedExposure
+data CEGE = CEGE_NO -- ^ Nominal value
+          | CEGE_NI -- ^ Nominal value plus interest
+         deriving stock (Show, Read, Eq, Generic)
+
+$(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CEGE)
+
 -- |FeeBasis
 data FEB = FEB_A -- ^ Absolute value
          | FEB_N -- ^ Notional of underlying
@@ -398,6 +405,7 @@ data ContractTermsPoly a = ContractTermsPoly
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
   , creditEventTypeCovered                   :: Maybe CETC       -- ^ Credit Event Type Covered
   , coverageOfCreditEnhancement              :: Maybe a          -- ^ Coverage Of Credit Enhancement
+  , guaranteedExposure                       :: Maybe CEGE       -- ^ Guaranteed Exposure
 
   -- Fees
   , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
@@ -505,6 +513,7 @@ instance FromJSON ContractTerms where
       <*> v .:? "contractPerformance"
       <*> v .:? "creditEventTypeCovered"
       <*> v .!? "coverageOfCreditEnhancement"
+      <*> v .!? "guaranteedExposure"
       <*> v .:? "cycleOfFee"
       <*> v .:? "cycleAnchorDateOfFee"
       <*> v .:? "feeAccrued"
