@@ -190,6 +190,7 @@ mainCLI version =
                                          timeout
             TemplateEscrow{..}  -> makeExample outputFile
                                      $ Example.makeEscrowContract
+                                         minAda
                                          price
                                          seller
                                          buyer
@@ -602,7 +603,8 @@ templateEscrowCommand =
 templateEscrowOptions :: O.Parser Command
 templateEscrowOptions =
   TemplateEscrow
-    <$> O.option O.auto            (O.long "price"              <> O.metavar "INTEGER"     <> O.help "The price of the sale, in lovelace."                )
+    <$> O.option O.auto            (O.long "minimum-ada"        <> O.metavar "INTEGER"     <> O.help "Lovelace in the initial state."                     )
+    <*> O.option O.auto            (O.long "price"              <> O.metavar "INTEGER"     <> O.help "The price of the sale, in lovelace."                )
     <*> O.option parseParty        (O.long "seller"             <> O.metavar "PARTY"       <> O.help "The seller."                                        )
     <*> O.option parseParty        (O.long "buyer"              <> O.metavar "PARTY"       <> O.help "The buyer."                                         )
     <*> O.option parseParty        (O.long "mediator"           <> O.metavar "PARTY"       <> O.help "The mediator."                                      )

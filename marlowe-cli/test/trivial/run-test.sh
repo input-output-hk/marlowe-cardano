@@ -27,9 +27,16 @@ set -e
 
 # Select the network.
 
-MAGIC=(--testnet-magic 1097911063)
-SLOT_LENGTH=1000
-SLOT_OFFSET=1594369216000
+if false
+then # Use the public testnet.
+  MAGIC=(--testnet-magic 1097911063)
+  SLOT_LENGTH=1000
+  SLOT_OFFSET=1594369216000
+else # Use the private testnet.
+  MAGIC=(--testnet-magic 1564)
+  SLOT_LENGTH=1000
+  SLOT_OFFSET=1638215277000
+fi
 
 
 # The "bystander" simply provides the minimum ada to be held in the contract while it is active.
@@ -174,7 +181,7 @@ marlowe-cli transaction-create "${MAGIC[@]}"                               \
 )
 
 echo
-echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace the UTxO $TX_1."
+echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from $BYSTANDER_NAME in the transaction $TX_1."
 
 echo
 echo "Here is the UTxO at the contract address:"
@@ -249,14 +256,14 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                                 \
 )
 
 echo
-echo "The contract received the deposit of $DEPOSIT_LOVELACE lovelace in the UTxO $TX_2"
+echo "The contract received the deposit of $DEPOSIT_LOVELACE lovelace from $PARTY_NAME in the transaction $TX_2"
 
 echo
 echo "Here is the UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 echo
-echo "Here is the UTxO at $PARTY_NAME address:"
+echo "Here is the UTxO at $PARTY_NAME's address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 
@@ -328,7 +335,7 @@ echo "Here is the UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
 echo
-echo "Here is the UTxO at $PARTY_NAME address:"
+echo "Here is the UTxO at $PARTY_NAME's address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
 
@@ -389,11 +396,11 @@ echo "There is no UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 echo
-echo "Here is the UTxO at $BYSTANDER_NAME address:"
+echo "Here is the UTxO at $BYSTANDER_NAME's address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 echo
-echo "Here is the UTxO at $PARTY_NAME address:"
+echo "Here is the UTxO at $PARTY_NAME's address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
 
@@ -415,7 +422,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" --out-file /
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 
 echo
-echo "Here is the UTxO at $BYSTANDER_NAME address:"
+echo "Here is the UTxO at $BYSTANDER_NAME's address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" --out-file /dev/stdout \
@@ -431,5 +438,5 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" --out-file /dev/
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 
 echo
-echo "Here is the UTxO at $PARTY_NAME address:"
+echo "Here is the UTxO at $PARTY_NAME's address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"

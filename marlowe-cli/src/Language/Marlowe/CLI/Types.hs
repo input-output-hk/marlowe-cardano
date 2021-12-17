@@ -427,7 +427,8 @@ data Command =
     -- | Template for escrow contract.
   | TemplateEscrow
     {
-      price             :: Integer  -- ^ Price of the item for sale, in lovelace.
+      minAda            :: Integer  -- ^ Lovelace in the initial state.
+    , price             :: Integer  -- ^ Price of the item for sale, in lovelace.
     , seller            :: Party    -- ^ The seller.
     , buyer             :: Party    -- ^ The buyer.
     , mediator          :: Party    -- ^ The mediator.

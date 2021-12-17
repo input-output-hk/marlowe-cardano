@@ -32,7 +32,8 @@ import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 -- | An escrow contract with mediation.
-makeEscrowContract :: Integer      -- ^ Price of the item, in lovelace.
+makeEscrowContract :: Integer      -- ^ Lovelace in the initial state.
+                   -> Integer      -- ^ Price of the item, in lovelace.
                    -> Party        -- ^ The seller.
                    -> Party        -- ^ The buyer.
                    -> Party        -- ^ The mediator.
@@ -41,14 +42,14 @@ makeEscrowContract :: Integer      -- ^ Price of the item, in lovelace.
                    -> Slot         -- ^ The deadline for the seller to dispute a complaint.
                    -> Slot         -- ^ The deadline for the mediator to decide.
                    -> MarloweData  -- ^ The escrow contract and initial state.
-makeEscrowContract price seller buyer mediator paymentDeadline complaintDeadline disputeDeadline mediationDeadline =
+makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintDeadline disputeDeadline mediationDeadline =
   let
     ada = Token adaSymbol adaToken
     price' = Constant price
     marloweState =
       State
       {
-        accounts    = AM.singleton (seller, ada) 5_000_000
+        accounts    = AM.singleton (mediator, ada) minAda
       , choices     = AM.empty
       , boundValues = AM.empty
       , minSlot     = 1
@@ -62,7 +63,7 @@ makeEscrowContract price seller buyer mediator paymentDeadline complaintDeadline
                Case (Choice (ChoiceId "Everything is alright" buyer) [Bound 0 0])
                  Close
              , Case (Choice (ChoiceId "Report problem" buyer) [Bound 1 1])
-                 $ Pay seller (Party buyer) ada price'
+                 $ Pay seller (Account buyer) ada price'
                  $ When
                    [
                      Case (Choice (ChoiceId "Confirm problem" seller) [Bound 1 1])
@@ -71,9 +72,9 @@ makeEscrowContract price seller buyer mediator paymentDeadline complaintDeadline
                      $ When
                        [
                          Case (Choice (ChoiceId "Dismiss claim" mediator) [Bound 0 0])
-                           $ Pay buyer (Party seller) ada price'
+                           $ Pay buyer (Account seller) ada price'
                            Close
-                       , Case (Choice (ChoiceId "Confirm problem" mediator) [Bound 1 1])
+                       , Case (Choice (ChoiceId "Confirm claim" mediator) [Bound 1 1])
                            Close
                        ]
                        mediationDeadline
