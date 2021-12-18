@@ -7,12 +7,12 @@
 module Marlowe.Run.Webserver.Wallet.Types where
 
 import           Cardano.Prelude
-import           Data.Aeson.Types (ToJSON)
-
+import           Data.Aeson.Types       (ToJSON)
+import           Plutus.V1.Ledger.Value (Value)
 data GetTotalFunds =
     GetTotalFunds
-        { balance :: Integer
-        , sync    :: Double
+        { assets :: Value
+        , sync   :: Double
         }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON)
