@@ -283,8 +283,8 @@ cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
                               --tx-out "$PARTY_A_ADDRESS+45000000"         \
                               --tx-out "$PARTY_B_ADDRESS+7000000"          \
                               --change-address "$PARTY_B_ADDRESS"          \
-                              --invalid-before "$TIP"                      \
-                              --invalid-hereafter "$(($TIP+4*24*3600))"    \
+                              --invalid-before "$MINIMUM_SLOT"             \
+                              --invalid-hereafter "$TIMEOUT_SLOT"          \
                               --out-file tx-2.raw
 
 # Perform a dry-run of redeeming both contracts at once: the first party only
@@ -311,8 +311,8 @@ cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
                               --tx-out "$PARTY_A_ADDRESS+25000000"         \
                               --tx-out "$PARTY_B_ADDRESS+27000000"         \
                               --change-address "$PARTY_B_ADDRESS"          \
-                              --invalid-before "$TIP"                      \
-                              --invalid-hereafter "$(($TIP+4*24*3600))"    \
+                              --invalid-before "$MINIMUM_SLOT"             \
+                              --invalid-hereafter "$TIMEOUT_SLOT"          \
                               --out-file tx-2.raw
 
 # Now sign an submit the transaction, just to make sure that the theft really
@@ -345,7 +345,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS" --out-file /de
 | xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                             \
                                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                                --change-address "$PARTY_A_ADDRESS"       \
-                                               --out-file tx-6.raw                       \
+                                               --out-file tx-3.raw                       \
                                                --required-signer "$PARTY_A_PAYMENT_SKEY" \
                                                --submit=600                              \
 > /dev/null
@@ -356,7 +356,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS" --out-file /de
 | xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                             \
                                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                                --change-address "$PARTY_B_ADDRESS"       \
-                                               --out-file tx-5.raw                       \
+                                               --out-file tx-4.raw                       \
                                                --required-signer "$PARTY_B_PAYMENT_SKEY" \
                                                --submit=600                              \
 > /dev/null

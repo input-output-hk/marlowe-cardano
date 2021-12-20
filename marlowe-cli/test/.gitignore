@@ -1,5 +1,3 @@
 *.plutus
-*.skey
-*.vkey
+*.protocol
 tx-*.*
-*.diff
