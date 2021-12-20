@@ -6,6 +6,7 @@ on:
       - production
       - deploy-hernan
       - deploy-pablo
+      - shlevy
 jobs:
   deploy:
     runs-on: ubuntu-latest
