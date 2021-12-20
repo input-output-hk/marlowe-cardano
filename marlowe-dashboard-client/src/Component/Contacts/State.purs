@@ -41,7 +41,7 @@ import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
-import Marlowe.Semantics (Assets, Token(..))
+import Marlowe.Semantics (Assets, Token(..), CurrencySymbol, TokenName)
 import Network.RemoteData (RemoteData(..), fromEither)
 import Page.Dashboard.Types (Action(..)) as Dashboard
 import Toast.Types (errorToast, successToast)
@@ -143,19 +143,14 @@ handleAction (WalletIdInputAction inputFieldAction) = do
       -- note we handle the inputFieldAction _first_ so that the InputField value is set - otherwise the
       -- validation feedback is wrong while the rest is happening
       toWalletIdInput $ InputField.handleAction inputFieldAction
-      handleAction $ SetRemoteWalletInfo NotAsked
+      setRemoteWalletInfo NotAsked
       -- if this is a valid contract ID ...
       for_ (parsePlutusAppId walletIdString) \walletId -> do
-        handleAction $ SetRemoteWalletInfo Loading
+        setRemoteWalletInfo Loading
         -- .. lookup wallet info
         ajaxWalletInfo <- lookupWalletInfo walletId
-        handleAction $ SetRemoteWalletInfo $ fromEither ajaxWalletInfo
+        setRemoteWalletInfo $ fromEither ajaxWalletInfo
     _ -> toWalletIdInput $ InputField.handleAction inputFieldAction
-
-handleAction (SetRemoteWalletInfo remoteWalletInfo) = do
-  assign _remoteWalletInfo remoteWalletInfo
-  walletLibrary <- use _walletLibrary
-  handleAction $ WalletIdInputAction $ InputField.SetValidator $ walletIdError remoteWalletInfo walletLibrary
 
 handleAction (ConnectWallet walletNickname companionAppId) = do
   ajaxWalletDetails <- lookupWalletDetails companionAppId
@@ -171,6 +166,24 @@ handleAction (ConnectWallet walletNickname companionAppId) = do
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
   addToast $ successToast "Copied to clipboard"
+
+-- TODO: As part of SCP-2865, we should refactor all InputField to be a proper halogen component instead
+--       of a sub-component. Then we could remove the SetValidator logic here that requires this function
+--       to have all the capabilities that the component has (because we need to use handleAction)
+setRemoteWalletInfo ::
+  forall m.
+  MonadAff m =>
+  MonadAsk Env m =>
+  ManageMarlowe m =>
+  ManageMarloweStorage m =>
+  Toast m =>
+  MonadClipboard m =>
+  (NotFoundWebData WalletInfo) ->
+  HalogenM State Action ChildSlots Msg m Unit
+setRemoteWalletInfo info = do
+  assign _remoteWalletInfo info
+  walletLibrary <- use _walletLibrary
+  handleAction $ WalletIdInputAction $ InputField.SetValidator $ walletIdError info walletLibrary
 
 ------------------------------------------------------------
 toWalletNicknameInput ::
@@ -188,11 +201,24 @@ toWalletIdInput ::
 toWalletIdInput = mapSubmodule _walletIdInput WalletIdInputAction
 
 ------------------------------------------------------------
+-- The cardano Blockchain has Multi-Asset support, each monetary policy is identified
+-- by a policyId which is also known as the CurrencySymbol. The ADA token is a special
+-- case that has the empty string as both the token name and the currency symbol
+-- https://docs.cardano.org/native-tokens/learn
+-- https://github.com/input-output-hk/plutus/blob/1f31e640e8a258185db01fa899da63f9018c0e85/plutus-ledger-api/src/Plutus/V1/Ledger/Ada.hs#L45
+-- TODO: We should probably move this to the Semantic module (marlowe-web-common), or a common Ledger module (web-common?), but definitely not
+--       the contacts module.
+adaCurrencySymbol :: CurrencySymbol
+adaCurrencySymbol = ""
+
+adaTokenName :: TokenName
+adaTokenName = ""
+
 adaToken :: Token
-adaToken = Token "" ""
+adaToken = Token adaCurrencySymbol adaTokenName
 
 getAda :: Assets -> BigInt
-getAda assets = fromMaybe zero $ lookup "" =<< lookup "" (unwrap assets)
+getAda assets = fromMaybe zero $ lookup adaTokenName =<< lookup adaCurrencySymbol (unwrap assets)
 
 walletNicknameError :: WalletLibrary -> WalletNickname -> Maybe WalletNicknameError
 walletNicknameError _ "" = Just EmptyWalletNickname
