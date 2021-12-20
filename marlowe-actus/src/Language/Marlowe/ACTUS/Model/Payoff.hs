@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
+{-| = ACTUS payoff functions -}
 module Language.Marlowe.ACTUS.Model.Payoff
   ( payoff
   , CtxPOF (..)
@@ -16,11 +17,13 @@ import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), Ac
                                                                YearFractionOps (_y))
 import           Prelude                                      hiding (Fractional, Num, (*), (+), (-), (/))
 
+-- |The context for payoff functions
 data CtxPOF a = CtxPOF
   { contractTerms :: ContractTermsPoly a                         -- ^ Contract terms
   , riskFactors   :: EventType -> LocalTime -> RiskFactorsPoly a -- ^ Risk factors as a function of event type and time
   }
 
+-- |The payoff function
 payoff :: (RoleSignOps a, YearFractionOps a) =>
      EventType           -- ^ Event type
   -> LocalTime           -- ^ Time

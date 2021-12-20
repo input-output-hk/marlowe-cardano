@@ -325,11 +325,11 @@ data Assertion = NpvAssertionAgainstZeroRiskBond
   deriving anyclass (FromJSON, ToJSON)
 
 -- |Reference type
-data ReferenceType = CNT
-                   | CID
-                   | MOC
-                   | EID
-                   | CST
+data ReferenceType = CNT -- ^ Contract
+                   | CID -- ^ Contract Identifier
+                   | MOC -- ^ Market Object Identifier
+                   | EID -- ^ Legal Entity Identifier
+                   | CST -- ^ Contract Structure
   deriving stock (Eq, Show, Read, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
