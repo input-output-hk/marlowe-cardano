@@ -338,14 +338,12 @@ ex_com1 =
     run ct = case genStaticContract rf ct of
       Failure _ -> assertFailure "Terms validation should not fail"
       Success contract ->
-          let principal = IDeposit (Role "counterparty") "counterparty" ada
-              ex = IDeposit (Role "party") "party" ada
+          let principal = IDeposit (Role "party") "party" ada
               out =
                 computeTransaction
                   ( TransactionInput
                       (0, 0)
-                      [ principal 10,
-                        ex 40
+                      [ principal $ 2*700
                       ]
                   )
                   (emptyState 0)
@@ -356,9 +354,9 @@ ex_com1 =
                   assertBool "Contract is in Close" $ con == Close
                   assertBool "No warnings" $ null txWarn
 
-                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 10)
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 0)
                   let tc = totalPayments (Party "counterparty") txPay
-                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 40)
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400)
 
       where
         rf :: EventType -> LocalTime -> RiskFactors
