@@ -315,16 +315,17 @@ cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
                               --invalid-hereafter "$TIMEOUT_SLOT"          \
                               --out-file tx-2.raw
 
-# Now sign an submit the transaction, just to make sure that the theft really
+# Now sign and submit the transaction, just to make sure that the theft really
 # can occur.
-TX_3=$(
+TX_3x=$(
 marlowe-cli transaction-submit "${MAGIC[@]}"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --tx-body-file tx-2.raw                   \
                                --required-signer "$PARTY_B_PAYMENT_SKEY" \
                                --timeout 600                             \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                         \
 )
+TX_3_EXIT="$?"
+TX_3=$(echo "$TX_3x" | sed -e 's/^TxId "\(.*\)"$/\1/')
 echo "TxId $TX_3"
 
 echo "There is no UTxO at the contract address:"
@@ -360,3 +361,14 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS" --out-file /de
                                                --required-signer "$PARTY_B_PAYMENT_SKEY" \
                                                --submit=600                              \
 > /dev/null
+
+
+# Return error if the transaction succeeded.
+
+if [ "$TX_3_EXIT" -eq 0 ]
+then
+  echo "Double satisfaction occurred."
+  exit 1
+else
+  echo "Double satisfaction did not occur."
+fi
