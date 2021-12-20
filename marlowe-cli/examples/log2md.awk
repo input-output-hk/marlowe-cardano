@@ -3,7 +3,7 @@ BEGIN {
   mode = "v"
 }
 
-/^ echo "# / && mode == "v" {
+/^ echo ["']# / && mode == "v" {
   mode = ""
 }
 

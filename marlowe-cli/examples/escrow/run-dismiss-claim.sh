@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 
-
-# Test of an escrow contract.
-
-
-# The environment variable CARDANO_NODE_SOCKET_PATH must be set to the path to the cardano node's socket.
-#
-# The following tools must be on the path:
-#   marlowe-cli
-#   cardano-cli
-#   sed
-#   jq
-#   xargs
-#
-# Signing and verification keys must be provided below for the "bystander" and "party" roles: to do this, set the
-# environment variables "SELLER_PREFIX", "BUYER_PREFIX", and "MEDIATOR_PREFIX" where they appear below.
-
-
 # This script exits with an error value if the end-to-end test fails.
-
 set -e
 
+echo '# Example Escrow Contract: "Dismiss Claim"'
 
-# Select the network.
+echo "In this example execution of [an escrow contract](ReadMe.md), the buyer reports a problem, the seller disputes the problem, and the mediator dismisses the buyer's claim."
+
+echo "## Prerequisites"
+
+echo "The environment variable "'`CARDANO_NODE_SOCKET_PATH`'" must be set to the path to the cardano node's socket."
+echo
+echo 'The following tools must be on the PATH:'
+echo '* [marlowe-cli](../../ReadMe.md)'
+echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
+echo '* [jq](https://stedolan.github.io/jq/manual/)'
+echo '* sed'
+echo '* xargs'
+echo
+echo 'Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables `SELLER_PREFIX`, `BUYER_PREFIX`, and `PARTY_PREFIX` where they appear below.'
+
+echo "## Preliminaries"
+
+echo "### Select Network"
 
 if false
 then # Use the public testnet.
@@ -35,113 +35,121 @@ else # Use the private testnet.
   SLOT_OFFSET=1638215277000
 fi
 
+echo "### Select Parties"
 
-# The "seller" sells an item for a price.
+echo "#### The Seller"
+
+echo "The seller sells an item for a price."
 
 SELLER_PREFIX="$TREASURY/francis-beaumont"
 SELLER_NAME="Francis Beaumont"
 SELLER_PAYMENT_SKEY="$SELLER_PREFIX".skey
 SELLER_PAYMENT_VKEY="$SELLER_PREFIX".vkey
-SELLER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$SELLER_PAYMENT_VKEY")
-SELLER_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$SELLER_PAYMENT_VKEY")
+SELLER_ADDRESS=$(
+  cardano-cli address build "${MAGIC[@]}"                                          \
+                            --payment-verification-key-file "$SELLER_PAYMENT_VKEY" \
+)
+SELLER_PUBKEYHASH=$(
+  cardano-cli address key-hash --payment-verification-key-file "$SELLER_PAYMENT_VKEY"
+)
 
-echo "$SELLER_NAME is the seller."
-echo "$SELLER_NAME's address: $SELLER_ADDRESS"
-echo "$SELLER_NAME's public key hash: $SELLER_PUBKEYHASH"
-echo "Contents of $SELLER_NAME's wallet:"
+echo "The seller $SELLER_NAME has the address "'`'"$SELLER_ADDRESS"'`'" and public-key hash "'`'"$SELLER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS"
+
+echo "We select the UTxO with the most funds to use in executing the contract."
 
 TX_0_SELLER=$(
 cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$SELLER_ADDRESS"                  \
+                       --address "$SELLER_ADDRESS"                     \
                        --out-file /dev/stdout                          \
 | jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
 )
-echo
-echo "$SELLER_NAME will spend the UTxO $TX_0_SELLER."
 
+echo "$SELLER_NAME will spend the UTxO "'`'"$TX_0_SELLER"'`.'
 
-# The "buyer" buys an item for a price.
+echo "### The Buyer"
 
 BUYER_PREFIX="$TREASURY/thomas-kyd"
 BUYER_NAME="Thomas Kyd"
 BUYER_PAYMENT_SKEY="$BUYER_PREFIX".skey
 BUYER_PAYMENT_VKEY="$BUYER_PREFIX".vkey
-BUYER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$BUYER_PAYMENT_VKEY")
-BUYER_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$BUYER_PAYMENT_VKEY")
+BUYER_ADDRESS=$(
+  cardano-cli address build "${MAGIC[@]}"                                          \
+                            --payment-verification-key-file "$BUYER_PAYMENT_VKEY" \
+)
+BUYER_PUBKEYHASH=$(
+  cardano-cli address key-hash --payment-verification-key-file "$BUYER_PAYMENT_VKEY"
+)
 
-echo
-echo "$BUYER_NAME is the buyer."
-echo "$BUYER_NAME's address: $BUYER_ADDRESS"
-echo "$BUYER_NAME's public key hash: $BUYER_PUBKEYHASH"
-echo "Contents of $BUYER_NAME's wallet:"
+echo "The buyer $BUYER_NAME has the address "'`'"$BUYER_ADDRESS"'`'" and public-key hash "'`'"$BUYER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS"
+
+echo "We select the UTxO with the most funds to use in executing the contract."
 
 TX_0_BUYER=$(
 cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$BUYER_ADDRESS"                      \
+                       --address "$BUYER_ADDRESS"                     \
                        --out-file /dev/stdout                          \
 | jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
 )
-echo
-echo "$BUYER_NAME will spend the UTxO $TX_0_BUYER."
 
+echo "$BUYER_NAME will spend the UTxO "'`'"$TX_0_BUYER"'`.'
 
-# The "mediator" mediates any dispute between buyer and seller.
+echo "### The Mediator"
 
 MEDIATOR_PREFIX="$TREASURY/christopher-marlowe"
 MEDIATOR_NAME="Christopher Marlowe"
 MEDIATOR_PAYMENT_SKEY="$MEDIATOR_PREFIX".skey
 MEDIATOR_PAYMENT_VKEY="$MEDIATOR_PREFIX".vkey
-MEDIATOR_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY")
-MEDIATOR_PUBKEYHASH=$(cardano-cli address key-hash --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY")
+MEDIATOR_ADDRESS=$(
+  cardano-cli address build "${MAGIC[@]}"                                          \
+                            --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY" \
+)
+MEDIATOR_PUBKEYHASH=$(
+  cardano-cli address key-hash --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY"
+)
 
-echo
-echo "$MEDIATOR_NAME is the mediator."
-echo "$MEDIATOR_NAME's address: $MEDIATOR_ADDRESS"
-echo "$MEDIATOR_NAME's public key hash: $MEDIATOR_PUBKEYHASH"
-echo "Contents of $MEDIATOR_NAME's wallet:"
+echo "The mediator $MEDIATOR_NAME has the address "'`'"$MEDIATOR_ADDRESS"'`'" and public-key hash "'`'"$MEDIATOR_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS"
+
+echo "We select the UTxO with the most funds to use in executing the contract."
 
 TX_0_MEDIATOR=$(
 cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$MEDIATOR_ADDRESS"                   \
+                       --address "$MEDIATOR_ADDRESS"                     \
                        --out-file /dev/stdout                          \
 | jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
 )
-echo
-echo "$MEDIATOR_NAME will spend the UTxO $TX_0_MEDIATOR."
 
+echo "$MEDIATOR_NAME will spend the UTxO "'`'"$TX_0_MEDIATOR"'`.'
 
-# Compute the contract address and validator script.
+echo "### Validator Script and Address"
 
-echo
-echo "Compute the contract address and validator script."
+echo "The contract has a validator script and address. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
 
 CONTRACT_ADDRESS=$(
 marlowe-cli export-address "${MAGIC[@]}" \
             --slot-length "$SLOT_LENGTH" \
             --slot-offset "$SLOT_OFFSET" \
 )
-
 marlowe-cli export-validator "${MAGIC[@]}"                \
                              --slot-length "$SLOT_LENGTH" \
                              --slot-offset "$SLOT_OFFSET" \
                              --out-file escrow.plutus     \
                              --print-stats
 
-
-# Find the current tip of the blockchain.
+echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
-echo
-echo "The tip is at slot $TIP."
 
-echo
-echo "The current POSIX time implies that the tip of the blockchain should be at slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
 
+echo "## The Contract"
 
-# The contract has a minimum slot and a timeout.
+echo "The contract has a minimum slot and several deadlines."
 
 MINIMUM_SLOT="$TIP"
 
@@ -150,23 +158,22 @@ COMPLAINT_DEADLINE=$(($TIP + 2 * 24 * 3600))
 DISPUTE_DEADLINE=$(($TIP + 3 * 24 * 3600))
 MEDIATION_DEADLINE=$(($TIP + 4 * 24 * 3600))
 
-echo
-echo "The current slot is $TIP."
-echo "$BUYER_NAME must pay before slot $PAYMENT_DEADLINE."
-echo "$BUYER_NAME has until slot $COMPAINT_DEADLINE to complain."
-echo "$SELLER_NAME has until slot $DISPUTE_DEADLINE to dispute a complaint."
-echo "$MEDIATOR_NAME has until slot $MEDIATION_DEADLINE to decide on a disputed complaint."
+echo "* The current slot is $TIP."
+echo "* The buyer $BUYER_NAME must pay before slot $PAYMENT_DEADLINE."
+echo "* They buyer $BUYER_NAME has until slot $COMPLAINT_DEADLINE to complain."
+echo "* The seller $SELLER_NAME has until slot $DISPUTE_DEADLINE to dispute a complaint."
+echo "* The mediator $MEDIATOR_NAME has until slot $MEDIATION_DEADLINE to decide on a disputed complaint."
+
+echo "The contract also involves the price of the good exchanged and a minimum-ADA value."
 
 MINIMUM_ADA=3000000
 PRICE=256000000
-echo
+
 echo "The selling price is $PRICE lovelace."
 
+echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
-# Transaction 1. Create the contract by providing the minimum ADA.
-
-echo
-echo "Transaction 1. Create the contract by providing the minimum ADA."
+echo "We create the contract for the previously specified parameters."
 
 marlowe-cli contract-escrow --minimum-ada "$MINIMUM_ADA"               \
                             --price "$PRICE"                           \
@@ -179,18 +186,20 @@ marlowe-cli contract-escrow --minimum-ada "$MINIMUM_ADA"               \
                             --mediation-deadline "$MEDIATION_DEADLINE" \
                             --out-file tx-1.marlowe
 
+echo 'We extract the initial state and full contract from the `.marlowe`file that contains comprehensive information.'
+
 jq '.marloweState'    tx-1.marlowe > tx-1.state
 jq '.marloweContract' tx-1.marlowe > tx-1.contract
 
-echo
-echo "Construct the datum. Here is its hash:"
+echo "For each transaction, we construct the output datum. Here is its size and hash:"
+
 marlowe-cli export-datum --contract-file tx-1.contract \
                          --state-file    tx-1.state    \
                          --out-file      tx-1.datum    \
                          --print-stats
 
-echo
-echo "Submit the transaction."
+echo "The mediator $MEDIATOR_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
+
 TX_1=$(
 marlowe-cli transaction-create "${MAGIC[@]}"                              \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
@@ -206,30 +215,25 @@ marlowe-cli transaction-create "${MAGIC[@]}"                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-echo
-echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from $MEDIATOR_NAME in the transaction $TX_1."
+echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from the mediator $MEDIATOR_NAME in the transaction "'`'"$TX_1"'`'".  Here is the UTxO at the contract address:"
 
-echo
-echo "Here is the UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
-echo
-echo "Here is the UTxO at $MEDIATOR_NAME's address:"
+echo "Here is the UTxO at the mediator $MEDIATOR_NAME's address:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
+echo "## Transaction 2. Buyer Deposits Funds into Seller's Account."
 
-# Transaction 2. Buyer deposits funds into seller's account.
-
-echo
-echo "Transaction 2. Buyer deposits funds into seller's account."
+echo "First we compute the Marlowe input required to make the initial deposit by the buyer."
 
 marlowe-cli input-deposit --deposit-account "PK=$SELLER_PUBKEYHASH" \
                           --deposit-party "PK=$BUYER_PUBKEYHASH"    \
                           --deposit-amount "$PRICE"                 \
                           --out-file "tx-2.input"
 
-echo
-echo "Compute the transaction."
+echo "Next we compute the transition caused by that input to the contract."
+
 marlowe-cli compute --contract-file tx-1.contract          \
                     --state-file    tx-1.state             \
                     --input-file    tx-2.input             \
@@ -238,26 +242,30 @@ marlowe-cli compute --contract-file tx-1.contract          \
                     --invalid-hereafter "$(($TIP+4*3600))" \
                     --print-stats
 
+echo "As in the first transaction, we compute the new state and contract."
+
 jq '.state'    tx-2.marlowe > tx-2.state
 jq '.contract' tx-2.marlowe > tx-2.contract
 
-echo
-echo "Construct the redeemer."
+echo "Because this transaction spends from the script address, it also needs a redeemer:"
+
 marlowe-cli export-redeemer --input-file tx-2.input    \
                             --out-file   tx-2.redeemer \
                             --print-stats
 
-echo
-echo "Construct the datum. Here is its hash:"
+echo "As in the first transaction, we compute the datum and its hash:"
+
 marlowe-cli export-datum --contract-file tx-2.contract \
                          --state-file    tx-2.state    \
                          --out-file      tx-2.datum    \
                          --print-stats
 
+echo "The value held at the contract address must match that required by its state."
+
 CONTRACT_VALUE_2=$(jq '.accounts | [.[][1]] | add' tx-2.state)
 
-echo
-echo "Submit the transaction."
+echo "Now the buyer $BUYER_NAME submits the transaction along with their deposit:"
+
 TX_2=$(
 marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -281,30 +289,25 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-echo
-echo "The contract received the deposit of $PRICE lovelace from $BUYER_NAME in the transaction $TX_2"
+echo "The contract received the deposit of $PRICE lovelace from $BUYER_NAME in the transaction "'`'"$TX_2"'`'". Here is the UTxO at the contract address:"
 
-echo
-echo "Here is the UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
-echo
 echo "Here is the UTxO at $BUYER_NAME's address:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
+echo "## Transaction 3. The Buyer Reports that There is a Problem"
 
-# Transaction 3. The buyer reports that there is a problem.
-
-echo
-echo "Transaction 3. The buyer reports that there is a problem."
+echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli input-choose --choice-name "Report problem"        \
                          --choice-party "PK=$BUYER_PUBKEYHASH" \
                          --choice-number 1                     \
                          --out-file tx-3.input
 
-echo
-echo "Compute the transaction."
+echo "As in the second transaction we compute the contract's transition, its new state, the redeemer, the datum, and the value."
+
 marlowe-cli compute --contract-file tx-2.contract          \
                     --state-file    tx-2.state             \
                     --input-file    tx-3.input             \
@@ -312,25 +315,18 @@ marlowe-cli compute --contract-file tx-2.contract          \
                     --invalid-before "$TIP"                \
                     --invalid-hereafter "$(($TIP+4*3600))" \
                     --print-stats
-
 jq '.state'    tx-3.marlowe > tx-3.state
 jq '.contract' tx-3.marlowe > tx-3.contract
-
-echo
-echo "Construct the redeemer."
 marlowe-cli export-redeemer --input-file tx-3.input    \
                             --out-file   tx-3.redeemer \
                             --print-stats
-
-echo
-echo "Construct the datum. Here is its hash:"
 marlowe-cli export-datum --contract-file tx-3.contract \
                          --state-file    tx-3.state    \
                          --out-file      tx-3.datum    \
                          --print-stats
 
-echo
-echo "Submit the transaction."
+echo "Now the buyer $BUYER_NAME can submit a transaction to report that there is a problem:"
+
 TX_3=$(
 marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -354,30 +350,25 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-echo
-echo "The reporting of a problem was recorded in the transaction $TX_3."
+echo "The reporting of a problem was recorded in the transaction "'`'"$TX_3"'`'". Here is the UTxO at the contract address:"
 
-echo
-echo "There is no UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
-echo
 echo "Here is the UTxO at $BUYER_NAME's address:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
+echo "## Transaction 4. The Seller Disputes that There is a Problem"
 
-# Transaction 4. The seller disputes that there is a problem.
-
-echo
-echo "Transaction 4. The seller disputes that there is a problem."
+echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli input-choose --choice-name "Dispute problem"        \
                          --choice-party "PK=$SELLER_PUBKEYHASH" \
                          --choice-number 0                      \
                          --out-file tx-4.input
 
-echo
-echo "Compute the transaction."
+echo "As always we compute the contract's transition, its new state, the redeemer, the datum, and the value."
+
 marlowe-cli compute --contract-file tx-3.contract          \
                     --state-file    tx-3.state             \
                     --input-file    tx-4.input             \
@@ -385,25 +376,18 @@ marlowe-cli compute --contract-file tx-3.contract          \
                     --invalid-before "$TIP"                \
                     --invalid-hereafter "$(($TIP+4*3600))" \
                     --print-stats
-
 jq '.state'    tx-4.marlowe > tx-4.state
 jq '.contract' tx-4.marlowe > tx-4.contract
-
-echo
-echo "Construct the redeemer."
 marlowe-cli export-redeemer --input-file tx-4.input    \
                             --out-file   tx-4.redeemer \
                             --print-stats
-
-echo
-echo "Construct the datum. Here is its hash:"
 marlowe-cli export-datum --contract-file tx-4.contract \
                          --state-file    tx-4.state    \
                          --out-file      tx-4.datum    \
                          --print-stats
 
-echo
-echo "Submit the transaction."
+echo "Now the seller $SELLER_NAME can submit a transaction to dispute that there is a problem:"
+
 TX_4=$(
 marlowe-cli transaction-advance "${MAGIC[@]}"                             \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -427,30 +411,27 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-echo
-echo "The dispute that this is a problem is recorded in the transaction $TX_4."
+echo "The dispute that this is a problem is recorded in the transaction "'`'"$TX_4"'`'". Here is the UTxO at the contract address:"
 
-echo
-echo "Here is the UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
-echo
-echo "Here is the UTxO at $SELLER_NAME's address:"
+echo "Here is the UTxO at the seller $SELLER_NAME's address:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
+echo "## Transaction 5. The Mediator Dismisses the Claim"
 
-# Transaction 5. The mediator confirms the claim.
+echo "Funds are released to the seller and mediator, closing the contract."
 
-echo
-echo "Transaction 5. The mediator confirms the claim."
+echo "First we compute the input for the contract to transition forward."
 
-marlowe-cli input-choose --choice-name "Confirm claim"            \
+marlowe-cli input-choose --choice-name "Dismiss claim"            \
                          --choice-party "PK=$MEDIATOR_PUBKEYHASH" \
-                         --choice-number 1                        \
+                         --choice-number 0                        \
                          --out-file tx-5.input
 
-echo
-echo "Compute the transaction."
+echo "As previously we compute the contract's transition, its new state, and the redeemer. Because the contract is being closed, no new datum need be computed."
+
 marlowe-cli compute --contract-file tx-4.contract          \
                     --state-file    tx-4.state             \
                     --input-file    tx-5.input             \
@@ -461,15 +442,12 @@ marlowe-cli compute --contract-file tx-4.contract          \
 
 jq '.state'    tx-5.marlowe > tx-5.state
 jq '.contract' tx-5.marlowe > tx-5.contract
-
-echo
-echo "Construct the redeemer."
 marlowe-cli export-redeemer --input-file tx-5.input    \
                             --out-file   tx-5.redeemer \
                             --print-stats
 
-echo
-echo "Submit the transaction."
+echo "Now the mediator $MEDIATOR_NAME can submit a transaction to release funds:"
+
 TX_5=$(
 marlowe-cli transaction-close "${MAGIC[@]}"                              \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
@@ -480,7 +458,7 @@ marlowe-cli transaction-close "${MAGIC[@]}"                              \
                               --tx-in "$TX_1"#0                          \
                               --tx-in-collateral "$TX_1"#0               \
                               --required-signer "$MEDIATOR_PAYMENT_SKEY" \
-                              --tx-out "$BUYER_ADDRESS+$PRICE"           \
+                              --tx-out "$SELLER_ADDRESS+$PRICE"          \
                               --change-address "$MEDIATOR_ADDRESS"       \
                               --tx-out "$MEDIATOR_ADDRESS+$MINIMUM_ADA"  \
                               --invalid-before "$TIP"                    \
@@ -492,25 +470,25 @@ marlowe-cli transaction-close "${MAGIC[@]}"                              \
 )
 
 echo
-echo "The confirmation of the claim resulted in closing the contract, paying $PRICE lovelace to $BUYER_NAME and $MINIMUM_ADA lovelace to $MEDIATOR_NAME in the transaction $TX_5."
+echo "The dismissal of the claim resulted in closing the contract, paying $PRICE lovelace to the the seller $SELLER_NAME and $MINIMUM_ADA lovelace to the mediator $MEDIATOR_NAME in the transaction "'`'"$TX_5"'`'".  There is no UTxO at the contract address:"
 
-echo
-echo "There is no UTxO at the contract address:"
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
-echo
-echo "Here is the UTxO at $BUYER_NAME's address:"
+echo "Here is the UTxO at the seller $SELLER_NAME's address:"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
+
+echo "Here is the UTxO at the buyer $BUYER_NAME's address:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
-echo
-echo "Here is the UTxO at $MEDIATOR_NAME's address:"
+echo "Here is the UTxO at the mediator $MEDIATOR_NAME's address:"
+
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
+echo "## Clean Up Wallets"
 
-# Clean up.
-
-echo
-echo "Clean up."
+echo "It's convenient to consolidate all of the UTxOs into single ones."
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" --out-file /dev/stdout  \
 | jq '. | to_entries[] | .key'                                                           \
@@ -520,14 +498,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" --out-file /dev
                                                --change-address "$SELLER_ADDRESS"        \
                                                --out-file tx-6.raw                       \
                                                --required-signer "$SELLER_PAYMENT_SKEY"  \
-                                               --print-stats                             \
                                                --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
-
-echo
-echo "Here is the UTxO at $SELLER_NAME's address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS"
-
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" --out-file /dev/stdout   \
 | jq '. | to_entries[] | .key'                                                           \
 | sed -e 's/"//g;s/^/--tx-in /'                                                          \
@@ -536,14 +508,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" --out-file /dev/
                                                --change-address "$BUYER_ADDRESS"         \
                                                --out-file tx-7.raw                       \
                                                --required-signer "$BUYER_PAYMENT_SKEY"   \
-                                               --print-stats                             \
                                                --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
-
-echo
-echo "Here is the UTxO at $BUYER_NAME's address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS"
-
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" --out-file /dev/stdout \
 | jq '. | to_entries[] | .key'                                                            \
 | sed -e 's/"//g;s/^/--tx-in /'                                                           \
@@ -552,10 +518,6 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" --out-file /d
                                                --change-address "$MEDIATOR_ADDRESS"       \
                                                --out-file tx-8.raw                        \
                                                --required-signer "$MEDIATOR_PAYMENT_SKEY" \
-                                               --print-stats                              \
                                                --submit=600                               \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
+> /dev/null
 
-echo
-echo "Here is the UTxO at $MEDIATOR_NAME's address:"
-cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS"

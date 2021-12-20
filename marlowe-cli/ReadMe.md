@@ -100,6 +100,17 @@ The [`address`](doc/address.md), [`validator`](doc/validator.md), [`datum`](doc/
 See [example.sh](doc/example.sh) for an example bash script embodying this workflow. A tutorial for this workflow is available [here](doc/tutorial.md).
 
 
+## Examples
+
+*   [simple contract](examples/simple/ReadMe.md)
+*   [escrow](examples/escrow/ReadMe.md)
+
+
 ## Testing
 
-A automated test script is available at [test/trivial/run-test.sh](test/trivial/run-test.sh).
+*   [simple contract](examples/simple/run-test.sh)
+*   escrow
+    *   ["everything is alright"](examples/escrow/run-everything-is-alright.sh)
+    *   ["confirm problem"](examples/escrow/run-confirm-problem.sh)
+    *   ["dismiss claim"](examples/escrow/run-dimiss-claim.sh)
+    *   ["confirm claim"](examples/escrow/run-confirm-claim.sh)

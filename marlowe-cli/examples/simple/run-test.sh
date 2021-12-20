@@ -3,18 +3,53 @@
 # This script exits with an error value if the end-to-end test fails.
 set -e
 
-echo "# Test of a Trivial Contract"
+echo "# Test of a Simple Contract"
+
+echo "[This simple contract](../../src/Language/Marlowe/CLI/Examples/Trivial.hs) takes as deposit, waits for a notification, makes a payment, waits for another notification, and then closes the contract:"
 echo
-echo "The environment variable CARDANO_NODE_SOCKET_PATH must be set to the echo path to the cardano node's socket."
+echo '```'
+echo 'When'
+echo '    [Case'
+echo '        (Deposit'
+echo '            (PK "d735da025e42bdfeb92e325fc530da3ac732a47726c6cee666a6ea5a")'
+echo '            (PK "d735da025e42bdfeb92e325fc530da3ac732a47726c6cee666a6ea5a")'
+echo '            (Token "" "")'
+echo '            (Constant 12)'
+echo '        )'
+echo '        (When'
+echo '            [Case'
+echo '                (Notify TrueObs)'
+echo '                (Pay'
+echo '                    (PK "d735da025e42bdfeb92e325fc530da3ac732a47726c6cee666a6ea5a")'
+echo '                    (Party (PK "d735da025e42bdfeb92e325fc530da3ac732a47726c6cee666a6ea5a"))'
+echo '                    (Token "" "")'
+echo '                    (Constant 5)'
+echo '                    (When'
+echo '                        [Case'
+echo '                            (Notify TrueObs)'
+echo '                            Close ]'
+echo '                        2582625 Close '
+echo '                    )'
+echo '                )]'
+echo '            2582624 Close '
+echo '        )]'
+echo '    2582623 Close '
+echo '```'
 echo
-echo "The following tools must be on the PATH:"
-echo "* marlowe-cli"
-echo "* cardano-cli"
-echo "* sed"
-echo "* jq"
-echo "* xargs"
+echo '![Simple Marlowe Contract](simple-0.png)'
+
+echo "## Prerequisites"
+
+echo "The environment variable "'`CARDANO_NODE_SOCKET_PATH`'" must be set to the path to the cardano node's socket."
 echo
-echo "Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables BYSTANDER_PREFIX and PARTY_PREFIX where they appear below."
+echo 'The following tools must be on the PATH:'
+echo '* [marlowe-cli](../../ReadMe.md)'
+echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
+echo '* [jq](https://stedolan.github.io/jq/manual/)'
+echo '* sed'
+echo '* xargs'
+echo
+echo 'Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables `BYSTANDER_PREFIX` and `PARTY_PREFIX` where they appear below.'
 
 echo "## Preliminaries"
 
@@ -49,7 +84,7 @@ BYSTANDER_PUBKEYHASH=$(
   cardano-cli address key-hash --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY"
 )
 
-echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address $BYSTANDER_ADDRESS and public-key hash $BYSTANDER_PUBKEYHASH. They have the following UTxOs in their wallet:"
+echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'" and public-key hash "'`'"$BYSTANDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS"
 
@@ -62,7 +97,7 @@ cardano-cli query utxo "${MAGIC[@]}"                                   \
 | jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
 )
 
-echo "$BYSTANDER_NAME will spend the UTxO $TX_0_BYSTANDER."
+echo "$BYSTANDER_NAME will spend the UTxO "'`'"$TX_0_BYSTANDER"'`.'
 
 echo "### The Party"
 
@@ -80,7 +115,7 @@ PARTY_PUBKEYHASH=$(
   cardano-cli address key-hash --payment-verification-key-file "$PARTY_PAYMENT_VKEY"
 )
 
-echo "The party $PARTY_NAME has the address $PARTY_ADDRESS and the public-key hash $PARTY_PUBKEYHASH. They have the following UTxOs in their wallet:"
+echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and the public-key hash "'`'"$PARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
 
@@ -93,7 +128,7 @@ cardano-cli query utxo "${MAGIC[@]}"                                   \
 | jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
 )
 
-echo "$PARTY_NAME will spend the UTxO $TX_0_PARTY."
+echo "$PARTY_NAME will spend the UTxO "'`'"$TX_0_PARTY"'`.'
 
 echo "### Validator Script and Address"
 
@@ -118,14 +153,14 @@ echo "The tip is at slot $TIP. The current POSIX time implies that the tip of th
 
 echo "## The Contract"
 
-echo "The contract has a minimum slot and a timeout:"
+echo "The contract has a minimum slot and a timeout."
 
 MINIMUM_SLOT="$TIP"
 TIMEOUT_SLOT="$(($TIP+10*24*3600))"
 
 echo "The contract starts no sooner than slot $MINIMUM_SLOT and will automatically close at slot $TIMEOUT_SLOT."
 
-echo "The contract also involves various payments:"
+echo "The contract also involves various payments."
 
 MINIMUM_ADA=3000000
 DEPOSIT_LOVELACE=12000000
@@ -176,11 +211,11 @@ marlowe-cli transaction-create "${MAGIC[@]}"                               \
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                           \
 )
 
-echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from the bystander $BYSTANDER_NAME in the transaction $TX_1. Here is the UTxO at the contract address:"
+echo "The contract received the minimum ADA of $MINIMUM_ADA lovelace from the bystander $BYSTANDER_NAME in the transaction "'`'"$TX_1"'`'". Here is the UTxO at the contract address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
-echo "Here is the UTxO at $BYSTANDER_NAME's address:"
+echo "Here is the UTxO at the bystander $BYSTANDER_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
 
@@ -193,7 +228,7 @@ marlowe-cli input-deposit --deposit-account "PK=$PARTY_PUBKEYHASH" \
                           --deposit-amount "$DEPOSIT_LOVELACE"     \
                           --out-file tx-2.input
 
-echo "Next we compute the transition caused by that input to the contract."
+echo "Next we compute the transition caused by that input to the contract:"
 
 marlowe-cli compute --contract-file tx-1.contract          \
                     --state-file    tx-1.state             \
@@ -250,17 +285,17 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                             \
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                          \
 )
 
-echo "The contract received the deposit of $DEPOSIT_LOVELACE lovelace from the party $PARTY_NAME in the transaction $TX_2. Here is the UTxO at the contract address:"
+echo "The contract received the deposit of $DEPOSIT_LOVELACE lovelace from the party $PARTY_NAME in the transaction "'`'"$TX_2"'`'". Here is the UTxO at the contract address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
-echo "Here is the UTxO at $PARTY_NAME's address:"
+echo "Here is the UTxO at the party $PARTY_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 echo "## Transaction 3. Make the First Withdrawal"
 
-echo "First we compute the input for the contract to transition forward:"
+echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli input-notify --out-file tx-3.input
 
@@ -309,17 +344,17 @@ marlowe-cli transaction-advance "${MAGIC[@]}"                                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
-echo "The contract made a payment of $WITHDRAWAL_LOVELACE lovelace to the party $PARTY_NAME in the transaction $TX_3. Here is the UTxO at the contract address:"
+echo "The contract made a payment of $WITHDRAWAL_LOVELACE lovelace to the party $PARTY_NAME in the transaction "'`'"$TX_3"'`'". Here is the UTxO at the contract address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
-echo "Here is the UTxO at $PARTY_NAME's address:"
+echo "Here is the UTxO at the party $PARTY_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
 echo "## Transaction 4. Close the contract"
 
-echo "As in the third transaction, we compute the input for the contract to transition forward:"
+echo "As in the third transaction, we compute the input for the contract to transition forward."
 
 marlowe-cli input-notify --out-file tx-4.input
 
@@ -358,7 +393,7 @@ marlowe-cli transaction-close "${MAGIC[@]}"                              \
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                         \
 )
 
-echo "The closing of the contract paid $CLOSE_LOVELACE lovelace to the $PARTY_NAME and $MINIMUM_ADA lovelace to the bystander $BYSTANDER_NAME in the transaction $TX_4. There is no UTxO at the contract address:"
+echo "The closing of the contract paid $CLOSE_LOVELACE lovelace to the the party $PARTY_NAME and $MINIMUM_ADA lovelace to the bystander $BYSTANDER_NAME in the transaction "'`'"$TX_4"'`'". There is no UTxO at the contract address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
 
