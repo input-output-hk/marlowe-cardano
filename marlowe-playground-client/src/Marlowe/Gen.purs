@@ -21,7 +21,6 @@ import Marlowe.Holes (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..
 import Marlowe.Holes as H
 import Marlowe.Semantics (CurrencySymbol, Input(..), PubKey, Rational(..), Slot(..), SlotInterval(..), TokenName, TransactionInput(..), TransactionWarning(..))
 import Marlowe.Semantics as S
-import Type.Proxy (Proxy(..))
 
 newtype GenerationOptions
   = GenerationOptions { withHoles :: Boolean, withExtendedConstructs :: Boolean }
@@ -129,9 +128,8 @@ genRange = do
 genHole :: forall m a. MonadGen m => MonadRec m => String -> m (Term a)
 genHole name = do
   -- name <- suchThat genString (\s -> s /= "")
-  proxy <- pure (Proxy :: Proxy a)
   range <- genRange
-  pure $ Hole name proxy range
+  pure $ Hole name range
 
 genTerm :: forall m a. MonadGen m => MonadRec m => MonadReader GenerationOptions m => String -> m a -> m (Term a)
 genTerm name g = do

@@ -455,7 +455,7 @@ lintContract env (Term (Let (TermWrapper valueId pos) value cont) _) = do
   newEnv <- stepPrefixMapEnv_ tmpEnv LetPath
   lintContract newEnv cont
 
-lintContract _ hole@(Hole _ _ _) = do
+lintContract _ hole@(Hole _ _) = do
   modifying _holes (insertHole hole)
   pure unit
 
@@ -557,7 +557,7 @@ lintObservation _ (Term TrueObs pos) = pure (ConstantSimp pos false true)
 
 lintObservation _ (Term FalseObs pos) = pure (ConstantSimp pos false false)
 
-lintObservation _ hole@(Hole _ _ pos) = do
+lintObservation _ hole@(Hole _ pos) = do
   modifying _holes (insertHole hole)
   pure (ValueSimp pos false hole)
 
@@ -674,7 +674,7 @@ lintValue env t@(Term (UseValue (TermWrapper valueId _)) pos) = do
     (addWarning UndefinedUse pos)
   pure (ValueSimp pos false t)
 
-lintValue _ hole@(Hole _ _ pos) = do
+lintValue _ hole@(Hole _ pos) = do
   modifying _holes (insertHole hole)
   pure (ValueSimp pos false hole)
 
@@ -715,12 +715,12 @@ lintCase iniEnv n (Term (Case action contract) pos) = do
   lintContract newEnv contract
   pure unit
 
-lintCase _ _ hole@(Hole _ _ _) = do
+lintCase _ _ hole@(Hole _ _) = do
   modifying _holes (insertHole hole)
   pure unit
 
 lintBounds :: Boolean -> Term Bound -> CMS.State State Boolean
-lintBounds _ (Hole _ _ _) = do
+lintBounds _ (Hole _ _) = do
   pure false
 
 lintBounds restAreInvalid (Term (Bound l h) pos) = do
@@ -782,7 +782,7 @@ lintAction env (Term (Notify obs) pos) = do
       pure isReachable
   pure $ NoEffect /\ newIsReachable
 
-lintAction env hole@(Hole _ _ _) = do
+lintAction env hole@(Hole _ _) = do
   let
     isReachable = view _isReachable env
   modifying _holes (insertHole hole)
