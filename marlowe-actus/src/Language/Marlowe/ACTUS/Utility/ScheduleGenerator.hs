@@ -2,14 +2,11 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
-  ( generateRecurrentScheduleWithCorrections
+  ( generateRecurrentSchedule
   , (<+>)
   , (<->)
   , sup
   , inf
-  , sup'
-  , inf'
-  , remove
   , applyEOMC
   , moveToEndOfMonth
   )
@@ -21,7 +18,7 @@ import           Data.Time.Calendar                          (addDays, addGregor
                                                               fromGregorian, gregorianMonthLength, toGregorian)
 import           Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..),
                                                               ScheduleConfig (..), Stub (LongStub))
-import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedDay (..), ShiftedSchedule)
+import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedSchedule, mkShiftedDay)
 import           Language.Marlowe.ACTUS.Utility.DateShift    (applyBDC)
 
 maximumMaybe :: Ord a => [a] -> Maybe a
@@ -32,61 +29,50 @@ minimumMaybe :: Ord a => [a] -> Maybe a
 minimumMaybe [] = Nothing
 minimumMaybe xs = Just $ minimum xs
 
-inf :: [ShiftedDay] -> LocalTime -> Maybe ShiftedDay
+inf :: (Ord a) => [a] -> a -> Maybe a
 inf set threshold =
-  minimumMaybe [t | t <- set, calculationDay t > threshold]
-
-sup :: [ShiftedDay] -> LocalTime -> Maybe ShiftedDay
-sup set threshold =
-  maximumMaybe [t | t <- set, calculationDay t < threshold]
-
-inf' :: (Ord a) => [a] -> a -> Maybe a
-inf' set threshold =
   minimumMaybe [t | t <- set, t > threshold]
 
-sup' :: (Ord a) => [a] -> a -> Maybe a
-sup' set threshold =
+sup :: (Ord a) => [a] -> a -> Maybe a
+sup set threshold =
   maximumMaybe [t | t <- set, t < threshold]
 
-remove :: ShiftedDay -> [ShiftedDay] -> [ShiftedDay]
-remove d = filter (\t -> calculationDay t /= calculationDay d)
-
 correction :: Cycle -> LocalTime -> LocalTime -> [LocalTime] -> [LocalTime]
-correction Cycle{ stub = stub, includeEndDay = includeEndDay} anchorDate endDate schedule =
-  let
-    lastDate = L.last schedule
-    schedule' = L.init schedule
-    scheduleSize = L.length schedule'
-    schedule'' =
-      if not includeEndDay && endDate == anchorDate then
-        L.delete anchorDate schedule'
-      else
-        schedule'
-  in
-    if stub == LongStub && L.length schedule'' > 2 && endDate /= lastDate then
-      L.delete (schedule'' !! (scheduleSize - 1)) schedule''
-    else
-      schedule''
+correction
+  Cycle
+    { ..
+    }
+  anchorDate
+  endDate
+  schedule =
+    let lastDate = L.last schedule
+        schedule' = L.init schedule
+        scheduleSize = L.length schedule'
+        schedule'' =
+          if not includeEndDay && endDate == anchorDate
+            then L.delete anchorDate schedule'
+            else schedule'
+     in if stub == LongStub && L.length schedule'' > 2 && endDate /= lastDate
+          then L.delete (schedule'' !! (scheduleSize - 1)) schedule''
+          else schedule''
 
 addEndDay :: Bool -> LocalTime -> ShiftedSchedule -> ShiftedSchedule
-addEndDay includeEndDay endDate schedule =
-  if includeEndDay then
-    schedule ++ [ShiftedDay{ calculationDay = endDate, paymentDay = endDate }]
-  else
-    schedule
+addEndDay True endDate schedule = schedule ++ [mkShiftedDay endDate]
+addEndDay _ _ schedule          = schedule
 
-generateRecurrentSchedule :: Cycle -> LocalTime -> LocalTime -> [LocalTime]
-generateRecurrentSchedule Cycle {..} anchorDate endDate =
+generateRecurrentSchedule' :: Cycle -> LocalTime -> LocalTime -> [LocalTime]
+generateRecurrentSchedule' Cycle {..} anchorDate endDate =
   let go :: LocalTime -> Integer -> [LocalTime] -> [LocalTime]
-      go current k acc = if current >= endDate || n == 0
-        then acc ++ [current]
-        else let current' = shiftDate anchorDate (k * n) p
-              in  go current' (k + 1) (acc ++ [current])
+      go current k acc =
+        if current >= endDate || n == 0
+          then acc ++ [current]
+          else
+            let current' = shiftDate anchorDate (k * n) p
+             in go current' (k + 1) (acc ++ [current])
+   in go anchorDate 1 []
 
-  in  go anchorDate 1 []
-
-generateRecurrentScheduleWithCorrections :: LocalTime -> Cycle -> LocalTime -> ScheduleConfig -> ShiftedSchedule
-generateRecurrentScheduleWithCorrections
+generateRecurrentSchedule :: LocalTime -> Cycle -> LocalTime -> ScheduleConfig -> ShiftedSchedule
+generateRecurrentSchedule
   anchorDate
   cycle
   endDate
@@ -95,22 +81,16 @@ generateRecurrentScheduleWithCorrections
       calendar = Just cal,
       businessDayConvention = Just bdc
     } =
-      let s = generateRecurrentSchedule cycle anchorDate endDate
-          c = correction cycle anchorDate endDate s
-        in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc cal . applyEOMC anchorDate cycle eomc) c
-generateRecurrentScheduleWithCorrections _ _ _ _ = []
-
-plusCycle :: LocalTime -> Cycle -> LocalTime
-plusCycle date cycle = shiftDate date (n cycle) (p cycle)
-
-minusCycle :: LocalTime -> Cycle -> LocalTime
-minusCycle date cycle = shiftDate date (-n cycle) (p cycle)
+    let s = generateRecurrentSchedule' cycle anchorDate endDate
+        c = correction cycle anchorDate endDate s
+     in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc cal . applyEOMC anchorDate cycle eomc) c
+generateRecurrentSchedule _ _ _ _ = []
 
 (<+>) :: LocalTime -> Cycle -> LocalTime
-(<+>) = plusCycle
+(<+>) date cycle = shiftDate date (n cycle) (p cycle)
 
 (<->) :: LocalTime -> Cycle -> LocalTime
-(<->) = minusCycle
+(<->) date cycle = shiftDate date (-n cycle) (p cycle)
 
 shiftDate :: LocalTime -> Integer -> Period -> LocalTime
 shiftDate LocalTime {..} n p = case p of
@@ -142,4 +122,7 @@ moveToEndOfMonth :: LocalTime -> LocalTime
 moveToEndOfMonth LocalTime {..} =
   let (year, month, _) = toGregorian localDay
       monthLength = gregorianMonthLength year month
-   in LocalTime {localDay = fromGregorian year month monthLength, localTimeOfDay = localTimeOfDay}
+   in LocalTime
+        { localDay = fromGregorian year month monthLength,
+          localTimeOfDay = localTimeOfDay
+        }

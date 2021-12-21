@@ -27,7 +27,7 @@ import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum (..)
                                                                    YearFractionOps (..))
 import           Language.Marlowe.ACTUS.Model.StateTransition     (CtxSTF (..))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentScheduleWithCorrections, inf', sup')
+import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentSchedule, inf, sup)
 import           Prelude                                          hiding ((*), (+), (-), (/))
 
 {-# ANN module "HLint: ignore Use camelCase" #-}
@@ -60,9 +60,9 @@ initializeState = reader initializeState'
       where
         t0 = statusDate contractTerms
 
-        tMinusFP = fromMaybe t0 (sup' fpSchedule t0)
-        tPlusFP = fromMaybe t0 (inf' fpSchedule t0)
-        tMinusIP = fromMaybe t0 (sup' ipSchedule t0)
+        tMinusFP = fromMaybe t0 (sup fpSchedule t0)
+        tPlusFP = fromMaybe t0 (inf fpSchedule t0)
+        tMinusIP = fromMaybe t0 (sup ipSchedule t0)
 
         scalingEffect_xNx :: SCEF -> Bool
         scalingEffect_xNx SE_ONO = True
@@ -206,7 +206,7 @@ initializeState = reader initializeState'
               cycleOfPrincipalRedemption = Just prcl,
               cycleAnchorDateOfPrincipalRedemption = Just pranx,
               scheduleConfig
-            } = nt / _fromInteger (fromIntegral . length $ generateRecurrentScheduleWithCorrections pranx (prcl {includeEndDay = True}) md scheduleConfig)
+            } = nt / _fromInteger (fromIntegral . length $ generateRecurrentSchedule pranx (prcl {includeEndDay = True}) md scheduleConfig)
         nextPrincipalRedemptionPayment
           ContractTermsPoly
             { contractType = ANN,

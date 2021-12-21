@@ -11,7 +11,7 @@ where
 import           Control.Applicative                              ((<|>))
 import           Control.Monad                                    (liftM2, liftM4)
 import           Data.Functor                                     ((<&>))
-import           Data.List                                        as L (find, nub)
+import           Data.List                                        as L (delete, find, nub)
 import           Data.Maybe                                       (fromMaybe, isJust, isNothing, maybeToList)
 import           Data.Ord                                         (Down (..))
 import           Data.Sort                                        (sortOn)
@@ -24,10 +24,10 @@ import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), Cont
                                                                    ScheduleConfig (..))
 import           Language.Marlowe.ACTUS.Domain.Ops                as O (ActusNum (..), ActusOps (..), ScheduleOps (..),
                                                                         YearFractionOps (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..))
+import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..), mkShiftedDay)
 import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (applyEOMC, generateRecurrentScheduleWithCorrections,
-                                                                   inf, remove, (<+>), (<->))
+import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (applyEOMC, generateRecurrentSchedule, inf, (<+>),
+                                                                   (<->))
 
 -- |Generate the schedule for a given event type
 schedule :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) =>
@@ -137,7 +137,7 @@ maturity
     } =
     let (lastEvent, remainingPeriods)
           | pranx < statusDate =
-            let previousEvents = generateRecurrentScheduleWithCorrections pranx prcl statusDate scheduleConfig
+            let previousEvents = generateRecurrentSchedule pranx prcl statusDate scheduleConfig
                 f1 = (\ShiftedDay {..} -> calculationDay > statusDate <-> ipcl)
                 f2 = (\ShiftedDay {..} -> calculationDay == statusDate)
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f2 . filter f1 $ previousEvents
@@ -164,7 +164,7 @@ maturity
           | pranx >= statusDate = pranx
           | ied <+> prcl >= statusDate = ied <+> prcl
           | otherwise =
-            let previousEvents = generateRecurrentScheduleWithCorrections pranx prcl statusDate scheduleConfig
+            let previousEvents = generateRecurrentSchedule pranx prcl statusDate scheduleConfig
                 f = (\ShiftedDay {..} -> calculationDay == statusDate)
                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f $ previousEvents
              in lastEventCalcDay
@@ -194,7 +194,7 @@ maturity
           | pranx >= statusDate = pranx
           | tplus >= statusDate = tplus
           | otherwise =
-            let previousEvents = generateRecurrentScheduleWithCorrections statusDate prcl pranx scheduleConfig
+            let previousEvents = generateRecurrentSchedule statusDate prcl pranx scheduleConfig
              in calculationDay . head . sortOn (Down . calculationDay) . filter (\ShiftedDay {..} -> calculationDay > statusDate) $ previousEvents
         timeFromLastEventPlusOneCycle = _y dcc lastEvent (lastEvent <+> prcl) Nothing
         redemptionPerCycle = prnxt O.- timeFromLastEventPlusOneCycle O.* ipnr O.* nt
@@ -243,7 +243,7 @@ _SCHED_PP_PAM
       cycleOfOptionality = Just opcl,
       maturityDate = Just md,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections opanx opcl md scheduleConfig
+    } = generateRecurrentSchedule opanx opcl md scheduleConfig
 _SCHED_PP_PAM
   ContractTermsPoly
     { cycleAnchorDateOfOptionality = Nothing,
@@ -251,7 +251,7 @@ _SCHED_PP_PAM
       maturityDate = Just md,
       initialExchangeDate = Just ied,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections (ied <+> opcl) opcl md scheduleConfig
+    } = generateRecurrentSchedule (ied <+> opcl) opcl md scheduleConfig
 _SCHED_PP_PAM _ = []
 
 _SCHED_PY_PAM :: ContractTermsPoly a -> [ShiftedDay]
@@ -278,7 +278,7 @@ _SCHED_FP_PAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections feanx fecl {includeEndDay = True} m scheduleConfig
+    Just m  -> generateRecurrentSchedule feanx fecl {includeEndDay = True} m scheduleConfig
     Nothing -> []
 _SCHED_FP_PAM
   ct@ContractTermsPoly
@@ -288,7 +288,7 @@ _SCHED_FP_PAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections (ied <+> fecl) fecl {includeEndDay = True} m scheduleConfig
+    Just m  -> generateRecurrentSchedule (ied <+> fecl) fecl {includeEndDay = True} m scheduleConfig
     Nothing -> []
 _SCHED_FP_PAM _ = []
 
@@ -321,7 +321,7 @@ _SCHED_IP_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let s = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} m scheduleConfig
+      let s = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} m scheduleConfig
        in filter (\d -> Just (calculationDay d) > ipced) s
     Nothing -> []
 _SCHED_IP_PAM
@@ -334,7 +334,7 @@ _SCHED_IP_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let s = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} m scheduleConfig
+      let s = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} m scheduleConfig
        in filter (\d -> Just (calculationDay d) > ipced) s
     Nothing -> []
 _SCHED_IP_PAM _ = []
@@ -350,7 +350,7 @@ _SCHED_IPCI_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let s = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} m scheduleConfig
+      let s = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} m scheduleConfig
        in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
     Nothing -> []
 _SCHED_IPCI_PAM
@@ -363,7 +363,7 @@ _SCHED_IPCI_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let s = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} m scheduleConfig
+      let s = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} m scheduleConfig
        in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
     Nothing -> []
 _SCHED_IPCI_PAM _ = []
@@ -380,8 +380,8 @@ _SCHED_RR_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let tt = generateRecurrentScheduleWithCorrections rranx rrcl {includeEndDay = False} m scheduleConfig
-       in fromMaybe [] (inf tt statusDate <&> flip remove tt)
+      let tt = generateRecurrentSchedule rranx rrcl {includeEndDay = False} m scheduleConfig
+       in fromMaybe [] (inf tt (mkShiftedDay statusDate) <&> flip delete tt)
     Nothing -> []
 _SCHED_RR_PAM
   ct@ContractTermsPoly
@@ -391,7 +391,7 @@ _SCHED_RR_PAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections rranx rrcl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule rranx rrcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_RR_PAM
   ct@ContractTermsPoly
@@ -404,8 +404,8 @@ _SCHED_RR_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let tt = generateRecurrentScheduleWithCorrections (ied <+> rrcl) rrcl {includeEndDay = False} m scheduleConfig
-       in fromMaybe [] (inf tt statusDate <&> flip remove tt)
+      let tt = generateRecurrentSchedule (ied <+> rrcl) rrcl {includeEndDay = False} m scheduleConfig
+       in fromMaybe [] (inf tt (mkShiftedDay statusDate) <&> flip delete tt)
     Nothing -> []
 _SCHED_RR_PAM
   ct@ContractTermsPoly
@@ -416,7 +416,7 @@ _SCHED_RR_PAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections (ied <+> rrcl) rrcl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule (ied <+> rrcl) rrcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_RR_PAM _ = []
 
@@ -432,7 +432,7 @@ _SCHED_RRF_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let tt = generateRecurrentScheduleWithCorrections rranx rrcl {includeEndDay = False} m scheduleConfig
+      let tt = generateRecurrentSchedule rranx rrcl {includeEndDay = False} m scheduleConfig
        in maybeToList (L.find (\ShiftedDay {..} -> calculationDay > statusDate) tt)
     Nothing -> []
 _SCHED_RRF_PAM
@@ -446,7 +446,7 @@ _SCHED_RRF_PAM
       scheduleConfig
     } = case maturity ct <|> maturityDate of
     Just m ->
-      let tt = generateRecurrentScheduleWithCorrections (ied <+> rrcl) rrcl m scheduleConfig
+      let tt = generateRecurrentSchedule (ied <+> rrcl) rrcl m scheduleConfig
        in maybeToList (L.find (\ShiftedDay {..} -> calculationDay > statusDate) tt)
     Nothing -> []
 _SCHED_RRF_PAM _ = []
@@ -461,7 +461,7 @@ _SCHED_SC_PAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections scanx sccl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule scanx sccl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_SC_PAM
   ct@ContractTermsPoly
@@ -471,7 +471,7 @@ _SCHED_SC_PAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections (ied <+> sccl) sccl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule (ied <+> sccl) sccl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_SC_PAM _ = []
 
@@ -486,7 +486,7 @@ _SCHED_PR_LAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections pranx prcl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule pranx prcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_PR_LAM
   ct@ContractTermsPoly
@@ -496,7 +496,7 @@ _SCHED_PR_LAM
       initialExchangeDate = Just ied,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections (ied <+> prcl) prcl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule (ied <+> prcl) prcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_PR_LAM _ = []
 
@@ -520,7 +520,7 @@ _SCHED_IPCB_LAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections ipcbanx ipcbcl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule ipcbanx ipcbcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_IPCB_LAM
   ct@ContractTermsPoly
@@ -530,7 +530,7 @@ _SCHED_IPCB_LAM
       maturityDate,
       scheduleConfig
     } = case maturity ct <|> maturityDate of
-    Just m  -> generateRecurrentScheduleWithCorrections (ied <+> ipcbcl) ipcbcl {includeEndDay = False} m scheduleConfig
+    Just m  -> generateRecurrentSchedule (ied <+> ipcbcl) ipcbcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_IPCB_LAM _ = []
 
@@ -544,7 +544,7 @@ _SCHED_IP_NAM ct@ContractTermsPoly {..} =
         | isNothing cycleAnchorDateOfPrincipalRedemption = liftM2 (<+>) initialExchangeDate cycleOfPrincipalRedemption
         | otherwise = cycleAnchorDateOfPrincipalRedemption
 
-      v = liftM4 generateRecurrentScheduleWithCorrections s cycleOfPrincipalRedemption m (Just scheduleConfig)
+      v = liftM4 generateRecurrentSchedule s cycleOfPrincipalRedemption m (Just scheduleConfig)
 
       r
         | isJust cycleAnchorDateOfInterestPayment = cycleAnchorDateOfInterestPayment
@@ -556,7 +556,7 @@ _SCHED_IP_NAM ct@ContractTermsPoly {..} =
       u
         | isNothing cycleAnchorDateOfInterestPayment && isNothing cycleOfInterestPayment = Nothing
         | isJust capitalizationEndDate && Just True == liftM2 (>) capitalizationEndDate _T = Nothing
-        | otherwise = liftM4 generateRecurrentScheduleWithCorrections r ((\c -> c {includeEndDay = True}) <$> cycleOfInterestPayment) m (Just scheduleConfig)
+        | otherwise = liftM4 generateRecurrentSchedule r ((\c -> c {includeEndDay = True}) <$> cycleOfInterestPayment) m (Just scheduleConfig)
 
       result = nub <$> liftM2 (++) u v
 
@@ -573,7 +573,7 @@ _SCHED_IPCI_NAM ct@ContractTermsPoly {..} =
         | isNothing cycleAnchorDateOfPrincipalRedemption = liftM2 (<+>) initialExchangeDate cycleOfPrincipalRedemption
         | otherwise = cycleAnchorDateOfPrincipalRedemption
 
-      v = liftM4 generateRecurrentScheduleWithCorrections s cycleOfPrincipalRedemption m (Just scheduleConfig)
+      v = liftM4 generateRecurrentSchedule s cycleOfPrincipalRedemption m (Just scheduleConfig)
 
       r
         | isJust capitalizationEndDate = capitalizationEndDate
@@ -586,7 +586,7 @@ _SCHED_IPCI_NAM ct@ContractTermsPoly {..} =
       u
         | isNothing cycleAnchorDateOfInterestPayment && isNothing cycleOfInterestPayment = Nothing
         | isJust capitalizationEndDate && Just True == liftM2 (>) capitalizationEndDate _T = Nothing
-        | otherwise = liftM4 generateRecurrentScheduleWithCorrections r ((\c -> c {includeEndDay = True}) <$> cycleOfInterestPayment) m (Just scheduleConfig)
+        | otherwise = liftM4 generateRecurrentSchedule r ((\c -> c {includeEndDay = True}) <$> cycleOfInterestPayment) m (Just scheduleConfig)
 
       result = Just $ nub (fromMaybe [] u ++ fromMaybe [] v)
 
@@ -623,14 +623,14 @@ _SCHED_DV_STK
       nextDividendPaymentAmount = Nothing,
       scheduleConfig = scheduleConfig
     } = let tMax = LocalTime (addDays (10 Prelude.* 365) $ localDay dvanx) (localTimeOfDay dvanx)
-         in generateRecurrentScheduleWithCorrections dvanx dvcl tMax scheduleConfig
+         in generateRecurrentSchedule dvanx dvcl tMax scheduleConfig
 _SCHED_DV_STK
   ContractTermsPoly
     { cycleAnchorDateOfDividend = Just dvanx,
       cycleOfDividend = Just dvcl,
       scheduleConfig = scheduleConfig
     } = let tMax = LocalTime (addDays (10 Prelude.* 365) $ localDay dvanx) (localTimeOfDay dvanx)
-          in generateRecurrentScheduleWithCorrections (dvanx <+> dvcl) dvcl tMax scheduleConfig
+          in generateRecurrentSchedule (dvanx <+> dvcl) dvcl tMax scheduleConfig
 _SCHED_DV_STK _ = []
 
 -- Options (OPTNS)
@@ -702,7 +702,7 @@ _SCHED_IP_SWPPV
       cycleOfInterestPayment = Just ipcl,
       maturityDate = Just md,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IP_SWPPV
   ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Nothing,
@@ -710,7 +710,7 @@ _SCHED_IP_SWPPV
       maturityDate = Just md,
       initialExchangeDate = Just ied,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IP_SWPPV _ = []
 
 _SCHED_IPFX_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
@@ -730,7 +730,7 @@ _SCHED_IPFX_SWPPV
       cycleOfInterestPayment = Just ipcl,
       maturityDate = Just md,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IPFX_SWPPV
   ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Nothing,
@@ -738,7 +738,7 @@ _SCHED_IPFX_SWPPV
       maturityDate = Just md,
       initialExchangeDate = Just ied,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IPFX_SWPPV _ = []
 
 _SCHED_IPFL_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
@@ -758,7 +758,7 @@ _SCHED_IPFL_SWPPV
       cycleOfInterestPayment = Just ipcl,
       maturityDate = Just md,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IPFL_SWPPV
   ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Nothing,
@@ -766,7 +766,7 @@ _SCHED_IPFL_SWPPV
       maturityDate = Just md,
       initialExchangeDate = Just ied,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IPFL_SWPPV _ = []
 
 _SCHED_RR_SWPPV :: ContractTermsPoly a -> [ShiftedDay]
@@ -776,14 +776,14 @@ _SCHED_RR_SWPPV
       cycleOfRateReset = Just rrcl,
       maturityDate = Just md,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections rranx rrcl {includeEndDay = False} md scheduleConfig
+    } = generateRecurrentSchedule rranx rrcl {includeEndDay = False} md scheduleConfig
 _SCHED_RR_SWPPV
   ContractTermsPoly
     { cycleOfRateReset = Just rrcl,
       maturityDate = Just md,
       initialExchangeDate = Just ied,
       scheduleConfig
-    } = generateRecurrentScheduleWithCorrections (ied <+> rrcl) rrcl {includeEndDay = False} md scheduleConfig
+    } = generateRecurrentSchedule (ied <+> rrcl) rrcl {includeEndDay = False} md scheduleConfig
 _SCHED_RR_SWPPV
   ContractTermsPoly
     { cycleOfRateReset = Nothing,

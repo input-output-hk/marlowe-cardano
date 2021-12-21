@@ -15,6 +15,9 @@ data ShiftedDay = ShiftedDay
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+mkShiftedDay :: LocalTime -> ShiftedDay
+mkShiftedDay d = ShiftedDay d d
+
 type ShiftedSchedule = [ShiftedDay]
 
 data CashFlowPoly a = CashFlowPoly

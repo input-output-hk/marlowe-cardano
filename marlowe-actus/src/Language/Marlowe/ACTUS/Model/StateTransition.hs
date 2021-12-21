@@ -18,7 +18,7 @@ import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), Cont
 import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum (..), ActusOps (..), RoleSignOps (..),
                                                                    YearFractionOps (_y))
 import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf', sup')
+import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf, sup)
 import           Prelude                                          hiding (Fractional, Num, (*), (+), (-), (/))
 
 
@@ -1034,9 +1034,9 @@ stateTransition ev t sn = reader stateTransition'
         -------------
         stf _ _ _ _ = sn
 
-        tfp_minus = fromMaybe t (sup' fpSchedule t)
-        tfp_plus = fromMaybe t (inf' fpSchedule t)
-        tpr_plus = fromMaybe t (inf' prSchedule t)
+        tfp_minus = fromMaybe t (sup fpSchedule t)
+        tfp_plus = fromMaybe t (inf fpSchedule t)
+        tpr_plus = fromMaybe t (inf prSchedule t)
 
         prDates = prSchedule ++ maybeToList maturity
         prDatesAfterSd = filter (> sd sn) prDates

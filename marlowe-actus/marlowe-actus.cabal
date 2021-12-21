@@ -6,13 +6,26 @@ license-files:
   LICENSE
   NOTICE
 build-type: Simple
-maintainer: dmytro.kondratiuk@iohk.io
+maintainer: Yves Hauser <yves.hauser@iohk.io>
 stability: experimental
-author: Dmytro Kondratiuk
+author: Dmytro Kondratiuk, Yves Hauser
 synopsis:
-  Marlowe ACTUS: standardised financial contracts on Cardano Computation Layer
+  Marlowe ACTUS: Standardised financial contracts with Marlowe
 description:
-  implementation of ACTUS contracts on Marlowe
+  /marlowe-actus/ is an implementation of the [ACTUS](https://www.actusfrf.org)
+  specification in Haskell together with generators for Marlowe contracts.
+  .
+  ACTUS is a [taxonomy](https://www.actusfrf.org/taxonomy) of financial contracts that
+  uniformly specifies projected cash flows per contract type. A contract is evolved
+  over time, i.e. state changes are triggered from event schedules and performed by
+  state transformation functions, projected cash flows are determined by payoff
+  functions. Future contract state and payoff might depend on observable values, like
+  user provided input (a choice for example) or market values
+  observed by an Oracle.
+  .
+  The implementation is tested against the [reference test cases](https://github.com/actusfrf/actus-tests) provided by the
+  ACTUS foundation.
+
 category: Language
 extra-doc-files: README.md
 
