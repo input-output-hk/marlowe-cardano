@@ -131,6 +131,8 @@ data TermGenerator
   = ArgumentArray (Array Argument)
   | SimpleArgument Argument
 
+-- | FIXME: This function should be probably memoized.
+-- | It is called quite extensively in other places.
 getMarloweConstructors :: MarloweType -> Map String TermGenerator
 getMarloweConstructors ChoiceIdType = Map.singleton "ChoiceId" $ ArgumentArray [ DefaultString "choiceNumber", DataArg PartyType ]
 
