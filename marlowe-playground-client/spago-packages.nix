@@ -617,6 +617,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "heterogeneous" = pkgs.stdenv.mkDerivation {
+        name = "heterogeneous";
+        version = "v0.5.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-heterogeneous.git";
+          rev = "550445cf7932e158395423fc087cdc05bab41c40";
+          sha256 = "08bpgm9p8ib1jzrmssqpa1bqqzfmba43lsih1xvr3pf1jfizayxg";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "http-methods" = pkgs.stdenv.mkDerivation {
         name = "http-methods";
         version = "v5.0.0";
