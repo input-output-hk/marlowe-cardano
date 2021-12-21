@@ -64,7 +64,6 @@ You can edit this file as you like.
   , "transformers"
   , "tuples"
   , "type-equality"
-  , "typelevel-prelude"
   , "undefined-is-not-a-problem"
   , "unfoldable"
   , "web-common"

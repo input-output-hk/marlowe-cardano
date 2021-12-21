@@ -2,22 +2,15 @@ module Marlowe.Mermaid where
 
 import Prologue
 import Data.Array (fromFoldable) as Array
-import Data.BigInt (toString) as BigInt
-import Data.BigInt.Argonaut (BigInt(..)) as Argonaut
-import Data.BigInt.Argonaut (BigInt(..)) as Argounaut
 import Data.Foldable (foldMap)
 import Data.List (List(..), singleton) as List
 import Data.List (List, (:))
 import Data.Maybe (fromMaybe)
-import Data.String (Pattern(..), Replacement(..), joinWith, replace, replaceAll) as String
+import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll) as String
 import Data.Tuple.Nested ((/\))
-import Marlowe.Holes (Action(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Term(..), TermWrapper(..), Timeout(..), Value(..), ValueId(..), getLocation)
+import Marlowe.Holes (Action(..), Case(..), ChoiceId(..), Contract(..), Location(..), Observation(..), Party(..), Term(..), TermWrapper(..), Timeout, Value(..), ValueId(..), getLocation)
 import Text.Pretty (pretty)
 
--- | Convert the 'Contract' DSL into a flat list (like converting from a graph
--- representation to a vertex list). The result is a list denoting the
--- connection between contracts, and a string representing what text to
--- display on this edge.
 type Edge
   = { start :: Term Contract, end :: Term Contract, label :: Maybe String }
 
@@ -33,8 +26,6 @@ flatten start@(Term c _) = case c of
     { start, end: trueContract, label: Just "True" } : flatten trueContract
       <> { start, end: falseContract, label: Just "False" }
       : flatten falseContract
-  -- -- If we have no cases we always show the continuation
-  -- When [] t end ->  { start, end, label: Just $ show $ "currentSlot >= " <> timeoutShow t } : flatten end
   When cases t end -> do
     let
       step (Term (Case a c') _) = { start, end: c', label: Just $ actionShow a } : flatten c'
@@ -42,8 +33,6 @@ flatten start@(Term c _) = case c of
       step (Hole name _) = List.singleton { start, end: Hole "to be defined" (BlockId "test"), label: Just name }
 
       cases' = foldMap step cases
-    -- case c of
-    --   Close -> cases'
     { start, end, label: Just $ show $ "slot >= " <> timeoutShow t } : cases'
 
 -- | Escape a string for display in mermaid.  In mermaid everything needs to
@@ -66,7 +55,7 @@ actionShow (Hole name _) = name
 
 actionShow (Term action _) = escape <<< showAction $ action
   where
-  showAction (Deposit accountId party tkn val) =
+  showAction (Deposit accountId party _ val) =
     partyShow party
       <> " deposits "
       <> valueShow val
@@ -74,7 +63,7 @@ actionShow (Term action _) = escape <<< showAction $ action
       <> partyShow accountId
       <> " account"
 
-  showAction (Choice (ChoiceId id party) bnd) = partyShow party <> " makes a choice in " <> show id
+  showAction (Choice (ChoiceId id party) _) = partyShow party <> " makes a choice in " <> show id
 
   showAction (Notify obs) = "A notification on " <> observationShow obs
 
@@ -118,7 +107,7 @@ contractShow (Term c _) =
   escape
     $ case c of
         Close -> "Close"
-        Pay from to tok_ v _ -> "Pay " <> valueShow v <> " from " <> show from <> " to " <> show to
+        Pay from to _ v _ -> "Pay " <> valueShow v <> " from " <> show from <> " to " <> show to
         If obs _ _ -> observationShow obs
         When _ _ _ -> "When ..."
         Let (TermWrapper (ValueId valId) _) val _ -> "let " <> show valId <> " = " <> valueShow val
