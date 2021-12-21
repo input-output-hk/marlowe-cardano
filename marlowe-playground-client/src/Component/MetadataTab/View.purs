@@ -15,11 +15,12 @@ import Data.Map as Map
 import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe)
+import Data.Monoid (guard)
 import Data.Set (Set, toUnfoldable)
 import Data.Set.Ordered.OSet (OSet)
 import Data.Tuple (curry)
 import Data.Tuple.Nested (type (/\), (/\))
-import Halogen.Classes (btn, disabled, downBtn, minusBtn, plusBtn, upBtn)
+import Halogen.Classes (btn, disabled, downBtn, hidden, minusBtn, plusBtn, upBtn)
 import Halogen.HTML (ClassName(..), HTML, button, div, em_, h6_, input, option, select, text)
 import Halogen.HTML.Events (onClick, onValueChange)
 import Halogen.HTML.Properties (InputType(..), class_, classes, min, placeholder, required, selected, type_, value)
@@ -266,14 +267,18 @@ sortableMetadataList actions metadataMap hintSet metadataRenderer typeNameTitle 
 
             up =
               button
-                [ classes [ btn, upBtn, disabled (idx == 0) ]
+                [ classes
+                    $ [ btn, upBtn, disabled (idx == 0) ]
+                    <> guard (itemsCount == 1) [ hidden ]
                 , onClick $ const $ actions.moveUp key
                 ]
                 [ text "↑" ]
 
             down =
               button
-                [ classes [ btn, downBtn, disabled (idx == itemsCount - 1) ]
+                [ classes
+                    $ [ btn, downBtn, disabled (idx == itemsCount - 1) ]
+                    <> guard (itemsCount == 1) [ hidden ]
                 , onClick $ const $ actions.moveDown key
                 ]
                 [ text "↓" ]

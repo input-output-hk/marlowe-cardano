@@ -2,7 +2,7 @@ module Component.MetadataTab.State (carryMetadataAction) where
 
 import Prologue hiding (div)
 import Component.MetadataTab.Types (MetadataAction(..), actionLabels)
-import Contrib.Halogen.State.Record (mkSettersDispatcher, mkUpdatersDispatcher)
+import Contrib.Record.Generic (mkSettersDispatcher, mkUpdatersDispatcher)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Lens (assign, modifying, over)
 import Data.Map (delete, insert) as Map

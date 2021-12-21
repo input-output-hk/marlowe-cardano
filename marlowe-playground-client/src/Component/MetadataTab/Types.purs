@@ -1,7 +1,7 @@
 module Component.MetadataTab.Types where
 
 import Prologue
-import Contrib.Halogen.State.Record (Update)
+import Contrib.Record.Generic (Update)
 import Contrib.Type.Proxy.Generic (fromRowLabels) as Proxies
 import Contrib.Variant (tag) as Contrib.Variant
 import Data.Map.Ordered.OMap (OMap)

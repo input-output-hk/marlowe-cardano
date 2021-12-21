@@ -1,4 +1,4 @@
-module Contrib.Halogen.State.Record where
+module Contrib.Record.Generic where
 
 import Contrib.Type.Data.Symbol.Transform (class ToUpperFirst) as Symbol.Transform
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
@@ -8,21 +8,22 @@ import Prim.Symbol (class Append) as Symbol
 import Record (insert, modify, set) as Record
 import Type.Prelude (class IsSymbol, Proxy(..))
 
--- | This is not strictly halogen specific folding...
--- |
 -- | Given a proxy to the record (like "state record")
--- | we produce a dispatcher (another record).
+-- | we produce a dispatcher - an another record.
 -- |
 -- | This dispatcher when used with `Variant.match`
 -- | accepts a `Variant` value (an "action") and dispatches it
 -- | using its label in a type safe manner over our state value.
+-- |
+-- | We provide two types of dispatchers below for setters and
+-- | updaters.
+-- | We use `FoldingWithIndex` here and below and not
+-- | `MappingWithIndex` because mapping requires
+-- | a value to operate on and folding allows us to build up
+-- | a value "out of thin air" i.e. based on `Proxy (RowList k)`.
 data SettersDispatchStep
   = SettersDispatchStep
 
--- | We use `FoldingWithIndex` here and not
--- | `MappingWithIndex` because mapping requires
--- | a value to operate on and folding allows us to build up
--- | a value just from the `Proxy (RowList k)`.
 instance purtyProblem0 ::
   ( IsSymbol l
   , Symbol.Transform.ToUpperFirst l l'
@@ -43,10 +44,11 @@ mkSettersDispatcher ::
   { | rout }
 mkSettersDispatcher _ = hfoldlWithIndex SettersDispatchStep {} (Proxy :: Proxy rl)
 
--- | If are brave and don't want to use setters with quite clear semantics
--- | you can reach for updaters. They allow you to modify state field value
--- | in arbitrary way. The final action type algebra would be just
--- | ambigious...
+-- | If you are brave enough and don't want to use setters with a clear semantic
+-- | you can reach for updaters. The final action type algebra would be just ambigious...
+-- | Updater dispatcher allows you to modify state field value in arbitrary way by
+-- | applying "Update" function from a given `Variant` value over a
+-- | corresponding `Record` field.
 data UpdatersDispatchStep
   = UpdatersDispatchStep
 
