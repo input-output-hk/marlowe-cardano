@@ -2,6 +2,8 @@
 
 In this example execution of [an escrow contract](ReadMe.md), the buyer reports a problem, the seller disputes the problem, but the mediator confirms the problem.
 
+![Flow chart for "confirm claim".](confirm-claim.svg)
+
 ## Prerequisites
 
 The environment variable `CARDANO_NODE_SOCKET_PATH` must be set to the path to the cardano node's socket.

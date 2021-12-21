@@ -6,6 +6,8 @@ set -e
 echo '# Example Escrow Contract: "Everything is alright"'
 
 echo "In this example execution of [an escrow contract](ReadMe.md), the buyer does not report a problem."
+echo
+echo '![Flow chart for "everything is alright".](everything-is-alright.svg)'
 
 echo "## Prerequisites"
 

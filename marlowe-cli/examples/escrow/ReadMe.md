@@ -69,12 +69,13 @@ When
 
 The four paths through the flow chart variously involve three, four, or five transactions:
 
-|         | ["Everything is alright"](everything-is-alright.md) | ["Confirm problem"](confirm-problem.md)     | ["Dismiss claim"](dismiss-claim.md)         | ["Confirm claim"](confirm-claim.md)         |
-|---------|---------------------------------------------        |---------------------------------------------|---------------------------------------------|---------------------------------------------|
-| 1.      | Mediator provides minimum ADA.                      | Mediator provides minimum ADA.              | Mediator provides minimum ADA.              | Mediator provides minimum ADA.              |
-| 2.      | Buyer deposits funds into seller's account.         | Buyer deposits funds into seller's account. | Buyer deposits funds into seller's account. | Buyer deposits funds into seller's account. |
-| 3.      | Buyer reports that everything is alright.           | Buyer reports that there is a problem.      | Buyer reports that there is a problem.      | Buyer reports that there is a problem.      |
-| 4.      | - - -                                               | Seller confirms that there is a problem.    | Seller disputes that there is a problem.    | Seller disputes that there is a problem.    |
-| 5.      | - - -                                               | - - -                                       | Mediator dismisses the buyer's claim.       | Mediator confirms the buyer's claim.        |
-| Outcome | Seller receives purchase price.                     | Buyer receives refund.                      | Seller receives purchase price.             | Buyer receives refund.                      |
-|         | Mediator receives their minimum ADA back.           | Mediator receives their minimum ADA back.   | Mediator receives their minimum ADA back.   | Mediator receives their minimum ADA back.   |
+|         | ["Everything is alright"](everything-is-alright.md)                   | ["Confirm problem"](confirm-problem.md)                   | ["Dismiss claim"](dismiss-claim.md)                   | ["Confirm claim"](confirm-claim.md)                   |
+|---------|-----------------------------------------------------------------------|-----------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------|
+|         | ![Flow chart for "everything is alright".](everything-is-alright.svg) | ![Flow chart for "confirm problem".](confirm-problem.svg) | ![Flow chart for "dismiss claim".](dismiss-claim.svg) | ![Flow chart for "confirm claim".](confirm-claim.svg) |
+| 1.      | Mediator provides minimum ADA.                                        | Mediator provides minimum ADA.                            | Mediator provides minimum ADA.                        | Mediator provides minimum ADA.                        |
+| 2.      | Buyer deposits funds into seller's account.                           | Buyer deposits funds into seller's account.               | Buyer deposits funds into seller's account.           | Buyer deposits funds into seller's account.           |
+| 3.      | Buyer reports that everything is alright.                             | Buyer reports that there is a problem.                    | Buyer reports that there is a problem.                | Buyer reports that there is a problem.                |
+| 4.      | - - -                                                                 | Seller confirms that there is a problem.                  | Seller disputes that there is a problem.              | Seller disputes that there is a problem.              |
+| 5.      | - - -                                                                 | - - -                                                     | Mediator dismisses the buyer's claim.                 | Mediator confirms the buyer's claim.                  |
+| Outcome | Seller receives purchase price.                                       | Buyer receives refund.                                    | Seller receives purchase price.                       | Buyer receives refund.                                |
+|         | Mediator receives their minimum ADA back.                             | Mediator receives their minimum ADA back.                 | Mediator receives their minimum ADA back.             | Mediator receives their minimum ADA back.             |

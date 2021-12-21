@@ -2,6 +2,8 @@
 
 In this example execution of [an escrow contract](ReadMe.md), the buyer does not report a problem.
 
+![Flow chart for "everything is alright".](everything-is-alright.svg)
+
 ## Prerequisites
 
 The environment variable `CARDANO_NODE_SOCKET_PATH` must be set to the path to the cardano node's socket.

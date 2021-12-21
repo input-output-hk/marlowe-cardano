@@ -6,6 +6,8 @@ set -e
 echo '# Example Escrow Contract: "Confirm Claim"'
 
 echo "In this example execution of [an escrow contract](ReadMe.md), the buyer reports a problem, the seller disputes the problem, but the mediator confirms the problem."
+echo
+echo '![Flow chart for "confirm claim".](confirm-claim.svg)'
 
 echo "## Prerequisites"
 

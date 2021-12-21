@@ -2,6 +2,8 @@
 
 In this example execution of [an escrow contract](ReadMe.md), the buyer reports a problem, the seller disputes the problem, and the mediator dismisses the buyer's claim.
 
+![Flow chart for "dismiss claim".](dismiss-claim.svg)
+
 ## Prerequisites
 
 The environment variable `CARDANO_NODE_SOCKET_PATH` must be set to the path to the cardano node's socket.

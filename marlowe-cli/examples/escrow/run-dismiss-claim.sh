@@ -6,6 +6,8 @@ set -e
 echo '# Example Escrow Contract: "Dismiss Claim"'
 
 echo "In this example execution of [an escrow contract](ReadMe.md), the buyer reports a problem, the seller disputes the problem, and the mediator dismisses the buyer's claim."
+echo
+echo '![Flow chart for "dismiss claim".](dismiss-claim.svg)'
 
 echo "## Prerequisites"
 
