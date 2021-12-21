@@ -7,19 +7,14 @@ module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
   , (<->)
   , sup
   , inf
-  , applyEOMC
-  , moveToEndOfMonth
   )
 where
 
 import qualified Data.List                                   as L (delete, init, last, length)
 import           Data.Time                                   (LocalTime (..))
-import           Data.Time.Calendar                          (addDays, addGregorianMonthsClip, addGregorianYearsClip,
-                                                              fromGregorian, gregorianMonthLength, toGregorian)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..),
-                                                              ScheduleConfig (..), Stub (LongStub))
+import           Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), ScheduleConfig (..), Stub (..))
 import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedSchedule, mkShiftedDay)
-import           Language.Marlowe.ACTUS.Utility.DateShift    (applyBDC)
+import           Language.Marlowe.ACTUS.Utility.DateShift    (applyBDC, applyEOMC, shiftDate)
 
 maximumMaybe :: Ord a => [a] -> Maybe a
 maximumMaybe [] = Nothing
@@ -91,38 +86,3 @@ generateRecurrentSchedule _ _ _ _ = []
 
 (<->) :: LocalTime -> Cycle -> LocalTime
 (<->) date cycle = shiftDate date (-n cycle) (p cycle)
-
-shiftDate :: LocalTime -> Integer -> Period -> LocalTime
-shiftDate LocalTime {..} n p = case p of
-  P_D -> LocalTime {localDay = addDays n localDay, localTimeOfDay = localTimeOfDay}
-  P_W -> LocalTime {localDay = addDays (n * 7) localDay, localTimeOfDay = localTimeOfDay}
-  P_M -> LocalTime {localDay = addGregorianMonthsClip n localDay, localTimeOfDay = localTimeOfDay}
-  P_Q -> LocalTime {localDay = addGregorianMonthsClip (n * 3) localDay, localTimeOfDay = localTimeOfDay}
-  P_H -> LocalTime {localDay = addGregorianMonthsClip (n * 6) localDay, localTimeOfDay = localTimeOfDay}
-  P_Y -> LocalTime {localDay = addGregorianYearsClip n localDay, localTimeOfDay = localTimeOfDay}
-
-{- End of Month Convention -}
-applyEOMC :: LocalTime -> Cycle -> EOMC -> LocalTime -> LocalTime
-applyEOMC s Cycle {..} endOfMonthConvention date
-  | isLastDayOfMonthWithLessThan31Days s
-    && p /= P_D
-    && p /= P_W
-    && endOfMonthConvention == EOMC_EOM
-  = moveToEndOfMonth date
-  | otherwise
-  = date
-
-isLastDayOfMonthWithLessThan31Days :: LocalTime -> Bool
-isLastDayOfMonthWithLessThan31Days LocalTime {..} =
-  let (year, month, day) = toGregorian localDay
-      isLastDay = gregorianMonthLength year month == day
-   in day < 31 && isLastDay
-
-moveToEndOfMonth :: LocalTime -> LocalTime
-moveToEndOfMonth LocalTime {..} =
-  let (year, month, _) = toGregorian localDay
-      monthLength = gregorianMonthLength year month
-   in LocalTime
-        { localDay = fromGregorian year month monthLength,
-          localTimeOfDay = localTimeOfDay
-        }

@@ -25,9 +25,8 @@ import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), Cont
 import           Language.Marlowe.ACTUS.Domain.Ops                as O (ActusNum (..), ActusOps (..), ScheduleOps (..),
                                                                         YearFractionOps (..))
 import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..), mkShiftedDay)
-import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (applyEOMC, generateRecurrentSchedule, inf, (<+>),
-                                                                   (<->))
+import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg, applyEOMC)
+import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentSchedule, inf, (<+>), (<->))
 
 -- |Generate the schedule for a given event type
 schedule :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) =>
