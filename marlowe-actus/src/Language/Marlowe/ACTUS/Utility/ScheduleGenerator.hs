@@ -1,5 +1,5 @@
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
   ( generateRecurrentSchedule
@@ -35,21 +35,94 @@ sup set threshold =
 correction :: Cycle -> LocalTime -> LocalTime -> [LocalTime] -> [LocalTime]
 correction
   Cycle
-    { ..
+    { stub = ShortStub,
+      includeEndDay = False
     }
   anchorDate
   endDate
-  schedule =
-    let lastDate = L.last schedule
-        schedule' = L.init schedule
-        scheduleSize = L.length schedule'
-        schedule'' =
-          if not includeEndDay && endDate == anchorDate
-            then L.delete anchorDate schedule'
-            else schedule'
-     in if stub == LongStub && L.length schedule'' > 2 && endDate /= lastDate
-          then L.delete (schedule'' !! (scheduleSize - 1)) schedule''
-          else schedule''
+  schedule
+    | endDate == anchorDate =
+      L.delete anchorDate $ L.init schedule
+correction
+  Cycle
+    { stub = ShortStub
+    }
+  _
+  _
+  schedule = L.init schedule
+correction
+  Cycle
+    { stub = LongStub,
+      includeEndDay = True
+    }
+  _
+  endDate
+  schedule
+    | endDate /= L.last schedule =
+      let s = L.init schedule
+          l = L.length s
+       in if l > 2
+            then L.delete (s !! (l - 1)) s
+            else s
+correction
+  Cycle
+    { stub = LongStub,
+      includeEndDay = True
+    }
+  _
+  _
+  schedule = L.init schedule
+correction
+  Cycle
+    { stub = LongStub,
+      includeEndDay = False
+    }
+  anchorDate
+  endDate
+  schedule
+    | endDate == anchorDate
+        && endDate /= L.last schedule =
+      let s = L.delete anchorDate $ L.init schedule
+          l = L.length s
+       in if l > 2
+            then L.delete (s !! (l - 1)) s
+            else s
+correction
+  Cycle
+    { stub = LongStub,
+      includeEndDay = False
+    }
+  anchorDate
+  endDate
+  schedule
+    | endDate == anchorDate =
+      let s = L.delete anchorDate $ L.init schedule
+          l = L.length s
+       in if l > 2
+            then L.delete (s !! (l - 1)) s
+            else s
+correction
+  Cycle
+    { stub = LongStub,
+      includeEndDay = False
+    }
+  _
+  endDate
+  schedule
+    | endDate /= L.last schedule =
+      let s = L.init schedule
+          l = L.length s
+       in if l > 2
+            then L.delete (s !! (l - 1)) s
+            else s
+correction
+  Cycle
+    { stub = LongStub,
+      includeEndDay = False
+    }
+  _
+  _
+  schedule = L.init schedule
 
 addEndDay :: Bool -> LocalTime -> ShiftedSchedule -> ShiftedSchedule
 addEndDay True endDate schedule = schedule ++ [mkShiftedDay endDate]
@@ -66,23 +139,25 @@ generateRecurrentSchedule' Cycle {..} anchorDate endDate =
              in go current' (k + 1) (acc ++ [current])
    in go anchorDate 1 []
 
-generateRecurrentSchedule :: LocalTime -> Cycle -> LocalTime -> ScheduleConfig -> ShiftedSchedule
-generateRecurrentSchedule
-  anchorDate
-  cycle
-  endDate
+generateRecurrentSchedule ::
+  LocalTime          -- ^ Anchor date
+  -> Cycle           -- ^ Cycle
+  -> LocalTime       -- ^ End date
+  -> ScheduleConfig  -- ^ Schedule config
+  -> ShiftedSchedule -- ^ New schedule
+generateRecurrentSchedule a c e
   ScheduleConfig
     { endOfMonthConvention = Just eomc,
       calendar = Just cal,
       businessDayConvention = Just bdc
     } =
-    let s = generateRecurrentSchedule' cycle anchorDate endDate
-        c = correction cycle anchorDate endDate s
-     in addEndDay (includeEndDay cycle) endDate $ fmap (applyBDC bdc cal . applyEOMC anchorDate cycle eomc) c
+    addEndDay (includeEndDay c) e .
+      fmap (applyBDC bdc cal . applyEOMC a c eomc) .
+        correction c a e $ generateRecurrentSchedule' c a e
 generateRecurrentSchedule _ _ _ _ = []
 
 (<+>) :: LocalTime -> Cycle -> LocalTime
-(<+>) date cycle = shiftDate date (n cycle) (p cycle)
+(<+>) d c = shiftDate d (n c) (p c)
 
 (<->) :: LocalTime -> Cycle -> LocalTime
-(<->) date cycle = shiftDate date (-n cycle) (p cycle)
+(<->) d c = shiftDate d (-n c) (p c)
