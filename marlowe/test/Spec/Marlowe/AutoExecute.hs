@@ -73,7 +73,7 @@ reqId :: UUID
 reqId = UUID.nil
 
 almostAll :: Ledger.Value
-almostAll = defaultLovelaceAmount <> P.inv (lovelaceValueOf 50)
+almostAll = defaultLovelaceAmount <> P.inv (lovelaceValueOf 2000050)
 
 autoexecZCBTest :: TestTree
 autoexecZCBTest = checkPredicate "ZCB Auto Execute Contract"
@@ -83,6 +83,7 @@ autoexecZCBTest = checkPredicate "ZCB Auto Execute Contract"
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag bob) "contract should not have any errors"
     T..&&. walletFundsChange alice (lovelaceValueOf 150)
     T..&&. walletFundsChange bob (lovelaceValueOf (-150))
+    T..&&. walletFundsChange carol (lovelaceValueOf 0)
     ) $ do
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
@@ -96,7 +97,7 @@ autoexecZCBTest = checkPredicate "ZCB Auto Execute Contract"
     Trace.waitNSlots 1
 
     -- Move all Alice's money to Carol, so she can't make a payment
-    Trace.payToWallet alice carol (almostAll P.- adaValueOf 1)
+    Trace.payToWallet alice carol (almostAll)
     Trace.waitNSlots 1
 
     Trace.callEndpoint @"auto" aliceHdl (reqId, params, alicePk, contractLifespan)
@@ -117,7 +118,7 @@ autoexecZCBTestAliceWalksAway = checkPredicate
     -- /\ emulatorLog (const False) ""
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag alice) "contract should not have any errors"
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag bob) "contract should not have any errors"
-    T..&&. walletFundsChange alice (P.inv (lovelaceValueOf 98999950))
+    T..&&. walletFundsChange alice (P.inv (lovelaceValueOf 97999950))
     T..&&. walletFundsChange carol almostAll
     ) $ do
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
@@ -126,11 +127,11 @@ autoexecZCBTestAliceWalksAway = checkPredicate
     -- Bob will wait for the contract to appear on chain
     Trace.callEndpoint @"auto" bobHdl (reqId, params, bobPk, contractLifespan)
 
-    -- Init a contract, 10,000.000000 - 1.000010 = 9,998.999990
+    -- Init a contract, 10,000.000000 - 2.000010 = 9,997.999990
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 1
 
-    -- Move all Alice's money to Carol, so she can't make a payment, 9,998.999990 - 9,998.999950 - 0.000010 = 0.000030
+    -- Move all Alice's money to Carol, so she can't make a payment, 9,997.999990 - 9,997.999950 - 0.000010 = 0.000030
     Trace.payToWallet alice carol almostAll
     Trace.waitNSlots 1
 

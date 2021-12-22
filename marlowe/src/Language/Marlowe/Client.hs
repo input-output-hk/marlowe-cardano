@@ -25,13 +25,13 @@
 module Language.Marlowe.Client where
 import           Control.Lens
 import           Control.Monad                    (forM_, void)
-import           Control.Monad.Error.Lens         (catching, throwing)
+import           Control.Monad.Error.Lens         (catching, throwing, throwing_)
 import           Data.Aeson                       (FromJSON, ToJSON, parseJSON, toJSON)
 import           Data.Either                      (rights)
 import qualified Data.List.NonEmpty               as NonEmpty
 import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (isNothing, maybeToList)
+import           Data.Maybe                       (isNothing, listToMaybe, mapMaybe, maybeToList)
 import           Data.Monoid                      (First (..))
 import           Data.Semigroup.Generic           (GenericSemigroupMonoid (..))
 import qualified Data.Set                         as Set
@@ -46,13 +46,14 @@ import           Language.Marlowe.SemanticsTypes  hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes  as Marlowe
 import           Language.Marlowe.Util            (extractNonMerkleizedContractRoles)
 import           Ledger                           (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
-                                                   TxOut (..), inScripts, txOutValue)
+                                                   TxOut (..), TxOutRef, inScripts, txOutValue)
 import qualified Ledger
 import           Ledger.Ada                       (adaSymbol, adaToken, adaValueOf)
 import           Ledger.Address                   (pubKeyHashAddress, scriptHashAddress)
 import           Ledger.Constraints
 import qualified Ledger.Constraints               as Constraints
 import           Ledger.Constraints.TxConstraints
+import qualified Ledger.Interval                  as Interval
 import           Ledger.Scripts                   (datumHash, unitRedeemer)
 import qualified Ledger.Tx                        as Tx
 import           Ledger.Typed.Scripts
@@ -60,10 +61,9 @@ import qualified Ledger.Typed.Scripts             as Scripts
 import           Ledger.Typed.Tx                  (TypedScriptTxOut (..), tyTxOutData)
 import qualified Ledger.Typed.Tx                  as Typed
 import qualified Ledger.Value                     as Val
-import           Plutus.ChainIndex                (ChainIndexTx, _ValidTx, citxInputs, citxOutputs, citxTxId)
+import           Plutus.ChainIndex                (ChainIndexTx (..), _ValidTx, citxInputs, citxOutputs, citxTxId)
 import           Plutus.Contract                  as Contract
-import           Plutus.Contract.StateMachine     (AsSMContractError (..), StateMachineClient (..), Void,
-                                                   WaitingResult (..))
+import           Plutus.Contract.StateMachine     (AsSMContractError (..), Void)
 import qualified Plutus.Contract.StateMachine     as SM
 import           Plutus.Contract.Wallet           (getUnspentOutput)
 import qualified Plutus.Contracts.Currency        as Currency
@@ -121,6 +121,17 @@ data ContractHistory =
         deriving anyclass (FromJSON, ToJSON)
         deriving (Semigroup, Monoid) via (GenericSemigroupMonoid ContractHistory)
 
+
+-- | The outcome of 'waitForUpdateTimeout'
+data WaitingResult t i s
+    = Timeout t -- ^ The timeout happened before any change of the on-chain state was detected
+    | ContractEnded ChainIndexTx i -- ^ The state machine instance ended
+    | Transition ChainIndexTx i s -- ^ The state machine instance transitioned to a new state
+    | InitialState ChainIndexTx s -- ^ The state machine instance was initialised
+  deriving stock (Show,Generic,Functor)
+  deriving anyclass (ToJSON, FromJSON)
+
+
 created :: MarloweParams -> MarloweData -> ContractHistory
 created p d = mempty{chParams = First (Just (p, d)) }
 
@@ -159,56 +170,68 @@ type MarloweContractState = LastResult
 
 marloweFollowContract :: Contract ContractHistory MarloweFollowSchema MarloweError ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params -> do
-    let client = mkMarloweClient params
+    let typedValidator = smallTypedValidator params
     let go [] = pure InProgress
         go (tx:rest) = do
-            res <- updateHistoryFromTx client params tx
+            res <- updateHistoryFromTx typedValidator params tx
             case res of
                 Finished   -> pure Finished
                 InProgress -> go rest
 
-    go [] >>= checkpointLoop (follow client params)
+    go [] >>= checkpointLoop (follow typedValidator params)
 
   where
-    follow client params = \case
+    follow typedValidator params = \case
         Finished -> do
             logDebug @String ("Contract finished " <> show params)
             pure (Right InProgress) -- do not close the contract so we can see it in Marlowe Run history
         InProgress -> do
-            result <- SM.waitForUpdateTimeout @_ @MarloweInput client never >>= awaitPromise
+            result <- waitForUpdateTimeout typedValidator never >>= awaitPromise
             case result of
                 Timeout t -> absurd t
-                ContractEnded _ (itvl, inputs) -> do
-                    tell @ContractHistory (transition $ TransactionInput itvl inputs)
+                ContractEnded tx inputs -> do
+                    interval <- case _citxValidRange tx of
+                        Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> pure (l, h)
+                        _ -> throwError (OtherContractError $ OtherError "Interval")
+                    tell @ContractHistory (transition $ TransactionInput interval inputs)
                     pure (Right Finished)
-                Transition _ (itvl, inputs) _ -> do
-                    tell @ContractHistory (transition $ TransactionInput itvl inputs)
+                Transition tx inputs _ -> do
+                    interval <- case _citxValidRange tx of
+                        Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> pure (l, h)
+                        _ -> throwError (OtherContractError $ OtherError "Interval")
+                    tell @ContractHistory (transition $ TransactionInput interval inputs)
                     pure (Right InProgress)
-                InitialState _ SM.OnChainState{ocsTxOut} -> do
+                InitialState _ OnChainState{ocsTxOut} -> do
                     let initialMarloweData = tyTxOutData ocsTxOut
                     tell @ContractHistory (created params initialMarloweData)
                     pure (Right InProgress)
 
-    updateHistoryFromTx StateMachineClient{scInstance, scChooser} params tx = do
+    updateHistoryFromTx :: TypedValidator TypedMarloweValidator
+                        -> MarloweParams
+                        -> ChainIndexTx
+                        -> Contract ContractHistory MarloweFollowSchema MarloweError ContractProgress
+    updateHistoryFromTx inst params tx = do
         logInfo @String $ "Updating history from tx " <> show (view citxTxId tx)
-        let inst = SM.typedValidator scInstance
         let address = Scripts.validatorAddress inst
         utxos <- fmap ( Map.filter ((==) address . view Ledger.ciTxOutAddress . fst)
                       . Map.fromList
                       ) $ utxosTxOutTxFromTx tx
-        let states = SM.getStates scInstance utxos
+        let states = getStates inst utxos
         case findInput inst tx of
             -- if there's no TxIn for Marlowe contract that means
             -- it's a contract creation transaction, and there is Marlowe TxOut
-            Nothing -> case scChooser states of
-                Left err    -> throwing _SMContractError err
-                Right SM.OnChainState{SM.ocsTxOut=state} -> do
+            Nothing -> case states of
+                [OnChainState{ocsTxOut=state}] -> do
                     let initialMarloweData = tyTxOutData state
                     logInfo @String ("Contract created " <> show initialMarloweData)
                     tell $ created params initialMarloweData
                     pure InProgress
+                _    -> throwError (OtherContractError $ OtherError "CCC")
             -- There is TxIn with Marlowe contract, hence this is a state transition
-            Just (interval, inputs) -> do
+            Just inputs -> do
+                interval <- case _citxValidRange tx of
+                        Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> pure (l, h)
+                        _ -> throwError (OtherContractError $ OtherError "Interval")
                 let txInput = TransactionInput {
                         txInterval = interval,
                         txInputs = inputs }
@@ -310,19 +333,20 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
 
         marlowePlutusContract
     auto = endpoint @"auto" $ \(reqId, params, party, untilSlot) -> catchError reqId "auto" $ do
-        let theClient = mkMarloweClient params
+        let typedValidator = smallTypedValidator params
+        let address = validatorAddress typedValidator
         let continueWith :: MarloweData -> Contract MarloweContractState MarloweSchema MarloweError ()
             continueWith md@MarloweData{marloweContract} =
                 if canAutoExecuteContractForParty party marloweContract
-                then autoExecuteContract reqId theClient party md
+                then autoExecuteContract reqId params typedValidator party md
                 else do
                     tell $ OK reqId "auto"
                     marlowePlutusContract
 
-        maybeState <- SM.getOnChainState theClient
+        maybeState <- getOnChainState typedValidator address
         case maybeState of
             Nothing -> do
-                wr <- SM.waitForUpdateUntilSlot theClient untilSlot
+                wr <- waitForUpdateUntilSlot @[Input] typedValidator untilSlot
                 case wr of
                     ContractEnded{} -> do
                         logInfo @String $ "Contract Ended for party " <> show party
@@ -334,7 +358,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                         marlowePlutusContract
                     Transition _ _ marloweData -> continueWith marloweData
                     InitialState _ marloweData -> continueWith marloweData
-            Just (SM.OnChainState{SM.ocsTxOut=st}, _) -> do
+            Just (OnChainState{ocsTxOut=st}, _) -> do
                 let marloweData = tyTxOutData st
                 continueWith marloweData
     -- The MarloweApp contract is closed implicitly by not returning
@@ -343,11 +367,12 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
 
 
     autoExecuteContract :: UUID
-                      -> StateMachineClient MarloweData MarloweInput
+                      -> MarloweParams
+                      -> SmallTypedValidator
                       -> Party
                       -> MarloweData
                       -> Contract MarloweContractState MarloweSchema MarloweError ()
-    autoExecuteContract reqId theClient party marloweData = do
+    autoExecuteContract reqId params typedValidator party marloweData = do
         slot <- currentSlot
         let slotRange = (slot, slot + defaultTxValidationRange)
         let action = getAction slotRange party marloweData
@@ -355,12 +380,9 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
             PayDeposit acc p token amount -> do
                 logInfo @String $ "PayDeposit " <> show amount <> " at within slots " <> show slotRange
                 let payDeposit = do
-                        marloweData <- SM.runStep theClient (slotRange, [NormalInput $ IDeposit acc p token amount])
-                        case marloweData of
-                            SM.TransitionFailure e -> throwing _TransitionError e
-                            SM.TransitionSuccess d -> continueWith d
-
-                catching _StateMachineError payDeposit $ \err -> do
+                        marloweData <- mkStep params typedValidator slotRange [NormalInput $ IDeposit acc p token amount]
+                        continueWith marloweData
+                catching _MarloweError payDeposit $ \err -> do
                     logWarn @String $ "Error " <> show err
                     logInfo @String $ "Retry PayDeposit in 2 slots"
                     _ <- awaitSlot (slot + 2)
@@ -371,7 +393,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 continueWith marloweData
             WaitOtherActionUntil timeout -> do
                 logInfo @String $ "WaitOtherActionUntil " <> show timeout
-                wr <- SM.waitForUpdateUntilSlot theClient timeout
+                wr <- waitForUpdateUntilSlot @[Input] typedValidator timeout
                 case wr of
                     ContractEnded{} -> do
                         logInfo @String $ "Contract Ended"
@@ -386,14 +408,11 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
             CloseContract -> do
                 logInfo @String $ "CloseContract"
                 let closeContract = do
-                        marloweData <- SM.runStep theClient (slotRange, [])
-                        case marloweData of
-                            SM.TransitionFailure e -> throwing _TransitionError e
-                            SM.TransitionSuccess _ -> do
-                                tell $ OK reqId "auto"
-                                marlowePlutusContract
+                        _ <- mkStep params typedValidator slotRange []
+                        tell $ OK reqId "auto"
+                        marlowePlutusContract
 
-                catching _StateMachineError closeContract $ \err -> do
+                catching _MarloweError closeContract $ \err -> do
                     logWarn @String $ "Error " <> show err
                     logInfo @String $ "Retry CloseContract in 2 slots"
                     _ <- awaitSlot (slot + 2)
@@ -404,7 +423,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 marlowePlutusContract
 
           where
-            continueWith = autoExecuteContract reqId theClient party
+            continueWith = autoExecuteContract reqId params typedValidator party
 
 
 setupMarloweParams
@@ -608,10 +627,10 @@ findMarloweContractsOnChainByRoleCurrency
                 (Maybe (MarloweParams, MarloweData))
 findMarloweContractsOnChainByRoleCurrency curSym = do
     let params = marloweParams curSym
-    let client = mkMarloweClient params
-    maybeState <- SM.getOnChainState client
+    let typedValidator = smallTypedValidator params
+    maybeState <- getOnChainState typedValidator (validatorAddress typedValidator)
     case maybeState of
-        Just (SM.OnChainState{SM.ocsTxOut}, _) -> do
+        Just (OnChainState{ocsTxOut}, _) -> do
             let marloweData = tyTxOutData ocsTxOut
             pure $ Just (params, marloweData)
         Nothing -> pure Nothing
@@ -696,3 +715,60 @@ mkStep params typedValidator range input = do
                     submitTxConfirmed utx
                     pure (SM.stateData newState)
                 Nothing -> throwing _ContractError $ OtherError "AAA"
+
+
+waitForUpdateTimeout ::
+    forall i t w schema e.
+    ( AsSMContractError e
+    , AsContractError e
+    , PlutusTx.FromData i
+    )
+    => SmallTypedValidator
+    -> Promise w schema e t -- ^ The timeout
+    -> Contract w schema e (Promise w schema e (WaitingResult t i OnChainState))
+waitForUpdateTimeout typedValidator timeout = do
+    let addr = validatorAddress typedValidator
+    currentState <- getOnChainState typedValidator addr
+    let success = case currentState of
+                    Nothing ->
+                        -- There is no on-chain state, so we wait for an output to appear
+                        -- at the address. Any output that appears needs to be checked
+                        -- with scChooser'
+                        promiseBind (utxoIsProduced addr) $ \txns -> do
+                            outRefMaps <- traverse utxosTxOutTxFromTx txns
+                            let produced = getStates typedValidator (Map.fromList $ concat outRefMaps)
+                            case produced of
+                                [onChainState] -> pure $ InitialState (ocsTx onChainState) onChainState
+                                _              -> throwing _ContractError $ OtherError "DDD"
+                    Just (OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}, ocsTx}, _) ->
+                        promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
+                            outRefMap <- Map.fromList <$> utxosTxOutTxFromTx txn
+                            let newStates = getStates typedValidator outRefMap
+                                inp       = getInput tyTxOutRefRef txn
+                            case (newStates, inp) of
+                                ([], Just i)         -> pure (ContractEnded ocsTx i)
+                                ([newState], Just i) -> pure (Transition ocsTx i newState)
+                                _                    -> throwing_ _UnableToExtractTransition
+    pure $ select success (Timeout <$> timeout)
+
+waitForUpdateUntilSlot ::
+    forall i w schema e.
+    ( AsSMContractError e
+    , AsContractError e
+    , PlutusTx.FromData i
+    )
+    => SmallTypedValidator
+    -> Slot
+    -> Contract w schema e (WaitingResult Slot i MarloweData)
+waitForUpdateUntilSlot client timeoutSlot = waitForUpdateTimeout client (isSlot timeoutSlot) >>= fmap (fmap (tyTxOutData . ocsTxOut)) . awaitPromise
+
+
+getInput ::
+    forall i.
+    (PlutusTx.FromData i)
+    => TxOutRef
+    -> ChainIndexTx
+    -> Maybe i
+getInput outRef tx = do
+    (_validator, Ledger.Redeemer r, _) <- listToMaybe $ mapMaybe Tx.inScripts $ filter (\Tx.TxIn{Tx.txInRef} -> outRef == txInRef) $ Set.toList $ _citxInputs tx
+    PlutusTx.fromBuiltinData r
