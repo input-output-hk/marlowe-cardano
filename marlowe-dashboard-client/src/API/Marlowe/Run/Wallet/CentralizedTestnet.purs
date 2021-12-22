@@ -1,4 +1,4 @@
-module API.Marlowe.Run.TestnetWallet
+module API.Marlowe.Run.Wallet.CentralizedTestnet
   ( restoreWallet
   , RestoreWalletOptions
   , RestoreError(..)
@@ -11,7 +11,7 @@ import Control.Monad.Except (runExceptT)
 import Data.Argonaut (encodeJson)
 import Data.Argonaut.Decode.Aeson as D
 import Effect.Aff.Class (class MonadAff)
-import Marlowe.Run.Webserver.Types (RestoreError(..), RestorePostData(..)) as BE
+import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError(..), RestorePostData(..)) as BE
 import Servant.PureScript (AjaxError)
 
 type RestoreWalletOptions
@@ -46,5 +46,5 @@ restoreWallet { walletName, mnemonicPhrase } = do
     $ runExceptT
     $ doPostRequestWith
         { encode: encodeJson, decode: D.decode (D.either D.value D.value) }
-        "/api/wallet/restore"
+        "/api/wallet/centralized-testnet/restore"
         body

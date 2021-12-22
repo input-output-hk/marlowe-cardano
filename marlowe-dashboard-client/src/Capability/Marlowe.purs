@@ -20,7 +20,7 @@ module Capability.Marlowe
 
 import Prologue
 import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicWallet, _observableState)
-import API.Marlowe.Run.TestnetWallet (RestoreError(..), RestoreWalletOptions)
+import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..), RestoreWalletOptions)
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.Contract (activateContract, getContractInstanceClientState, getContractInstanceObservableState, getWalletContractInstances, invokeEndpoint) as Contract
