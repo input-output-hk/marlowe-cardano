@@ -2,4 +2,5 @@
 *.skey
 *.vkey
 tx-*.*
+utxo-*.*
 *.diff

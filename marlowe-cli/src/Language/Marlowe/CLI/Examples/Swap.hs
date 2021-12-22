@@ -11,8 +11,7 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Language.Marlowe.CLI.Examples.Swap (
@@ -31,7 +30,8 @@ import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 -- | A swap contract.
-makeSwapContract :: Party        -- ^ First party.
+makeSwapContract :: Integer      -- ^ Lovelace that the first party contributes to the initial state.
+                 -> Party        -- ^ First party.
                  -> Token        -- ^ First party's token.
                  -> Integer      -- ^ Amount of first party's token.
                  -> Slot         -- ^ Timeout for first party's deposit.
@@ -40,12 +40,12 @@ makeSwapContract :: Party        -- ^ First party.
                  -> Integer      -- ^ Amount of second party's token.
                  -> Slot         -- ^ Timeout for second party's deposit
                  -> MarloweData  -- ^ Swap contract and initial state.
-makeSwapContract aParty aToken aAmount aTimeout bParty bToken bAmount bTimeout =
+makeSwapContract minAda aParty aToken aAmount aTimeout bParty bToken bAmount bTimeout =
   let
     marloweState =
       State
       {
-        accounts    = AM.singleton (aParty, Token adaSymbol adaToken) 2_000_000
+        accounts    = AM.singleton (aParty, Token adaSymbol adaToken) minAda
       , choices     = AM.empty
       , boundValues = AM.empty
       , minSlot     = 1
@@ -57,8 +57,8 @@ makeSwapContract aParty aToken aAmount aTimeout bParty bToken bAmount bTimeout =
             $ When
               [
                 Case (Deposit bParty bParty bToken $ Constant bAmount)
-                $ Pay bParty (Party aParty) aToken (Constant aAmount)
-                $ Pay aParty (Party bParty) bToken (Constant bAmount)
+                $ Pay aParty (Party bParty) aToken (Constant aAmount)
+                $ Pay bParty (Party aParty) bToken (Constant bAmount)
                 Close
               ]
               bTimeout

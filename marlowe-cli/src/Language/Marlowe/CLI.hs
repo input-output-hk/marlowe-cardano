@@ -201,6 +201,7 @@ mainCLI version =
                                          mediationDeadline
             TemplateSwap{..}    -> makeExample outputFile
                                      $ Example.makeSwapContract
+                                         minAda
                                          aParty
                                          aToken
                                          aAmount
@@ -627,12 +628,13 @@ templateSwapCommand =
 templateSwapOptions :: O.Parser Command
 templateSwapOptions =
   TemplateSwap
-    <$> O.option parseParty        (O.long "a-party"   <> O.metavar "PARTY"       <> O.help "The first party."                           )
-    <*> O.option parseToken        (O.long "a-token"   <> O.metavar "TOKEN"       <> O.help "The first party's token."                   )
-    <*> O.option O.auto            (O.long "a-amount"  <> O.metavar "INTEGER"     <> O.help "The amount of the first party's token."     )
-    <*> O.option parseSlot         (O.long "a-timeout" <> O.metavar "SLOT"        <> O.help "The timeout for the first party's deposit." )
-    <*> O.option parseParty        (O.long "b-party"   <> O.metavar "PARTY"       <> O.help "The second party."                          )
-    <*> O.option parseToken        (O.long "b-token"   <> O.metavar "TOKEN"       <> O.help "The second party's token."                  )
-    <*> O.option O.auto            (O.long "b-amount"  <> O.metavar "INTEGER"     <> O.help "The amount of the second party's token."    )
-    <*> O.option parseSlot         (O.long "b-timeout" <> O.metavar "SLOT"        <> O.help "The timeout for the second party's deposit.")
-    <*> (O.optional . O.strOption) (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."       )
+    <$> O.option O.auto            (O.long "minimum-ada" <> O.metavar "INTEGER"     <> O.help "Lovelace that the first party contributes to the initial state.")
+    <*> O.option parseParty        (O.long "a-party"     <> O.metavar "PARTY"       <> O.help "The first party."                                               )
+    <*> O.option parseToken        (O.long "a-token"     <> O.metavar "TOKEN"       <> O.help "The first party's token."                                       )
+    <*> O.option O.auto            (O.long "a-amount"    <> O.metavar "INTEGER"     <> O.help "The amount of the first party's token."                         )
+    <*> O.option parseSlot         (O.long "a-timeout"   <> O.metavar "SLOT"        <> O.help "The timeout for the first party's deposit."                     )
+    <*> O.option parseParty        (O.long "b-party"     <> O.metavar "PARTY"       <> O.help "The second party."                                              )
+    <*> O.option parseToken        (O.long "b-token"     <> O.metavar "TOKEN"       <> O.help "The second party's token."                                      )
+    <*> O.option O.auto            (O.long "b-amount"    <> O.metavar "INTEGER"     <> O.help "The amount of the second party's token."                        )
+    <*> O.option parseSlot         (O.long "b-timeout"   <> O.metavar "SLOT"        <> O.help "The timeout for the second party's deposit."                    )
+    <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."                           )

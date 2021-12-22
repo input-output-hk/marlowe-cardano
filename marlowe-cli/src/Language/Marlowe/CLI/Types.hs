@@ -441,7 +441,8 @@ data Command =
     -- | Template for swap contract.
   | TemplateSwap
     {
-      aParty     :: Party           -- ^ First party.
+      minAda     :: Integer         -- ^ Lovelace that the first party contributes to the initial state.
+    , aParty     :: Party           -- ^ First party.
     , aToken     :: Token           -- ^ First party's token.
     , aAmount    :: Integer         -- ^ Amount of first party's token.
     , aTimeout   :: Slot            -- ^ Timeout for first party's deposit.
