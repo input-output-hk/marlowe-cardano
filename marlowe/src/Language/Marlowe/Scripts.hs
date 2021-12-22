@@ -41,6 +41,7 @@ import qualified Plutus.Contract.StateMachine     as SM
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap                as AssocMap
 import           PlutusTx.Prelude
+import           Unsafe.Coerce
 
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])
@@ -328,10 +329,13 @@ smallTypedValidator params = Scripts.mkTypedValidatorParam @TypedMarloweValidato
         wrap = Scripts.wrapValidator
 
 
-smallUntypedValidator :: MarloweParams -> Scripts.Validator
+smallUntypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
 smallUntypedValidator params = let
     wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
-    in mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+    typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+    -- Yeah, I know. It works, though.
+    -- Remove this when Typed Validator has the same size as untyped.
+    in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
 
 
 mkMachineInstance :: MarloweParams -> SM.StateMachineInstance MarloweData MarloweInput
