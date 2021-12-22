@@ -54,7 +54,7 @@ let
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
-      WEB_COMMON_SRC = webCommon;
+      WEB_COMMON_SRC = webCommon.cleanSrc;
     });
 in
 {
