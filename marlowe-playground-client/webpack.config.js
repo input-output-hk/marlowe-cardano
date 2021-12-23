@@ -4,6 +4,7 @@ const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const path = require("path");
+const webpack = require("webpack");
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
@@ -16,7 +17,12 @@ class ErrorReportingPlugin {
     }
 }
 
-const plugins = isDevelopment ? [] : [new ErrorReportingPlugin()];
+const plugins = (function() {
+  if(isDevelopment)
+    return [ new webpack.DllReferencePlugin({ manifest: path.resolve(__dirname, "dist/vendor-dll-manifest.json") })]
+  else
+    return [ new ErrorReportingPlugin() ] ;
+})();
 
 // source map adds 20Mb to the output!
 const devtool = isDevelopment ? "eval-source-map" : false;
@@ -40,11 +46,11 @@ module.exports = {
     entry: "./entry.js",
     output: {
         path: path.join(__dirname, "dist"),
-        filename: "[name].[hash].js",
+        filename: "[name].[fullhash].js",
         pathinfo: true,
         clean: true,
     },
-    optimization: {
+    optimization: isDevelopment? undefined : {
         runtimeChunk: "single",
         splitChunks: {
             cacheGroups: {
@@ -76,7 +82,7 @@ module.exports = {
             },
             {
                 test: /\.purs$/,
-                use: [
+                use: isDevelopment? [] : [
                     {
                         loader: 'purs-loader',
                         options: {
@@ -134,7 +140,7 @@ module.exports = {
             static: path.resolve(__dirname, "./static"),
             src: path.resolve(__dirname, "./src")
         },
-        extensions: [".purs", ".js", ".ts", ".tsx"],
+        extensions: [".js", ".ts", ".tsx"].concat(isDevelopment? []: [".purs"]),
         fallback: {
             vm: require.resolve("vm-browserify"),
         },
@@ -151,8 +157,9 @@ module.exports = {
             favicon: "static/favicon.ico",
             title: "Marlowe Playground",
             productName: "marlowe-playground",
-            googleAnalyticsId: isDevelopment ? "UA-XXXXXXXXX-X" : "G-G06CGG33D4",
-            segmentAnalyticsId: isDevelopment ? "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" : "RMh20hw83CbQY1CXanru5hnwkFWZOzL0",
+            googleAnalyticsId: isDevelopment ? null : "G-G06CGG33D4",
+            segmentAnalyticsId: isDevelopment ? null : "RMh20hw83CbQY1CXanru5hnwkFWZOzL0",
+            vendorDll: isDevelopment ? "vendor.bundle.js" : null,
         }),
         new MonacoWebpackPlugin({
             // note that you have to include typescript if you want javascript to work!
@@ -161,6 +168,5 @@ module.exports = {
         new MiniCssExtractPlugin({
             filename: "[name].[contenthash].css",
         }),
-
     ].concat(plugins)
 };
