@@ -1,19 +1,28 @@
-module AppM where
+module AppM
+  ( AppM
+  , runAppM
+  ) where
 
 import Prologue
 import Clipboard (class MonadClipboard, copy)
-import Control.Monad.Reader.Trans (class MonadAsk, ReaderT, asks, runReaderT)
+import Control.Monad.Reader.Class (class MonadAsk)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (Env)
-import Type.Equality (class TypeEquals, from)
+import Halogen (Component)
+import Halogen.Store.Monad (class MonadStore, StoreT, getStore, runStoreT)
+import Safe.Coerce (coerce)
+import Store as Store
 
 newtype AppM a
-  = AppM (ReaderT Env Aff a)
+  = AppM (StoreT Store.Action Store.Store Aff a)
 
-runAppM :: Env -> AppM ~> Aff
-runAppM env (AppM m) = runReaderT m env
+runAppM
+  :: forall q i o
+   . Store.Store
+  -> Component q i o AppM
+  -> Aff (Component q i o Aff)
+runAppM store = runStoreT store Store.reduce <<< coerce
 
 derive newtype instance functorAppM :: Functor AppM
 
@@ -29,14 +38,13 @@ derive newtype instance monadEffectAppM :: MonadEffect AppM
 
 derive newtype instance monadAffAppM :: MonadAff AppM
 
--- | We can't write instances for type synonyms, and we defined our environment (`Env`) as
--- | a type synonym for convenience. To get around this, we can use `TypeEquals` to assert that
--- | types `a` and `b` are in fact the same.
--- |
--- | In our case, we'll write a `MonadAsk` instance for the type `e`, and assert it is our `Env` type.
--- | This is how we can write a type class instance for a type synonym, which is otherwise disallowed.
-instance monadAskAppM :: TypeEquals e Env => MonadAsk e AppM where
-  ask = AppM $ asks from
+derive newtype instance monadStoreAppM ::
+  MonadStore Store.Action Store.Store AppM
+
+-- The MonadAsk instance is redundant with MonadStore, but I add it here so I don't
+-- modify the code that used to work with it.
+instance monadAskAppM :: MonadAsk Store.Store AppM where
+  ask = getStore
 
 instance monadClipboardAppM :: MonadClipboard AppM where
   copy = liftEffect <<< copy

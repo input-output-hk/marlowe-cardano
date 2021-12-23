@@ -35,7 +35,6 @@ import Component.Template.Types
   , State
   , ValueError(..)
   )
-import Control.Monad.Reader (class MonadAsk)
 import Data.Array (mapMaybe) as Array
 import Data.BigInt.Argonaut (BigInt)
 import Data.Lens (Lens', assign, set, use, view)
@@ -47,7 +46,6 @@ import Data.Set (toUnfoldable) as Set
 import Data.Traversable (for, traverse)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Env (Env)
 import Examples.PureScript.ContractForDifferences (defaultSlotContent) as ContractForDifferences
 import Examples.PureScript.Escrow (contractTemplate, defaultSlotContent) as Escrow
 import Examples.PureScript.EscrowWithCollateral (defaultSlotContent) as EscrowWithCollateral
@@ -98,7 +96,6 @@ initialState =
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
@@ -161,7 +158,6 @@ handleAction _ StartContract = pure unit -- handled in Dashboard.State (see note
 setInputValidators
   :: forall e m
    . MonadAff m
-  => MonadAsk Env m
   => InputFieldError e
   => Input
   -> Lens' State (Map String (InputField.State e))

@@ -87,7 +87,6 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
 import MainFrame.Types (Action(..)) as MainFrame
@@ -139,6 +138,7 @@ import Page.Dashboard.Types
   , State
   , WalletCompanionStatus(..)
   )
+import Store (Env)
 import Toast.Types
   ( ajaxErrorToast
   , decodedAjaxErrorToast
@@ -184,9 +184,9 @@ mkInitialState contacts walletDetails contracts contractNicknames currentSlot =
     }
 
 handleAction
-  :: forall m
+  :: forall m e
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAsk (Env e) m
   => MainFrameLoop m
   => ManageContract m
   => ManageMarloweStorage m

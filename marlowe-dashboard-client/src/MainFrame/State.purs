@@ -38,9 +38,9 @@ import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import Humanize (getTimezoneOffset)
 import MainFrame.Lenses
   ( _currentSlot
@@ -64,13 +64,15 @@ import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts, _walletDetails)
 import Page.Dashboard.State (dummyState, handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.Types (Action(..), State) as Dashboard
-import Page.Welcome.Lenses (_addressBook)
+import Page.Welcome.Lenses (_walletLibrary)
 import Page.Welcome.State (dummyState, handleAction, mkInitialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
   , InstanceStatusToClient(..)
   )
+import Store (Env)
+import Store as Store
 import Toast.State (defaultState, handleAction) as Toast
 import Toast.Types (Action, State) as Toast
 import Toast.Types
@@ -103,9 +105,10 @@ the code. Comments are added throughout with the format "[Workflow n][m]" - so y
 code for e.g. "[Workflow 4]" to see all of the steps involved in starting a contract.
 -}
 mkMainFrame
-  :: forall m
+  :: forall m e
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAsk (Env e) m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => Toast m
   => MonadClipboard m
@@ -134,10 +137,11 @@ initialState =
   }
 
 handleQuery
-  :: forall a m
+  :: forall a m e
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAsk (Env e) m
   => ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
   => Query a
@@ -169,7 +173,12 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
     (WS.ReceiveMessage (Right streamToClient)) -> case streamToClient of
       -- update the current slot
       SlotChange slot -> do
+        updateStore $ Store.AdvanceToSlot $ toFront slot
+        -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
         assign _currentSlot $ toFront slot
+        -- TODO: SCP-3208 Move contract logic to global store and include AdvanceTimedoutSteps
+        --       We need to have special care when modifying this function as there are some effectful
+        --       computations that needs to happen in the view if the currently selected step is modified.
         handleAction $ DashboardAction Dashboard.AdvanceTimedoutSteps
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract
@@ -296,9 +305,9 @@ handleQuery (MainFrameActionQuery action next) = do
 -- submodule actions (triggered straightforwardly in the submodule's `render`
 -- functions) are handled by their parent module's `handleAction` function.
 handleAction
-  :: forall m
+  :: forall m e
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAsk (Env e) m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m

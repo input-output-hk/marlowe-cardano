@@ -9,17 +9,16 @@ import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (forkAff, launchAff_)
 import Effect.Class (liftEffect)
-import Env (Env, WebSocketManager)
-import Halogen (hoist)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Action(..), Msg(..), Query(..))
 import WebSocket.Support as WS
+import Store as Store
 
-mkEnvironment :: WebSocketManager -> Effect Env
-mkEnvironment wsManager = do
+mkStore :: Store.WebSocketManager -> Effect Store.Store
+mkStore wsManager = do
   contractStepCarouselSubscription <- AVar.empty
   marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
   pure
@@ -27,15 +26,17 @@ mkEnvironment wsManager = do
     , contractStepCarouselSubscription
     , marloweAppEndpointMutex
     , wsManager
+    , currentSlot: zero
     }
 
 main :: Effect Unit
 main = do
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
-    environment <- liftEffect $ mkEnvironment wsManager
+    store <- liftEffect $ mkStore wsManager
     body <- awaitBody
-    driver <- runUI (hoist (runAppM environment) mkMainFrame) Init body
+    rootComponent <- runAppM store mkMainFrame
+    driver <- runUI rootComponent Init body
     void
       $ forkAff
       $ WS.runWebSocketManager
