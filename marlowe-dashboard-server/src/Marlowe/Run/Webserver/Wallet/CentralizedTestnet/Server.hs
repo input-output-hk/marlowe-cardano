@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -131,14 +130,14 @@ createOrRestoreWallet postData mnemonic = do
             case mWalletIdFromErr of
                 Just walletId -> pure $ Right walletId
                 Nothing       ->  do
-                    putStrLn ("restoreWallet failed" :: Text)
-                    putStrLn $ "Error: " <> (show err :: Text)
+                    putStrLn "restoreWallet failed"
+                    putStrLn $ "Error: " <> show err
                     pure $ Left err
         Left err -> do
             -- FIXME: Define a better logging mechanism
-            putStrLn ("restoreWallet failed" :: Text)
-            putStrLn $ "Error: " <> (show err :: Text)
+            putStrLn "restoreWallet failed"
+            putStrLn $ "Error: " <> show err
             pure $ Left err
         Right WBE.ApiWallet{WBE.id = WBE.ApiT walletId} -> do
-            putStrLn $ "Restored wallet: " <> (show walletId :: Text)
+            putStrLn $ "Restored wallet: " <> show walletId
             pure $ Right walletId
