@@ -1,17 +1,18 @@
 # Marlowe CLI: Create Input JSON File for a Deposit
 
-The `compute` command creates the next step in a Marlowe contract, given input.
+The `marlowe-cli run compute` command creates the next step in a Marlowe contract, given input.
 
 
 ## Usage
 
-    $ marlowe-cli compute --help
+    $ marlowe-cli run compute --help
     
-    Usage: marlowe-cli compute --contract-file CONTRACT_FILE --state-file STATE_FILE
-                               [--input-file INPUT_FILE] --invalid-before SLOT
-                               --invalid-hereafter SLOT [--out-file OUTPUT_FILE]
-                               [--print-stats]
-      Compute the next step of a Marlowe contract and write the output to a JSON file.
+    Usage: marlowe-cli run compute --contract-file CONTRACT_FILE
+                                   --state-file STATE_FILE [--input-file INPUT_FILE]
+                                   --invalid-before SLOT --invalid-hereafter SLOT
+                                   [--out-file OUTPUT_FILE] [--print-stats]
+      Compute the next step of a Marlowe contract and write the output to a JSON
+      file.
     
     Available options:
       --contract-file CONTRACT_FILE  JSON input file for the contract.

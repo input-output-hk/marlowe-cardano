@@ -1,13 +1,13 @@
 # Marlowe CLI: Create Input JSON File for a Choice
 
-The `input-choose` command creates the JSON input file representing a choice into a Marlowe contract.
+The `marlowe input choose` command creates the JSON input file representing a choice into a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli input-choose --help
+    $ marlowe-cli input choose --help
     
-    Usage: marlowe-cli input-choose --choice-name NAME --choice-party PARTY
+    Usage: marlowe-cli input choose --choice-name NAME --choice-party PARTY
                                     --choice-number INTEGER [--out-file OUTPUT_FILE]
       Create Marlowe input for a choice.
     

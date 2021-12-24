@@ -1,13 +1,13 @@
 # Marlowe CLI: Build a Non-Marlowe Transaction
 
-The `transaction-simple` command builds a non-Marlowe transaction. This command is provided as a convenient alternative to using `cardano-cli transaction build`.
+The `marlowe-cli transaction simple` command builds a non-Marlowe transaction. This command is provided as a convenient alternative to using `cardano-cli transaction build`.
 
 
 ## Usage
 
-    $ marlowe-cli transaction-simple --help
+    $ marlowe-cli transaction simple --help
     
-    Usage: marlowe-cli transaction-simple [--testnet-magic INTEGER]
+    Usage: marlowe-cli transaction simple [--testnet-magic INTEGER]
                                           --socket-path SOCKET_FILE
                                           [--required-signer SIGNING_FILE]
                                           [--tx-in TXID#TXIX]

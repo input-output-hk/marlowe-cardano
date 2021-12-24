@@ -66,13 +66,13 @@ EOI
 
 # Create the contract, and extract the address, validator, datum hash, datum, and redeemer.
 
-marlowe-cli export-marlowe "${MAGIC[@]}"                  \
-                           --contract-file $CONTRACT_FILE \
-                           --slot-length "$SLOT_LENGTH"   \
-                           --slot-offset "$SLOT_OFFSET"   \
-                           --state-file $STATE_FILE       \
-                           --out-file $MARLOWE_FILE       \
-                           --print-stats
+marlowe-cli contract marlowe "${MAGIC[@]}"                  \
+                             --contract-file $CONTRACT_FILE \
+                             --slot-length "$SLOT_LENGTH"   \
+                             --slot-offset "$SLOT_OFFSET"   \
+                             --state-file $STATE_FILE       \
+                             --out-file $MARLOWE_FILE       \
+                             --print-stats
 
 ADDRESS_S=$(jq -r '.validator.address' $MARLOWE_FILE)
 
@@ -95,7 +95,7 @@ TX_0=50b8713845c6a9cb2ffc7edee52c0ac6a1b2251862e12474685a49ee054154df#0
 
 # Fund the contract.
 
-marlowe-cli transaction-create "${MAGIC[@]}"                             \
+marlowe-cli transaction create "${MAGIC[@]}"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --script-address "$ADDRESS_S"             \
                                --tx-out-datum-file $DATUM_FILE           \
@@ -117,7 +117,7 @@ TX_1=05a7ee6ee589fe4e821ccb1cb142e0a56c69c7b238776191756bd00ce7d2be13
 
 # Redeem the contract.
 
-marlowe-cli transaction-close "${MAGIC[@]}"                             \
+marlowe-cli transaction close "${MAGIC[@]}"                             \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                               --tx-in-script-file $PLUTUS_FILE          \
                               --tx-in-redeemer-file $REDEEMER_FILE      \

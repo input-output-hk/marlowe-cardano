@@ -1,19 +1,18 @@
 # Marlowe CLI: Build a Transaction that Pays to a Marlowe Contract
 
-The `transaction-create` command builds a transaction that pays to a Marlowe contract. This command can be used to initially fund a Marlowe contract.
+The `marlowe-cli transaction create` command builds a transaction that pays to a Marlowe contract. This command can be used to initially fund a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli transaction-create --help
+    $ marlowe-cli transaction create --help
     
-    Usage: marlowe-cli transaction-create [--testnet-magic INTEGER]
+    Usage: marlowe-cli transaction create [--testnet-magic INTEGER]
                                           --socket-path SOCKET_FILE
                                           --script-address ADDRESS
                                           [--required-signer SIGNING_FILE]
                                           --tx-out-datum-file DATUM_FILE
-                                          --tx-out-value LOVELACE
-                                          [--tx-in TXID#TXIX]
+                                          --tx-out-marlowe VALUE [--tx-in TXID#TXIX]
                                           [--tx-out ADDRESS+VALUE]
                                           --change-address ADDRESS --out-file FILE
                                           [--submit SECONDS] [--print-stats]
@@ -26,7 +25,7 @@ The `transaction-create` command builds a transaction that pays to a Marlowe con
       --script-address ADDRESS        Address of the Marlowe contract.
       --required-signer SIGNING_FILE  Files containing required signing keys.
       --tx-out-datum-file DATUM_FILE  Datum JSON file datum paid to Marlowe contract.
-      --tx-out-value LOVELACE         Lovelace value paid to Marlowe contract.
+      --tx-out-marlowe VALUE          Value paid to Marlowe contract.
       --tx-in TXID#TXIX               Transaction input in TxId#TxIx format.
       --tx-out ADDRESS+VALUE          Transaction output in ADDRESS+VALUE format.
       --change-address ADDRESS        Address to receive ADA in excess of fee.

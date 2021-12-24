@@ -45,7 +45,14 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
-    Language.Marlowe.CLI
+    Language.Marlowe.CLI.Command
+    Language.Marlowe.CLI.Command.Contract
+    Language.Marlowe.CLI.Command.Export
+    Language.Marlowe.CLI.Command.Input
+    Language.Marlowe.CLI.Command.Role
+    Language.Marlowe.CLI.Command.Template
+    Language.Marlowe.CLI.Command.Transaction
+    Language.Marlowe.CLI.Command.Util
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Examples.Escrow
     Language.Marlowe.CLI.Examples.Swap
@@ -66,7 +73,6 @@ library
     base16-bytestring -any,
     bytestring -any,
     cardano-api -any,
-    cardano-config -any,
     cardano-ledger-alonzo -any,
     containers -any,
     marlowe -any,
@@ -92,6 +98,8 @@ executable marlowe-cli
     Paths_marlowe_cli
   build-depends:
     base >= 4.9 && < 5,
+    cardano-config -any,
     marlowe-cli -any,
+    text -any,
   ghc-options:
     -threaded

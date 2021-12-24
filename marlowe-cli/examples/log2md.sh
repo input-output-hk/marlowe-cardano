@@ -5,7 +5,7 @@ DIR=$(dirname "$0")
 SCRIPT="$1"
 LOG="${SCRIPT%%.sh}".log
 DIFF="${SCRIPT%%.sh}".diff
-MD="${SCRIPT%%.sh}".md
+MD="$2"
 
 bash -o verbose "$SCRIPT" >& "$LOG"
 

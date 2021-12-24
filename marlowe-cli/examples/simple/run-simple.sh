@@ -91,10 +91,11 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS"
 echo "We select the UTxO with the most funds to use in executing the contract."
 
 TX_0_BYSTANDER=$(
-cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$BYSTANDER_ADDRESS"                  \
-                       --out-file /dev/stdout                          \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$BYSTANDER_ADDRESS"                                                           \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| head -n 1                                                                                                     \
 )
 
 echo "$BYSTANDER_NAME will spend the UTxO "'`'"$TX_0_BYSTANDER"'`.'
@@ -122,10 +123,11 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
 echo "We select the UTxO with the most funds to use in executing the contract."
 
 TX_0_PARTY=$(
-cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$PARTY_ADDRESS"                      \
-                       --out-file /dev/stdout                          \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$PARTY_ADDRESS"                                                               \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| head -n 1                                                                                                     \
 )
 
 echo "$PARTY_NAME will spend the UTxO "'`'"$TX_0_PARTY"'`.'
@@ -135,15 +137,15 @@ echo "### Validator Script and Address"
 echo "The contract has a validator script and address. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
 
 CONTRACT_ADDRESS=$(
-marlowe-cli export-address "${MAGIC[@]}" \
-            --slot-length "$SLOT_LENGTH" \
-            --slot-offset "$SLOT_OFFSET" \
+marlowe-cli contract address "${MAGIC[@]}" \
+              --slot-length "$SLOT_LENGTH" \
+              --slot-offset "$SLOT_OFFSET" \
 )
-marlowe-cli export-validator "${MAGIC[@]}"                \
-                             --slot-length "$SLOT_LENGTH" \
-                             --slot-offset "$SLOT_OFFSET" \
-                             --out-file trivial.plutus    \
-                             --print-stats
+marlowe-cli contract validator "${MAGIC[@]}"                \
+                               --slot-length "$SLOT_LENGTH" \
+                               --slot-offset "$SLOT_OFFSET" \
+                               --out-file simple.plutus     \
+                               --print-stats
 
 echo "### Tip of the Blockchain"
 
@@ -173,7 +175,7 @@ echo "## Transaction 1. Create the Contract by Providing the Minimum ADA"
 
 echo "We create the contract for the previously specified parameters."
 
-marlowe-cli contract-trivial --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
+marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"        \
                              --minimum-ada "$MINIMUM_ADA"                 \
                              --minimum-slot "$MINIMUM_SLOT"               \
                              --party "PK=$PARTY_PUBKEYHASH"               \
@@ -189,15 +191,15 @@ jq '.marloweContract' tx-1.marlowe > tx-1.contract
 
 echo "For each transaction, we construct the output datum. Here is its size and hash:"
 
-marlowe-cli export-datum --contract-file tx-1.contract \
-                         --state-file    tx-1.state    \
-                         --out-file      tx-1.datum    \
-                         --print-stats
+marlowe-cli contract datum --contract-file tx-1.contract \
+                           --state-file    tx-1.state    \
+                           --out-file      tx-1.datum    \
+                           --print-stats
 
 echo "The bystander $BYSTANDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
-marlowe-cli transaction-create "${MAGIC[@]}"                               \
+marlowe-cli transaction create "${MAGIC[@]}"                               \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
                                --tx-in "$TX_0_BYSTANDER"                   \
                                --change-address "$BYSTANDER_ADDRESS"       \
@@ -223,20 +225,20 @@ echo "## Transaction 2. Make the Initial Deposit"
 
 echo "First we compute the Marlowe input required to make the initial deposit by the party."
 
-marlowe-cli input-deposit --deposit-account "PK=$PARTY_PUBKEYHASH" \
+marlowe-cli input deposit --deposit-account "PK=$PARTY_PUBKEYHASH" \
                           --deposit-party "PK=$PARTY_PUBKEYHASH"   \
                           --deposit-amount "$DEPOSIT_LOVELACE"     \
                           --out-file tx-2.input
 
 echo "Next we compute the transition caused by that input to the contract:"
 
-marlowe-cli compute --contract-file tx-1.contract          \
-                    --state-file    tx-1.state             \
-                    --input-file    tx-2.input             \
-                    --out-file      tx-2.marlowe           \
-                    --invalid-before "$TIP"                \
-                    --invalid-hereafter "$(($TIP+4*3600))" \
-                    --print-stats
+marlowe-cli run compute --contract-file tx-1.contract          \
+                        --state-file    tx-1.state             \
+                        --input-file    tx-2.input             \
+                        --out-file      tx-2.marlowe           \
+                        --invalid-before "$TIP"                \
+                        --invalid-hereafter "$(($TIP+4*3600))" \
+                        --print-stats
 
 echo "As in the first transaction, we compute the new state and contract."
 
@@ -245,16 +247,16 @@ jq '.contract' tx-2.marlowe > tx-2.contract
 
 echo "Because this transaction spends from the script address, it also needs a redeemer:"
 
-marlowe-cli export-redeemer --input-file tx-2.input    \
-                            --out-file   tx-2.redeemer \
-                            --print-stats
+marlowe-cli contract redeemer --input-file tx-2.input    \
+                              --out-file   tx-2.redeemer \
+                              --print-stats
 
 echo "As in the first transaction, we compute the datum and its hash:"
 
-marlowe-cli export-datum --contract-file tx-2.contract \
-                         --state-file    tx-2.state    \
-                         --out-file      tx-2.datum    \
-                         --print-stats
+marlowe-cli contract datum --contract-file tx-2.contract \
+                           --state-file    tx-2.state    \
+                           --out-file      tx-2.datum    \
+                           --print-stats
 
 echo "The value held at the contract address must match that required by its state."
 
@@ -263,11 +265,11 @@ CONTRACT_VALUE_2=$(jq '.accounts | [.[][1]] | add' tx-2.state)
 echo "Now the party $PARTY_NAME submits the transaction along with their deposit:"
 
 TX_2=$(
-marlowe-cli transaction-advance "${MAGIC[@]}"                             \
+marlowe-cli transaction advance "${MAGIC[@]}"                             \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                 --script-address "$CONTRACT_ADDRESS"      \
                                 --tx-in-marlowe "$TX_1"#1                 \
-                                --tx-in-script-file trivial.plutus        \
+                                --tx-in-script-file simple.plutus         \
                                 --tx-in-datum-file tx-1.datum             \
                                 --tx-in-redeemer-file tx-2.redeemer       \
                                 --tx-in "$TX_0_PARTY"                     \
@@ -297,36 +299,36 @@ echo "## Transaction 3. Make the First Withdrawal"
 
 echo "First we compute the input for the contract to transition forward."
 
-marlowe-cli input-notify --out-file tx-3.input
+marlowe-cli input notify --out-file tx-3.input
 
 echo "As in the second transaction we compute the contract's transition, its new state, the redeemer, the datum, and the value."
 
-marlowe-cli compute --contract-file tx-2.contract          \
-                    --state-file    tx-2.state             \
-                    --input-file    tx-3.input             \
-                    --out-file      tx-3.marlowe           \
-                    --invalid-before "$TIP"                \
-                    --invalid-hereafter "$(($TIP+4*3600))" \
-                    --print-stats
+marlowe-cli run compute --contract-file tx-2.contract          \
+                        --state-file    tx-2.state             \
+                        --input-file    tx-3.input             \
+                        --out-file      tx-3.marlowe           \
+                        --invalid-before "$TIP"                \
+                        --invalid-hereafter "$(($TIP+4*3600))" \
+                        --print-stats
 jq '.state'    tx-3.marlowe > tx-3.state
 jq '.contract' tx-3.marlowe > tx-3.contract
-marlowe-cli export-redeemer --input-file tx-3.input    \
-                            --out-file   tx-3.redeemer \
-                            --print-stats
-marlowe-cli export-datum --contract-file tx-3.contract \
-                         --state-file    tx-3.state    \
-                         --out-file      tx-3.datum    \
-                         --print-stats
+marlowe-cli contract redeemer --input-file tx-3.input    \
+                              --out-file   tx-3.redeemer \
+                              --print-stats
+marlowe-cli contract datum --contract-file tx-3.contract \
+                           --state-file    tx-3.state    \
+                           --out-file      tx-3.datum    \
+                           --print-stats
 CONTRACT_VALUE_3=$(jq '.accounts | [.[][1]] | add' tx-3.state)
 
 echo "Now the party $PARTY_NAME can submit a transaction to withdraw funds:"
 
 TX_3=$(
-marlowe-cli transaction-advance "${MAGIC[@]}"                                  \
+marlowe-cli transaction advance "${MAGIC[@]}"                                  \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
                                 --script-address "$CONTRACT_ADDRESS"           \
                                 --tx-in-marlowe "$TX_2"#1                      \
-                                --tx-in-script-file trivial.plutus             \
+                                --tx-in-script-file simple.plutus              \
                                 --tx-in-datum-file tx-2.datum                  \
                                 --tx-in-redeemer-file tx-3.redeemer            \
                                 --tx-in "$TX_2"#0                              \
@@ -356,27 +358,27 @@ echo "## Transaction 4. Close the contract"
 
 echo "As in the third transaction, we compute the input for the contract to transition forward."
 
-marlowe-cli input-notify --out-file tx-4.input
+marlowe-cli input notify --out-file tx-4.input
 
 echo "Once again we compute the transition, new state and contract, and redeemer. Because we are closing the contract, we don't need a new datum."
 
-marlowe-cli compute --contract-file tx-3.contract          \
-                    --state-file    tx-3.state             \
-                    --input-file    tx-4.input             \
-                    --out-file      tx-4.marlowe           \
-                    --invalid-before "$TIP"                \
-                    --invalid-hereafter "$(($TIP+4*3600))" \
-                    --print-stats
+marlowe-cli run compute --contract-file tx-3.contract          \
+                        --state-file    tx-3.state             \
+                        --input-file    tx-4.input             \
+                        --out-file      tx-4.marlowe           \
+                        --invalid-before "$TIP"                \
+                        --invalid-hereafter "$(($TIP+4*3600))" \
+                        --print-stats
 jq '.state'    tx-4.marlowe > tx-4.state
 jq '.contract' tx-4.marlowe > tx-4.contract
-marlowe-cli export-redeemer --input-file tx-4.input    \
-                            --out-file   tx-4.redeemer \
-                            --print-stats
+marlowe-cli contract redeemer --input-file tx-4.input    \
+                              --out-file   tx-4.redeemer \
+                              --print-stats
 TX_4=$(
-marlowe-cli transaction-close "${MAGIC[@]}"                              \
+marlowe-cli transaction close "${MAGIC[@]}"                              \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                               --tx-in-marlowe "$TX_3"#1                  \
-                              --tx-in-script-file trivial.plutus         \
+                              --tx-in-script-file simple.plutus          \
                               --tx-in-datum-file tx-3.datum              \
                               --tx-in-redeemer-file tx-4.redeemer        \
                               --tx-in "$TX_3"#0                          \
@@ -409,24 +411,24 @@ echo "## Clean Up Wallets"
 
 echo "It's convenient to consolidate all of the UTxOs into single ones."
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" --out-file /dev/stdout \
-| jq '. | to_entries[] | .key'                                                             \
-| sed -e 's/"//g;s/^/--tx-in /'                                                            \
-| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                               \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
-                                               --change-address "$BYSTANDER_ADDRESS"       \
-                                               --out-file tx-5.raw                         \
-                                               --required-signer "$BYSTANDER_PAYMENT_SKEY" \
-                                               --submit=600                                \
+cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" --out-file /dev/stdout                      \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| sed -e 's/^/--tx-in /'                                                                                        \
+| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
+                                               --change-address "$BYSTANDER_ADDRESS"                            \
+                                               --out-file tx-5.raw                                              \
+                                               --required-signer "$BYSTANDER_PAYMENT_SKEY"                      \
+                                               --submit=600                                                     \
 > /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" --out-file /dev/stdout   \
-| jq '. | to_entries[] | .key'                                                           \
-| sed -e 's/"//g;s/^/--tx-in /'                                                          \
-| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                             \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                                               --change-address "$PARTY_ADDRESS"         \
-                                               --out-file tx-6.raw                       \
-                                               --required-signer "$PARTY_PAYMENT_SKEY"   \
-                                               --submit=600                              \
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" --out-file /dev/stdout                          \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| sed -e 's/^/--tx-in /'                                                                                        \
+| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
+                                               --change-address "$PARTY_ADDRESS"                                \
+                                               --out-file tx-6.raw                                              \
+                                               --required-signer "$PARTY_PAYMENT_SKEY"                          \
+                                               --submit=600                                                     \
 > /dev/null
 

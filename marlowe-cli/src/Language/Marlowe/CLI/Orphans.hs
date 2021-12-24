@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Orphan instances for Marlowe CLI tool.
+-- | Orphan instances for the Marlowe CLI tool.
 --
 -----------------------------------------------------------------------------
 

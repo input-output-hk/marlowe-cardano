@@ -76,7 +76,7 @@ We will redeem the ADA within a particular range of slots:
 
 We now create the Marlowe contract and transaction:
 
-    $ marlowe-cli export-marlowe "${MAGIC[@]}"                  \
+    $ marlowe-cli contract marlowe "${MAGIC[@]}"                  \
                                  --contract-file $CONTRACT_FILE \
                                  --slot-length "$SLOT_LENGTH"   \
                                  --slot-offset "$SLOT_OFFSET"   \
@@ -117,7 +117,7 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
 
     TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f#0
     
-    $ marlowe-cli transaction-create "${MAGIC[@]}"                             \
+    $ marlowe-cli transaction create "${MAGIC[@]}"                             \
                                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                      --script-address "$ADDRESS_S"             \
                                      --tx-out-datum-file $DATUM_FILE           \
@@ -157,7 +157,7 @@ We name the funding transaction as `TX_1`.
 
 We now use the previously computed redeemer and datum to remove the funds from the contract. This involves computing the fee, building the transaction, signing it, and submitting it.
 
-    $ marlowe-cli transaction-close "${MAGIC[@]}"                             \
+    $ marlowe-cli transaction close "${MAGIC[@]}"                             \
                                     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                     --tx-in-script-file $PLUTUS_FILE          \
                                     --tx-in-redeemer-file $REDEEMER_FILE      \

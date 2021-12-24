@@ -63,21 +63,23 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-8b6a0e1e2cf861654775ec492a61d915e16ae20b13618e55982a7b21ebc8f7dc     0        18398762978 lovelace + TxOutDatumNone
+0407579ed4e0718cad128967f5987bacce8a6fd0f8f002ad26d1d20e460e3b7e     2        1000000000 lovelace + 1 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.FrancisBeaumont + TxOutDatumNone
+fe79bb634799a11e1c136c307aeea60861ed9fe0dc390f87424aaf45bd7ed84a     0        19884971008 lovelace + TxOutDatumNone
 ```
 
-We select the UTxO with the most funds to use in executing the contract.
+We select the tokenless UTxO with the most funds to use in executing the contract.
 
 ```
 TX_0_SELLER=$(
-cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$SELLER_ADDRESS"                     \
-                       --out-file /dev/stdout                          \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$SELLER_ADDRESS"                                                              \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| head -n 1                                                                                                     \
 )
 ```
 
-Francis Beaumont will spend the UTxO `8b6a0e1e2cf861654775ec492a61d915e16ae20b13618e55982a7b21ebc8f7dc#0`.
+Francis Beaumont will spend the UTxO `fe79bb634799a11e1c136c307aeea60861ed9fe0dc390f87424aaf45bd7ed84a#0`.
 
 ### The Buyer
 
@@ -87,7 +89,7 @@ BUYER_NAME="Thomas Kyd"
 BUYER_PAYMENT_SKEY="$BUYER_PREFIX".skey
 BUYER_PAYMENT_VKEY="$BUYER_PREFIX".vkey
 BUYER_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                          \
+  cardano-cli address build "${MAGIC[@]}"                                         \
                             --payment-verification-key-file "$BUYER_PAYMENT_VKEY" \
 )
 BUYER_PUBKEYHASH=$(
@@ -104,21 +106,22 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-f92a576fa5043985b0a6c98bfcc283d8ad42fac3f4e37541be3e03490dd0f3f6     0        8182810306 lovelace + TxOutDatumNone
+e510ced75d6e3ca65490098e2c2a9c87f5a9df33e8699c04ed2eae1d2542a694     0        5844057955 lovelace + TxOutDatumNone
 ```
 
-We select the UTxO with the most funds to use in executing the contract.
+We select the tokenless UTxO with the most funds to use in executing the contract.
 
 ```
 TX_0_BUYER=$(
-cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$BUYER_ADDRESS"                     \
-                       --out-file /dev/stdout                          \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$BUYER_ADDRESS"                                                               \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| head -n 1                                                                                                     \
 )
 ```
 
-Thomas Kyd will spend the UTxO `f92a576fa5043985b0a6c98bfcc283d8ad42fac3f4e37541be3e03490dd0f3f6#0`.
+Thomas Kyd will spend the UTxO `e510ced75d6e3ca65490098e2c2a9c87f5a9df33e8699c04ed2eae1d2542a694#0`.
 
 ### The Mediator
 
@@ -128,7 +131,7 @@ MEDIATOR_NAME="Christopher Marlowe"
 MEDIATOR_PAYMENT_SKEY="$MEDIATOR_PREFIX".skey
 MEDIATOR_PAYMENT_VKEY="$MEDIATOR_PREFIX".vkey
 MEDIATOR_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                          \
+  cardano-cli address build "${MAGIC[@]}"                                            \
                             --payment-verification-key-file "$MEDIATOR_PAYMENT_VKEY" \
 )
 MEDIATOR_PUBKEYHASH=$(
@@ -145,21 +148,23 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS"
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-562625fc41df8cee08ecc955ee14605ad71432fe1e87979064424b3d56b7368b     0        8959723821 lovelace + TxOutDatumNone
+0407579ed4e0718cad128967f5987bacce8a6fd0f8f002ad26d1d20e460e3b7e     5        1000000000 lovelace + 1 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.ChristopherMarlowe + TxOutDatumNone
+4d1291e0429b1cad38dd3d8ff9043317685c395020b2d37b0f8b0c08274f022d     0        8937239122 lovelace + TxOutDatumNone
 ```
 
 We select the UTxO with the most funds to use in executing the contract.
 
 ```
 TX_0_MEDIATOR=$(
-cardano-cli query utxo "${MAGIC[@]}"                                   \
-                       --address "$MEDIATOR_ADDRESS"                     \
-                       --out-file /dev/stdout                          \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[0].key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$MEDIATOR_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| head -n 1                                                                                                     \
 )
 ```
 
-Christopher Marlowe will spend the UTxO `562625fc41df8cee08ecc955ee14605ad71432fe1e87979064424b3d56b7368b#0`.
+Christopher Marlowe will spend the UTxO `4d1291e0429b1cad38dd3d8ff9043317685c395020b2d37b0f8b0c08274f022d#0`.
 
 ### Validator Script and Address
 
@@ -167,15 +172,15 @@ The contract has a validator script and address. The bare size and cost of the s
 
 ```
 CONTRACT_ADDRESS=$(
-marlowe-cli export-address "${MAGIC[@]}" \
-            --slot-length "$SLOT_LENGTH" \
-            --slot-offset "$SLOT_OFFSET" \
+marlowe-cli contract address "${MAGIC[@]}"        \
+                     --slot-length "$SLOT_LENGTH" \
+                     --slot-offset "$SLOT_OFFSET" \
 )
-marlowe-cli export-validator "${MAGIC[@]}"                \
-                             --slot-length "$SLOT_LENGTH" \
-                             --slot-offset "$SLOT_OFFSET" \
-                             --out-file escrow.plutus     \
-                             --print-stats
+marlowe-cli contract validator "${MAGIC[@]}"                \
+                               --slot-length "$SLOT_LENGTH" \
+                               --slot-offset "$SLOT_OFFSET" \
+                               --out-file escrow.plutus     \
+                               --print-stats
 ```
 
 ```console
@@ -190,7 +195,7 @@ Validator cost: ExBudget {exBudgetCPU = ExCPU 37484307, exBudgetMemory = ExMemor
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 ```
 
-The tip is at slot 1814203. The current POSIX time implies that the tip of the blockchain should be slightly before slot 1814205. Tests may fail if this is not the case.
+The tip is at slot 2168440. The current POSIX time implies that the tip of the blockchain should be slightly before slot 2168454. Tests may fail if this is not the case.
 
 ## The Contract
 
@@ -204,11 +209,11 @@ DISPUTE_DEADLINE=$(($TIP + 3 * 24 * 3600))
 MEDIATION_DEADLINE=$(($TIP + 4 * 24 * 3600))
 ```
 
-* The current slot is 1814203.
-* The buyer Thomas Kyd must pay before slot 1900603.
-* They buyer Thomas Kyd has until slot 1987003 to complain.
-* The seller Francis Beaumont has until slot 2073403 to dispute a complaint.
-* The mediator Christopher Marlowe has until slot 2159803 to decide on a disputed complaint.
+* The current slot is 2168440.
+* The buyer Thomas Kyd must pay before slot 2254840.
+* They buyer Thomas Kyd has until slot 2341240 to complain.
+* The seller Francis Beaumont has until slot 2427640 to dispute a complaint.
+* The mediator Christopher Marlowe has until slot 2514040 to decide on a disputed complaint.
 
 The contract also involves the price of the good exchanged and a minimum-ADA value.
 
@@ -224,7 +229,7 @@ The selling price is 256000000 lovelace.
 We create the contract for the previously specified parameters.
 
 ```
-marlowe-cli contract-escrow --minimum-ada "$MINIMUM_ADA"               \
+marlowe-cli template escrow --minimum-ada "$MINIMUM_ADA"               \
                             --price "$PRICE"                           \
                             --seller "PK=$SELLER_PUBKEYHASH"           \
                             --buyer "PK=$BUYER_PUBKEYHASH"             \
@@ -246,22 +251,22 @@ jq '.marloweContract' tx-1.marlowe > tx-1.contract
 For each transaction, we construct the output datum. Here is its size and hash:
 
 ```
-marlowe-cli export-datum --contract-file tx-1.contract \
-                         --state-file    tx-1.state    \
-                         --out-file      tx-1.datum    \
-                         --print-stats
+marlowe-cli contract datum --contract-file tx-1.contract \
+                           --state-file    tx-1.state    \
+                           --out-file      tx-1.datum    \
+                           --print-stats
 ```
 
 ```console
 Datum size: 823
-336bfd39448ae57ac5913eca2f3e51012dc26cdbbec8b88de715f6de9e71445f
+e4e87226f8e2b0d6fd5dca64b8af2a0980e456cefc8dc18c20b08601d78e2d2e
 ```
 
 The mediator Christopher Marlowe submits the transaction along with the minimum ADA 3000000 lovelace required for the contract's initial state. Submitting with the `--print-stats` switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits.
 
 ```
 TX_1=$(
-marlowe-cli transaction-create "${MAGIC[@]}"                              \
+marlowe-cli transaction create "${MAGIC[@]}"                              \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
                                --tx-in "$TX_0_MEDIATOR"                   \
                                --change-address "$MEDIATOR_ADDRESS"       \
@@ -284,7 +289,7 @@ Execution units:
   Steps: 0 / 10000000000 = 0%
 ```
 
-The contract received the minimum ADA of 3000000 lovelace from the mediator Christopher Marlowe in the transaction `85c4ab4ccb2217d31a0ad51239c66b9fb37493568e36cdb25edd42546f9c0c71`.  Here is the UTxO at the contract address:
+The contract received the minimum ADA of 3000000 lovelace from the mediator Christopher Marlowe in the transaction `606faa13d07385dff6844db81e103f94c54fe7cf93761b3d84cca529646340c5`.  Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p"
@@ -293,7 +298,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-85c4ab4ccb2217d31a0ad51239c66b9fb37493568e36cdb25edd42546f9c0c71     1        3000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "336bfd39448ae57ac5913eca2f3e51012dc26cdbbec8b88de715f6de9e71445f"
+606faa13d07385dff6844db81e103f94c54fe7cf93761b3d84cca529646340c5     1        3000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "e4e87226f8e2b0d6fd5dca64b8af2a0980e456cefc8dc18c20b08601d78e2d2e"
 ```
 
 Here is the UTxO at the mediator Christopher Marlowe's address:
@@ -305,7 +310,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-85c4ab4ccb2217d31a0ad51239c66b9fb37493568e36cdb25edd42546f9c0c71     0        8956516960 lovelace + TxOutDatumNone
+606faa13d07385dff6844db81e103f94c54fe7cf93761b3d84cca529646340c5     0        8934032261 lovelace + TxOutDatumNone
 ```
 
 ## Transaction 2. Buyer Deposits Funds into Seller's Account.
@@ -313,7 +318,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "
 First we compute the Marlowe input required to make the initial deposit by the buyer.
 
 ```
-marlowe-cli input-deposit --deposit-account "PK=$SELLER_PUBKEYHASH" \
+marlowe-cli input deposit --deposit-account "PK=$SELLER_PUBKEYHASH" \
                           --deposit-party "PK=$BUYER_PUBKEYHASH"    \
                           --deposit-amount "$PRICE"                 \
                           --out-file "tx-2.input"
@@ -322,13 +327,13 @@ marlowe-cli input-deposit --deposit-account "PK=$SELLER_PUBKEYHASH" \
 Next we compute the transition caused by that input to the contract.
 
 ```
-marlowe-cli compute --contract-file tx-1.contract          \
-                    --state-file    tx-1.state             \
-                    --input-file    tx-2.input             \
-                    --out-file      tx-2.marlowe           \
-                    --invalid-before "$TIP"                \
-                    --invalid-hereafter "$(($TIP+4*3600))" \
-                    --print-stats
+marlowe-cli run compute --contract-file tx-1.contract          \
+                        --state-file    tx-1.state             \
+                        --input-file    tx-2.input             \
+                        --out-file      tx-2.marlowe           \
+                        --invalid-before "$TIP"                \
+                        --invalid-hereafter "$(($TIP+4*3600))" \
+                        --print-stats
 ```
 
 ```console
@@ -345,9 +350,9 @@ jq '.contract' tx-2.marlowe > tx-2.contract
 Because this transaction spends from the script address, it also needs a redeemer:
 
 ```
-marlowe-cli export-redeemer --input-file tx-2.input    \
-                            --out-file   tx-2.redeemer \
-                            --print-stats
+marlowe-cli contract redeemer --input-file tx-2.input    \
+                              --out-file   tx-2.redeemer \
+                              --print-stats
 ```
 
 ```console
@@ -357,15 +362,15 @@ Redeemer size: 85
 As in the first transaction, we compute the datum and its hash:
 
 ```
-marlowe-cli export-datum --contract-file tx-2.contract \
-                         --state-file    tx-2.state    \
-                         --out-file      tx-2.datum    \
-                         --print-stats
+marlowe-cli contract datum --contract-file tx-2.contract \
+                           --state-file    tx-2.state    \
+                           --out-file      tx-2.datum    \
+                           --print-stats
 ```
 
 ```console
 Datum size: 771
-00683e79fbcd145265c3307ace4b74a25238f762e4f6bbad3396869ef36811ba
+aba28dbf770250276fe4ad8c6e57958674bfb43913b54e6b85c01b05796cff16
 ```
 
 The value held at the contract address must match that required by its state.
@@ -378,7 +383,7 @@ Now the buyer Thomas Kyd submits the transaction along with their deposit:
 
 ```
 TX_2=$(
-marlowe-cli transaction-advance "${MAGIC[@]}"                             \
+marlowe-cli transaction advance "${MAGIC[@]}"                             \
                                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                 --script-address "$CONTRACT_ADDRESS"      \
                                 --tx-in-marlowe "$TX_1"#1                 \
@@ -409,7 +414,7 @@ Execution units:
   Steps: 1528605687 / 10000000000 = 15%
 ```
 
-The contract received the deposit of 256000000 lovelace from Thomas Kyd in the transaction `8b57b72429b568b1fe033216db20b2f00b4ef6492c619ae83ddc827778e90b49`. Here is the UTxO at the contract address:
+The contract received the deposit of 256000000 lovelace from Thomas Kyd in the transaction `7cbc847c8b552ecdfa078f79024051f58fd98b1e805aebdd9bc8b3c3cebd65ce`. Here is the UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
@@ -418,7 +423,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-8b57b72429b568b1fe033216db20b2f00b4ef6492c619ae83ddc827778e90b49     1        259000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "00683e79fbcd145265c3307ace4b74a25238f762e4f6bbad3396869ef36811ba"
+7cbc847c8b552ecdfa078f79024051f58fd98b1e805aebdd9bc8b3c3cebd65ce     1        259000000 lovelace + TxOutDatumHash ScriptDataInAlonzoEra "aba28dbf770250276fe4ad8c6e57958674bfb43913b54e6b85c01b05796cff16"
 ```
 
 Here is the UTxO at Thomas Kyd's address:
@@ -430,8 +435,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-8b57b72429b568b1fe033216db20b2f00b4ef6492c619ae83ddc827778e90b49     0        7922595605 lovelace + TxOutDatumNone
-8b57b72429b568b1fe033216db20b2f00b4ef6492c619ae83ddc827778e90b49     2        3000000 lovelace + TxOutDatumNone
+7cbc847c8b552ecdfa078f79024051f58fd98b1e805aebdd9bc8b3c3cebd65ce     0        5583843254 lovelace + TxOutDatumNone
+7cbc847c8b552ecdfa078f79024051f58fd98b1e805aebdd9bc8b3c3cebd65ce     2        3000000 lovelace + TxOutDatumNone
 ```
 
 ## Transaction 3. The Buyer Reports that Everything is Alright
@@ -441,7 +446,7 @@ Funds are released to the seller and mediator, closing the contract.
 First we compute the input for the contract to transition forward.
 
 ```
-marlowe-cli input-choose --choice-name "Everything is alright" \
+marlowe-cli input choose --choice-name "Everything is alright" \
                          --choice-party "PK=$BUYER_PUBKEYHASH" \
                          --choice-number 0                     \
                          --out-file tx-3.input
@@ -450,13 +455,13 @@ marlowe-cli input-choose --choice-name "Everything is alright" \
 As in the second transaction we compute the contract's transition, its new state, and the redeemer. Because the contract is being closed, no new datum need be computed.
 
 ```
-marlowe-cli compute --contract-file tx-2.contract          \
-                    --state-file    tx-2.state             \
-                    --input-file    tx-3.input             \
-                    --out-file      tx-3.marlowe           \
-                    --invalid-before "$TIP"                \
-                    --invalid-hereafter "$(($TIP+4*3600))" \
-                    --print-stats
+marlowe-cli run compute --contract-file tx-2.contract          \
+                        --state-file    tx-2.state             \
+                        --input-file    tx-3.input             \
+                        --out-file      tx-3.marlowe           \
+                        --invalid-before "$TIP"                \
+                        --invalid-hereafter "$(($TIP+4*3600))" \
+                        --print-stats
 ```
 
 ```console
@@ -474,9 +479,9 @@ Datum size: 80
 ```
 jq '.state'    tx-3.marlowe > tx-3.state
 jq '.contract' tx-3.marlowe > tx-3.contract
-marlowe-cli export-redeemer --input-file tx-3.input    \
-                            --out-file   tx-3.redeemer \
-                            --print-stats
+marlowe-cli contract redeemer --input-file tx-3.input    \
+                              --out-file   tx-3.redeemer \
+                              --print-stats
 ```
 
 ```console
@@ -484,22 +489,22 @@ Redeemer size: 67
 ```
 
 ```
-marlowe-cli export-datum --contract-file tx-3.contract \
-                         --state-file    tx-3.state    \
-                         --out-file      tx-3.datum    \
-                         --print-stats
+marlowe-cli contract datum --contract-file tx-3.contract \
+                           --state-file    tx-3.state    \
+                           --out-file      tx-3.datum    \
+                           --print-stats
 ```
 
 ```console
 Datum size: 80
-a97a12d3c5f4b7c7f2fd84d1ed5318053e9f639c3e6bf1144dd5ac67b3d4b9d5
+b49e9b69fe1a6a0e7a7bf88dc951b09e2119cf7a6efdd074bd2aa2aa266a6db8
 ```
 
 Now the buyer Thomas Kyd can submit a transaction to release funds:
 
 ```
 TX_3=$(
-marlowe-cli transaction-close "${MAGIC[@]}"                             \
+marlowe-cli transaction close "${MAGIC[@]}"                             \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                               --tx-in-marlowe "$TX_2"#1                 \
                               --tx-in-script-file escrow.plutus         \
@@ -529,7 +534,7 @@ Execution units:
   Steps: 1485379533 / 10000000000 = 14%
 ```
 
-The closing of the contract paid 256000000 lovelace to the seller Francis Beaumont and 3000000 lovelace to the mediator Christopher Marlowe in the transaction `69aa33fbc5ccfc58bdea79364dffe6114500bfb3b4c592da86b985fd18762321`. There is no UTxO at the contract address:
+The closing of the contract paid 256000000 lovelace to the seller Francis Beaumont and 3000000 lovelace to the mediator Christopher Marlowe in the transaction `3ee77ddd9a72a6262d52d3e9fbfbe8eddb9b9cf5074a8951ad58ed8b7eb68e99`. There is no UTxO at the contract address:
 
 ```
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
@@ -549,8 +554,8 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" | sed -n -e "1p
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-69aa33fbc5ccfc58bdea79364dffe6114500bfb3b4c592da86b985fd18762321     0        18397578326 lovelace + TxOutDatumNone
-69aa33fbc5ccfc58bdea79364dffe6114500bfb3b4c592da86b985fd18762321     1        256000000 lovelace + TxOutDatumNone
+3ee77ddd9a72a6262d52d3e9fbfbe8eddb9b9cf5074a8951ad58ed8b7eb68e99     0        19883786356 lovelace + TxOutDatumNone
+3ee77ddd9a72a6262d52d3e9fbfbe8eddb9b9cf5074a8951ad58ed8b7eb68e99     1        256000000 lovelace + TxOutDatumNone
 ```
 
 Here is the UTxO at the buyer Thomas Kyd's address:
@@ -573,7 +578,7 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "
 ```console
                            TxHash                                 TxIx        Amount
 --------------------------------------------------------------------------------------
-69aa33fbc5ccfc58bdea79364dffe6114500bfb3b4c592da86b985fd18762321     2        3000000 lovelace + TxOutDatumNone
+3ee77ddd9a72a6262d52d3e9fbfbe8eddb9b9cf5074a8951ad58ed8b7eb68e99     2        3000000 lovelace + TxOutDatumNone
 ```
 
 ## Clean Up Wallets
@@ -581,34 +586,33 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "
 It's convenient to consolidate all of the UTxOs into single ones.
 
 ```
-cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" --out-file /dev/stdout  \
-| jq '. | to_entries[] | .key'                                                           \
-| sed -e 's/"//g;s/^/--tx-in /'                                                          \
-| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                             \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                                               --tx-out "$BUYER_ADDRESS+$PRICE"          \
-                                               --change-address "$SELLER_ADDRESS"        \
-                                               --out-file tx-4.raw                       \
-                                               --required-signer "$SELLER_PAYMENT_SKEY"  \
-                                               --submit=600                              \
+cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" --out-file /dev/stdout                         \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| sed -e 's/^/--tx-in /'                                                                                        \
+| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
+                                               --change-address "$SELLER_ADDRESS"                               \
+                                               --out-file tx-5.raw                                              \
+                                               --required-signer "$SELLER_PAYMENT_SKEY"                         \
+                                               --submit=600                                                     \
 > /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" --out-file /dev/stdout   \
-| jq '. | to_entries[] | .key'                                                           \
-| sed -e 's/"//g;s/^/--tx-in /'                                                          \
-| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                             \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                                               --change-address "$BUYER_ADDRESS"         \
-                                               --out-file tx-5.raw                       \
-                                               --required-signer "$BUYER_PAYMENT_SKEY"   \
-                                               --submit=600                              \
+cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" --out-file /dev/stdout                          \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| sed -e 's/^/--tx-in /'                                                                                        \
+| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
+                                               --change-address "$BUYER_ADDRESS"                                \
+                                               --out-file tx-6.raw                                              \
+                                               --required-signer "$BUYER_PAYMENT_SKEY"                          \
+                                               --submit=600                                                     \
 > /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" --out-file /dev/stdout \
-| jq '. | to_entries[] | .key'                                                            \
-| sed -e 's/"//g;s/^/--tx-in /'                                                           \
-| xargs -n 9999 marlowe-cli transaction-simple "${MAGIC[@]}"                              \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                                               --change-address "$MEDIATOR_ADDRESS"       \
-                                               --out-file tx-6.raw                        \
-                                               --required-signer "$MEDIATOR_PAYMENT_SKEY" \
-                                               --submit=600                               \
+cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" --out-file /dev/stdout                       \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| sed -e 's/^/--tx-in /'                                                                                        \
+| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
+                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
+                                               --change-address "$MEDIATOR_ADDRESS"                             \
+                                               --out-file tx-7.raw                                              \
+                                               --required-signer "$MEDIATOR_PAYMENT_SKEY"                       \
+                                               --submit=600                                                     \
 > /dev/null

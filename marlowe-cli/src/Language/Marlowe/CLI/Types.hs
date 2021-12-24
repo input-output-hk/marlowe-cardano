@@ -6,13 +6,11 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Types for Marlowe CLI tool.
+-- | Types for the Marlowe CLI tool.
 --
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -34,32 +32,26 @@ module Language.Marlowe.CLI.Types (
 , SomePaymentSigningKey
 -- * Exceptions
 , CliError(..)
--- * Marlowe CLI Commands
-, Command(..)
 ) where
 
 
-import           Cardano.Api                     (AddressAny, AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
-                                                  NetworkId, PaymentExtendedKey, PaymentKey, PlutusScript,
-                                                  PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData,
-                                                  SigningKey, SlotNo, StakeAddressReference, TxIn, VerificationKey,
-                                                  deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
-                                                  serialiseToTextEnvelope)
-import           Cardano.Api.Shelley             (PlutusScript (..))
-import           Codec.Serialise                 (deserialise)
-import           Data.Aeson                      (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
-import           Data.ByteString.Short           (ShortByteString)
-import           Data.String                     (IsString)
-import           GHC.Generics                    (Generic)
-import           Language.Marlowe.CLI.Orphans    ()
-import           Language.Marlowe.SemanticsTypes (AccountId, ChoiceName, ChosenNum, Party, Token)
-import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, TokenName,
-                                                  ValidatorHash)
-import           Plutus.V1.Ledger.Slot           (Slot)
+import           Cardano.Api                  (AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
+                                               PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
+                                               PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, TxIn,
+                                               VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope,
+                                               serialiseAddress, serialiseToTextEnvelope)
+import           Cardano.Api.Shelley          (PlutusScript (..))
+import           Codec.Serialise              (deserialise)
+import           Data.Aeson                   (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
+import           Data.ByteString.Short        (ShortByteString)
+import           Data.String                  (IsString)
+import           GHC.Generics                 (Generic)
+import           Language.Marlowe.CLI.Orphans ()
+import           Plutus.V1.Ledger.Api         (Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
-import qualified Cardano.Api                     as Api (Value)
-import qualified Data.ByteString.Lazy            as LBS (fromStrict)
-import qualified Data.ByteString.Short           as SBS (fromShort)
+import qualified Cardano.Api                  as Api (Value)
+import qualified Data.ByteString.Lazy         as LBS (fromStrict)
+import qualified Data.ByteString.Short        as SBS (fromShort)
 
 
 -- | Exception for Marlowe CLI.
@@ -241,257 +233,3 @@ data PayToScript era =
   , datumHash :: Hash ScriptData   -- ^ The datum hash.
   }
     deriving (Eq, Generic, Show)
-
-
--- | Marlowe CLI commands and options.
-data Command =
-    -- | Export comprehensive Marlowe contrac and transactiont information.
-    Export
-    {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
-    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , contractFile   :: FilePath                     -- ^ The JSON file containing the contract.
-    , stateFile      :: FilePath                     -- ^ The JSON file containing the contract's state.
-    , inputFiles     :: [FilePath]                   -- ^ The JSON files containing the contract's input.
-    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for Marlowe contract information.
-    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract and transaction.
-    }
-    -- | Export the address for a Marlowe contract.
-  | ExportAddress
-    {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
-    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    }
-    -- | Export the validator for a Marlowe contract.
-  | ExportValidator
-    {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
-    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
-    , printHash      :: Bool                         -- ^ Whether to print the validator hash.
-    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
-    }
-    -- | Export the datum for a Marlowe contract transaction.
-  | ExportDatum
-    {
-      contractFile :: FilePath        -- ^ The JSON file containing the contract.
-    , stateFile    :: FilePath        -- ^ The JSON file containing the contract's state.
-    , outputFile   :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats   :: Bool            -- ^ Whether to print statistics about the datum.
-    }
-    -- | Export the redeemer for a Marlowe contract transaction.
-  | ExportRedeemer
-    {
-      inputFiles :: [FilePath]      -- ^ The JSON files containing the contract's input.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file for the redeemer.
-    , printStats :: Bool            -- ^ Whether to print statistics about the redeemer.
-    }
-    -- | Export the role address for a Marlowe contract.
-  | ExportRoleAddress
-    {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency' :: CurrencySymbol               -- ^ The role currency symbols, if any.
-    }
-    -- | Export the role validator for a Marlowe contract.
-  | ExportRoleValidator
-    {
-      network        :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency' :: CurrencySymbol               -- ^ The role currency symbols, if any.
-    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
-    , printHash      :: Bool                         -- ^ Whether to print the validator hash.
-    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
-    }
-    -- | Export the role datum for a Marlowe contract transaction.
-  | ExportRoleDatum
-    {
-      roleName   :: TokenName       -- ^ The role name.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats :: Bool            -- ^ Whether to print statistics about the datum.
-    }
-    -- | Export the role redeemer for a Marlowe contract transaction.
-  | ExportRoleRedeemer
-    {
-      outputFile :: Maybe FilePath  -- ^ The output JSON file for the redeemer.
-    , printStats :: Bool            -- ^ Whether to print statistics about the redeemer.
-    }
-    -- | Build a non-Marlowe transaction.
-  | BuildTransact
-    {
-      network         :: Maybe NetworkId            -- ^ The network ID, if any.
-    , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
-    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , change          :: AddressAny                 -- ^ The change address.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
-    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
-    }
-    -- | Build a transaction paying into a Marlowe contract.
-  | BuildCreate
-    {
-      network         :: Maybe NetworkId            -- ^ The network ID, if any.
-    , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , scriptAddress   :: AddressAny                 -- ^ The script address.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
-    , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
-    , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
-    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , change          :: AddressAny                 -- ^ The change address.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
-    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
-    }
-    -- | Build a transaction that spends from and pays to a Marlowe contract.
-  | BuildAdvance
-    {
-      network         :: Maybe NetworkId            -- ^ The network ID, if any.
-    , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , scriptAddress   :: AddressAny                 -- ^ The script address.
-    , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
-    , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
-    , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
-    , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
-    , outputDatumFile :: FilePath                   -- ^ The file containing the datum for the payment to the script.
-    , outputValue     :: Api.Value                  -- ^ The value to be paid to the script.
-    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , collateral      :: TxIn                       -- ^ The collateral.
-    , change          :: AddressAny                 -- ^ The change address.
-    , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
-    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
-    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
-    }
-    -- | Build a transaction spending from a Marlowe contract.
-  | BuildClose
-    {
-      network         :: Maybe NetworkId            -- ^ The network ID, if any.
-    , socketPath      :: FilePath                   -- ^ The path to the node socket.
-    , validatorFile   :: FilePath                   -- ^ The file containing the script validator.
-    , redeemerFile    :: FilePath                   -- ^ The file containing the redeemer.
-    , inputDatumFile  :: FilePath                   -- ^ The file containing the datum for spending from the script.
-    , signingKeyFiles :: [FilePath]                 -- ^ The files containing the required signing keys.
-    , inputTxIn       :: TxIn                       -- ^ The script eUTxO to be spent.
-    , inputs          :: [TxIn]                     -- ^ The transaction inputs.
-    , outputs         :: [(AddressAny, Api.Value)]  -- ^ The transaction outputs.
-    , collateral      :: TxIn                       -- ^ The collateral.
-    , change          :: AddressAny                 -- ^ The change address.
-    , minimumSlot     :: SlotNo                     -- ^ The first valid slot for the transaction.
-    , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
-    , bodyFile        :: FilePath                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
-    , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
-    }
-    -- | Submit a transaction.
-  | Submit
-    {
-      network         :: Maybe NetworkId  -- ^ The network ID, if any.
-    , socketPath      :: FilePath         -- ^ The path to the node socket.
-    , bodyFile        :: FilePath         -- ^ The JSON file containing the transaction body.
-    , signingKeyFiles :: [FilePath]       -- ^ The signing key files.
-    , submitTimeout   :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
-    }
-    -- | Compute the next step in a contract.
-  | Compute
-    {
-      contractFile :: FilePath        -- ^ The JSON file containing the contract.
-    , stateFile    :: FilePath        -- ^ The JSON file containing the contract's state.
-    , inputFiles   :: [FilePath]      -- ^ The JSON files containing the contract's inputs.
-    , minimumSlot  :: SlotNo          -- ^ The first valid slot for the transaction.
-    , maximumSlot  :: SlotNo          -- ^ The last valid slot for the transaction.
-    , outputFile   :: Maybe FilePath  -- ^ The output JSON file with the results of the computation.
-    , printStats   :: Bool            -- ^ Whether to print statistics about the redeemer.
-    }
-    -- | Input a deposit to a contract.
-  | InputDeposit
-    {
-      account    :: AccountId       -- ^ The account for the deposit.
-    , party      :: Party           -- ^ The party making the deposit.
-    , token      :: Maybe Token     -- ^ The token being deposited, if not Ada.
-    , amount     :: Integer         -- ^ The amount of the token deposited.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
-    }
-    -- | Input a choice to a contract.
-  | InputChoice
-    {
-      choiceName  :: ChoiceName      -- ^ The name of the choice made.
-    , choiceParty :: Party           -- ^ The party making the choice.
-    , chosen      :: ChosenNum       -- ^ The number chosen.
-    , outputFile  :: Maybe FilePath  -- ^ The output JSON file representing the input.
-    }
-    -- | Input a notification to a contract.
-  | InputNotify
-    {
-      outputFile :: Maybe FilePath  -- ^ The output JSON file representing the input.
-    }
-    -- | Template for trivial contract.
-  | TemplateTrivial
-    {
-      bystander          :: Party           -- ^ The party providing the min-ADA.
-    , minAda             :: Integer         -- ^ Lovelace in the initial state.
-    , minSlot            :: Slot            -- ^ The minimum slot.
-    , party              :: Party           -- ^ The party.
-    , depositLovelace    :: Integer         -- ^ Lovelace in the deposit.
-    , withdrawalLovelace :: Integer         -- ^ Lovelace in the withdrawal.
-    , timeout            :: Slot            -- ^ The timeout.
-    , outputFile         :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
-    }
-    -- | Template for escrow contract.
-  | TemplateEscrow
-    {
-      minAda            :: Integer  -- ^ Lovelace in the initial state.
-    , price             :: Integer  -- ^ Price of the item for sale, in lovelace.
-    , seller            :: Party    -- ^ The seller.
-    , buyer             :: Party    -- ^ The buyer.
-    , mediator          :: Party    -- ^ The mediator.
-    , paymentDeadline   :: Slot     -- ^ The deadline for the buyer to pay.
-    , complaintDeadline :: Slot     -- ^ The deadline for the buyer to complain.
-    , disputeDeadline   :: Slot     -- ^ The deadline for the seller to dispute a complaint.
-    , mediationDeadline :: Slot     -- ^ The deadline for the mediator to decide.
-    , outputFile        :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
-    }
-    -- | Template for swap contract.
-  | TemplateSwap
-    {
-      minAda     :: Integer         -- ^ Lovelace that the first party contributes to the initial state.
-    , aParty     :: Party           -- ^ First party.
-    , aToken     :: Token           -- ^ First party's token.
-    , aAmount    :: Integer         -- ^ Amount of first party's token.
-    , aTimeout   :: Slot            -- ^ Timeout for first party's deposit.
-    , bParty     :: Party           -- ^ Second party.
-    , bToken     :: Token           -- ^ Second party's token.
-    , bAmount    :: Integer         -- ^ Amount of second party's token.
-    , bTimeout   :: Slot            -- ^ Timeout for second party's deposit.
-    , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
-    }
-    -- | Template for zero-coupon bond.
-  | TemplateZeroCouponBond
-    {
-      minAda          :: Integer         -- ^ Lovelace that the lender contributes to the initial state.
-    , lender          :: Party           -- ^ The lender.
-    , borrower        :: Party           -- ^ The borrower.
-    , principal       :: Integer         -- ^ The principal.
-    , interest        :: Integer         -- ^ The interest.
-    , lendingDeadline :: Slot            -- ^ The lending deadline.
-    , paybackDeadline :: Slot            -- ^ The payback deadline.
-    , outputFile      :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
-    }

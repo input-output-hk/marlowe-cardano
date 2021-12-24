@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Export information for Marlowe contracts and transactions.
+-- | Export information for Marlowe contracts and roles.
 --
 -----------------------------------------------------------------------------
 

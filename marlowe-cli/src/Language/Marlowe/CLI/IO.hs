@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Input/output functions for Marlowe CLI tool.
+-- | Input/output functions for the Marlowe CLI tool.
 --
 -----------------------------------------------------------------------------
 

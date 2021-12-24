@@ -1,13 +1,17 @@
 # Marlowe CLI: Submitting Transactions
 
-The `submit` command submits a transaction body to the blockchain.
+The `marlowe-cli transaction submit` command submits a transaction body to the blockchain.
 
 
 ## Options
 
-    Usage: marlowe-cli submit [--testnet-magic INTEGER] --socket-path SOCKET_FILE
-                              --tx-body-file BODY_FILE
-                              [--required-signer SIGNING_FILE]
+    $ marlowe-cli transaction submit
+    
+    Usage: marlowe-cli transaction submit [--testnet-magic INTEGER]
+                                          --socket-path SOCKET_FILE
+                                          --tx-body-file BODY_FILE
+                                          [--required-signer SIGNING_FILE]
+                                          [--timeout SECONDS]
       Submit a transaction body.
     
     Available options:
@@ -15,4 +19,5 @@ The `submit` command submits a transaction body to the blockchain.
       --socket-path SOCKET_FILE       Location of the cardano-node socket file.
       --tx-body-file BODY_FILE        File containing the transaction body.
       --required-signer SIGNING_FILE  Files containing required signing keys.
+      --timeout SECONDS               Also submit the transaction, and wait for confirmation.
       -h,--help                       Show this help text

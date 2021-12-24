@@ -1,13 +1,13 @@
 # Marlowe CLI: Build a Transaction that Pays to and Spends from a Marlowe Contract
 
-The `transaction-advance` command builds a transaction that both pays to and spends from a Marlowe contract. This command can be used for continuing operation of a Marlowe contract.
+The `marlowe transaction advance` command builds a transaction that both pays to and spends from a Marlowe contract. This command can be used for continuing operation of a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli transaction-advance --help
+    $ marlowe-cli transaction advance --help
     
-    Usage: marlowe-cli transaction-advance [--testnet-magic INTEGER]
+    Usage: marlowe-cli transaction advance [--testnet-magic INTEGER]
                                            --socket-path SOCKET_FILE
                                            --script-address ADDRESS
                                            --tx-in-script-file PLUTUS_FILE
@@ -16,7 +16,7 @@ The `transaction-advance` command builds a transaction that both pays to and spe
                                            [--required-signer SIGNING_FILE]
                                            --tx-in-marlowe TXID#TXIX
                                            --tx-out-datum-file DATUM_FILE
-                                           --tx-out-marlowe LOVELACE
+                                           --tx-out-marlowe VALUE
                                            [--tx-in TXID#TXIX]
                                            [--tx-out ADDRESS+VALUE]
                                            --tx-in-collateral TXID#TXIX

@@ -1,13 +1,13 @@
 # Marlowe CLI: Build a Transaction that Spends from a Marlowe Contract
 
-The `transaction-close` command builds a transaction that spends from a Marlowe contract. This command can be used to close a Marlowe contract.
+The `marlowe-cli transaction close` command builds a transaction that spends from a Marlowe contract. This command can be used to close a Marlowe contract.
 
 
 ## Usage
 
-    $ marlowe-cli transaction-close --help
+    $ marlowe-cli transaction close --help
     
-    Usage: marlowe-cli transaction-close [--testnet-magic INTEGER]
+    Usage: marlowe-cli transaction close [--testnet-magic INTEGER]
                                          --socket-path SOCKET_FILE
                                          --tx-in-script-file PLUTUS_FILE
                                          --tx-in-redeemer-file REDEEMER_FILE

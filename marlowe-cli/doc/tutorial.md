@@ -76,15 +76,15 @@ We will redeem the ADA within a particular range of slots:
 We now create the Plutus script for the contract and compute its script address:
 
     $ ADDRESS_S=$(
-      marlowe-cli export-address "${MAGIC[@]}" \
-                  --slot-length "$SLOT_LENGTH" \
-                  --slot-offset "$SLOT_OFFSET" \
+      marlowe-cli contract address "${MAGIC[@]}"        \
+                           --slot-length "$SLOT_LENGTH" \
+                           --slot-offset "$SLOT_OFFSET" \
       )
-    $ marlowe-cli export-validator "${MAGIC[@]}"           \
-                                   --slot-length "$SLOT_LENGTH" \
-                                   --slot-offset "$SLOT_OFFSET" \
-                                   --out-file $PLUTUS_FILE \
-                                   --print-stats
+    $ marlowe-cli contract validator "${MAGIC[@]}"                \
+                                     --slot-length "$SLOT_LENGTH" \
+                                     --slot-offset "$SLOT_OFFSET" \
+                                     --out-file $PLUTUS_FILE      \
+                                     --print-stats
     
     Validator size: 13756
     Validator cost: ExBudget {exBudgetCPU = ExCPU 36829301, exBudgetMemory = ExMemory 123800}
@@ -98,14 +98,14 @@ This default Marlowe validator has the following address:
 The contract and its state form the datum, which we also compute:
 
     DATUM_HASH=$(
-    marlowe-cli export-datum --contract-file $CONTRACT_FILE \
-                             --state-file $STATE_FILE       \
-                             --out-file $DATUM_FILE
+    marlowe-cli contract datum --contract-file $CONTRACT_FILE \
+                               --state-file $STATE_FILE       \
+                               --out-file $DATUM_FILE
     )
 
 Since this is the `Close` contract, the redeemer needs no input aside from a slot range:
 
-    marlowe-cli export-redeemer --out-file $REDEEMER_FILE
+    marlowe-cli contract redeemer --out-file $REDEEMER_FILE
 
 
 ## Fund the contract.
@@ -122,7 +122,7 @@ Select one of these UTxOs for use in funding the contract, naming it `TX_0`, and
 
     TX_0=3ed9cbe11b6308c5ede3ca8c9eb3a7ba1d7fe00a958dceb029f6c6219180235f#0
     
-    $ marlowe-cli transaction-create "${MAGIC[@]}"                             \
+    $ marlowe-cli transaction create "${MAGIC[@]}"                             \
                                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                      --script-address "$ADDRESS_S"             \
                                      --tx-out-datum-file $DATUM_FILE           \
@@ -162,7 +162,7 @@ We name the funding transaction as `TX_1`.
 
 We now use the previously computed redeemer and datum to remove the funds from the contract. This involves computing the fee, building the transaction, signing it, and submitting it.
 
-    $ marlowe-cli transaction-close "${MAGIC[@]}"                             \
+    $ marlowe-cli transaction close "${MAGIC[@]}"                             \
                                     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                     --tx-in-script-file $PLUTUS_FILE          \
                                     --tx-in-redeemer-file $REDEEMER_FILE      \

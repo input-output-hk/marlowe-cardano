@@ -1,23 +1,27 @@
 # Marlowe CLI: Export Validator, Datum, and Redeemer Information
 
-The `export-marlowe` command writes a JSON file with comprehensive information about the Marlowe validator, datum, and redeemer for a contract. In contrast, the [`export-address`](export-address.md), [`export-validator`](export-validator.md), [`export-datum`](export-datum.md), and [`export-redeemer`](export-redeemer.md) commands only export information on one aspect of the contract.
+The `marlowe contract marlowe` command writes a JSON file with comprehensive information about the Marlowe validator, datum, and redeemer for a contract. In contrast, the [`contract address`](contract address.md), [`contract validator`](contract validator.md), [`contract datum`](contract datum.md), and [`contract redeemer`](contract redeemer.md) commands only export information on one aspect of the contract.
 
 
 ## Usage
 
-    $ marlowe-cli export-marlowe --help
+    $ marlowe-cli contract marlowe --help
     
-    Usage: marlowe-cli export-marlowe [--testnet-magic INTEGER]
-                                      [--stake-address ADDRESS]
-                                      [--roles-currency CURRENCY_SYMBOL]
-                                      --contract-file CONTRACT_FILE
-                                      --state-file STATE_FILE
-                                      [--input-file INPUT_FILE]
-                                      [--out-file OUTPUT_FILE] [--print-stats]
+    Usage: marlowe-cli contract marlowe [--testnet-magic INTEGER]
+                                        [--slot-length INTEGER]
+                                        [--slot-offset INTEGER]
+                                        [--stake-address ADDRESS]
+                                        [--roles-currency CURRENCY_SYMBOL]
+                                        --contract-file CONTRACT_FILE
+                                        --state-file STATE_FILE
+                                        [--input-file INPUT_FILE]
+                                        [--out-file OUTPUT_FILE] [--print-stats]
       Export a Marlowe contract to a JSON file.
     
     Available options:
       --testnet-magic INTEGER           Network magic, or omit for mainnet.
+      --slot-length INTEGER             The slot length, in milliseconds.
+      --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
       --stake-address ADDRESS           Stake address, if any.
       --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
       --contract-file CONTRACT_FILE     JSON input file for the contract.
@@ -40,11 +44,11 @@ Optionally, this command will print on `stderr` the size and cost of the contrac
 
 The following command uses the close contract [example.contract](example.contract), the simple state [example.state](example.state), and the inputs [example.inputs](example.inputs) to create the datum to create the JSON file [example.marlowe](example.marlowe) that contains address, validator, datum, and redeemer information for a Marlowe contract.
 
-    $ marlowe-cli export-marlowe --testnet-magic 1097911063       \
-                                 --contract-file example.contract \
-                                 --state-file example.state       \
-                                 --out-file example.marlowe       \
-                                 --print-stats
+    $ marlowe-cli contract marlowe --testnet-magic 1097911063       \
+                                   --contract-file example.contract \
+                                   --state-file example.state       \
+                                   --out-file example.marlowe       \
+                                   --print-stats
     
     Bare-validator cost: ExBudget {exBudgetCPU = ExCPU 36829301, exBudgetMemory = ExMemory 123800}
     Validator size: 13756

@@ -69,24 +69,24 @@ EOI
 # Create the contract.
 
 ADDRESS_S=$(
-marlowe-cli export-address "${MAGIC[@]}" \
-            --slot-length "$SLOT_LENGTH" \
-            --slot-offset "$SLOT_OFFSET" \
-)
-
-marlowe-cli export-validator "${MAGIC[@]}"           \
+marlowe-cli contract address "${MAGIC[@]}"                \
                              --slot-length "$SLOT_LENGTH" \
                              --slot-offset "$SLOT_OFFSET" \
-                             --out-file $PLUTUS_FILE \
-                             --print-stats
+)
 
-marlowe-cli export-datum --contract-file $CONTRACT_FILE \
-                         --state-file $STATE_FILE       \
-                         --out-file $DATUM_FILE         \
-                         --print-stats
+marlowe-cli contract validator "${MAGIC[@]}"                \
+                               --slot-length "$SLOT_LENGTH" \
+                               --slot-offset "$SLOT_OFFSET" \
+                               --out-file $PLUTUS_FILE      \
+                               --print-stats
 
-marlowe-cli export-redeemer --out-file $REDEEMER_FILE \
-                            --print-stats
+marlowe-cli contract datum --contract-file $CONTRACT_FILE \
+                           --state-file $STATE_FILE       \
+                           --out-file $DATUM_FILE         \
+                           --print-stats
+
+marlowe-cli contract redeemer --out-file $REDEEMER_FILE \
+                              --print-stats
 
 
 # Find funds, and enter the selected UTxO as "TX_0".
@@ -98,7 +98,7 @@ TX_0=bf614bcd838ddfe7246263fb6f9b0a28a34adee0e8d98d9e50e40e0125e752ed#0
 
 # Fund the contract.
 
-marlowe-cli transaction-create "${MAGIC[@]}"                             \
+marlowe-cli transaction create "${MAGIC[@]}"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --script-address "$ADDRESS_S"             \
                                --tx-out-datum-file $DATUM_FILE           \
@@ -120,7 +120,7 @@ TX_1=7c055eaefbb48a25284a629b34a64b9921a87e74d93aab0987c36a8e75e42d78
 
 # Redeem the contract.
 
-marlowe-cli transaction-close "${MAGIC[@]}"                             \
+marlowe-cli transaction close "${MAGIC[@]}"                             \
                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                               --tx-in-script-file $PLUTUS_FILE          \
                               --tx-in-redeemer-file $REDEEMER_FILE      \
