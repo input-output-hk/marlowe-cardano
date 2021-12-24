@@ -33,6 +33,18 @@ module Language.Marlowe.CLI.Export (
 -- * Redeemer
 , exportRedeemer
 , buildRedeemer
+-- * Roles Address
+, exportRoleAddress
+, buildRoleAddress
+-- * Role Validator
+, exportRoleValidator
+, buildRoleValidator
+-- * Role Datum
+, exportRoleDatum
+, buildRoleDatum
+-- * Role Redeemer
+, exportRoleRedeemer
+, buildRoleRedeemer
 ) where
 
 
@@ -48,11 +60,12 @@ import           Data.Aeson                      (encode)
 import           Language.Marlowe.CLI.IO         (decodeFileStrict, maybeWriteJson, maybeWriteTextEnvelope)
 import           Language.Marlowe.CLI.Types      (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                                   ValidatorInfo (..))
-import           Language.Marlowe.Scripts        (smallUntypedValidator)
+import           Language.Marlowe.Scripts        (rolePayoutScript, smallUntypedValidator)
 import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParams)
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript, validatorHash)
-import           Plutus.V1.Ledger.Api            (CostModelParams, Datum (..), Redeemer (..), VerboseMode (..),
+import           Plutus.V1.Ledger.Api            (BuiltinData, CostModelParams, CurrencySymbol, Datum (..),
+                                                  Redeemer (..), TokenName, Validator, VerboseMode (..),
                                                   evaluateScriptCounting, getValidator)
 import           PlutusTx                        (builtinDataToData, toBuiltinData)
 import           System.IO                       (hPutStrLn, stderr)
@@ -177,15 +190,14 @@ printMarlowe marloweParams costModel network stake contract state inputs =
         putStrLn $ "Total size: " <> show (viSize + diSize + riSize)
 
 
--- | Compute the address of a Marlowe contract.
-buildAddress :: IsShelleyBasedEra era
-             => MarloweParams          -- ^ The Marlowe contract parameters.
-             -> NetworkId              -- ^ The network ID.
-             -> StakeAddressReference  -- ^ The stake address.
-             -> AddressInEra era       -- ^ The script address.
-buildAddress marloweParams network stake =
+-- | Compute the address of a validator.
+buildAddressImpl :: IsShelleyBasedEra era
+                 => Validator              -- ^ The validator.
+                 -> NetworkId              -- ^ The network ID.
+                 -> StakeAddressReference  -- ^ The stake address.
+                 -> AddressInEra era       -- ^ The script address.
+buildAddressImpl viValidator network stake =
   let
-    viValidator = smallUntypedValidator marloweParams
     script = getValidator viValidator
     viScript = toCardanoApiScript script
   in
@@ -195,15 +207,24 @@ buildAddress marloweParams network stake =
       stake
 
 
--- | Print the address of a Marlowe contract.
-exportAddress :: MonadIO m
-              => MarloweParams          -- ^ The Marlowe contract parameters.
-              -> NetworkId              -- ^ The network ID.
-              -> StakeAddressReference  -- ^ The stake address.
-              -> m ()                   -- ^ Action to print the script address.
-exportAddress marloweParams network stake =
+-- | Compute the address of a Marlowe contract.
+buildAddress :: IsShelleyBasedEra era
+             => MarloweParams          -- ^ The Marlowe contract parameters.
+             -> NetworkId              -- ^ The network ID.
+             -> StakeAddressReference  -- ^ The stake address.
+             -> AddressInEra era       -- ^ The script address.
+buildAddress = buildAddressImpl . smallUntypedValidator
+
+
+-- | Print the address of a validator.
+exportAddressImpl :: MonadIO m
+                  => Validator              -- ^ The validator.
+                  -> NetworkId              -- ^ The network ID.
+                  -> StakeAddressReference  -- ^ The stake address.
+                  -> m ()                   -- ^ Action to print the script address.
+exportAddressImpl validator network stake =
   let
-    address = buildAddress marloweParams network stake
+    address = buildAddressImpl validator network stake
   in
     liftIO
       . putStrLn
@@ -211,17 +232,24 @@ exportAddress marloweParams network stake =
       $ serialiseAddress (address :: AddressInEra AlonzoEra) -- FIXME: Generalize eras.
 
 
+-- | Print the address of a Marlowe contract.
+exportAddress :: MonadIO m
+              => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> NetworkId              -- ^ The network ID.
+              -> StakeAddressReference  -- ^ The stake address.
+              -> m ()                   -- ^ Action to print the script address.
+exportAddress = exportAddressImpl . smallUntypedValidator
 
--- | Build the validator information about a Marlowe contract.
-buildValidator :: IsShelleyBasedEra era
-               => MarloweParams                        -- ^ The Marlowe contract parameters.
-               -> CostModelParams                      -- ^ The cost model parameters.
-               -> NetworkId                            -- ^ The network ID.
-               -> StakeAddressReference                -- ^ The stake address.
-               -> Either CliError (ValidatorInfo era)  -- ^ The validator information, or an error message.
-buildValidator marloweParams costModel network stake =
+
+-- | Build validator info.
+buildValidatorImpl :: IsShelleyBasedEra era
+                   => Validator                            -- ^ The validator.
+                   -> CostModelParams                      -- ^ The cost model parameters.
+                   -> NetworkId                            -- ^ The network ID.
+                   -> StakeAddressReference                -- ^ The stake address.
+                   -> Either CliError (ValidatorInfo era)  -- ^ The validator information, or an error message.
+buildValidatorImpl viValidator costModel network stake =
   let
-    viValidator = smallUntypedValidator marloweParams
     script = getValidator viValidator
     viScript = toCardanoApiScript script
     viBytes = SBS.toShort . LBS.toStrict . serialise $ script
@@ -238,10 +266,20 @@ buildValidator marloweParams costModel network stake =
       _                 -> Left $ CliError "Failed to evaluate cost of validator script."
 
 
--- | Export to a file the validator information about a Marlowe contract.
-exportValidator :: MonadError CliError m
+-- | Build the validator information about a Marlowe contract.
+buildValidator :: IsShelleyBasedEra era
+               => MarloweParams                        -- ^ The Marlowe contract parameters.
+               -> CostModelParams                      -- ^ The cost model parameters.
+               -> NetworkId                            -- ^ The network ID.
+               -> StakeAddressReference                -- ^ The stake address.
+               -> Either CliError (ValidatorInfo era)  -- ^ The validator information, or an error message.
+buildValidator = buildValidatorImpl . smallUntypedValidator
+
+
+-- | Export to a file the validator information.
+exportValidatorImpl :: MonadError CliError m
                 => MonadIO m
-                => MarloweParams          -- ^ The Marlowe contract parameters.
+                => Validator              -- ^ The validator.
                 -> CostModelParams        -- ^ The cost model parameters.
                 -> NetworkId              -- ^ The network ID.
                 -> StakeAddressReference  -- ^ The stake address.
@@ -249,11 +287,11 @@ exportValidator :: MonadError CliError m
                 -> Bool                   -- ^ Whether to print the validator hash.
                 -> Bool                   -- ^ Whether to print statistics about the validator.
                 -> m ()                   -- ^ Action to export the validator information to a file.
-exportValidator marloweParams costModel network stake outputFile printHash printStats =
+exportValidatorImpl validator costModel network stake outputFile printHash printStats =
   do
     ValidatorInfo{..} <-
       liftEither
-        $ buildValidator marloweParams costModel network stake
+        $ buildValidatorImpl validator costModel network stake
     maybeWriteTextEnvelope outputFile viScript
     liftIO
       $ do
@@ -269,6 +307,37 @@ exportValidator marloweParams costModel network stake outputFile printHash print
             hPutStrLn stderr $ "Validator cost: " <> show viCost
 
 
+-- | Export to a file the validator information about a Marlowe contract.
+exportValidator :: MonadError CliError m
+                => MonadIO m
+                => MarloweParams          -- ^ The Marlowe contract parameters.
+                -> CostModelParams        -- ^ The cost model parameters.
+                -> NetworkId              -- ^ The network ID.
+                -> StakeAddressReference  -- ^ The stake address.
+                -> Maybe FilePath         -- ^ The output JSON file for the validator information.
+                -> Bool                   -- ^ Whether to print the validator hash.
+                -> Bool                   -- ^ Whether to print statistics about the validator.
+                -> m ()                   -- ^ Action to export the validator information to a file.
+exportValidator = exportValidatorImpl . smallUntypedValidator
+
+
+-- | Build the datum information about a Marlowe transaction.
+buildDatumImpl :: BuiltinData  -- ^ The datum.
+               -> DatumInfo    -- ^ Information about the transaction datum.
+buildDatumImpl datum =
+  let
+    diDatum = Datum datum
+    diBytes = SBS.toShort . LBS.toStrict . serialise $ diDatum
+    diJson =
+      scriptDataToJson ScriptDataJsonDetailedSchema
+        . fromPlutusData
+        $ PlutusTx.builtinDataToData datum
+    diHash = datumHash diDatum
+    diSize = SBS.length diBytes
+  in
+    DatumInfo{..}
+
+
 -- | Build the datum information about a Marlowe transaction.
 buildDatum :: Contract   -- ^ The contract.
            -> State      -- ^ The contract's state.
@@ -277,16 +346,29 @@ buildDatum marloweContract marloweState =
   let
     marloweData = MarloweData{..}
     marloweDatum = PlutusTx.toBuiltinData marloweData
-    diDatum = Datum marloweDatum
-    diBytes = SBS.toShort . LBS.toStrict . serialise $ diDatum
-    diJson =
-      scriptDataToJson ScriptDataJsonDetailedSchema
-        . fromPlutusData
-        $ PlutusTx.builtinDataToData marloweDatum
-    diHash = datumHash diDatum
-    diSize = SBS.length diBytes
   in
-    DatumInfo{..}
+    buildDatumImpl marloweDatum
+
+
+-- | Export to a file the datum information about a Marlowe transaction.
+exportDatumImpl :: MonadError CliError m
+                => MonadIO m
+                => BuiltinData     -- ^ The datum
+                -> Maybe FilePath  -- ^ The output JSON file for the datum information.
+                -> Bool            -- ^ Whether to print statistics about the datum.
+                -> m ()            -- ^ Action to export the datum information to a file.
+exportDatumImpl datum outputFile printStats =
+  do
+    let
+      DatumInfo{..} = buildDatumImpl datum
+    maybeWriteJson outputFile diJson
+    liftIO
+      $ do
+        print diHash
+        when printStats
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Datum size: " <> show diSize
 
 
 -- | Export to a file the datum information about a Marlowe transaction.
@@ -299,35 +381,53 @@ exportDatum :: MonadError CliError m
             -> m ()            -- ^ Action to export the datum information to a file.
 exportDatum contractFile stateFile outputFile printStats =
   do
-    contract <- decodeFileStrict contractFile
-    state    <- decodeFileStrict stateFile
+    marloweContract <- decodeFileStrict contractFile
+    marloweState    <- decodeFileStrict stateFile
     let
-      DatumInfo{..} = buildDatum contract state
-    maybeWriteJson outputFile diJson
-    liftIO
-      $ do
-        print diHash
-        when printStats
-          $ do
-            hPutStrLn stderr ""
-            hPutStrLn stderr $ "Datum size: " <> show diSize
+      marloweData = MarloweData{..}
+      marloweDatum = PlutusTx.toBuiltinData marloweData
+    exportDatumImpl marloweDatum outputFile printStats
+
+
+-- | Build the redeemer information about a Marlowe transaction.
+buildRedeemerImpl :: BuiltinData   -- ^ The redeemer.
+                  -> RedeemerInfo  -- ^ Information about the transaction redeemer.
+buildRedeemerImpl redeemer =
+  let
+    riRedeemer = Redeemer redeemer
+    riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
+    riJson =
+      scriptDataToJson ScriptDataJsonDetailedSchema
+        . fromPlutusData
+        $ PlutusTx.builtinDataToData redeemer
+    riSize = SBS.length riBytes
+  in
+    RedeemerInfo{..}
 
 
 -- | Build the redeemer information about a Marlowe transaction.
 buildRedeemer :: [Input]       -- ^ The contract's input,
               -> RedeemerInfo  -- ^ Information about the transaction redeemer.
-buildRedeemer inputs =
-  let
-    marloweRedeemer = PlutusTx.toBuiltinData inputs
-    riRedeemer = Redeemer marloweRedeemer
-    riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
-    riJson =
-      scriptDataToJson ScriptDataJsonDetailedSchema
-        . fromPlutusData
-        $ PlutusTx.builtinDataToData marloweRedeemer
-    riSize = SBS.length riBytes
-  in
-    RedeemerInfo{..}
+buildRedeemer = buildRedeemerImpl . PlutusTx.toBuiltinData
+
+
+-- | Export to a file the redeemer information about a Marlowe transaction.
+exportRedeemerImpl :: MonadError CliError m
+                   => MonadIO m
+                   => BuiltinData     -- ^ The redeemer.
+                   -> Maybe FilePath  -- ^ The output JSON file for Marlowe contract information.
+                   -> Bool            -- ^ Whether to print statistics on the contract.
+                   -> m ()            -- ^ Action to export the redeemer information to a file.
+exportRedeemerImpl redeemer outputFile printStats =
+  do
+    let
+      RedeemerInfo{..} = buildRedeemerImpl redeemer
+    maybeWriteJson outputFile riJson
+    liftIO
+      . when printStats
+          $ do
+            hPutStrLn stderr ""
+            hPutStrLn stderr $ "Redeemer size: " <> show riSize
 
 
 -- | Export to a file the redeemer information about a Marlowe transaction.
@@ -340,11 +440,76 @@ exportRedeemer :: MonadError CliError m
 exportRedeemer inputFiles outputFile printStats =
   do
     inputs <- mapM decodeFileStrict inputFiles
-    let
-      RedeemerInfo{..} = buildRedeemer inputs
-    maybeWriteJson outputFile riJson
-    liftIO
-      . when printStats
-          $ do
-            hPutStrLn stderr ""
-            hPutStrLn stderr $ "Redeemer size: " <> show riSize
+    exportRedeemerImpl (PlutusTx.toBuiltinData (inputs :: [Input])) outputFile printStats
+
+
+-- | Compute the role address of a Marlowe contract.
+buildRoleAddress :: IsShelleyBasedEra era
+                 => CurrencySymbol         -- ^ The currency symbol for Marlowe contract roles.
+                 -> NetworkId              -- ^ The network ID.
+                 -> StakeAddressReference  -- ^ The stake address.
+                 -> AddressInEra era       -- ^ The script address.
+buildRoleAddress = buildAddressImpl . rolePayoutScript
+
+
+-- | Print the role address of a Marlowe contract.
+exportRoleAddress :: MonadIO m
+                  => CurrencySymbol         -- ^ The currency symbol for Marlowe contract roles.
+                  -> NetworkId              -- ^ The network ID.
+                  -> StakeAddressReference  -- ^ The stake address.
+                  -> m ()                   -- ^ Action to print the script address.
+exportRoleAddress = exportAddressImpl . rolePayoutScript
+
+
+-- | Build the role validator for a Marlowe contract.
+buildRoleValidator :: IsShelleyBasedEra era
+                   => CurrencySymbol                       -- ^ The currency symbol for Marlowe contract roles.
+                   -> CostModelParams                      -- ^ The cost model parameters.
+                   -> NetworkId                            -- ^ The network ID.
+                   -> StakeAddressReference                -- ^ The stake address.
+                   -> Either CliError (ValidatorInfo era)  -- ^ The validator information, or an error message.
+buildRoleValidator = buildValidatorImpl . rolePayoutScript
+
+
+-- | Export to a file the role validator information about a Marlowe contract.
+exportRoleValidator :: MonadError CliError m
+                => MonadIO m
+                => CurrencySymbol         -- ^ The currency symbol for Marlowe contract roles.
+                -> CostModelParams        -- ^ The cost model parameters.
+                -> NetworkId              -- ^ The network ID.
+                -> StakeAddressReference  -- ^ The stake address.
+                -> Maybe FilePath         -- ^ The output JSON file for the validator information.
+                -> Bool                   -- ^ Whether to print the validator hash.
+                -> Bool                   -- ^ Whether to print statistics about the validator.
+                -> m ()                   -- ^ Action to export the validator information to a file.
+exportRoleValidator = exportValidatorImpl . rolePayoutScript
+
+
+-- | Build the role datum information about a Marlowe transaction.
+buildRoleDatum :: TokenName  -- ^ The role name.
+               -> DatumInfo  -- ^ Information about the transaction datum.
+buildRoleDatum = buildDatumImpl . PlutusTx.toBuiltinData
+
+
+-- | Export to a file the role datum information about a Marlowe transaction.
+exportRoleDatum :: MonadError CliError m
+                => MonadIO m
+                => TokenName       -- ^ The role name.
+                -> Maybe FilePath  -- ^ The output JSON file for the datum information.
+                -> Bool            -- ^ Whether to print statistics about the datum.
+                -> m ()            -- ^ Action to export the datum information to a file.
+exportRoleDatum = exportDatumImpl . PlutusTx.toBuiltinData
+
+
+-- | Build the role redeemer information about a Marlowe transaction.
+buildRoleRedeemer :: RedeemerInfo  -- ^ Information about the transaction redeemer.
+buildRoleRedeemer = buildRedeemerImpl $ PlutusTx.toBuiltinData ()
+
+
+-- | Export to a file the role redeemer information about a Marlowe transaction.
+exportRoleRedeemer :: MonadError CliError m
+                   => MonadIO m
+                   => Maybe FilePath  -- ^ The output JSON file for Marlowe contract information.
+                   -> Bool            -- ^ Whether to print statistics on the contract.
+                   -> m ()            -- ^ Action to export the redeemer information to a file.
+exportRoleRedeemer = exportRedeemerImpl $ PlutusTx.toBuiltinData ()

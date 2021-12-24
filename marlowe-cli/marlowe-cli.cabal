@@ -50,6 +50,7 @@ library
     Language.Marlowe.CLI.Examples.Escrow
     Language.Marlowe.CLI.Examples.Swap
     Language.Marlowe.CLI.Examples.Trivial
+    Language.Marlowe.CLI.Examples.ZeroCouponBond
     Language.Marlowe.CLI.Export
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans

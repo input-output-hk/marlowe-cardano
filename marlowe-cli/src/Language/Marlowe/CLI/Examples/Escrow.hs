@@ -11,9 +11,8 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 
 module Language.Marlowe.CLI.Examples.Escrow (

@@ -53,7 +53,8 @@ import           Data.String                     (IsString)
 import           GHC.Generics                    (Generic)
 import           Language.Marlowe.CLI.Orphans    ()
 import           Language.Marlowe.SemanticsTypes (AccountId, ChoiceName, ChosenNum, Party, Token)
-import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, TokenName,
+                                                  ValidatorHash)
 import           Plutus.V1.Ledger.Slot           (Slot)
 
 import qualified Cardano.Api                     as Api (Value)
@@ -294,6 +295,36 @@ data Command =
     , outputFile :: Maybe FilePath  -- ^ The output JSON file for the redeemer.
     , printStats :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
+    -- | Export the role address for a Marlowe contract.
+  | ExportRoleAddress
+    {
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency' :: CurrencySymbol               -- ^ The role currency symbols, if any.
+    }
+    -- | Export the role validator for a Marlowe contract.
+  | ExportRoleValidator
+    {
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency' :: CurrencySymbol               -- ^ The role currency symbols, if any.
+    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
+    , printHash      :: Bool                         -- ^ Whether to print the validator hash.
+    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
+    }
+    -- | Export the role datum for a Marlowe contract transaction.
+  | ExportRoleDatum
+    {
+      roleName   :: TokenName       -- ^ The role name.
+    , outputFile :: Maybe FilePath  -- ^ The output JSON file for the datum.
+    , printStats :: Bool            -- ^ Whether to print statistics about the datum.
+    }
+    -- | Export the role redeemer for a Marlowe contract transaction.
+  | ExportRoleRedeemer
+    {
+      outputFile :: Maybe FilePath  -- ^ The output JSON file for the redeemer.
+    , printStats :: Bool            -- ^ Whether to print statistics about the redeemer.
+    }
     -- | Build a non-Marlowe transaction.
   | BuildTransact
     {
@@ -451,4 +482,16 @@ data Command =
     , bAmount    :: Integer         -- ^ Amount of second party's token.
     , bTimeout   :: Slot            -- ^ Timeout for second party's deposit.
     , outputFile :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
+    }
+    -- | Template for zero-coupon bond.
+  | TemplateZeroCouponBond
+    {
+      minAda          :: Integer         -- ^ Lovelace that the lender contributes to the initial state.
+    , lender          :: Party           -- ^ The lender.
+    , borrower        :: Party           -- ^ The borrower.
+    , principal       :: Integer         -- ^ The principal.
+    , interest        :: Integer         -- ^ The interest.
+    , lendingDeadline :: Slot            -- ^ The lending deadline.
+    , paybackDeadline :: Slot            -- ^ The payback deadline.
+    , outputFile      :: Maybe FilePath  -- ^ The output JSON file representing the Marlowe data.
     }

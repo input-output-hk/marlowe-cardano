@@ -19,10 +19,12 @@ module Language.Marlowe.CLI.Parse (
 , parseLovelaceValue
 , parseNetworkId
 , parseParty
+, parseRoleOutput
 , parseSlot
 , parseSlotNo
 , parseStakeAddressReference
 , parseToken
+, parseTokenName
 , parseTxId
 , parseTxIn
 , parseTxIx
@@ -127,6 +129,21 @@ parseTxOut =
                                          tokens' <- mapM readAssetValueEither tokens
                                          pure (address', lovelace' <> mconcat tokens')
         _                           -> Left "Invalid transaction output."
+
+
+-- | Parser for role output information.
+parseRoleOutput :: O.ReadM (TokenName, Value)
+parseRoleOutput =
+  O.eitherReader
+    $ \s ->
+      case splitOn "+" s of
+        role : lovelace : tokens -> do
+                                      let
+                                         role' = readTokenName role
+                                      lovelace' <- readLovelaceEither lovelace
+                                      tokens' <- mapM readAssetValueEither tokens
+                                      pure (role', lovelace' <> mconcat tokens')
+        _                        -> Left "Invalid role output."
 
 
 -- | Parser for `Value`.
@@ -240,6 +257,18 @@ readTokenEither s =
                                                   (TokenName . toBuiltin . BS8.pack $ name)
                              Left message -> Left message
     _                   -> Left "Invalid token."
+
+
+
+-- | Parser for `TokenName`.
+parseTokenName :: O.ReadM TokenName
+parseTokenName = readTokenName <$> O.auto
+
+
+-- | Reader for `TokenName`.
+readTokenName :: String
+              -> TokenName
+readTokenName = TokenName . toBuiltin . BS8.pack
 
 
 -- | Parser for `BuiltinByteString`.

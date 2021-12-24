@@ -21,35 +21,39 @@ module Language.Marlowe.CLI (
 ) where
 
 
-import           Cardano.Api                           (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
-                                                        LocalNodeConnectInfo (..), NetworkId (..),
-                                                        StakeAddressReference (..))
-import           Cardano.Config.Git.Rev                (gitRev)
-import           Control.Monad                         (when)
-import           Control.Monad.Except                  (liftIO, runExceptT, throwError)
-import           Data.Maybe                            (fromMaybe)
-import           Data.Version                          (Version, showVersion)
-import           Language.Marlowe.CLI.Examples         (makeExample)
-import           Language.Marlowe.CLI.Export           (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
-                                                        exportValidator)
-import           Language.Marlowe.CLI.Parse            (parseAddressAny, parseCurrencySymbol, parseNetworkId,
-                                                        parseParty, parseSlot, parseSlotNo, parseStakeAddressReference,
-                                                        parseToken, parseTxIn, parseTxOut, parseValue)
-import           Language.Marlowe.CLI.Run              (computeMarlowe, makeChoice, makeDeposit, makeNotification)
-import           Language.Marlowe.CLI.Transaction      (buildContinuing, buildIncoming, buildOutgoing, buildSimple,
-                                                        submit)
-import           Language.Marlowe.CLI.Types            (CliError (..), Command (..))
-import           Language.Marlowe.Client               (defaultMarloweParams, marloweParams)
-import           Language.Marlowe.Semantics            (MarloweParams (slotConfig))
-import           Plutus.V1.Ledger.Api                  (POSIXTime (..), defaultCostModelParams)
-import           System.Exit                           (exitFailure)
-import           System.IO                             (hPutStrLn, stderr)
+import           Cardano.Api                                  (ConsensusModeParams (CardanoModeParams), EpochSlots (..),
+                                                               LocalNodeConnectInfo (..), NetworkId (..),
+                                                               StakeAddressReference (..))
+import           Cardano.Config.Git.Rev                       (gitRev)
+import           Control.Monad                                (when)
+import           Control.Monad.Except                         (liftIO, runExceptT, throwError)
+import           Data.Maybe                                   (fromMaybe)
+import           Data.Version                                 (Version, showVersion)
+import           Language.Marlowe.CLI.Examples                (makeExample)
+import           Language.Marlowe.CLI.Export                  (exportAddress, exportDatum, exportMarlowe,
+                                                               exportRedeemer, exportRoleAddress, exportRoleDatum,
+                                                               exportRoleRedeemer, exportRoleValidator, exportValidator)
+import           Language.Marlowe.CLI.Parse                   (parseAddressAny, parseCurrencySymbol, parseNetworkId,
+                                                               parseParty, parseSlot, parseSlotNo,
+                                                               parseStakeAddressReference, parseToken, parseTokenName,
+                                                               parseTxIn, parseTxOut, parseValue)
+import           Language.Marlowe.CLI.Run                     (computeMarlowe, makeChoice, makeDeposit,
+                                                               makeNotification)
+import           Language.Marlowe.CLI.Transaction             (buildContinuing, buildIncoming, buildOutgoing,
+                                                               buildSimple, submit)
+import           Language.Marlowe.CLI.Types                   (CliError (..), Command (..))
+import           Language.Marlowe.Client                      (defaultMarloweParams, marloweParams)
+import           Language.Marlowe.Semantics                   (MarloweParams (slotConfig))
+import           Plutus.V1.Ledger.Api                         (POSIXTime (..), defaultCostModelParams)
+import           System.Exit                                  (exitFailure)
+import           System.IO                                    (hPutStrLn, stderr)
 
-import qualified Data.Text                             as T (unpack)
-import qualified Language.Marlowe.CLI.Examples.Escrow  as Example (makeEscrowContract)
-import qualified Language.Marlowe.CLI.Examples.Swap    as Example (makeSwapContract)
-import qualified Language.Marlowe.CLI.Examples.Trivial as Example (makeTrivialContract)
-import qualified Options.Applicative                   as O
+import qualified Data.Text                                    as T (unpack)
+import qualified Language.Marlowe.CLI.Examples.Escrow         as Example (makeEscrowContract)
+import qualified Language.Marlowe.CLI.Examples.Swap           as Example (makeSwapContract)
+import qualified Language.Marlowe.CLI.Examples.Trivial        as Example (makeTrivialContract)
+import qualified Language.Marlowe.CLI.Examples.ZeroCouponBond as Example (makeZeroCouponBond)
+import qualified Options.Applicative                          as O
 
 
 -- | Main entry point for Marlowe CLI tool.
@@ -83,133 +87,155 @@ mainCLI version =
             printTxId = liftIO . putStrLn . ("TxId " <>) . show
             guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
           case command of
-            Export{..}          -> exportMarlowe
-                                     marloweParams' costModel network' stake'
-                                     contractFile stateFile
-                                     inputFiles
-                                     outputFile
-                                     printStats
-            ExportAddress{}     -> exportAddress
-                                     marloweParams' network' stake'
-            ExportValidator{..} -> exportValidator
-                                     marloweParams' costModel network' stake'
-                                     outputFile
-                                     printHash printStats
-            ExportDatum{..}     -> exportDatum
-                                     contractFile stateFile
-                                     outputFile
-                                     printStats
-            ExportRedeemer{..}  -> exportRedeemer
-                                     inputFiles
-                                     outputFile
-                                     printStats
-            BuildTransact{..}   -> guardMainnet
-                                     >> buildSimple
-                                       connection
-                                       signingKeyFiles
-                                       inputs outputs change
-                                       bodyFile
-                                       submitTimeout
-                                       printStats
-                                       invalid
-                                     >>= printTxId
-            BuildCreate{..}     -> guardMainnet
-                                     >> buildIncoming
-                                       connection
-                                       scriptAddress
-                                       signingKeyFiles
-                                       outputDatumFile
-                                       outputValue
-                                       inputs outputs change
-                                       bodyFile
-                                       submitTimeout
-                                       printStats
-                                       invalid
-                                     >>= printTxId
-            BuildAdvance{..}    -> guardMainnet
-                                     >> buildContinuing
-                                       connection
-                                       scriptAddress
-                                       validatorFile
-                                       redeemerFile
-                                       inputDatumFile
-                                       signingKeyFiles
-                                       inputTxIn
-                                       outputDatumFile
-                                       outputValue
-                                       inputs outputs collateral change
-                                       minimumSlot maximumSlot
-                                       bodyFile
-                                       submitTimeout
-                                       printStats
-                                       invalid
-                                     >>= printTxId
-            BuildClose{..}      -> guardMainnet
-                                     >> buildOutgoing
-                                       connection
-                                       validatorFile
-                                       redeemerFile
-                                       inputDatumFile
-                                       signingKeyFiles
-                                       inputTxIn
-                                       inputs outputs collateral change
-                                       minimumSlot maximumSlot
-                                       bodyFile
-                                       submitTimeout
-                                       printStats
-                                       invalid
-                                     >>= printTxId
-            Submit{..}          -> guardMainnet
-                                     >> submit
-                                       connection
-                                       bodyFile
-                                       signingKeyFiles
-                                       (fromMaybe 0 submitTimeout)
-                                     >>= printTxId
-            Compute{..}         -> computeMarlowe
-                                     contractFile stateFile
-                                     inputFiles minimumSlot maximumSlot
-                                     outputFile
-                                     printStats
-            InputDeposit{..}    -> makeDeposit
-                                     account party token amount
-                                     outputFile
-            InputChoice{..}     -> makeChoice
-                                     choiceName choiceParty chosen
-                                     outputFile
-            InputNotify{..}     -> makeNotification
-                                     outputFile
-            TemplateTrivial{..} -> makeExample outputFile
-                                     $ Example.makeTrivialContract
-                                         bystander
-                                         minAda
-                                         minSlot
-                                         party
-                                         depositLovelace
-                                         withdrawalLovelace
-                                         timeout
-            TemplateEscrow{..}  -> makeExample outputFile
-                                     $ Example.makeEscrowContract
-                                         minAda
-                                         price
-                                         seller
-                                         buyer
-                                         mediator
-                                         paymentDeadline
-                                         complaintDeadline
-                                         disputeDeadline
-                                         mediationDeadline
-            TemplateSwap{..}    -> makeExample outputFile
-                                     $ Example.makeSwapContract
-                                         minAda
-                                         aParty
-                                         aToken
-                                         aAmount
-                                         aTimeout
-                                         bParty
-                                         bToken
-                                         bAmount
-                                         bTimeout
+            Export{..}                 -> exportMarlowe
+                                            marloweParams' costModel network' stake'
+                                            contractFile stateFile
+                                            inputFiles
+                                            outputFile
+                                            printStats
+            ExportAddress{}            -> exportAddress
+                                            marloweParams' network' stake'
+            ExportValidator{..}        -> exportValidator
+                                            marloweParams' costModel network' stake'
+                                            outputFile
+                                            printHash printStats
+            ExportDatum{..}            -> exportDatum
+                                            contractFile stateFile
+                                            outputFile
+                                            printStats
+            ExportRedeemer{..}         -> exportRedeemer
+                                            inputFiles
+                                            outputFile
+                                            printStats
+            ExportRoleAddress{..}      -> exportRoleAddress
+                                            rolesCurrency' network' stake'
+            ExportRoleValidator{..}    -> exportRoleValidator
+                                            rolesCurrency' costModel network' stake'
+                                            outputFile
+                                            printHash printStats
+            ExportRoleDatum{..}        -> exportRoleDatum
+                                            roleName
+                                            outputFile
+                                            printStats
+            ExportRoleRedeemer{..}     -> exportRoleRedeemer
+                                            outputFile
+                                            printStats
+            BuildTransact{..}          -> guardMainnet
+                                            >> buildSimple
+                                              connection
+                                              signingKeyFiles
+                                              inputs outputs change
+                                              bodyFile
+                                              submitTimeout
+                                              printStats
+                                              invalid
+                                            >>= printTxId
+            BuildCreate{..}            -> guardMainnet
+                                            >> buildIncoming
+                                              connection
+                                              scriptAddress
+                                              signingKeyFiles
+                                              outputDatumFile
+                                              outputValue
+                                              inputs outputs change
+                                              bodyFile
+                                              submitTimeout
+                                              printStats
+                                              invalid
+                                            >>= printTxId
+            BuildAdvance{..}           -> guardMainnet
+                                            >> buildContinuing
+                                              connection
+                                              scriptAddress
+                                              validatorFile
+                                              redeemerFile
+                                              inputDatumFile
+                                              signingKeyFiles
+                                              inputTxIn
+                                              outputDatumFile
+                                              outputValue
+                                              inputs outputs collateral change
+                                              minimumSlot maximumSlot
+                                              bodyFile
+                                              submitTimeout
+                                              printStats
+                                              invalid
+                                            >>= printTxId
+            BuildClose{..}             -> guardMainnet
+                                            >> buildOutgoing
+                                              connection
+                                              validatorFile
+                                              redeemerFile
+                                              inputDatumFile
+                                              signingKeyFiles
+                                              inputTxIn
+                                              inputs outputs collateral change
+                                              minimumSlot maximumSlot
+                                              bodyFile
+                                              submitTimeout
+                                              printStats
+                                              invalid
+                                            >>= printTxId
+            Submit{..}                 -> guardMainnet
+                                            >> submit
+                                              connection
+                                              bodyFile
+                                              signingKeyFiles
+                                              (fromMaybe 0 submitTimeout)
+                                            >>= printTxId
+            Compute{..}                -> computeMarlowe
+                                            contractFile stateFile
+                                            inputFiles minimumSlot maximumSlot
+                                            outputFile
+                                            printStats
+            InputDeposit{..}           -> makeDeposit
+                                            account party token amount
+                                            outputFile
+            InputChoice{..}            -> makeChoice
+                                            choiceName choiceParty chosen
+                                            outputFile
+            InputNotify{..}            -> makeNotification
+                                            outputFile
+            TemplateTrivial{..}        -> makeExample outputFile
+                                            $ Example.makeTrivialContract
+                                                bystander
+                                                minAda
+                                                minSlot
+                                                party
+                                                depositLovelace
+                                                withdrawalLovelace
+                                                timeout
+            TemplateEscrow{..}         -> makeExample outputFile
+                                            $ Example.makeEscrowContract
+                                                minAda
+                                                price
+                                                seller
+                                                buyer
+                                                mediator
+                                                paymentDeadline
+                                                complaintDeadline
+                                                disputeDeadline
+                                                mediationDeadline
+            TemplateSwap{..}           -> makeExample outputFile
+                                            $ Example.makeSwapContract
+                                                minAda
+                                                aParty
+                                                aToken
+                                                aAmount
+                                                aTimeout
+                                                bParty
+                                                bToken
+                                                bAmount
+                                                bTimeout
+            TemplateZeroCouponBond{..} -> makeExample outputFile
+                                            $ Example.makeZeroCouponBond
+                                                minAda
+                                                lender
+                                                borrower
+                                                principal
+                                                interest
+                                                lendingDeadline
+                                                paybackDeadline
     case result of
       Right ()      -> return ()
       Left  message -> do
@@ -232,6 +258,10 @@ parser version =
               <> exportValidatorCommand
               <> exportDatumCommand
               <> exportRedeemerCommand
+              <> exportRoleAddressCommand
+              <> exportRoleValidatorCommand
+              <> exportRoleDatumCommand
+              <> exportRoleRedeemerCommand
               <> buildSimpleCommand
               <> buildIncomingCommand
               <> buildContinuingCommand
@@ -244,6 +274,7 @@ parser version =
               <> templateTrivialCommand
               <> templateEscrowCommand
               <> templateSwapCommand
+              <> templateZeroCouponBondCommand
             )
     )
     (
@@ -262,7 +293,7 @@ versionOption version =
     (O.long "version" <> O.help "Show version.")
 
 
--- | Parser for the "export" command.
+-- | Parser for the "export-marlowe" command.
 exportMarloweCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 exportMarloweCommand =
   O.command "export-marlowe"
@@ -270,7 +301,7 @@ exportMarloweCommand =
     $ O.progDesc "Export a Marlowe contract to a JSON file."
 
 
--- | Parser for the "export" options.
+-- | Parser for the "export-marlowe" options.
 exportMarloweOptions :: O.Parser Command -- ^ The parser.
 exportMarloweOptions =
   Export
@@ -286,7 +317,7 @@ exportMarloweOptions =
     <*> O.switch                                           (O.long "print-stats"                                                            <> O.help "Print statistics."                                      )
 
 
--- | Parser for the "address" command.
+-- | Parser for the "export-address" command.
 exportAddressCommand :: O.Mod O.CommandFields Command
 exportAddressCommand =
   O.command "export-address"
@@ -294,7 +325,7 @@ exportAddressCommand =
     $ O.progDesc "Print a validator address."
 
 
--- | Parser for the "address" options.
+-- | Parser for the "export-address" options.
 exportAddressOptions :: O.Parser Command
 exportAddressOptions =
   ExportAddress
@@ -305,7 +336,7 @@ exportAddressOptions =
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
 
 
--- | Parser for the "validator" command.
+-- | Parser for the "export-validator" command.
 exportValidatorCommand :: O.Mod O.CommandFields Command
 exportValidatorCommand =
   O.command "export-validator"
@@ -313,7 +344,7 @@ exportValidatorCommand =
     $ O.progDesc "Export a validator to a JSON file."
 
 
--- | Parser for the "validator" options.
+-- | Parser for the "export-validator" options.
 exportValidatorOptions :: O.Parser Command
 exportValidatorOptions =
   ExportValidator
@@ -327,7 +358,7 @@ exportValidatorOptions =
     <*> O.switch                                           (O.long "print-stats"                                                            <> O.help "Print statistics."                                      )
 
 
--- | Parser for the "datum" command.
+-- | Parser for the "export-datum" command.
 exportDatumCommand :: O.Mod O.CommandFields Command
 exportDatumCommand =
   O.command "export-datum"
@@ -335,7 +366,7 @@ exportDatumCommand =
     $ O.progDesc "Export a datum to a JSON file."
 
 
--- | Parser for the "datum" options.
+-- | Parser for the "export-datum" options.
 exportDatumOptions :: O.Parser Command
 exportDatumOptions =
   ExportDatum
@@ -345,7 +376,7 @@ exportDatumOptions =
     <*> O.switch                   (O.long "print-stats"                                <> O.help "Print statistics."                      )
 
 
--- | Parser for the "redeemer" command.
+-- | Parser for the "export-redeemer" command.
 exportRedeemerCommand :: O.Mod O.CommandFields Command
 exportRedeemerCommand =
   O.command "export-redeemer"
@@ -353,7 +384,7 @@ exportRedeemerCommand =
     $ O.progDesc "Export a redeemer to a JSON file."
 
 
--- | Parser for the "redeemer" options.
+-- | Parser for the "export-redeemer" options.
 exportRedeemerOptions :: O.Parser Command
 exportRedeemerOptions =
   ExportRedeemer
@@ -362,7 +393,77 @@ exportRedeemerOptions =
     <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                   )
 
 
--- | Parser for the "transact" command.
+-- | Parser for the "role-address" command.
+exportRoleAddressCommand :: O.Mod O.CommandFields Command
+exportRoleAddressCommand =
+  O.command "role-address"
+    . O.info (exportRoleAddressOptions O.<**> O.helper)
+    $ O.progDesc "Print a role validator address."
+
+
+-- | Parser for the "role-address" options.
+exportRoleAddressOptions :: O.Parser Command
+exportRoleAddressOptions =
+  ExportRoleAddress
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."             )
+    <*> O.option parseCurrencySymbol                       (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."     )
+
+
+-- | Parser for the "role-validator" command.
+exportRoleValidatorCommand :: O.Mod O.CommandFields Command
+exportRoleValidatorCommand =
+  O.command "role-validator"
+    . O.info (exportRoleValidatorOptions O.<**> O.helper)
+    $ O.progDesc "Export a role validator to a JSON file."
+
+
+-- | Parser for the "role-validator" options.
+exportRoleValidatorOptions :: O.Parser Command
+exportRoleValidatorOptions =
+  ExportRoleValidator
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."             )
+    <*> O.option parseCurrencySymbol                       (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles."     )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."    )
+    <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."              )
+    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                  )
+
+
+-- | Parser for the "role-datum" command.
+exportRoleDatumCommand :: O.Mod O.CommandFields Command
+exportRoleDatumCommand =
+  O.command "role-datum"
+    . O.info (exportRoleDatumOptions O.<**> O.helper)
+    $ O.progDesc "Export a role datum to a JSON file."
+
+
+-- | Parser for the "role-datum" options.
+exportRoleDatumOptions :: O.Parser Command
+exportRoleDatumOptions =
+  ExportRoleDatum
+    <$> O.option parseTokenName    (O.long "role-name"   <> O.metavar "TOKEN_NAME" <> O.help "JSON input file for the contract state.")
+    <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "DATUM_FILE" <> O.help "JSON output file for datum."            )
+    <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."                      )
+
+
+-- | Parser for the "role-redeemer" command.
+exportRoleRedeemerCommand :: O.Mod O.CommandFields Command
+exportRoleRedeemerCommand =
+  O.command "role-redeemer"
+    . O.info (exportRoleRedeemerOptions O.<**> O.helper)
+    $ O.progDesc "Export a role redeemer to a JSON file."
+
+
+-- | Parser for the "role-redeemer" options.
+exportRoleRedeemerOptions :: O.Parser Command
+exportRoleRedeemerOptions =
+  ExportRoleRedeemer
+    <$> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
+    <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                   )
+
+
+-- | Parser for the "transaction-simple" command.
 buildSimpleCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildSimpleCommand =
   O.command "transaction-simple"
@@ -370,7 +471,7 @@ buildSimpleCommand =
     $ O.progDesc "Build a non-Marlowe transaction."
 
 
--- | Parser for the "transact" options.
+-- | Parser for the "transaction-simple" options.
 buildSimpleOptions :: O.Parser Command -- ^ The parser.
 buildSimpleOptions =
   BuildTransact
@@ -386,7 +487,7 @@ buildSimpleOptions =
     <*> O.switch                               (O.long "script-invalid"                               <> O.help "Assert that the transaction is invalid."                )
 
 
--- | Parser for the "create" command.
+-- | Parser for the "transaction-create" command.
 buildIncomingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildIncomingCommand =
   O.command "transaction-create"
@@ -394,7 +495,7 @@ buildIncomingCommand =
     $ O.progDesc "Build a transaction that pays to a Marlowe script."
 
 
--- | Parser for the "create" options.
+-- | Parser for the "transaction-create" options.
 buildIncomingOptions :: O.Parser Command -- ^ The parser.
 buildIncomingOptions =
   BuildCreate
@@ -413,7 +514,7 @@ buildIncomingOptions =
     <*> O.switch                               (O.long "script-invalid"                                 <> O.help "Assert that the transaction is invalid."                )
 
 
--- | Parser for the "advance" command.
+-- | Parser for the "transaction-advance" command.
 buildContinuingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildContinuingCommand =
   O.command "transaction-advance"
@@ -421,7 +522,7 @@ buildContinuingCommand =
     $ O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
 
 
--- | Parser for the "advance" options.
+-- | Parser for the "transaction-advance" options.
 buildContinuingOptions :: O.Parser Command -- ^ The parser.
 buildContinuingOptions =
   BuildAdvance
@@ -447,7 +548,7 @@ buildContinuingOptions =
     <*> O.switch                               (O.long "script-invalid"                                   <> O.help "Assert that the transaction is invalid."                )
 
 
--- | Parser for the "close" command.
+-- | Parser for the "transaction-close" command.
 buildOutgoingCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 buildOutgoingCommand =
   O.command "transaction-close"
@@ -455,7 +556,7 @@ buildOutgoingCommand =
     $ O.progDesc "Build a transaction that spends from a Marlowe script."
 
 
--- | Parser for the "close" options.
+-- | Parser for the "transaction-close" options.
 buildOutgoingOptions :: O.Parser Command -- ^ The parser.
 buildOutgoingOptions =
   BuildClose
@@ -478,7 +579,7 @@ buildOutgoingOptions =
     <*> O.switch                               (O.long "script-invalid"                                   <> O.help "Assert that the transaction is invalid."                )
 
 
--- | Parser for the "submit" command.
+-- | Parser for the "transaction-submit" command.
 submitCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 submitCommand =
   O.command "transaction-submit"
@@ -486,7 +587,7 @@ submitCommand =
     $ O.progDesc "Submit a transaction body."
 
 
--- | Parser for the "submit" options.
+-- | Parser for the "transaction-submit" options.
 submitOptions :: O.Parser Command
 submitOptions =
   Submit
@@ -518,7 +619,7 @@ computeOptions =
     <*> O.switch                   (O.long "print-stats"                                    <> O.help "Print statistics."                      )
 
 
--- | Parser for the "deposit" command.
+-- | Parser for the "input-deposit" command.
 inputDepositCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 inputDepositCommand =
   O.command "input-deposit"
@@ -526,7 +627,7 @@ inputDepositCommand =
     $ O.progDesc "Create Marlowe input for a deposit."
 
 
--- | Parser for the "deposit" options.
+-- | Parser for the "input-deposit" options.
 inputDepositOptions :: O.Parser Command -- ^ The parser.
 inputDepositOptions =
   InputDeposit
@@ -537,7 +638,7 @@ inputDepositOptions =
     <*> (O.optional . O.strOption)         (O.long "out-file"        <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."  )
 
 
--- | Parser for the "choose" command.
+-- | Parser for the "input-choose" command.
 inputChoiceCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 inputChoiceCommand =
   O.command "input-choose"
@@ -545,7 +646,7 @@ inputChoiceCommand =
     $ O.progDesc "Create Marlowe input for a choice."
 
 
--- | Parser for the "choose" options.
+-- | Parser for the "input-choose" options.
 inputChoiceOptions :: O.Parser Command -- ^ The parser.
 inputChoiceOptions =
   InputChoice
@@ -555,7 +656,7 @@ inputChoiceOptions =
     <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input.")
 
 
--- | Parser for the "notify" command.
+-- | Parser for the "input-notify" command.
 inputNotifyCommand :: O.Mod O.CommandFields Command -- ^ The parser.
 inputNotifyCommand =
   O.command "input-notify"
@@ -563,7 +664,7 @@ inputNotifyCommand =
     $ O.progDesc "Create Marlowe input for a notification."
 
 
--- | Parser for the "notify" options.
+-- | Parser for the "input-notify" options.
 inputNotifyOptions :: O.Parser Command -- ^ The parser.
 inputNotifyOptions =
   InputNotify
@@ -638,3 +739,25 @@ templateSwapOptions =
     <*> O.option O.auto            (O.long "b-amount"    <> O.metavar "INTEGER"     <> O.help "The amount of the second party's token."                        )
     <*> O.option parseSlot         (O.long "b-timeout"   <> O.metavar "SLOT"        <> O.help "The timeout for the second party's deposit."                    )
     <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."                           )
+
+
+-- | Parser for the "contract-zcb" command.
+templateZeroCouponBondCommand :: O.Mod O.CommandFields Command -- ^ The parser.
+templateZeroCouponBondCommand =
+  O.command "contract-zcb"
+    $ O.info (templateZeroCouponBondOptions O.<**> O.helper)
+    $ O.progDesc "Template for a zero-coupon bond."
+
+
+-- | Parser for the "contract-zcb" options.
+templateZeroCouponBondOptions :: O.Parser Command
+templateZeroCouponBondOptions =
+  TemplateZeroCouponBond
+    <$> O.option O.auto            (O.long "minimum-ada"        <> O.metavar "INTEGER"     <> O.help "Lovelace that the lender contributes to the initial state.")
+    <*> O.option parseParty        (O.long "lender"             <> O.metavar "PARTY"       <> O.help "The lender."                                               )
+    <*> O.option parseParty        (O.long "borrower"           <> O.metavar "PARTY"       <> O.help "The borrower."                                             )
+    <*> O.option O.auto            (O.long "principal"          <> O.metavar "INTEGER"     <> O.help "The principal, in lovelace."                               )
+    <*> O.option O.auto            (O.long "interest"           <> O.metavar "INTEGER"     <> O.help "The interest, in lovelace."                                )
+    <*> O.option parseSlot         (O.long "lending-deadline"   <> O.metavar "SLOT"        <> O.help "The lending deadline."                                     )
+    <*> O.option parseSlot         (O.long "repayment-deadline" <> O.metavar "SLOT"        <> O.help "The repayment deadline."                                   )
+    <*> (O.optional . O.strOption) (O.long "out-file"           <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for contract input."                      )
