@@ -25,7 +25,7 @@ let
   '';
 in
 {
-  web-ghc-server-entrypoint = pkgs.callPackage ./web-ghc-server.nix {
+  web-ghc-server-entrypoint = pkgs.callPackage (sources.plutus-apps + "/bitte/web-ghc-server.nix") {
     web-ghc-server = web-ghc;
   };
 
