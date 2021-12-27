@@ -205,7 +205,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             wallet = toFront $ view _cicWallet clientState
           walletContracts <- withExceptT Just $ ExceptT $ Contract.getWalletContractInstances wallet
           walletInfo <- withExceptT Just $ ExceptT $ Wallet.getWalletInfo wallet
-          assets <- withExceptT Just $ ExceptT $ Wallet.getWalletTotalFunds wallet
           case find (\state -> view _cicDefinition state == MarloweApp) walletContracts of
             Just marloweApp ->
               pure
@@ -213,7 +212,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
                 , companionAppId
                 , marloweAppId: toFront $ view _cicContract marloweApp
                 , walletInfo
-                , assets
+                , assets: mempty
                 , previousCompanionAppState: Nothing
                 }
             Nothing -> except $ Left Nothing

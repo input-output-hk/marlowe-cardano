@@ -11,9 +11,9 @@ import Prologue
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmInput.Types as ConfirmInput
-import Component.Template.Types (Action, State) as Template
 import Component.Contacts.Types (Action, State) as Contacts
 import Component.Contacts.Types (WalletDetails, WalletNickname)
+import Component.Template.Types (Action, State) as Template
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)

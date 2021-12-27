@@ -1,18 +1,20 @@
 module Page.Dashboard.State
   ( dummyState
-  , mkInitialState
   , handleAction
+  , mkInitialState
   ) where
 
 import Prologue
+import Bridge (toFront)
 import Capability.Contract (class ManageContract)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, createContract, createPendingFollowerApp, followContract, followContractWithPendingFollowerApp, redeem, subscribeToPlutusApp)
 import Capability.MarloweStorage (class ManageMarloweStorage, insertIntoContractNicknames)
 import Capability.Toast (class Toast, addToast)
+import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses (_assets, _cardSection, _pubKeyHash, _walletInfo, _walletLibrary, _walletNickname)
+import Component.Contacts.Lenses (_assets, _cardSection, _pubKeyHash, _walletId, _walletInfo, _walletLibrary, _walletNickname)
 import Component.Contacts.State (defaultWalletDetails, getAda)
 import Component.Contacts.State (handleAction, mkInitialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
@@ -52,12 +54,13 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
+import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds(..))
 import Marlowe.Semantics (MarloweData, MarloweParams, Party(..), Payee(..), Payment(..), Slot(..), _marloweContract)
 import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
 import Page.Contract.State (applyTimeout)
 import Page.Contract.State (dummyState, handleAction, mkInitialState, mkPlaceholderState, updateState) as Contract
 import Page.Contract.Types (Action(..), State(..), StartingState) as Contract
-import Page.Dashboard.Lenses (_card, _cardOpen, _contractFilter, _contract, _contracts, _menuOpen, _selectedContract, _selectedContractFollowerAppId, _templateState, _walletCompanionStatus, _contactsState, _walletDetails)
+import Page.Dashboard.Lenses (_card, _cardOpen, _contactsState, _contract, _contractFilter, _contracts, _menuOpen, _selectedContract, _selectedContractFollowerAppId, _templateState, _walletCompanionStatus, _walletDetails)
 import Page.Dashboard.Types (Action(..), Card(..), ContractFilter(..), Input, State, WalletCompanionStatus(..))
 import Toast.Types (ajaxErrorToast, decodedAjaxErrorToast, errorToast, successToast)
 
@@ -119,7 +122,11 @@ handleAction _ (ClipboardAction action) = do
   addToast $ successToast "Copied to clipboard"
 
 handleAction _ (OpenCard card) = do
-  -- first we set the card and reset the contact and template card states to their first section
+  -- Most cards requires to show the assets of the current wallet, so we update the funds
+  -- before opening a card.
+  -- See note [polling updateTotalFunds]
+  updateTotalFunds
+  -- Then we set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
     $ set _card (Just card)
@@ -212,38 +219,42 @@ about its initial state through the WebSocket. We potentially use that to change
 `Contract.State` from `Starting` to `Started`.
 -}
 {- [Workflow 5][2] Move a contract forward -}
-handleAction input@{ currentSlot } (UpdateContract followerAppId contractHistory) =
+handleAction input@{ currentSlot } (UpdateContract followerAppId contractHistory) = do
   let
     chParams = view _chParams contractHistory
-  in
-    -- if the chParams have not yet been set, we can't do anything; that's fine though, we'll get
-    -- another notification through the websocket as soon as they are set
-    for_ chParams \(marloweParams /\ marloweData) -> do
-      walletDetails <- use _walletDetails
-      contracts <- use _contracts
-      case lookup followerAppId contracts of
-        Just contractState -> do
-          let
-            chHistory = view _chHistory contractHistory
-          selectedStep <- peruse $ _selectedContract <<< _Started <<< _selectedStep
-          modifying _contracts $ insert followerAppId $ Contract.updateState walletDetails marloweParams marloweData currentSlot chHistory contractState
-          -- if the modification changed the currently selected step, that means the card for the contract
-          -- that was changed is currently open, so we need to realign the step cards
-          selectedStep' <- peruse $ _selectedContract <<< _Started <<< _selectedStep
-          when (selectedStep /= selectedStep')
-            $ for_ selectedStep' (handleAction input <<< ContractAction followerAppId <<< Contract.MoveToStep)
-        Nothing -> for_ (Contract.mkInitialState walletDetails currentSlot mempty contractHistory) (modifying _contracts <<< insert followerAppId)
-      -- if we're currently loading the first bunch of contracts, we can report that this one has now been loaded
-      walletCompanionStatus <- use _walletCompanionStatus
-      case walletCompanionStatus of
-        LoadingNewContracts pendingMarloweParams -> do
-          let
-            updatedPendingMarloweParams = Set.delete marloweParams pendingMarloweParams
-          if Set.isEmpty updatedPendingMarloweParams then
-            assign _walletCompanionStatus FirstUpdateComplete
-          else
-            assign _walletCompanionStatus $ LoadingNewContracts updatedPendingMarloweParams
-        _ -> pure unit
+  -- Before we update the contract state we need to update the total funds to see if there has
+  -- been a change in the role tokens.
+  -- There is a chance that the data is not fully synced
+  -- See note [polling updateTotalFunds]
+  updateTotalFunds
+  -- if the chParams have not yet been set, we can't do anything; that's fine though, we'll get
+  -- another notification through the websocket as soon as they are set
+  for_ chParams \(marloweParams /\ marloweData) -> do
+    walletDetails <- use _walletDetails
+    contracts <- use _contracts
+    case lookup followerAppId contracts of
+      Just contractState -> do
+        let
+          chHistory = view _chHistory contractHistory
+        selectedStep <- peruse $ _selectedContract <<< _Started <<< _selectedStep
+        modifying _contracts $ insert followerAppId $ Contract.updateState walletDetails marloweParams marloweData currentSlot chHistory contractState
+        -- if the modification changed the currently selected step, that means the card for the contract
+        -- that was changed is currently open, so we need to realign the step cards
+        selectedStep' <- peruse $ _selectedContract <<< _Started <<< _selectedStep
+        when (selectedStep /= selectedStep')
+          $ for_ selectedStep' (handleAction input <<< ContractAction followerAppId <<< Contract.MoveToStep)
+      Nothing -> for_ (Contract.mkInitialState walletDetails currentSlot mempty contractHistory) (modifying _contracts <<< insert followerAppId)
+    -- if we're currently loading the first bunch of contracts, we can report that this one has now been loaded
+    walletCompanionStatus <- use _walletCompanionStatus
+    case walletCompanionStatus of
+      LoadingNewContracts pendingMarloweParams -> do
+        let
+          updatedPendingMarloweParams = Set.delete marloweParams pendingMarloweParams
+        if Set.isEmpty updatedPendingMarloweParams then
+          assign _walletCompanionStatus FirstUpdateComplete
+        else
+          assign _walletCompanionStatus $ LoadingNewContracts updatedPendingMarloweParams
+      _ -> pure unit
 
 {- [Workflow 6][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -384,6 +395,29 @@ handleAction input@{ currentSlot, tzOffset } (ContractAction followerAppId contr
     _ -> toContract followerAppId $ Contract.handleAction contractInput contractAction
 
 ------------------------------------------------------------
+-- Note [polling updateTotalFunds]
+-- We used to have a WebSocket notification whenever the wallet assets changed but that was
+-- removed from the Mock Wallet (see link below) and the WalletBackEnd doesn't provide such
+-- a mechanism anyways.
+-- https://github.com/input-output-hk/plutus-apps/pull/50
+-- Besides that, the WBE has the notion of a wallet being synced, so it makes sense to eventually
+-- switch from WebSocket push to a rest Pull. The reason I didn't do this change in the PR I
+-- introduced this code is that the wallet information is scattered between the Dashboard, Contract
+-- and Contact page.
+-- TODO: SCP-3211 After Halogen Store is merged and once we refactor wallet state into a global store
+--       Refactor this code and do a global polling mechanism.
+updateTotalFunds ::
+  forall m slots msg.
+  MonadAff m =>
+  ManageWallet m =>
+  HalogenM State Action slots msg m Unit
+updateTotalFunds = do
+  walletId <- use (_walletDetails <<< _walletInfo <<< _walletId)
+  response <- getWalletTotalFunds walletId
+  for_ response \(GetTotalFunds { assets }) ->
+    modify_
+      $ set (_walletDetails <<< _assets) (toFront assets)
+
 toContacts ::
   forall m msg slots.
   Functor m =>
