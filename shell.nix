@@ -45,6 +45,18 @@ let
     exec -a entrypoint ${bitte-packages.chain-index}/bin/entrypoint
   '';
 
+  launch-wbe = writeShellScriptBin "launch-wbe" ''
+    set -eEuo pipefail
+
+    ${set-xdg}
+
+    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
+
+    export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
+
+    exec -a entrypoint ${bitte-packages.wbe}/bin/entrypoint
+  '';
+
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
     sphinxcontrib-haddock.sphinxcontrib-domaintools
@@ -137,6 +149,7 @@ let
 
     launch-node
     launch-chain-index
+    launch-wbe
   ]);
 
 in
