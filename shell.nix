@@ -30,6 +30,21 @@ let
     exec -a entrypoint ${bitte-packages.node}/bin/entrypoint
   '';
 
+  launch-chain-index = writeShellScriptBin "launch-chain-index" ''
+    set -eEuo pipefail
+
+    ${set-xdg}
+
+    export INDEX_STATE_DIR="''${INDEX_STATE_DIR:-''${XDG_DATA_HOME}/index}"
+    mkdir -p "$INDEX_STATE_DIR"
+
+    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
+
+    export NOMAD_PORT_index="''${NOMAD_PORT_index:-9083}"
+
+    exec -a entrypoint ${bitte-packages.chain-index}/bin/entrypoint
+  '';
+
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
     sphinxcontrib-haddock.sphinxcontrib-domaintools
@@ -119,7 +134,9 @@ let
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
+
     launch-node
+    launch-chain-index
   ]);
 
 in
