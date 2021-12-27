@@ -3,10 +3,32 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground;
-  inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
+  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground bitte-packages;
+  inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
   inherit (marlowe) purty-pre-commit;
+
+  set-xdg = ''
+    export XDG_DATA_HOME="''${XDG_DATA_HOME:-''${HOME}/.local/share}"
+    mkdir -p "''${XDG_DATA_HOME}"
+    export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-''${HOME}/.local/run}"
+    mkdir -p "''${XDG_RUNTIME_DIR}"
+  '';
+
+  launch-node = writeShellScriptBin "launch-node" ''
+    set -eEuo pipefail
+
+    ${set-xdg}
+
+    export NODE_STATE_DIR="''${NODE_STATE_DIR:-''${XDG_DATA_HOME}/node}"
+    mkdir -p "$NODE_STATE_DIR"
+
+    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
+
+    export NOMAD_PORT_node="''${NOMAD_PORT_node:-3001}"
+
+    exec -a entrypoint ${bitte-packages.node}/bin/entrypoint
+  '';
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
@@ -97,6 +119,7 @@ let
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
+    launch-node
   ]);
 
 in
