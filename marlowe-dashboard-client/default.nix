@@ -22,11 +22,18 @@ let
     $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server psgenerator $generatedDir
   '';
 
-  start-backend = pkgs.writeShellScriptBin "marlowe-pab-server" ''
+  start-backend = pkgs.writeShellScriptBin "marlowe-run-server" ''
     echo "marlowe-pab-server: for development use only"
+    export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
+    cat > marlowe-run.json <<EOF
+    {
+      "getWbeConfig": { "_wbeHost": "localhost", "_wbePort": $NOMAD_PORT_wbe },
+      "getStaticPath": "/var/empty"
+    }
+    EOF
     (trap 'kill 0' SIGINT;
       $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml webserver &
-      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./config.json
+      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./marlowe-run.json
     )
   '';
 

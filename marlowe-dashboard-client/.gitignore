@@ -13,3 +13,4 @@ yarn.lock
 # contracts is a symlink provided via the nix build
 # and should be ignored
 contracts
+marlowe-run.json
