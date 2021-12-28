@@ -9,9 +9,10 @@ module API.Contract
   ) where
 
 import Prologue
-import API.Request (doGetRequest, doPostRequest, doPutRequest)
+import API.Request (doGetRequest, doPostRequest, doPostRequestWith, doPutRequest)
 import API.Url (toUrlPiece)
 import Control.Monad.Error.Class (class MonadError)
+import Data.Argonaut (encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Effect.Aff.Class (class MonadAff)
 import MarloweContract (MarloweContract)
@@ -47,7 +48,13 @@ invokeEndpoint ::
   MonadError AjaxError m =>
   MonadAff m =>
   ContractInstanceId -> String -> d -> m Unit
-invokeEndpoint contractInstanceId endpoint payload = doPostRequest ("/pab/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/endpoint/" <> endpoint) payload
+invokeEndpoint contractInstanceId endpoint payload =
+  doPostRequestWith
+    -- The server encodes Unit as `[]`, because we don't care for the response we always return
+    -- Unit, but we could enhance this to decode an empty array.
+    { encode: encodeJson, decode: const (Right unit) }
+    ("/pab/api/contract/instance/" <> toUrlPiece contractInstanceId <> "/endpoint/" <> endpoint)
+    payload
 
 getWalletContractInstances ::
   forall m.
