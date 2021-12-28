@@ -10,12 +10,9 @@ module Component.Contacts.State
   ) where
 
 import Prologue
+
 import Capability.MainFrameLoop (callMainFrameAction)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , lookupWalletDetails
-  , lookupWalletInfo
-  )
+import Capability.Marlowe (class ManageMarlowe, lookupWalletInfo)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , insertIntoWalletLibrary
@@ -28,15 +25,14 @@ import Component.Contacts.Lenses
   , _remoteWalletInfo
   , _walletIdInput
   , _walletLibrary
-  , _walletNickname
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
   , CardSection(..)
   , State
-  , WalletId(..)
   , WalletDetails
+  , WalletId(..)
   , WalletIdError(..)
   , WalletInfo(..)
   , WalletLibrary
@@ -52,7 +48,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.CodePoint.Unicode (isAlphaNum)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use)
-import Data.Map (isEmpty, filter, insert, lookup, member)
+import Data.Map (filter, insert, isEmpty, lookup, member)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
 import Data.String (codePointFromChar)
@@ -66,10 +62,10 @@ import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
-import Marlowe.Semantics (Assets, Token(..), CurrencySymbol, TokenName)
+import Marlowe.Semantics (Assets, CurrencySymbol, Token(..), TokenName)
 import Network.RemoteData (RemoteData(..), fromEither)
 import Page.Dashboard.Types (Action(..)) as Dashboard
-import Toast.Types (errorToast, successToast)
+import Toast.Types (successToast)
 import Types (NotFoundWebData)
 
 mkInitialState :: WalletLibrary -> State
@@ -183,20 +179,6 @@ handleAction (WalletIdInputAction inputFieldAction) = do
         ajaxWalletInfo <- lookupWalletInfo walletId
         setRemoteWalletInfo $ fromEither ajaxWalletInfo
     _ -> toWalletIdInput $ InputField.handleAction inputFieldAction
-
-handleAction (ConnectWallet walletNickname companionAppId) = do
-  ajaxWalletDetails <- lookupWalletDetails companionAppId
-  case ajaxWalletDetails of
-    Right walletDetails -> do
-      let
-        walletDetailsWithNickname = set _walletNickname walletNickname
-          walletDetails
-      walletLibrary <- use _walletLibrary
-      callMainFrameAction $ MainFrame.EnterDashboardState walletLibrary
-        walletDetailsWithNickname
-    _ -> do
-      addToast $ errorToast "Unable to use this wallet." $ Just
-        "Details for this wallet could not be loaded."
 
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction

@@ -132,7 +132,6 @@ data Action
   | CancelNewContactForRole
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
   | WalletIdInputAction (InputField.Action WalletIdError)
-  | ConnectWallet WalletNickname PlutusAppId
   | ClipboardAction Clipboard.Action
 
 instance actionIsEvent :: IsEvent Action where
@@ -143,5 +142,4 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (WalletNicknameInputAction inputFieldAction) = toEvent
     inputFieldAction
   toEvent (WalletIdInputAction inputFieldAction) = toEvent inputFieldAction
-  toEvent (ConnectWallet _ _) = Just $ defaultEvent "ConnectWallet"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

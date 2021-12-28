@@ -37,7 +37,7 @@ import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (toString) as UUID
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, text, ul)
+import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, span_, text, ul)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (disabled)
 
@@ -204,11 +204,7 @@ walletDetailsCard currentWallet walletDetails =
               ]
               [ text "Using this wallet" ]
           else
-            button
-              [ classNames $ Css.primaryButton <> [ "flex-1", "text-center" ]
-              , onClick_ $ ConnectWallet walletNickname companionAppId
-              ]
-              [ text "Connect wallet" ]
+            span_ []
         ]
     ]
 
