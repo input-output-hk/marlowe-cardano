@@ -5,6 +5,7 @@ module Page.Welcome.State
   ) where
 
 import Prologue
+
 import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe
@@ -15,14 +16,19 @@ import Capability.Marlowe
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , clearAllLocalStorage
-  , insertIntoWalletLibrary
+  , insertIntoAddressBook
   )
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses (_companionAppId, _walletNickname)
+import Component.Contacts.Lenses
+  ( _companionAppId
+  , _pubKeyHash
+  , _walletInfo
+  , _walletNickname
+  )
 import Component.Contacts.State (walletNicknameError)
-import Component.Contacts.Types (WalletLibrary, WalletNicknameError)
+import Component.Contacts.Types (AddressBook, WalletNicknameError)
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
@@ -33,6 +39,7 @@ import Data.Lens (assign, modifying, set, use, view, (^.))
 import Data.Map (insert)
 import Data.Map as Map
 import Data.String (Pattern(..), split)
+import Data.Time.Duration (Milliseconds(..))
 import Data.UUID.Argonaut (emptyUUID) as UUID
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
@@ -44,12 +51,12 @@ import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
 import Network.RemoteData (RemoteData(..), fromEither)
 import Page.Welcome.Lenses
-  ( _card
+  ( _addressBook
+  , _card
   , _cardOpen
   , _enteringDashboardState
   , _remoteWalletDetails
   , _walletId
-  , _walletLibrary
   , _walletMnemonicInput
   , _walletNicknameInput
   )
@@ -58,15 +65,14 @@ import Toast.Types (errorToast, successToast)
 import Web.HTML (window)
 import Web.HTML.Location (reload)
 import Web.HTML.Window (location)
-import Data.Time.Duration (Milliseconds(..))
 
 -- see note [dummyState] in MainFrame.State
 dummyState :: State
 dummyState = mkInitialState Map.empty
 
-mkInitialState :: WalletLibrary -> State
-mkInitialState walletLibrary =
-  { walletLibrary
+mkInitialState :: AddressBook -> State
+mkInitialState addressBook =
+  { addressBook
   , card: Nothing
   , cardOpen: false
   , walletNicknameInput: InputField.mkInitialState Nothing
@@ -106,10 +112,10 @@ handleAction (OpenCard card) = do
   -- Reset calls spread over this file.
   case card of
     RestoreTestnetWalletCard -> do
-      walletLibrary <- use _walletLibrary
+      addressBook <- use _addressBook
       handleAction $ WalletNicknameInputAction $ InputField.Reset
       handleAction $ WalletNicknameInputAction $ InputField.SetValidator $
-        walletNicknameError walletLibrary
+        walletNicknameError addressBook
       handleAction $ WalletMnemonicInputAction $ InputField.Reset
       handleAction $ WalletMnemonicInputAction $ InputField.SetValidator $
         walletMnemonicError Nothing
@@ -140,7 +146,7 @@ that wallet: a `WalletCompanion` and a `MarloweApp`.
 -- TODO: This functionality is disabled, I'll re-enable it as part of SCP-3170.
 handleAction GenerateWallet = pure unit
 
--- walletLibrary <- use _walletLibrary
+-- addressBook <- use _addressBook
 -- assign _remoteWalletDetails Loading
 -- ajaxWalletDetails <- createWallet
 -- assign _remoteWalletDetails $ fromEither $ lmap Just $ ajaxWalletDetails
@@ -148,7 +154,7 @@ handleAction GenerateWallet = pure unit
 --   Left ajaxError -> addToast $ ajaxErrorToast "Failed to generate wallet." ajaxError
 --   Right walletDetails -> do
 --     handleAction $ WalletNicknameInputAction $ InputField.Reset
---     handleAction $ WalletNicknameInputAction $ InputField.SetValidator $ walletNicknameError walletLibrary
+--     handleAction $ WalletNicknameInputAction $ InputField.SetValidator $ walletNicknameError addressBook
 --     assign _walletId $ walletDetails ^. _companionAppId
 --     handleAction $ OpenCard UseNewWalletCard
 {- [UC-WALLET-TESTNET-2][0] Restore a testnet wallet
@@ -219,10 +225,12 @@ handleAction (ConnectWallet walletNickname) = do
       let
         walletDetailsWithNickname = set _walletNickname walletNickname
           walletDetails
-      modifying _walletLibrary (insert walletNickname walletDetailsWithNickname)
-      insertIntoWalletLibrary walletDetailsWithNickname
-      walletLibrary <- use _walletLibrary
-      callMainFrameAction $ MainFrame.EnterDashboardState walletLibrary
+
+        address = view (_walletInfo <<< _pubKeyHash) walletDetailsWithNickname
+      modifying _addressBook $ insert walletNickname address
+      insertIntoAddressBook walletNickname address
+      addressBook <- use _addressBook
+      callMainFrameAction $ MainFrame.EnterDashboardState addressBook
         walletDetailsWithNickname
     _ -> do
       -- this should never happen (the button to use a wallet should be disabled unless

@@ -1,6 +1,6 @@
 module Component.Contacts.Types
   ( State
-  , WalletLibrary
+  , AddressBook
   , WalletNickname
   , WalletDetails
   , WalletInfo(..)
@@ -12,11 +12,12 @@ module Component.Contacts.Types
   ) where
 
 import Prologue
+
 import API.Url (class ToUrlPiece)
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
-import Component.InputField.Types (Action, State) as InputField
 import Component.InputField.Types (class InputFieldError)
+import Component.InputField.Types (Action, State) as InputField
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Generic.Rep (class Generic)
@@ -26,21 +27,26 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
 import Types (NotFoundWebData)
 
-type State
-  =
-  { walletLibrary :: WalletLibrary
+type State =
+  { addressBook :: AddressBook
   , cardSection :: CardSection
   , walletNicknameInput :: InputField.State WalletNicknameError
   , walletIdInput :: InputField.State WalletIdError
   , remoteWalletInfo :: NotFoundWebData WalletInfo
   }
 
-type WalletLibrary
-  = Map WalletNickname WalletDetails
+-- TODO: The changes to this code take us closer to
+--       "SCP-3145 Use addresses instead of WalletId in the UI", but we still need to show
+--       an actual BECH32 address instead of a PubKeyHash (which is only a subpart of the address)
+type AddressBook
+  = Map WalletNickname PubKeyHash
 
 type WalletNickname
   = String
 
+-- TODO: Move this data type away from the Contacts module and possibly rename.
+--       A good location might just be a global Wallet module, and the name
+--       could be plain `Wallet` or maybe `Wallet.State` (using qualified imports)
 type WalletDetails
   =
   { walletNickname :: WalletNickname
@@ -89,7 +95,8 @@ derive newtype instance toUrlPieceWalletId :: ToUrlPiece WalletId
 
 data CardSection
   = Home
-  | ViewWallet WalletDetails
+  -- TODO: as part of SCP-3145 change PubKeyHash to BECH32 address
+  | ViewWallet WalletNickname PubKeyHash
   | NewWallet (Maybe String)
 
 derive instance eqCardSection :: Eq CardSection

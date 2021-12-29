@@ -10,10 +10,11 @@ module Component.Template.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.Contacts.Types (WalletLibrary)
-import Component.InputField.Types (Action, State) as InputField
+import Component.Contacts.Types (AddressBook)
 import Component.InputField.Types (class InputFieldError)
+import Component.InputField.Types (Action, State) as InputField
 import Data.Map (Map)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Semantics (Slot, TokenName)
@@ -36,10 +37,9 @@ data ContractSetupStage
 
 derive instance eqContractSetupStage :: Eq ContractSetupStage
 
-type Input
-  =
+type Input =
   { currentSlot :: Slot
-  , walletLibrary :: WalletLibrary
+  , addressBook :: AddressBook
   }
 
 data ContractNicknameError

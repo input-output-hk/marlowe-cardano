@@ -1,5 +1,5 @@
 module Component.Contacts.Lenses
-  ( _walletLibrary
+  ( _addressBook
   , _cardSection
   , _walletNicknameInput
   , _walletIdInput
@@ -15,16 +15,17 @@ module Component.Contacts.Lenses
   ) where
 
 import Prologue
+
 import Component.Contacts.Types
-  ( CardSection
+  ( AddressBook
+  , CardSection
   , State
+  , WalletDetails
   , WalletId
   , WalletIdError
   , WalletInfo
-  , WalletLibrary
   , WalletNickname
   , WalletNicknameError
-  , WalletDetails
   )
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')
@@ -36,8 +37,8 @@ import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
 import Type.Proxy (Proxy(..))
 import Types (NotFoundWebData)
 
-_walletLibrary :: Lens' State WalletLibrary
-_walletLibrary = prop (Proxy :: _ "walletLibrary")
+_addressBook :: Lens' State AddressBook
+_addressBook = prop (Proxy :: _ "addressBook")
 
 _cardSection :: Lens' State CardSection
 _cardSection = prop (Proxy :: _ "cardSection")

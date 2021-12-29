@@ -15,27 +15,28 @@ import Capability.MainFrameLoop (callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, lookupWalletInfo)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , insertIntoWalletLibrary
+  , insertIntoAddressBook
   )
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses
-  ( _cardSection
+  ( _addressBook
+  , _cardSection
+  , _pubKeyHash
   , _remoteWalletInfo
   , _walletIdInput
-  , _walletLibrary
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
+  , AddressBook
   , CardSection(..)
   , State
   , WalletDetails
   , WalletId(..)
   , WalletIdError(..)
   , WalletInfo(..)
-  , WalletLibrary
   , WalletNickname
   , WalletNicknameError(..)
   )
@@ -47,7 +48,7 @@ import Data.Array (any)
 import Data.BigInt.Argonaut (BigInt)
 import Data.CodePoint.Unicode (isAlphaNum)
 import Data.Foldable (for_)
-import Data.Lens (assign, modifying, set, use)
+import Data.Lens (assign, modifying, set, use, view)
 import Data.Map (filter, insert, isEmpty, lookup, member)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
@@ -68,9 +69,9 @@ import Page.Dashboard.Types (Action(..)) as Dashboard
 import Toast.Types (successToast)
 import Types (NotFoundWebData)
 
-mkInitialState :: WalletLibrary -> State
-mkInitialState walletLibrary =
-  { walletLibrary
+mkInitialState :: AddressBook -> State
+mkInitialState addressBook =
+  { addressBook
   , cardSection: Home
   , walletNicknameInput: InputField.mkInitialState Nothing
   , walletIdInput: InputField.mkInitialState Nothing
@@ -110,14 +111,18 @@ handleAction CloseContactsCard = callMainFrameAction $ MainFrame.DashboardAction
 handleAction (SetCardSection cardSection) = do
   case cardSection of
     NewWallet _ -> do
-      walletLibrary <- use _walletLibrary
+      addressBook <- use _addressBook
       assign _remoteWalletInfo NotAsked
       handleAction $ WalletNicknameInputAction InputField.Reset
-      handleAction $ WalletNicknameInputAction $ InputField.SetValidator $
-        walletNicknameError walletLibrary
+      handleAction
+        $ WalletNicknameInputAction
+        $ InputField.SetValidator
+        $ walletNicknameError addressBook
       handleAction $ WalletIdInputAction InputField.Reset
-      handleAction $ WalletIdInputAction $ InputField.SetValidator $
-        walletIdError NotAsked walletLibrary
+      handleAction
+        $ WalletIdInputAction
+        $ InputField.SetValidator
+        $ walletIdError NotAsked addressBook
     _ -> pure unit
   assign _cardSection cardSection
 
@@ -130,18 +135,9 @@ handleAction (SaveWallet mTokenName) = do
   case remoteWalletInfo, mWalletId of
     Success walletInfo, Just walletId -> do
       let
-        -- note the empty properties are fine for saved wallets - these will be fetched if/when
-        -- this wallet is picked up
-        walletDetails =
-          { walletNickname
-          , companionAppId: walletId
-          , marloweAppId: PlutusAppId emptyUUID
-          , walletInfo
-          , assets: mempty
-          , previousCompanionAppState: Nothing
-          }
-      modifying _walletLibrary (insert walletNickname walletDetails)
-      insertIntoWalletLibrary walletDetails
+        address = view _pubKeyHash walletInfo
+      modifying _addressBook (insert walletNickname address)
+      insertIntoAddressBook walletNickname address
       addToast $ successToast "Contact added"
       case mTokenName of
         -- if a tokenName was also passed, we are inside a template contract and we need to update role
@@ -199,10 +195,11 @@ setRemoteWalletInfo
   -> HalogenM State Action ChildSlots Msg m Unit
 setRemoteWalletInfo info = do
   assign _remoteWalletInfo info
-  walletLibrary <- use _walletLibrary
-  handleAction $ WalletIdInputAction $ InputField.SetValidator $ walletIdError
-    info
-    walletLibrary
+  addressBook <- use _addressBook
+  handleAction
+    $ WalletIdInputAction
+    $ InputField.SetValidator
+    $ walletIdError info addressBook
 
 ------------------------------------------------------------
 toWalletNicknameInput
@@ -252,11 +249,11 @@ getAda assets = fromMaybe zero $ lookup adaTokenName =<< lookup
   (unwrap assets)
 
 walletNicknameError
-  :: WalletLibrary -> WalletNickname -> Maybe WalletNicknameError
+  :: AddressBook -> WalletNickname -> Maybe WalletNicknameError
 walletNicknameError _ "" = Just EmptyWalletNickname
 
-walletNicknameError walletLibrary walletNickname =
-  if member walletNickname walletLibrary then
+walletNicknameError addressBook walletNickname =
+  if member walletNickname addressBook then
     Just DuplicateWalletNickname
   else if
     any (\char -> not $ isAlphaNum $ codePointFromChar char) $ toCharArray
@@ -266,19 +263,15 @@ walletNicknameError walletLibrary walletNickname =
     Nothing
 
 walletIdError
-  :: NotFoundWebData WalletInfo
-  -> WalletLibrary
-  -> String
-  -> Maybe WalletIdError
+  :: NotFoundWebData WalletInfo -> AddressBook -> String -> Maybe WalletIdError
 walletIdError _ _ "" = Just EmptyWalletId
 
-walletIdError remoteDataWalletInfo walletLibrary walletIdString =
+walletIdError remoteDataWalletInfo addressBook walletIdString =
   case parsePlutusAppId walletIdString of
     Nothing -> Just InvalidWalletId
-    Just plutusAppId
-      | not $ isEmpty $ filter
-          (\walletDetails -> walletDetails.companionAppId == plutusAppId)
-          walletLibrary -> Just DuplicateWalletId
+    Just plutusAppId -> Just DuplicateWalletId
+    {- FIXME: change parsePlutusAppId to parsePubKeyHash and add link to SCP-3145
+  -- | not $ isEmpty $ filter (\pubKeyHash -> pubKeyHash == plutusAppId) addressBook -> Just DuplicateWalletId-}
     _ -> case remoteDataWalletInfo of
       Success _ -> Nothing
       Failure _ -> Just NonexistentWalletId

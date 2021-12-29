@@ -1,9 +1,10 @@
 module Page.Welcome.Lenses where
 
 import Prologue
+
 import Component.Contacts.Types
-  ( WalletDetails
-  , WalletLibrary
+  ( AddressBook
+  , WalletDetails
   , WalletNicknameError
   )
 import Component.InputField.Types (State) as InputField
@@ -20,8 +21,8 @@ _card = prop (Proxy :: _ "card")
 _cardOpen :: Lens' State Boolean
 _cardOpen = prop (Proxy :: _ "cardOpen")
 
-_walletLibrary :: Lens' State WalletLibrary
-_walletLibrary = prop (Proxy :: _ "walletLibrary")
+_addressBook :: Lens' State AddressBook
+_addressBook = prop (Proxy :: _ "addressBook")
 
 _walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
 _walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")

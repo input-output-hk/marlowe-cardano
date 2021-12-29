@@ -4,13 +4,14 @@ module Page.Dashboard.View
   ) where
 
 import Prologue hiding (Either(..), div)
+
 import Clipboard (Action(..)) as Clipboard
 import Component.ConfirmInput.View as ConfirmInput
 import Component.Contacts.Lenses
-  ( _assets
+  ( _addressBook
+  , _assets
   , _companionAppId
   , _walletNickname
-  , _walletLibrary
   )
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.Types (WalletDetails)
@@ -152,7 +153,7 @@ dashboardCard state = case view _card state of
     let
       cardOpen = state ^. _cardOpen
 
-      walletLibrary = state ^. (_contactsState <<< _walletLibrary)
+      addressBook = state ^. (_contactsState <<< _addressBook)
 
       currentWallet = state ^. _walletDetails
 
@@ -176,7 +177,7 @@ dashboardCard state = case view _card state of
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
-                    (contractTemplateCard walletLibrary assets)
+                    (contractTemplateCard addressBook assets)
                     state
                   ContractActionConfirmationCard contractId input ->
                     mapComponentAction

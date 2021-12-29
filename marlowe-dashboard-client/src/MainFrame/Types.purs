@@ -8,8 +8,9 @@ module MainFrame.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.Contacts.Types (WalletDetails, WalletLibrary)
+import Component.Contacts.Types (AddressBook, WalletDetails)
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
@@ -73,9 +74,11 @@ data Msg
 ------------------------------------------------------------
 data Action
   = Init
-  | EnterWelcomeState WalletLibrary WalletDetails
+  | EnterWelcomeState
+      AddressBook
+      WalletDetails
       (Map PlutusAppId Contract.State)
-  | EnterDashboardState WalletLibrary WalletDetails
+  | EnterDashboardState AddressBook WalletDetails
   | WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
   | ToastAction Toast.Action

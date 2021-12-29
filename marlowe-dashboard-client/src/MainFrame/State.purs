@@ -1,6 +1,7 @@
 module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
+
 import Bridge (toFront)
 import Capability.Marlowe
   ( class ManageMarlowe
@@ -12,8 +13,8 @@ import Capability.Marlowe
   )
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
+  , getAddressBook
   , getContractNicknames
-  , getWalletLibrary
   )
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.PlutusApps.MarloweApp.Types (LastResult(..))
@@ -63,8 +64,8 @@ import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts, _walletDetails)
 import Page.Dashboard.State (dummyState, handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.Types (Action(..), State) as Dashboard
-import Page.Welcome.Lenses (_walletLibrary)
-import Page.Welcome.State (handleAction, dummyState, mkInitialState) as Welcome
+import Page.Welcome.Lenses (_addressBook)
+import Page.Welcome.State (dummyState, handleAction, mkInitialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
@@ -306,9 +307,9 @@ handleAction
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction Init = do
   tzOffset <- liftEffect getTimezoneOffset
-  walletLibrary <- getWalletLibrary
+  addressBook <- getAddressBook
   modify_
-    $ set (_welcomeState <<< _walletLibrary) walletLibrary
+    $ set (_welcomeState <<< _addressBook) addressBook
         <<< set _tzOffset tzOffset
 
 {- [Workflow 3][1] Disconnect a wallet
@@ -316,7 +317,7 @@ handleAction Init = do
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
 need to unsubscribe from all the apps related to the wallet that was previously connected.
 -}
-handleAction (EnterWelcomeState walletLibrary walletDetails followerApps) = do
+handleAction (EnterWelcomeState addressBook walletDetails followerApps) = do
   let
     followerAppIds :: Array PlutusAppId
     followerAppIds = Set.toUnfoldable $ keys followerApps
@@ -324,7 +325,7 @@ handleAction (EnterWelcomeState walletLibrary walletDetails followerApps) = do
   unsubscribeFromPlutusApp $ view _companionAppId walletDetails
   unsubscribeFromPlutusApp $ view _marloweAppId walletDetails
   for_ followerAppIds unsubscribeFromPlutusApp
-  assign _subState $ Left $ Welcome.mkInitialState walletLibrary
+  assign _subState $ Left $ Welcome.mkInitialState addressBook
 
 {- [Workflow 2][3] Connect a wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
@@ -335,7 +336,7 @@ these apps (and avoiding the UI bug of saying "you have no contracts" when in fa
 finished loading them yet) is a bit convoluted - follow the trail of workflow comments to see how
 it works.
 -}
-handleAction (EnterDashboardState walletLibrary walletDetails) = do
+handleAction (EnterDashboardState addressBook walletDetails) = do
   ajaxFollowerApps <- getFollowerApps walletDetails
   currentSlot <- use _currentSlot
   case ajaxFollowerApps of
@@ -355,11 +356,14 @@ handleAction (EnterDashboardState walletLibrary walletDetails) = do
       -- we've just subscribed to this wallet's WalletCompanion app, however, the creation of new
       -- MarloweFollower apps will be triggered by the initial WebSocket status notification.
       contractNicknames <- getContractNicknames
-      assign _subState $ Right $ Dashboard.mkInitialState walletLibrary
-        walletDetails
-        followerApps
-        contractNicknames
-        currentSlot
+      assign _subState
+        $ Right
+        $ Dashboard.mkInitialState
+            addressBook
+            walletDetails
+            followerApps
+            contractNicknames
+            currentSlot
 
 handleAction (WelcomeAction welcomeAction) = toWelcome $ Welcome.handleAction
   welcomeAction
