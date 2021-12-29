@@ -86,7 +86,9 @@ type MarloweFollowSchema = Endpoint "follow" MarloweParams
 
 data MarloweError =
     StateMachineError SM.SMContractError
-    | TransitionError (SM.InvalidTransition MarloweData MarloweInput)
+    | TransitionError
+    | AmbiguousOnChainState
+    | OnChainStateNotFound
     | MarloweEvaluationError TransactionError
     | OtherContractError ContractError
   deriving stock (Eq, Show, Generic)
@@ -122,6 +124,14 @@ data ContractHistory =
         deriving stock (Show, Generic)
         deriving anyclass (FromJSON, ToJSON)
         deriving (Semigroup, Monoid) via (GenericSemigroupMonoid ContractHistory)
+
+
+data OnChainState =
+    OnChainState
+        { ocsTxOut    :: Typed.TypedScriptTxOut TypedMarloweValidator -- ^ Typed transaction output
+        , ocsTxOutRef :: Typed.TypedScriptTxOutRef TypedMarloweValidator -- ^ Typed UTXO
+        , ocsTx       :: ChainIndexTx -- ^ Transaction that produced the output
+        }
 
 
 -- | The outcome of 'waitForUpdateTimeout'
@@ -644,25 +654,16 @@ findMarloweContractsOnChainByRoleCurrency curSym = do
     Throws an @SMContractError@ if the number of outputs at the machine address is greater than one.
 -}
 getOnChainState ::
-    ( AsSMContractError e
-    )
-    => SmallTypedValidator
-    -> Contract w schema e (Maybe (OnChainState, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
-getOnChainState validator = mapError (review _SMContractError) $ do
-    utxoTx <- utxosTxOutTxAt (validatorAddress validator)
+    SmallTypedValidator
+    -> Contract w schema MarloweError (Maybe (OnChainState, Map Ledger.TxOutRef Tx.ChainIndexTxOut))
+getOnChainState validator = do
+    utxoTx <- mapError (review _MarloweError) $ utxosTxOutTxAt (validatorAddress validator)
     let states = getStates validator utxoTx
-    let err = SM.ChooserError "Error"
     case states of
         []      -> pure Nothing
         [state] -> pure $ Just (state, fmap fst utxoTx)
-        _       -> throwing _SMContractError err
+        _       -> throwing_ _AmbiguousOnChainState
 
-data OnChainState =
-    OnChainState
-        { ocsTxOut    :: Typed.TypedScriptTxOut TypedMarloweValidator -- ^ Typed transaction output
-        , ocsTxOutRef :: Typed.TypedScriptTxOutRef TypedMarloweValidator -- ^ Typed UTXO
-        , ocsTx       :: ChainIndexTx -- ^ Transaction that produced the output
-        }
 
 getStates :: SmallTypedValidator
     -> Map Tx.TxOutRef (Tx.ChainIndexTxOut, ChainIndexTx)
@@ -684,7 +685,7 @@ mkStep ::
 mkStep params typedValidator range input = do
     maybeState <- getOnChainState typedValidator
     case maybeState of
-        Nothing -> throwing _ContractError $ OtherError "BBB"
+        Nothing -> throwError OnChainStateNotFound
         Just (onChainState, utxo) -> do
             let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=currentState, tyTxOutTxOut}, ocsTxOutRef} = onChainState
                 oldState = SM.State
@@ -717,18 +718,16 @@ mkStep params typedValidator range input = do
                                 (Constraints.mkTx lookups smtConstraints)
                     submitTxConfirmed utx
                     pure (SM.stateData newState)
-                Nothing -> throwing _ContractError $ OtherError "AAA"
+                Nothing -> throwError TransitionError
 
 
 waitForUpdateTimeout ::
-    forall i t w schema e.
-    ( AsSMContractError e
-    , AsContractError e
-    , PlutusTx.FromData i
+    forall i t w schema.
+    (PlutusTx.FromData i
     )
     => SmallTypedValidator
-    -> Promise w schema e t -- ^ The timeout
-    -> Contract w schema e (Promise w schema e (WaitingResult t i OnChainState))
+    -> Promise w schema MarloweError t -- ^ The timeout
+    -> Contract w schema MarloweError (Promise w schema MarloweError (WaitingResult t i OnChainState))
 waitForUpdateTimeout typedValidator timeout = do
     let addr = validatorAddress typedValidator
     currentState <- getOnChainState typedValidator
@@ -741,8 +740,9 @@ waitForUpdateTimeout typedValidator timeout = do
                     outRefMaps <- traverse utxosTxOutTxFromTx txns
                     let produced = getStates typedValidator (Map.fromList $ concat outRefMaps)
                     case produced of
+                        -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
                         [onChainState] -> pure $ InitialState (ocsTx onChainState) onChainState
-                        _              -> throwing _ContractError $ OtherError "DDD"
+                        _              -> throwing_ _AmbiguousOnChainState
             Just (OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}, ocsTx}, _) ->
                 promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
                     outRefMap <- Map.fromList <$> utxosTxOutTxFromTx txn
@@ -756,14 +756,12 @@ waitForUpdateTimeout typedValidator timeout = do
 
 
 waitForUpdateUntilSlot ::
-    forall i w schema e.
-    ( AsSMContractError e
-    , AsContractError e
-    , PlutusTx.FromData i
+    forall i w schema.
+    ( PlutusTx.FromData i
     )
     => SmallTypedValidator
     -> Slot
-    -> Contract w schema e (WaitingResult Slot i MarloweData)
+    -> Contract w schema MarloweError (WaitingResult Slot i MarloweData)
 waitForUpdateUntilSlot client timeoutSlot = do
     result <- waitForUpdateTimeout client (isSlot timeoutSlot)
     let getTxOutData = fmap (fmap (tyTxOutData . ocsTxOut)) . awaitPromise
