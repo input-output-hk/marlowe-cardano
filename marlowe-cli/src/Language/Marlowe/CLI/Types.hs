@@ -20,7 +20,8 @@
 
 module Language.Marlowe.CLI.Types (
 -- * Marlowe Transactions
-  MarloweInfo(..)
+  MarloweTransaction(..)
+, MarloweInfo(..)
 , ValidatorInfo(..)
 , DatumInfo(..)
 , RedeemerInfo(..)
@@ -35,23 +36,26 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import           Cardano.Api                  (AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
-                                               PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
-                                               PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, TxIn,
-                                               VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope,
-                                               serialiseAddress, serialiseToTextEnvelope)
-import           Cardano.Api.Shelley          (PlutusScript (..))
-import           Codec.Serialise              (deserialise)
-import           Data.Aeson                   (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
-import           Data.ByteString.Short        (ShortByteString)
-import           Data.String                  (IsString)
-import           GHC.Generics                 (Generic)
-import           Language.Marlowe.CLI.Orphans ()
-import           Plutus.V1.Ledger.Api         (Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import           Cardano.Api                     (AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
+                                                  PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
+                                                  PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo,
+                                                  TxIn, VerificationKey, deserialiseAddress,
+                                                  deserialiseFromTextEnvelope, serialiseAddress,
+                                                  serialiseToTextEnvelope)
+import           Cardano.Api.Shelley             (PlutusScript (..))
+import           Codec.Serialise                 (deserialise)
+import           Data.Aeson                      (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
+import           Data.ByteString.Short           (ShortByteString)
+import           Data.String                     (IsString)
+import           GHC.Generics                    (Generic)
+import           Language.Marlowe.CLI.Orphans    ()
+import           Language.Marlowe.Semantics      (Payment)
+import           Language.Marlowe.SemanticsTypes (Contract, Input, State)
+import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
-import qualified Cardano.Api                  as Api (Value)
-import qualified Data.ByteString.Lazy         as LBS (fromStrict)
-import qualified Data.ByteString.Short        as SBS (fromShort)
+import qualified Cardano.Api                     as Api (Value)
+import qualified Data.ByteString.Lazy            as LBS (fromStrict)
+import qualified Data.ByteString.Short           as SBS (fromShort)
 
 
 -- | Exception for Marlowe CLI.
@@ -65,6 +69,60 @@ type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (Verificat
 
 -- | A payment signing key.
 type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentExtendedKey)
+
+
+-- | Complete description of a Marlowe transaction.
+data MarloweTransaction era =
+  MarloweTransaction
+  {
+    mtAddress  :: AddressInEra era        -- ^ The script address.
+  , mtScript   :: Script PlutusScriptV1   -- ^ The Plutus script.
+  , mtHash     :: ValidatorHash           -- ^ The validator hash.
+  , mtRoles    :: CurrencySymbol          -- ^ The roles currency.
+  , mtState    :: State                   -- ^ The Marlowe state after the transaction.
+  , mtContract :: Contract                -- ^ The Marlowe contract after the transaction.
+  , mtRange    :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
+  , mtInputs   :: [Input]                 -- ^ The inputs to the transaction.
+  , mtPayments :: [Payment]               -- ^ The payments from the transaction.
+  }
+    deriving (Generic, Show)
+
+instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
+  toJSON MarloweTransaction{..} =
+    object
+      [
+        "address"  .= serialiseAddress mtAddress
+      , "script"   .= toJSON (serialiseToTextEnvelope Nothing mtScript)
+      , "hash"     .= toJSON mtHash
+      , "roles"    .= toJSON mtRoles
+      , "state"    .= toJSON mtState
+      , "contract" .= toJSON mtContract
+      , "range"    .= toJSON mtRange
+      , "inputs"   .= toJSON mtInputs
+      , "payments" .= toJSON mtPayments
+      ]
+
+instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize eras.
+  parseJSON =
+    withObject "MarloweTransaction"
+      $ \o ->
+        do
+          address    <- o .: "address"
+          mtHash     <- o .: "hash"
+          script     <- o .: "script"
+          mtRoles    <- o .: "roles"
+          mtState    <- o .: "state"
+          mtContract <- o .: "contract"
+          mtRange    <- o .: "range"
+          mtInputs   <- o .: "inputs"
+          mtPayments <- o .: "payments"
+          mtAddress  <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) address of
+                         Just address' -> pure address'
+                         Nothing       -> fail "Failed deserialising address."
+          mtScript   <- case deserialiseFromTextEnvelope (AsScript AsPlutusScriptV1) script of
+                         Right script' -> pure script'
+                         Left message  -> fail $ show message
+          pure MarloweTransaction{..}
 
 
 -- | Comprehensive information about a Marlowe transaction.

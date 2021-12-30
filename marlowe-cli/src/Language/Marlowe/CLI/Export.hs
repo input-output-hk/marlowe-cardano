@@ -175,7 +175,7 @@ printMarlowe marloweParams costModel network stake contract state inputs =
         putStrLn ""
         putStrLn $ "Validator size: " <> show viSize
         putStrLn ""
-        putStrLn $ "Validator cost: " <> show viCost
+        putStrLn $ "Bare-validator cost: " <> show viCost
         putStrLn ""
         putStrLn $ "Datum:" <> LBS8.unpack (encode diJson)
         putStrLn ""
@@ -304,7 +304,7 @@ exportValidatorImpl validator costModel network stake outputFile printHash print
           $ do
             hPutStrLn stderr ""
             hPutStrLn stderr $ "Validator size: " <> show viSize
-            hPutStrLn stderr $ "Validator cost: " <> show viCost
+            hPutStrLn stderr $ "Bare-validator cost: " <> show viCost
 
 
 -- | Export to a file the validator information about a Marlowe contract.

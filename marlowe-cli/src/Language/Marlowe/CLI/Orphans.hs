@@ -21,7 +21,7 @@ module Language.Marlowe.CLI.Orphans (
 ) where
 
 
-import           Data.Aeson                 (FromJSON (..), ToJSON (..), object, withText, (.=))
+import           Data.Aeson                 (FromJSON (..), ToJSON (..), object, withObject, withText, (.:), (.=))
 import           Data.ByteString.Short      (ShortByteString, fromShort, toShort)
 import           Language.Marlowe.Semantics (Payment (..), TransactionOutput (..))
 
@@ -66,3 +66,13 @@ instance ToJSON Payment where
       , "payee"     .= toJSON payee
       , "money"     .= toJSON money
       ]
+
+
+instance FromJSON Payment where
+  parseJSON =
+    withObject "Payment"
+      $ \o ->
+        Payment
+          <$> (o .: "accountId")
+          <*> (o .: "payee"    )
+          <*> (o .: "money"    )

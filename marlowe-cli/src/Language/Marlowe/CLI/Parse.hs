@@ -16,6 +16,7 @@ module Language.Marlowe.CLI.Parse (
   parseAddressAny
 , parseByteString
 , parseCurrencySymbol
+, parseInput
 , parseLovelaceValue
 , parseNetworkId
 , parseParty
@@ -42,7 +43,8 @@ import           Cardano.Api                     (AddressAny, AsType (AsAddressA
 import           Cardano.Api.Shelley             (StakeAddress (..), fromShelleyStakeCredential)
 import           Control.Applicative             ((<|>))
 import           Data.List.Split                 (splitOn)
-import           Language.Marlowe.SemanticsTypes (Party (..), Token (..))
+import           Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), Party (..), Token (..))
+import           Plutus.V1.Ledger.Ada            (adaSymbol, adaToken)
 import           Plutus.V1.Ledger.Api            (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..),
                                                   TokenName (..), toBuiltin)
 import           Plutus.V1.Ledger.Slot           (Slot (..))
@@ -279,3 +281,25 @@ parseByteString =
       case Base16.decode $ BS8.pack s of
         Left  message  -> Left message
         Right currency -> Right . toBuiltin $ currency
+
+
+-- | Parse input to a contract.
+parseInput :: O.Parser Input
+parseInput =
+  parseDeposit <|> parseChoice <|> parseNotify
+    where
+      parseDeposit =
+        IDeposit
+          <$> O.option parseParty (O.long "deposit-account" <> O.metavar "PARTY"                                         <> O.help "The account for the deposit."          )
+          <*> O.option parseParty (O.long "deposit-party"   <> O.metavar "PARTY"                                         <> O.help "The party making the deposit."         )
+          <*> O.option parseToken (O.long "deposit-token"   <> O.metavar "TOKEN"   <> O.value (Token adaSymbol adaToken) <> O.help "The token being deposited, if not Ada.")
+          <*> O.option O.auto     (O.long "deposit-amount"  <> O.metavar "INTEGER"                                       <> O.help "The amount of token being deposited."  )
+      parseChoice =
+        IChoice
+          <$> (
+                ChoiceId
+                  <$> O.strOption         (O.long "choice-name"   <> O.metavar "NAME"    <> O.help "The name of the choice made.")
+                  <*> O.option parseParty (O.long "choice-party"  <> O.metavar "PARTY"   <> O.help "The party making the choice.")
+              )
+          <*> O.option O.auto             (O.long "choice-number" <> O.metavar "INTEGER" <> O.help "The number chosen."          )
+      parseNotify = INotify <$ O.flag' () (O.long "notify" <> O.help "Notify the contract.")

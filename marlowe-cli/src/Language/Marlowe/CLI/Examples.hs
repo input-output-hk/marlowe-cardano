@@ -11,7 +11,7 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Language.Marlowe.CLI.Examples (
@@ -20,14 +20,21 @@ module Language.Marlowe.CLI.Examples (
 ) where
 
 
-import           Control.Monad.Except       (MonadIO)
-import           Language.Marlowe.CLI.IO    (maybeWriteJson)
+import           Control.Monad.Except       (MonadIO, liftIO)
+import           Data.Aeson.Encode.Pretty   (encodePretty)
 import           Language.Marlowe.Semantics (MarloweData (..))
+
+import qualified Data.ByteString.Lazy       as LBS (writeFile)
 
 
 -- | Serialise an example contract to JSON.
 makeExample :: MonadIO m
-            => Maybe FilePath  -- ^ The output JSON file for the Marlowe data.
+            => FilePath        -- ^ The output JSON file for the Marlowe contract.
+            -> FilePath        -- ^ The output JSON file for the Marlowe contract's state.
             -> MarloweData     -- ^ The contract and state data.
             -> m ()            -- ^ Action to serialise the Marlowe data.
-makeExample = maybeWriteJson
+makeExample contractFile stateFile MarloweData{..} =
+  liftIO
+    $ do
+      LBS.writeFile contractFile . encodePretty $ marloweContract
+      LBS.writeFile stateFile    . encodePretty $ marloweState

@@ -27,6 +27,12 @@ module Language.Marlowe.CLI.Transaction (
 , buildOutgoing
 -- * Submitting
 , submit
+-- * Low-Level Functions
+, buildBody
+, buildPayFromScript
+, buildPayToScript
+, hashSigningKey
+, submitBody
 ) where
 
 
