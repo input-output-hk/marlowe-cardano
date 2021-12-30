@@ -23,12 +23,12 @@ module Language.Marlowe.CLI.Command.Template (
 
 
 import           Control.Monad.Except                         (MonadIO)
+import           Language.Marlowe.CLI.Command.Parse           (parseParty, parseSlot, parseToken)
 import           Language.Marlowe.CLI.Examples                (makeExample)
 import           Language.Marlowe.CLI.Examples.Escrow         (makeEscrowContract)
 import           Language.Marlowe.CLI.Examples.Swap           (makeSwapContract)
 import           Language.Marlowe.CLI.Examples.Trivial        (makeTrivialContract)
 import           Language.Marlowe.CLI.Examples.ZeroCouponBond (makeZeroCouponBond)
-import           Language.Marlowe.CLI.Parse                   (parseParty, parseSlot, parseToken)
 import           Language.Marlowe.SemanticsTypes              (Party, Token)
 import           Plutus.V1.Ledger.Slot                        (Slot)
 

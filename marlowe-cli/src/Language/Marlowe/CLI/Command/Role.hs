@@ -24,17 +24,17 @@ module Language.Marlowe.CLI.Command.Role (
 ) where
 
 
-import           Cardano.Api                 (NetworkId (..), StakeAddressReference (..))
-import           Control.Monad.Except        (MonadError, MonadIO, throwError)
-import           Data.Maybe                  (fromMaybe)
-import           Language.Marlowe.CLI.Export (exportRoleAddress, exportRoleDatum, exportRoleRedeemer,
-                                              exportRoleValidator)
-import           Language.Marlowe.CLI.Parse  (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference,
-                                              parseTokenName)
-import           Language.Marlowe.CLI.Types  (CliError)
-import           Plutus.V1.Ledger.Api        (CurrencySymbol, TokenName, defaultCostModelParams)
+import           Cardano.Api                        (NetworkId (..), StakeAddressReference (..))
+import           Control.Monad.Except               (MonadError, MonadIO, throwError)
+import           Data.Maybe                         (fromMaybe)
+import           Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference,
+                                                     parseTokenName)
+import           Language.Marlowe.CLI.Export        (exportRoleAddress, exportRoleDatum, exportRoleRedeemer,
+                                                     exportRoleValidator)
+import           Language.Marlowe.CLI.Types         (CliError)
+import           Plutus.V1.Ledger.Api               (CurrencySymbol, TokenName, defaultCostModelParams)
 
-import qualified Options.Applicative         as O
+import qualified Options.Applicative                as O
 
 
 -- | Marlowe CLI commands and options for exporting role information.

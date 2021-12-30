@@ -11,7 +11,7 @@
 -----------------------------------------------------------------------------
 
 
-module Language.Marlowe.CLI.Parse (
+module Language.Marlowe.CLI.Command.Parse (
 -- * Parsers
   parseAddressAny
 , parseByteString

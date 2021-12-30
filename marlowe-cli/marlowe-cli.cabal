@@ -47,9 +47,10 @@ library
   exposed-modules:
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
-    Language.Marlowe.CLI.Command.Export
     Language.Marlowe.CLI.Command.Input
+    Language.Marlowe.CLI.Command.Parse
     Language.Marlowe.CLI.Command.Role
+    Language.Marlowe.CLI.Command.Run
     Language.Marlowe.CLI.Command.Template
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
@@ -61,7 +62,6 @@ library
     Language.Marlowe.CLI.Export
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
-    Language.Marlowe.CLI.Parse
     Language.Marlowe.CLI.Run
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
