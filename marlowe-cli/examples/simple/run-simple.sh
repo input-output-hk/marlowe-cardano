@@ -184,15 +184,17 @@ echo "In particular, we can extract the contract's address from the "'`.marlowe`
 
 CONTRACT_ADDRESS=$(jq -r '.address' tx-1.marlowe)
 
+echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
+
 echo "The bystander $BYSTANDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
 marlowe-cli run execute "${MAGIC[@]}"                               \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
-                        --marlowe-out-file tx-1.marlowe             \
                         --tx-in "$TX_0_BYSTANDER"                   \
-                        --change-address "$BYSTANDER_ADDRESS"       \
                         --required-signer "$BYSTANDER_PAYMENT_SKEY" \
+                        --marlowe-out-file tx-1.marlowe             \
+                        --change-address "$BYSTANDER_ADDRESS"       \
                         --out-file tx-1.raw                         \
                         --print-stats                               \
                         --submit=600                                \
@@ -228,10 +230,10 @@ marlowe-cli run execute "${MAGIC[@]}"                             \
                         --marlowe-in-file tx-1.marlowe            \
                         --tx-in-marlowe "$TX_1"#1                 \
                         --tx-in-collateral "$TX_0_PARTY"          \
-                        --marlowe-out-file tx-2.marlowe           \
                         --tx-in "$TX_0_PARTY"                     \
-                        --change-address "$PARTY_ADDRESS"         \
                         --required-signer "$PARTY_PAYMENT_SKEY"   \
+                        --marlowe-out-file tx-2.marlowe           \
+                        --change-address "$PARTY_ADDRESS"         \
                         --out-file tx-2.raw                       \
                         --print-stats                             \
                         --submit=600                              \
@@ -265,14 +267,14 @@ marlowe-cli run execute "${MAGIC[@]}"                                  \
                         --marlowe-in-file tx-2.marlowe                 \
                         --tx-in-marlowe "$TX_2"#1                      \
                         --tx-in-collateral "$TX_2"#0                   \
-                        --marlowe-out-file tx-3.marlowe                \
                         --tx-in "$TX_2"#0                              \
-                        --change-address "$PARTY_ADDRESS"              \
                         --required-signer "$PARTY_PAYMENT_SKEY"        \
+                        --marlowe-out-file tx-3.marlowe                \
+                        --change-address "$PARTY_ADDRESS"              \
                         --out-file tx-3.raw                            \
                         --print-stats                                  \
                         --submit=600                                   \
-| sed -e 's/^TxId "\(.*\)"$/\1/'
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                       \
 )
 
 echo "The contract made a payment of $WITHDRAWAL_LOVELACE lovelace to the party $PARTY_NAME in the transaction "'`'"$TX_3"'`'". Here is the UTxO at the contract address:"
@@ -302,10 +304,10 @@ marlowe-cli run execute "${MAGIC[@]}"                              \
                         --marlowe-in-file tx-3.marlowe             \
                         --tx-in-marlowe "$TX_3"#1                  \
                         --tx-in-collateral "$TX_3"#0               \
-                        --marlowe-out-file tx-4.marlowe            \
                         --tx-in "$TX_3"#0                          \
-                        --change-address "$PARTY_ADDRESS"          \
                         --required-signer "$PARTY_PAYMENT_SKEY"    \
+                        --marlowe-out-file tx-4.marlowe            \
+                        --change-address "$PARTY_ADDRESS"          \
                         --out-file tx-4.raw                        \
                         --print-stats                              \
                         --submit=600                               \

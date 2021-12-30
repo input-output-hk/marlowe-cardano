@@ -32,9 +32,14 @@ module Language.Marlowe.CLI.Run (
 
 
 import           Cardano.Api                      (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode,
-                                                   LocalNodeConnectInfo (localNodeNetworkId), NetworkId, Script (..),
-                                                   SlotNo (..), StakeAddressReference (..), TxId, TxIn, getTxId,
-                                                   toAddressAny, writeFileTextEnvelope)
+                                                   LocalNodeConnectInfo (localNodeNetworkId),
+                                                   MultiAssetSupportedInEra (MultiAssetInAlonzoEra), NetworkId,
+                                                   QueryInShelleyBasedEra (QueryProtocolParameters), Script (..),
+                                                   ShelleyBasedEra (ShelleyBasedEraAlonzo), SlotNo (..),
+                                                   StakeAddressReference (..), TxId, TxIn, TxOut (..), TxOutDatum (..),
+                                                   TxOutValue (..), calculateMinimumUTxO, getTxId, lovelaceToValue,
+                                                   selectLovelace, toAddressAny, writeFileTextEnvelope)
+import           Cardano.Api.Shelley              (ProtocolParameters)
 import           Control.Monad                    (forM_, guard, unless, when)
 import           Control.Monad.Except             (MonadError, MonadIO, liftIO, throwError)
 import           Data.Bifunctor                   (bimap)
@@ -45,7 +50,7 @@ import           Language.Marlowe.CLI.Export      (buildDatum, buildRedeemer, bu
 import           Language.Marlowe.CLI.IO          (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readSigningKey)
 import           Language.Marlowe.CLI.Orphans     ()
 import           Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey,
-                                                   submitBody)
+                                                   queryAlonzo, submitBody)
 import           Language.Marlowe.CLI.Types       (CliError (..), DatumInfo (..), MarloweTransaction (..),
                                                    RedeemerInfo (..), ValidatorInfo (..))
 import           Language.Marlowe.Semantics       (MarloweParams (rolesCurrency), Payment (..), TransactionInput (..),
@@ -244,6 +249,7 @@ runTransaction :: MonadError CliError m
                -> m TxId                            -- ^ Action to build the transaction body.
 runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles bodyFile timeout printStats invalid =
   do
+    protocol <- queryAlonzo connection QueryProtocolParameters
     marloweOut <- decodeFileStrict marloweOutFile
     (spend, collateral) <-
       case marloweInBundle of
@@ -290,7 +296,9 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                 money' <-
                                   liftCli
                                     $ toCardanoValue money
-                                pure $ Just (toAddressAny' address, money')
+                                money'' <- adjustMinimumUTxO protocol address money'
+                                let
+                                pure $ Just (toAddressAny' address, money'')
             Party (Role _) -> pure Nothing
             Account _      -> pure Nothing
         |
@@ -323,3 +331,20 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
     pure
       $ getTxId body
 
+
+-- | Adjust the lovelace in an output to confirm to the minimum ADA requirement.
+adjustMinimumUTxO :: MonadError CliError m
+                  => ProtocolParameters       -- ^ The protocol parameters.
+                  -> AddressInEra AlonzoEra   -- ^ The output address.
+                  -> Api.Value                -- ^ The output value.
+                  -> m Api.Value              -- ^ Action to compute the adjusted value.
+adjustMinimumUTxO protocol address value =
+  do
+    let
+      txOut = TxOut address (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
+    minValue <- liftCli $ calculateMinimumUTxO ShelleyBasedEraAlonzo txOut protocol
+    let
+      minLovelace = selectLovelace minValue
+      deficit = minLovelace <> negate (minimum[selectLovelace value, minLovelace])
+    pure
+      $ value <> lovelaceToValue deficit

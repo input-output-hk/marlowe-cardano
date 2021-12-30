@@ -32,6 +32,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildPayFromScript
 , buildPayToScript
 , hashSigningKey
+, queryAlonzo
 , submitBody
 ) where
 

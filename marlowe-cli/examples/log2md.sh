@@ -3,9 +3,9 @@
 DIR=$(dirname "$0")
 
 SCRIPT="$1"
-LOG="${SCRIPT%%.sh}".log
-DIFF="${SCRIPT%%.sh}".diff
 MD="$2"
+LOG="${MD%%.md}".log
+DIFF="${MD%%.md}".diff
 
 bash -o verbose "$SCRIPT" >& "$LOG"
 
