@@ -41,9 +41,14 @@ import qualified Plutus.Contract.StateMachine     as SM
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap                as AssocMap
 import           PlutusTx.Prelude
+import           Unsafe.Coerce
 
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])
+
+-- Yeah, I know
+type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
+type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
 
 data TypedMarloweValidator
 
@@ -195,6 +200,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     let (minTime, maxTime) =
             case txInfoValidRange scriptContextTxInfo of
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
+                -- FIXME remove this when mockchain implementation updates to correct one as above
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) True) -> (l, h)
                 _ -> traceError "R0"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
@@ -322,10 +329,13 @@ smallTypedValidator params = Scripts.mkTypedValidatorParam @TypedMarloweValidato
         wrap = Scripts.wrapValidator
 
 
-smallUntypedValidator :: MarloweParams -> Scripts.Validator
+smallUntypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
 smallUntypedValidator params = let
     wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
-    in mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+    typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+    -- Yeah, I know. It works, though.
+    -- Remove this when Typed Validator has the same size as untyped.
+    in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
 
 
 mkMachineInstance :: MarloweParams -> SM.StateMachineInstance MarloweData MarloweInput
