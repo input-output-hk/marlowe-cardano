@@ -225,12 +225,12 @@ walletNicknameError addressBook walletNickname =
     Nothing
 
 walletIdError :: AddressBook -> String -> Maybe AddressError
-walletIdError _ "" = Just EmptyWalletId
+walletIdError _ "" = Just EmptyAddress
 
 walletIdError addressBook walletIdString = case parseAddress walletIdString of
-  Nothing -> Just InvalidWalletId
+  Nothing -> Just InvalidAddress
   Just address
-    | any (eq address) addressBook -> Just DuplicateWalletId
+    | any (eq address) addressBook -> Just DuplicateAddress
   _ -> Nothing
 
 -- TODO: As part of 3145, provide a better way to create an Address from a string.

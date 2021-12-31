@@ -110,21 +110,17 @@ instance inputFieldErrorWalletNicknameError ::
     "Nicknames can only contain letters and numbers"
 
 data AddressError
-  = EmptyWalletId
-  | DuplicateWalletId
-  | InvalidWalletId
-  | UnconfirmedWalletId
-  | NonexistentWalletId
+  = EmptyAddress
+  | DuplicateAddress
+  | InvalidAddress
 
 derive instance eqAddressError :: Eq AddressError
 
 instance inputeFieldErrorAddressError :: InputFieldError AddressError where
-  -- FIXME
-  inputErrorToString EmptyWalletId = "Wallet ID cannot be blank"
-  inputErrorToString DuplicateWalletId = "Wallet ID is already in your contacts"
-  inputErrorToString InvalidWalletId = "Wallet ID is not valid"
-  inputErrorToString UnconfirmedWalletId = "Looking up wallet..."
-  inputErrorToString NonexistentWalletId = "Wallet not found"
+  inputErrorToString EmptyAddress = "The address cannot be blank"
+  inputErrorToString DuplicateAddress =
+    "The address is already in your contacts"
+  inputErrorToString InvalidAddress = "The address is invalid"
 
 data Action
   = CloseContactsCard
