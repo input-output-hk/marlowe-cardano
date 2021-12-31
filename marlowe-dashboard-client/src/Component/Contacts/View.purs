@@ -273,5 +273,5 @@ walletIdTip =
   p
     [ classNames [ "text-xs", "font-semibold" ] ]
     [ text
-        "Tip: Copy and share your demo wallet ID with others so they can add you to their contracts"
+        "Tip: Copy and share your address with others so they can add you to their contracts"
     ]
