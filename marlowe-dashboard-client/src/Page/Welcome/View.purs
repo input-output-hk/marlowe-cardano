@@ -5,9 +5,6 @@ module Page.Welcome.View
 
 import Prologue hiding (div)
 
-import Clipboard (Action(..)) as Clipboard
-import Component.Address.View as Address
-import Component.Contacts.View (walletIdTip)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.InputField.Lenses (_value)
@@ -20,8 +17,6 @@ import Css as Css
 import Data.Lens ((^.))
 import Data.List (foldMap)
 import Data.Maybe (isJust, isNothing)
-import Data.Newtype (unwrap)
-import Data.UUID.Argonaut (toString) as UUID
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -48,15 +43,12 @@ import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (disabled, href, src, title)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
-import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (PubKeyHash)
 import Network.RemoteData (isSuccess)
 import Page.Welcome.Lenses
   ( _card
   , _cardOpen
   , _enteringDashboardState
   , _remoteWalletDetails
-  , _walletId
   , _walletMnemonicInput
   , _walletNicknameInput
   )
@@ -394,19 +386,19 @@ useNewWalletCard state =
     ]
 
 -- TODO: Probably remove as part of SCP-3218
-renderAddress :: forall p. PubKeyHash -> HTML p Action
-renderAddress address =
-  let
-    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
-  in
-    div
-      [ classNames [] ]
-      [ copyAddress
-          <$> Address.render
-            Address.defaultInput
-              { label = "Demo wallet ID", value = address }
-      , walletIdTip
-      ]
+-- renderAddress :: forall p. PubKeyHash -> HTML p Action
+-- renderAddress address =
+--   let
+--     copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
+--   in
+--     div
+--       [ classNames [] ]
+--       [ copyAddress
+--           <$> Address.render
+--             Address.defaultInput
+--               { label = "Demo wallet ID", value = address }
+--       , walletIdTip
+--       ]
 
 -- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
 useWalletCard :: forall p. State -> Array (HTML p Action)

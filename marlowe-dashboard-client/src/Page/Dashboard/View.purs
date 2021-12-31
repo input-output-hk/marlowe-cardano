@@ -11,7 +11,6 @@ import Component.ConfirmInput.View as ConfirmInput
 import Component.Contacts.Lenses
   ( _addressBook
   , _assets
-  , _companionAppId
   , _pubKeyHash
   , _walletInfo
   , _walletNickname
@@ -30,10 +29,8 @@ import Data.Compactable (compact)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
-import Data.Newtype (unwrap)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
-import Data.UUID.Argonaut (toString) as UUID
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)

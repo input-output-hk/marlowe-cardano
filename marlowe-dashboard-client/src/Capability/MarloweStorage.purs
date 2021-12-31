@@ -15,12 +15,10 @@ module Capability.MarloweStorage
 import Prologue
 
 import AppM (AppM)
-import Component.Contacts.Lenses (_pubKeyHash, _walletInfo, _walletNickname)
-import Component.Contacts.Types (AddressBook, WalletDetails, WalletNickname)
+import Component.Contacts.Types (AddressBook, WalletNickname)
 import Control.Monad.Except (lift)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Either (hush)
-import Data.Lens (view)
 import Data.Map (Map, insert, lookup)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)

@@ -11,7 +11,7 @@ module Component.Contacts.State
 import Prologue
 
 import Capability.MainFrameLoop (callMainFrameAction)
-import Capability.Marlowe (class ManageMarlowe, lookupWalletInfo)
+import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , insertIntoAddressBook
@@ -23,8 +23,6 @@ import Component.Contacts.Lenses
   ( _addressBook
   , _addressInput
   , _cardSection
-  , _pubKeyHash
-  , _remoteWalletInfo
   , _walletNicknameInput
   )
 import Component.Contacts.Types
@@ -43,17 +41,16 @@ import Component.InputField.Lenses (_pristine, _value)
 import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
 import Control.Monad.Reader (class MonadAsk)
-import Data.Array (any)
 import Data.BigInt.Argonaut (BigInt)
 import Data.CodePoint.Unicode (isAlphaNum)
-import Data.Foldable (for_)
-import Data.Lens (assign, modifying, set, use, view)
-import Data.Map (filter, insert, isEmpty, lookup, member)
+import Data.Foldable (any)
+import Data.Lens (assign, modifying, set, use)
+import Data.Map (insert, lookup, member)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
 import Data.String (codePointFromChar)
-import Data.String.CodeUnits (toCharArray)
-import Data.UUID.Argonaut (emptyUUID, parseUUID)
+import Data.String.CodeUnits (length, toCharArray)
+import Data.UUID.Argonaut (emptyUUID)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -62,11 +59,15 @@ import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
-import Marlowe.Semantics (Assets, CurrencySymbol, Token(..), TokenName)
-import Network.RemoteData (RemoteData(..), fromEither)
+import Marlowe.Semantics
+  ( Assets
+  , CurrencySymbol
+  , PubKeyHash
+  , Token(..)
+  , TokenName
+  )
 import Page.Dashboard.Types (Action(..)) as Dashboard
 import Toast.Types (successToast)
-import Types (NotFoundWebData)
 
 mkInitialState :: AddressBook -> State
 mkInitialState addressBook =
@@ -74,7 +75,6 @@ mkInitialState addressBook =
   , cardSection: Home
   , walletNicknameInput: InputField.mkInitialState Nothing
   , addressInput: InputField.mkInitialState Nothing
-  , remoteWalletInfo: NotAsked
   }
 
 defaultWalletDetails :: WalletDetails
@@ -111,7 +111,6 @@ handleAction (SetCardSection cardSection) = do
   case cardSection of
     NewWallet _ -> do
       addressBook <- use _addressBook
-      assign _remoteWalletInfo NotAsked
       handleAction $ WalletNicknameInputAction InputField.Reset
       handleAction
         $ WalletNicknameInputAction
@@ -121,22 +120,17 @@ handleAction (SetCardSection cardSection) = do
       handleAction
         $ AddressInputAction
         $ InputField.SetValidator
-        $ walletIdError NotAsked addressBook
+        $ walletIdError addressBook
     _ -> pure unit
   assign _cardSection cardSection
 
 handleAction (SaveWallet mTokenName) = do
   walletNickname <- use (_walletNicknameInput <<< _value)
-  walletIdString <- use (_addressInput <<< _value)
-  remoteWalletInfo <- use _remoteWalletInfo
+  addressAsString <- use (_addressInput <<< _value)
   let
-    mWalletId = parsePlutusAppId walletIdString
-  -- FIXME: check, but I think we don't need remoteWalletInfo...
-  case remoteWalletInfo, mWalletId of
-    Success walletInfo, Just walletId -> do
-      let
-        -- FIXME: Should I use the one in WalletInfo or the one from parse?
-        address = view _pubKeyHash walletInfo
+    mAddress = parseAddress addressAsString
+  case mAddress of
+    Just address -> do
       modifying _addressBook (insert walletNickname address)
       insertIntoAddressBook walletNickname address
       addToast $ successToast "Contact added"
@@ -155,52 +149,19 @@ handleAction (SaveWallet mTokenName) = do
             <<< set (_addressInput <<< _pristine) true
     -- TODO: show error feedback to the user (just to be safe - but this should never happen, because
     -- the button to save a new wallet should be disabled in this case)
-    _, _ -> pure unit
+    _ -> pure unit
 
 handleAction CancelNewContactForRole = pure unit -- handled in Dashboard.State
 
 handleAction (WalletNicknameInputAction inputFieldAction) =
   toWalletNicknameInput $ InputField.handleAction inputFieldAction
 
-handleAction (AddressInputAction inputFieldAction) = do
-  case inputFieldAction of
-    InputField.SetValue walletIdString -> do
-      -- note we handle the inputFieldAction _first_ so that the InputField value is set - otherwise the
-      -- validation feedback is wrong while the rest is happening
-      toAddressInput $ InputField.handleAction inputFieldAction
-      setRemoteWalletInfo NotAsked
-      -- if this is a valid contract ID ...
-      for_ (parsePlutusAppId walletIdString) \walletId -> do
-        setRemoteWalletInfo Loading
-        -- .. lookup wallet info
-        ajaxWalletInfo <- lookupWalletInfo walletId
-        setRemoteWalletInfo $ fromEither ajaxWalletInfo
-    _ -> toAddressInput $ InputField.handleAction inputFieldAction
+handleAction (AddressInputAction inputFieldAction) = toAddressInput $
+  InputField.handleAction inputFieldAction
 
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
   addToast $ successToast "Copied to clipboard"
-
--- TODO: As part of SCP-2865, we should refactor all InputField to be a proper halogen component instead
---       of a sub-component. Then we could remove the SetValidator logic here that requires this function
---       to have all the capabilities that the component has (because we need to use handleAction)
-setRemoteWalletInfo
-  :: forall m
-   . MonadAff m
-  => MonadAsk Env m
-  => ManageMarlowe m
-  => ManageMarloweStorage m
-  => Toast m
-  => MonadClipboard m
-  => (NotFoundWebData WalletInfo)
-  -> HalogenM State Action ChildSlots Msg m Unit
-setRemoteWalletInfo info = do
-  assign _remoteWalletInfo info
-  addressBook <- use _addressBook
-  handleAction
-    $ AddressInputAction
-    $ InputField.SetValidator
-    $ walletIdError info addressBook
 
 ------------------------------------------------------------
 toWalletNicknameInput
@@ -263,22 +224,19 @@ walletNicknameError addressBook walletNickname =
   else
     Nothing
 
-walletIdError
-  :: NotFoundWebData WalletInfo -> AddressBook -> String -> Maybe AddressError
-walletIdError _ _ "" = Just EmptyWalletId
+walletIdError :: AddressBook -> String -> Maybe AddressError
+walletIdError _ "" = Just EmptyWalletId
 
-walletIdError remoteDataWalletInfo addressBook walletIdString =
-  case parsePlutusAppId walletIdString of
-    Nothing -> Just InvalidWalletId
-    Just plutusAppId -> Just DuplicateWalletId
-    {- FIXME: change parsePlutusAppId to parsePubKeyHash and add link to SCP-3145
-  -- | not $ isEmpty $ filter (\pubKeyHash -> pubKeyHash == plutusAppId) addressBook -> Just DuplicateWalletId-}
-    _ -> case remoteDataWalletInfo of
-      Success _ -> Nothing
-      Failure _ -> Just NonexistentWalletId
-      _ -> Just UnconfirmedWalletId
+walletIdError addressBook walletIdString = case parseAddress walletIdString of
+  Nothing -> Just InvalidWalletId
+  Just address
+    | any (eq address) addressBook -> Just DuplicateWalletId
+  _ -> Nothing
 
-parsePlutusAppId :: String -> Maybe PlutusAppId
-parsePlutusAppId plutusAppIdString = case parseUUID plutusAppIdString of
-  Just uuid -> Just $ PlutusAppId uuid
-  Nothing -> Nothing
+-- TODO: As part of 3145, provide a better way to create an Address from a string.
+parseAddress :: String -> Maybe PubKeyHash
+parseAddress addressAsString =
+  if length addressAsString == 56 then
+    Just addressAsString
+  else
+    Nothing

@@ -30,7 +30,6 @@ import Component.Contacts.Lenses
   ( _addressBook
   , _assets
   , _cardSection
-  , _pubKeyHash
   , _walletId
   , _walletInfo
   , _walletNickname

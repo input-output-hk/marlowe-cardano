@@ -3,7 +3,6 @@ module Component.Contacts.Lenses
   , _cardSection
   , _walletNicknameInput
   , _addressInput
-  , _remoteWalletInfo
   , _walletNickname
   , _companionAppId
   , _marloweAppId
@@ -35,7 +34,6 @@ import Data.Map (Map)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
 import Type.Proxy (Proxy(..))
-import Types (NotFoundWebData)
 
 _addressBook :: Lens' State AddressBook
 _addressBook = prop (Proxy :: _ "addressBook")
@@ -48,9 +46,6 @@ _walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
 
 _addressInput :: Lens' State (InputField.State AddressError)
 _addressInput = prop (Proxy :: _ "addressInput")
-
-_remoteWalletInfo :: Lens' State (NotFoundWebData WalletInfo)
-_remoteWalletInfo = prop (Proxy :: _ "remoteWalletInfo")
 
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname

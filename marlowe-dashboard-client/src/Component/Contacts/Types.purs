@@ -25,30 +25,25 @@ import Data.Map (Map)
 import Data.Newtype (class Newtype)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
-import Types (NotFoundWebData)
 
 type State =
   { addressBook :: AddressBook
   , cardSection :: CardSection
   , walletNicknameInput :: InputField.State WalletNicknameError
   , addressInput :: InputField.State AddressError
-  , remoteWalletInfo :: NotFoundWebData WalletInfo
   }
 
 -- TODO: The changes to this code take us closer to
 --       "SCP-3145 Use addresses instead of WalletId in the UI", but we still need to show
 --       an actual BECH32 address instead of a PubKeyHash (which is only a subpart of the address)
-type AddressBook
-  = Map WalletNickname PubKeyHash
+type AddressBook = Map WalletNickname PubKeyHash
 
-type WalletNickname
-  = String
+type WalletNickname = String
 
 -- TODO: Move this data type away from the Contacts module and possibly rename.
 --       A good location might just be a global Wallet module, and the name
 --       could be plain `Wallet` or maybe `Wallet.State` (using qualified imports)
-type WalletDetails
-  =
+type WalletDetails =
   { walletNickname :: WalletNickname
   , companionAppId :: PlutusAppId
   , marloweAppId :: PlutusAppId
@@ -62,8 +57,7 @@ type WalletDetails
 
 -- this is the data that the wallet API returns when creating a wallet and when subsequently requesting
 -- its "own-public-key"
-newtype WalletInfo
-  = WalletInfo
+newtype WalletInfo = WalletInfo
   { walletId :: WalletId
   , pubKeyHash :: PubKeyHash
   }
@@ -78,8 +72,7 @@ derive newtype instance encodeWalletInfo :: EncodeJson WalletInfo
 
 derive newtype instance decodeJsonWalletInfo :: DecodeJson WalletInfo
 
-newtype WalletId
-  = WalletId String
+newtype WalletId = WalletId String
 
 derive instance newtypeWalletId :: Newtype WalletId _
 
