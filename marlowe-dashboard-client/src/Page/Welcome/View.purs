@@ -399,7 +399,6 @@ useNewWalletCard state =
 --               { label = "Demo wallet ID", value = address }
 --       , walletIdTip
 --       ]
-
 -- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
 useWalletCard :: forall p. State -> Array (HTML p Action)
 useWalletCard state =
