@@ -149,7 +149,6 @@ handleAction RestoreTestnetWallet = do
     Right walletDetails -> do
       tell _submitButtonSlot "restore-wallet" $ SubmitResult (Milliseconds 1200.0) (Right "Wallet restored")
       assign _remoteWalletDetails $ pure walletDetails
-      -- TODO: SCP-3132 Fire logic to sync total funds
       handleAction $ ConnectWallet walletName
 
 -- TODO: We'll most likely won't need the [Workflow 2][X] connect wallet features, but I'll remove them

@@ -43,8 +43,8 @@ import WebSocket.Support as WS
 {-
 The Marlowe Run app consists of six main workflows:
 
-1. Generate a demo wallet (this will become redundant when we integrate with real wallets).
-2. Connect a wallet (this will change when we integrate with real wallets).
+1. UC-WALLET-TESTNET-1 Create a testnet wallet (this only make sense for the centralized testnet site and may become redundant when we integrate with light wallets).
+2. UC-WALLET-TESTNET-2 Restore a testnet wallet (same note as before).
 3. Disconnect a wallet.
 4. Start a contract.
 5. Move a contract forward.
@@ -125,16 +125,6 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       SlotChange slot -> do
         assign _currentSlot $ toFront slot
         handleAction $ DashboardAction Dashboard.AdvanceTimedoutSteps
-      -- TODO We need to rewrite this to query the funds periodically instead, see https://github.com/input-output-hk/plutus-apps/pull/50
-      -- update the wallet funds (if the change is to the current wallet)
-      -- note: we should only ever be notified of changes to the current wallet, since we subscribe to
-      -- this update when we pick it up, and unsubscribe when we put it down - but we check here
-      -- anyway in case
-      -- WalletFundsChange wallet value -> do
-      --   mCurrentWallet <- peruse (_dashboardState <<< _walletDetails <<< _walletInfo <<< _wallet)
-      --   for_ mCurrentWallet \currentWallet -> do
-      --     when (currentWallet == toFront wallet)
-      --       $ assign (_dashboardState <<< _walletDetails <<< _assets) (toFront value)
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract
       -- instances, including its wallet companion contract

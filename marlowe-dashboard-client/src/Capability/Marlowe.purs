@@ -89,24 +89,16 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         -- create the WalletCompanion and MarloweApp for this wallet
         ajaxCompanionAppId <- Contract.activateContract WalletCompanion walletId
         ajaxMarloweAppId <- Contract.activateContract MarloweApp walletId
-        -- get the wallet's current funds
-        -- Note that, because it can take a moment for the initial demo funds to be added, at
-        -- this point the funds might be zero. It doesn't matter though - if we connect this
-        -- wallet, we'll get a WebSocket notification when the funds are added (and if we don't
-        -- connect it, we don't need to know what they are.)
-        -- TODO(?): Because of that, we could potentially forget about this call and just set
-        -- assets to `mempty`.
-        ajaxAssets <- Wallet.getWalletTotalFunds walletId
         let
-          createWalletDetails companionAppId marloweAppId assets =
+          createWalletDetails companionAppId marloweAppId =
             { walletNickname: ""
             , companionAppId
             , marloweAppId
             , walletInfo
-            , assets
+            , assets: mempty
             , previousCompanionAppState: Nothing
             }
-        pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId <*> ajaxAssets
+        pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
   restoreWallet options = do
     mWalletInfo <- Wallet.restoreWallet options
     case mWalletInfo of
@@ -213,7 +205,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             wallet = toFront $ view _cicWallet clientState
           walletContracts <- withExceptT Just $ ExceptT $ Contract.getWalletContractInstances wallet
           walletInfo <- withExceptT Just $ ExceptT $ Wallet.getWalletInfo wallet
-          assets <- withExceptT Just $ ExceptT $ Wallet.getWalletTotalFunds wallet
           case find (\state -> view _cicDefinition state == MarloweApp) walletContracts of
             Just marloweApp ->
               pure
@@ -221,7 +212,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
                 , companionAppId
                 , marloweAppId: toFront $ view _cicContract marloweApp
                 , walletInfo
-                , assets
+                , assets: mempty
                 , previousCompanionAppState: Nothing
                 }
             Nothing -> except $ Left Nothing

@@ -17,15 +17,15 @@ import Prologue
 import Component.Contacts.Types (State) as Contacts
 import Component.Contacts.Types (WalletDetails)
 import Component.Template.Types (State) as Template
-import Page.Dashboard.Types (Card, ContractFilter, State, WalletCompanionStatus)
 import Data.Lens (Lens', Traversal', set, wander)
 import Data.Lens.At (at)
 import Data.Lens.Prism.Maybe (_Just)
 import Data.Lens.Record (prop)
 import Data.Map (Map, insert, lookup)
-import Type.Proxy (Proxy(..))
 import Marlowe.PAB (PlutusAppId)
 import Page.Contract.Types (State) as Contract
+import Page.Dashboard.Types (Card, ContractFilter, State, WalletCompanionStatus)
+import Type.Proxy (Proxy(..))
 
 _contactsState :: Lens' State Contacts.State
 _contactsState = prop (Proxy :: _ "contactsState")

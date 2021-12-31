@@ -11,17 +11,17 @@ module Capability.Wallet
 import Prologue
 import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError, RestoreWalletOptions)
 import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
+import API.Marlowe.Run.Wallet as WBE
 import API.MockWallet as MockAPI
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
-import Marlowe.Semantics (Assets)
+import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
 
--- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
   Monad m <= ManageWallet m where
   -- FIXME: Abstract from AjaxResponse
@@ -29,7 +29,7 @@ class
   restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletInfo)
   submitWalletTransaction :: WalletId -> Tx -> m (AjaxResponse Unit)
   getWalletInfo :: WalletId -> m (AjaxResponse WalletInfo)
-  getWalletTotalFunds :: WalletId -> m (AjaxResponse Assets)
+  getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFunds)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
 instance monadWalletAppM :: ManageWallet AppM where
@@ -37,7 +37,7 @@ instance monadWalletAppM :: ManageWallet AppM where
   restoreWallet options = map (map toFront) $ TestnetAPI.restoreWallet options
   submitWalletTransaction wallet tx = runExceptT $ MockAPI.submitWalletTransaction (toBack wallet) tx
   getWalletInfo wallet = map (map toFront) $ runExceptT $ MockAPI.getWalletInfo (toBack wallet)
-  getWalletTotalFunds wallet = map (map toFront) $ runExceptT $ MockAPI.getWalletTotalFunds (toBack wallet)
+  getWalletTotalFunds walletId = runExceptT $ WBE.getTotalFunds walletId
   signTransaction wallet tx = runExceptT $ MockAPI.signTransaction (toBack wallet) tx
 
 instance monadWalletHalogenM :: ManageWallet m => ManageWallet (HalogenM state action slots msg m) where

@@ -5,7 +5,6 @@ module Capability.MarloweStorage
   , insertIntoWalletLibrary
   , getContractNicknames
   , insertIntoContractNicknames
-  , addAssets
   , getContracts
   , insertContract
   , getAllWalletRoleContracts
@@ -15,14 +14,12 @@ module Capability.MarloweStorage
 
 import Prologue
 import AppM (AppM)
-import Component.Contacts.Lenses (_assets, _pubKeyHash, _walletInfo, _walletNickname)
+import Component.Contacts.Lenses (_walletNickname)
 import Component.Contacts.Types (WalletDetails, WalletLibrary)
 import Control.Monad.Except (lift)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Either (hush)
-import Data.Foldable (for_)
-import Data.Lens (set, view)
-import Data.List (find)
+import Data.Lens (view)
 import Data.Map (Map, insert, lookup)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -30,7 +27,7 @@ import Effect.Class (liftEffect)
 import Halogen (HalogenM)
 import LocalStorage (Key(..), getItem, removeItem, setItem)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash, TransactionInput)
+import Marlowe.Semantics (MarloweData, MarloweParams, TransactionInput)
 
 walletLibraryLocalStorageKey :: Key
 walletLibraryLocalStorageKey = Key "walletLibrary"
@@ -53,8 +50,6 @@ class
   -- contract nicknames
   getContractNicknames :: m (Map PlutusAppId String)
   insertIntoContractNicknames :: PlutusAppId -> String -> m Unit
-  -- temporary data that we persist until everything is working with the PAB
-  addAssets :: PubKeyHash -> Assets -> m Unit
   getContracts :: m (Map MarloweParams (Tuple MarloweData (Array TransactionInput)))
   insertContract :: MarloweParams -> (Tuple MarloweData (Array TransactionInput)) -> m Unit
   getAllWalletRoleContracts :: m (Map String (Map MarloweParams MarloweData))
@@ -88,18 +83,6 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
     let
       updatedContractNicknames = insert plutusAppId nickname contractNicknames
     liftEffect $ setItem contractNicknamesLocalStorageKey $ encodeStringifyJson updatedContractNicknames
-  -- temporary data that we persist until everything is working with the PAB
-  addAssets pubKeyHash assets = do
-    walletLibrary <- Map.values <$> getWalletLibrary
-    for_ (find (\details -> view (_walletInfo <<< _pubKeyHash) details == pubKeyHash) walletLibrary) \details ->
-      let
-        existingAssets = view _assets details
-
-        updatedAssets = existingAssets <> assets
-
-        updatedDetails = set _assets updatedAssets details
-      in
-        insertIntoWalletLibrary updatedDetails
   getContracts = do
     mContractsJson <- liftEffect $ getItem contractsLocalStorageKey
     pure $ fromMaybe Map.empty $ hush <<< parseDecodeJson =<< mContractsJson
@@ -130,7 +113,6 @@ instance manageMarloweStorageHalogenM :: ManageMarloweStorage m => ManageMarlowe
   insertIntoWalletLibrary = lift <<< insertIntoWalletLibrary
   getContractNicknames = lift getContractNicknames
   insertIntoContractNicknames plutusAppId nickname = lift $ insertIntoContractNicknames plutusAppId nickname
-  addAssets walletDetails assets = lift $ addAssets walletDetails assets
   getContracts = lift getContracts
   insertContract marloweParams contractData = lift $ insertContract marloweParams contractData
   getAllWalletRoleContracts = lift getAllWalletRoleContracts
