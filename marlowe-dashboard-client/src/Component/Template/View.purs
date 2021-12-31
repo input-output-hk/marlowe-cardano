@@ -555,8 +555,6 @@ roleInputs addressBook metaData roleWalletInputs =
     , readOnly: false
     , numberFormat: Nothing
     , valueOptions: fst <$> Map.toUnfoldable addressBook
-    -- TODO: delete if it works
-    -- , valueOptions: List.toUnfoldable $ Map.values $ view _walletNickname <$> addressBook
     , after: Nothing
     , before: Nothing
     }
