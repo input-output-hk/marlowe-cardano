@@ -6,7 +6,6 @@ module Component.Contacts.State
   , getAda
   , walletNicknameError
   , walletIdError
-  , parsePlutusAppId
   ) where
 
 import Prologue
@@ -22,20 +21,20 @@ import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses
   ( _addressBook
+  , _addressInput
   , _cardSection
   , _pubKeyHash
   , _remoteWalletInfo
-  , _walletIdInput
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
   , AddressBook
+  , AddressError(..)
   , CardSection(..)
   , State
   , WalletDetails
   , WalletId(..)
-  , WalletIdError(..)
   , WalletInfo(..)
   , WalletNickname
   , WalletNicknameError(..)
@@ -74,7 +73,7 @@ mkInitialState addressBook =
   { addressBook
   , cardSection: Home
   , walletNicknameInput: InputField.mkInitialState Nothing
-  , walletIdInput: InputField.mkInitialState Nothing
+  , addressInput: InputField.mkInitialState Nothing
   , remoteWalletInfo: NotAsked
   }
 
@@ -118,9 +117,9 @@ handleAction (SetCardSection cardSection) = do
         $ WalletNicknameInputAction
         $ InputField.SetValidator
         $ walletNicknameError addressBook
-      handleAction $ WalletIdInputAction InputField.Reset
+      handleAction $ AddressInputAction InputField.Reset
       handleAction
-        $ WalletIdInputAction
+        $ AddressInputAction
         $ InputField.SetValidator
         $ walletIdError NotAsked addressBook
     _ -> pure unit
@@ -128,13 +127,15 @@ handleAction (SetCardSection cardSection) = do
 
 handleAction (SaveWallet mTokenName) = do
   walletNickname <- use (_walletNicknameInput <<< _value)
-  walletIdString <- use (_walletIdInput <<< _value)
+  walletIdString <- use (_addressInput <<< _value)
   remoteWalletInfo <- use _remoteWalletInfo
   let
     mWalletId = parsePlutusAppId walletIdString
+  -- FIXME: check, but I think we don't need remoteWalletInfo...
   case remoteWalletInfo, mWalletId of
     Success walletInfo, Just walletId -> do
       let
+        -- FIXME: Should I use the one in WalletInfo or the one from parse?
         address = view _pubKeyHash walletInfo
       modifying _addressBook (insert walletNickname address)
       insertIntoAddressBook walletNickname address
@@ -150,8 +151,8 @@ handleAction (SaveWallet mTokenName) = do
       modify_
         $ set (_walletNicknameInput <<< _value) ""
             <<< set (_walletNicknameInput <<< _pristine) true
-            <<< set (_walletIdInput <<< _value) ""
-            <<< set (_walletIdInput <<< _pristine) true
+            <<< set (_addressInput <<< _value) ""
+            <<< set (_addressInput <<< _pristine) true
     -- TODO: show error feedback to the user (just to be safe - but this should never happen, because
     -- the button to save a new wallet should be disabled in this case)
     _, _ -> pure unit
@@ -161,12 +162,12 @@ handleAction CancelNewContactForRole = pure unit -- handled in Dashboard.State
 handleAction (WalletNicknameInputAction inputFieldAction) =
   toWalletNicknameInput $ InputField.handleAction inputFieldAction
 
-handleAction (WalletIdInputAction inputFieldAction) = do
+handleAction (AddressInputAction inputFieldAction) = do
   case inputFieldAction of
     InputField.SetValue walletIdString -> do
       -- note we handle the inputFieldAction _first_ so that the InputField value is set - otherwise the
       -- validation feedback is wrong while the rest is happening
-      toWalletIdInput $ InputField.handleAction inputFieldAction
+      toAddressInput $ InputField.handleAction inputFieldAction
       setRemoteWalletInfo NotAsked
       -- if this is a valid contract ID ...
       for_ (parsePlutusAppId walletIdString) \walletId -> do
@@ -174,7 +175,7 @@ handleAction (WalletIdInputAction inputFieldAction) = do
         -- .. lookup wallet info
         ajaxWalletInfo <- lookupWalletInfo walletId
         setRemoteWalletInfo $ fromEither ajaxWalletInfo
-    _ -> toWalletIdInput $ InputField.handleAction inputFieldAction
+    _ -> toAddressInput $ InputField.handleAction inputFieldAction
 
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
@@ -197,7 +198,7 @@ setRemoteWalletInfo info = do
   assign _remoteWalletInfo info
   addressBook <- use _addressBook
   handleAction
-    $ WalletIdInputAction
+    $ AddressInputAction
     $ InputField.SetValidator
     $ walletIdError info addressBook
 
@@ -215,16 +216,16 @@ toWalletNicknameInput
 toWalletNicknameInput = mapSubmodule _walletNicknameInput
   WalletNicknameInputAction
 
-toWalletIdInput
+toAddressInput
   :: forall m msg slots
    . Functor m
-  => HalogenM (InputField.State WalletIdError) (InputField.Action WalletIdError)
+  => HalogenM (InputField.State AddressError) (InputField.Action AddressError)
        slots
        msg
        m
        Unit
   -> HalogenM State Action slots msg m Unit
-toWalletIdInput = mapSubmodule _walletIdInput WalletIdInputAction
+toAddressInput = mapSubmodule _addressInput AddressInputAction
 
 ------------------------------------------------------------
 -- The cardano Blockchain has Multi-Asset support, each monetary policy is identified
@@ -263,7 +264,7 @@ walletNicknameError addressBook walletNickname =
     Nothing
 
 walletIdError
-  :: NotFoundWebData WalletInfo -> AddressBook -> String -> Maybe WalletIdError
+  :: NotFoundWebData WalletInfo -> AddressBook -> String -> Maybe AddressError
 walletIdError _ _ "" = Just EmptyWalletId
 
 walletIdError remoteDataWalletInfo addressBook walletIdString =

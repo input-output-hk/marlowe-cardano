@@ -6,21 +6,21 @@ module Component.Contacts.View
 import Prelude hiding (div)
 
 import Clipboard (Action(..)) as Clipboard
+import Component.Address.View as Address
 import Component.Contacts.Lenses
   ( _addressBook
+  , _addressInput
   , _cardSection
-  , _companionAppId
-  , _walletIdInput
   , _walletNickname
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
   , AddressBook
+  , AddressError
   , CardSection(..)
   , State
   , WalletDetails
-  , WalletIdError
   , WalletNickname
   , WalletNicknameError
   )
@@ -30,14 +30,11 @@ import Component.InputField.State (validate)
 import Component.InputField.Types (State) as InputField
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
-import Component.WalletId.View as WalletId
 import Css as Css
 import Data.Lens ((^.))
 import Data.Map (isEmpty, toUnfoldable)
 import Data.Maybe (Maybe(..), isJust)
-import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Data.UUID.Argonaut (toString) as UUID
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, span_, text, ul)
 import Halogen.HTML.Events.Extra (onClick_)
@@ -53,7 +50,7 @@ contactsCard currentWallet state =
 
     walletNicknameInput = state ^. _walletNicknameInput
 
-    walletIdInput = state ^. _walletIdInput
+    addressInput = state ^. _addressInput
   in
     div
       [ classNames
@@ -75,7 +72,7 @@ contactsCard currentWallet state =
             ViewWallet nickname address ->
               contactDetailsCard currentWallet nickname address
             NewWallet mTokenName ->
-              newWalletCard walletNicknameInput walletIdInput mTokenName
+              newWalletCard walletNicknameInput addressInput mTokenName
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action
 contactsBreadcrumb cardSection =
@@ -170,21 +167,17 @@ contactDetailsCard currentWallet walletNickname address =
   let
     isCurrentWallet = walletNickname == currentWallet ^. _walletNickname
 
-    copyWalletId =
-      ( ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<<
-          unwrap
-      )
+    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
         [ h3
             [ classNames [ "text-lg", "font-semibold" ] ]
             [ text walletNickname ]
-        , copyWalletId
-            <$> WalletId.render
-              WalletId.defaultInput
-                { label = "Wallet pub key hash"
-                -- FIXME
-                -- , value = address
+        , copyAddress
+            <$> Address.render
+              Address.defaultInput
+                { label = "Wallet Address"
+                , value = address
                 }
         , walletIdTip
         ]
@@ -214,7 +207,7 @@ contactDetailsCard currentWallet walletNickname address =
 newWalletCard
   :: forall p
    . InputField.State WalletNicknameError
-  -> InputField.State WalletIdError
+  -> InputField.State AddressError
   -> Maybe String
   -> Array (HTML p Action)
 newWalletCard walletNicknameInput walletIdInput mTokenName =
@@ -234,10 +227,10 @@ newWalletCard walletNicknameInput walletIdInput mTokenName =
                   { for = "newWalletNickname", text = "Wallet nickname" }
       }
 
-    walletIdInputDisplayOptions =
+    addressInputDisplayOptions =
       { additionalCss: mempty
-      , id_: "newWalletId"
-      , placeholder: "Wallet ID"
+      , id_: "newAddress"
+      , placeholder: "Address"
       , readOnly: false
       , numberFormat: Nothing
       , valueOptions: mempty
@@ -246,14 +239,14 @@ newWalletCard walletNicknameInput walletIdInput mTokenName =
           Just
             $ Label.render
                 Label.defaultInput
-                  { for = "newWalletId", text = "Wallet nickname" }
+                  { for = "newAddress", text = "Wallet address" }
       }
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
         [ WalletNicknameInputAction <$> renderInput
             walletNicknameInputDisplayOptions
             walletNicknameInput
-        , WalletIdInputAction <$> renderInput walletIdInputDisplayOptions
+        , AddressInputAction <$> renderInput addressInputDisplayOptions
             walletIdInput
         ]
     , div

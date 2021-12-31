@@ -2,7 +2,7 @@ module Component.Contacts.Lenses
   ( _addressBook
   , _cardSection
   , _walletNicknameInput
-  , _walletIdInput
+  , _addressInput
   , _remoteWalletInfo
   , _walletNickname
   , _companionAppId
@@ -18,11 +18,11 @@ import Prologue
 
 import Component.Contacts.Types
   ( AddressBook
+  , AddressError
   , CardSection
   , State
   , WalletDetails
   , WalletId
-  , WalletIdError
   , WalletInfo
   , WalletNickname
   , WalletNicknameError
@@ -46,8 +46,8 @@ _cardSection = prop (Proxy :: _ "cardSection")
 _walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
 _walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
 
-_walletIdInput :: Lens' State (InputField.State WalletIdError)
-_walletIdInput = prop (Proxy :: _ "walletIdInput")
+_addressInput :: Lens' State (InputField.State AddressError)
+_addressInput = prop (Proxy :: _ "addressInput")
 
 _remoteWalletInfo :: Lens' State (NotFoundWebData WalletInfo)
 _remoteWalletInfo = prop (Proxy :: _ "remoteWalletInfo")

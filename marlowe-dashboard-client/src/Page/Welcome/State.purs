@@ -184,7 +184,7 @@ handleAction RestoreTestnetWallet = do
       assign _remoteWalletDetails $ pure walletDetails
       handleAction $ ConnectWallet walletName
 
--- TODO: We'll most likely won't need the [Workflow 2][X] connect wallet features, but I'll remove them
+-- TODO: SCP-3218 We'll most likely won't need the [Workflow 2][X] connect wallet features, but I'll remove them
 --       once the new flow is fully functional.
 {- [Workflow 2][1] Connect a wallet
 If we are connecting a wallet that was selected by the user inputting a wallet nickname, then we

@@ -7,7 +7,7 @@ module Component.Contacts.Types
   , WalletId(..)
   , CardSection(..)
   , WalletNicknameError(..)
-  , WalletIdError(..)
+  , AddressError(..)
   , Action(..)
   ) where
 
@@ -31,7 +31,7 @@ type State =
   { addressBook :: AddressBook
   , cardSection :: CardSection
   , walletNicknameInput :: InputField.State WalletNicknameError
-  , walletIdInput :: InputField.State WalletIdError
+  , addressInput :: InputField.State AddressError
   , remoteWalletInfo :: NotFoundWebData WalletInfo
   }
 
@@ -116,16 +116,17 @@ instance inputFieldErrorWalletNicknameError ::
   inputErrorToString BadWalletNickname =
     "Nicknames can only contain letters and numbers"
 
-data WalletIdError
+data AddressError
   = EmptyWalletId
   | DuplicateWalletId
   | InvalidWalletId
   | UnconfirmedWalletId
   | NonexistentWalletId
 
-derive instance eqWalletIdError :: Eq WalletIdError
+derive instance eqAddressError :: Eq AddressError
 
-instance inputeFieldErrorWalletIdError :: InputFieldError WalletIdError where
+instance inputeFieldErrorAddressError :: InputFieldError AddressError where
+  -- FIXME
   inputErrorToString EmptyWalletId = "Wallet ID cannot be blank"
   inputErrorToString DuplicateWalletId = "Wallet ID is already in your contacts"
   inputErrorToString InvalidWalletId = "Wallet ID is not valid"
@@ -138,7 +139,7 @@ data Action
   | SaveWallet (Maybe String)
   | CancelNewContactForRole
   | WalletNicknameInputAction (InputField.Action WalletNicknameError)
-  | WalletIdInputAction (InputField.Action WalletIdError)
+  | AddressInputAction (InputField.Action AddressError)
   | ClipboardAction Clipboard.Action
 
 instance actionIsEvent :: IsEvent Action where
@@ -146,7 +147,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SetCardSection _) = Just $ defaultEvent "SetCardSection"
   toEvent (SaveWallet _) = Just $ defaultEvent "SaveWallet"
   toEvent CancelNewContactForRole = Nothing
-  toEvent (WalletNicknameInputAction inputFieldAction) = toEvent
-    inputFieldAction
-  toEvent (WalletIdInputAction inputFieldAction) = toEvent inputFieldAction
+  toEvent (WalletNicknameInputAction inputFieldAction) =
+    toEvent inputFieldAction
+  toEvent (AddressInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

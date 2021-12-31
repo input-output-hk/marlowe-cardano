@@ -4,7 +4,9 @@ module Page.Welcome.View
   ) where
 
 import Prologue hiding (div)
+
 import Clipboard (Action(..)) as Clipboard
+import Component.Address.View as Address
 import Component.Contacts.View (walletIdTip)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -14,7 +16,6 @@ import Component.InputField.Types (InputDisplayOptions)
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
-import Component.WalletId.View as WalletId
 import Css as Css
 import Data.Lens ((^.))
 import Data.List (foldMap)
@@ -48,6 +49,7 @@ import Halogen.HTML.Properties (disabled, href, src, title)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Semantics (PubKeyHash)
 import Network.RemoteData (isSuccess)
 import Page.Welcome.Lenses
   ( _card
@@ -338,7 +340,7 @@ restoreTestnetWalletCard state =
         ]
     ]
 
--- TODO: Most likely remove or adapt all [Workflow 2][X] functionality
+-- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
 useNewWalletCard :: forall p. State -> Array (HTML p Action)
 useNewWalletCard state =
   let
@@ -349,8 +351,7 @@ useNewWalletCard state =
     walletNicknameInput = state ^. _walletNicknameInput
 
     walletNickname = walletNicknameInput ^. _value
-
-    walletId = state ^. _walletId
+  -- walletId = state ^. _walletId
   in
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
@@ -361,10 +362,15 @@ useNewWalletCard state =
         [ h2
             [ classNames [ "font-bold" ] ]
             [ text $ "Demo wallet generated" ]
-        , WalletNicknameInputAction <$> renderInput
-            (walletNicknameInputDisplayOptions false)
-            walletNicknameInput
-        , renderWalletId walletId
+        , WalletNicknameInputAction
+            <$> renderInput
+              (walletNicknameInputDisplayOptions false)
+              walletNicknameInput
+        -- While removing information from the other contacts we have (part of task SCP-3174) I noticed
+        -- that we don't have the right data to show renderAddress in here, which is pointing to the direction
+        -- of removing this view altogether. Once the phase 1 is complete and we are sure we don use this, we can
+        -- remove the view and most likely the walletId and maybe the remoteWalletDetails from the state
+        -- , renderAddress walletId
         , div
             [ classNames [ "flex", "gap-4" ] ]
             [ button
@@ -387,22 +393,22 @@ useNewWalletCard state =
         ]
     ]
 
-renderWalletId :: forall p. PlutusAppId -> HTML p Action
-renderWalletId walletId =
+-- TODO: Probably remove as part of SCP-3218
+renderAddress :: forall p. PubKeyHash -> HTML p Action
+renderAddress address =
   let
-    copyWalletId =
-      ( ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<<
-          unwrap
-      )
+    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
   in
     div
       [ classNames [] ]
-      [ copyWalletId <$> WalletId.render WalletId.defaultInput
-          { label = "Demo wallet ID", value = walletId }
+      [ copyAddress
+          <$> Address.render
+            Address.defaultInput
+              { label = "Demo wallet ID", value = address }
       , walletIdTip
       ]
 
--- TODO: Most likely remove or adapt all [Workflow 2][X] functionality
+-- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
 useWalletCard :: forall p. State -> Array (HTML p Action)
 useWalletCard state =
   let
@@ -413,8 +419,7 @@ useWalletCard state =
     walletNicknameInput = state ^. _walletNicknameInput
 
     walletNickname = walletNicknameInput ^. _value
-
-    walletId = state ^. _walletId
+  -- walletId = state ^. _walletId
   in
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
@@ -425,10 +430,12 @@ useWalletCard state =
         [ h2
             [ classNames [ "font-bold", "truncate", "w-11/12" ] ]
             [ text $ "Demo wallet " <> walletNickname ]
-        , WalletNicknameInputAction <$> renderInput
-            (walletNicknameInputDisplayOptions true)
-            walletNicknameInput
-        , renderWalletId walletId
+        , WalletNicknameInputAction
+            <$> renderInput
+              (walletNicknameInputDisplayOptions true)
+              walletNicknameInput
+        -- same note that in useNewWalletCard
+        -- , renderAddress walletId
         , div
             [ classNames [ "flex", "gap-4" ] ]
             [ button
