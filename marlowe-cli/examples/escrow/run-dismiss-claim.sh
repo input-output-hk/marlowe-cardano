@@ -18,7 +18,6 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* xargs'
 echo
 echo 'Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables `SELLER_PREFIX`, `BUYER_PREFIX`, and `PARTY_PREFIX` where they appear below.'
 
@@ -189,7 +188,7 @@ marlowe-cli run initialize "${MAGIC[@]}"                 \
 
 echo "In particular, we can extract the contract's address from the "'`.marlowe`'" file."
 
-CONTRACT_ADDRESS=$(jq -r '.address' tx-1.marlowe)
+CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
@@ -386,34 +385,22 @@ echo "## Clean Up Wallets"
 
 echo "It's convenient to consolidate all of the UTxOs into single ones."
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS" --out-file /dev/stdout                         \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| sed -e 's/^/--tx-in /'                                                                                        \
-| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
-                                               --change-address "$SELLER_ADDRESS"                               \
-                                               --out-file tx-6.raw                                              \
-                                               --required-signer "$SELLER_PAYMENT_SKEY"                         \
-                                               --submit=600                                                     \
+marlowe-cli transaction simple "${MAGIC[@]}"                             \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                               --tx-in "$TX_4"#0                         \
+                               --tx-in "$TX_5"#2                         \
+                               --required-signer "$SELLER_PAYMENT_SKEY"  \
+                               --change-address "$SELLER_ADDRESS"        \
+                               --out-file tx-6.raw                       \
+                               --submit=600                              \
 > /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" --out-file /dev/stdout                          \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| sed -e 's/^/--tx-in /'                                                                                        \
-| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
-                                               --change-address "$BUYER_ADDRESS"                                \
-                                               --out-file tx-7.raw                                              \
-                                               --required-signer "$BUYER_PAYMENT_SKEY"                          \
-                                               --submit=600                                                     \
-> /dev/null
-cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" --out-file /dev/stdout                       \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| sed -e 's/^/--tx-in /'                                                                                        \
-| xargs -n 9999 marlowe-cli transaction simple "${MAGIC[@]}"                                                    \
-                                               --socket-path "$CARDANO_NODE_SOCKET_PATH"                        \
-                                               --change-address "$MEDIATOR_ADDRESS"                             \
-                                               --out-file tx-8.raw                                              \
-                                               --required-signer "$MEDIATOR_PAYMENT_SKEY"                       \
-                                               --submit=600                                                     \
+marlowe-cli transaction simple "${MAGIC[@]}"                              \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                               --tx-in "$TX_5"#0                         \
+                               --tx-in "$TX_5"#1                         \
+                               --required-signer "$MEDIATOR_PAYMENT_SKEY" \
+                               --change-address "$MEDIATOR_ADDRESS"       \
+                               --out-file tx-8.raw                        \
+                               --submit=600                               \
 > /dev/null
 

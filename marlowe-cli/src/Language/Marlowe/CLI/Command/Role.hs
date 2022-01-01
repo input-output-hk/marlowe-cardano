@@ -162,9 +162,9 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser RoleCommand
 exportDatumOptions =
   ExportDatum
-    <$> O.option parseTokenName    (O.long "name"        <> O.metavar "TOKEN_NAME" <> O.help "JSON input file for the contract state.")
-    <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "DATUM_FILE" <> O.help "JSON output file for datum."            )
-    <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."                      )
+    <$> O.option parseTokenName    (O.long "role-name"   <> O.metavar "TOKEN_NAME" <> O.help "The role name for the datum.")
+    <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "DATUM_FILE" <> O.help "JSON output file for datum." )
+    <*> O.switch                   (O.long "print-stats"                           <> O.help "Print statistics."           )
 
 
 -- | Parser for the "redeemer" command.

@@ -98,22 +98,22 @@ import qualified Data.Set                                          as S (empty, 
 -- | Build a non-Marlowe transaction.
 buildSimple :: MonadError CliError m
             => MonadIO m
-            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-            -> [FilePath]                        -- ^ The files for required signing keys.
-            -> [TxIn]                            -- ^ The transaction inputs.
-            -> [(AddressAny, Value)]             -- ^ The transaction outputs.
-            -> AddressAny                        -- ^ The change address.
-            -> FilePath                          -- ^ The output file for the transaction body.
-            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-            -> Bool                              -- ^ Whether to print statistics about the transaction.
-            -> Bool                              -- ^ Assertion that the transaction is invalid.
-            -> m TxId                            -- ^ Action to build the transaction body.
+            => LocalNodeConnectInfo CardanoMode    -- ^ The connection info for the local node.
+            -> [FilePath]                          -- ^ The files for required signing keys.
+            -> [TxIn]                              -- ^ The transaction inputs.
+            -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
+            -> AddressAny                          -- ^ The change address.
+            -> FilePath                            -- ^ The output file for the transaction body.
+            -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> Bool                                -- ^ Whether to print statistics about the transaction.
+            -> Bool                                -- ^ Assertion that the transaction is invalid.
+            -> m TxId                              -- ^ Action to build the transaction body.
 buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile timeout printStats invalid =
   do
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
-        Nothing
+        []
         Nothing
         inputs outputs Nothing changeAddress
         Nothing
@@ -133,19 +133,19 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
 -- | Build a transaction paying into a Marlowe contract.
 buildIncoming :: MonadError CliError m
               => MonadIO m
-              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-              -> AddressAny                        -- ^ The script address.
-              -> [FilePath]                        -- ^ The files for required signing keys.
-              -> FilePath                          -- ^ The file containing the datum for the payment to the script.
-              -> Value                             -- ^ The value to be paid to the script.
-              -> [TxIn]                            -- ^ The transaction inputs.
-              -> [(AddressAny, Value)]             -- ^ The transaction outputs.
-              -> AddressAny                        -- ^ The change address.
-              -> FilePath                          -- ^ The output file for the transaction body.
-              -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-              -> Bool                              -- ^ Whether to print statistics about the transaction.
-              -> Bool                              -- ^ Assertion that the transaction is invalid.
-              -> m TxId                            -- ^ Action to build the transaction body.
+              => LocalNodeConnectInfo CardanoMode    -- ^ The connection info for the local node.
+              -> AddressAny                          -- ^ The script address.
+              -> [FilePath]                          -- ^ The files for required signing keys.
+              -> FilePath                            -- ^ The file containing the datum for the payment to the script.
+              -> Value                               -- ^ The value to be paid to the script.
+              -> [TxIn]                              -- ^ The transaction inputs.
+              -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
+              -> AddressAny                          -- ^ The change address.
+              -> FilePath                            -- ^ The output file for the transaction body.
+              -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Bool                                -- ^ Whether to print statistics about the transaction.
+              -> Bool                                -- ^ Assertion that the transaction is invalid.
+              -> m TxId                              -- ^ Action to build the transaction body.
 buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress bodyFile timeout printStats invalid =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
@@ -153,7 +153,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
-        Nothing
+        []
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
         inputs outputs Nothing changeAddress
         Nothing
@@ -173,26 +173,26 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
 -- | Build a transaction that spends from and pays to a Marlowe contract.
 buildContinuing :: MonadError CliError m
                 => MonadIO m
-                => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-                -> AddressAny                        -- ^ The script address.
-                -> FilePath                          -- ^ The file containing the script validator.
-                -> FilePath                          -- ^ The file containing the redeemer.
-                -> FilePath                          -- ^ The file containing the datum for spending from the script.
-                -> [FilePath]                        -- ^ The files for required signing keys.
-                -> TxIn                              -- ^ The script eUTxO to be spent.
-                -> FilePath                          -- ^ The file containing the datum for the payment to the script.
-                -> Value                             -- ^ The value to be paid to the script.
-                -> [TxIn]                            -- ^ The transaction inputs.
-                -> [(AddressAny, Value)]             -- ^ The transaction outputs.
-                -> TxIn                              -- ^ The collateral.
-                -> AddressAny                        -- ^ The change address.
-                -> SlotNo                            -- ^ The first valid slot for the transaction.
-                -> SlotNo                            -- ^ The last valid slot for the transaction.
-                -> FilePath                          -- ^ The output file for the transaction body.
-                -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-                -> Bool                              -- ^ Whether to print statistics about the transaction.
-                -> Bool                              -- ^ Assertion that the transaction is invalid.
-                -> m TxId                            -- ^ Action to build the transaction body.
+                => LocalNodeConnectInfo CardanoMode    -- ^ The connection info for the local node.
+                -> AddressAny                          -- ^ The script address.
+                -> FilePath                            -- ^ The file containing the script validator.
+                -> FilePath                            -- ^ The file containing the redeemer.
+                -> FilePath                            -- ^ The file containing the datum for spending from the script.
+                -> [FilePath]                          -- ^ The files for required signing keys.
+                -> TxIn                                -- ^ The script eUTxO to be spent.
+                -> FilePath                            -- ^ The file containing the datum for the payment to the script.
+                -> Value                               -- ^ The value to be paid to the script.
+                -> [TxIn]                              -- ^ The transaction inputs.
+                -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
+                -> TxIn                                -- ^ The collateral.
+                -> AddressAny                          -- ^ The change address.
+                -> SlotNo                              -- ^ The first valid slot for the transaction.
+                -> SlotNo                              -- ^ The last valid slot for the transaction.
+                -> FilePath                            -- ^ The output file for the transaction body.
+                -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+                -> Bool                                -- ^ Whether to print statistics about the transaction.
+                -> Bool                                -- ^ Assertion that the transaction is invalid.
+                -> m TxId                              -- ^ Action to build the transaction body.
 buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFile signingKeyFiles txIn outputDatumFile outputValue inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
   do
     scriptAddress' <- asAlonzoAddress "Failed to converting script address to Alonzo era." scriptAddress
@@ -203,7 +203,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
-        (Just $ buildPayFromScript validator inputDatum redeemer txIn)
+        [buildPayFromScript validator inputDatum redeemer txIn]
         (Just $ buildPayToScript scriptAddress' outputValue outputDatum)
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
@@ -223,23 +223,23 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
 -- | Build a transaction spending from a Marlowe contract.
 buildOutgoing :: MonadError CliError m
               => MonadIO m
-              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-              -> FilePath                          -- ^ The file containing the script validator.
-              -> FilePath                          -- ^ The file containing the redeemer.
-              -> FilePath                          -- ^ The file containing the datum for spending from the script.
-              -> [FilePath]                        -- ^ The files for required signing keys.
-              -> TxIn                              -- ^ The script eUTxO to be spent.
-              -> [TxIn]                            -- ^ The transaction inputs.
-              -> [(AddressAny, Value)]             -- ^ The transaction outputs.
-              -> TxIn                              -- ^ The collateral.
-              -> AddressAny                        -- ^ The change address.
-              -> SlotNo                            -- ^ The first valid slot for the transaction.
-              -> SlotNo                            -- ^ The last valid slot for the transaction.
-              -> FilePath                          -- ^ The output file for the transaction body.
-              -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-              -> Bool                              -- ^ Whether to print statistics about the transaction.
-              -> Bool                              -- ^ Assertion that the transaction is invalid.
-              -> m TxId                            -- ^ Action to build the transaction body.
+              => LocalNodeConnectInfo CardanoMode    -- ^ The connection info for the local node.
+              -> FilePath                            -- ^ The file containing the script validator.
+              -> FilePath                            -- ^ The file containing the redeemer.
+              -> FilePath                            -- ^ The file containing the datum for spending from the script.
+              -> [FilePath]                          -- ^ The files for required signing keys.
+              -> TxIn                                -- ^ The script eUTxO to be spent.
+              -> [TxIn]                              -- ^ The transaction inputs.
+              -> [(AddressAny, Maybe Datum, Value)]  -- ^ The transaction outputs.
+              -> TxIn                                -- ^ The collateral.
+              -> AddressAny                          -- ^ The change address.
+              -> SlotNo                              -- ^ The first valid slot for the transaction.
+              -> SlotNo                              -- ^ The last valid slot for the transaction.
+              -> FilePath                            -- ^ The output file for the transaction body.
+              -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Bool                                -- ^ Whether to print statistics about the transaction.
+              -> Bool                                -- ^ Assertion that the transaction is invalid.
+              -> m TxId                              -- ^ Action to build the transaction body.
 buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFiles txIn inputs outputs collateral changeAddress minimumSlot maximumSlot bodyFile timeout printStats invalid =
   do
     validator <- liftCliIO (readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) validatorFile)
@@ -248,7 +248,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
     signingKeys <- mapM readSigningKey signingKeyFiles
     body <-
       buildBody connection
-        (Just $ buildPayFromScript validator inputDatum redeemer txIn)
+        [buildPayFromScript validator inputDatum redeemer txIn]
         Nothing
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
@@ -299,18 +299,18 @@ hashSigningKey =
 -- | Build a balanced transaction body.
 buildBody :: MonadError CliError m
           => MonadIO m
-          => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-          -> Maybe PayFromScript               -- ^ Payment information from the script, if any.
-          -> Maybe (PayToScript AlonzoEra)     -- ^ Payment information to the script, if any.
-          -> [TxIn]                            -- ^ Transaction inputs.
-          -> [(AddressAny, Value)]             -- ^ Transaction outputs.
-          -> Maybe TxIn                        -- ^ Collateral, if any.
-          -> AddressAny                        -- ^ The change address.
-          -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
-          -> [Hash PaymentKey]                 -- ^ The extra required signatures.
-          -> Bool                              -- ^ Whether to print statistics about the transaction.
-          -> Bool                              -- ^ Assertion that the transaction is invalid.
-          -> m (TxBody AlonzoEra)              -- ^ The action to build the transaction body.
+          => LocalNodeConnectInfo CardanoMode    -- ^ The connection info for the local node.
+          -> [PayFromScript]                     -- ^ Payment information from the script, if any.
+          -> Maybe (PayToScript AlonzoEra)       -- ^ Payment information to the script, if any.
+          -> [TxIn]                              -- ^ Transaction inputs.
+          -> [(AddressAny, Maybe Datum, Value)]  -- ^ Transaction outputs.
+          -> Maybe TxIn                          -- ^ Collateral, if any.
+          -> AddressAny                          -- ^ The change address.
+          -> Maybe (SlotNo, SlotNo)              -- ^ The valid slot range, if any.
+          -> [Hash PaymentKey]                   -- ^ The extra required signatures.
+          -> Bool                                -- ^ Whether to print statistics about the transaction.
+          -> Bool                                -- ^ Assertion that the transaction is invalid.
+          -> m (TxBody AlonzoEra)                -- ^ The action to build the transaction body.
 buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats invalid =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
@@ -341,10 +341,10 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
       txScriptValidity  = if invalid
                             then TxScriptValidity TxScriptValiditySupportedInAlonzoEra ScriptInvalid
                             else TxScriptValidityNone
-      scriptTxIn = maybe [] redeemScript payFromScript
+      scriptTxIn = redeemScript <$> payFromScript
       txIns = scriptTxIn <> fmap makeTxIn inputs
       scriptTxOut = maybe [] payScript payToScript
-    txOuts <- (scriptTxOut <>) <$> mapM (uncurry makeTxOut) outputs
+    txOuts <- (scriptTxOut <>) <$> mapM (uncurry3 makeTxOut) outputs
     utxo <-
       queryAlonzo connection
         . QueryUTxO
@@ -502,23 +502,21 @@ waitForUtxos connection timeout txIns =
 
 
 -- | Compute the transaction input for paying from a script.
-redeemScript :: PayFromScript                                                 -- ^ The payment information.
-             -> [(TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))]  -- ^ The transaction input.
+redeemScript :: PayFromScript                                               -- ^ The payment information.
+             -> (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn AlonzoEra))  -- ^ The transaction input.
 redeemScript PayFromScript{..} =
-  [
-    (
-      txIn
-    , BuildTxWith
-        . ScriptWitness ScriptWitnessForSpending
-        $ PlutusScriptWitness
-          PlutusScriptV1InAlonzo
-          PlutusScriptV1
-          script
-          (ScriptDatumForTxIn . fromPlutusData $ toData datum)
-          (fromPlutusData $ toData redeemer)
-          (ExecutionUnits 0 0)
-    )
-  ]
+  (
+    txIn
+  , BuildTxWith
+      . ScriptWitness ScriptWitnessForSpending
+      $ PlutusScriptWitness
+        PlutusScriptV1InAlonzo
+        PlutusScriptV1
+        script
+        (ScriptDatumForTxIn . fromPlutusData $ toData datum)
+        (fromPlutusData $ toData redeemer)
+        (ExecutionUnits 0 0)
+  )
 
 
 -- | Compute the transaction output for paying to a script.
@@ -539,19 +537,27 @@ makeTxIn :: TxIn                                                        -- ^ The
 makeTxIn = (, BuildTxWith $ KeyWitness KeyWitnessForSpending)
 
 
+-- | Uncurry a triplet.
+uncurry3 :: (a1 -> a2 -> a3 -> b)
+         -> (a1, a2, a3)
+         -> b
+uncurry3 f (x, y, z) = f x y z
+
+
 -- | Compute transaction output for building a transaction.
 makeTxOut :: MonadError CliError m
-          => AddressAny           -- ^ The output address.
-          -> Value                -- ^ The output value.
+          => AddressAny                 -- ^ The output address.
+          -> Maybe Datum                -- ^ The datum, if any.
+          -> Value                      -- ^ The output value.
           -> m (TxOut CtxTx AlonzoEra)  -- ^ Action for building the transaction output.
-makeTxOut address value =
+makeTxOut address datum value =
   do
     address' <- asAlonzoAddress "Failed converting output address to Alonzo era." address
     pure
       $ TxOut
         address'
         (TxOutValue MultiAssetInAlonzoEra value)
-        TxOutDatumNone
+        (maybe TxOutDatumNone (TxOutDatum ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
 
 
 -- | Convert an address to Alonzo era.

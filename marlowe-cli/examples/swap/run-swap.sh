@@ -16,7 +16,6 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* xargs'
 echo
 echo 'Signing and verification keys must be provided below for the two parties: to do this, set the environment variables `PARTY_A_PREFIX` and `PARTY_B_PREFIX` where they appear below.'
 echo
@@ -160,7 +159,7 @@ marlowe-cli run initialize "${MAGIC[@]}"                 \
 
 echo "In particular, we can extract the contract's address from the "'`.marlowe`'" file."
 
-CONTRACT_ADDRESS=$(jq -r '.address' tx-1.marlowe)
+CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 

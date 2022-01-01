@@ -31,6 +31,9 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxIx
 , parseTxOut
 , parseValue
+
+
+, readTokenName
 ) where
 
 
@@ -264,7 +267,7 @@ readTokenEither s =
 
 -- | Parser for `TokenName`.
 parseTokenName :: O.ReadM TokenName
-parseTokenName = readTokenName <$> O.auto
+parseTokenName = O.eitherReader $ Right . readTokenName
 
 
 -- | Reader for `TokenName`.

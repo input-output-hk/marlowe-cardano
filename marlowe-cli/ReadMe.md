@@ -212,6 +212,7 @@ See [example.sh](doc/example.sh) for an example bash script embodying this workf
 *   [simple contract](examples/simple/ReadMe.md)
 *   [escrow](examples/escrow/ReadMe.md)
 *   [swap](examples/swap/ReadMe.md)
+*   [zero-coupon bond](examples/zcb/ReadMe.md)
 
 
 ## Testing
@@ -223,3 +224,4 @@ See [example.sh](doc/example.sh) for an example bash script embodying this workf
     *   ["dismiss claim"](examples/escrow/run-dimiss-claim.sh)
     *   ["confirm claim"](examples/escrow/run-confirm-claim.sh)
 *   [swap](examples/swap/run-swap.sh)
+*   [zero-coupon bond](examples/zcb/run-zcb.sh)

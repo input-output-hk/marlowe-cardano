@@ -6,6 +6,7 @@
 *   [simple contract](simple/ReadMe.md)
 *   [escrow](escrow/ReadMe.md)
 *   [swap](swap/ReadMe.md)
+*   [zero-coupon bond](zcb/ReadMe.md)
 
 
 ## Testing
@@ -17,3 +18,4 @@
     *   ["dismiss claim"](escrow/run-dimiss-claim.sh)
     *   ["confirm claim"](escrow/run-confirm-claim.sh)
 *   [swap](swap/run-swap.sh)
+*   [zero-coupon bond](zcb/run-zcb.sh)

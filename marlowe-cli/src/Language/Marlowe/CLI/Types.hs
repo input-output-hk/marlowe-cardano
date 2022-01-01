@@ -75,15 +75,14 @@ type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentE
 data MarloweTransaction era =
   MarloweTransaction
   {
-    mtAddress  :: AddressInEra era        -- ^ The script address.
-  , mtScript   :: Script PlutusScriptV1   -- ^ The Plutus script.
-  , mtHash     :: ValidatorHash           -- ^ The validator hash.
-  , mtRoles    :: CurrencySymbol          -- ^ The roles currency.
-  , mtState    :: State                   -- ^ The Marlowe state after the transaction.
-  , mtContract :: Contract                -- ^ The Marlowe contract after the transaction.
-  , mtRange    :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
-  , mtInputs   :: [Input]                 -- ^ The inputs to the transaction.
-  , mtPayments :: [Payment]               -- ^ The payments from the transaction.
+    mtValidator     :: ValidatorInfo era       -- ^ The Marlowe validator.
+  , mtRoleValidator :: ValidatorInfo era       -- ^ The roles validator.
+  , mtRoles         :: CurrencySymbol          -- ^ The roles currency.
+  , mtState         :: State                   -- ^ The Marlowe state after the transaction.
+  , mtContract      :: Contract                -- ^ The Marlowe contract after the transaction.
+  , mtRange         :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
+  , mtInputs        :: [Input]                 -- ^ The inputs to the transaction.
+  , mtPayments      :: [Payment]               -- ^ The payments from the transaction.
   }
     deriving (Generic, Show)
 
@@ -91,15 +90,14 @@ instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
   toJSON MarloweTransaction{..} =
     object
       [
-        "address"  .= serialiseAddress mtAddress
-      , "script"   .= toJSON (serialiseToTextEnvelope Nothing mtScript)
-      , "hash"     .= toJSON mtHash
-      , "roles"    .= toJSON mtRoles
-      , "state"    .= toJSON mtState
-      , "contract" .= toJSON mtContract
-      , "range"    .= toJSON mtRange
-      , "inputs"   .= toJSON mtInputs
-      , "payments" .= toJSON mtPayments
+        "marloweValidator" .= toJSON mtValidator
+      , "rolesValidator"   .= toJSON mtRoleValidator
+      , "roles"            .= toJSON mtRoles
+      , "state"            .= toJSON mtState
+      , "contract"         .= toJSON mtContract
+      , "range"            .= toJSON mtRange
+      , "inputs"           .= toJSON mtInputs
+      , "payments"         .= toJSON mtPayments
       ]
 
 instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize eras.
@@ -107,21 +105,14 @@ instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize era
     withObject "MarloweTransaction"
       $ \o ->
         do
-          address    <- o .: "address"
-          mtHash     <- o .: "hash"
-          script     <- o .: "script"
-          mtRoles    <- o .: "roles"
-          mtState    <- o .: "state"
-          mtContract <- o .: "contract"
-          mtRange    <- o .: "range"
-          mtInputs   <- o .: "inputs"
-          mtPayments <- o .: "payments"
-          mtAddress  <- case deserialiseAddress (AsAddressInEra AsAlonzoEra) address of
-                         Just address' -> pure address'
-                         Nothing       -> fail "Failed deserialising address."
-          mtScript   <- case deserialiseFromTextEnvelope (AsScript AsPlutusScriptV1) script of
-                         Right script' -> pure script'
-                         Left message  -> fail $ show message
+          mtValidator     <- o .: "marloweValidator"
+          mtRoleValidator <- o .: "rolesValidator"
+          mtRoles         <- o .: "roles"
+          mtState         <- o .: "state"
+          mtContract      <- o .: "contract"
+          mtRange         <- o .: "range"
+          mtInputs        <- o .: "inputs"
+          mtPayments      <- o .: "payments"
           pure MarloweTransaction{..}
 
 

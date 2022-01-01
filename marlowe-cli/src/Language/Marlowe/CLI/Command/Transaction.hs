@@ -146,12 +146,14 @@ runTransactionCommand command =
         }
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
       guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
+      padTxOut (address, value) = (address, Nothing, value)
+      outputs' = padTxOut <$> outputs command
     case command of
       BuildTransact{..}          -> guardMainnet
                                       >> buildSimple
                                         connection
                                         signingKeyFiles
-                                        inputs outputs change
+                                        inputs outputs' change
                                         bodyFile
                                         submitTimeout
                                         printStats
@@ -164,7 +166,7 @@ runTransactionCommand command =
                                         signingKeyFiles
                                         outputDatumFile
                                         outputValue
-                                        inputs outputs change
+                                        inputs outputs' change
                                         bodyFile
                                         submitTimeout
                                         printStats
@@ -181,7 +183,7 @@ runTransactionCommand command =
                                         inputTxIn
                                         outputDatumFile
                                         outputValue
-                                        inputs outputs collateral change
+                                        inputs outputs' collateral change
                                         minimumSlot maximumSlot
                                         bodyFile
                                         submitTimeout
@@ -196,7 +198,7 @@ runTransactionCommand command =
                                         inputDatumFile
                                         signingKeyFiles
                                         inputTxIn
-                                        inputs outputs collateral change
+                                        inputs outputs' collateral change
                                         minimumSlot maximumSlot
                                         bodyFile
                                         submitTimeout

@@ -24,6 +24,8 @@ module Language.Marlowe.CLI.Run (
 , prepareTransaction
 , makeMarlowe
 , runTransaction
+-- * Roles
+, withdrawFunds
 -- * Input
 , makeDeposit
 , makeChoice
@@ -34,19 +36,23 @@ module Language.Marlowe.CLI.Run (
 import           Cardano.Api                      (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode,
                                                    LocalNodeConnectInfo (localNodeNetworkId),
                                                    MultiAssetSupportedInEra (MultiAssetInAlonzoEra), NetworkId,
-                                                   QueryInShelleyBasedEra (QueryProtocolParameters), Script (..),
+                                                   QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO),
+                                                   QueryUTxOFilter (QueryUTxOByAddress), Script (..),
+                                                   ScriptDataSupportedInEra (..),
                                                    ShelleyBasedEra (ShelleyBasedEraAlonzo), SlotNo (..),
                                                    StakeAddressReference (..), TxId, TxIn, TxOut (..), TxOutDatum (..),
-                                                   TxOutValue (..), calculateMinimumUTxO, getTxId, lovelaceToValue,
-                                                   selectLovelace, toAddressAny, writeFileTextEnvelope)
-import           Cardano.Api.Shelley              (ProtocolParameters)
+                                                   TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId,
+                                                   lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue,
+                                                   writeFileTextEnvelope)
+import           Cardano.Api.Shelley              (ProtocolParameters, fromPlutusData)
 import           Control.Monad                    (forM_, guard, unless, when)
 import           Control.Monad.Except             (MonadError, MonadIO, liftIO, throwError)
 import           Data.Bifunctor                   (bimap)
 import           Data.Function                    (on)
 import           Data.List                        (groupBy)
 import           Data.Maybe                       (catMaybes, fromMaybe)
-import           Language.Marlowe.CLI.Export      (buildDatum, buildRedeemer, buildValidator)
+import           Language.Marlowe.CLI.Export      (buildDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer,
+                                                   buildRoleValidator, buildValidator)
 import           Language.Marlowe.CLI.IO          (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readSigningKey)
 import           Language.Marlowe.CLI.Orphans     ()
 import           Language.Marlowe.CLI.Transaction (buildBody, buildPayFromScript, buildPayToScript, hashSigningKey,
@@ -57,15 +63,18 @@ import           Language.Marlowe.Semantics       (MarloweParams (rolesCurrency)
                                                    TransactionOutput (..), TransactionWarning, computeTransaction)
 import           Language.Marlowe.SemanticsTypes  (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract,
                                                    Input (..), Party (..), Payee (..), State (accounts), Token (..))
-import           Ledger.Tx.CardanoAPI             (toCardanoAddress, toCardanoValue)
+import           Ledger.Tx.CardanoAPI             (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import           Plutus.V1.Ledger.Ada             (adaSymbol, adaToken, fromValue, getAda)
-import           Plutus.V1.Ledger.Api             (Address (..), CostModelParams, Credential (..))
+import           Plutus.V1.Ledger.Api             (Address (..), CostModelParams, Credential (..), Datum, TokenName,
+                                                   toData)
 import           Plutus.V1.Ledger.Slot            (Slot (..))
 import           Plutus.V1.Ledger.Value           (AssetClass (..), Value (..), assetClassValue)
 import           Prettyprinter.Extras             (Pretty (..))
 import           System.IO                        (hPutStrLn, stderr)
 
 import qualified Cardano.Api                      as Api (Value)
+import qualified Data.Map.Strict                  as M (toList)
+import qualified Data.Set                         as S (singleton)
 import qualified PlutusTx.AssocMap                as AM (toList)
 
 
@@ -137,24 +146,23 @@ initializeTransactionImpl :: MonadError CliError m
                           -> Bool                   -- ^ Whether to print statistics about the validator.
                           -> m ()                   -- ^ Action to export the validator information to a file.
 initializeTransactionImpl marloweParams costModelParams network stake mtContract mtState outputFile printStats =
-  case buildValidator marloweParams costModelParams network stake of
-    Left message            -> throwError . CliError . show $ message
-    Right ValidatorInfo{..} -> do
-                                 let
-                                   mtAddress  = viAddress :: AddressInEra AlonzoEra  -- FIXME: Generalize eras.
-                                   mtHash     = viHash
-                                   mtScript   = viScript
-                                   mtRoles    = rolesCurrency marloweParams
-                                   mtRange    = Nothing
-                                   mtInputs   = []
-                                   mtPayments = []
-                                 maybeWriteJson outputFile MarloweTransaction{..}
-                                 liftIO
-                                   $ when printStats
-                                     $ do
-                                       hPutStrLn stderr ""
-                                       hPutStrLn stderr $ "Validator size: " <> show viSize
-                                       hPutStrLn stderr $ "Base-validator cost: " <> show viCost
+  do
+     let
+       mtRoles = rolesCurrency marloweParams
+     mtValidator <- liftCli $ buildValidator marloweParams costModelParams network stake
+     mtRoleValidator <- liftCli $ buildRoleValidator mtRoles costModelParams network stake
+     let
+       ValidatorInfo{..} = mtValidator :: ValidatorInfo AlonzoEra  -- FIXME: Generalize eras.
+       mtRange    = Nothing
+       mtInputs   = []
+       mtPayments = []
+     maybeWriteJson outputFile MarloweTransaction{..}
+     liftIO
+       $ when printStats
+         $ do
+           hPutStrLn stderr ""
+           hPutStrLn stderr $ "Validator size: " <> show viSize
+           hPutStrLn stderr $ "Base-validator cost: " <> show viCost
 
 
 -- | Prepare the next step in a Marlowe contract.
@@ -235,39 +243,39 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{.
 -- | Run a Marlowe transaction.
 runTransaction :: MonadError CliError m
                => MonadIO m
-               => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-               -> Maybe (FilePath, TxIn, TxIn)      -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
-               -> FilePath                          -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
-               -> [TxIn]                            -- ^ The transaction inputs.
-               -> [(AddressAny, Api.Value)]         -- ^ The transaction outputs.
-               -> AddressAny                        -- ^ The change address.
-               -> [FilePath]                        -- ^ The files for required signing keys.
-               -> FilePath                          -- ^ The output file for the transaction body.
-               -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-               -> Bool                              -- ^ Whether to print statistics about the transaction.
-               -> Bool                              -- ^ Assertion that the transaction is invalid.
-               -> m TxId                            -- ^ Action to build the transaction body.
+               => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
+               -> Maybe (FilePath, TxIn, TxIn)            -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
+               -> FilePath                                -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+               -> [TxIn]                                  -- ^ The transaction inputs.
+               -> [(AddressAny, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
+               -> AddressAny                              -- ^ The change address.
+               -> [FilePath]                              -- ^ The files for required signing keys.
+               -> FilePath                                -- ^ The output file for the transaction body.
+               -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Bool                                    -- ^ Whether to print statistics about the transaction.
+               -> Bool                                    -- ^ Assertion that the transaction is invalid.
+               -> m TxId                                  -- ^ Action to build the transaction body.
 runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAddress signingKeyFiles bodyFile timeout printStats invalid =
   do
     protocol <- queryAlonzo connection QueryProtocolParameters
     marloweOut <- decodeFileStrict marloweOutFile
     (spend, collateral) <-
       case marloweInBundle of
-        Nothing                                 -> pure (Nothing, Nothing)
+        Nothing                                 -> pure ([], Nothing)
         Just (marloweInFile, spend, collateral) -> do
                                                     marloweIn  <- decodeFileStrict marloweInFile
                                                     let
-                                                      _scriptAddress = mtAddress marloweIn :: AddressInEra AlonzoEra  -- FIXME: Generalize eras.
-                                                      PlutusScript _ validator = mtScript marloweIn
+                                                      validatorInfo = mtValidator (marloweIn :: MarloweTransaction AlonzoEra) -- FIXME: Generalize eras.
+                                                      PlutusScript _ validator = viScript validatorInfo
                                                       redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
                                                       inputDatum  = diDatum $ buildDatum (mtContract marloweIn) (mtState marloweIn)
                                                       spend' = buildPayFromScript validator inputDatum redeemer spend
-                                                    pure (Just spend', Just collateral)
+                                                    pure ([spend'], Just collateral)
     let
       toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
       toAddressAny' (AddressInEra _ address) = toAddressAny address
       network = localNodeNetworkId connection
-      scriptAddress = mtAddress marloweOut
+      scriptAddress = viAddress $ mtValidator marloweOut
       outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
     outputValue <-
       mconcat
@@ -283,24 +291,32 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
           guard (outputValue /= mempty)
           pure
             $ buildPayToScript scriptAddress outputValue outputDatum
+      roleAddress = viAddress $ mtRoleValidator marloweOut :: AddressInEra AlonzoEra
     payments <-
       catMaybes
       <$> sequence
         [
           case payee of
-            Party (PK pkh) -> do
-                                address <-
-                                  liftCli
-                                    . toCardanoAddress network
-                                    $ Address (PubKeyCredential pkh) Nothing
-                                money' <-
-                                  liftCli
-                                    $ toCardanoValue money
-                                money'' <- adjustMinimumUTxO protocol address money'
-                                let
-                                pure $ Just (toAddressAny' address, money'')
-            Party (Role _) -> pure Nothing
-            Account _      -> pure Nothing
+            Party (PK pkh)    -> do
+                                   address <-
+                                     liftCli
+                                       . toCardanoAddress network
+                                       $ Address (PubKeyCredential pkh) Nothing
+                                   money' <-
+                                     liftCli
+                                       $ toCardanoValue money
+                                   money'' <- adjustMinimumUTxO protocol address Nothing money'
+                                   pure $ Just (toAddressAny' address, Nothing, money'')
+            Party (Role role) -> do
+                                   money' <-
+                                     liftCli
+                                       $ toCardanoValue money
+                                   let
+                                     datum = Just . diDatum $ buildRoleDatum role
+                                   money'' <- adjustMinimumUTxO protocol roleAddress datum money'
+                                   pure $ Just (toAddressAny' roleAddress, datum, money'')
+
+            Account _         -> pure Nothing
         |
            (payee, money) <- bimap head mconcat
                                . unzip
@@ -336,15 +352,84 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
 adjustMinimumUTxO :: MonadError CliError m
                   => ProtocolParameters       -- ^ The protocol parameters.
                   -> AddressInEra AlonzoEra   -- ^ The output address.
+                  -> Maybe Datum              -- ^ The datum, if any.
                   -> Api.Value                -- ^ The output value.
                   -> m Api.Value              -- ^ Action to compute the adjusted value.
-adjustMinimumUTxO protocol address value =
+adjustMinimumUTxO protocol address datum value =
   do
     let
-      txOut = TxOut address (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
+      txOut =
+        TxOut
+          address
+          (TxOutValue MultiAssetInAlonzoEra value)
+          (maybe TxOutDatumNone (TxOutDatum ScriptDataInAlonzoEra . fromPlutusData . toData) datum)
     minValue <- liftCli $ calculateMinimumUTxO ShelleyBasedEraAlonzo txOut protocol
     let
       minLovelace = selectLovelace minValue
       deficit = minLovelace <> negate (minimum[selectLovelace value, minLovelace])
     pure
       $ value <> lovelaceToValue deficit
+
+
+-- | Withdraw funds for a specific role from the role address.
+withdrawFunds :: MonadError CliError m
+              => MonadIO m
+              => LocalNodeConnectInfo CardanoMode        -- ^ The connection info for the local node.
+              -> FilePath                                -- ^ The JSON file with the Marlowe state and contract.
+              -> TokenName                               -- ^ The role name for the redemption.
+              -> TxIn                                    -- ^ The collateral.
+              -> [TxIn]                                  -- ^ The transaction inputs.
+              -> [(AddressAny, Maybe Datum, Api.Value)]  -- ^ The transaction outputs.
+              -> AddressAny                              -- ^ The change address.
+              -> [FilePath]                              -- ^ The files for required signing keys.
+              -> FilePath                                -- ^ The output file for the transaction body.
+              -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Bool                                    -- ^ Whether to print statistics about the transaction.
+              -> Bool                                    -- ^ Assertion that the transaction is invalid.
+              -> m TxId                                  -- ^ Action to build the transaction body.
+withdrawFunds connection marloweOutFile roleName collateral inputs outputs changeAddress signingKeyFiles bodyFile timeout printStats invalid =
+  do
+    marloweOut <- decodeFileStrict marloweOutFile
+    signingKeys <- mapM readSigningKey signingKeyFiles
+    roleHash <- liftCli . toCardanoScriptDataHash . diHash $ buildRoleDatum roleName
+    let
+      toAddressAny' :: AddressInEra AlonzoEra -> AddressAny
+      toAddressAny' (AddressInEra _ address) = toAddressAny address
+      validatorInfo = mtRoleValidator marloweOut
+      PlutusScript _ roleScript = viScript validatorInfo
+      roleAddress = viAddress validatorInfo :: AddressInEra AlonzoEra
+      roleDatum = diDatum $ buildRoleDatum roleName
+      roleRedeemer = riRedeemer buildRoleRedeemer
+      checkRole (TxOut _ _ datum) =
+        case datum of
+          TxOutDatumNone             -> False
+          TxOutDatumHash _ datumHash -> datumHash == roleHash
+    utxos <-
+      fmap (filter (checkRole . snd) . M.toList . unUTxO)
+        . queryAlonzo connection
+        . QueryUTxO
+        . QueryUTxOByAddress
+        . S.singleton
+        . toAddressAny'
+        $ roleAddress
+    let
+      spend = buildPayFromScript roleScript roleDatum roleRedeemer . fst <$> utxos
+      withdrawal = (changeAddress, Nothing, mconcat [txOutValueToValue value | (_, TxOut _ value _) <- utxos])
+      outputs' = withdrawal : outputs
+    body <-
+      buildBody connection
+        spend Nothing
+        inputs outputs'
+        (Just collateral) changeAddress
+        (mtRange marloweOut)
+        (hashSigningKey <$> signingKeys)
+        printStats
+        invalid
+    liftCliIO
+      $ writeFileTextEnvelope bodyFile Nothing body
+    forM_ timeout
+      $ if invalid
+          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else submitBody connection body signingKeys
+    pure
+      $ getTxId body
