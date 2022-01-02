@@ -62,7 +62,7 @@ import           Language.Marlowe.SemanticsTypes         (AccountId, Accounts, A
                                                           Observation (..), Party, Payee (..), SlotInterval, State (..),
                                                           Token (..), Value (..), ValueId, getAction, getInputContent,
                                                           inBounds)
-import           Ledger                                  (Slot (..), ValidatorHash)
+import           Ledger                                  (POSIXTime, Slot (..), ValidatorHash)
 import           Ledger.Value                            (CurrencySymbol (..))
 import qualified Ledger.Value                            as Val
 import           PlutusTx                                (makeIsDataIndexed)
@@ -210,7 +210,8 @@ data TransactionOutput =
 -}
 data MarloweData = MarloweData {
         marloweState    :: State,
-        marloweContract :: Contract
+        marloweContract :: Contract,
+        slotConfigFix   :: (Integer, POSIXTime)  -- FIXME: This is a temporary fix until SCP-3150 is complete.
     } deriving stock (Haskell.Show, Haskell.Eq, Generic)
       deriving anyclass (ToJSON, FromJSON)
 

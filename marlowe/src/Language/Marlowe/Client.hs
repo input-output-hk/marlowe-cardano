@@ -28,6 +28,7 @@ import           Control.Lens
 import           Control.Monad                    (forM_, void)
 import           Control.Monad.Error.Lens         (catching, throwing, throwing_)
 import           Data.Aeson                       (FromJSON, ToJSON, parseJSON, toJSON)
+import           Data.Default                     (def)
 import           Data.Either                      (rights)
 import qualified Data.List.NonEmpty               as NonEmpty
 import           Data.Map.Strict                  (Map)
@@ -56,6 +57,7 @@ import qualified Ledger.Constraints               as Constraints
 import           Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval                  as Interval
 import           Ledger.Scripts                   (datumHash, unitRedeemer)
+import           Ledger.TimeSlot                  (SlotConfig (..))
 import qualified Ledger.Tx                        as Tx
 import           Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts             as Scripts
@@ -298,7 +300,8 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                     { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) minLovelaceDeposit
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
-                    , minSlot = slot } }
+                    , minSlot = slot },
+                slotConfigFix = (scSlotLength def, scSlotZeroTime def) }  -- FIXME: This is a temporary fix until SCP-3150 is complete.
         let minAdaTxOut = lovelaceValueOf minLovelaceDeposit
         let typedValidator = mkMarloweTypedValidator params
         let tx = mustPayToTheScript marloweData minAdaTxOut <> distributeRoleTokens
