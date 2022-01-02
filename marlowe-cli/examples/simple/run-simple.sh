@@ -54,7 +54,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if false
+if true
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -85,6 +85,13 @@ BYSTANDER_PUBKEYHASH=$(
 
 echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'" and public-key hash "'`'"$BYSTANDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                               \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
+                       --required-signer "$BYSTANDER_PAYMENT_SKEY" \
+                       --change-address "$BYSTANDER_ADDRESS"       \
+                       --out-file /dev/null                        \
+                       --submit=600                                \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS"
 
 echo "We select the UTxO with the most funds to use in executing the contract."
@@ -117,6 +124,13 @@ PARTY_PUBKEYHASH=$(
 
 echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and the public-key hash "'`'"$PARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$PARTY_PAYMENT_SKEY"   \
+                       --change-address "$PARTY_ADDRESS"         \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
 
 echo "We select the UTxO with the most funds to use in executing the contract."
@@ -325,27 +339,4 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS" | sed -n -e 
 echo "Here is the UTxO at the party $PARTY_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
-
-echo "## Clean Up Wallets"
-
-echo "It's convenient to consolidate all of the UTxOs into single ones."
-
-marlowe-cli transaction simple "${MAGIC[@]}"                               \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"   \
-                               --tx-in "$TX_1"#0                           \
-                               --tx-in "$TX_4"#1                           \
-                               --required-signer "$BYSTANDER_PAYMENT_SKEY" \
-                               --change-address "$BYSTANDER_ADDRESS"       \
-                               --out-file tx-5.raw                         \
-                               --submit=600                                \
-> /dev/null
-marlowe-cli transaction simple "${MAGIC[@]}"                             \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                               --tx-in "$TX_4"#0                         \
-                               --tx-in "$TX_4"#2                         \
-                               --required-signer "$PARTY_PAYMENT_SKEY"   \
-                               --change-address "$PARTY_ADDRESS"         \
-                               --out-file tx-6.raw                       \
-                               --submit=600                              \
-> /dev/null
 

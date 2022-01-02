@@ -175,9 +175,9 @@ parseRunCommand :: O.Parser RunCommand
 parseRunCommand =
   O.hsubparser
     $ O.commandGroup "Commands for running contracts:"
+    <> runCommand
     <> initializeCommand
     <> prepareCommand
-    <> runCommand
     <> withdrawCommand
 
 
@@ -243,7 +243,7 @@ runOptions =
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"           <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                             )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"          <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."                        )
     <*> O.option parseAddressAny               (O.long "change-address"  <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                           )
-    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."                            )
+    <*> (O.many . O.strOption)                 (O.long "required-signer" <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                            )
     <*> O.strOption                            (O.long "out-file"        <> O.metavar "FILE"          <> O.help "Output file for transaction body."                                  )
     <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."            )
     <*> O.switch                               (O.long "print-stats"                                  <> O.help "Print statistics."                                                  )
@@ -277,7 +277,7 @@ withdrawOptions =
     <*> (O.many . O.option parseTxIn)          (O.long "tx-in"            <> O.metavar "TXID#TXIX"     <> O.help "Transaction input in TxId#TxIx format."                             )
     <*> (O.many . O.option parseTxOut)         (O.long "tx-out"           <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."                        )
     <*> O.option parseAddressAny               (O.long "change-address"   <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                           )
-    <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"  <> O.help "Files containing required signing keys."                            )
+    <*> (O.many . O.strOption)                 (O.long "required-signer"  <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                            )
     <*> O.strOption                            (O.long "out-file"         <> O.metavar "FILE"          <> O.help "Output file for transaction body."                                  )
     <*> (O.optional . O.option O.auto)         (O.long "submit"           <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."            )
     <*> O.switch                               (O.long "print-stats"                                   <> O.help "Print statistics."                                                  )

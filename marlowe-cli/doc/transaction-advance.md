@@ -34,7 +34,7 @@ The `marlowe transaction advance` command builds a transaction that both pays to
       --tx-in-script-file PLUTUS_FILE      Plutus file for Marlowe contract.
       --tx-in-redeemer-file REDEEMER_FILE  Redeemer JSON file spent from Marlowe contract.
       --tx-in-datum-file DATUM_FILE        Datum JSON file spent from Marlowe contract.
-      --required-signer SIGNING_FILE       Files containing required signing keys.
+      --required-signer SIGNING_FILE       File containing a required signing key.
       --tx-in-marlowe TXID#TXIX            UTxO spent from Marlowe contract.
       --tx-out-datum-file DATUM_FILE       Datum JSON file datum paid to Marlowe contract.
       --tx-out-marlowe VALUE               Value paid to Marlowe contract.

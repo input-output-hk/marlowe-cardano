@@ -25,6 +25,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildIncoming
 , buildContinuing
 , buildOutgoing
+, buildClean
 -- * Submitting
 , submit
 -- * Low-Level Functions
@@ -37,14 +38,15 @@ module Language.Marlowe.CLI.Transaction (
 ) where
 
 
-import           Cardano.Api                                       (AddressAny, AddressInEra, AlonzoEra, AsType (..),
-                                                                    BalancedTxBody (..), BuildTx, BuildTxWith (..),
-                                                                    CardanoEra (..), CardanoMode,
+import           Cardano.Api                                       (AddressAny, AddressInEra (..), AlonzoEra,
+                                                                    AsType (..), BalancedTxBody (..), BuildTx,
+                                                                    BuildTxWith (..), CardanoEra (..), CardanoMode,
                                                                     CollateralSupportedInEra (..),
                                                                     ConsensusModeIsMultiEra (..), CtxTx, EraInMode (..),
                                                                     ExecutionUnits (..), Hash, KeyWitnessInCtx (..),
-                                                                    LocalNodeConnectInfo, MultiAssetSupportedInEra (..),
-                                                                    PaymentKey, PlutusScript, PlutusScriptV1,
+                                                                    LocalNodeConnectInfo, Lovelace,
+                                                                    MultiAssetSupportedInEra (..), PaymentKey,
+                                                                    PlutusScript, PlutusScriptV1,
                                                                     PlutusScriptVersion (..), QueryInEra (..),
                                                                     QueryInMode (..), QueryInShelleyBasedEra (..),
                                                                     QueryUTxOFilter (..), ScriptDataSupportedInEra (..),
@@ -73,7 +75,9 @@ import           Cardano.Api                                       (AddressAny, 
                                                                     makeTransactionBodyAutoBalance, queryNodeLocalState,
                                                                     readFileTextEnvelope, serialiseToCBOR,
                                                                     signShelleyTransaction, submitTxToNodeLocal,
-                                                                    verificationKeyHash, writeFileTextEnvelope)
+                                                                    txOutValueToValue, valueFromList, valueToList,
+                                                                    valueToLovelace, verificationKeyHash,
+                                                                    writeFileTextEnvelope)
 import           Cardano.Api.Shelley                               (TxBody (ShelleyTxBody), fromPlutusData,
                                                                     protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import           Cardano.Ledger.Alonzo.Scripts                     (ExUnits (..))
@@ -81,7 +85,7 @@ import           Cardano.Ledger.Alonzo.TxWitness                   (Redeemers (.
 import           Control.Concurrent                                (threadDelay)
 import           Control.Monad                                     (forM_, when, (<=<))
 import           Control.Monad.Except                              (MonadError, MonadIO, liftIO, throwError)
-import           Data.Maybe                                        (maybeToList)
+import           Data.Maybe                                        (isNothing, maybeToList)
 import           Language.Marlowe.CLI.IO                           (decodeFileBuiltinData, liftCli, liftCliIO,
                                                                     readSigningKey)
 import           Language.Marlowe.CLI.Types                        (CliError (..), PayFromScript (..), PayToScript (..),
@@ -91,8 +95,8 @@ import           Plutus.V1.Ledger.Api                              (Datum (..), 
 import           System.IO                                         (hPutStrLn, stderr)
 
 import qualified Data.ByteString                                   as BS (length)
-import qualified Data.Map.Strict                                   as M (elems, keysSet)
-import qualified Data.Set                                          as S (empty, fromList)
+import qualified Data.Map.Strict                                   as M (elems, keysSet, toList)
+import qualified Data.Set                                          as S (empty, fromList, singleton)
 
 
 -- | Build a non-Marlowe transaction.
@@ -126,6 +130,54 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
       $ if invalid
           then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
           else submitBody connection body signingKeys
+    pure
+      $ getTxId body
+
+
+-- | Build a non-Marlowe transaction.
+buildClean :: MonadError CliError m
+           => MonadIO m
+           => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+           -> [FilePath]                        -- ^ The files for required signing keys.
+           -> Lovelace                          -- ^ The value to be sent to addresses with tokens.
+           -> AddressAny                        -- ^ The change address.
+           -> FilePath                          -- ^ The output file for the transaction body.
+           -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+           -> m TxId                            -- ^ Action to build the transaction body.
+buildClean connection signingKeyFiles lovelace changeAddress bodyFile timeout =
+  do
+    signingKeys <- mapM readSigningKey signingKeyFiles
+    utxos <-
+      fmap (M.toList . unUTxO)
+        .  queryAlonzo connection
+        . QueryUTxO
+        . QueryUTxOByAddress
+        . S.singleton
+        $ changeAddress
+    let
+      inputs = fst <$> utxos
+      extractValue (TxOut _ value _) = txOutValueToValue value
+      total = mconcat $ extractValue . snd <$> utxos
+      outputs =
+        [
+          (changeAddress, Nothing, value <> lovelaceToValue lovelace)
+        |
+          value <- valueFromList . pure <$> valueToList total
+        , isNothing $ valueToLovelace value
+        ]
+    body <-
+      buildBody connection
+        []
+        Nothing
+        inputs outputs Nothing changeAddress
+        Nothing
+        []
+        False
+        False
+    liftCliIO
+      $ writeFileTextEnvelope bodyFile Nothing body
+    forM_ timeout
+      $ submitBody connection body signingKeys
     pure
       $ getTxId body
 

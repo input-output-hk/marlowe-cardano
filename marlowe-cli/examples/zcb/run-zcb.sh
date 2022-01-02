@@ -26,7 +26,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if false
+if true
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -61,6 +61,13 @@ LENDER_PUBKEYHASH=$(
 
 echo "The lender $LENDER_NAME is the minimum-ADA provider and has the address "'`'"$LENDER_ADDRESS"'`'" and public-key hash "'`'"$LENDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$LENDER_PAYMENT_SKEY"  \
+                       --change-address "$LENDER_ADDRESS"        \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS"
 
 echo "We select the UTxO with the lender $LENDER_NAME's role token."
@@ -99,6 +106,13 @@ BORROWER_PUBKEYHASH=$(
 
 echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_BDDRESS"'`'" and public-key hash "'`'"$BORROWER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                              \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                       --required-signer "$BORROWER_PAYMENT_SKEY" \
+                       --change-address "$BORROWER_ADDRESS"       \
+                       --out-file /dev/null                       \
+                       --submit=600                               \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS"
 
 echo "We select the UTxO with the borrower $BORROWER_NAME's role token."
@@ -111,9 +125,9 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_BORROWER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                      \
+cardano-cli query utxo "${MAGIC[@]}"                                                                        \
                        --address "$BORROWER_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                             \
+                       --out-file /dev/stdout                                                               \
 | jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BORROWER_ROLE"'" == 1) | .key' \
 )
 
@@ -344,18 +358,4 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2
 echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
-
-echo "## Clean Up"
-
-echo "It's convenient to consolidate the UTxOs for the lender."
-
-marlowe-cli transaction simple "${MAGIC[@]}"                             \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                               --tx-in "$TX_5"#0                         \
-                               --tx-in "$TX_5"#1                         \
-                               --required-signer "$LENDER_PAYMENT_SKEY"  \
-                               --change-address "$LENDER_ADDRESS"        \
-                               --out-file tx-4.raw                       \
-                               --submit=600                              \
-> /dev/null
 

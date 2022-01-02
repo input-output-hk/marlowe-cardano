@@ -23,7 +23,7 @@ The `marlowe-cli transaction create` command builds a transaction that pays to a
       --testnet-magic INTEGER         Network magic, or omit for mainnet.
       --socket-path SOCKET_FILE       Location of the cardano-node socket file.
       --script-address ADDRESS        Address of the Marlowe contract.
-      --required-signer SIGNING_FILE  Files containing required signing keys.
+      --required-signer SIGNING_FILE  File containing a required signing key.
       --tx-out-datum-file DATUM_FILE  Datum JSON file datum paid to Marlowe contract.
       --tx-out-marlowe VALUE          Value paid to Marlowe contract.
       --tx-in TXID#TXIX               Transaction input in TxId#TxIx format.

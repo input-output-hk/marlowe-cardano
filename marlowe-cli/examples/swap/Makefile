@@ -17,7 +17,10 @@ docs: ReadMe.md
 ReadMe.md : run-swap.sh
 	../log2md.sh $< $@
 
+clean:
+	-rm tx-?.{marlowe,contract,state,raw} *.{diff,log} utxo-?-?.json
+
 
 .SUFFIXES:
 
-.PHONY: all tests docs
+.PHONY: all tests docs clean

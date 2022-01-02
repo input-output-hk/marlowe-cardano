@@ -2,13 +2,13 @@
 #!nix-shell -i "make -f" -p gnumake
 
 
-SUBDIRS:=simple swap escrow
+SUBDIRS:=simple swap zcb escrow
 
 
 all: $(SUBDIRS)
 
-$(SUBDIRS): 
-	make -C $@ tests
+$(SUBDIRS):
+	make -C $@ clean tests
 
 
 .SUFFIXES:

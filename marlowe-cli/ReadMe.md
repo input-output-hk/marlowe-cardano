@@ -10,33 +10,92 @@ The `marlowe-cli` tool provides several utilities for serialising Marlowe contra
     Usage: marlowe-cli [--version] COMMAND
       Utilities for Marlowe.
     
+    marlow-cli : a command-line tool for Marlowe contracts
+    
+    Usage: marlowe-cli [--version] (COMMAND | COMMAND)
+      Utilities for Marlowe.
+    
     Available options:
       -h,--help                Show this help text
       --version                Show version.
     
-    Available commands:
-      contract                 Export contract address, validator, datum, or redeemer. [low-level]
-      input                    Create inputs to a contract.
-      role                     Export role address, validator, datum, or redeemer.  [low-level]
+    High-level commands:
       run                      Run a contract.
       template                 Create a contract from a template.
-      transaction              Create and submit transactions. [low-level]
+    
+    Low-level commands:
+      contract                 Export contract address, validator, datum, or redeemer.
+      input                    Create inputs to a contract.
+      role                     Export role address, validator, datum, or redeemer.
+      transaction              Create and submit transactions.
+      util                     Miscellaneous utilities.
 
 Help for subcommands:
 
-* [`marlowe-cli contract`](#contract-commands)
-* [`marlowe-cli input`](#input-commands)
-* [`marlowe-cli role`](#role-commands)
-* [`marlowe-cli template`](#template-commands)
-* [`marlowe-cli transaction`](#transaction-commands)
+*   high-level commands
+    *   [`marlowe-cli run`](#run-commands)
+    *   [`marlowe-cli template`](#template-commands)
+*   low-level commands
+    *   [`marlowe-cli contract`](#contract-commands)
+    *   [`marlowe-cli input`](#input-commands)
+    *   [`marlowe-cli role`](#role-commands)
+    *   [`marlowe-cli transaction`](#transaction-commands)
+    *   [`marlowe-cli util`](#util-commands)
 
 
-### "Contract" Commands
+### High-Level Commands
+
+
+#### "Run" Commands
+
+    $ marlowe-cli run --help
+    
+    Usage: marlowe-cli run COMMAND
+      Run a contract.
+    
+    Available options:
+      -h,--help                Show this help text
+    
+    Commands for running contracts:
+      execute                  Run a Marlowe transaction.
+      initialize               Initialize the first transaction of a Marlowe contract and write output to a JSON file.
+      prepare                  Prepare the next step of a Marlowe contract and write the output to a JSON file.
+      withdraw                 Withdraw funds from the Marlowe role address.
+
+Individual help pages:
+
+*   [`marlowe-cli run execute`](doc/run-execute.md)
+*   [`marlowe-cli run initialize`](doc/run-initialize.md)
+*   [`marlowe-cli run prepare`](doc/run-prepare.md)
+*   [`marlowe-cli run withdraw`](doc/run-withdraw.md)
+
+
+#### "Template" Commands
+
+    $ marlowe-cli template --help
+    
+    Usage: marlowe-cli template COMMAND
+      Create a contract from a template.
+    
+    Available options:
+      -h,--help                Show this help text
+    
+    Commands for creating Marlowe contracts from templates:
+      escrow                   Create an escrow contract.
+      simple                   Create a simple example contract.
+      swap                     Create a swap contract.
+      zcb                      Create a zero-coupon bond.
+
+
+### Low-Level Commands
+
+
+#### "Contract" Commands
 
     $ marlowe-cli contract --help
     
     Usage: marlowe-cli contract COMMAND
-      Export contract address, validator, datum, or redeemer. [low-level]
+      Export contract address, validator, datum, or redeemer.
     
     Available options:
       -h,--help                Show this help text
@@ -57,7 +116,7 @@ Individual help pages:
 *   [`marlowe-cli contract redeemer`](doc/export-redeemer.md)
 
 
-### "Input" Commands
+#### "Input" Commands
 
     $ marlowe-cli input --help
     
@@ -67,7 +126,7 @@ Individual help pages:
     Available options:
       -h,--help                Show this help text
     
-    Commands for creating inputs to a contract:
+    Low-level commands for creating inputs to a contract:
       choose                   Create Marlowe input for a choice.
       deposit                  Create Marlowe input for a deposit.
       notify                   Create Marlowe input for a notification.
@@ -79,7 +138,7 @@ Individual help pages:
 *   [`marlowe-cli input notify`](doc/input-notify.md)
 
 
-### "Role" Commands
+#### "Role" Commands
 
     $ marlowe-cli role --help
     
@@ -96,42 +155,7 @@ Individual help pages:
       validator                Export a role validator to a JSON file.
 
 
-### "Run" Commands
-
-    $ marlowe-cli run --help
-    
-    Usage: marlowe-cli run COMMAND
-      Run a contract.
-    
-    Available options:
-      -h,--help                Show this help text
-    
-    Commands for running contracts:
-      compute                  Compute the next step of a Marlowe contract and write the output to a JSON file.
-
-Individual help pages:
-
-*   [`marlowe-cli run compute`](doc/compute.md)
-
-
-### "Template" Commands
-
-    $ marlowe-cli template --help
-    
-    Usage: marlowe-cli template COMMAND
-      Create a contract from a template.
-    
-    Available options:
-      -h,--help                Show this help text
-    
-    Commands for creating Marlowe contracts from templates:
-      escrow                   Create an escrow contract.
-      simple                   Create a simple example contract.
-      swap                     Create a swap contract.
-      zcb                      Create a zero-coupon bond.
-
-
-### "Transaction" Commands
+#### "Transaction" Commands
 
     $ marlowe-cli transaction --help
     
@@ -142,10 +166,8 @@ Individual help pages:
       -h,--help                Show this help text
     
     Low-level commands for creating and submitting transactions:
-      advance                  Build a transaction that both spends from and pays to
-                               a Marlowe script.
-      close                    Build a transaction that spends from a Marlowe
-                               script.
+      advance                  Build a transaction that both spends from and pays to a Marlowe script.
+      close                    Build a transaction that spends from a Marlowe script.
       create                   Build a transaction that pays to a Marlowe script.
       simple                   Build a non-Marlowe transaction.
       submit                   Submit a transaction body.
@@ -157,6 +179,24 @@ Individual help pages:
 *   [`marlowe-cli transaction advance`](doc/transaction-advance.md)
 *   [`marlowe-cli transaction close`](doc/transaction-close.md)
 *   [`marlowe-cli transaction submit`](doc/transaction-submit.md)
+
+
+#### "Util" Commands
+
+    $ marlowe-cli util --help
+    
+    Usage: marlowe-cli util COMMAND
+      Miscellaneous utilities.
+    
+    Available options:
+      -h,--help                Show this help text
+    
+    Miscellaneous low-level commands:
+      clean                    Reorganize the UTxOs at an address, separating tokens.
+
+Individual help pages:
+
+*   [`marlowe-cli util clean`](doc/util-clean.md)
 
 
 ## Installation

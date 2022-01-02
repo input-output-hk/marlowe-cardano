@@ -20,7 +20,7 @@ The `marlowe-cli transaction simple` command builds a non-Marlowe transaction. T
     Available options:
       --testnet-magic INTEGER         Network magic, or omit for mainnet.
       --socket-path SOCKET_FILE       Location of the cardano-node socket file.
-      --required-signer SIGNING_FILE  Files containing required signing keys.
+      --required-signer SIGNING_FILE  File containing a required signing key.
       --tx-in TXID#TXIX               Transaction input in TxId#TxIx format.
       --tx-out ADDRESS+VALUE          Transaction output in ADDRESS+VALUE format.
       --change-address ADDRESS        Address to receive ADA in excess of fee.

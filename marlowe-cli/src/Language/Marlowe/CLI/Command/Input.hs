@@ -74,7 +74,7 @@ runInputCommand InputNotify{..}  = makeNotification
 parseInputCommand :: O.Parser InputCommand
 parseInputCommand =
   O.hsubparser
-    $ O.commandGroup "Commands for creating inputs to a contract:"
+    $ O.commandGroup "Low-level commands for creating inputs to a contract:"
     <> inputChoiceCommand
     <> inputDepositCommand
     <> inputNotifyCommand

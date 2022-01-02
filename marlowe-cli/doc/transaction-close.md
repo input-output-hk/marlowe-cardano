@@ -30,7 +30,7 @@ The `marlowe-cli transaction close` command builds a transaction that spends fro
       --tx-in-script-file PLUTUS_FILE      Plutus file for Marlowe contract.
       --tx-in-redeemer-file REDEEMER_FILE  Redeemer JSON file spent from Marlowe contract.
       --tx-in-datum-file DATUM_FILE        Datum JSON file spent from Marlowe contract.
-      --required-signer SIGNING_FILE       Files containing required signing keys.
+      --required-signer SIGNING_FILE       File containing a required signing key.
       --tx-in-marlowe TXID#TXIX            UTxO spent from Marlowe contract.
       --tx-in TXID#TXIX                    Transaction input in TxId#TxIx format.
       --tx-out ADDRESS+VALUE               Transaction output in ADDRESS+VALUE format.

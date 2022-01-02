@@ -7,7 +7,9 @@ MD="$2"
 LOG="${MD%%.md}".log
 DIFF="${MD%%.md}".diff
 
+set -e
 bash -o verbose "$SCRIPT" >& "$LOG"
+set +e
 
 diff --new-line-format='+%L'       \
      --old-line-format='-%L'       \

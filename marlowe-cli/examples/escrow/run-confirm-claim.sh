@@ -25,7 +25,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if false
+if true
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -56,6 +56,13 @@ SELLER_PUBKEYHASH=$(
 
 echo "The seller $SELLER_NAME has the address "'`'"$SELLER_ADDRESS"'`'" and public-key hash "'`'"$SELLER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$SELLER_PAYMENT_SKEY"  \
+                       --change-address "$SELLER_ADDRESS"        \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$SELLER_ADDRESS"
 
 echo "We select the tokenless UTxO with the most funds to use in executing the contract."
@@ -86,6 +93,13 @@ BUYER_PUBKEYHASH=$(
 
 echo "The buyer $BUYER_NAME has the address "'`'"$BUYER_ADDRESS"'`'" and public-key hash "'`'"$BUYER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$BUYER_PAYMENT_SKEY"   \
+                       --change-address "$BUYER_ADDRESS"         \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS"
 
 echo "We select the tokenless UTxO with the most funds to use in executing the contract."
@@ -116,6 +130,13 @@ MEDIATOR_PUBKEYHASH=$(
 
 echo "The mediator $MEDIATOR_NAME has the address "'`'"$MEDIATOR_ADDRESS"'`'" and public-key hash "'`'"$MEDIATOR_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                              \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
+                       --required-signer "$MEDIATOR_PAYMENT_SKEY" \
+                       --change-address "$MEDIATOR_ADDRESS"       \
+                       --out-file /dev/null                       \
+                       --submit=600                               \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS"
 
 echo "We select the UTxO with the most funds to use in executing the contract."
@@ -380,27 +401,4 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$BUYER_ADDRESS" | sed -n -e "1p;
 echo "Here is the UTxO at the mediator $MEDIATOR_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
-
-echo "## Clean Up Wallets"
-
-echo "It's convenient to consolidate all of the UTxOs into single ones."
-
-marlowe-cli transaction simple "${MAGIC[@]}"                             \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                               --tx-in "$TX_3"#0                         \
-                               --tx-in "$TX_5"#2                         \
-                               --required-signer "$BUYER_PAYMENT_SKEY"   \
-                               --change-address "$BUYER_ADDRESS"         \
-                               --out-file tx-7.raw                       \
-                               --submit=600                              \
-> /dev/null
-marlowe-cli transaction simple "${MAGIC[@]}"                              \
-                               --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
-                               --tx-in "$TX_5"#0                         \
-                               --tx-in "$TX_5"#1                         \
-                               --required-signer "$MEDIATOR_PAYMENT_SKEY" \
-                               --change-address "$MEDIATOR_ADDRESS"       \
-                               --out-file tx-8.raw                        \
-                               --submit=600                               \
-> /dev/null
 

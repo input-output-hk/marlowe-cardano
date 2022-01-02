@@ -25,7 +25,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if false
+if true
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -52,6 +52,13 @@ PARTY_A_PUBKEYHASH=$(
 
 echo "The first party $PARTY_A_NAME is the minimum-ADA provider and has the address "'`'"$PARTY_A_ADDRESS"'`'" and public-key hash "'`'"$PARTY_A_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$PARTY_A_PAYMENT_SKEY" \
+                       --change-address "$PARTY_A_ADDRESS"       \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS"
 
 echo "We select the UTxO with the most ADA and another UTxO with exactly one type of native token."
@@ -92,6 +99,13 @@ PARTY_B_PUBKEYHASH=$(
 
 echo "The second party $PARTY_B_NAME has the address "'`'"$PARTY_B_BDDRESS"'`'" and public-key hash "'`'"$PARTY_B_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
+marlowe-cli util clean "${MAGIC[@]}"                             \
+                       --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                       --required-signer "$PARTY_B_PAYMENT_SKEY" \
+                       --change-address "$PARTY_B_ADDRESS"       \
+                       --out-file /dev/null                      \
+                       --submit=600                              \
+> /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_B_ADDRESS"
 
 echo "We select the UTxO with the most ADA and another UTxO with exactly one type of native token."
@@ -244,20 +258,20 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
 echo "Now the second party $PARTY_B_NAME can submit a transaction that deposits their tokens and completes the swap."
 
 TX_3=$(
-marlowe-cli run execute "${MAGIC[@]}"                                               \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"                   \
-                        --marlowe-in-file tx-2.marlowe                              \
-                        --tx-in-marlowe "$TX_2"#1                                   \
-                        --tx-in-collateral "$TX_0_B_ADA"                            \
-                        --tx-in "$TX_0_B_ADA"                                       \
-                        --tx-in "$TX_0_B_TOKEN"                                     \
-                        --required-signer "$PARTY_B_PAYMENT_SKEY"                   \
-                        --marlowe-out-file tx-3.marlowe                             \
-                        --change-address "$PARTY_B_ADDRESS"                         \
-                        --out-file tx-3.raw                                         \
-                        --print-stats                                               \
-                        --submit=600                                                \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                                    \
+marlowe-cli run execute "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --marlowe-in-file tx-2.marlowe            \
+                        --tx-in-marlowe "$TX_2"#1                 \
+                        --tx-in-collateral "$TX_0_B_ADA"          \
+                        --tx-in "$TX_0_B_ADA"                     \
+                        --tx-in "$TX_0_B_TOKEN"                   \
+                        --required-signer "$PARTY_B_PAYMENT_SKEY" \
+                        --marlowe-out-file tx-3.marlowe           \
+                        --change-address "$PARTY_B_ADDRESS"       \
+                        --out-file tx-3.raw                       \
+                        --print-stats                             \
+                        --submit=600                              \
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
 )
 
 echo "The closing of the contract paid $AMOUNT_B "'`'"$TOKEN_B"'`'" to the first party $PARTY_A_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract, and it paid $AMOUNT_A "'`'"$TOKEN_A"'`'" to the second party $PARTY_B_NAME in the transaction "'`'"$TX_3"'`'". There is no UTxO at the contract address:"
