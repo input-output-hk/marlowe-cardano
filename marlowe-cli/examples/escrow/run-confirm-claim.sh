@@ -11,7 +11,7 @@ echo '![Flow chart for "confirm claim".](confirm-claim.svg)'
 
 echo "## Prerequisites"
 
-echo "The environment variable "'`CARDANO_NODE_SOCKET_PATH`'" must be set to the path to the cardano node's socket."
+echo "The environment variable "'`'"CARDANO_NODE_SOCKET_PATH"'`'" must be set to the path to the cardano node's socket."
 echo
 echo 'The following tools must be on the PATH:'
 echo '* [marlowe-cli](../../ReadMe.md)'
@@ -19,7 +19,7 @@ echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/maste
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
 echo
-echo 'Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables `SELLER_PREFIX`, `BUYER_PREFIX`, and `PARTY_PREFIX` where they appear below.'
+echo "Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables "'`'"SELLER_PREFIX"'`'", "'`'"BUYER_PREFIX"'`'", and "'`'"MEDIATOR_PREFIX"'`'" where they appear below."
 
 echo "## Preliminaries"
 
@@ -155,18 +155,16 @@ echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
 echo "The contract has a minimum slot and several deadlines."
 
-MINIMUM_SLOT="$TIP"
-
-PAYMENT_DEADLINE=$(($TIP + 1 * 24 * 3600))
-COMPLAINT_DEADLINE=$(($TIP + 2 * 24 * 3600))
-DISPUTE_DEADLINE=$(($TIP + 3 * 24 * 3600))
-MEDIATION_DEADLINE=$(($TIP + 4 * 24 * 3600))
+PAYMENT_DEADLINE=$((TIP+1*24*3600))
+COMPLAINT_DEADLINE=$((TIP+2*24*3600))
+DISPUTE_DEADLINE=$((TIP+3*24*3600))
+MEDIATION_DEADLINE=$((TIP+4*24*3600))
 
 echo "* The current slot is $TIP."
 echo "* The buyer $BUYER_NAME must pay before slot $PAYMENT_DEADLINE."
@@ -197,7 +195,7 @@ marlowe-cli template escrow --minimum-ada "$MINIMUM_ADA"               \
 
 echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
-echo 'First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require.'
+echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
 
 marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --slot-length "$SLOT_LENGTH"  \
@@ -207,13 +205,13 @@ marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --out-file      tx-1.marlowe  \
                            --print-stats
 
-echo "In particular, we can extract the contract's address from the "'`.marlowe`'" file."
+echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
 CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
-echo "The mediator $MEDIATOR_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
+echo "The mediator $MEDIATOR_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
 marlowe-cli run execute "${MAGIC[@]}"                              \
@@ -245,7 +243,7 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe               \
                         --deposit-party "PK=$BUYER_PUBKEYHASH"    \
                         --deposit-amount "$PRICE"                 \
                         --invalid-before "$TIP"                   \
-                        --invalid-hereafter "$(($TIP+4*3600))"    \
+                        --invalid-hereafter "$((TIP+4*3600))"     \
                         --out-file tx-2.marlowe                   \
                         --print-stats
 
@@ -279,13 +277,13 @@ echo "## Transaction 3. The Buyer Reports that There is a Problem"
 
 echo "First we compute the input for the contract to transition forward."
 
-marlowe-cli run prepare --marlowe-file tx-2.marlowe            \
-                        --choice-name "Report problem"         \
-                        --choice-party "PK=$BUYER_PUBKEYHASH"  \
-                        --choice-number 1                      \
-                        --invalid-before "$TIP"                \
-                        --invalid-hereafter "$(($TIP+4*3600))" \
-                        --out-file tx-3.marlowe                \
+marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
+                        --choice-name "Report problem"        \
+                        --choice-party "PK=$BUYER_PUBKEYHASH" \
+                        --choice-number 1                     \
+                        --invalid-before "$TIP"               \
+                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --out-file tx-3.marlowe               \
                         --print-stats
 
 echo "Now the buyer $BUYER_NAME can submit a transaction to report that there is a problem:"
@@ -303,7 +301,7 @@ marlowe-cli run execute "${MAGIC[@]}"                             \
                         --out-file tx-3.raw                       \
                         --print-stats                             \
                         --submit=600                              \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+| sed -e 's/^TxId "\(.*\)"$/\1/'
 )
 
 echo "The reporting of a problem was recorded in the transaction "'`'"$TX_3"'`'". Here is the UTxO at the contract address:"
@@ -323,7 +321,7 @@ marlowe-cli run prepare --marlowe-file tx-3.marlowe            \
                         --choice-party "PK=$SELLER_PUBKEYHASH" \
                         --choice-number 0                      \
                         --invalid-before "$TIP"                \
-                        --invalid-hereafter "$(($TIP+4*3600))" \
+                        --invalid-hereafter "$((TIP+4*3600))"  \
                         --out-file tx-4.marlowe                \
                         --print-stats
 
@@ -364,7 +362,7 @@ marlowe-cli run prepare --marlowe-file tx-4.marlowe              \
                         --choice-party "PK=$MEDIATOR_PUBKEYHASH" \
                         --choice-number 1                        \
                         --invalid-before "$TIP"                  \
-                        --invalid-hereafter "$(($TIP+4*3600))"   \
+                        --invalid-hereafter "$((TIP+4*3600))"    \
                         --out-file tx-5.marlowe                  \
                         --print-stats
 

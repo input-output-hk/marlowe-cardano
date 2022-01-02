@@ -9,7 +9,7 @@ echo "[This zero-coupon bond](../../src/Language/Marlowe/CLI/Examples/ZeroCoupon
 
 echo "## Prerequisites"
 
-echo "The environment variable "'`CARDANO_NODE_SOCKET_PATH`'" must be set to the path to the cardano node's socket."
+echo "The environment variable "'`'"CARDANO_NODE_SOCKET_PATH"'`'" must be set to the path to the cardano node's socket."
 echo
 echo 'The following tools must be on the PATH:'
 echo '* [marlowe-cli](../../ReadMe.md)'
@@ -18,9 +18,9 @@ echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
 echo '* xargs'
 echo
-echo 'Signing and verification keys must be provided below for the two parties: to do this, set the environment variables `LENDER_PREFIX` and `BORROWER_PREFIX` where they appear below.'
+echo "Signing and verification keys must be provided below for the two parties: to do this, set the environment variables "'`'"LENDER_PREFIX"'`'" and "'`'"BORROWER_PREFIX"'`'" where they appear below."
 echo
-echo "The two parties' wallets must have exactly one UTxO with their role token. The currency symbol for the role tokens must be set below in "'`ROLE_CURRENCY`.'
+echo "The two parties' wallets must have exactly one UTxO with their role token. The currency symbol for the role tokens must be set below in "'`'"ROLE_CURRENCY"'`'"."
 
 echo "## Preliminaries"
 
@@ -104,7 +104,7 @@ BORROWER_PUBKEYHASH=$(
   cardano-cli address key-hash --payment-verification-key-file "$BORROWER_PAYMENT_VKEY"
 )
 
-echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_BDDRESS"'`'" and public-key hash "'`'"$BORROWER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_ADDRESS"'`'" and public-key hash "'`'"$BORROWER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean "${MAGIC[@]}"                              \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
@@ -137,7 +137,7 @@ echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
@@ -145,10 +145,10 @@ MINIMUM_ADA=3000000
 PRINCIPAL=100000000
 INTEREST=5000000
 
-LENDING_DEADLINE=$(($TIP+12*3600))
-REPAYMENT_DEADLINE=$(($TIP+24*3600))
+LENDING_DEADLINE=$((TIP+12*3600))
+REPAYMENT_DEADLINE=$((TIP+24*3600))
 
-echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the lender $LENDER_NAME will pay principal of $PRINCIPAL ADA before slot $LENDING_DEADLINE and the borrower will repay the principal and interest of $INTEREST ADA before slot $REPAYMENT_DEADINE."
+echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the lender $LENDER_NAME will pay principal of $PRINCIPAL ADA before slot $LENDING_DEADLINE and the borrower will repay the principal and interest of $INTEREST ADA before slot $REPAYMENT_DEADLINE."
 
 echo "We create the contract for the previously specified parameters."
 
@@ -164,7 +164,7 @@ marlowe-cli template zcb --minimum-ada "$MINIMUM_ADA"               \
 
 echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
-echo 'First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require.'
+echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
 
 marlowe-cli run initialize "${MAGIC[@]}"                     \
                            --slot-length "$SLOT_LENGTH"      \
@@ -175,7 +175,7 @@ marlowe-cli run initialize "${MAGIC[@]}"                     \
                            --out-file      tx-1.marlowe      \
                            --print-stats
 
-echo "In particular, we can extract the contract's address from the "'`.marlowe`'" file."
+echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
 CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 
@@ -187,7 +187,7 @@ ROLE_ADDRESS=$(jq -r '.rolesValidator.address' tx-1.marlowe)
 
 echo "The role address is "'`'"$ROLE_ADDRESS"'`.'
 
-echo "The lender $LENDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace requiredd for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
+echo "The lender $LENDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace requiredd for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
 marlowe-cli run execute "${MAGIC[@]}"                             \
@@ -214,13 +214,13 @@ echo "## Transaction 2. Lender Deposits the Loan Amount"
 
 echo "First we compute the Marlowe input required to deposit the funds for the loan."
 
-marlowe-cli run prepare --marlowe-file tx-1.marlowe            \
-                        --deposit-account "Role=$LENDER_ROLE"  \
-                        --deposit-party "Role=$LENDER_ROLE"    \
-                        --deposit-amount "$PRINCIPAL"          \
-                        --invalid-before "$TIP"                \
-                        --invalid-hereafter "$(($TIP+4*3600))" \
-                        --out-file tx-2.marlowe                \
+marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
+                        --deposit-account "Role=$LENDER_ROLE" \
+                        --deposit-party "Role=$LENDER_ROLE"   \
+                        --deposit-amount "$PRINCIPAL"         \
+                        --invalid-before "$TIP"               \
+                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --out-file tx-2.marlowe               \
                         --print-stats
 
 echo "Now the lender $LENDER_NAME submits the transaction that deposits the loan amount."
@@ -288,13 +288,13 @@ echo "## Transaction 4. Borrower Repays the Loan's Principal and Interest"
 
 echo "First we compute the Marlowe input required to replay the funds for the loan."
 
-marlowe-cli run prepare --marlowe-file tx-2.marlowe                  \
-                        --deposit-account "Role=$BORROWER_ROLE"      \
-                        --deposit-party "Role=$BORROWER_ROLE"        \
-                        --deposit-amount "$(($PRINCIPAL+$INTEREST))" \
-                        --invalid-before "$TIP"                      \
-                        --invalid-hereafter "$(($TIP+4*3600))"       \
-                        --out-file tx-4.marlowe                      \
+marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
+                        --deposit-account "Role=$BORROWER_ROLE"    \
+                        --deposit-party "Role=$BORROWER_ROLE"      \
+                        --deposit-amount "$((PRINCIPAL+INTEREST))" \
+                        --invalid-before "$TIP"                    \
+                        --invalid-hereafter "$((TIP+4*3600))"      \
+                        --out-file tx-4.marlowe                    \
                         --print-stats
 
 echo "Now the borrower $BORROWER_NAME submits a transaction that repays the loan."

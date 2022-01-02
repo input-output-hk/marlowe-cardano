@@ -40,7 +40,7 @@ echo '![Simple Marlowe Contract](simple-0.png)'
 
 echo "## Prerequisites"
 
-echo "The environment variable "'`CARDANO_NODE_SOCKET_PATH`'" must be set to the path to the cardano node's socket."
+echo "The environment variable "'`'"CARDANO_NODE_SOCKET_PATH"'`'" must be set to the path to the cardano node's socket."
 echo
 echo 'The following tools must be on the PATH:'
 echo '* [marlowe-cli](../../ReadMe.md)'
@@ -48,7 +48,7 @@ echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/maste
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
 echo
-echo 'Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables `BYSTANDER_PREFIX` and `PARTY_PREFIX` where they appear below.'
+echo "Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables "'`'"BYSTANDER_PREFIX"'`'" and "'`'"PARTY_PREFIX"'`'" where they appear below."
 
 echo "## Preliminaries"
 
@@ -108,7 +108,7 @@ echo "$BYSTANDER_NAME will spend the UTxO "'`'"$TX_0_BYSTANDER"'`.'
 
 echo "### The Party"
 
-echo "The "party" deposits and removes funds from the contract."
+echo "The party deposits and removes funds from the contract."
 
 PARTY_PREFIX="$TREASURY/francis-beaumont"
 PARTY_NAME="Francis Beaumont"
@@ -149,14 +149,14 @@ echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
 echo "The contract has a minimum slot and a timeout."
 
 MINIMUM_SLOT="$TIP"
-TIMEOUT_SLOT="$(($TIP+10*24*3600))"
+TIMEOUT_SLOT="$((TIP+10*24*3600))"
 
 echo "The contract starts no sooner than slot $MINIMUM_SLOT and will automatically close at slot $TIMEOUT_SLOT."
 
@@ -165,7 +165,7 @@ echo "The contract also involves various payments."
 MINIMUM_ADA=3000000
 DEPOSIT_LOVELACE=12000000
 WITHDRAWAL_LOVELACE=5000000
-CLOSE_LOVELACE=$(($DEPOSIT_LOVELACE-$WITHDRAWAL_LOVELACE))
+CLOSE_LOVELACE=$((DEPOSIT_LOVELACE-WITHDRAWAL_LOVELACE))
 
 echo "The bystander $BYSTANDER_NAME will provide $MINIMUM_ADA lovelace during the contract's operation, so that it satisfies the minimmum-ADA requirement. The party $PARTY_NAME will deposit $DEPOSIT_LOVELACE lovelace at the start of the contract. They will wait until notified to withdraw $WITHDRAWAL_LOVELACE lovelace. After another notification, the party $PARTY_NAME will withdrawn the remaining $CLOSE_LOVELACE lovelace and the bystander $BYSTANDER_NAME will receive their $MINIMUM_ADA lovelace back. This is expressed in the Marlowe language [here](../../src/Language/Marlowe/CLI/Examples/Trivial.hs)."
 
@@ -183,7 +183,7 @@ marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
 
 echo "## Transaction 1. Create the Contract by Providing the Minimum ADA"
 
-echo 'First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require.'
+echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
 
 marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --slot-length "$SLOT_LENGTH"  \
@@ -193,13 +193,13 @@ marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --out-file      tx-1.marlowe  \
                            --print-stats
 
-echo "In particular, we can extract the contract's address from the "'`.marlowe`'" file."
+echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
 CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
-echo "The bystander $BYSTANDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
+echo "The bystander $BYSTANDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
 marlowe-cli run execute "${MAGIC[@]}"                               \
@@ -231,7 +231,7 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe              \
                         --deposit-party "PK=$PARTY_PUBKEYHASH"   \
                         --deposit-amount "$DEPOSIT_LOVELACE"     \
                         --invalid-before "$TIP"                  \
-                        --invalid-hereafter "$(($TIP+4*3600))"   \
+                        --invalid-hereafter "$((TIP+4*3600))"    \
                         --out-file tx-2.marlowe                  \
                         --print-stats
 
@@ -265,11 +265,11 @@ echo "## Transaction 3. Make the First Withdrawal"
 
 echo "First we compute the input for the contract to transition forward."
 
-marlowe-cli run prepare --marlowe-file tx-2.marlowe            \
-                        --notify                               \
-                        --invalid-before "$TIP"                \
-                        --invalid-hereafter "$(($TIP+4*3600))" \
-                        --out-file tx-3.marlowe                \
+marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
+                        --notify                              \
+                        --invalid-before "$TIP"               \
+                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --out-file tx-3.marlowe               \
                         --print-stats
 
 echo "Now the party $PARTY_NAME can submit a transaction to withdraw funds:"
@@ -302,11 +302,11 @@ echo "## Transaction 4. Close the contract"
 
 echo "As in the third transaction, we compute the input for the contract to transition forward."
 
-marlowe-cli run prepare --marlowe-file tx-3.marlowe            \
-                        --notify                               \
-                        --invalid-before "$TIP"                \
-                        --invalid-hereafter "$(($TIP+4*3600))" \
-                        --out-file tx-4.marlowe                \
+marlowe-cli run prepare --marlowe-file tx-3.marlowe           \
+                        --notify                              \
+                        --invalid-before "$TIP"               \
+                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --out-file tx-4.marlowe               \
                         --print-stats
 
 echo "Now the party $PARTY_NAME can submit a transaction to close the contract and disperse the remaining funds:"

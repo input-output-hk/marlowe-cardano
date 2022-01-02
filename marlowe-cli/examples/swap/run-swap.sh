@@ -9,7 +9,7 @@ echo "[This swap contract](../../src/Language/Marlowe/CLI/Examples/Swap.hs) swap
 
 echo "## Prerequisites"
 
-echo "The environment variable "'`CARDANO_NODE_SOCKET_PATH`'" must be set to the path to the cardano node's socket."
+echo "The environment variable "'`'"CARDANO_NODE_SOCKET_PATH"'`'" must be set to the path to the cardano node's socket."
 echo
 echo 'The following tools must be on the PATH:'
 echo '* [marlowe-cli](../../ReadMe.md)'
@@ -17,7 +17,7 @@ echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/maste
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
 echo
-echo 'Signing and verification keys must be provided below for the two parties: to do this, set the environment variables `PARTY_A_PREFIX` and `PARTY_B_PREFIX` where they appear below.'
+echo "Signing and verification keys must be provided below for the two parties: to do this, set the environment variables "'`'"PARTY_A_PREFIX"'`'" and "'`'"PARTY_B_PREFIX"'`'" where they appear below."
 echo
 echo "The two parties' wallets much have exactly one UTxO with the token they want to swap and at least one UTxO without tokens."
 
@@ -97,7 +97,7 @@ PARTY_B_PUBKEYHASH=$(
   cardano-cli address key-hash --payment-verification-key-file "$PARTY_B_PAYMENT_VKEY"
 )
 
-echo "The second party $PARTY_B_NAME has the address "'`'"$PARTY_B_BDDRESS"'`'" and public-key hash "'`'"$PARTY_B_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The second party $PARTY_B_NAME has the address "'`'"$PARTY_B_ADDRESS"'`'" and public-key hash "'`'"$PARTY_B_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -134,7 +134,7 @@ echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - $SLOT_OFFSET / $SLOT_LENGTH)). Tests may fail if this is not the case."
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
@@ -142,8 +142,8 @@ echo "The contract has a minimum-ADA requirement and two timeouts. It also speci
 
 MINIMUM_ADA=3000000
 
-PARTY_A_TIMEOUT=$(($TIP+12*3600))
-PARTY_B_TIMEOUT=$(($TIP+24*3600))
+PARTY_A_TIMEOUT=$((TIP+12*3600))
+PARTY_B_TIMEOUT=$((TIP+24*3600))
 
 echo "We create the contract for the previously specified parameters."
 
@@ -161,7 +161,7 @@ marlowe-cli template swap --minimum-ada "$MINIMUM_ADA"       \
 
 echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
-echo 'First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require.'
+echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
 
 marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --slot-length "$SLOT_LENGTH"  \
@@ -171,13 +171,13 @@ marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --out-file      tx-1.marlowe  \
                            --print-stats
 
-echo "In particular, we can extract the contract's address from the "'`.marlowe`'" file."
+echo "In particular, we can extract the contract's address from the "'`'".marlowe"'`'" file."
 
 CONTRACT_ADDRESS=$(jq -r '.marloweValidator.address' tx-1.marlowe)
 
 echo "The Marlowe contract resides at address "'`'"$CONTRACT_ADDRESS"'`.'
 
-echo "The first party $PARTY_A_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace requiredd for the contract's initial state. Submitting with the "'`--print-stats`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
+echo "The first party $PARTY_A_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace requiredd for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
 marlowe-cli run execute "${MAGIC[@]}"                             \
@@ -210,7 +210,7 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe                \
                         --deposit-token "$TOKEN_A"                 \
                         --deposit-amount "$AMOUNT_A"               \
                         --invalid-before "$TIP"                    \
-                        --invalid-hereafter "$(($TIP+4*3600))"     \
+                        --invalid-hereafter "$((TIP+4*3600))"      \
                         --out-file tx-2.marlowe                    \
                         --print-stats
 
@@ -251,7 +251,7 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
                         --deposit-token "$TOKEN_B"                 \
                         --deposit-amount "$AMOUNT_B"               \
                         --invalid-before "$TIP"                    \
-                        --invalid-hereafter "$(($TIP+4*3600))"     \
+                        --invalid-hereafter "$((TIP+4*3600))"      \
                         --out-file tx-3.marlowe                    \
                         --print-stats
 

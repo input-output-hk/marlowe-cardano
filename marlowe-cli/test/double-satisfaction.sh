@@ -115,7 +115,7 @@ cardano-cli query  protocol-parameters "${MAGIC[@]}" --out-file private.protocol
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 
 MINIMUM_SLOT="$TIP"
-TIMEOUT_SLOT="$(($TIP+4*3600))"
+TIMEOUT_SLOT="$((TIP+4*3600))"
 
 
 # Transaction 1. Configure the first contract.
@@ -331,15 +331,15 @@ cardano-cli transaction build "${MAGIC[@]}" --alonzo-era                   \
 
 # Now sign and submit the transaction, just to make sure that the theft really
 # can occur.
-TX_3x=$(
+TX_3=$(
 marlowe-cli transaction submit "${MAGIC[@]}"                             \
                                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                                --tx-body-file tx-2.raw                   \
                                --required-signer "$PARTY_B_PAYMENT_SKEY" \
                                --timeout 600                             \
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                         \
 )
 TX_3_EXIT="$?"
-TX_3=$(echo "$TX_3x" | sed -e 's/^TxId "\(.*\)"$/\1/')
 echo "TxId $TX_3"
 
 echo "There is no UTxO at the contract address:"
