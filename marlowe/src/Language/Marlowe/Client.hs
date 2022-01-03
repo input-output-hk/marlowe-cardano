@@ -294,6 +294,8 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         ownPubKey <- Contract.ownPubKeyHash
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners contract
         slot <- currentSlot
+        time <- Ledger.getPOSIXTime <$> currentTime
+        let timeZero = Ledger.POSIXTime $ time - getSlot slot * scSlotLength def
         let marloweData = MarloweData {
                 marloweContract = contract,
                 marloweState = State
@@ -301,7 +303,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
                     , minSlot = slot },
-                slotConfigFix = (scSlotLength def, scSlotZeroTime def) }  -- FIXME: This is a temporary fix until SCP-3150 is complete.
+                slotConfigFix = (scSlotLength def, timeZero) }  -- FIXME: This is a temporary fix until SCP-3150 is complete.
         let minAdaTxOut = lovelaceValueOf minLovelaceDeposit
         let typedValidator = mkMarloweTypedValidator params
         let tx = mustPayToTheScript marloweData minAdaTxOut <> distributeRoleTokens
