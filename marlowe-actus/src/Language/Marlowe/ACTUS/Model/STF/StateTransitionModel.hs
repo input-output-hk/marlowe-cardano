@@ -687,3 +687,10 @@ _STF_XD_FUTUR
     }
 _STF_XD_FUTUR _ _ _ _ = undefined
 
+-- Cash (CSH)
+
+_STF_AD_CSH :: ActusNum a => ContractStatePoly a b -> b -> a -> ContractStatePoly a b
+_STF_AD_CSH st@ContractStatePoly {..} t y_sd_t =
+  st
+    { sd = t
+    }

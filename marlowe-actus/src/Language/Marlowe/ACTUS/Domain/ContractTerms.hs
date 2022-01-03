@@ -29,6 +29,7 @@ data CT = PAM   -- ^ Principal at maturity
         | OPTNS -- ^ Option
         | FUTUR -- ^ Future
         | COM   -- ^ Commodity
+        | CSH   -- ^ Cash
         deriving stock (Show, Read, Eq, Generic)
         deriving anyclass (FromJSON, ToJSON)
 
