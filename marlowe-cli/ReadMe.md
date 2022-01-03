@@ -3,6 +3,14 @@
 The `marlowe-cli` tool provides several utilities for serialising Marlowe contracts to validators, datums, and redeemers. It also computes hashes and addresses. It can be used in conjunction with [`cardano-cli`](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md) to submit Marlowe transactions to the Cardano blockchain.
 
 
+## Examples
+
+*   [simple contract](examples/simple/ReadMe.md)
+*   [escrow](examples/escrow/ReadMe.md)
+*   [swap](examples/swap/ReadMe.md)
+*   [zero-coupon bond](examples/zcb/ReadMe.md)
+
+
 ## Available Commands
 
     $ marlowe-cli --help
@@ -213,7 +221,7 @@ or just using Cabal, if Cabal and GHC are already installed:
     cabal install exe:marlowe-cli
 
 
-## Workflows for Building Marlowe Scripts, Datums, and Redeemers
+## Low-Level Workflows for Building Marlowe Scripts, Datums, and Redeemers
 
 The `marlowe-cli` tools supports both granular and monolithic workflows for creating the files and hashes needed to submit Marlowe contracts with `cardano-cli`.
 
@@ -245,14 +253,6 @@ The [`address`](doc/address.md), [`validator`](doc/validator.md), [`datum`](doc/
 ![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](doc/diagrams/workflow.svg)
 
 See [example.sh](doc/example.sh) for an example bash script embodying this workflow. A tutorial for this workflow is available [here](doc/tutorial.md).
-
-
-## Examples
-
-*   [simple contract](examples/simple/ReadMe.md)
-*   [escrow](examples/escrow/ReadMe.md)
-*   [swap](examples/swap/ReadMe.md)
-*   [zero-coupon bond](examples/zcb/ReadMe.md)
 
 
 ## Testing

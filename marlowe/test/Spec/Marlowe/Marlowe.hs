@@ -56,6 +56,7 @@ import           Language.Marlowe.Util
 import           Ledger                                    (Slot (..), pubKeyHash, validatorHash)
 import           Ledger.Ada                                (adaValueOf, lovelaceValueOf)
 import           Ledger.Constraints.TxConstraints          (TxConstraints)
+import           Ledger.TimeSlot                           (SlotConfig (..))
 import qualified Ledger.Typed.Scripts                      as Scripts
 import qualified Ledger.Value                              as Val
 import qualified Plutus.Contract.StateMachine              as SM
@@ -331,7 +332,8 @@ uniqueContractHash :: IO ()
 uniqueContractHash = do
     let params cs = MarloweParams
             { rolesCurrency = cs
-            , rolePayoutValidatorHash = validatorHash (rolePayoutScript cs) }
+            , rolePayoutValidatorHash = validatorHash (rolePayoutScript cs)
+            , slotConfig = (scSlotLength def, scSlotZeroTime def) }  -- FIXME: This is temporary, until SCP-3050 is completed.
 
     let hash1 = Scripts.validatorHash $ typedValidator (params "11")
     let hash2 = Scripts.validatorHash $ typedValidator (params "22")
@@ -343,7 +345,7 @@ stateMachineValidatorSize :: IO ()
 stateMachineValidatorSize = do
     let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18500)
+    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18525)
 
 typedValidatorSize :: IO ()
 typedValidatorSize = do
@@ -355,7 +357,7 @@ untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14500)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14550)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do

@@ -38,20 +38,20 @@ REDEEMER_MIN_SLOT=44316000
 REDEEMER_MAX_SLOT=44317000 #$((CUR_SLOT+1000))
 
 
-ADDRESS_S=$(marlowe-cli address --testnet-magic 1097911063)
+ADDRESS_S=$(marlowe-cli contract address --testnet-magic 1097911063)
 
 PLUTUS_FILE=test.plutus
 DATUM_FILE=test.datum
 REDEEMER_FILE=test.redeemer
 
 DATUM_HASH=$(
-marlowe-cli datum --contract-file $CONTRACT_FILE \
+marlowe-cli contract datum --contract-file $CONTRACT_FILE \
                   --state-file $STATE_FILE       \
                   --out-file $DATUM_FILE
 )
 
-marlowe-cli validator "$MAGIC" --out-file $PLUTUS_FILE
-# marlowe-cli redeemer --min-slot $REDEEMER_MIN_SLOT \
+marlowe-cli contract validator "$MAGIC" --out-file $PLUTUS_FILE
+# marlowe-cli contract redeemer --min-slot $REDEEMER_MIN_SLOT \
 #                      --max-slot $REDEEMER_MAX_SLOT \
 #                      --out-file $REDEEMER_FILE
 

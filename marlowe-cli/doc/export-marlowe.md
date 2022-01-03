@@ -7,29 +7,29 @@ The `marlowe contract marlowe` command writes a JSON file with comprehensive inf
 
     $ marlowe-cli contract marlowe --help
     
-Usage: marlowe-cli contract marlowe [--slot-length INTEGER]
-                                    [--slot-offset INTEGER]
-                                    [--testnet-magic INTEGER]
-                                    [--stake-address ADDRESS]
-                                    [--roles-currency CURRENCY_SYMBOL]
-                                    --contract-file CONTRACT_FILE
-                                    --state-file STATE_FILE
-                                    [--input-file INPUT_FILE]
-                                    [--out-file OUTPUT_FILE] [--print-stats]
-  Export a Marlowe contract to a JSON file.
-
-Available options:
-  --slot-length INTEGER             The slot length, in milliseconds.
-  --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
-  --testnet-magic INTEGER           Network magic, or omit for mainnet.
-  --stake-address ADDRESS           Stake address, if any.
-  --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
-  --contract-file CONTRACT_FILE     JSON input file for the contract.
-  --state-file STATE_FILE           JSON input file for the contract state.
-  --input-file INPUT_FILE           JSON input file for redeemer inputs.
-  --out-file OUTPUT_FILE            JSON output file for contract.
-  --print-stats                     Print statistics.
-  -h,--help                         Show this help text
+    Usage: marlowe-cli contract marlowe [--testnet-magic INTEGER]
+                                        [--slot-length INTEGER]
+                                        [--slot-offset INTEGER]
+                                        [--stake-address ADDRESS]
+                                        [--roles-currency CURRENCY_SYMBOL]
+                                        --contract-file CONTRACT_FILE
+                                        --state-file STATE_FILE
+                                        [--input-file INPUT_FILE]
+                                        [--out-file OUTPUT_FILE] [--print-stats]
+      Export a Marlowe contract to a JSON file.
+    
+    Available options:
+      --testnet-magic INTEGER           Network magic, or omit for mainnet.
+      --slot-length INTEGER             The slot length, in milliseconds.
+      --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
+      --stake-address ADDRESS           Stake address, if any.
+      --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
+      --contract-file CONTRACT_FILE     JSON input file for the contract.
+      --state-file STATE_FILE           JSON input file for the contract state.
+      --input-file INPUT_FILE           JSON input file for redeemer inputs.
+      --out-file OUTPUT_FILE            JSON output file for contract.
+      --print-stats                     Print statistics.
+      -h,--help                         Show this help text
 
 The stake address can be omitted if no staking will be done at the script address. If the currency symbol is omitted, then ADA is used as the currency for the Marlowe roles.
 

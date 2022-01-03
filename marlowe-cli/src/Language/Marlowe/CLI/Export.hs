@@ -65,7 +65,7 @@ import           Language.Marlowe.Semantics      (MarloweData (..), MarloweParam
 import           Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import           Ledger.Scripts                  (datumHash, toCardanoApiScript, validatorHash)
 import           Ledger.Typed.Scripts            (validatorScript)
-import           Plutus.V1.Ledger.Api            (BuiltinData, CostModelParams, CurrencySymbol, Datum (..), POSIXTime,
+import           Plutus.V1.Ledger.Api            (BuiltinData, CostModelParams, CurrencySymbol, Datum (..),
                                                   Redeemer (..), TokenName, Validator, VerboseMode (..),
                                                   evaluateScriptCounting, getValidator)
 import           PlutusTx                        (builtinDataToData, toBuiltinData)
@@ -79,8 +79,7 @@ import qualified Data.Text                       as T (unpack)
 
 -- | Build comprehensive information about a Marlowe contract and transaction.
 buildMarlowe :: IsShelleyBasedEra era
-             => (Integer, POSIXTime)               -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-             -> MarloweParams                      -- ^ The Marlowe contract parameters.
+             => MarloweParams                      -- ^ The Marlowe contract parameters.
              -> CostModelParams                    -- ^ The cost model parameters.
              -> NetworkId                          -- ^ The network ID.
              -> StakeAddressReference              -- ^ The stake address.
@@ -88,11 +87,11 @@ buildMarlowe :: IsShelleyBasedEra era
              -> State                              -- ^ The contract's state.
              -> [Input]                            -- ^ The contract's input,
              -> Either CliError (MarloweInfo era)  -- ^ The contract and transaction information, or an error message.
-buildMarlowe slotConfigFix marloweParams costModel network stake contract state inputs =
+buildMarlowe marloweParams costModel network stake contract state inputs =
   do
     validatorInfo <- buildValidator marloweParams costModel network stake
     let
-      datumInfo = buildDatum slotConfigFix contract state
+      datumInfo = buildDatum contract state
       redeemerInfo = buildRedeemer inputs
     pure MarloweInfo{..}
 
@@ -100,8 +99,7 @@ buildMarlowe slotConfigFix marloweParams costModel network stake contract state 
 -- | Export to a file the comprehensive information about a Marlowe contract and transaction.
 exportMarlowe :: MonadError CliError m
               => MonadIO m
-              => (Integer, POSIXTime)   -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-              -> MarloweParams          -- ^ The Marlowe contract parameters.
+              => MarloweParams          -- ^ The Marlowe contract parameters.
               -> CostModelParams        -- ^ The cost model parameters.
               -> NetworkId              -- ^ The network ID.
               -> StakeAddressReference  -- ^ The stake address.
@@ -111,7 +109,7 @@ exportMarlowe :: MonadError CliError m
               -> Maybe FilePath         -- ^ The output JSON file for Marlowe contract information.
               -> Bool                   -- ^ Whether to print statistics about the contract.
               -> m ()                   -- ^ Action to export the contract and transaction information to a file.
-exportMarlowe slotConfigFix marloweParams costModel network stake contractFile stateFile inputFiles outputFile printStats =
+exportMarlowe marloweParams costModel network stake contractFile stateFile inputFiles outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
@@ -119,7 +117,6 @@ exportMarlowe slotConfigFix marloweParams costModel network stake contractFile s
     marloweInfo@MarloweInfo{..} <-
       liftEither
         $ buildMarlowe
-            slotConfigFix
             marloweParams costModel network stake
             contract state
             inputs
@@ -142,8 +139,7 @@ exportMarlowe slotConfigFix marloweParams costModel network stake contractFile s
 -- | Print information about a Marlowe contract and transaction.
 printMarlowe :: MonadError CliError m
               => MonadIO m
-              => (Integer, POSIXTime)   -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-              -> MarloweParams          -- ^ The Marlowe contract parameters.
+              => MarloweParams          -- ^ The Marlowe contract parameters.
               -> CostModelParams        -- ^ The cost model parameters.
               -> NetworkId              -- ^ The network ID.
               -> StakeAddressReference  -- ^ The stake address.
@@ -151,12 +147,11 @@ printMarlowe :: MonadError CliError m
               -> State                  -- ^ The contract's state.
               -> [Input]                -- ^ The contract's input,
               -> m ()                   -- ^ Action to print the contract and transaction information.
-printMarlowe slotConfigFix marloweParams costModel network stake contract state inputs =
+printMarlowe marloweParams costModel network stake contract state inputs =
   do
     MarloweInfo{..} <-
       liftEither
         $ buildMarlowe
-            slotConfigFix
             marloweParams costModel network stake
             contract state
             inputs
@@ -345,11 +340,10 @@ buildDatumImpl datum =
 
 
 -- | Build the datum information about a Marlowe transaction.
-buildDatum :: (Integer, POSIXTime)  -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-           -> Contract              -- ^ The contract.
-           -> State                 -- ^ The contract's state.
-           -> DatumInfo             -- ^ Information about the transaction datum.
-buildDatum slotConfigFix marloweContract marloweState =
+buildDatum :: Contract   -- ^ The contract.
+           -> State      -- ^ The contract's state.
+           -> DatumInfo  -- ^ Information about the transaction datum.
+buildDatum marloweContract marloweState =
   let
     marloweData = MarloweData{..}
     marloweDatum = PlutusTx.toBuiltinData marloweData
@@ -381,13 +375,12 @@ exportDatumImpl datum outputFile printStats =
 -- | Export to a file the datum information about a Marlowe transaction.
 exportDatum :: MonadError CliError m
             => MonadIO m
-            => (Integer, POSIXTime)  -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-            -> FilePath              -- ^ The JSON file containing the contract.
-            -> FilePath              -- ^ The JSON file containing the contract's state.
-            -> Maybe FilePath        -- ^ The output JSON file for the datum information.
-            -> Bool                  -- ^ Whether to print statistics about the datum.
-            -> m ()                  -- ^ Action to export the datum information to a file.
-exportDatum slotConfigFix contractFile stateFile outputFile printStats =
+            => FilePath        -- ^ The JSON file containing the contract.
+            -> FilePath        -- ^ The JSON file containing the contract's state.
+            -> Maybe FilePath  -- ^ The output JSON file for the datum information.
+            -> Bool            -- ^ Whether to print statistics about the datum.
+            -> m ()            -- ^ Action to export the datum information to a file.
+exportDatum contractFile stateFile outputFile printStats =
   do
     marloweContract <- decodeFileStrict contractFile
     marloweState    <- decodeFileStrict stateFile

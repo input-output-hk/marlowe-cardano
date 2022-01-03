@@ -66,8 +66,8 @@ import           Language.Marlowe.SemanticsTypes  (AccountId, ChoiceId (..), Cho
                                                    State (accounts), Token (..))
 import           Ledger.Tx.CardanoAPI             (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import           Plutus.V1.Ledger.Ada             (adaSymbol, adaToken, fromValue, getAda)
-import           Plutus.V1.Ledger.Api             (Address (..), CostModelParams, Credential (..), Datum, POSIXTime,
-                                                   TokenName, toData)
+import           Plutus.V1.Ledger.Api             (Address (..), CostModelParams, Credential (..), Datum, TokenName,
+                                                   toData)
 import           Plutus.V1.Ledger.Slot            (Slot (..))
 import           Plutus.V1.Ledger.Value           (AssetClass (..), Value (..), assetClassValue)
 import           Prettyprinter.Extras             (Pretty (..))
@@ -118,8 +118,7 @@ makeNotification outputFile =
 -- | Create an initial Marlowe transaction.
 initializeTransaction :: MonadError CliError m
               => MonadIO m
-              => (Integer, POSIXTime)   -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-              -> MarloweParams          -- ^ The Marlowe contract parameters.
+              => MarloweParams          -- ^ The Marlowe contract parameters.
               -> CostModelParams        -- ^ The cost model parameters.
               -> NetworkId              -- ^ The network ID.
               -> StakeAddressReference  -- ^ The stake address.
@@ -128,12 +127,11 @@ initializeTransaction :: MonadError CliError m
               -> Maybe FilePath         -- ^ The output JSON file for the validator information.
               -> Bool                   -- ^ Whether to print statistics about the validator.
               -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransaction slotConfigFix marloweParams costModelParams network stake contractFile stateFile outputFile printStats =
+initializeTransaction marloweParams costModelParams network stake contractFile stateFile outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
     initializeTransactionImpl
-      slotConfigFix
       marloweParams costModelParams network stake
       contract state
       outputFile
@@ -143,8 +141,7 @@ initializeTransaction slotConfigFix marloweParams costModelParams network stake 
 -- | Create an initial Marlowe transaction.
 initializeTransactionImpl :: MonadError CliError m
                           => MonadIO m
-                          => (Integer, POSIXTime)   -- ^ The slot length, in milliseconds, and the effective POSIX time of slot zero, in milliseconds.
-                          -> MarloweParams          -- ^ The Marlowe contract parameters.
+                          => MarloweParams          -- ^ The Marlowe contract parameters.
                           -> CostModelParams        -- ^ The cost model parameters.
                           -> NetworkId              -- ^ The network ID.
                           -> StakeAddressReference  -- ^ The stake address.
@@ -153,7 +150,7 @@ initializeTransactionImpl :: MonadError CliError m
                           -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
                           -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransactionImpl mtSlotConfigFix marloweParams costModelParams network stake mtContract mtState outputFile printStats =
+initializeTransactionImpl marloweParams costModelParams network stake mtContract mtState outputFile printStats =
   do
      let
        mtRoles = rolesCurrency marloweParams
@@ -203,7 +200,7 @@ prepareTransaction marloweFile txInputs (SlotNo minimumSlot) (SlotNo maximumSlot
                 hPutStrLn stderr "Warnings:"
                 forM_ warnings
                   $ hPutStrLn stderr . ("  " <>) . show
-            hPutStrLn stderr $ "Datum size: " <> show (diSize $ buildDatum mtSlotConfigFix mtContract mtState)
+            hPutStrLn stderr $ "Datum size: " <> show (diSize $ buildDatum mtContract mtState)
         sequence_
           [
             do
@@ -276,7 +273,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
                                                       validatorInfo = mtValidator (marloweIn :: MarloweTransaction AlonzoEra) -- FIXME: Generalize eras.
                                                       PlutusScript _ validator = viScript validatorInfo
                                                       redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
-                                                      inputDatum  = diDatum $ buildDatum (mtSlotConfigFix marloweIn) (mtContract marloweIn) (mtState marloweIn)
+                                                      inputDatum  = diDatum $ buildDatum (mtContract marloweIn) (mtState marloweIn)
                                                       spend' = buildPayFromScript validator inputDatum redeemer spend
                                                     pure ([spend'], Just collateral)
     let
@@ -284,7 +281,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
       toAddressAny' (AddressInEra _ address) = toAddressAny address
       network = localNodeNetworkId connection
       scriptAddress = viAddress $ mtValidator marloweOut
-      outputDatum = diDatum $ buildDatum (mtSlotConfigFix marloweOut) (mtContract marloweOut) (mtState marloweOut)
+      outputDatum = diDatum $ buildDatum (mtContract marloweOut) (mtState marloweOut)
     outputValue <-
       mconcat
         <$> sequence

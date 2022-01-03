@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 
 module Language.Marlowe.CLI.Examples.Escrow (
@@ -20,6 +21,7 @@ module Language.Marlowe.CLI.Examples.Escrow (
 ) where
 
 
+import           Language.Marlowe.Semantics      (MarloweData (..))
 import           Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
                                                   Party (..), Payee (..), State (..), Token (..), Value (..))
 import           Ledger.Ada                      (adaSymbol, adaToken)
@@ -29,16 +31,16 @@ import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 -- | An escrow contract with mediation.
-makeEscrowContract :: Integer            -- ^ Lovelace in the initial state.
-                   -> Integer            -- ^ Price of the item, in lovelace.
-                   -> Party              -- ^ The seller.
-                   -> Party              -- ^ The buyer.
-                   -> Party              -- ^ The mediator.
-                   -> Slot               -- ^ The deadline for the buyer to pay.
-                   -> Slot               -- ^ The deadline for the buyer to complain.
-                   -> Slot               -- ^ The deadline for the seller to dispute a complaint.
-                   -> Slot               -- ^ The deadline for the mediator to decide.
-                   -> (Contract, State)  -- ^ The escrow contract and initial state.
+makeEscrowContract :: Integer      -- ^ Lovelace in the initial state.
+                   -> Integer      -- ^ Price of the item, in lovelace.
+                   -> Party        -- ^ The seller.
+                   -> Party        -- ^ The buyer.
+                   -> Party        -- ^ The mediator.
+                   -> Slot         -- ^ The deadline for the buyer to pay.
+                   -> Slot         -- ^ The deadline for the buyer to complain.
+                   -> Slot         -- ^ The deadline for the seller to dispute a complaint.
+                   -> Slot         -- ^ The deadline for the mediator to decide.
+                   -> MarloweData  -- ^ The escrow contract and initial state.
 makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintDeadline disputeDeadline mediationDeadline =
   let
     ada = Token adaSymbol adaToken
@@ -86,4 +88,4 @@ makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintD
         paymentDeadline
         Close
   in
-    (marloweContract, marloweState)
+    MarloweData{..}

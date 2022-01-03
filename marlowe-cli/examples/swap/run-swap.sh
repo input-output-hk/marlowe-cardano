@@ -85,8 +85,8 @@ echo "$PARTY_A_NAME will spend the UTxOs "'`'"$TX_0_A_ADA"'`'" and "'`'"$TX_0_A_
 
 echo "### The Second Party"
 
-PARTY_B_PREFIX="$TREASURY/thomas-middleton"
-PARTY_B_NAME="Thomas Middleton"
+PARTY_B_PREFIX="$TREASURY/thomas-kyd"
+PARTY_B_NAME="Thomas Kyd"
 PARTY_B_PAYMENT_SKEY="$PARTY_B_PREFIX".skey
 PARTY_B_PAYMENT_VKEY="$PARTY_B_PREFIX".vkey
 PARTY_B_ADDRESS=$(
@@ -276,11 +276,11 @@ marlowe-cli run execute "${MAGIC[@]}"                             \
 
 echo "The closing of the contract paid $AMOUNT_B "'`'"$TOKEN_B"'`'" to the first party $PARTY_A_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract, and it paid $AMOUNT_A "'`'"$TOKEN_A"'`'" to the second party $PARTY_B_NAME in the transaction "'`'"$TX_3"'`'". There is no UTxO at the contract address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p"
 
 echo "Here are the UTxOs at the first party $PARTY_A_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p;/$TX_3/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_A_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
 echo "Here are the UTxOs at the second party $PARTY_B_NAME's address:"
 

@@ -11,12 +11,16 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE RecordWildCards #-}
+
+
 module Language.Marlowe.CLI.Examples.ZeroCouponBond (
 -- * Contract
   makeZeroCouponBond
 ) where
 
 
+import           Language.Marlowe.Semantics      (MarloweData (..))
 import           Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..),
                                                   State (..), Token (..), Value (..))
 import           Ledger.Ada                      (adaSymbol, adaToken)
@@ -26,14 +30,14 @@ import qualified PlutusTx.AssocMap               as AM (empty, singleton)
 
 
 -- | A swap contract.
-makeZeroCouponBond :: Integer            -- ^ Lovelace that the lender contributes to the initial state.
-                   -> Party              -- ^ The lender.
-                   -> Party              -- ^ The borrower.
-                   -> Integer            -- ^ The principal.
-                   -> Integer            -- ^ The interest.
-                   -> Slot               -- ^ The lending deadline.
-                   -> Slot               -- ^ The payback deadline.
-                   -> (Contract, State)  -- ^ Swap contract and initial state.
+makeZeroCouponBond :: Integer      -- ^ Lovelace that the lender contributes to the initial state.
+                   -> Party        -- ^ The lender.
+                   -> Party        -- ^ The borrower.
+                   -> Integer      -- ^ The principal.
+                   -> Integer      -- ^ The interest.
+                   -> Slot         -- ^ The lending deadline.
+                   -> Slot         -- ^ The payback deadline.
+                   -> MarloweData  -- ^ Swap contract and initial state.
 makeZeroCouponBond minAda lender borrower principal interest lendingDeadline paybackDeadline =
   let
     ada = Token adaSymbol adaToken
@@ -64,4 +68,4 @@ makeZeroCouponBond minAda lender borrower principal interest lendingDeadline pay
         lendingDeadline
         Close
   in
-    (marloweContract, marloweState)
+    MarloweData{..}

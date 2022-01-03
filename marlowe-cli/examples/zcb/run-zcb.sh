@@ -55,11 +55,8 @@ LENDER_ADDRESS=$(
   cardano-cli address build "${MAGIC[@]}"                                          \
                             --payment-verification-key-file "$LENDER_PAYMENT_VKEY" \
 )
-LENDER_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$LENDER_PAYMENT_VKEY"
-)
 
-echo "The lender $LENDER_NAME is the minimum-ADA provider and has the address "'`'"$LENDER_ADDRESS"'`'" and public-key hash "'`'"$LENDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The lender $LENDER_NAME is the minimum-ADA provider and has the address "'`'"$LENDER_ADDRESS"'`'" and role token named "'`'"$LENDER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean "${MAGIC[@]}"                             \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -100,11 +97,8 @@ BORROWER_ADDRESS=$(
   cardano-cli address build "${MAGIC[@]}"                                            \
                             --payment-verification-key-file "$BORROWER_PAYMENT_VKEY" \
 )
-BORROWER_PUBKEYHASH=$(
-  cardano-cli address key-hash --payment-verification-key-file "$BORROWER_PAYMENT_VKEY"
-)
 
-echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_ADDRESS"'`'" and public-key hash "'`'"$BORROWER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
+echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_ADDRESS"'`'" and role token named "'`'"$BORROWER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
 marlowe-cli util clean "${MAGIC[@]}"                              \
                        --socket-path "$CARDANO_NODE_SOCKET_PATH"  \
@@ -267,9 +261,9 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
                          --tx-in "$TX_0_BORROWER_TOKEN"                              \
                          --tx-in "$TX_0_BORROWER_ADA"                                \
                          --tx-in-collateral "$TX_0_BORROWER_ADA"                     \
+                         --required-signer "$BORROWER_PAYMENT_SKEY"                  \
                          --tx-out "$BORROWER_ADDRESS+$MINIMUM_ADA+1 $BORROWER_TOKEN" \
                          --change-address "$BORROWER_ADDRESS"                        \
-                         --required-signer "$BORROWER_PAYMENT_SKEY"                  \
                          --out-file tx-3.raw                                         \
                          --print-stats                                               \
                          --submit=600                                                \
@@ -320,7 +314,7 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 
 echo "The closing of the contract paid in the transaction "'`'"$TX_4"'`'" the $PRINCIPAL ADA principal and $INTEREST ADA interest to the role address for the benefit of the lender $LENDER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract. There is no UTxO at the contract address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_4/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
 
 echo "Here are the UTxOs at the borrower $BORROWER_NAME's address:"
 
@@ -342,9 +336,9 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
                          --tx-in "$TX_2"#0                                       \
                          --tx-in "$TX_2"#3                                       \
                          --tx-in-collateral "$TX_2"#0                            \
+                         --required-signer "$LENDER_PAYMENT_SKEY"                \
                          --tx-out "$LENDER_ADDRESS+$MINIMUM_ADA+1 $LENDER_TOKEN" \
                          --change-address "$LENDER_ADDRESS"                      \
-                         --required-signer "$LENDER_PAYMENT_SKEY"                \
                          --out-file tx-5.raw                                     \
                          --print-stats                                           \
                          --submit=600                                            \
@@ -353,7 +347,7 @@ marlowe-cli run withdraw "${MAGIC[@]}"                                          
 
 echo "There is no UTxO at the role address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ROLE_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p;/$TX_5/p"
 
 echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 

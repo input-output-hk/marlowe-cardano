@@ -294,16 +294,13 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         ownPubKey <- Contract.ownPubKeyHash
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners contract
         slot <- currentSlot
-        time <- Ledger.getPOSIXTime <$> currentTime
-        let timeZero = Ledger.POSIXTime $ time - getSlot slot * scSlotLength def
         let marloweData = MarloweData {
                 marloweContract = contract,
                 marloweState = State
                     { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) minLovelaceDeposit
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
-                    , minSlot = slot },
-                slotConfigFix = (scSlotLength def, timeZero) }  -- FIXME: This is a temporary fix until SCP-3150 is complete.
+                    , minSlot = slot } }
         let minAdaTxOut = lovelaceValueOf minLovelaceDeposit
         let typedValidator = mkMarloweTypedValidator params
         let tx = mustPayToTheScript marloweData minAdaTxOut <> distributeRoleTokens
@@ -459,7 +456,8 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
     then do
         let params = MarloweParams
                 { rolesCurrency = adaSymbol
-                , rolePayoutValidatorHash = defaultRolePayoutValidatorHash }
+                , rolePayoutValidatorHash = defaultRolePayoutValidatorHash
+                , slotConfig = (scSlotLength def, scSlotZeroTime def) }  -- FIXME: This is temporary, until SCP-3050 is completed.
         pure (params, mempty, mempty)
     else if roles `Set.isSubsetOf` Set.fromList (AssocMap.keys owners)
     then do
@@ -481,7 +479,8 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
         let distributeRoleTokens = foldMap giveToParty (AssocMap.toList owners)
         let params = MarloweParams
                 { rolesCurrency = rolesSymbol
-                , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesSymbol }
+                , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesSymbol
+                , slotConfig = (scSlotLength def, scSlotZeroTime def) }  -- FIXME: This is temporary, until SCP-3050 is completed.
         pure (params, mintTx <> distributeRoleTokens, lookups)
     else do
         let missingRoles = roles `Set.difference` Set.fromList (AssocMap.keys owners)
@@ -561,7 +560,8 @@ applyInputs params typedValidator slotInterval inputs = mapError (review _Marlow
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
     { rolesCurrency = rolesCurrency
-    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency }
+    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency
+    , slotConfig = (scSlotLength def, scSlotZeroTime def) }  -- FIXME: This is temporary, until SCP-3050 is completed.
 
 
 defaultMarloweParams :: MarloweParams

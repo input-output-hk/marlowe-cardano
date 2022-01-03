@@ -117,8 +117,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
 
             let marloweData = MarloweData {
                     marloweContract = txOutContract,
-                    marloweState = txOutState,
-                    slotConfigFix = slotConfigFix }  -- FIXME: This is a temporary fix until SCP-3150 is complete.
+                    marloweState = txOutState}
 
             let (outputsConstraints, finalBalance) = let
                     payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
@@ -192,8 +191,8 @@ smallMarloweValidator
     -> [Input]
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
-    let slotConfig = uncurry TimeSlot.SlotConfig slotConfigFix  -- FIXME: This is a temporary fix until SCP-3150 is complete.
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig = (scSlotLength, scSlotZeroTime)} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
+    let slotConfig = TimeSlot.SlotConfig{..}  -- FIXME: This is temporary, until SCP-3150 is completed.
     let ownInput = case findOwnInput ctx of
             Just i -> i
             _      -> traceError "I0" {-"Can't find validation input"-}
@@ -238,8 +237,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
         TransactionOutput {txOutPayments, txOutState, txOutContract} -> do
             let marloweData = MarloweData {
                     marloweContract = txOutContract,
-                    marloweState = txOutState,
-                    slotConfigFix = slotConfigFix }  -- FIXME: This is a temporary fix until SCP-3150 is complete.
+                    marloweState = txOutState }
 
                 payoutsByParty = AssocMap.toList $ foldMap payoutByParty txOutPayments
                 payoutsOk = payoutConstraints payoutsByParty

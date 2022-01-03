@@ -8,6 +8,8 @@ The `marlowe contract validator` command writes the default Marlowe validator to
     $ marlowe-cli contract validator --help
     
     Usage: marlowe-cli contract validator [--testnet-magic INTEGER]
+                                          [--slot-length INTEGER]
+                                          [--slot-offset INTEGER]
                                           [--stake-address ADDRESS]
                                           [--roles-currency CURRENCY_SYMBOL]
                                           [--out-file OUTPUT_FILE] [--print-hash]
@@ -16,6 +18,8 @@ The `marlowe contract validator` command writes the default Marlowe validator to
     
     Available options:
       --testnet-magic INTEGER           Network magic, or omit for mainnet.
+      --slot-length INTEGER             The slot length, in milliseconds.
+      --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
       --stake-address ADDRESS           Stake address, if any.
       --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
       --out-file OUTPUT_FILE            JSON output file for validator.

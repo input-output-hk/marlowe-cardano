@@ -32,6 +32,7 @@ import           Language.Marlowe.CLI.Export        (exportAddress, exportDatum,
                                                      exportValidator)
 import           Language.Marlowe.CLI.Types         (CliError)
 import           Language.Marlowe.Client            (defaultMarloweParams, marloweParams)
+import           Language.Marlowe.Semantics         (MarloweParams (slotConfig))
 import           Plutus.V1.Ledger.Api               (CurrencySymbol, POSIXTime (..), defaultCostModelParams)
 
 import qualified Options.Applicative                as O
@@ -42,9 +43,9 @@ data ContractCommand =
     -- | Export comprehensive Marlowe contrac and transactiont information.
     Export
     {
-      slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
     , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , network        :: Maybe NetworkId              -- ^ The network ID, if any.
     , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
     , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     , contractFile   :: FilePath                     -- ^ The JSON file containing the contract.
@@ -56,29 +57,31 @@ data ContractCommand =
     -- | Export the address for a Marlowe contract.
   | ExportAddress
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
+    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
     }
     -- | Export the validator for a Marlowe contract.
   | ExportValidator
     {
-      network       :: Maybe NetworkId              -- ^ The network ID, if any.
-    , stake         :: Maybe StakeAddressReference  -- ^ The stake address, if any.
-    , rolesCurrency :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
-    , outputFile    :: Maybe FilePath               -- ^ The output JSON file for the validator information.
-    , printHash     :: Bool                         -- ^ Whether to print the validator hash.
-    , printStats    :: Bool                         -- ^ Whether to print statistics about the contract.
+      network        :: Maybe NetworkId              -- ^ The network ID, if any.
+    , slotLength     :: Integer                      -- ^ The slot length, in milliseconds.
+    , slotZeroOffset :: Integer                      -- ^ The effective POSIX time of slot zero, in milliseconds.
+    , stake          :: Maybe StakeAddressReference  -- ^ The stake address, if any.
+    , rolesCurrency  :: Maybe CurrencySymbol         -- ^ The role currency symbols, if any.
+    , outputFile     :: Maybe FilePath               -- ^ The output JSON file for the validator information.
+    , printHash      :: Bool                         -- ^ Whether to print the validator hash.
+    , printStats     :: Bool                         -- ^ Whether to print statistics about the contract.
     }
     -- | Export the datum for a Marlowe contract transaction.
   | ExportDatum
     {
-      slotLength     :: Integer         -- ^ The slot length, in milliseconds.
-    , slotZeroOffset :: Integer         -- ^ The effective POSIX time of slot zero, in milliseconds.
-    , contractFile   :: FilePath        -- ^ The JSON file containing the contract.
-    , stateFile      :: FilePath        -- ^ The JSON file containing the contract's state.
-    , outputFile     :: Maybe FilePath  -- ^ The output JSON file for the datum.
-    , printStats     :: Bool            -- ^ Whether to print statistics about the datum.
+      contractFile :: FilePath        -- ^ The JSON file containing the contract.
+    , stateFile    :: FilePath        -- ^ The JSON file containing the contract's state.
+    , outputFile   :: Maybe FilePath  -- ^ The output JSON file for the datum.
+    , printStats   :: Bool            -- ^ Whether to print statistics about the datum.
     }
     -- | Export the redeemer for a Marlowe contract transaction.
   | ExportRedeemer
@@ -103,11 +106,13 @@ runContractCommand command =
         defaultCostModelParams
     let
       network' = fromMaybe Mainnet $ network command
-      marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
+      marloweParams' = (maybe defaultMarloweParams marloweParams $ rolesCurrency command)
+                       {
+                         slotConfig = (slotLength command, POSIXTime $ slotZeroOffset command)
+                       }
       stake'         = fromMaybe NoStakeAddress $ stake command
     case command of
       Export{..}          -> exportMarlowe
-                               (slotLength, POSIXTime slotZeroOffset)
                                marloweParams' costModel network' stake'
                                contractFile stateFile
                                inputFiles
@@ -120,7 +125,6 @@ runContractCommand command =
                                outputFile
                                printHash printStats
       ExportDatum{..}     -> exportDatum
-                               (slotLength, POSIXTime slotZeroOffset)
                                contractFile stateFile
                                outputFile
                                printStats
@@ -154,9 +158,9 @@ exportMarloweCommand =
 exportMarloweOptions :: O.Parser ContractCommand
 exportMarloweOptions =
   Export
-    <$> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
     <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
-    <*> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
     <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
     <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
     <*> O.strOption                                        (O.long "contract-file"  <> O.metavar "CONTRACT_FILE"                            <> O.help "JSON input file for the contract."                      )
@@ -178,9 +182,11 @@ exportAddressCommand =
 exportAddressOptions :: O.Parser ContractCommand
 exportAddressOptions =
   ExportAddress
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."                    )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                                 )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any."                 )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
+    <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
 
 
 -- | Parser for the "validator" command.
@@ -195,12 +201,14 @@ exportValidatorCommand =
 exportValidatorOptions :: O.Parser ContractCommand
 exportValidatorOptions =
   ExportValidator
-    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"         <> O.help "Network magic, or omit for mainnet."                    )
-    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"         <> O.help "Stake address, if any."                                 )
-    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL" <> O.help "The currency symbol for roles, if any."                 )
-    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"     <> O.help "JSON output file for validator."                        )
-    <*> O.switch                                           (O.long "print-hash"                                    <> O.help "Print validator hash."                                  )
-    <*> O.switch                                           (O.long "print-stats"                                   <> O.help "Print statistics."                                      )
+    <$> (O.optional . O.option parseNetworkId)             (O.long "testnet-magic"  <> O.metavar "INTEGER"                                  <> O.help "Network magic, or omit for mainnet."                    )
+    <*> O.option O.auto                                    (O.long "slot-length"    <> O.metavar "INTEGER"         <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
+    <*> O.option O.auto                                    (O.long "slot-offset"    <> O.metavar "INTEGER"         <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
+    <*> (O.optional . O.option parseStakeAddressReference) (O.long "stake-address"  <> O.metavar "ADDRESS"                                  <> O.help "Stake address, if any."                                 )
+    <*> (O.optional . O.option parseCurrencySymbol)        (O.long "roles-currency" <> O.metavar "CURRENCY_SYMBOL"                          <> O.help "The currency symbol for roles, if any."                 )
+    <*> (O.optional . O.strOption)                         (O.long "out-file"       <> O.metavar "OUTPUT_FILE"                              <> O.help "JSON output file for validator."                        )
+    <*> O.switch                                           (O.long "print-hash"                                                             <> O.help "Print validator hash."                                  )
+    <*> O.switch                                           (O.long "print-stats"                                                            <> O.help "Print statistics."                                      )
 
 
 -- | Parser for the "datum" command.
@@ -215,12 +223,10 @@ exportDatumCommand =
 exportDatumOptions :: O.Parser ContractCommand
 exportDatumOptions =
   ExportDatum
-    <$> O.option O.auto            (O.long "slot-length"   <> O.metavar "INTEGER"       <> O.value 1000          <> O.help "The slot length, in milliseconds."                      )
-    <*> O.option O.auto            (O.long "slot-offset"   <> O.metavar "INTEGER"       <> O.value 1591566291000 <> O.help "The effective POSIX time of slot zero, in milliseconds.")
-    <*> O.strOption                (O.long "contract-file" <> O.metavar "CONTRACT_FILE"                          <> O.help "JSON input file for the contract."                      )
-    <*> O.strOption                (O.long "state-file"    <> O.metavar "STATE_FILE"                             <> O.help "JSON input file for the contract state."                )
-    <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "DATUM_FILE"                             <> O.help "JSON output file for datum."                            )
-    <*> O.switch                   (O.long "print-stats"                                                         <> O.help "Print statistics."                                      )
+    <$> O.strOption                (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract."      )
+    <*> O.strOption                (O.long "state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON input file for the contract state.")
+    <*> (O.optional . O.strOption) (O.long "out-file"      <> O.metavar "DATUM_FILE"    <> O.help "JSON output file for datum."            )
+    <*> O.switch                   (O.long "print-stats"                                <> O.help "Print statistics."                      )
 
 
 -- | Parser for the "redeemer" command.

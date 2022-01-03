@@ -101,10 +101,16 @@ echo "The second party will spend the UTxO $TX_0_PARTY_B."
 
 # Configure the validator.
 
-CONTRACT_ADDRESS=$(marlowe-cli contract address "${MAGIC[@]}")
+CONTRACT_ADDRESS=$(
+marlowe-cli contract address "${MAGIC[@]}"        \
+                     --slot-length "$SLOT_LENGTH" \
+                     --slot-offset "$SLOT_OFFSET" \
+)
 
-marlowe-cli contract validator "${MAGIC[@]}"             \
-                               --out-file marlowe.plutus \
+marlowe-cli contract validator "${MAGIC[@]}"                \
+                               --slot-length "$SLOT_LENGTH" \
+                               --slot-offset "$SLOT_OFFSET" \
+                               --out-file marlowe.plutus    \
                                --print-stats
 
 
@@ -147,9 +153,7 @@ cat > tx-1.contract << EOI
 "close"
 EOI
 
-marlowe-cli contract datum --slot-length "$SLOT_LENGTH"  \
-                           --slot-offset "$SLOT_OFFSET"  \
-                           --contract-file tx-1.contract \
+marlowe-cli contract datum --contract-file tx-1.contract \
                            --state-file    tx-1.state    \
                            --out-file      tx-1.datum
 
@@ -200,9 +204,7 @@ cat > tx-2.contract << EOI
 "close"
 EOI
 
-marlowe-cli contract datum --slot-length "$SLOT_LENGTH"  \
-                           --slot-offset "$SLOT_OFFSET"  \
-                           --contract-file tx-2.contract \
+marlowe-cli contract datum --contract-file tx-2.contract \
                            --state-file    tx-2.state    \
                            --out-file      tx-2.datum
 

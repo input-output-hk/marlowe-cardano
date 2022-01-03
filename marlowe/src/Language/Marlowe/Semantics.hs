@@ -210,15 +210,15 @@ data TransactionOutput =
 -}
 data MarloweData = MarloweData {
         marloweState    :: State,
-        marloweContract :: Contract,
-        slotConfigFix   :: (Integer, POSIXTime)  -- FIXME: This is a temporary fix until SCP-3150 is complete.
+        marloweContract :: Contract
     } deriving stock (Haskell.Show, Haskell.Eq, Generic)
       deriving anyclass (ToJSON, FromJSON)
 
 
 data MarloweParams = MarloweParams {
         rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol
+        rolesCurrency           :: CurrencySymbol,
+        slotConfig              :: (Integer, POSIXTime)  -- FIXME: This is temporary, until SCP-3050 is completed.
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (FromJSON,ToJSON)

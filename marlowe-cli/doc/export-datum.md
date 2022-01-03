@@ -7,16 +7,12 @@ The `marlowe-cli contract datum` command writes a Marlowe datum to a JSON file i
 
     $ marlowe-cli contract datum --help
     
-    Usage: marlowe-cli contract datum [--slot-length INTEGER]
-                                      [--slot-offset INTEGER]
-                                      --contract-file CONTRACT_FILE
+    Usage: marlowe-cli contract datum --contract-file CONTRACT_FILE
                                       --state-file STATE_FILE
                                       [--out-file DATUM_FILE] [--print-stats]
       Export a contract datum to a JSON file.
     
     Available options:
-      --slot-length INTEGER          The slot length, in milliseconds.
-      --slot-offset INTEGER          The effective POSIX time of slot zero, in milliseconds.
       --contract-file CONTRACT_FILE  JSON input file for the contract.
       --state-file STATE_FILE        JSON input file for the contract state.
       --out-file DATUM_FILE          JSON output file for datum.

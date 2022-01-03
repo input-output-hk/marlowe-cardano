@@ -16,6 +16,8 @@ The `marlowe-cli contract address` command computes the address of the Marlowe v
     
     Available options:
       --testnet-magic INTEGER           Network magic, or omit for mainnet.
+      --slot-length INTEGER             The slot length, in milliseconds.
+      --slot-offset INTEGER             The effective POSIX time of slot zero, in milliseconds.
       --stake-address ADDRESS           Stake address, if any.
       --roles-currency CURRENCY_SYMBOL  The currency symbol for roles, if any.
       -h,--help                         Show this help text
