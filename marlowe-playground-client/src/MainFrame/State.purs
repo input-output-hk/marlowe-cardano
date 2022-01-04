@@ -28,7 +28,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
-import Env (Env)
+import Store (Env)
 import Gist (Gist, _GistId, gistDescription, gistId)
 import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists
@@ -767,7 +767,7 @@ handleGistAction LoadGist = do
           pure aGist
   assign _loadGistResult res
   where
-  toEither :: forall e a. Either e a -> RemoteData e a -> Either e a
+  toEither :: forall err a. Either err a -> RemoteData err a -> Either err a
   toEither _ (Success a) = Right a
 
   toEither _ (Failure e) = Left e

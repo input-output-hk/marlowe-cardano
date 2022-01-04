@@ -7,7 +7,7 @@ import Data.Lens (assign, modifying, over, set)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
+import Store (Env)
 import Halogen.Query (HalogenM)
 import MainFrame.Types
   ( Action

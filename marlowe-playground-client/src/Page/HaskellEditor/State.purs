@@ -17,7 +17,7 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
+import Store (Env)
 import Examples.Haskell.Contracts (example) as HE
 import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)

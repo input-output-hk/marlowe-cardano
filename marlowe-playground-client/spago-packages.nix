@@ -593,6 +593,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "halogen-store" = pkgs.stdenv.mkDerivation {
+        name = "halogen-store";
+        version = "v0.2.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/thomashoneyman/purescript-halogen-store.git";
+          rev = "e262a17eb06a705b9207b598663b64a71714f428";
+          sha256 = "0sr3f5jlkz7cfprq3df17f5bh9ykd4rnr2n4p3h21jqnfin64m0f";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "halogen-subscriptions" = pkgs.stdenv.mkDerivation {
         name = "halogen-subscriptions";
         version = "v1.0.0";

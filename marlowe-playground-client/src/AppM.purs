@@ -1,18 +1,21 @@
 module AppM where
 
 import Prologue
-import Control.Monad.Reader.Trans (class MonadAsk, ReaderT, asks, runReaderT)
+import Control.Monad.Reader.Trans (class MonadAsk)
 import Effect.Aff (Aff)
-import Env (Env)
-import Effect.Class (class MonadEffect)
 import Effect.Aff.Class (class MonadAff)
-import Type.Equality (class TypeEquals, from)
+import Effect.Class (class MonadEffect)
+import Halogen as H
+import Halogen.Store.Monad (class MonadStore, StoreT, getStore, runStoreT)
+import Safe.Coerce (coerce)
+import Store (Env, Store, toEnv)
+import Store as Store
 
 newtype AppM a
-  = AppM (ReaderT Env Aff a)
+  = AppM (StoreT Store.Action Store Aff a)
 
-runAppM :: Env -> AppM ~> Aff
-runAppM env (AppM m) = runReaderT m env
+runAppM :: forall i o q. Store -> H.Component q i o AppM -> Aff (H.Component q i o Aff)
+runAppM store = runStoreT store Store.reduce <<< coerce
 
 derive newtype instance functorAppM :: Functor AppM
 
@@ -28,11 +31,7 @@ derive newtype instance monadEffectAppM :: MonadEffect AppM
 
 derive newtype instance monadAffAppM :: MonadAff AppM
 
--- | We can't write instances for type synonyms, and we defined our environment (`Env`) as
--- | a type synonym for convenience. To get around this, we can use `TypeEquals` to assert that
--- | types `a` and `b` are in fact the same.
--- |
--- | In our case, we'll write a `MonadAsk` instance for the type `e`, and assert it is our `Env` type.
--- | This is how we can write a type class instance for a type synonym, which is otherwise disallowed.
-instance monadAskAppM :: TypeEquals e Env => MonadAsk e AppM where
-  ask = AppM $ asks from
+derive newtype instance monadStoreAppM :: MonadStore Store.Action Store.Store AppM
+
+instance monadAskAppM :: MonadAsk Env AppM where
+  ask = toEnv <$> getStore

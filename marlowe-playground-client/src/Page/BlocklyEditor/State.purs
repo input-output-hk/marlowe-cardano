@@ -16,7 +16,7 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Env (Env)
+import Store (Env)
 import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, modify_)
 import Halogen as H
