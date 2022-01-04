@@ -8,7 +8,7 @@ import           Data.Map.Strict                         (Map)
 
 import           Language.Marlowe
 import           Language.Marlowe.SemanticsSerialisation (contractToByteString)
-import           Ledger                                  (pubKeyHash)
+import           Ledger                                  (PaymentPubKeyHash (..), pubKeyHash)
 import qualified Ledger
 import           PlutusTx.Builtins                       (sha2_256)
 import qualified PlutusTx.Ratio                          as P
@@ -334,7 +334,7 @@ shrinkContract cont = case cont of
 
 pangramContract :: Contract
 pangramContract = let
-    alicePk = PK $ walletPubKeyHash $ knownWallet 1
+    alicePk = PK . unPaymentPubKeyHash . mockWalletPaymentPubKeyHash $ knownWallet 1
     aliceAcc = alicePk
     bobRole = Role "Bob"
     constant = Constant 100
