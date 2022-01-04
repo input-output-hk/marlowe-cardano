@@ -53,9 +53,9 @@ type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
 data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
-instance Scripts.ValidatorTypes (TypedMarloweValidator) where
-    type instance RedeemerType (TypedMarloweValidator) = [Input]
-    type instance DatumType (TypedMarloweValidator) = MarloweData
+instance Scripts.ValidatorTypes TypedMarloweValidator where
+    type instance RedeemerType TypedMarloweValidator = [Input]
+    type instance DatumType TypedMarloweValidator = MarloweData
 
 
 rolePayoutScript :: CurrencySymbol -> Validator
@@ -87,7 +87,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     (interval@(minSlot, maxSlot), inputs) = do
     let positiveBalances = validateBalances marloweState ||
             -- Avoid creating a too-big string literal
-            traceError ("M1")
+            traceError "M1"
 
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
@@ -142,7 +142,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     validateInputs MarloweParams{rolesCurrency} inputs = let
         (keys, roles) = foldMap (validateInputWitness . getInputContent) inputs
         mustSpendSetOfRoleTokens = foldMap mustSpendRoleToken (AssocMap.keys roles)
-        in foldMap mustBeSignedBy keys <> mustSpendSetOfRoleTokens
+        in foldMap mustBeSignedBy (PaymentPubKeyHash <$> keys) <> mustSpendSetOfRoleTokens
       where
         validateInputWitness :: InputContent -> ([PubKeyHash], AssocMap.Map TokenName ())
         validateInputWitness input =
@@ -169,7 +169,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     payoutConstraints payoutsByParty = foldMap payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            PK pk  -> mustPayToPubKey pk value
+            PK pk  -> mustPayToPubKey (PaymentPubKeyHash pk) value
             Role role -> let
                 dataValue = Datum $ PlutusTx.toBuiltinData role
                 in mustPayToOtherScript (rolePayoutValidatorHash params) dataValue value
@@ -321,10 +321,9 @@ typedValidator params = Scripts.mkTypedValidator @MarloweStateMachine
 
 
 smallTypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
-smallTypedValidator params = Scripts.mkTypedValidatorParam @TypedMarloweValidator
+smallTypedValidator = Scripts.mkTypedValidatorParam @TypedMarloweValidator
     $$(PlutusTx.compile [|| smallMarloweValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
-    params
     where
         wrap = Scripts.wrapValidator
 

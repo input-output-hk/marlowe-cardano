@@ -94,8 +94,8 @@ unlock = endpoint @"unlock" (unlockFunds . mkSplitData)
 mkSplitData :: LockArgs -> SplitData
 mkSplitData LockArgs{recipient1Wallet, recipient2Wallet, totalAda} =
     SplitData
-        { recipient1 = walletPubKeyHash recipient1Wallet
-        , recipient2 = walletPubKeyHash recipient2Wallet
+        { recipient1 = unPaymentPubKeyHash $ mockWalletPaymentPubKeyHash recipient1Wallet
+        , recipient2 = unPaymentPubKeyHash $ mockWalletPaymentPubKeyHash recipient2Wallet
         , amount = totalAda
         }
 
@@ -116,8 +116,8 @@ unlockFunds SplitData{recipient1, recipient2, amount} = do
     let half = Ada.divide amount 2
         tx =
             collectFromScript utxos ()
-            <> Constraints.mustPayToPubKey recipient1 (Ada.toValue half)
-            <> Constraints.mustPayToPubKey recipient2 (Ada.toValue $ amount - half)
+            <> Constraints.mustPayToPubKey (PaymentPubKeyHash recipient1) (Ada.toValue half)
+            <> Constraints.mustPayToPubKey (PaymentPubKeyHash recipient2) (Ada.toValue $ amount - half)
     void $ submitTxConstraintsSpending splitValidator utxos tx
 
 -- BLOCK9

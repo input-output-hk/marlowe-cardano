@@ -192,16 +192,16 @@ instanceSpec = [ ContractInstanceSpec (WalletKey w) w G.contract | w <- wallets 
 
 -- START prop_Game
 prop_Game :: Actions GameModel -> Property
-prop_Game actions = propRunActions_ instanceSpec actions
+prop_Game = propRunActions_ instanceSpec
 -- END prop_Game
 
 -- START propGame'
 propGame' :: LogLevel -> Actions GameModel -> Property
-propGame' l s = propRunActionsWithOptions
-                    (set minLogLevel l defaultCheckOptions)
-                    instanceSpec
-                    (\ _ -> pure True)
-                    s
+propGame' l = propRunActionsWithOptions
+                  (set minLogLevel l defaultCheckOptions)
+                  defaultCoverageOptions
+                  instanceSpec
+                  (\ _ -> pure True)
 -- END propGame'
 
 -- START Generators

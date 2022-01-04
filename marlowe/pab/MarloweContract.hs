@@ -13,7 +13,6 @@ import Control.Monad.Freer (interpret)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Default (Default (def))
 import qualified Data.OpenApi as OpenApi
-import Data.Text.Prettyprint.Doc (Pretty (..), viaShow)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Client as Marlowe
 import Language.PureScript.Bridge (argonaut, equal, genericShow, mkSumType, order)
@@ -23,6 +22,7 @@ import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import Plutus.PAB.Run.PSGenerator (HasPSTypes (psTypes))
 import Plutus.PAB.Simulator (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator as Simulator
+import Prettyprinter (Pretty (..), viaShow)
 
 data MarloweContract =
     MarloweApp -- The main marlowe contract

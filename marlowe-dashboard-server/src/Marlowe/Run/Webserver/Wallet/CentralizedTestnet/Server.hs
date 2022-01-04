@@ -28,7 +28,7 @@ import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import Data.String as S
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
-import Ledger (PubKeyHash (..))
+import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
 import Marlowe.Run.Webserver.Types (Env)
 import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError (..), RestorePostData (..))
 import Marlowe.Run.Webserver.Wallet.Client (callWBE, decodeError)
@@ -69,7 +69,7 @@ restoreWallet postData = runExceptT $ do
     pubKeyHash <- withExceptT (const FetchPubKeyHashError) $
         ExceptT $ getPubKeyHashFromWallet walletId
 
-    pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPubKeyHash = pubKeyHash }
+    pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPaymentPubKeyHash = PaymentPubKeyHash pubKeyHash }
 
 getPubKeyHashFromWallet ::
     MonadIO m =>
