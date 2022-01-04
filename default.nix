@@ -27,6 +27,7 @@
 }:
 let
   inherit (packages) pkgs marlowe sources;
+
   inherit (marlowe) haskell;
   inherit (haskell.packages.cardano-wallet.components.exes) cardano-wallet;
   inherit (haskell.packages.plutus-chain-index.components.exes) plutus-chain-index;
