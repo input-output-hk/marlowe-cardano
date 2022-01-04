@@ -31,6 +31,7 @@ let
   inherit (haskell.packages.cardano-wallet.components.exes) cardano-wallet;
   inherit (haskell.packages.plutus-chain-index.components.exes) plutus-chain-index;
   inherit (haskell.packages.marlowe-dashboard-server.components.exes) marlowe-dashboard-server;
+  inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
 in
 rec {
   inherit pkgs marlowe;
@@ -61,6 +62,8 @@ rec {
       inherit webCommon webCommonMarlowe;
     }) client pab-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
   };
+
+  inherit marlowe-cli;
 
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;

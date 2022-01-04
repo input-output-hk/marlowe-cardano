@@ -47,7 +47,7 @@ echo "#### The Lender"
 
 LENDER_PREFIX="$TREASURY/john-fletcher"
 LENDER_NAME="John Fletcher"
-LENDER_ROLE=JohnFletcher
+LENDER_ROLE=JF
 LENDER_TOKEN="$ROLE_CURRENCY.$LENDER_ROLE"
 LENDER_PAYMENT_SKEY="$LENDER_PREFIX".skey
 LENDER_PAYMENT_VKEY="$LENDER_PREFIX".vkey
@@ -89,7 +89,7 @@ echo "### The Borrower"
 
 BORROWER_PREFIX="$TREASURY/thomas-middleton"
 BORROWER_NAME="Thomas Middleton"
-BORROWER_ROLE=ThomasMiddleton
+BORROWER_ROLE=TM
 BORROWER_TOKEN="$ROLE_CURRENCY.$BORROWER_ROLE"
 BORROWER_PAYMENT_SKEY="$BORROWER_PREFIX".skey
 BORROWER_PAYMENT_VKEY="$BORROWER_PREFIX".vkey
@@ -142,7 +142,7 @@ INTEREST=5000000
 LENDING_DEADLINE=$((TIP+12*3600))
 REPAYMENT_DEADLINE=$((TIP+24*3600))
 
-echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the lender $LENDER_NAME will pay principal of $PRINCIPAL ADA before slot $LENDING_DEADLINE and the borrower will repay the principal and interest of $INTEREST ADA before slot $REPAYMENT_DEADLINE."
+echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the lender $LENDER_NAME will pay principal of $PRINCIPAL lovelace before slot $LENDING_DEADLINE and the borrower will repay the principal and interest of $INTEREST lovelace before slot $REPAYMENT_DEADLINE."
 
 echo "We create the contract for the previously specified parameters."
 
@@ -312,7 +312,7 @@ marlowe-cli run execute "${MAGIC[@]}"                                           
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                                    \
 )
 
-echo "The closing of the contract paid in the transaction "'`'"$TX_4"'`'" the $PRINCIPAL ADA principal and $INTEREST ADA interest to the role address for the benefit of the lender $LENDER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract. There is no UTxO at the contract address:"
+echo "The closing of the contract paid in the transaction "'`'"$TX_4"'`'" the $PRINCIPAL lovelace principal and $INTEREST lovelace interest to the role address for the benefit of the lender $LENDER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract. There is no UTxO at the contract address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_3/p;/$TX_4/p"
 

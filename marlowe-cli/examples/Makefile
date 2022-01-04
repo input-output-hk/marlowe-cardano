@@ -10,6 +10,8 @@ all: $(SUBDIRS)
 $(SUBDIRS):
 	make -C $@ clean tests
 
+clean:
+	-rm */tx-?.* */utxo-?-?.json */*.{diff,log}
 
 .SUFFIXES:
 

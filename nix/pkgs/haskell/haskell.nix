@@ -87,6 +87,7 @@ let
           marlowe-dashboard-server.package.buildable = false;
           marlowe-playground-server.package.buildable = false; # Would also require libpq
           marlowe-symbolic.package.buildable = false;
+          marlowe-cli.package.buildable = false;
           playground-common.package.buildable = false;
           plutus-benchmark.package.buildable = false;
           plutus-chain-index-core.package.buildable = false;
