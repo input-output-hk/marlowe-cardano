@@ -4,25 +4,37 @@ module AppM
   ) where
 
 import Prologue
+
 import Clipboard (class MonadClipboard, copy)
+import Control.Monad.Reader (class MonadReader, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (class MonadAsk)
+import Control.Monad.Trans.Class (lift)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
+import Env (Env)
 import Halogen (Component)
-import Halogen.Store.Monad (class MonadStore, StoreT, getStore, runStoreT)
-import Safe.Coerce (coerce)
+import Halogen.Component (hoist)
+import Halogen.Store.Monad
+  ( class MonadStore
+  , StoreT
+  , emitSelected
+  , getStore
+  , runStoreT
+  , updateStore
+  )
 import Store as Store
 
-newtype AppM a
-  = AppM (StoreT Store.Action Store.Store Aff a)
+newtype AppM a = AppM (ReaderT Env (StoreT Store.Action Store.Store Aff) a)
 
 runAppM
   :: forall q i o
-   . Store.Store
+   . Env
+  -> Store.Store
   -> Component q i o AppM
   -> Aff (Component q i o Aff)
-runAppM store = runStoreT store Store.reduce <<< coerce
+runAppM env store =
+  runStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
 
 derive newtype instance functorAppM :: Functor AppM
 
@@ -38,13 +50,14 @@ derive newtype instance monadEffectAppM :: MonadEffect AppM
 
 derive newtype instance monadAffAppM :: MonadAff AppM
 
-derive newtype instance monadStoreAppM ::
-  MonadStore Store.Action Store.Store AppM
+instance monadStoreAppM :: MonadStore Store.Action Store.Store AppM where
+  getStore = AppM (lift getStore)
+  updateStore = AppM <<< lift <<< updateStore
+  emitSelected = AppM <<< lift <<< emitSelected
 
--- The MonadAsk instance is redundant with MonadStore, but I add it here so I don't
--- modify the code that used to work with it.
-instance monadAskAppM :: MonadAsk Store.Store AppM where
-  ask = getStore
+derive newtype instance monadAskAppM :: MonadAsk Env AppM
+
+derive newtype instance monadReaderAppM :: MonadReader Env AppM
 
 instance monadClipboardAppM :: MonadClipboard AppM where
   copy = liftEffect <<< copy

@@ -38,6 +38,7 @@ import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
+import Env (Env)
 import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
 import Halogen.Store.Monad (class MonadStore, updateStore)
@@ -71,7 +72,6 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
   , InstanceStatusToClient(..)
   )
-import Store (Env)
 import Store as Store
 import Toast.State (defaultState, handleAction) as Toast
 import Toast.Types (Action, State) as Toast
@@ -105,9 +105,9 @@ the code. Comments are added throughout with the format "[Workflow n][m]" - so y
 code for e.g. "[Workflow 4]" to see all of the steps involved in starting a contract.
 -}
 mkMainFrame
-  :: forall m e
+  :: forall m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => Toast m
@@ -137,9 +137,9 @@ initialState =
   }
 
 handleQuery
-  :: forall a m e
+  :: forall a m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m
   => Toast m
@@ -305,9 +305,9 @@ handleQuery (MainFrameActionQuery action next) = do
 -- submodule actions (triggered straightforwardly in the submodule's `render`
 -- functions) are handled by their parent module's `handleAction` function.
 handleAction
-  :: forall m e
+  :: forall m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m

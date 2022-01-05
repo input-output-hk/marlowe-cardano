@@ -74,6 +74,7 @@ import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
+import Env (Env)
 import Halogen
   ( HalogenM
   , getHTMLElementRef
@@ -146,7 +147,6 @@ import Page.Contract.Types
   , scrollContainerRef
   )
 import Page.Dashboard.Types (Action(..)) as Dashboard
-import Store (Env)
 import Toast.Types (ajaxErrorToast, successToast)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
@@ -334,9 +334,9 @@ withStarted
 withStarted f = peruse _Started >>= traverse_ f
 
 handleAction
-  :: forall m e
+  :: forall m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => MainFrameLoop m
   => ManageMarlowe m
   => ManageMarloweStorage m
@@ -653,9 +653,9 @@ selectLastStep state@{ previousSteps } = state
 --       were active at the same time, which caused scroll issues. We use an AVar to control the
 --       concurrency and assure that only one subscription is active at a time.
 unsubscribeFromSelectCenteredStep
-  :: forall m e
+  :: forall m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => HalogenM State Action ChildSlots Msg m Unit
 unsubscribeFromSelectCenteredStep = do
   mutex <- asks _.contractStepCarouselSubscription
@@ -663,9 +663,9 @@ unsubscribeFromSelectCenteredStep = do
   for_ mSubscription unsubscribe
 
 subscribeToSelectCenteredStep
-  :: forall m e
+  :: forall m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => HalogenM State Action ChildSlots Msg m Unit
 subscribeToSelectCenteredStep = do
   mElement <- getHTMLElementRef scrollContainerRef

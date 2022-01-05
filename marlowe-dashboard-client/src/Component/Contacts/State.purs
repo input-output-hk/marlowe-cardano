@@ -52,6 +52,7 @@ import Data.String (codePointFromChar)
 import Data.String.CodeUnits (length, toCharArray)
 import Data.UUID.Argonaut (emptyUUID)
 import Effect.Aff.Class (class MonadAff)
+import Env (Env)
 import Halogen (HalogenM, modify_)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Query.HalogenM (mapAction)
@@ -66,7 +67,6 @@ import Marlowe.Semantics
   , TokenName
   )
 import Page.Dashboard.Types (Action(..)) as Dashboard
-import Store (Env)
 import Toast.Types (errorToast, successToast)
 import Types (NotFoundWebData)
 
@@ -96,9 +96,9 @@ defaultWalletInfo =
     }
 
 handleAction
-  :: forall m e
+  :: forall m
    . MonadAff m
-  => MonadAsk (Env e) m
+  => MonadAsk Env m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m

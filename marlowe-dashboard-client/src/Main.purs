@@ -3,22 +3,23 @@ module Main
   ) where
 
 import Prologue
+
 import AppM (runAppM)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (forkAff, launchAff_)
 import Effect.Class (liftEffect)
+import Env (Env, WebSocketManager)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Action(..), Msg(..), Query(..))
 import WebSocket.Support as WS
-import Store as Store
 
-mkStore :: Store.WebSocketManager -> Effect Store.Store
-mkStore wsManager = do
+mkEnv :: WebSocketManager -> Effect Env
+mkEnv wsManager = do
   contractStepCarouselSubscription <- AVar.empty
   marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
   pure
@@ -26,16 +27,16 @@ mkStore wsManager = do
     , contractStepCarouselSubscription
     , marloweAppEndpointMutex
     , wsManager
-    , currentSlot: zero
     }
 
 main :: Effect Unit
 main = do
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
-    store <- liftEffect $ mkStore wsManager
+    env <- liftEffect $ mkEnv wsManager
+    let store = { currentSlot: zero }
     body <- awaitBody
-    rootComponent <- runAppM store mkMainFrame
+    rootComponent <- runAppM env store mkMainFrame
     driver <- runUI rootComponent Init body
     void
       $ forkAff
