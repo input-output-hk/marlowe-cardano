@@ -19,10 +19,12 @@
       ref = "nixpkgs-unstable";
       flake = false;
     };
-    #haskell-nix = {
-    #  url = "github:input-output-hk/haskell.nix";
-    #  flake = false;
-    #};
+
+    haskell-nix = {
+      # TODO: fix ref usage to master
+      url = "github:input-output-hk/haskell.nix?rev=df363a0b30abbeb8b40a9223fe8ec224b4d6d358";
+      flake = false;
+    };
 
     actus-tests = {
       url = "github:actusfrf/actus-tests";
@@ -44,19 +46,19 @@
       url = "github:input-output-hk/hackage.nix";
       flake = false;
     };
-    #haskell-language-server = {
-    #  # Pinned to a release
-    #  url = "github:haskell/haskell-language-server?ref=1.3.0";
-    #  flake = false;
-    #};
-    #iohk-nix = {
-    #  url = "github:input-output-hk/iohk-nix";
-    #  flake = false;
-    #};
-    #npmlock2nix = {
-    #  url = "github:tweag/npmlock2nix";
-    #  flake = false;
-    #};
+    haskell-language-server = {
+      # Pinned to a release
+      url = "github:haskell/haskell-language-server?ref=1.3.0";
+      flake = false;
+    };
+    iohk-nix = {
+      url = "github:input-output-hk/iohk-nix";
+      flake = false;
+    };
+    npmlock2nix = {
+      url = "github:tweag/npmlock2nix";
+      flake = false;
+    };
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;
@@ -83,11 +85,20 @@
     };
   };
 
-  outputs = { self, flake-utils, ... }@inputs:
+  outputs = { self, flake-utils, nixpkgs, haskell-nix, hackage-nix, stackage-nix, ... }@inputs:
     (flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
+        pkgs = import nixpkgs { inherit system; };
+        haskellNix = import haskell-nix {
+          inherit pkgs;
+          sourcesOverride = {
+            hackage = hackage-nix;
+            stackage = stackage-nix;
+          };
+        };
+
         topLevel = import ./. {
-          inherit system;
+          inherit system haskellNix;
           sources = inputs;
         };
       in
