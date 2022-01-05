@@ -6,11 +6,11 @@
 
 module Language.Marlowe.ACTUS.Domain.ContractState where
 
-import           Data.Aeson.Types                            (ToJSON)
-import           Data.Time                                   (LocalTime)
-import           GHC.Generics                                (Generic)
-import           Language.Marlowe                            (Observation, Value)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (PRF)
+import Data.Aeson.Types (ToJSON)
+import Data.Time (LocalTime)
+import GHC.Generics (Generic)
+import Language.Marlowe (Observation, Value)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (PRF)
 
 {-| ACTUS contract states are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-states.json

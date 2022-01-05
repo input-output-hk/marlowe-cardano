@@ -8,16 +8,16 @@ module Marlowe.Run.Webserver.Wallet.Client
  )
  where
 
-import           Cardano.Prelude             hiding (Handler)
+import Cardano.Prelude hiding (Handler)
 
 
-import           Data.Aeson                  as Aeson
-import qualified Data.Aeson.Types            as Aeson
+import Data.Aeson as Aeson
+import qualified Data.Aeson.Types as Aeson
 
-import qualified Data.ByteString.Lazy        as BL
+import qualified Data.ByteString.Lazy as BL
 
-import           Marlowe.Run.Webserver.Types (Env)
-import           Servant.Client              (ClientError, ClientM, runClientM)
+import Marlowe.Run.Webserver.Types (Env)
+import Servant.Client (ClientError, ClientM, runClientM)
 
 callWBE :: MonadIO m => MonadReader Env m => ClientM a -> m (Either ClientError a)
 callWBE client = do

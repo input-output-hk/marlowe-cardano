@@ -29,13 +29,67 @@ import Data.NonEmptyList.Extra (extendWith)
 import Data.NonEmptyList.Lens (_Tail)
 import Data.Semigroup.Foldable (foldl1)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Holes (Contract(..), Term(..), TransactionOutput(..), computeTransaction, fromTerm, reduceContractUntilQuiescent)
+import Marlowe.Holes
+  ( Contract(..)
+  , Term(..)
+  , TransactionOutput(..)
+  , computeTransaction
+  , fromTerm
+  , reduceContractUntilQuiescent
+  )
 import Marlowe.Holes as T
-import Marlowe.Semantics (Action(..), Bound(..), ChoiceId(..), ChosenNum, Environment(..), Input, IntervalResult(..), Observation, Party, Slot, SlotInterval(..), State, Timeouts(..), TransactionError(..), TransactionInput(..), _minSlot, boundFrom, emptyState, evalValue, fixInterval, moneyInContract, timeouts)
+import Marlowe.Semantics
+  ( Action(..)
+  , Bound(..)
+  , ChoiceId(..)
+  , ChosenNum
+  , Environment(..)
+  , Input
+  , IntervalResult(..)
+  , Observation
+  , Party
+  , Slot
+  , SlotInterval(..)
+  , State
+  , Timeouts(..)
+  , TransactionError(..)
+  , TransactionInput(..)
+  , _minSlot
+  , boundFrom
+  , emptyState
+  , evalValue
+  , fixInterval
+  , moneyInContract
+  , timeouts
+  )
 import Marlowe.Semantics as S
 import Marlowe.Template (getPlaceholderIds, initializeTemplateContent)
-import Simulator.Lenses (_SimulationRunning, _contract, _currentMarloweState, _executionState, _log, _marloweState, _moneyInContract, _moveToAction, _pendingInputs, _possibleActions, _slot, _state, _transactionError, _transactionWarnings)
-import Simulator.Types (ActionInput(..), ActionInputId(..), ExecutionState(..), ExecutionStateRecord, LogEntry(..), MarloweState, Parties(..), otherActionsParty)
+import Simulator.Lenses
+  ( _SimulationRunning
+  , _contract
+  , _currentMarloweState
+  , _executionState
+  , _log
+  , _marloweState
+  , _moneyInContract
+  , _moveToAction
+  , _pendingInputs
+  , _possibleActions
+  , _slot
+  , _state
+  , _transactionError
+  , _transactionWarnings
+  )
+import Simulator.Types
+  ( ActionInput(..)
+  , ActionInputId(..)
+  , ExecutionState(..)
+  , ExecutionStateRecord
+  , LogEntry(..)
+  , MarloweState
+  , Parties(..)
+  , otherActionsParty
+  )
 
 emptyExecutionStateWithSlot :: Slot -> Term T.Contract -> ExecutionState
 emptyExecutionStateWithSlot sn cont =
@@ -51,12 +105,15 @@ emptyExecutionStateWithSlot sn cont =
     , contract: cont
     }
 
-simulationNotStartedWithSlot :: Slot -> Maybe (Term T.Contract) -> ExecutionState
+simulationNotStartedWithSlot
+  :: Slot -> Maybe (Term T.Contract) -> ExecutionState
 simulationNotStartedWithSlot slot mContract =
   SimulationNotStarted
     { initialSlot: slot
     , termContract: mContract
-    , templateContent: maybe mempty (initializeTemplateContent <<< getPlaceholderIds) mContract
+    , templateContent: maybe mempty
+        (initializeTemplateContent <<< getPlaceholderIds)
+        mContract
     }
 
 simulationNotStarted :: Maybe (Term T.Contract) -> ExecutionState
@@ -84,40 +141,59 @@ actionToActionInput state (Deposit accountId party token value) =
 
     env = Environment { slotInterval: (SlotInterval minSlot minSlot) }
   in
-    Tuple (DepositInputId accountId party token evalResult) (DepositInput accountId party token evalResult)
+    Tuple (DepositInputId accountId party token evalResult)
+      (DepositInput accountId party token evalResult)
 
-actionToActionInput _ (Choice choiceId bounds) = Tuple (ChoiceInputId choiceId) (ChoiceInput choiceId bounds (minimumBound bounds))
+actionToActionInput _ (Choice choiceId bounds) = Tuple (ChoiceInputId choiceId)
+  (ChoiceInput choiceId bounds (minimumBound bounds))
 
 actionToActionInput _ (Notify _) = Tuple NotifyInputId NotifyInput
 
 combineChoices :: ActionInput -> ActionInput -> ActionInput
-combineChoices (ChoiceInput choiceId1 bounds1 _) (ChoiceInput choiceId2 bounds2 _)
-  | choiceId1 == choiceId2 = (ChoiceInput choiceId2 combinedBounds (minimumBound combinedBounds))
-    where
-    combinedBounds = bounds1 <> bounds2
+combineChoices
+  (ChoiceInput choiceId1 bounds1 _)
+  (ChoiceInput choiceId2 bounds2 _)
+  | choiceId1 == choiceId2 =
+      (ChoiceInput choiceId2 combinedBounds (minimumBound combinedBounds))
+      where
+      combinedBounds = bounds1 <> bounds2
 
 combineChoices _ a2 = a2
 
 simplifyActionInput :: ActionInput -> ActionInput
-simplifyActionInput (ChoiceInput choiceId bounds minBound) = ChoiceInput choiceId (simplifyBounds bounds) minBound
+simplifyActionInput (ChoiceInput choiceId bounds minBound) = ChoiceInput
+  choiceId
+  (simplifyBounds bounds)
+  minBound
 
 simplifyActionInput other = other
 
 simplifyBounds :: Array Bound -> Array Bound
-simplifyBounds bounds = fromFoldable (simplifyBoundList (toUnfoldable (sort bounds)))
+simplifyBounds bounds = fromFoldable
+  (simplifyBoundList (toUnfoldable (sort bounds)))
 
 simplifyBoundList :: List Bound -> List Bound
 simplifyBoundList (Cons (Bound low1 high1) (Cons b2@(Bound low2 high2) rest))
-  | high1 >= low2 = simplifyBoundList (Cons (Bound (min low1 low2) (max high1 high2)) rest)
+  | high1 >= low2 = simplifyBoundList
+      (Cons (Bound (min low1 low2) (max high1 high2)) rest)
   | otherwise = (Cons (Bound low1 high1) (simplifyBoundList (Cons b2 rest)))
 
 simplifyBoundList l = l
 
-inFuture :: forall r. { marloweState :: NonEmptyList MarloweState | r } -> Slot -> Boolean
-inFuture state slot = has (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _slot <<< nearly zero ((>) slot)) state
+inFuture
+  :: forall r
+   . { marloweState :: NonEmptyList MarloweState | r }
+  -> Slot
+  -> Boolean
+inFuture state slot = has
+  ( _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _slot
+      <<< nearly zero ((>) slot)
+  )
+  state
 
 updatePossibleActions :: MarloweState -> MarloweState
-updatePossibleActions oldState@{ executionState: SimulationRunning executionState } =
+updatePossibleActions
+  oldState@{ executionState: SimulationRunning executionState } =
   let
     contract = executionState ^. _contract
 
@@ -127,13 +203,16 @@ updatePossibleActions oldState@{ executionState: SimulationRunning executionStat
 
     txInput = pendingTransactionInputs executionState
 
-    (Tuple nextState actions) = extractRequiredActionsWithTxs txInput state contract
+    (Tuple nextState actions) = extractRequiredActionsWithTxs txInput state
+      contract
 
     usefulActions = mapMaybe removeUseless actions
 
     slot = fromMaybe (add one currentSlot) (nextTimeout oldState)
 
-    rawActionInputs = Map.fromFoldableWith combineChoices $ map (actionToActionInput nextState) usefulActions
+    rawActionInputs = Map.fromFoldableWith combineChoices $ map
+      (actionToActionInput nextState)
+      usefulActions
 
     actionInputs = map simplifyActionInput rawActionInputs
 
@@ -149,19 +228,25 @@ updatePossibleActions oldState@{ executionState: SimulationRunning executionStat
     set _executionState (SimulationRunning newExecutionState) oldState
   where
   removeUseless :: Action -> Maybe Action
-  removeUseless action@(Notify observation) = if evalObservation oldState observation then Just action else Nothing
+  removeUseless action@(Notify observation) =
+    if evalObservation oldState observation then Just action else Nothing
 
   removeUseless action = Just action
 
   updateActions :: Map ActionInputId ActionInput -> Parties -> Parties
-  updateActions actionInputs oldInputs = foldlWithIndex (addButPreserveActionInputs oldInputs) mempty actionInputs
+  updateActions actionInputs oldInputs = foldlWithIndex
+    (addButPreserveActionInputs oldInputs)
+    mempty
+    actionInputs
 
-  addButPreserveActionInputs :: Parties -> ActionInputId -> Parties -> ActionInput -> Parties
+  addButPreserveActionInputs
+    :: Parties -> ActionInputId -> Parties -> ActionInput -> Parties
   addButPreserveActionInputs oldInputs actionInputIdx m actionInput =
     let
       party = actionPerson actionInput
     in
-      wrap $ appendValue (unwrap m) (unwrap oldInputs) party actionInputIdx actionInput
+      wrap $ appendValue (unwrap m) (unwrap oldInputs) party actionInputIdx
+        actionInput
 
   actionPerson :: ActionInput -> Party
   actionPerson (DepositInput _ party _ _) = party
@@ -171,15 +256,35 @@ updatePossibleActions oldState@{ executionState: SimulationRunning executionStat
   -- We have a special person for notifications
   actionPerson _ = otherActionsParty
 
-  appendValue :: forall k k2 v2. Ord k => Ord k2 => Map k (Map k2 v2) -> Map k (Map k2 v2) -> k -> k2 -> v2 -> Map k (Map k2 v2)
-  appendValue m oldMap k k2 v2 = Map.alter (alterMap k2 (findWithDefault2 v2 k k2 oldMap)) k m
+  appendValue
+    :: forall k k2 v2
+     . Ord k
+    => Ord k2
+    => Map k (Map k2 v2)
+    -> Map k (Map k2 v2)
+    -> k
+    -> k2
+    -> v2
+    -> Map k (Map k2 v2)
+  appendValue m oldMap k k2 v2 = Map.alter
+    (alterMap k2 (findWithDefault2 v2 k k2 oldMap))
+    k
+    m
 
   alterMap :: forall k v. Ord k => k -> v -> Maybe (Map k v) -> Maybe (Map k v)
   alterMap k v Nothing = Just $ Map.singleton k v
 
   alterMap k v (Just vs) = Just $ Map.insert k v vs
 
-  findWithDefault2 :: forall k k2 v2. Ord k => Ord k2 => v2 -> k -> k2 -> Map k (Map k2 v2) -> v2
+  findWithDefault2
+    :: forall k k2 v2
+     . Ord k
+    => Ord k2
+    => v2
+    -> k
+    -> k2
+    -> Map k (Map k2 v2)
+    -> v2
   findWithDefault2 def k k2 m = case Map.lookup k m of
     Just m2 -> case Map.lookup k2 m2 of
       Just v -> v
@@ -188,60 +293,81 @@ updatePossibleActions oldState@{ executionState: SimulationRunning executionStat
 
 updatePossibleActions oldState = oldState
 
-extractRequiredActionsWithTxs :: TransactionInput -> State -> Term T.Contract -> Tuple State (Array Action)
+extractRequiredActionsWithTxs
+  :: TransactionInput -> State -> Term T.Contract -> Tuple State (Array Action)
 extractRequiredActionsWithTxs txInput state contract
-  | TransactionOutput { txOutContract, txOutState } <- computeTransaction txInput state contract = Tuple txOutState (extractRequiredActions txOutContract)
+  | TransactionOutput { txOutContract, txOutState } <-
+      computeTransaction txInput state contract = Tuple txOutState
+      (extractRequiredActions txOutContract)
   | TransactionInput { inputs: Nil } <- txInput
   , IntervalTrimmed env fixState <- fixInterval (unwrap txInput).interval state
-  , Just (_ /\ reducedContract) <- reduceContractUntilQuiescent env fixState contract = Tuple fixState (extractRequiredActions reducedContract)
+  , Just (_ /\ reducedContract) <-
+      reduceContractUntilQuiescent env fixState contract = Tuple fixState
+      (extractRequiredActions reducedContract)
   -- the actions remain unchanged in error cases, cases where the contract is not reduced or cases where inputs remain
   | otherwise = Tuple state (extractRequiredActions contract)
 
 extractRequiredActions :: Term T.Contract -> Array Action
 extractRequiredActions contract = case contract of
-  Term (When cases _ _) _ -> map (\(S.Case action _) -> action) $ mapMaybe fromTerm cases
+  Term (When cases _ _) _ -> map (\(S.Case action _) -> action) $ mapMaybe
+    fromTerm
+    cases
   _ -> mempty
 
 applyPendingInputs :: MarloweState -> MarloweState
-applyPendingInputs oldState@{ executionState: SimulationRunning executionState } = newState
+applyPendingInputs oldState@{ executionState: SimulationRunning executionState } =
+  newState
   where
   txInput@(TransactionInput txIn) = pendingTransactionInputs executionState
 
-  newState = case computeTransaction txInput (executionState ^. _state) (executionState ^. _contract) of
-    TransactionOutput { txOutWarnings, txOutPayments, txOutState, txOutContract } ->
-      let
-        mContractCloseLog = case txOutContract of
-          Term Close _ -> over _log (append [ CloseEvent txIn.interval ])
-          _ -> identity
+  newState =
+    case
+      computeTransaction txInput (executionState ^. _state)
+        (executionState ^. _contract)
+      of
+      TransactionOutput
+        { txOutWarnings, txOutPayments, txOutState, txOutContract } ->
+        let
+          mContractCloseLog = case txOutContract of
+            Term Close _ -> over _log (append [ CloseEvent txIn.interval ])
+            _ -> identity
 
-        newExecutionState =
-          ( set _transactionError Nothing
-              <<< over _transactionWarnings (flip append $ fromFoldable txOutWarnings)
-              <<< set _pendingInputs mempty
-              <<< set _state txOutState
-              <<< set _moneyInContract (moneyInContract txOutState)
-              <<< mContractCloseLog
-              <<< over _log (append (fromFoldable (map (OutputEvent txIn.interval) txOutPayments)))
-              <<< over _log (append [ InputEvent txInput ])
-          )
-            executionState
-      in
-        set _executionState (SimulationRunning (set _contract txOutContract newExecutionState)) oldState
-    InvalidContract -> oldState
-    SemanticError TEUselessTransaction -> oldState
-    SemanticError txError ->
-      let
-        newExecutionState =
-          ( set _transactionError (Just txError)
-              -- apart from setting the error, we also removing the pending inputs
-              
-              -- otherwise there can be hidden pending inputs in the simulation
-              
-              <<< set _pendingInputs mempty
-          )
-            executionState
-      in
-        set _executionState (SimulationRunning newExecutionState) oldState
+          newExecutionState =
+            ( set _transactionError Nothing
+                <<< over _transactionWarnings
+                  (flip append $ fromFoldable txOutWarnings)
+                <<< set _pendingInputs mempty
+                <<< set _state txOutState
+                <<< set _moneyInContract (moneyInContract txOutState)
+                <<< mContractCloseLog
+                <<< over _log
+                  ( append
+                      ( fromFoldable
+                          (map (OutputEvent txIn.interval) txOutPayments)
+                      )
+                  )
+                <<< over _log (append [ InputEvent txInput ])
+            )
+              executionState
+        in
+          set _executionState
+            (SimulationRunning (set _contract txOutContract newExecutionState))
+            oldState
+      InvalidContract -> oldState
+      SemanticError TEUselessTransaction -> oldState
+      SemanticError txError ->
+        let
+          newExecutionState =
+            ( set _transactionError (Just txError)
+                -- apart from setting the error, we also removing the pending inputs
+
+                -- otherwise there can be hidden pending inputs in the simulation
+
+                <<< set _pendingInputs mempty
+            )
+              executionState
+        in
+          set _executionState (SimulationRunning newExecutionState) oldState
 
 applyPendingInputs oldState = oldState
 
@@ -259,38 +385,45 @@ pendingTransactionInputs executionState =
   in
     TransactionInput { interval: interval, inputs: (List.fromFoldable inputs) }
 
-updateMarloweState ::
-  forall s m.
-  MonadState { marloweState :: NonEmptyList MarloweState | s } m =>
-  (MarloweState -> MarloweState) ->
-  m Unit
-updateMarloweState f = modifying _marloweState (extendWith (updatePossibleActions <<< f))
+updateMarloweState
+  :: forall s m
+   . MonadState { marloweState :: NonEmptyList MarloweState | s } m
+  => (MarloweState -> MarloweState)
+  -> m Unit
+updateMarloweState f = modifying _marloweState
+  (extendWith (updatePossibleActions <<< f))
 
-applyInputTransformation ::
-  forall s m.
-  MonadState { marloweState :: NonEmptyList MarloweState | s } m =>
-  (Array Input -> Array Input) ->
-  m Unit
+applyInputTransformation
+  :: forall s m
+   . MonadState { marloweState :: NonEmptyList MarloweState | s } m
+  => (Array Input -> Array Input)
+  -> m Unit
 applyInputTransformation inputTransformation =
   updateMarloweState
     ( applyPendingInputs
-        <<< (over (_executionState <<< _SimulationRunning <<< _pendingInputs) inputTransformation)
+        <<<
+          ( over (_executionState <<< _SimulationRunning <<< _pendingInputs)
+              inputTransformation
+          )
     )
 
-applyInput ::
-  forall s m.
-  MonadState { marloweState :: NonEmptyList MarloweState | s } m =>
-  Input ->
-  m Unit
+applyInput
+  :: forall s m
+   . MonadState { marloweState :: NonEmptyList MarloweState | s } m
+  => Input
+  -> m Unit
 applyInput input = applyInputTransformation $ flip snoc $ input
 
-updateChoice ::
-  forall s m.
-  MonadState { marloweState :: NonEmptyList MarloweState | s } m =>
-  ChoiceId ->
-  ChosenNum ->
-  m Unit
-updateChoice choiceId chosenNum = updateMarloweState (over (_executionState <<< _SimulationRunning <<< _possibleActions) (mapPartiesActionInput (doUpdate choiceId)))
+updateChoice
+  :: forall s m
+   . MonadState { marloweState :: NonEmptyList MarloweState | s } m
+  => ChoiceId
+  -> ChosenNum
+  -> m Unit
+updateChoice choiceId chosenNum = updateMarloweState
+  ( over (_executionState <<< _SimulationRunning <<< _possibleActions)
+      (mapPartiesActionInput (doUpdate choiceId))
+  )
   where
   doUpdate :: ChoiceId -> ActionInput -> ActionInput
   doUpdate wantedChoiceId (ChoiceInput currentChoiceId bounds _)
@@ -298,12 +431,12 @@ updateChoice choiceId chosenNum = updateMarloweState (over (_executionState <<< 
 
   doUpdate _ input = input
 
-startSimulation ::
-  forall s m.
-  MonadState { marloweState :: NonEmptyList MarloweState | s } m =>
-  Slot ->
-  Term Contract ->
-  m Unit
+startSimulation
+  :: forall s m
+   . MonadState { marloweState :: NonEmptyList MarloweState | s } m
+  => Slot
+  -> Term Contract
+  -> m Unit
 startSimulation initialSlot contract =
   let
     initialExecutionState =
@@ -319,11 +452,11 @@ startSimulation initialSlot contract =
           <<< (set _executionState initialExecutionState)
       )
 
-moveToSlot ::
-  forall s m.
-  MonadState { marloweState :: NonEmptyList MarloweState | s } m =>
-  Slot ->
-  m Unit
+moveToSlot
+  :: forall s m
+   . MonadState { marloweState :: NonEmptyList MarloweState | s } m
+  => Slot
+  -> m Unit
 moveToSlot slot = do
   mSignificantSlot <- use (_marloweState <<< _Head <<< to nextTimeout)
   let
@@ -336,7 +469,8 @@ moveToSlot slot = do
         identity
   updateMarloweState (mApplyPendingInputs <<< updateSlot slot)
 
-hasHistory :: forall s. { marloweState :: NonEmptyList MarloweState | s } -> Boolean
+hasHistory
+  :: forall s. { marloweState :: NonEmptyList MarloweState | s } -> Boolean
 hasHistory state = case state ^. (_marloweState <<< _Tail) of
   Nil -> false
   Cons _ _ -> true
@@ -356,7 +490,8 @@ evalObservation _ _ = false
 
 nextTimeout :: MarloweState -> Maybe Slot
 nextTimeout state = do
-  contract <- previewOn state (_executionState <<< _SimulationRunning <<< _contract)
+  contract <- previewOn state
+    (_executionState <<< _SimulationRunning <<< _contract)
   let
     Timeouts { minTime } = timeouts contract
   minTime

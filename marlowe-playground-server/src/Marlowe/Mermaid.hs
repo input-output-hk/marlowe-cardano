@@ -24,10 +24,10 @@
 
 module Marlowe.Mermaid (toMermaid) where
 
-import           Data.Hashable             (hash)
-import           Data.List                 (nub)
-import           GHC.Real                  (denominator, numerator)
-import           Language.Marlowe.Extended
+import Data.Hashable (hash)
+import Data.List (nub)
+import GHC.Real (denominator, numerator)
+import Language.Marlowe.Extended
 
 -- | Convert the 'Contract' DSL into a flat list (like converting from a graph
 -- representation to a vertex list). The result is a list denoting the

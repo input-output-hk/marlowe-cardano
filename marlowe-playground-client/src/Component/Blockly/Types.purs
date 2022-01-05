@@ -13,15 +13,16 @@ import Halogen (RefLabel(..), SubscriptionId)
 import Marlowe.Linter (Warning)
 
 type State
-  = { blocklyState :: Maybe BT.BlocklyState
-    , errorMessage :: Maybe String
-    , blocklyEventSubscription :: Maybe SubscriptionId
-    , eventsWhileDragging :: Maybe (List BT.BlocklyEvent)
-    -- For some reason the "FinishLoading" event can be triggered when doing an UNDO in some cases
-    -- we only need to fire the BlocklyReady once in the lifetime of this component, so we
-    -- store a flag to avoid firing it multiple times.
-    , blocklyReadyFired :: Boolean
-    }
+  =
+  { blocklyState :: Maybe BT.BlocklyState
+  , errorMessage :: Maybe String
+  , blocklyEventSubscription :: Maybe SubscriptionId
+  , eventsWhileDragging :: Maybe (List BT.BlocklyEvent)
+  -- For some reason the "FinishLoading" event can be triggered when doing an UNDO in some cases
+  -- we only need to fire the BlocklyReady once in the lifetime of this component, so we
+  -- store a flag to avoid firing it multiple times.
+  , blocklyReadyFired :: Boolean
+  }
 
 _blocklyState :: Lens' State (Maybe BT.BlocklyState)
 _blocklyState = prop (Proxy :: _ "blocklyState")

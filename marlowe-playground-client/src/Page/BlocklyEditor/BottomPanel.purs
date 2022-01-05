@@ -8,49 +8,94 @@ import Data.Array as Array
 import Data.Lens (to, (^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
-import Halogen.Classes (flex, flexCol, fontBold, fullWidth, grid, gridColsDescriptionLocation, justifySelfEnd, paddingRight, underline)
+import Halogen.Classes
+  ( flex
+  , flexCol
+  , fontBold
+  , fullWidth
+  , grid
+  , gridColsDescriptionLocation
+  , justifySelfEnd
+  , paddingRight
+  , underline
+  )
 import Halogen.HTML (a, div, div_, pre_, section, section_, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
-import Page.BlocklyEditor.Types (Action(..), BottomPanelView(..), State, _hasHoles, _metadataHintInfo, _warnings)
-import StaticAnalysis.BottomPanel (analysisResultPane, analyzeButton, clearButton)
-import StaticAnalysis.Types (_analysisExecutionState, _analysisState, isCloseAnalysisLoading, isNoneAsked, isReachabilityLoading, isStaticLoading)
+import Page.BlocklyEditor.Types
+  ( Action(..)
+  , BottomPanelView(..)
+  , State
+  , _hasHoles
+  , _metadataHintInfo
+  , _warnings
+  )
+import StaticAnalysis.BottomPanel
+  ( analysisResultPane
+  , analyzeButton
+  , clearButton
+  )
+import StaticAnalysis.Types
+  ( _analysisExecutionState
+  , _analysisState
+  , isCloseAnalysisLoading
+  , isNoneAsked
+  , isReachabilityLoading
+  , isStaticLoading
+  )
 
-panelContents ::
-  forall m.
-  MonadAff m =>
-  State ->
-  MetaData ->
-  BottomPanelView ->
-  ComponentHTML Action ChildSlots m
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents
+  :: forall m
+   . MonadAff m
+  => State
+  -> MetaData
+  -> BottomPanelView
+  -> ComponentHTML Action ChildSlots m
+panelContents state metadata MetadataView = metadataView
+  (state ^. _metadataHintInfo)
+  metadata
+  MetadataAction
 
 panelContents state metadata StaticAnalysisView =
   section [ classes [ flex, flexCol ] ]
     if (state ^. _hasHoles) then
-      [ div_ [ text "The contract needs to be complete (no holes) before doing static analysis." ]
+      [ div_
+          [ text
+              "The contract needs to be complete (no holes) before doing static analysis."
+          ]
       ]
     else
       [ analysisResultPane metadata SetIntegerTemplateParam state
       , div [ classes [ paddingRight ] ]
-          [ analyzeButton loadingWarningAnalysis analysisEnabled "Analyse for warnings" AnalyseContract
-          , analyzeButton loadingReachability analysisEnabled "Analyse reachability" AnalyseReachabilityContract
-          , analyzeButton loadingCloseAnalysis analysisEnabled "Analyse for refunds on Close" AnalyseContractForCloseRefund
+          [ analyzeButton loadingWarningAnalysis analysisEnabled
+              "Analyse for warnings"
+              AnalyseContract
+          , analyzeButton loadingReachability analysisEnabled
+              "Analyse reachability"
+              AnalyseReachabilityContract
+          , analyzeButton loadingCloseAnalysis analysisEnabled
+              "Analyse for refunds on Close"
+              AnalyseContractForCloseRefund
           , clearButton clearEnabled "Clear" ClearAnalysisResults
           ]
       ]
   where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isStaticLoading
+  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
+    <<< to isStaticLoading
 
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<< to isReachabilityLoading
+  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isReachabilityLoading
 
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isCloseAnalysisLoading
+  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isCloseAnalysisLoading
 
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isNoneAsked
+  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
+    isNoneAsked
 
-  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not loadingCloseAnalysis
+  nothingLoading = not loadingWarningAnalysis && not loadingReachability && not
+    loadingCloseAnalysis
 
   clearEnabled = nothingLoading && not noneAskedAnalysis
 

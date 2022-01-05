@@ -12,7 +12,12 @@ import Effect.Class (liftEffect)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Web.Event.Event (Event, EventType(..))
-import Web.Event.EventTarget (EventListener, addEventListener, eventListener, removeEventListener)
+import Web.Event.EventTarget
+  ( EventListener
+  , addEventListener
+  , eventListener
+  , removeEventListener
+  )
 import Web.HTML as Web
 import Web.HTML.Location (replace, origin)
 import Web.HTML.Window (outerHeight, outerWidth)
@@ -98,12 +103,12 @@ informParentAndClose authRole = do
   targetOrigin <- origin location
   Window.opener window
     >>= case _ of
-        -- If the function is called from a poput window (expected behaviour)
-        -- then we comunicate the login result with our parent window and close
-        -- the popup
-        Just parent -> do
-          postMessage (encodeJson authRole) targetOrigin parent
-          close window
-        -- If someone access the github callback url directly, we redirect them to
-        -- the home page
-        Nothing -> replace "/" location
+      -- If the function is called from a poput window (expected behaviour)
+      -- then we comunicate the login result with our parent window and close
+      -- the popup
+      Just parent -> do
+        postMessage (encodeJson authRole) targetOrigin parent
+        close window
+      -- If someone access the github callback url directly, we redirect them to
+      -- the home page
+      Nothing -> replace "/" location

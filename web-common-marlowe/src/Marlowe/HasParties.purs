@@ -31,7 +31,8 @@ instance semanticValueHasParties :: HasParties Semantic.Value where
   getParties Semantic.SlotIntervalStart = Set.empty
   getParties Semantic.SlotIntervalEnd = Set.empty
   getParties (Semantic.UseValue _) = Set.empty
-  getParties (Semantic.Cond obs lhs rhs) = getParties obs <> getParties lhs <> getParties rhs
+  getParties (Semantic.Cond obs lhs rhs) = getParties obs <> getParties lhs <>
+    getParties rhs
 
 instance extendedValueHasParties :: HasParties Extended.Value where
   getParties (Extended.AvailableMoney accId _) = getParties accId
@@ -46,7 +47,8 @@ instance extendedValueHasParties :: HasParties Extended.Value where
   getParties Extended.SlotIntervalStart = Set.empty
   getParties Extended.SlotIntervalEnd = Set.empty
   getParties (Extended.UseValue _) = Set.empty
-  getParties (Extended.Cond obs lhs rhs) = getParties obs <> getParties lhs <> getParties rhs
+  getParties (Extended.Cond obs lhs rhs) = getParties obs <> getParties lhs <>
+    getParties rhs
 
 instance semanticObservationHasParties :: HasParties Semantic.Observation where
   getParties (Semantic.AndObs lhs rhs) = getParties lhs <> getParties rhs
@@ -75,12 +77,16 @@ instance extendedObservationHasParties :: HasParties Extended.Observation where
   getParties Extended.FalseObs = Set.empty
 
 instance semanticActionHasParties :: HasParties Semantic.Action where
-  getParties (Semantic.Deposit accId party _ value) = getParties accId <> getParties party <> getParties value
+  getParties (Semantic.Deposit accId party _ value) = getParties accId
+    <> getParties party
+    <> getParties value
   getParties (Semantic.Choice choId _) = getParties choId
   getParties (Semantic.Notify obs) = getParties obs
 
 instance extendedActionHasParties :: HasParties Extended.Action where
-  getParties (Extended.Deposit accId party _ value) = getParties accId <> getParties party <> getParties value
+  getParties (Extended.Deposit accId party _ value) = getParties accId
+    <> getParties party
+    <> getParties value
   getParties (Extended.Choice choId _) = getParties choId
   getParties (Extended.Notify obs) = getParties obs
 
@@ -93,23 +99,33 @@ instance extendedPayeeHasParties :: HasParties Extended.Payee where
   getParties (Extended.Party party) = getParties party
 
 instance semanticCaseHasParties :: HasParties Semantic.Case where
-  getParties (Semantic.Case action contract) = getParties action <> getParties contract
+  getParties (Semantic.Case action contract) = getParties action <> getParties
+    contract
 
 instance extendedCaseHasParties :: HasParties Extended.Case where
-  getParties (Extended.Case action contract) = getParties action <> getParties contract
+  getParties (Extended.Case action contract) = getParties action <> getParties
+    contract
 
 instance semanticContractHasParties :: HasParties Semantic.Contract where
   getParties Semantic.Close = Set.empty
-  getParties (Semantic.Pay accId payee _ val cont) = getParties accId <> getParties payee <> getParties val <> getParties cont
-  getParties (Semantic.If obs cont1 cont2) = getParties obs <> getParties cont1 <> getParties cont2
+  getParties (Semantic.Pay accId payee _ val cont) = getParties accId
+    <> getParties payee
+    <> getParties val
+    <> getParties cont
+  getParties (Semantic.If obs cont1 cont2) = getParties obs <> getParties cont1
+    <> getParties cont2
   getParties (Semantic.When cases _ cont) = getParties cases <> getParties cont
   getParties (Semantic.Let _ val cont) = getParties val <> getParties cont
   getParties (Semantic.Assert obs cont) = getParties obs <> getParties cont
 
 instance extendedContractHasParties :: HasParties Extended.Contract where
   getParties Extended.Close = Set.empty
-  getParties (Extended.Pay accId payee _ val cont) = getParties accId <> getParties payee <> getParties val <> getParties cont
-  getParties (Extended.If obs cont1 cont2) = getParties obs <> getParties cont1 <> getParties cont2
+  getParties (Extended.Pay accId payee _ val cont) = getParties accId
+    <> getParties payee
+    <> getParties val
+    <> getParties cont
+  getParties (Extended.If obs cont1 cont2) = getParties obs <> getParties cont1
+    <> getParties cont2
   getParties (Extended.When cases _ cont) = getParties cases <> getParties cont
   getParties (Extended.Let _ val cont) = getParties val <> getParties cont
   getParties (Extended.Assert obs cont) = getParties obs <> getParties cont

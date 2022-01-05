@@ -14,15 +14,26 @@ import Halogen (ComponentHTML)
 import Halogen.Extra (renderSubmodule)
 import Halogen.HTML (ClassName(ClassName), div, text)
 import Halogen.HTML.Properties (classes)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, _newProject, _projects, _rename, _saveAs, _showModal, hasGlobalLoading)
+import MainFrame.Types
+  ( Action(..)
+  , ChildSlots
+  , ModalView(..)
+  , State
+  , _newProject
+  , _projects
+  , _rename
+  , _saveAs
+  , _showModal
+  , hasGlobalLoading
+  )
 import Rename.State (render) as Rename
 import SaveAs.State (render) as SaveAs
 
-modal ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
+modal
+  :: forall m
+   . MonadAff m
+  => State
+  -> ComponentHTML Action ChildSlots m
 modal state = case state ^. _showModal of
   Nothing -> text ""
   Just view ->
@@ -38,10 +49,14 @@ modal state = case state ^. _showModal of
       [ ClassName "overlay", ClassName "overlay-background" ]
 
   modalContent = case _ of
-    NewProject -> renderSubmodule _newProject NewProjectAction NewProject.render state
-    OpenProject -> renderSubmodule _projects ProjectsAction Projects.render state
+    NewProject -> renderSubmodule _newProject NewProjectAction NewProject.render
+      state
+    OpenProject -> renderSubmodule _projects ProjectsAction Projects.render
+      state
     OpenDemo -> renderSubmodule identity DemosAction (const Demos.render) state
     RenameProject -> renderSubmodule _rename RenameAction Rename.render state
     SaveProjectAs -> renderSubmodule _saveAs SaveAsAction SaveAs.render state
-    (ConfirmUnsavedNavigation intendedAction) -> ConfirmUnsavedNavigation.render intendedAction state
+    (ConfirmUnsavedNavigation intendedAction) -> ConfirmUnsavedNavigation.render
+      intendedAction
+      state
     (GithubLogin intendedAction) -> authButton intendedAction state

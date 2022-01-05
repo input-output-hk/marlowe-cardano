@@ -5,8 +5,23 @@ module Component.Contacts.View
 
 import Prelude hiding (div)
 import Clipboard (Action(..)) as Clipboard
-import Component.Contacts.Lenses (_cardSection, _companionAppId, _walletIdInput, _walletLibrary, _walletNickname, _walletNicknameInput)
-import Component.Contacts.Types (Action(..), CardSection(..), State, WalletDetails, WalletIdError, WalletLibrary, WalletNicknameError)
+import Component.Contacts.Lenses
+  ( _cardSection
+  , _companionAppId
+  , _walletIdInput
+  , _walletLibrary
+  , _walletNickname
+  , _walletNicknameInput
+  )
+import Component.Contacts.Types
+  ( Action(..)
+  , CardSection(..)
+  , State
+  , WalletDetails
+  , WalletIdError
+  , WalletLibrary
+  , WalletNicknameError
+  )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
 import Component.InputField.State (validate)
@@ -38,43 +53,79 @@ contactsCard currentWallet state =
     walletIdInput = state ^. _walletIdInput
   in
     div
-      [ classNames [ "h-full", "grid", "grid-rows-auto-auto-1fr-auto", "divide-y", "divide-gray" ] ]
-      $ [ h2
+      [ classNames
+          [ "h-full"
+          , "grid"
+          , "grid-rows-auto-auto-1fr-auto"
+          , "divide-y"
+          , "divide-gray"
+          ]
+      ]
+      $
+        [ h2
             [ classNames Css.cardHeader ]
             [ text "Contacts" ]
         , contactsBreadcrumb cardSection
         ]
-      <> case cardSection of
-          Home -> walletLibraryCard walletLibrary
-          ViewWallet walletDetails -> walletDetailsCard currentWallet walletDetails
-          NewWallet mTokenName -> newWalletCard walletNicknameInput walletIdInput mTokenName
+          <> case cardSection of
+            Home -> walletLibraryCard walletLibrary
+            ViewWallet walletDetails -> walletDetailsCard currentWallet
+              walletDetails
+            NewWallet mTokenName -> newWalletCard walletNicknameInput
+              walletIdInput
+              mTokenName
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action
 contactsBreadcrumb cardSection =
   div
-    [ classNames [ "overflow-x-auto", "flex", "align-baseline", "px-4", "gap-1", "text-xs" ] ] case cardSection of
-    Home -> [ activeItem "Home" ]
-    ViewWallet walletDetails ->
-      [ previousItem "Home" Home
-      , arrow
-      , activeItem $ walletDetails ^. _walletNickname
-      ]
-    NewWallet mTokenName ->
-      [ previousItem "Home" Home
-      , arrow
-      , case mTokenName of
-          Nothing -> activeItem "New Contact"
-          Just tokenName -> activeItem $ "New Contact for " <> tokenName <> " Role"
-      ]
+    [ classNames
+        [ "overflow-x-auto"
+        , "flex"
+        , "align-baseline"
+        , "px-4"
+        , "gap-1"
+        , "text-xs"
+        ]
+    ]
+    case cardSection of
+      Home -> [ activeItem "Home" ]
+      ViewWallet walletDetails ->
+        [ previousItem "Home" Home
+        , arrow
+        , activeItem $ walletDetails ^. _walletNickname
+        ]
+      NewWallet mTokenName ->
+        [ previousItem "Home" Home
+        , arrow
+        , case mTokenName of
+            Nothing -> activeItem "New Contact"
+            Just tokenName -> activeItem $ "New Contact for " <> tokenName <>
+              " Role"
+        ]
   where
   activeItem itemText =
     span
-      [ classNames [ "whitespace-nowrap", "py-2.5", "border-black", "border-b-2", "font-semibold" ] ]
+      [ classNames
+          [ "whitespace-nowrap"
+          , "py-2.5"
+          , "border-black"
+          , "border-b-2"
+          , "font-semibold"
+          ]
+      ]
       [ text itemText ]
 
   previousItem itemText stage =
     a
-      [ classNames [ "whitespace-nowrap", "py-2.5", "text-purple", "border-transparent", "border-b-2", "hover:border-purple", "font-semibold" ]
+      [ classNames
+          [ "whitespace-nowrap"
+          , "py-2.5"
+          , "text-purple"
+          , "border-transparent"
+          , "border-b-2"
+          , "hover:border-purple"
+          , "font-semibold"
+          ]
       , onClick_ $ SetCardSection stage
       ]
       [ text itemText ]
@@ -89,9 +140,11 @@ walletLibraryCard walletLibrary =
       -- to forget cases like these, so it seems sensible to code for it in case.
       p [ classNames [ "p-4" ] ] [ text "You do not have any contacts." ]
     else
-      ul [ classNames [ "divide-y", "divide-gray" ] ] $ contactLi <$> toUnfoldable walletLibrary
+      ul [ classNames [ "divide-y", "divide-gray" ] ] $ contactLi <$>
+        toUnfoldable walletLibrary
   , button
-      [ classNames $ Css.primaryButton <> Css.withIcon Icon.NewContact <> Css.fixedBottomRight
+      [ classNames $ Css.primaryButton <> Css.withIcon Icon.NewContact <>
+          Css.fixedBottomRight
       , onClick_ $ SetCardSection $ NewWallet Nothing
       ]
       [ text "New contact" ]
@@ -99,12 +152,14 @@ walletLibraryCard walletLibrary =
   where
   contactLi (nickname /\ walletDetails) =
     li
-      [ classNames [ "px-4", "py-2", "hover:cursor-pointer", "hover:text-purple" ]
+      [ classNames
+          [ "px-4", "py-2", "hover:cursor-pointer", "hover:text-purple" ]
       , onClick_ $ SetCardSection $ ViewWallet walletDetails
       ]
       [ text nickname ]
 
-walletDetailsCard :: forall p. WalletDetails -> WalletDetails -> Array (HTML p Action)
+walletDetailsCard
+  :: forall p. WalletDetails -> WalletDetails -> Array (HTML p Action)
 walletDetailsCard currentWallet walletDetails =
   let
     walletNickname = walletDetails ^. _walletNickname
@@ -113,7 +168,10 @@ walletDetailsCard currentWallet walletDetails =
 
     isCurrentWallet = walletNickname == currentWallet ^. _walletNickname
 
-    copyWalletId = (ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<< unwrap)
+    copyWalletId =
+      ( ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<<
+          unwrap
+      )
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
         [ h3
@@ -121,10 +179,10 @@ walletDetailsCard currentWallet walletDetails =
             [ text walletNickname ]
         , copyWalletId
             <$> WalletId.render
-                WalletId.defaultInput
-                  { label = "Demo wallet key"
-                  , value = companionAppId
-                  }
+              WalletId.defaultInput
+                { label = "Demo wallet key"
+                , value = companionAppId
+                }
         , walletIdTip
         ]
     , div
@@ -136,7 +194,14 @@ walletDetailsCard currentWallet walletDetails =
             [ text "Back" ]
         , if isCurrentWallet then
             span
-              [ classNames $ Css.button <> [ "flex-1", "text-center", "border-2", "border-green", "text-green" ] ]
+              [ classNames $ Css.button <>
+                  [ "flex-1"
+                  , "text-center"
+                  , "border-2"
+                  , "border-green"
+                  , "text-green"
+                  ]
+              ]
               [ text "Using this wallet" ]
           else
             button
@@ -147,7 +212,12 @@ walletDetailsCard currentWallet walletDetails =
         ]
     ]
 
-newWalletCard :: forall p. InputField.State WalletNicknameError -> InputField.State WalletIdError -> Maybe String -> Array (HTML p Action)
+newWalletCard
+  :: forall p
+   . InputField.State WalletNicknameError
+  -> InputField.State WalletIdError
+  -> Maybe String
+  -> Array (HTML p Action)
 newWalletCard walletNicknameInput walletIdInput mTokenName =
   let
     walletNicknameInputDisplayOptions =
@@ -181,8 +251,11 @@ newWalletCard walletNicknameInput walletIdInput mTokenName =
       }
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
-        [ WalletNicknameInputAction <$> renderInput walletNicknameInputDisplayOptions walletNicknameInput
-        , WalletIdInputAction <$> renderInput walletIdInputDisplayOptions walletIdInput
+        [ WalletNicknameInputAction <$> renderInput
+            walletNicknameInputDisplayOptions
+            walletNicknameInput
+        , WalletIdInputAction <$> renderInput walletIdInputDisplayOptions
+            walletIdInput
         ]
     , div
         [ classNames [ "flex", "gap-4", "p-4" ] ]
@@ -195,7 +268,8 @@ newWalletCard walletNicknameInput walletIdInput mTokenName =
             [ text "Back" ]
         , button
             [ classNames $ Css.primaryButton <> [ "flex-1" ]
-            , disabled $ isJust (validate walletNicknameInput) || isJust (validate walletIdInput)
+            , disabled $ isJust (validate walletNicknameInput) || isJust
+                (validate walletIdInput)
             , onClick_ $ SaveWallet mTokenName
             ]
             [ text "Save" ]
@@ -206,4 +280,6 @@ walletIdTip :: forall p a. HTML p a
 walletIdTip =
   p
     [ classNames [ "text-xs", "font-semibold" ] ]
-    [ text "Tip: Copy and share your demo wallet ID with others so they can add you to their contracts" ]
+    [ text
+        "Tip: Copy and share your demo wallet ID with others so they can add you to their contracts"
+    ]

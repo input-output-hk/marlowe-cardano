@@ -35,16 +35,13 @@ in
 rec {
   inherit pkgs marlowe;
 
-  inherit (marlowe) web-ghc;
+  inherit (marlowe) webCommon web-ghc;
 
   inherit (haskell.packages.marlowe.components.exes) marlowe-pab;
 
   # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
   # we switch to flakes.
-  webCommon = pkgs.callPackage sources.web-common { inherit (marlowe.lib) gitignore-nix; };
-  webCommonPlutus = pkgs.callPackage (sources.plutus-apps + "/web-common-plutus") { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
-
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (marlowe.lib) gitignore-nix; };
 
   marlowe-playground = pkgs.recurseIntoAttrs rec {
@@ -65,7 +62,7 @@ rec {
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
     inherit (marlowe.lib) gitignore-nix;
-    inherit (marlowe) fixStylishHaskell fixPurty fixPngOptimization;
+    inherit (marlowe) fixStylishHaskell fix-purs-tidy fix-prettier fixPngOptimization;
     inherit (haskell) plutus-pab;
     inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;

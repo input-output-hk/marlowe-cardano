@@ -7,14 +7,13 @@ module Language.Marlowe.ACTUS.Model.Payoff
   )
 where
 
-import           Control.Monad.Reader                         (Reader, reader)
-import           Data.Time.LocalTime                          (LocalTime)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState  (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms  (CT (..), ContractTermsPoly (..), FEB (..), PYTP (..))
-import           Language.Marlowe.ACTUS.Domain.Ops            (ActusNum (..), ActusOps (..), RoleSignOps (..),
-                                                               YearFractionOps (_y))
-import           Prelude                                      hiding (Fractional, Num, (*), (+), (-), (/))
+import Control.Monad.Reader (Reader, reader)
+import Data.Time.LocalTime (LocalTime)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), FEB (..), PYTP (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
+import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 data CtxPOF a = CtxPOF
   { contractTerms :: ContractTermsPoly a                         -- ^ Contract terms

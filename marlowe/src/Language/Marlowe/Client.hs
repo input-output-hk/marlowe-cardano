@@ -24,52 +24,52 @@
 {-# OPTIONS_GHC -fno-specialise #-}
 
 module Language.Marlowe.Client where
-import           Control.Lens
-import           Control.Monad                    (forM_, void)
-import           Control.Monad.Error.Lens         (catching, throwing, throwing_)
-import           Data.Aeson                       (FromJSON, ToJSON, parseJSON, toJSON)
-import           Data.Either                      (rights)
-import qualified Data.List.NonEmpty               as NonEmpty
-import           Data.Map.Strict                  (Map)
-import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (isNothing, listToMaybe, mapMaybe, maybeToList)
-import           Data.Monoid                      (First (..))
-import           Data.Semigroup.Generic           (GenericSemigroupMonoid (..))
-import qualified Data.Set                         as Set
-import qualified Data.Text                        as T
-import           Data.UUID                        (UUID)
-import           Data.Void                        (absurd)
-import           GHC.Generics                     (Generic)
-import           Language.Marlowe.Scripts
-import           Language.Marlowe.Semantics
-import qualified Language.Marlowe.Semantics       as Marlowe
-import           Language.Marlowe.SemanticsTypes  hiding (Contract, getAction)
-import qualified Language.Marlowe.SemanticsTypes  as Marlowe
-import           Language.Marlowe.Util            (extractNonMerkleizedContractRoles)
-import           Ledger                           (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName,
-                                                   TxOut (..), TxOutRef, inScripts, txOutValue)
+import Control.Lens
+import Control.Monad (forM_, void)
+import Control.Monad.Error.Lens (catching, throwing, throwing_)
+import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
+import Data.Either (rights)
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Data.Maybe (isNothing, listToMaybe, mapMaybe, maybeToList)
+import Data.Monoid (First (..))
+import Data.Semigroup.Generic (GenericSemigroupMonoid (..))
+import qualified Data.Set as Set
+import qualified Data.Text as T
+import Data.UUID (UUID)
+import Data.Void (absurd)
+import GHC.Generics (Generic)
+import Language.Marlowe.Scripts
+import Language.Marlowe.Semantics
+import qualified Language.Marlowe.Semantics as Marlowe
+import Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
+import qualified Language.Marlowe.SemanticsTypes as Marlowe
+import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
+import Ledger (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName, TxOut (..), TxOutRef, inScripts,
+               txOutValue)
 import qualified Ledger
-import           Ledger.Ada                       (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
-import           Ledger.Address                   (pubKeyHashAddress, scriptHashAddress)
-import           Ledger.Constraints
-import qualified Ledger.Constraints               as Constraints
-import           Ledger.Constraints.TxConstraints
-import qualified Ledger.Interval                  as Interval
-import           Ledger.Scripts                   (datumHash, unitRedeemer)
-import qualified Ledger.Tx                        as Tx
-import           Ledger.Typed.Scripts
-import qualified Ledger.Typed.Scripts             as Scripts
-import           Ledger.Typed.Tx                  (TypedScriptTxOut (..), tyTxOutData)
-import qualified Ledger.Typed.Tx                  as Typed
-import qualified Ledger.Value                     as Val
-import           Plutus.ChainIndex                (ChainIndexTx (..), _ValidTx, citxInputs, citxOutputs, citxTxId)
-import           Plutus.Contract                  as Contract
-import           Plutus.Contract.StateMachine     (AsSMContractError (..), Void)
-import qualified Plutus.Contract.StateMachine     as SM
-import           Plutus.Contract.Wallet           (getUnspentOutput)
-import qualified Plutus.Contracts.Currency        as Currency
+import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
+import Ledger.Address (pubKeyHashAddress, scriptHashAddress)
+import Ledger.Constraints
+import qualified Ledger.Constraints as Constraints
+import Ledger.Constraints.TxConstraints
+import qualified Ledger.Interval as Interval
+import Ledger.Scripts (datumHash, unitRedeemer)
+import qualified Ledger.Tx as Tx
+import Ledger.Typed.Scripts
+import qualified Ledger.Typed.Scripts as Scripts
+import Ledger.Typed.Tx (TypedScriptTxOut (..), tyTxOutData)
+import qualified Ledger.Typed.Tx as Typed
+import qualified Ledger.Value as Val
+import Plutus.ChainIndex (ChainIndexTx (..), _ValidTx, citxInputs, citxOutputs, citxTxId)
+import Plutus.Contract as Contract
+import Plutus.Contract.StateMachine (AsSMContractError (..), Void)
+import qualified Plutus.Contract.StateMachine as SM
+import Plutus.Contract.Wallet (getUnspentOutput)
+import qualified Plutus.Contracts.Currency as Currency
 import qualified PlutusTx
-import qualified PlutusTx.AssocMap                as AssocMap
+import qualified PlutusTx.AssocMap as AssocMap
 
 
 type MarloweSchema =

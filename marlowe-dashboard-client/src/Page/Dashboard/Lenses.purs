@@ -55,7 +55,8 @@ _contractFilter :: Lens' State ContractFilter
 _contractFilter = prop (Proxy :: _ "contractFilter")
 
 _selectedContractFollowerAppId :: Lens' State (Maybe PlutusAppId)
-_selectedContractFollowerAppId = prop (Proxy :: _ "selectedContractFollowerAppId")
+_selectedContractFollowerAppId = prop
+  (Proxy :: _ "selectedContractFollowerAppId")
 
 -- This traversal focus on a specific contract indexed by another property of the state
 _selectedContract :: Traversal' State Contract.State
@@ -63,10 +64,11 @@ _selectedContract =
   wander \f state -> case state.selectedContractFollowerAppId of
     Just ix
       | Just contract <- lookup ix state.contracts ->
-        let
-          updateContract contract' = insert ix contract' state.contracts
-        in
-          (\contract' -> set _contracts (updateContract contract') state) <$> f contract
+          let
+            updateContract contract' = insert ix contract' state.contracts
+          in
+            (\contract' -> set _contracts (updateContract contract') state) <$>
+              f contract
     _ -> pure state
 
 _templateState :: Lens' State Template.State

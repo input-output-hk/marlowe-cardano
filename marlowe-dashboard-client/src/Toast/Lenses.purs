@@ -21,7 +21,9 @@ _toastMessage :: Traversal' State ToastMessage
 _toastMessage = _mToast <<< _Just <<< prop (Proxy :: _ "message")
 
 _expanded :: Traversal' State Boolean
-_expanded = prop (Proxy :: _ "mToast") <<< _Just <<< prop (Proxy :: _ "expanded")
+_expanded = prop (Proxy :: _ "mToast") <<< _Just <<< prop
+  (Proxy :: _ "expanded")
 
 _timeoutSubscription :: Traversal' State SubscriptionId
-_timeoutSubscription = prop (Proxy :: _ "mToast") <<< _Just <<< prop (Proxy :: _ "timeoutSubscription")
+_timeoutSubscription = prop (Proxy :: _ "mToast") <<< _Just <<< prop
+  (Proxy :: _ "timeoutSubscription")

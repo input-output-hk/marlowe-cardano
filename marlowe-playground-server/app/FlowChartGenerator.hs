@@ -5,14 +5,14 @@ module Main
     )
     where
 
-import qualified ContractForDifferences           as ContractForDifferences
+import qualified ContractForDifferences as ContractForDifferences
 import qualified ContractForDifferencesWithOracle as ContractForDifferencesWithOracle
-import qualified CouponBondGuaranteed             as CouponBondGuaranteed
-import qualified Escrow                           as Escrow
-import qualified EscrowWithCollateral             as EscrowWithCollateral
-import           Marlowe.Mermaid                  (toMermaid)
-import qualified Swap                             as Swap
-import qualified ZeroCouponBond                   as ZeroCouponBond
+import qualified CouponBondGuaranteed as CouponBondGuaranteed
+import qualified Escrow as Escrow
+import qualified EscrowWithCollateral as EscrowWithCollateral
+import Marlowe.Mermaid (toMermaid)
+import qualified Swap as Swap
+import qualified ZeroCouponBond as ZeroCouponBond
 
 main :: IO ()
 main = do

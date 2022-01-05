@@ -27,12 +27,13 @@ import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
 import Types (NotFoundWebData)
 
 type State
-  = { walletLibrary :: WalletLibrary
-    , cardSection :: CardSection
-    , walletNicknameInput :: InputField.State WalletNicknameError
-    , walletIdInput :: InputField.State WalletIdError
-    , remoteWalletInfo :: NotFoundWebData WalletInfo
-    }
+  =
+  { walletLibrary :: WalletLibrary
+  , cardSection :: CardSection
+  , walletNicknameInput :: InputField.State WalletNicknameError
+  , walletIdInput :: InputField.State WalletIdError
+  , remoteWalletInfo :: NotFoundWebData WalletInfo
+  }
 
 type WalletLibrary
   = Map WalletNickname WalletDetails
@@ -41,16 +42,17 @@ type WalletNickname
   = String
 
 type WalletDetails
-  = { walletNickname :: WalletNickname
-    , companionAppId :: PlutusAppId
-    , marloweAppId :: PlutusAppId
-    , walletInfo :: WalletInfo
-    , assets :: Assets
-    -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
-    -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
-    -- really has changed anything
-    , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
-    }
+  =
+  { walletNickname :: WalletNickname
+  , companionAppId :: PlutusAppId
+  , marloweAppId :: PlutusAppId
+  , walletInfo :: WalletInfo
+  , assets :: Assets
+  -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
+  -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
+  -- really has changed anything
+  , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
+  }
 
 -- this is the data that the wallet API returns when creating a wallet and when subsequently requesting
 -- its "own-public-key"
@@ -99,10 +101,13 @@ data WalletNicknameError
 
 derive instance eqWalletNicknameError :: Eq WalletNicknameError
 
-instance inputFieldErrorWalletNicknameError :: InputFieldError WalletNicknameError where
+instance inputFieldErrorWalletNicknameError ::
+  InputFieldError WalletNicknameError where
   inputErrorToString EmptyWalletNickname = "Nickname cannot be blank"
-  inputErrorToString DuplicateWalletNickname = "Nickname is already in use in your contacts"
-  inputErrorToString BadWalletNickname = "Nicknames can only contain letters and numbers"
+  inputErrorToString DuplicateWalletNickname =
+    "Nickname is already in use in your contacts"
+  inputErrorToString BadWalletNickname =
+    "Nicknames can only contain letters and numbers"
 
 data WalletIdError
   = EmptyWalletId
@@ -135,7 +140,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SetCardSection _) = Just $ defaultEvent "SetCardSection"
   toEvent (SaveWallet _) = Just $ defaultEvent "SaveWallet"
   toEvent CancelNewContactForRole = Nothing
-  toEvent (WalletNicknameInputAction inputFieldAction) = toEvent inputFieldAction
+  toEvent (WalletNicknameInputAction inputFieldAction) = toEvent
+    inputFieldAction
   toEvent (WalletIdInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (ConnectWallet _ _) = Just $ defaultEvent "ConnectWallet"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

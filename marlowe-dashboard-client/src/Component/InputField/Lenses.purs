@@ -53,7 +53,8 @@ _readOnly = prop (Proxy :: _ "readOnly")
 _valueOptions :: forall w i. Lens' (InputDisplayOptions w i) (Array String)
 _valueOptions = prop (Proxy :: _ "valueOptions")
 
-_numberFormat :: forall w i. Lens' (InputDisplayOptions w i) (Maybe NumberFormat)
+_numberFormat
+  :: forall w i. Lens' (InputDisplayOptions w i) (Maybe NumberFormat)
 _numberFormat = prop (Proxy :: _ "numberFormat")
 
 _after :: forall w i. Lens' (InputDisplayOptions w i) (Maybe (HTML w i))

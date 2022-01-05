@@ -35,10 +35,10 @@
   font-weight: bold;
 }
 
-.Rtable-cell>h1,
-.Rtable-cell>h2,
-.Rtable-cell>h3,
-.Rtable-cell>h4 {
+.Rtable-cell > h1,
+.Rtable-cell > h2,
+.Rtable-cell > h3,
+.Rtable-cell > h4 {
   margin: 0;
 }
 
@@ -58,58 +58,58 @@
   text-align: left;
 }
 
-.Rtable--2cols>.Rtable-cell {
+.Rtable--2cols > .Rtable-cell {
   width: 50%;
 }
 
-.Rtable--3cols>.Rtable-cell {
+.Rtable--3cols > .Rtable-cell {
   width: 33.33%;
 }
 
-.Rtable--4cols>.Rtable-cell {
+.Rtable--4cols > .Rtable-cell {
   width: 25%;
 }
 
-.Rtable--4cols>.RTable-empty-row {
+.Rtable--4cols > .RTable-empty-row {
   width: 75%;
 }
 
-.Rtable--4cols>.RTable-data-row {
+.Rtable--4cols > .RTable-data-row {
   width: 75%;
 }
 
-.Rtable--4cols>.Rtable-single-column-row {
+.Rtable--4cols > .Rtable-single-column-row {
   width: 75%;
 }
 
-.Rtable--5cols>.Rtable-cell {
+.Rtable--5cols > .Rtable-cell {
   width: 20%;
 }
 
-.Rtable--6cols>.Rtable-cell {
+.Rtable--6cols > .Rtable-cell {
   width: 16.6%;
 }
 
-.Rtable--6cols>.RTable-empty-row {
+.Rtable--6cols > .RTable-empty-row {
   width: 83.3%;
 }
 
-.Rtable--6cols>.RTable-data-row {
+.Rtable--6cols > .RTable-data-row {
   width: 83.3%;
 }
 
-.Rtable--6cols>.Rtable-single-column-row {
+.Rtable--6cols > .Rtable-single-column-row {
   width: 83.3%;
 }
 
-.Rtable--6cols>.RTable-2-cells {
+.Rtable--6cols > .RTable-2-cells {
   width: 16.6%;
 }
 
-.Rtable--6cols>.RTable-4-cells {
+.Rtable--6cols > .RTable-4-cells {
   width: 66.6%;
 }
 
-.Rtable--6cols>.RTable-5-cells {
+.Rtable--6cols > .RTable-5-cells {
   width: 83.3%;
 }

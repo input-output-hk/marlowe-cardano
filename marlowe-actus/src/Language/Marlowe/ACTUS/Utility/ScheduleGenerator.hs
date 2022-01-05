@@ -15,14 +15,14 @@ module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
   )
 where
 
-import qualified Data.List                                   as L (delete, init, last, length)
-import           Data.Time                                   (LocalTime (..))
-import           Data.Time.Calendar                          (addDays, addGregorianMonthsClip, addGregorianYearsClip,
-                                                              fromGregorian, gregorianMonthLength, toGregorian)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..),
-                                                              ScheduleConfig (..), Stub (LongStub))
-import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedDay (..), ShiftedSchedule)
-import           Language.Marlowe.ACTUS.Utility.DateShift    (applyBDC)
+import qualified Data.List as L (delete, init, last, length)
+import Data.Time (LocalTime (..))
+import Data.Time.Calendar (addDays, addGregorianMonthsClip, addGregorianYearsClip, fromGregorian, gregorianMonthLength,
+                           toGregorian)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), EOMC (EOMC_EOM), Period (..), ScheduleConfig (..),
+                                                    Stub (LongStub))
+import Language.Marlowe.ACTUS.Domain.Schedule (ShiftedDay (..), ShiftedSchedule)
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDC)
 
 maximumMaybe :: Ord a => [a] -> Maybe a
 maximumMaybe [] = Nothing

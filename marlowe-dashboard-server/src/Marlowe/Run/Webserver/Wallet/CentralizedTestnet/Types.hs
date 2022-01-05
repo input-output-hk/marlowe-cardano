@@ -5,8 +5,8 @@
 
 module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types where
 
-import           Cardano.Prelude
-import           Data.Aeson.Types (FromJSON, ToJSON)
+import Cardano.Prelude
+import Data.Aeson.Types (FromJSON, ToJSON)
 
 
 data RestorePostData =

@@ -8,108 +8,116 @@ exports.createBlocklyInstance_ = () => {
 };
 
 exports.debugBlockly = (name) => (state) => () => {
-  if (typeof window.blockly === 'undefined') {
+  if (typeof window.blockly === "undefined") {
     window.blockly = {};
   }
-  window.blockly[name] = state
-}
+  window.blockly[name] = state;
+};
 
-exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => () =>{
-
+exports.createWorkspace = (blockly) => (workspaceDiv) => (config) => () => {
   /* Disable comments */
-  try { blockly.ContextMenuRegistry.registry.unregister('blockComment'); } catch(err) { }
+  try {
+    blockly.ContextMenuRegistry.registry.unregister("blockComment");
+  } catch (err) {}
 
   /* Disable disabling blocks */
-  try { blockly.ContextMenuRegistry.registry.unregister('blockDisable'); } catch(err) { }
+  try {
+    blockly.ContextMenuRegistry.registry.unregister("blockDisable");
+  } catch (err) {}
 
   /* Register extensions */
   /* Silently clean if already registered */
-  try { blockly.Extensions.register('timeout_validator', function () { }); } catch(err) { }
-  blockly.Extensions.unregister('timeout_validator');
-  try { blockly.Extensions.register('hash_validator', function () { }); } catch(err) { }
-  blockly.Extensions.unregister('hash_validator');
-  try { blockly.Extensions.register('number_validator', function () { }); } catch(err) { }
-  blockly.Extensions.unregister('number_validator');
+  try {
+    blockly.Extensions.register("timeout_validator", function () {});
+  } catch (err) {}
+  blockly.Extensions.unregister("timeout_validator");
+  try {
+    blockly.Extensions.register("hash_validator", function () {});
+  } catch (err) {}
+  blockly.Extensions.unregister("hash_validator");
+  try {
+    blockly.Extensions.register("number_validator", function () {});
+  } catch (err) {}
+  blockly.Extensions.unregister("number_validator");
 
   /* Timeout extension (advanced validation for the timeout field) */
-  blockly.Extensions.register('timeout_validator',
-    function () {
-      var thisBlock = this;
+  blockly.Extensions.register("timeout_validator", function () {
+    var thisBlock = this;
 
-      /* Validator for timeout */
-      var timeoutValidator = function (input) {
-        if (thisBlock.getFieldValue('timeout_type') == 'slot') {
-          var cleanedInput = input.replace(new RegExp('[,]+', 'g'), '').trim();
-          if ((new RegExp('^(-[0-9])?[0-9]*$', 'g')).test(cleanedInput)) {
-            return BigInt(cleanedInput).toString();
-          } else {
-            return null;
-          }
+    /* Validator for timeout */
+    var timeoutValidator = function (input) {
+      if (thisBlock.getFieldValue("timeout_type") == "slot") {
+        var cleanedInput = input.replace(new RegExp("[,]+", "g"), "").trim();
+        if (new RegExp("^(-[0-9])?[0-9]*$", "g").test(cleanedInput)) {
+          return BigInt(cleanedInput).toString();
         } else {
-          return input;
+          return null;
         }
-      };
+      } else {
+        return input;
+      }
+    };
 
-      thisBlock.getField('timeout').setValidator(timeoutValidator);
+    thisBlock.getField("timeout").setValidator(timeoutValidator);
 
-      /* This sets the timeout to zero when switching to slot in the dropdown */
-      this.setOnChange(function (event) {
-        if (event.blockId == thisBlock.id &&
-          event.name == 'timeout_type' &&
-          event.element == 'field' &&
-          event.oldValue != event.newValue) {
-          if (timeoutValidator(thisBlock.getFieldValue('timeout')) === null) {
-              thisBlock.setFieldValue('0', 'timeout');
-          }
+    /* This sets the timeout to zero when switching to slot in the dropdown */
+    this.setOnChange(function (event) {
+      if (
+        event.blockId == thisBlock.id &&
+        event.name == "timeout_type" &&
+        event.element == "field" &&
+        event.oldValue != event.newValue
+      ) {
+        if (timeoutValidator(thisBlock.getFieldValue("timeout")) === null) {
+          thisBlock.setFieldValue("0", "timeout");
+        }
+      }
+    });
+  });
+
+  /* Hash extension (advanced validation for the hash fields) */
+  blockly.Extensions.register("hash_validator", function () {
+    var thisBlock = this;
+
+    /* Validator for hash */
+    var hashValidator = function (input) {
+      var cleanedInput = input
+        .replace(new RegExp("[^a-fA-F0-9]+", "g"), "")
+        .toLowerCase();
+      if (new RegExp("^([a-f0-9][a-f0-9])*$", "g").test(cleanedInput)) {
+        return cleanedInput;
+      } else {
+        return null;
+      }
+    };
+
+    ["currency_symbol", "pubkey"].forEach(function (fieldName) {
+      var field = thisBlock.getField(fieldName);
+      if (field != null) {
+        field.setValidator(hashValidator);
+      }
+    });
+  });
+
+  /* Number extension (advanced validation for number fields - other than timeout) */
+  blockly.Extensions.register("number_validator", function () {
+    var thisBlock = this;
+
+    /* Validator for number fields */
+    var numberValidator = function (input) {
+      if (!isFinite(input)) {
+        return null;
+      }
+    };
+
+    thisBlock.inputList.forEach((input) => {
+      input.fieldRow.forEach((field) => {
+        if (field instanceof blockly.FieldNumber) {
+          field.setValidator(numberValidator);
         }
       });
     });
-
-  /* Hash extension (advanced validation for the hash fields) */
-  blockly.Extensions.register('hash_validator',
-    function () {
-      var thisBlock = this;
-
-      /* Validator for hash */
-      var hashValidator = function (input) {
-          var cleanedInput = input.replace(new RegExp('[^a-fA-F0-9]+', 'g'), '').toLowerCase();
-          if ((new RegExp('^([a-f0-9][a-f0-9])*$', 'g')).test(cleanedInput)) {
-            return cleanedInput;
-          } else {
-            return null;
-          }
-      };
-
-      ['currency_symbol', 'pubkey'].forEach(
-        function (fieldName) {
-          var field = thisBlock.getField(fieldName);
-          if (field != null) {
-            field.setValidator(hashValidator);
-          }
-        });
-    });
-
-  /* Number extension (advanced validation for number fields - other than timeout) */
-  blockly.Extensions.register('number_validator',
-    function() {
-      var thisBlock = this;
-
-      /* Validator for number fields */
-      var numberValidator = function (input) {
-        if (!isFinite(input)) {
-          return null;
-        }
-      }
-
-      thisBlock.inputList.forEach((input) => {
-        input.fieldRow.forEach((field) => {
-          if (field instanceof blockly.FieldNumber) {
-            field.setValidator(numberValidator);
-          }
-        })
-      })
-    })
-
+  });
 
   /* Inject workspace */
   var workspace = blockly.inject(workspaceDiv, config);
@@ -151,10 +159,11 @@ exports.addBlockType_ = (blockly) => (name) => (block) => () => {
   };
 };
 
-exports.initializeWorkspace_ = (blockly) => (workspace) => (workspaceBlocks) => () => {
-  blockly.Xml.domToWorkspace(workspaceBlocks, workspace);
-  workspace.getAllBlocks()[0].setDeletable(false);
-};
+exports.initializeWorkspace_ =
+  (blockly) => (workspace) => (workspaceBlocks) => () => {
+    blockly.Xml.domToWorkspace(workspaceBlocks, workspace);
+    workspace.getAllBlocks()[0].setDeletable(false);
+  };
 
 exports.render = (workspace) => () => {
   workspace.render();
@@ -199,32 +208,32 @@ exports.workspaceToDom = (blockly) => (workspace) => () => {
 
 exports.select = (block) => () => {
   block.select();
-}
+};
 
 exports.centerOnBlock = (workspace) => (blockId) => () => {
   workspace.centerOnBlock(blockId);
-}
+};
 
 exports.hideChaff = (blockly) => () => {
   blockly.hideChaff();
-}
+};
 
 exports.getBlockType = (block) => {
   return block.type;
-}
+};
 
 exports.updateToolbox_ = (toolboxJson) => (workspace) => () => {
   workspace.updateToolbox(toolboxJson);
-}
+};
 
 exports.clearUndoStack = (workspace) => () => {
   workspace.clearUndo();
-}
+};
 
 exports.isWorkspaceEmpty = (workspace) => () => {
   var topBlocks = workspace.getTopBlocks(false);
-  return ((topBlocks == null) || (topBlocks.length == 0));
-}
+  return topBlocks == null || topBlocks.length == 0;
+};
 
 exports.setGroup = (blockly) => (isGroup) => () =>
   blockly.Events.setGroup(isGroup);

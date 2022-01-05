@@ -29,12 +29,30 @@ import Marlowe.Extended as EM
 import Marlowe.Holes (Term(..), fromTerm)
 import Marlowe.Holes as T
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Contract(..), Input(..), Party(..), Token(..), TransactionError, TransactionWarning)
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Input(..)
+  , Party(..)
+  , Token(..)
+  , TransactionError
+  , TransactionWarning
+  )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Page.Simulation.State (mkState)
 import Page.Simulation.Types as Simulation
 import Partial.Unsafe (unsafePartial)
-import Simulator.Lenses (_SimulationRunning, _currentContract, _currentMarloweState, _currentPossibleActions, _executionState, _marloweState, _transactionError, _transactionWarnings)
+import Simulator.Lenses
+  ( _SimulationRunning
+  , _currentContract
+  , _currentMarloweState
+  , _currentPossibleActions
+  , _executionState
+  , _marloweState
+  , _transactionError
+  , _transactionWarnings
+  )
 import Simulator.State (applyInput, getAllActions, moveToSlot, startSimulation)
 import Simulator.Types (ActionInput(..))
 import Test.QuickCheck (Result(..))
@@ -54,7 +72,8 @@ all =
 -- We don't currently have a function that goes from semantic contract to term contract, so for the purposes
 -- of these test we print it and parse it.
 toTerm :: EM.Contract -> Term T.Contract
-toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $ pretty contract
+toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $
+  pretty contract
 
 contractToExtended :: String -> Maybe EM.Contract
 contractToExtended = fromTerm <=< hush <<< parseContract
@@ -63,19 +82,26 @@ examplesMatch :: TestSuite
 examplesMatch =
   suite "Purescript and Haskell examples match" do
     test "Simple escrow"
-      $ equal (Just Escrow.fullExtendedContract) (contractToExtended Contracts.escrow)
+      $ equal (Just Escrow.fullExtendedContract)
+          (contractToExtended Contracts.escrow)
     test "Escrow with collateral"
-      $ equal (Just EscrowWithCollateral.fullExtendedContract) (contractToExtended Contracts.escrowWithCollateral)
+      $ equal (Just EscrowWithCollateral.fullExtendedContract)
+          (contractToExtended Contracts.escrowWithCollateral)
     test "Zero coupon bond"
-      $ equal (Just ZeroCouponBond.fullExtendedContract) (contractToExtended Contracts.zeroCouponBond)
+      $ equal (Just ZeroCouponBond.fullExtendedContract)
+          (contractToExtended Contracts.zeroCouponBond)
     test "Coupon bond guaranteed"
-      $ equal (Just CouponBondGuaranteed.extendedContract) (contractToExtended Contracts.couponBondGuaranteed)
+      $ equal (Just CouponBondGuaranteed.extendedContract)
+          (contractToExtended Contracts.couponBondGuaranteed)
     test "Swap"
-      $ equal (Just Swap.fullExtendedContract) (contractToExtended Contracts.swap)
+      $ equal (Just Swap.fullExtendedContract)
+          (contractToExtended Contracts.swap)
     test "Contract for differences"
-      $ equal (Just ContractForDifferences.extendedContract) (contractToExtended Contracts.contractForDifferences)
+      $ equal (Just ContractForDifferences.extendedContract)
+          (contractToExtended Contracts.contractForDifferences)
     test "Contract for differences with oracle"
-      $ equal (Just ContractForDifferencesWithOracle.extendedContract) (contractToExtended Contracts.contractForDifferencesWithOracle)
+      $ equal (Just ContractForDifferencesWithOracle.extendedContract)
+          (contractToExtended Contracts.contractForDifferencesWithOracle)
 
 seller :: Party
 seller = Role "Seller"
@@ -251,7 +277,9 @@ escrowSimpleFlow =
       finalContract = previewOn finalState _currentContract
 
       txError = do
-        executionState <- preview (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning) finalState
+        executionState <- preview
+          (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning)
+          finalState
         executionState ^. _transactionError
     equal Nothing txError
     equal (Just Close) (fromTerm =<< finalContract)
@@ -267,7 +295,8 @@ exampleContractsHaveNoErrors =
     contractHasNoErrors "Coupon bond guaranteed" filledCouponBondGuaranteed
     contractHasNoErrors "Swap" filledSwap
     contractHasNoErrors "Contract for differences" filledContractForDifferences
-    contractHasNoErrors "Contract for differences with oracle" filledContractForDifferencesWithOracle
+    contractHasNoErrors "Contract for differences with oracle"
+      filledContractForDifferencesWithOracle
 
 -- This is a property based test that checks that for a given contract, the possible actions available
 -- during the simulation don't throw errors nor warnings.
@@ -288,7 +317,9 @@ contractHasNoErrors contractName contract =
   looselyToInt = round <<< BigInt.toNumber
 
   genValueInBound :: forall m. MonadGen m => MonadRec m => Bound -> m BigInt
-  genValueInBound (Bound from to) = BigInt.fromInt <$> chooseInt (looselyToInt from) (looselyToInt to)
+  genValueInBound (Bound from to) = BigInt.fromInt <$> chooseInt
+    (looselyToInt from)
+    (looselyToInt to)
 
   -- TODO: For the moment it was not needed, as none of the examples triggered a warning nor an error
   --       but we should add an extra parameter to runContract that includes the current Action list
@@ -313,13 +344,25 @@ contractHasNoErrors contractName contract =
         action <- lift $ elements possibleActions
         case action of
           MoveToSlot slot -> moveToSlot slot
-          DepositInput accountId party token value -> applyInput $ IDeposit accountId party token value
+          DepositInput accountId party token value -> applyInput $ IDeposit
+            accountId
+            party
+            token
+            value
           ChoiceInput choiceId bounds value -> do
-            randomValue <- lift $ oneOf $ pure value :| (genValueInBound <$> bounds)
+            randomValue <- lift $ oneOf $ pure value :|
+              (genValueInBound <$> bounds)
             applyInput $ IChoice choiceId randomValue
           NotifyInput -> applyInput INotify
-        (mError :: Maybe TransactionError) <- gets $ preview (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _transactionError <<< _Just)
-        (mWarnings :: Maybe (Array TransactionWarning)) <- gets $ preview (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _transactionWarnings)
+        (mError :: Maybe TransactionError) <- gets $ preview
+          ( _currentMarloweState <<< _executionState <<< _SimulationRunning
+              <<< _transactionError
+              <<< _Just
+          )
+        (mWarnings :: Maybe (Array TransactionWarning)) <- gets $ preview
+          ( _currentMarloweState <<< _executionState <<< _SimulationRunning <<<
+              _transactionWarnings
+          )
         mContract <- gets (preview _currentContract)
         case mError, mWarnings of
           -- TODO: If we run into this message, we'll need to implement the refactor described in runContract to know how to reach this state

@@ -1,14 +1,12 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module Language.Marlowe.SemanticsSerialisation (contractToByteString) where
 
-import           Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
-                                                  Observation (..), Party (..), Payee (..), Token (..), Value (..),
-                                                  ValueId (..))
-import           Language.Marlowe.Serialisation  (intToByteString, listToByteString, packByteString,
-                                                  positiveIntToByteString)
-import           Ledger                          (PubKeyHash (..), Slot (..))
-import           Ledger.Value                    (CurrencySymbol (..), TokenName (..))
-import           PlutusTx.Prelude
+import Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
+                                        Observation (..), Party (..), Payee (..), Token (..), Value (..), ValueId (..))
+import Language.Marlowe.Serialisation (intToByteString, listToByteString, packByteString, positiveIntToByteString)
+import Ledger (PubKeyHash (..), Slot (..))
+import Ledger.Value (CurrencySymbol (..), TokenName (..))
+import PlutusTx.Prelude
 
 {-# INLINABLE partyToByteString #-}
 {-# INLINABLE choiceIdToByteString #-}

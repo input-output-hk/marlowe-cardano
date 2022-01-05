@@ -2,11 +2,11 @@
 
 module Main (main) where
 
-import           Spec.Marlowe.ACTUS.Examples
-import           Spec.Marlowe.ACTUS.QCTests
-import           Spec.Marlowe.ACTUS.TestFramework
-import           System.Environment
-import           Test.Tasty
+import Spec.Marlowe.ACTUS.Examples
+import Spec.Marlowe.ACTUS.QCTests
+import Spec.Marlowe.ACTUS.TestFramework
+import System.Environment
+import Test.Tasty
 
 main :: IO ()
 main = do

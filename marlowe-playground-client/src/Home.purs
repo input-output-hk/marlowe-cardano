@@ -6,30 +6,60 @@ import Component.NewProject.Types as NewProject
 import Component.Projects.Types (Lang(..))
 import Data.Lens (has)
 import Halogen (ComponentHTML)
-import Halogen.Classes (arrowLeftDown, arrowLeftUp, arrowRightDown, arrowRightUp, marloweLogo, newProjectBlocklyIcon, newProjectHaskellIcon, newProjectJavascriptIcon, primaryButton, secondaryButton, simulationIconBlack)
+import Halogen.Classes
+  ( arrowLeftDown
+  , arrowLeftUp
+  , arrowRightDown
+  , arrowRightUp
+  , marloweLogo
+  , newProjectBlocklyIcon
+  , newProjectHaskellIcon
+  , newProjectJavascriptIcon
+  , primaryButton
+  , secondaryButton
+  , simulationIconBlack
+  )
 import Halogen.Css (classNames)
 import Halogen.HTML (a, button, div, h1, img, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, src, target)
-import MainFrame.Types (Action(..), ChildSlots, ModalView(..), State, _authStatus)
+import MainFrame.Types
+  ( Action(..)
+  , ChildSlots
+  , ModalView(..)
+  , State
+  , _authStatus
+  )
 import Network.RemoteData (_Success)
 
 render :: forall m. State -> ComponentHTML Action ChildSlots m
 render state =
   div [ classNames [ "flex", "flex-col", "items-center", "my-16" ] ]
-    [ h1 [ classNames [ "font-semibold", "text-4xl", "mb-16" ] ] [ text "Get started" ]
+    [ h1 [ classNames [ "font-semibold", "text-4xl", "mb-16" ] ]
+        [ text "Get started" ]
     , div [ classNames [ "mb-6" ] ]
         [ button
-            [ classNames (secondaryButton <> [ "mr-small", "w-56", "text-base", "cursor-pointer" ])
+            [ classNames
+                ( secondaryButton <>
+                    [ "mr-small", "w-56", "text-base", "cursor-pointer" ]
+                )
             , onClick \_ ->
-                if has (_authStatus <<< _Success <<< authStatusAuthRole <<< _GithubUser) state then
+                if
+                  has
+                    ( _authStatus <<< _Success <<< authStatusAuthRole <<<
+                        _GithubUser
+                    )
+                    state then
                   OpenModal OpenProject
                 else
                   OpenModal $ GithubLogin (OpenModal OpenProject)
             ]
             [ text "Open existing project" ]
         , button
-            [ classNames (primaryButton <> [ "ml-small", "w-56", "text-base", "cursor-pointer" ])
+            [ classNames
+                ( primaryButton <>
+                    [ "ml-small", "w-56", "text-base", "cursor-pointer" ]
+                )
             , onClick ((const <<< OpenModal) OpenDemo)
             ]
             [ text "Open an example" ]
@@ -43,24 +73,38 @@ render state =
         [ classNames [ "flex", "mb-8" ] ]
         [ div
             [ classNames (newProjectClasses <> [ "mr-24" ])
-            , onClick (const $ NewProjectAction $ NewProject.CreateProject Javascript)
+            , onClick
+                (const $ NewProjectAction $ NewProject.CreateProject Javascript)
             ]
-            [ img [ src newProjectJavascriptIcon, classNames [ "h-16", "mb-4" ] ]
+            [ img
+                [ src newProjectJavascriptIcon, classNames [ "h-16", "mb-4" ] ]
             , text
                 "Start in Javascript"
             ]
         , div
             [ classNames (newProjectClasses <> [ "mr-24" ])
-            , onClick (const $ NewProjectAction $ NewProject.CreateProject Haskell)
+            , onClick
+                (const $ NewProjectAction $ NewProject.CreateProject Haskell)
             ]
             [ img [ src newProjectHaskellIcon, classNames [ "h-16", "mb-4" ] ]
             , text
                 "Start in Haskell"
             ]
-        , div [ classNames [ "border-0", "border-l", "border-black", "border-solid", "h-10", "mt-2" ] ] []
+        , div
+            [ classNames
+                [ "border-0"
+                , "border-l"
+                , "border-black"
+                , "border-solid"
+                , "h-10"
+                , "mt-2"
+                ]
+            ]
+            []
         , div
             [ classNames (newProjectClasses <> [ "ml-24", "mr-4" ])
-            , onClick (const $ NewProjectAction $ NewProject.CreateProject Marlowe)
+            , onClick
+                (const $ NewProjectAction $ NewProject.CreateProject Marlowe)
             ]
             [ img [ src marloweLogo, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -72,7 +116,8 @@ render state =
             ]
         , div
             [ classNames (newProjectClasses <> [ "ml-4", "mr-1" ])
-            , onClick (const $ NewProjectAction $ NewProject.CreateProject Blockly)
+            , onClick
+                (const $ NewProjectAction $ NewProject.CreateProject Blockly)
             ]
             [ img [ src newProjectBlocklyIcon, classNames [ "h-16", "mb-4" ] ]
             , text
@@ -88,8 +133,16 @@ render state =
         , img [ classNames [ "ml-24" ], src arrowLeftDown ]
         ]
     , div [ classNames [ "font-bold", "text-sm" ] ]
-        [ a [ href "./doc/marlowe/tutorials/index.html", target "_blank" ] [ text "Read our Getting Started guide" ]
+        [ a [ href "./doc/marlowe/tutorials/index.html", target "_blank" ]
+            [ text "Read our Getting Started guide" ]
         ]
     ]
   where
-  newProjectClasses = [ "flex", "flex-col", "font-bold", "text-sm", "cursor-pointer", "text-center" ]
+  newProjectClasses =
+    [ "flex"
+    , "flex-col"
+    , "font-bold"
+    , "text-sm"
+    , "cursor-pointer"
+    , "text-center"
+    ]

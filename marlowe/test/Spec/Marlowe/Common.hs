@@ -4,17 +4,17 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 module Spec.Marlowe.Common where
 
-import           Data.Map.Strict                         (Map)
+import Data.Map.Strict (Map)
 
-import           Language.Marlowe
-import           Language.Marlowe.SemanticsSerialisation (contractToByteString)
-import           Ledger                                  (pubKeyHash)
+import Language.Marlowe
+import Language.Marlowe.SemanticsSerialisation (contractToByteString)
+import Ledger (pubKeyHash)
 import qualified Ledger
-import           PlutusTx.Builtins                       (sha2_256)
-import qualified PlutusTx.Ratio                          as P
-import           Test.QuickCheck
-import           Wallet                                  (PubKey (..))
-import           Wallet.Emulator
+import PlutusTx.Builtins (sha2_256)
+import qualified PlutusTx.Ratio as P
+import Test.QuickCheck
+import Wallet (PubKey (..))
+import Wallet.Emulator
 
 newtype MarloweScenario = MarloweScenario { mlInitialBalances :: Map PubKey Ledger.Value }
 

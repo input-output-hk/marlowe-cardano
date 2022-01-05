@@ -7,23 +7,34 @@ import Component.Projects.Types (Lang(..))
 import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML)
-import Halogen.Classes (fontSemibold, marloweLogo, modalContent, newProjectBlocklyIcon, newProjectHaskellIcon, newProjectJavascriptIcon, textBase, textSm)
+import Halogen.Classes
+  ( fontSemibold
+  , marloweLogo
+  , modalContent
+  , newProjectBlocklyIcon
+  , newProjectHaskellIcon
+  , newProjectJavascriptIcon
+  , textBase
+  , textSm
+  )
 import Halogen.HTML (div, div_, h3, img, span, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes, src)
 import MainFrame.Types (ChildSlots)
 
-render ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
+render
+  :: forall m
+   . MonadAff m
+  => State
+  -> ComponentHTML Action ChildSlots m
 render state =
   div_
     [ modalHeader "New Project" (Just Cancel)
     , div [ classes [ modalContent, ClassName "new-project-container" ] ]
-        [ h3 [ classes [ textBase, fontSemibold ] ] [ text "Please choose your initial coding environment" ]
-        , div [ classes [ ClassName "environment-selector-group" ] ] (map link [ Haskell, Javascript, Marlowe, Blockly ])
+        [ h3 [ classes [ textBase, fontSemibold ] ]
+            [ text "Please choose your initial coding environment" ]
+        , div [ classes [ ClassName "environment-selector-group" ] ]
+            (map link [ Haskell, Javascript, Marlowe, Blockly ])
         , renderError (state ^. _error)
         ]
     ]

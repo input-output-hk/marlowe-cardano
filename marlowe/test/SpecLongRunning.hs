@@ -2,7 +2,7 @@
 module Main(main) where
 
 import qualified Spec.PAB.Workflow
-import           Test.Tasty
+import Test.Tasty
 
 main :: IO ()
 main = defaultMain tests

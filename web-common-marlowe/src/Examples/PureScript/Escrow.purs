@@ -12,10 +12,23 @@ import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested (type (/\), (/\))
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), Token(..), ChoiceName)
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Party(..)
+  , Token(..)
+  , ChoiceName
+  )
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }
@@ -83,7 +96,12 @@ deposit timeout timeoutContinuation continuation =
     timeout
     timeoutContinuation
 
-choices :: Timeout -> Party -> Contract -> Array (BigInt /\ ChoiceName /\ Contract) -> Contract
+choices
+  :: Timeout
+  -> Party
+  -> Contract
+  -> Array (BigInt /\ ChoiceName /\ Contract)
+  -> Contract
 choices timeout chooser timeoutContinuation list =
   When
     ( do
@@ -105,14 +123,15 @@ fullExtendedContract =
     $ choices disputeTimeout buyer Close
         [ (zero /\ "Everything is alright" /\ Close)
         , ( one /\ "Report problem"
-              /\ ( sellerToBuyer
+              /\
+                ( sellerToBuyer
                     $ choices answerTimeout seller Close
                         [ (one /\ "Confirm problem" /\ Close)
                         , ( zero /\ "Dispute problem"
                               /\ choices arbitrageTimeout arbiter Close
-                                  [ (zero /\ "Dismiss claim" /\ paySeller Close)
-                                  , (one /\ "Confirm problem" /\ Close)
-                                  ]
+                                [ (zero /\ "Dismiss claim" /\ paySeller Close)
+                                , (one /\ "Confirm problem" /\ Close)
+                                ]
                           )
                         ]
                 )

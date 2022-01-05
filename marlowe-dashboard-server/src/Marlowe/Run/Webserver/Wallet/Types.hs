@@ -6,9 +6,9 @@
 
 module Marlowe.Run.Webserver.Wallet.Types where
 
-import           Cardano.Prelude
-import           Data.Aeson.Types       (ToJSON)
-import           Plutus.V1.Ledger.Value (Value)
+import Cardano.Prelude
+import Data.Aeson.Types (ToJSON)
+import Plutus.V1.Ledger.Value (Value)
 data GetTotalFunds =
     GetTotalFunds
         { assets :: Value
