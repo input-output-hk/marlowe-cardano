@@ -180,10 +180,7 @@ testWarning makeWarning composeExpression expression =
 testSimplificationWarning
   :: forall m a b
    . MonadThrow Error m
-  => ( a
-       -> b
-       -> String
-     )
+  => (a -> b -> String)
   -> (a -> String)
   -> a
   -> b

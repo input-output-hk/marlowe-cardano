@@ -4,22 +4,25 @@
 import "@fortawesome/fontawesome-free/css/all.css";
 import "./static/css/main.css";
 import "blockly";
-
 import "./grammar.ne";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
-global.monaco = monaco;
 import { EmacsExtension } from "monaco-emacs";
-global.EmacsExtension = EmacsExtension;
 import { initVimMode } from "monaco-vim";
-global.initVimMode = initVimMode;
-
 import * as bignumberDTS from "!!raw-loader!bignumber.js/bignumber.d.ts";
 import * as marloweDTS from "!!raw-loader!src/Language/Javascript/MarloweJS.ts";
+import { BigNumber } from "bignumber";
+import { stringify, parse } from "json-bigint";
+import { main } from "./output/Main";
+
+global.monaco = monaco;
+global.EmacsExtension = EmacsExtension;
+global.initVimMode = initVimMode;
 global.monacoExtraTypeScriptLibs = [
   [bignumberDTS.default, "inmemory://model/bignumber.js.d.ts"],
   [marloweDTS.default, "inmemory://model/marlowe-js.d.ts"],
 ];
 
-import { BigNumber } from "bignumber";
+JSON.stringify = stringify;
+JSON.parse = parse;
 
-require("./output/Main/index.js").main();
+main();

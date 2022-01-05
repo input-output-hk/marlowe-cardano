@@ -59,6 +59,7 @@ You can edit this file as you like.
   , "servant-support"
   , "simple-json"
   , "spec"
+  , "spec-quickcheck"
   , "strings"
   , "tailrec"
   , "transformers"
