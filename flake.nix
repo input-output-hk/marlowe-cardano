@@ -17,13 +17,11 @@
       owner = "NixOS";
       repo = "nixpkgs";
       ref = "nixpkgs-unstable";
-      flake = false;
     };
 
     haskell-nix = {
       # TODO: fix ref usage to master
       url = "github:input-output-hk/haskell.nix?rev=df363a0b30abbeb8b40a9223fe8ec224b4d6d358";
-      flake = false;
     };
 
     actus-tests = {
@@ -88,7 +86,10 @@
   outputs = { self, flake-utils, nixpkgs, haskell-nix, hackage-nix, stackage-nix, ... }@inputs:
     (flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = (nixpkgs.lib.attrValues haskell-nix.overlays);
+        };
         haskellNix = import haskell-nix {
           inherit pkgs;
           sourcesOverride = {
@@ -103,6 +104,7 @@
         };
       in
       {
+        inherit pkgs;
         packages = topLevel.bitte-packages;
       }));
 }
