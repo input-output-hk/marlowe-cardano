@@ -15,7 +15,6 @@ module.exports = {
     compress: true,
     host: "0.0.0.0",
     port: 8009,
-    https: true,
     stats: "errors-warnings",
     proxy: {
       "/pab/api": {
