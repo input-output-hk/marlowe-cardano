@@ -46,7 +46,7 @@ module.exports = {
                 "src/**/*.purs",
                 "test/**/*.purs",
                 "generated/**/*.purs",
-                "web-common-marlowe/src/**/*.purs",
+                "../web-common-marlowe/src/**/*.purs",
                 `${process.env.WEB_COMMON_PLAYGROUND_SRC}/src/**/*.purs`,
               ],
             },

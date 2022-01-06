@@ -26,7 +26,7 @@ let
   # generate-purescript: script to create purescript bridge code
   generate-purescript = pkgs.writeShellScriptBin "marlowe-playground-generate-purs" ''
     rm -rf ./generated
-    ${build-playground-exe}/bin/marlowe-playground-server psgenerator generated
+    ${playground-exe}/bin/marlowe-playground-server psgenerator generated
     cd ..
     ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-playground-client/generated
     ${prettier}/bin/prettier -w ./marlowe-playground-client/generated

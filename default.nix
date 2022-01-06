@@ -70,6 +70,8 @@ rec {
     inherit (haskell) plutus-pab;
     inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;
+    generate-run-purescript = marlowe-dashboard.generate-purescript;
+    generate-playground-purescript = marlowe-playground.generate-purescript;
   };
 
   docs = import ./nix/docs.nix { inherit pkgs marlowe; };

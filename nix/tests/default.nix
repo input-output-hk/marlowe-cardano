@@ -7,6 +7,8 @@
 , src
 , marlowe-playground
 , marlowe-dashboard
+, generate-run-purescript
+, generate-playground-purescript
 , web-ghc
 , plutus-pab
 , marlowe-pab
@@ -24,6 +26,11 @@ pkgs.recurseIntoAttrs {
   stylishHaskell = pkgs.callPackage ./stylish-haskell.nix {
     src = cleanSrc;
     inherit fixStylishHaskell;
+  };
+
+  generated = pkgs.callPackage ./generated.nix {
+    src = cleanSrc;
+    inherit generate-run-purescript generate-playground-purescript;
   };
 
   pursTidy = pkgs.callPackage ./purs-tidy.nix {
