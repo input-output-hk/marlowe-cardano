@@ -14,8 +14,7 @@ import Plutus.PAB.Webserver.Types
 import WebSocket.Support (WebSocketManager) as WS
 
 -- Application enviroment configuration
-type Env
-  =
+type Env =
   { ajaxSettings :: SPSettings_
   -- This AVar helps to solve a concurrency problem in the contract carousel subscriptions.
   -- See notes in [Contract.State(unsubscribeFromSelectCenteredStep)]

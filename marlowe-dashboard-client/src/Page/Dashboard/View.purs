@@ -86,6 +86,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 
+-- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
   :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
 dashboardScreen { currentSlot, tzOffset } state =

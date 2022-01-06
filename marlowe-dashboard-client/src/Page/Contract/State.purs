@@ -14,6 +14,7 @@ module Page.Contract.State
   ) where
 
 import Prologue
+
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
 import Capability.MarloweStorage
@@ -25,7 +26,7 @@ import Component.Contacts.Lenses (_assets, _pubKeyHash, _walletInfo)
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.Types (WalletDetails, WalletNickname)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
-import Component.Transfer.Types (Termini(..), Transfer, Participant)
+import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Array
   ( difference
@@ -90,10 +91,10 @@ import Marlowe.Client (ContractHistory, _chHistory, _chParams)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.Lenses
   ( _contract
-  , _semanticState
   , _history
   , _pendingTimeouts
   , _previousTransactions
+  , _semanticState
   )
 import Marlowe.Execution.State
   ( expandBalances
@@ -249,6 +250,7 @@ getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
     Role _ -> true
     _ -> false
 
+-- TODO: SCP-3208 Move contract state to halogen store
 updateState
   :: WalletDetails
   -> MarloweParams

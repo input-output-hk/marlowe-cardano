@@ -510,8 +510,7 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) =
                   assign _templateState Template.initialState
     _ -> do
       addressBook <- use (_contactsState <<< _addressBook)
-      toTemplate $ Template.handleAction { currentSlot, addressBook }
-        templateAction
+      toTemplate $ Template.handleAction { addressBook } templateAction
 
 -- This action is a bridge from the Contacts to the Template modules. It is used to create a
 -- contract for a specific role during contract setup.

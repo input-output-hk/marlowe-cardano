@@ -1,19 +1,40 @@
-module AppM where
+module AppM
+  ( AppM
+  , runAppM
+  ) where
 
 import Prologue
+
 import Clipboard (class MonadClipboard, copy)
-import Control.Monad.Reader.Trans (class MonadAsk, ReaderT, asks, runReaderT)
+import Control.Monad.Reader (class MonadReader, ReaderT, runReaderT)
+import Control.Monad.Reader.Class (class MonadAsk)
+import Control.Monad.Trans.Class (lift)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Env (Env)
-import Type.Equality (class TypeEquals, from)
+import Halogen (Component)
+import Halogen.Component (hoist)
+import Halogen.Store.Monad
+  ( class MonadStore
+  , StoreT
+  , emitSelected
+  , getStore
+  , runStoreT
+  , updateStore
+  )
+import Store as Store
 
-newtype AppM a
-  = AppM (ReaderT Env Aff a)
+newtype AppM a = AppM (ReaderT Env (StoreT Store.Action Store.Store Aff) a)
 
-runAppM :: Env -> AppM ~> Aff
-runAppM env (AppM m) = runReaderT m env
+runAppM
+  :: forall q i o
+   . Env
+  -> Store.Store
+  -> Component q i o AppM
+  -> Aff (Component q i o Aff)
+runAppM env store =
+  runStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
 
 derive newtype instance functorAppM :: Functor AppM
 
@@ -29,14 +50,14 @@ derive newtype instance monadEffectAppM :: MonadEffect AppM
 
 derive newtype instance monadAffAppM :: MonadAff AppM
 
--- | We can't write instances for type synonyms, and we defined our environment (`Env`) as
--- | a type synonym for convenience. To get around this, we can use `TypeEquals` to assert that
--- | types `a` and `b` are in fact the same.
--- |
--- | In our case, we'll write a `MonadAsk` instance for the type `e`, and assert it is our `Env` type.
--- | This is how we can write a type class instance for a type synonym, which is otherwise disallowed.
-instance monadAskAppM :: TypeEquals e Env => MonadAsk e AppM where
-  ask = AppM $ asks from
+instance monadStoreAppM :: MonadStore Store.Action Store.Store AppM where
+  getStore = AppM (lift getStore)
+  updateStore = AppM <<< lift <<< updateStore
+  emitSelected = AppM <<< lift <<< emitSelected
+
+derive newtype instance monadAskAppM :: MonadAsk Env AppM
+
+derive newtype instance monadReaderAppM :: MonadReader Env AppM
 
 instance monadClipboardAppM :: MonadClipboard AppM where
   copy = liftEffect <<< copy

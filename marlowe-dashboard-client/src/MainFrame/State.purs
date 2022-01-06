@@ -41,6 +41,7 @@ import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
 import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import Humanize (getTimezoneOffset)
 import MainFrame.Lenses
   ( _currentSlot
@@ -71,6 +72,7 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
   , InstanceStatusToClient(..)
   )
+import Store as Store
 import Toast.State (defaultState, handleAction) as Toast
 import Toast.Types (Action, State) as Toast
 import Toast.Types
@@ -106,6 +108,7 @@ mkMainFrame
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => Toast m
   => MonadClipboard m
@@ -138,6 +141,7 @@ handleQuery
    . MonadAff m
   => MonadAsk Env m
   => ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
   => Query a
@@ -169,7 +173,12 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
     (WS.ReceiveMessage (Right streamToClient)) -> case streamToClient of
       -- update the current slot
       SlotChange slot -> do
+        updateStore $ Store.AdvanceToSlot $ toFront slot
+        -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
         assign _currentSlot $ toFront slot
+        -- TODO: SCP-3208 Move contract logic to global store and include AdvanceTimedoutSteps
+        --       We need to have special care when modifying this function as there are some effectful
+        --       computations that needs to happen in the view if the currently selected step is modified.
         handleAction $ DashboardAction Dashboard.AdvanceTimedoutSteps
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract

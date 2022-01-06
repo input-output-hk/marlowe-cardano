@@ -557,6 +557,30 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "halogen-hooks" = pkgs.stdenv.mkDerivation {
+        name = "halogen-hooks";
+        version = "v0.5.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/thomashoneyman/purescript-halogen-hooks.git";
+          rev = "3e383fb59b7f32d9936c29153afde39d52d246d3";
+          sha256 = "0bqbs3l61dinvxv4i73wmg7n914iwb06jl73n63k2lfcpfbf4zr2";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "halogen-store" = pkgs.stdenv.mkDerivation {
+        name = "halogen-store";
+        version = "v0.2.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/thomashoneyman/purescript-halogen-store.git";
+          rev = "e262a17eb06a705b9207b598663b64a71714f428";
+          sha256 = "0sr3f5jlkz7cfprq3df17f5bh9ykd4rnr2n4p3h21jqnfin64m0f";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "halogen-subscriptions" = pkgs.stdenv.mkDerivation {
         name = "halogen-subscriptions";
         version = "v1.0.0";
