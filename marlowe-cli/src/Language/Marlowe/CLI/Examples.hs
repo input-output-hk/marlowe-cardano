@@ -20,11 +20,11 @@ module Language.Marlowe.CLI.Examples (
 ) where
 
 
-import           Control.Monad.Except       (MonadIO, liftIO)
-import           Data.Aeson.Encode.Pretty   (encodePretty)
-import           Language.Marlowe.Semantics (MarloweData (..))
+import Control.Monad.Except (MonadIO, liftIO)
+import Data.Aeson.Encode.Pretty (encodePretty)
+import Language.Marlowe.Semantics (MarloweData (..))
 
-import qualified Data.ByteString.Lazy       as LBS (writeFile)
+import qualified Data.ByteString.Lazy as LBS (writeFile)
 
 
 -- | Serialise an example contract to JSON.

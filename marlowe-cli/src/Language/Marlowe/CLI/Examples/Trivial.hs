@@ -21,13 +21,13 @@ module Language.Marlowe.CLI.Examples.Trivial (
 ) where
 
 
-import           Language.Marlowe.Semantics      (MarloweData (..))
-import           Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Observation (TrueObs),
-                                                  Party (..), Payee (..), State (..), Token (..), Value (..))
-import           Ledger.Ada                      (adaSymbol, adaToken)
-import           Plutus.V1.Ledger.Slot           (Slot)
+import Language.Marlowe.Semantics (MarloweData (..))
+import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Observation (TrueObs), Party (..),
+                                        Payee (..), State (..), Token (..), Value (..))
+import Ledger.Ada (adaSymbol, adaToken)
+import Plutus.V1.Ledger.Slot (Slot)
 
-import qualified PlutusTx.AssocMap               as AM (empty, singleton)
+import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 
 -- | A trivial contract, for testing.

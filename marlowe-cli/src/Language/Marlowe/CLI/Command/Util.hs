@@ -24,16 +24,15 @@ module Language.Marlowe.CLI.Command.Util (
 ) where
 
 
-import           Cardano.Api                        (AddressAny, ConsensusModeParams (CardanoModeParams),
-                                                     EpochSlots (..), LocalNodeConnectInfo (..), Lovelace (..),
-                                                     NetworkId (..))
-import           Control.Monad.Except               (MonadError, MonadIO, liftIO)
-import           Data.Maybe                         (fromMaybe)
-import           Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId)
-import           Language.Marlowe.CLI.Transaction   (buildClean)
-import           Language.Marlowe.CLI.Types         (CliError)
+import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
+                    Lovelace (..), NetworkId (..))
+import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Data.Maybe (fromMaybe)
+import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId)
+import Language.Marlowe.CLI.Transaction (buildClean)
+import Language.Marlowe.CLI.Types (CliError)
 
-import qualified Options.Applicative                as O
+import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options.

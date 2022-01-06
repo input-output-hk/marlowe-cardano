@@ -24,21 +24,20 @@ module Language.Marlowe.CLI.Command (
 ) where
 
 
-import           Control.Monad.Except                     (MonadError, MonadIO, runExceptT)
-import           Data.Foldable                            (asum)
-import           Language.Marlowe.CLI.Command.Contract    (ContractCommand, parseContractCommand, runContractCommand)
-import           Language.Marlowe.CLI.Command.Input       (InputCommand, parseInputCommand, runInputCommand)
-import           Language.Marlowe.CLI.Command.Role        (RoleCommand, parseRoleCommand, runRoleCommand)
-import           Language.Marlowe.CLI.Command.Run         (RunCommand, parseRunCommand, runRunCommand)
-import           Language.Marlowe.CLI.Command.Template    (TemplateCommand, parseTemplateCommand, runTemplateCommand)
-import           Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand,
-                                                           runTransactionCommand)
-import           Language.Marlowe.CLI.Command.Util        (UtilCommand, parseUtilCommand, runUtilCommand)
-import           Language.Marlowe.CLI.Types               (CliError (..))
-import           System.Exit                              (exitFailure)
-import           System.IO                                (hPutStrLn, stderr)
+import Control.Monad.Except (MonadError, MonadIO, runExceptT)
+import Data.Foldable (asum)
+import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
+import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
+import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
+import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
+import Language.Marlowe.CLI.Command.Template (TemplateCommand, parseTemplateCommand, runTemplateCommand)
+import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
+import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
+import Language.Marlowe.CLI.Types (CliError (..))
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
 
-import qualified Options.Applicative                      as O
+import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options.

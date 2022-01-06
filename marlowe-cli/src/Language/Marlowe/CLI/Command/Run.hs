@@ -24,25 +24,23 @@ module Language.Marlowe.CLI.Command.Run (
 ) where
 
 
-import           Cardano.Api                        (AddressAny, ConsensusModeParams (CardanoModeParams),
-                                                     EpochSlots (..), LocalNodeConnectInfo (..), NetworkId (..), SlotNo,
-                                                     StakeAddressReference (..), TxIn)
-import           Control.Monad                      (when)
-import           Control.Monad.Except               (MonadError, MonadIO, liftIO, throwError)
-import           Data.Maybe                         (fromMaybe)
-import           Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseInput, parseNetworkId,
-                                                     parseSlotNo, parseStakeAddressReference, parseTokenName, parseTxIn,
-                                                     parseTxOut)
-import           Language.Marlowe.CLI.Run           (initializeTransaction, prepareTransaction, runTransaction,
-                                                     withdrawFunds)
-import           Language.Marlowe.CLI.Types         (CliError)
-import           Language.Marlowe.Client            (defaultMarloweParams, marloweParams)
-import           Language.Marlowe.Semantics         (MarloweParams (slotConfig))
-import           Language.Marlowe.SemanticsTypes    (Input)
-import           Plutus.V1.Ledger.Api               (CurrencySymbol, POSIXTime (..), TokenName, defaultCostModelParams)
+import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
+                    NetworkId (..), SlotNo, StakeAddressReference (..), TxIn)
+import Control.Monad (when)
+import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
+import Data.Maybe (fromMaybe)
+import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseInput, parseNetworkId,
+                                           parseSlotNo, parseStakeAddressReference, parseTokenName, parseTxIn,
+                                           parseTxOut)
+import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
+import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
+import Language.Marlowe.Semantics (MarloweParams (slotConfig))
+import Language.Marlowe.SemanticsTypes (Input)
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, defaultCostModelParams)
 
-import qualified Cardano.Api                        as Api (Value)
-import qualified Options.Applicative                as O
+import qualified Cardano.Api as Api (Value)
+import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options for running contracts.

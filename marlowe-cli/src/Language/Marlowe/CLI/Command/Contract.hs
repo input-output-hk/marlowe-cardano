@@ -24,18 +24,17 @@ module Language.Marlowe.CLI.Command.Contract (
 ) where
 
 
-import           Cardano.Api                        (NetworkId (..), StakeAddressReference (..))
-import           Control.Monad.Except               (MonadError, MonadIO, throwError)
-import           Data.Maybe                         (fromMaybe)
-import           Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference)
-import           Language.Marlowe.CLI.Export        (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
-                                                     exportValidator)
-import           Language.Marlowe.CLI.Types         (CliError)
-import           Language.Marlowe.Client            (defaultMarloweParams, marloweParams)
-import           Language.Marlowe.Semantics         (MarloweParams (slotConfig))
-import           Plutus.V1.Ledger.Api               (CurrencySymbol, POSIXTime (..), defaultCostModelParams)
+import Cardano.Api (NetworkId (..), StakeAddressReference (..))
+import Control.Monad.Except (MonadError, MonadIO, throwError)
+import Data.Maybe (fromMaybe)
+import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference)
+import Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer, exportValidator)
+import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
+import Language.Marlowe.Semantics (MarloweParams (slotConfig))
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), defaultCostModelParams)
 
-import qualified Options.Applicative                as O
+import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options for exporting data.

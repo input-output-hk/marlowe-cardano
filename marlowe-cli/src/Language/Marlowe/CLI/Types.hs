@@ -36,26 +36,24 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import           Cardano.Api                     (AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra,
-                                                  PaymentExtendedKey, PaymentKey, PlutusScript, PlutusScriptV1,
-                                                  PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo,
-                                                  TxIn, VerificationKey, deserialiseAddress,
-                                                  deserialiseFromTextEnvelope, serialiseAddress,
-                                                  serialiseToTextEnvelope)
-import           Cardano.Api.Shelley             (PlutusScript (..))
-import           Codec.Serialise                 (deserialise)
-import           Data.Aeson                      (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
-import           Data.ByteString.Short           (ShortByteString)
-import           Data.String                     (IsString)
-import           GHC.Generics                    (Generic)
-import           Language.Marlowe.CLI.Orphans    ()
-import           Language.Marlowe.Semantics      (Payment)
-import           Language.Marlowe.SemanticsTypes (Contract, Input, State)
-import           Plutus.V1.Ledger.Api            (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import Cardano.Api (AddressInEra, AlonzoEra, AsType (..), Hash, IsCardanoEra, PaymentExtendedKey, PaymentKey,
+                    PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), Script (..), ScriptData, SigningKey, SlotNo,
+                    TxIn, VerificationKey, deserialiseAddress, deserialiseFromTextEnvelope, serialiseAddress,
+                    serialiseToTextEnvelope)
+import Cardano.Api.Shelley (PlutusScript (..))
+import Codec.Serialise (deserialise)
+import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.=))
+import Data.ByteString.Short (ShortByteString)
+import Data.String (IsString)
+import GHC.Generics (Generic)
+import Language.Marlowe.CLI.Orphans ()
+import Language.Marlowe.Semantics (Payment)
+import Language.Marlowe.SemanticsTypes (Contract, Input, State)
+import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
-import qualified Cardano.Api                     as Api (Value)
-import qualified Data.ByteString.Lazy            as LBS (fromStrict)
-import qualified Data.ByteString.Short           as SBS (fromShort)
+import qualified Cardano.Api as Api (Value)
+import qualified Data.ByteString.Lazy as LBS (fromStrict)
+import qualified Data.ByteString.Short as SBS (fromShort)
 
 
 -- | Exception for Marlowe CLI.

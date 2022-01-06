@@ -37,27 +37,24 @@ module Language.Marlowe.CLI.Command.Parse (
 ) where
 
 
-import           Cardano.Api                     (AddressAny, AsType (AsAddressAny, AsPolicyId, AsStakeAddress, AsTxId),
-                                                  AssetId (..), AssetName (..), NetworkId (..), NetworkMagic (..),
-                                                  Quantity (..), SlotNo (..), StakeAddressReference (..), TxId (..),
-                                                  TxIn (..), TxIx (..), Value, deserialiseAddress,
-                                                  deserialiseFromRawBytesHex, lovelaceToValue, quantityToLovelace,
-                                                  valueFromList)
-import           Cardano.Api.Shelley             (StakeAddress (..), fromShelleyStakeCredential)
-import           Control.Applicative             ((<|>))
-import           Data.List.Split                 (splitOn)
-import           Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
-import           Plutus.V1.Ledger.Ada            (adaSymbol, adaToken)
-import           Plutus.V1.Ledger.Api            (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..),
-                                                  TokenName (..), toBuiltin)
-import           Plutus.V1.Ledger.Slot           (Slot (..))
-import           Text.Read                       (readEither)
-import           Text.Regex.Posix                ((=~))
+import Cardano.Api (AddressAny, AsType (AsAddressAny, AsPolicyId, AsStakeAddress, AsTxId), AssetId (..), AssetName (..),
+                    NetworkId (..), NetworkMagic (..), Quantity (..), SlotNo (..), StakeAddressReference (..),
+                    TxId (..), TxIn (..), TxIx (..), Value, deserialiseAddress, deserialiseFromRawBytesHex,
+                    lovelaceToValue, quantityToLovelace, valueFromList)
+import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
+import Control.Applicative ((<|>))
+import Data.List.Split (splitOn)
+import Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
+import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
+import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
+import Plutus.V1.Ledger.Slot (Slot (..))
+import Text.Read (readEither)
+import Text.Regex.Posix ((=~))
 
-import qualified Data.ByteString.Base16          as Base16 (decode)
-import qualified Data.ByteString.Char8           as BS8 (pack)
-import qualified Data.Text                       as T (pack)
-import qualified Options.Applicative             as O
+import qualified Data.ByteString.Base16 as Base16 (decode)
+import qualified Data.ByteString.Char8 as BS8 (pack)
+import qualified Data.Text as T (pack)
+import qualified Options.Applicative as O
 
 
 -- | Parser for network ID.

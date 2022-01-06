@@ -28,20 +28,19 @@ module Language.Marlowe.CLI.IO (
 ) where
 
 
-import           Cardano.Api                (AsType (..), FromSomeType (..), HasTextEnvelope, ScriptDataJsonSchema (..),
-                                             readFileTextEnvelopeAnyOf, scriptDataFromJson, serialiseToTextEnvelope,
-                                             writeFileTextEnvelope)
-import           Cardano.Api.Shelley        (toPlutusData)
-import           Control.Monad              ((<=<))
-import           Control.Monad.Except       (MonadError, MonadIO, liftEither, liftIO)
-import           Data.Aeson                 (FromJSON (..), ToJSON, eitherDecodeFileStrict)
-import           Data.Aeson.Encode.Pretty   (encodePretty)
-import           Data.Bifunctor             (first)
-import           Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey)
-import           Plutus.V1.Ledger.Api       (BuiltinData)
-import           PlutusTx                   (dataToBuiltinData)
+import Cardano.Api (AsType (..), FromSomeType (..), HasTextEnvelope, ScriptDataJsonSchema (..),
+                    readFileTextEnvelopeAnyOf, scriptDataFromJson, serialiseToTextEnvelope, writeFileTextEnvelope)
+import Cardano.Api.Shelley (toPlutusData)
+import Control.Monad ((<=<))
+import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
+import Data.Aeson (FromJSON (..), ToJSON, eitherDecodeFileStrict)
+import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.Bifunctor (first)
+import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey)
+import Plutus.V1.Ledger.Api (BuiltinData)
+import PlutusTx (dataToBuiltinData)
 
-import qualified Data.ByteString.Lazy       as LBS (writeFile)
+import qualified Data.ByteString.Lazy as LBS (writeFile)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (putStrLn)
 
 

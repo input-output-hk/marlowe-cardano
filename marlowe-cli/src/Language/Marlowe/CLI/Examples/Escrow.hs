@@ -21,13 +21,13 @@ module Language.Marlowe.CLI.Examples.Escrow (
 ) where
 
 
-import           Language.Marlowe.Semantics      (MarloweData (..))
-import           Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
-                                                  Party (..), Payee (..), State (..), Token (..), Value (..))
-import           Ledger.Ada                      (adaSymbol, adaToken)
-import           Plutus.V1.Ledger.Slot           (Slot)
+import Language.Marlowe.Semantics (MarloweData (..))
+import Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..), Party (..),
+                                        Payee (..), State (..), Token (..), Value (..))
+import Ledger.Ada (adaSymbol, adaToken)
+import Plutus.V1.Ledger.Slot (Slot)
 
-import qualified PlutusTx.AssocMap               as AM (empty, singleton)
+import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 
 -- | An escrow contract with mediation.

@@ -17,11 +17,11 @@ module Main (
 ) where
 
 
-import           Cardano.Config.Git.Rev       (gitRev)
-import           Data.Text                    (unpack)
-import           Data.Version                 (showVersion)
-import           Language.Marlowe.CLI.Command (runCLI)
-import           Paths_marlowe_cli            (version)
+import Cardano.Config.Git.Rev (gitRev)
+import Data.Text (unpack)
+import Data.Version (showVersion)
+import Language.Marlowe.CLI.Command (runCLI)
+import Paths_marlowe_cli (version)
 
 
 -- | Run the Marlow CLI tool.
