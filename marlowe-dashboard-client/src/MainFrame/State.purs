@@ -65,7 +65,7 @@ import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts, _walletDetails)
 import Page.Dashboard.State (dummyState, handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.Types (Action(..), State) as Dashboard
-import Page.Welcome.Lenses (_walletLibrary)
+import Page.Welcome.Lenses (_addressBook)
 import Page.Welcome.State (dummyState, handleAction, mkInitialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types

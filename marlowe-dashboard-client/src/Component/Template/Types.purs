@@ -36,7 +36,6 @@ data ContractSetupStage
 
 derive instance eqContractSetupStage :: Eq ContractSetupStage
 
-<<<<<<< HEAD
 type Input =
   { addressBook :: AddressBook
   }

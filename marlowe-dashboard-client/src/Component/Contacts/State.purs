@@ -67,8 +67,7 @@ import Marlowe.Semantics
   , TokenName
   )
 import Page.Dashboard.Types (Action(..)) as Dashboard
-import Toast.Types (errorToast, successToast)
-import Types (NotFoundWebData)
+import Toast.Types (successToast)
 
 mkInitialState :: AddressBook -> State
 mkInitialState addressBook =
