@@ -23,13 +23,13 @@ import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (Contract, Term)
 import Marlowe.Parser as Parser
 import Test.QuickCheck (Result, (===))
-import Test.Unit (TestSuite, suite, test)
+import Test.Spec (Spec, describe, it)
 import Text.Extra (stripParens)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Blockly" do
-    test "codeToBlocklyToCode" $ contractQuickCheck
+  describe "Marlowe.Blockly" do
+    it "codeToBlocklyToCode" $ contractQuickCheck
       (GenerationOptions { withHoles: true, withExtendedConstructs: true })
       codeToBlocklyToCode
 

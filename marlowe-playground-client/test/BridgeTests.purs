@@ -3,6 +3,8 @@ module BridgeTests
   ) where
 
 import Prologue
+
+import Control.Monad.Error.Class (class MonadError)
 import Data.Argonaut.Decode
   ( class DecodeJson
   , JsonDecodeError
@@ -15,6 +17,7 @@ import Data.Map as Map
 import Data.String.Regex (replace)
 import Data.String.Regex.Flags (RegexFlags(..))
 import Data.String.Regex.Unsafe (unsafeRegex)
+import Effect.Aff (Error)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Language.Haskell.Interpreter (CompilationError)
@@ -35,18 +38,18 @@ import Marlowe.Semantics
   )
 import Node.Encoding (Encoding(UTF8))
 import Node.FS.Sync as FS
-import Test.Unit (TestSuite, Test, failure, success, suite, test)
-import Test.Unit.Assert (equal)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (fail, shouldEqual)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "JSON Serialization" do
+  describe "JSON Serialization" do
     jsonHandling
     serializationTest
 
-jsonHandling :: TestSuite
+jsonHandling :: Spec Unit
 jsonHandling = do
-  test "Json handling" do
+  it "Json handling" do
     response1 :: Either JsonDecodeError String <- decodeFile
       "test/evaluation_response1.json"
     assertRight response1
@@ -54,9 +57,9 @@ jsonHandling = do
       "test/evaluation_error1.json"
     assertRight error1
 
-serializationTest :: TestSuite
+serializationTest :: Spec Unit
 serializationTest =
-  test "Contract Serialization" do
+  it "Contract Serialization" do
     -- A simple test that runs the Escrow contract to completion
     let
       ada = Token "" ""
@@ -145,17 +148,18 @@ serializationTest =
         )
 
       expectedState = replace rx "" expectedStateJson
-    equal expectedState jsonState
-    equal (Right contract) (lmap printJsonDecodeError $ parseDecodeJson json)
-    equal (Right contract)
+    shouldEqual expectedState jsonState
+    shouldEqual (Right contract)
+      (lmap printJsonDecodeError $ parseDecodeJson json)
+    shouldEqual (Right contract)
       (lmap printJsonDecodeError $ parseDecodeJson bridgedJson)
-    equal (Right state)
+    shouldEqual (Right state)
       (lmap printJsonDecodeError $ parseDecodeJson bridgedStateJson)
 
-assertRight :: forall a. Either JsonDecodeError a -> Test
-assertRight (Left err) = failure (printJsonDecodeError err)
-
-assertRight (Right _) = success
+assertRight
+  :: forall m a. MonadError Error m => Either JsonDecodeError a -> m Unit
+assertRight (Left err) = fail (printJsonDecodeError err)
+assertRight (Right _) = pure unit
 
 decodeFile
   :: forall m a

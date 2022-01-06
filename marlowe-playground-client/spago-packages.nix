@@ -1253,18 +1253,6 @@ let
         installPhase = "ln -s $src $out";
       };
 
-    "test-unit" = pkgs.stdenv.mkDerivation {
-        name = "test-unit";
-        version = "v16.0.0";
-        src = pkgs.fetchgit {
-          url = "https://github.com/bodil/purescript-test-unit.git";
-          rev = "56d06897b621df5d2f619433d19ababb5bb8ebd1";
-          sha256 = "0qz903phxkgrn7qdz1xi49bydkf5cbxssyb4xk029zi4lshb35mw";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
     "transformers" = pkgs.stdenv.mkDerivation {
         name = "transformers";
         version = "v5.2.0";

@@ -1,6 +1,7 @@
 module Marlowe.GenWithHoles where
 
 import Prologue
+
 import Control.Lazy (class Lazy)
 import Control.Monad.Gen
   ( class MonadGen
@@ -17,11 +18,11 @@ import Control.Monad.Reader
   , runReaderT
   )
 import Control.Monad.Rec.Class (class MonadRec)
+import Effect.Aff (Aff)
+import Marlowe.Gen (GenerationOptions)
 import Test.QuickCheck (class Testable)
 import Test.QuickCheck.Gen (Gen)
-import Test.Unit (Test)
-import Test.Unit.QuickCheck (quickCheck)
-import Marlowe.Gen (GenerationOptions)
+import Test.Spec.QuickCheck (quickCheck)
 
 -- TODO: rename to GenContract or similar
 newtype GenWithHoles a
@@ -74,6 +75,6 @@ contractQuickCheck
    . Testable prop
   => GenerationOptions
   -> GenWithHoles prop
-  -> Test
+  -> Aff Unit
 contractQuickCheck options g = quickCheck $ runReaderT (unGenWithHoles g)
   options

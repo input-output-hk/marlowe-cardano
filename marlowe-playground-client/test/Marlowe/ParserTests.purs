@@ -8,17 +8,17 @@ import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (Contract)
 import Marlowe.Parser (parseContract)
 import Test.QuickCheck (Result, (===))
-import Test.Unit (TestSuite, suite, test)
+import Test.Spec (Spec, describe, it)
 import Text.Pretty (genericPretty)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Parser" do
+  describe "Marlowe.Parser" do
     let
       genOpts = GenerationOptions
         { withHoles: false, withExtendedConstructs: true }
-    test "Contract Parser" $ contractQuickCheck genOpts contractParser
-    test "Pretty Contract Parser" $ contractQuickCheck genOpts
+    it "Contract Parser" $ contractQuickCheck genOpts contractParser
+    it "Pretty Contract Parser" $ contractQuickCheck genOpts
       prettyContractParser
 
 contractParser :: GenWithHoles Result

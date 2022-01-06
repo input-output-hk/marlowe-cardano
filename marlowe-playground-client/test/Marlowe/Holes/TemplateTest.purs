@@ -19,17 +19,17 @@ import Marlowe.Template
   , getPlaceholderIds
   )
 import Test.QuickCheck (Result(..), (===))
-import Test.Unit (TestSuite, suite, test)
+import Test.Spec (Spec, describe, it)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Holes.Template" do
+  describe "Marlowe.Holes.Template" do
     let
       genOpts = GenerationOptions
         { withHoles: false, withExtendedConstructs: true }
-    test "Term and Extended contract has the same getPlaceholderIds" $
+    it "Term and Extended contract has the same getPlaceholderIds" $
       contractQuickCheck genOpts sameGetPlaceholderIds
-    test "Term and Extended contract has the same fillTemplate" $
+    it "Term and Extended contract has the same fillTemplate" $
       contractQuickCheck genOpts sameFillTemplate
 
 sameGetPlaceholderIds :: GenWithHoles Result
