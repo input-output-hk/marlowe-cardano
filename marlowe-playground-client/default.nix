@@ -1,4 +1,15 @@
-{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, webCommonPlayground, buildPursPackage, buildNodeModules, filterNpm }:
+{ pkgs
+, gitignore-nix
+, haskell
+, webCommon
+, webCommonMarlowe
+, webCommonPlayground
+, buildPursPackage
+, buildNodeModules
+, filterNpm
+, purs-tidy
+, prettier
+}:
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
@@ -16,6 +27,9 @@ let
   generate-purescript = pkgs.writeShellScriptBin "marlowe-playground-generate-purs" ''
     rm -rf ./generated
     ${build-playground-exe}/bin/marlowe-playground-server psgenerator generated
+    cd ..
+    ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-playground-client/generated
+    ${prettier}/bin/prettier -w ./marlowe-playground-client/generated
   '';
 
   # start-backend: script to start the plutus-playground-server

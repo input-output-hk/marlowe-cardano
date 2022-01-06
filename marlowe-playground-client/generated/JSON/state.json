@@ -1,1 +1,29 @@
-{"choices":[[{"choice_owner":{"pk_hash":"a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"},"choice_name":"choice"},42]],"accounts":[[[{"pk_hash":"a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"},{"currency_symbol":"aa","token_name":"name"}],12]],"minSlot":123,"boundValues":[["x",1],["y",2]]}
+{
+  "choices": [
+    [
+      {
+        "choice_owner": {
+          "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
+        },
+        "choice_name": "choice"
+      },
+      42
+    ]
+  ],
+  "accounts": [
+    [
+      [
+        {
+          "pk_hash": "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
+        },
+        { "currency_symbol": "aa", "token_name": "name" }
+      ],
+      12
+    ]
+  ],
+  "minSlot": 123,
+  "boundValues": [
+    ["x", 1],
+    ["y", 2]
+  ]
+}
