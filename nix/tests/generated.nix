@@ -1,18 +1,17 @@
-{ runCommand, generate-run-purescript, generate-playground-purescript, src, diffutils, glibcLocales }:
+{ runCommand, run-generated, play-generated, src, diffutils, glibcLocales }:
 runCommand "generated-purescript-test"
 {
-  buildInputs = [ generate-run-purescript generate-playground-purescript diffutils glibcLocales ];
+  buildInputs = [ diffutils glibcLocales ];
 } ''
   set +e
   echo ${toString src}
   cp -a ${src} expected
   cp -a ${src} actual
   chmod -R +w actual
-  cd actual/marlowe-dashboard-client
-  marlowe-pab-generate-purs
-  cd ../marlowe-playground-client
-  marlowe-playground-generate-purs
-  cd ../..
+  rm -rf actual/marlowe-dashboard-client/generated
+  rm -rf actual/marlowe-playground-client/generated
+  cp -a ${run-generated} actual/marlowe-dashboard-client/generated
+  cp -a ${play-generated} actual/marlowe-playground-client/generated
   diff --brief --recursive expected actual
   EXIT_CODE=$?
   if [[ $EXIT_CODE != 0 ]]

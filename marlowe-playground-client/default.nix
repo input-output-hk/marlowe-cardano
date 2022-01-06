@@ -21,6 +21,13 @@ let
   generated-purescript = pkgs.runCommand "marlowe-playground-purescript" { } ''
     mkdir $out
     ${playground-exe}/bin/marlowe-playground-server psgenerator $out
+    cp ${../.tidyrc.json} $out/.tidyrc.json
+    cp ${../.tidyoperators} $out/.tidyoperators
+    cd $out
+    ${purs-tidy}/bin/purs-tidy format-in-place $out
+    ${prettier}/bin/prettier -w $out
+    rm $out/.tidyrc.json
+    rm $out/.tidyoperators
   '';
 
   # generate-purescript: script to create purescript bridge code
@@ -78,6 +85,6 @@ let
     });
 in
 {
-  inherit client generate-purescript start-backend;
+  inherit client generated-purescript generate-purescript start-backend;
   server = playground-exe;
 }

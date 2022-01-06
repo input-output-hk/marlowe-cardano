@@ -20,6 +20,13 @@ let
     ${marlowe-setup-invoker}/bin/marlowe-pab-setup psgenerator $out
     ${marlowe-setup-invoker}/bin/marlowe-pab-setup psapigenerator $out
     ${marlowe-run-backend-invoker}/bin/marlowe-dashboard-server psgenerator $out
+    cp ${../.tidyrc.json} $out/.tidyrc.json
+    cp ${../.tidyoperators} $out/.tidyoperators
+    cd $out
+    ${purs-tidy}/bin/purs-tidy format-in-place $out
+    ${prettier}/bin/prettier -w $out
+    rm $out/.tidyrc.json
+    rm $out/.tidyoperators
   '';
 
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''

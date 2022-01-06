@@ -7,8 +7,8 @@
 , src
 , marlowe-playground
 , marlowe-dashboard
-, generate-run-purescript
-, generate-playground-purescript
+, run-generated
+, play-generated
 , web-ghc
 , plutus-pab
 , marlowe-pab
@@ -30,7 +30,7 @@ pkgs.recurseIntoAttrs {
 
   generated = pkgs.callPackage ./generated.nix {
     src = cleanSrc;
-    inherit generate-run-purescript generate-playground-purescript;
+    inherit run-generated play-generated;
   };
 
   pursTidy = pkgs.callPackage ./purs-tidy.nix {

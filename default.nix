@@ -50,7 +50,7 @@ rec {
       inherit haskell webCommon webCommonMarlowe webCommonPlayground;
       inherit (marlowe) purs-tidy;
       inherit (pkgs.nodePackages) prettier;
-    }) client server generate-purescript start-backend;
+    }) client server generated-purescript generate-purescript start-backend;
   };
 
   marlowe-dashboard = pkgs.recurseIntoAttrs rec {
@@ -70,8 +70,8 @@ rec {
     inherit (haskell) plutus-pab;
     inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;
-    generate-run-purescript = marlowe-dashboard.generate-purescript;
-    generate-playground-purescript = marlowe-playground.generate-purescript;
+    run-generated = marlowe-dashboard.generated-purescript;
+    play-generated = marlowe-playground.generated-purescript;
   };
 
   docs = import ./nix/docs.nix { inherit pkgs marlowe; };
