@@ -126,8 +126,8 @@ instance manageMarloweStorageHalogenM ::
   ManageMarloweStorage (HalogenM state action slots msg m) where
   clearAllLocalStorage = lift clearAllLocalStorage
   getAddressBook = lift getAddressBook
-  insertIntoAddressBook nickname address = lift $ insertIntoAddressBook nickname
-    address
+  insertIntoAddressBook nickname address =
+    lift $ insertIntoAddressBook nickname address
   getContractNicknames = lift getContractNicknames
   insertIntoContractNicknames plutusAppId nickname = lift $
     insertIntoContractNicknames plutusAppId nickname

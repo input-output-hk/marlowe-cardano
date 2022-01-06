@@ -352,11 +352,10 @@ instance monadMarloweHalogenM ::
     marloweParams
   createPendingFollowerApp = lift <<< createPendingFollowerApp
   followContractWithPendingFollowerApp walletDetails marloweParams followAppId =
-    lift
-      $ followContractWithPendingFollowerApp
-          walletDetails
-          marloweParams
-          followAppId
+    lift $ followContractWithPendingFollowerApp
+      walletDetails
+      marloweParams
+      followAppId
   createContract walletDetails roles contract =
     lift $ createContract walletDetails roles contract
   applyTransactionInput walletDetails marloweParams transactionInput =
