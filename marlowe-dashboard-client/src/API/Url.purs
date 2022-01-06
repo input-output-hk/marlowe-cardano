@@ -21,7 +21,8 @@ instance stringToUrlPiece :: ToUrlPiece String where
   toUrlPiece str = str
 
 instance contractInstanceIdToUrlPiece :: ToUrlPiece ContractInstanceId where
-  toUrlPiece (ContractInstanceId { unContractInstanceId: UUID uuid }) = UUID.toString uuid
+  toUrlPiece (ContractInstanceId { unContractInstanceId: UUID uuid }) =
+    UUID.toString uuid
 
 instance walletToUrlPiece :: ToUrlPiece Wallet where
   toUrlPiece (Wallet { getWalletId }) = getWalletId

@@ -37,17 +37,17 @@ instance encodeJsonContractHistory :: EncodeJson ContractHistory where
   encodeJson =
     E.encode $ unwrap
       >$< E.record
-          { chParams: E.maybe E.value :: _ (_ (Tuple MarloweParams MarloweData))
-          , chHistory: E.value :: _ (Array TransactionInput)
-          }
+        { chParams: E.maybe E.value :: _ (_ (Tuple MarloweParams MarloweData))
+        , chHistory: E.value :: _ (Array TransactionInput)
+        }
 
 instance decodeJsonContractHistory :: DecodeJson ContractHistory where
   decodeJson =
     D.decode $ ContractHistory
       <$> D.record "ContractHistory"
-          { chParams: D.maybe D.value :: _ (_ (Tuple MarloweParams MarloweData))
-          , chHistory: D.value :: _ (Array TransactionInput)
-          }
+        { chParams: D.maybe D.value :: _ (_ (Tuple MarloweParams MarloweData))
+        , chHistory: D.value :: _ (Array TransactionInput)
+        }
 
 _chParams :: Lens' ContractHistory (Maybe (Tuple MarloweParams MarloweData))
 _chParams = _Newtype <<< prop (Proxy :: _ "chParams")

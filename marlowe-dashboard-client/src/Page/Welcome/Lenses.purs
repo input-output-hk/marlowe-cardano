@@ -1,7 +1,11 @@
 module Page.Welcome.Lenses where
 
 import Prologue
-import Component.Contacts.Types (WalletDetails, WalletLibrary, WalletNicknameError)
+import Component.Contacts.Types
+  ( WalletDetails
+  , WalletLibrary
+  , WalletNicknameError
+  )
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)

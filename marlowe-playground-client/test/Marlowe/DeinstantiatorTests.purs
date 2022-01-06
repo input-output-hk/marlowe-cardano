@@ -39,8 +39,10 @@ all =
                 )
                 Escrow.contractTemplate.extendedContract
             )
-      assertFalse "Could not instantiate Escrow contract" (mFilledEscrow == Nothing)
-      equal (Just Escrow.contractTemplate) (maybe Nothing findTemplate mFilledEscrow)
+      assertFalse "Could not instantiate Escrow contract"
+        (mFilledEscrow == Nothing)
+      equal (Just Escrow.contractTemplate)
+        (maybe Nothing findTemplate mFilledEscrow)
     test "Zero Coupon Bond" do
       let
         mFilledZeroCouponBond :: Maybe Contract
@@ -62,5 +64,7 @@ all =
                 )
                 ZeroCouponBond.contractTemplate.extendedContract
             )
-      assertFalse "Could not instantiate Zero Coupon Bond contract" (mFilledZeroCouponBond == Nothing)
-      equal (Just ZeroCouponBond.contractTemplate) (maybe Nothing findTemplate mFilledZeroCouponBond)
+      assertFalse "Could not instantiate Zero Coupon Bond contract"
+        (mFilledZeroCouponBond == Nothing)
+      equal (Just ZeroCouponBond.contractTemplate)
+        (maybe Nothing findTemplate mFilledZeroCouponBond)

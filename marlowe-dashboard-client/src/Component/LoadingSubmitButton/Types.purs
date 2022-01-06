@@ -10,18 +10,20 @@ _submitButtonSlot :: Proxy "submitButtonSlot"
 _submitButtonSlot = Proxy
 
 type State
-  = { caption :: String
-    , styles :: Array String
-    , enabled :: Boolean
-    , status :: RemoteData String String
-    , buttonHeight :: Number
-    }
+  =
+  { caption :: String
+  , styles :: Array String
+  , enabled :: Boolean
+  , status :: RemoteData String String
+  , buttonHeight :: Number
+  }
 
 type Input
-  = { caption :: String
-    , styles :: Array String
-    , enabled :: Boolean
-    }
+  =
+  { caption :: String
+  , styles :: Array String
+  , enabled :: Boolean
+  }
 
 data Query a
   = SubmitResult Milliseconds (Either String String) a

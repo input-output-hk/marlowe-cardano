@@ -3,12 +3,40 @@ module Component.Blockly.State (blocklyComponent) where
 import Prologue hiding (div)
 import Blockly.Dom (explainError, getDom)
 import Blockly.Events (fromEvent, newParentId, oldParentId, newElementId)
-import Blockly.Internal (BlockDefinition, ElementId(..), centerOnBlock, getBlockById, getBlockType, newBlock, select, updateToolbox, addChangeListener, removeChangeListener)
+import Blockly.Internal
+  ( BlockDefinition
+  , ElementId(..)
+  , centerOnBlock
+  , getBlockById
+  , getBlockType
+  , newBlock
+  , select
+  , updateToolbox
+  , addChangeListener
+  , removeChangeListener
+  )
 import Blockly.Internal as Blockly
 import Blockly.Toolbox (Toolbox)
-import Blockly.Types (BlocklyEvent, BlocklyState, Workspace, isDragStart, isDragStop)
+import Blockly.Types
+  ( BlocklyEvent
+  , BlocklyState
+  , Workspace
+  , isDragStart
+  , isDragStop
+  )
 import Blockly.Types as BT
-import Component.Blockly.Types (Action(..), Message(..), Query(..), State, _blocklyEventSubscription, _blocklyReadyFired, _blocklyState, _errorMessage, blocklyRef, emptyState)
+import Component.Blockly.Types
+  ( Action(..)
+  , Message(..)
+  , Query(..)
+  , State
+  , _blocklyEventSubscription
+  , _blocklyReadyFired
+  , _blocklyState
+  , _errorMessage
+  , blocklyRef
+  , emptyState
+  )
 import Component.Blockly.View (render)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -25,7 +53,16 @@ import Effect.Exception.Unsafe (unsafeThrow)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Effect.Timer (clearTimeout, setTimeout)
-import Halogen (Component, HalogenM, SubscriptionId, getHTMLElementRef, liftEffect, mkComponent, modify_, raise)
+import Halogen
+  ( Component
+  , HalogenM
+  , SubscriptionId
+  , getHTMLElementRef
+  , liftEffect
+  , mkComponent
+  , modify_
+  , raise
+  )
 import Halogen as H
 import Halogen.ElementResize (elementResize)
 import Halogen.Subscription as HS
@@ -39,13 +76,13 @@ import Web.DOM.ResizeObserver (ResizeObserverBoxOptions(..))
 import Web.Event.EventTarget (EventListener, eventListener)
 import Web.HTML.HTMLElement as HTMLElement
 
-blocklyComponent ::
-  forall m.
-  MonadAff m =>
-  String ->
-  Array BlockDefinition ->
-  Toolbox ->
-  Component Query Unit Message m
+blocklyComponent
+  :: forall m
+   . MonadAff m
+  => String
+  -> Array BlockDefinition
+  -> Toolbox
+  -> Component Query Unit Message m
 blocklyComponent rootBlockName blockDefinitions toolbox =
   mkComponent
     { initialState: const emptyState
@@ -60,11 +97,11 @@ blocklyComponent rootBlockName blockDefinitions toolbox =
           }
     }
 
-handleQuery ::
-  forall slots m a.
-  MonadAff m =>
-  Query a ->
-  HalogenM State Action slots Message m (Maybe a)
+handleQuery
+  :: forall slots m a
+   . MonadAff m
+  => Query a
+  -> HalogenM State Action slots Message m (Maybe a)
 handleQuery (SetCode code next) = do
   mState <- use _blocklyState
   for_ mState \blocklyState -> do
@@ -76,7 +113,9 @@ handleQuery (SetCode code next) = do
           $ Parser.parseContract (Text.stripParens code)
     -- Create the blocks temporarily disabling the blockly events until they settle
     -- FIXME: check why buildBlocks requires we pass newBlock
-    runWithoutEventSubscription 100 BlocklyEvent $ buildBlocks newBlock blocklyState contract
+    runWithoutEventSubscription 100 BlocklyEvent $ buildBlocks newBlock
+      blocklyState
+      contract
   assign _errorMessage Nothing
   pure $ Just next
 
@@ -100,7 +139,8 @@ handleQuery (LoadWorkspace xml next) = do
 handleQuery (GetBlockRepresentation next) = do
   eBlock <-
     runExceptT do
-      blocklyState <- ExceptT $ note "BlocklyState not set" <$> use _blocklyState
+      blocklyState <- ExceptT $ note "BlocklyState not set" <$> use
+        _blocklyState
       withExceptT explainError (getDom blocklyState)
   case eBlock of
     Left e -> do
@@ -110,7 +150,9 @@ handleQuery (GetBlockRepresentation next) = do
       assign _errorMessage Nothing
       pure <<< Just <<< next $ block
   where
-  unexpected s = "An unexpected error has occurred, please raise a support issue at https://github.com/input-output-hk/marlowe-cardano/issues/new: " <> s
+  unexpected s =
+    "An unexpected error has occurred, please raise a support issue at https://github.com/input-output-hk/marlowe-cardano/issues/new: "
+      <> s
 
 handleQuery (SelectWarning warning next) = do
   let
@@ -118,7 +160,8 @@ handleQuery (SelectWarning warning next) = do
   void
     $ runMaybeT do
         blocklyState <- MaybeT $ use _blocklyState
-        block <- MaybeT $ liftEffect $ getBlockById blocklyState.workspace blockId
+        block <- MaybeT $ liftEffect $ getBlockById blocklyState.workspace
+          blockId
         MaybeT $ map pure
           $ liftEffect do
               select block
@@ -129,7 +172,8 @@ handleQuery (SetToolbox toolbox next) = do
   void
     $ runMaybeT do
         blocklyState <- MaybeT $ use _blocklyState
-        MaybeT $ map pure $ liftEffect $ updateToolbox toolbox blocklyState.workspace
+        MaybeT $ map pure $ liftEffect $ updateToolbox toolbox
+          blocklyState.workspace
   pure $ Just next
 
 -- We cannot guarantee at the type level that the only type of location we handle in this editor
@@ -137,27 +181,35 @@ handleQuery (SetToolbox toolbox next) = do
 locationToBlockId :: Location -> String
 locationToBlockId (BlockId blockId) = blockId
 
-locationToBlockId (Range _) = unsafeThrow "Unexpected Range location found in MarloweParser"
+locationToBlockId (Range _) = unsafeThrow
+  "Unexpected Range location found in MarloweParser"
 
-locationToBlockId NoLocation = unsafeThrow "Unexpected NoLocation found in MarloweParser"
+locationToBlockId NoLocation = unsafeThrow
+  "Unexpected NoLocation found in MarloweParser"
 
-handleAction ::
-  forall m slots.
-  MonadAff m =>
-  Action ->
-  HalogenM State Action slots Message m Unit
+handleAction
+  :: forall m slots
+   . MonadAff m
+  => Action
+  -> HalogenM State Action slots Message m Unit
 handleAction (Inject rootBlockName blockDefinitions toolbox) = do
-  mElement <- (pure <<< map HTMLElement.toElement) =<< getHTMLElementRef blocklyRef
+  mElement <- (pure <<< map HTMLElement.toElement) =<< getHTMLElementRef
+    blocklyRef
   blocklyState <-
     liftEffect do
-      state <- Blockly.createBlocklyInstance rootBlockName (ElementId "blocklyWorkspace") (ElementId "workspaceBlocks") toolbox
+      state <- Blockly.createBlocklyInstance rootBlockName
+        (ElementId "blocklyWorkspace")
+        (ElementId "workspaceBlocks")
+        toolbox
       Blockly.addBlockTypes state.blockly blockDefinitions
       Blockly.initializeWorkspace state
       pure state
   -- Subscribe to the resize events on the main section to resize blockly automatically.
-  for_ mElement $ H.subscribe <<< elementResize ContentBox (const ResizeWorkspace)
+  for_ mElement $ H.subscribe <<< elementResize ContentBox
+    (const ResizeWorkspace)
   -- Subscribe to blockly events to see when the code has changed.
-  eventSubscription <- H.subscribe $ blocklyEvents BlocklyEvent blocklyState.workspace
+  eventSubscription <- H.subscribe $ blocklyEvents BlocklyEvent
+    blocklyState.workspace
   modify_
     ( set _blocklyState (Just blocklyState)
         <<< set _blocklyEventSubscription (Just eventSubscription)
@@ -171,8 +223,10 @@ handleAction (BlocklyEvent (BT.Select event)) = case newElementId event of
     void
       $ runMaybeT do
           blocklyState <- MaybeT $ use _blocklyState
-          block <- MaybeT $ liftEffect $ getBlockById blocklyState.workspace blockId
-          MaybeT $ map pure $ raise $ BlockSelection $ Just { blockId, blockType: getBlockType block }
+          block <- MaybeT $ liftEffect $ getBlockById blocklyState.workspace
+            blockId
+          MaybeT $ map pure $ raise $ BlockSelection $ Just
+            { blockId, blockType: getBlockType block }
 
 handleAction (BlocklyEvent (BT.FinishLoading _)) = do
   alreadyFired <- use _blocklyReadyFired
@@ -194,7 +248,8 @@ handleAction Finalize = do
   for_ mState \{ blockly } ->
     liftEffect $ Blockly.hideChaff blockly
 
-blocklyEvents :: forall action. (BlocklyEvent -> action) -> Workspace -> HS.Emitter action
+blocklyEvents
+  :: forall action. (BlocklyEvent -> action) -> Workspace -> HS.Emitter action
 blocklyEvents toAction workspace =
   HS.makeEmitter \push -> do
     listener <-
@@ -216,7 +271,10 @@ blocklyEvents toAction workspace =
     addChangeListener workspace listener
     pure $ removeChangeListener workspace listener
 
-_eventsWhileDragging :: forall state. Lens' { eventsWhileDragging :: Maybe (List BlocklyEvent) | state } (Maybe (List BlocklyEvent))
+_eventsWhileDragging
+  :: forall state
+   . Lens' { eventsWhileDragging :: Maybe (List BlocklyEvent) | state }
+       (Maybe (List BlocklyEvent))
 _eventsWhileDragging = prop (Proxy :: _ "eventsWhileDragging")
 
 -- | Using the blockly events, detect when the contract has changed and fire a halogen message.
@@ -233,12 +291,17 @@ _eventsWhileDragging = prop (Proxy :: _ "eventsWhileDragging")
 -- | believe that the contract has changed. But if we ask Blockly to generate the contract at that point,
 -- | the result will include the block we just detached. So we need to accumulate the events fired during
 -- | drag-n-drop and analyze them once we drop it.
-detectCodeChanges ::
-  forall m state action slots message.
-  MonadAff m =>
-  message ->
-  BlocklyEvent ->
-  HalogenM { eventsWhileDragging :: Maybe (List BlocklyEvent) | state } action slots message m Unit
+detectCodeChanges
+  :: forall m state action slots message
+   . MonadAff m
+  => message
+  -> BlocklyEvent
+  -> HalogenM { eventsWhileDragging :: Maybe (List BlocklyEvent) | state }
+       action
+       slots
+       message
+       m
+       Unit
 detectCodeChanges codeChange event = do
   mDraggingEvents <- use _eventsWhileDragging
   case mDraggingEvents of
@@ -255,7 +318,9 @@ detectCodeChanges codeChange event = do
         assign _eventsWhileDragging (Just (event : eventsWhileDragging))
       else do
         let
-          hasChanged = foldl (\accu ev -> accu || doesEventModifiesContract ev) false eventsWhileDragging
+          hasChanged = foldl (\accu ev -> accu || doesEventModifiesContract ev)
+            false
+            eventsWhileDragging
         when hasChanged $ H.raise codeChange
         assign _eventsWhileDragging Nothing
   where
@@ -274,7 +339,8 @@ detectCodeChanges codeChange event = do
 -- |       for the PR that introduced this code as it's not clear at the moment wether the debounce should be
 -- |       tied to event listeners or if we can do it with plain Aff's
 waitForEvents :: Workspace -> Int -> Aff Unit
-waitForEvents workspace time = liftEffect (Ref.new Nothing) >>= waitForEventsAndCleanResources
+waitForEvents workspace time = liftEffect (Ref.new Nothing) >>=
+  waitForEventsAndCleanResources
   where
   -- Make sure that the event listener is removed no matter what
   waitForEventsAndCleanResources :: Ref (Maybe EventListener) -> Aff Unit
@@ -318,13 +384,22 @@ waitForEvents workspace time = liftEffect (Ref.new Nothing) >>= waitForEventsAnd
 
 -- Runs an effectful action temporarily disabling the blockly events, waiting
 -- `time` milliseconds for those events to settle, and then re-subscribe.
-runWithoutEventSubscription ::
-  forall m state action message slots.
-  MonadAff m =>
-  Int ->
-  (BlocklyEvent -> action) ->
-  Effect Unit ->
-  HalogenM { blocklyState :: Maybe BlocklyState, blocklyEventSubscription :: Maybe SubscriptionId | state } action slots message m Unit
+runWithoutEventSubscription
+  :: forall m state action message slots
+   . MonadAff m
+  => Int
+  -> (BlocklyEvent -> action)
+  -> Effect Unit
+  -> HalogenM
+       { blocklyState :: Maybe BlocklyState
+       , blocklyEventSubscription :: Maybe SubscriptionId
+       | state
+       }
+       action
+       slots
+       message
+       m
+       Unit
 runWithoutEventSubscription time toAction doEffect = do
   let
     _blocklyEventSubscription = prop (Proxy :: _ "blocklyEventSubscription")

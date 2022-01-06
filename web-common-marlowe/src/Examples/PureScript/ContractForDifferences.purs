@@ -11,9 +11,23 @@ import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested ((/\))
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Observation(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Observation(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), Token(..), ValueId(..))
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Party(..)
+  , Token(..)
+  , ValueId(..)
+  )
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract }
@@ -70,7 +84,8 @@ initialDeposit by deposit timeout timeoutContinuation continuation =
 
 oracleInput :: ChoiceId -> Timeout -> Contract -> Contract -> Contract
 oracleInput choiceId timeout timeoutContinuation continuation =
-  When [ Case (Choice choiceId [ Bound zero (fromInt 1000000000) ]) continuation ]
+  When
+    [ Case (Choice choiceId [ Bound zero (fromInt 1000000000) ]) continuation ]
     timeout
     timeoutContinuation
 
@@ -84,26 +99,32 @@ gtLtEq value1 value2 gtContinuation ltContinuation eqContinuation =
         eqContinuation
 
 recordDifference :: ValueId -> ChoiceId -> ChoiceId -> Contract -> Contract
-recordDifference name choiceId1 choiceId2 = Let name (SubValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))
+recordDifference name choiceId1 choiceId2 = Let name
+  (SubValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))
 
 transferUpToDeposit :: Party -> Value -> Party -> Value -> Contract -> Contract
-transferUpToDeposit from payerDeposit to amount = Pay from (Account to) ada (Cond (ValueLT amount payerDeposit) amount payerDeposit)
+transferUpToDeposit from payerDeposit to amount = Pay from (Account to) ada
+  (Cond (ValueLT amount payerDeposit) amount payerDeposit)
 
 extendedContract :: Contract
 extendedContract =
   initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
-    $ initialDeposit counterparty counterpartyDeposit (SlotParam "Counterparty deposit deadline") Close
+    $ initialDeposit counterparty counterpartyDeposit
+        (SlotParam "Counterparty deposit deadline")
+        Close
     $ wait (SlotParam "First window beginning")
     $ oracleInput priceBeginning (SlotParam "First window deadline") Close
     $ wait (SlotParam "Second window beginning")
     $ oracleInput priceEnd (SlotParam "Second window deadline") Close
     $ gtLtEq (ChoiceValue priceBeginning) (ChoiceValue priceEnd)
         ( recordDifference decreaseInPrice priceBeginning priceEnd
-            $ transferUpToDeposit counterparty counterpartyDeposit party (UseValue decreaseInPrice)
+            $ transferUpToDeposit counterparty counterpartyDeposit party
+                (UseValue decreaseInPrice)
                 Close
         )
         ( recordDifference increaseInPrice priceEnd priceBeginning
-            $ transferUpToDeposit party partyDeposit counterparty (UseValue increaseInPrice)
+            $ transferUpToDeposit party partyDeposit counterparty
+                (UseValue increaseInPrice)
                 Close
         )
         Close

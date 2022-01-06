@@ -24,24 +24,24 @@
 {-# OPTIONS_GHC -fno-specialise #-}
 
 module Language.Marlowe.Scripts where
-import           Data.Default                     (Default (def))
-import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsTypes  hiding (Contract)
-import           Ledger
-import           Ledger.Ada                       (adaSymbol)
-import           Ledger.Constraints
-import           Ledger.Constraints.OnChain
-import           Ledger.Constraints.TxConstraints
-import qualified Ledger.Interval                  as Interval
-import qualified Ledger.TimeSlot                  as TimeSlot
-import qualified Ledger.Typed.Scripts             as Scripts
-import qualified Ledger.Value                     as Val
-import           Plutus.Contract.StateMachine     (StateMachine (..), Void)
-import qualified Plutus.Contract.StateMachine     as SM
+import Data.Default (Default (def))
+import Language.Marlowe.Semantics
+import Language.Marlowe.SemanticsTypes hiding (Contract)
+import Ledger
+import Ledger.Ada (adaSymbol)
+import Ledger.Constraints
+import Ledger.Constraints.OnChain
+import Ledger.Constraints.TxConstraints
+import qualified Ledger.Interval as Interval
+import qualified Ledger.TimeSlot as TimeSlot
+import qualified Ledger.Typed.Scripts as Scripts
+import qualified Ledger.Value as Val
+import Plutus.Contract.StateMachine (StateMachine (..), Void)
+import qualified Plutus.Contract.StateMachine as SM
 import qualified PlutusTx
-import qualified PlutusTx.AssocMap                as AssocMap
-import           PlutusTx.Prelude
-import           Unsafe.Coerce
+import qualified PlutusTx.AssocMap as AssocMap
+import PlutusTx.Prelude
+import Unsafe.Coerce
 
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])

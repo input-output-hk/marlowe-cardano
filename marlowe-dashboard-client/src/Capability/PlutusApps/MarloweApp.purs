@@ -18,8 +18,18 @@ import AppM (AppM)
 import Bridge (toBack)
 import Capability.Contract (class ManageContract)
 import Capability.Contract (invokeEndpoint) as Contract
-import Capability.PlutusApps.MarloweApp.Lenses (_applyInputs, _create, _marloweAppEndpointMutex, _redeem, _requests)
-import Capability.PlutusApps.MarloweApp.Types (EndpointMutex, LastResult(..), MarloweAppEndpointMutexEnv)
+import Capability.PlutusApps.MarloweApp.Lenses
+  ( _applyInputs
+  , _create
+  , _marloweAppEndpointMutex
+  , _redeem
+  , _requests
+  )
+import Capability.PlutusApps.MarloweApp.Types
+  ( EndpointMutex
+  , LastResult(..)
+  , MarloweAppEndpointMutexEnv
+  )
 import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
@@ -38,7 +48,14 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Contract, MarloweParams, SlotInterval(..), TokenName, TransactionInput(..), PubKeyHash)
+import Marlowe.Semantics
+  ( Contract
+  , MarloweParams
+  , SlotInterval(..)
+  , TokenName
+  , TransactionInput(..)
+  , PubKeyHash
+  )
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.V1.Ledger.Crypto (PubKeyHash) as Back
 import Plutus.V1.Ledger.Slot (Slot) as Back
@@ -49,11 +66,21 @@ import Types (AjaxResponse)
 import Wallet.Types (_EndpointDescription)
 
 class MarloweApp m where
-  createContract :: PlutusAppId -> Map TokenName PubKeyHash -> Contract -> m (AjaxResponse Unit)
-  applyInputs :: PlutusAppId -> MarloweParams -> TransactionInput -> m (AjaxResponse Unit)
+  createContract
+    :: PlutusAppId
+    -> Map TokenName PubKeyHash
+    -> Contract
+    -> m (AjaxResponse Unit)
+  applyInputs
+    :: PlutusAppId -> MarloweParams -> TransactionInput -> m (AjaxResponse Unit)
   -- TODO auto
   -- TODO close
-  redeem :: PlutusAppId -> MarloweParams -> TokenName -> PubKeyHash -> m (AjaxResponse Unit)
+  redeem
+    :: PlutusAppId
+    -> MarloweParams
+    -> TokenName
+    -> PubKeyHash
+    -> m (AjaxResponse Unit)
 
 instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
@@ -64,7 +91,10 @@ instance marloweAppM :: MarloweApp AppM where
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
     invokeMutexedEndpoint plutusAppId reqId "create" _create payload
-  applyInputs plutusAppId marloweContractId (TransactionInput { interval: SlotInterval slotStart slotEnd, inputs }) = do
+  applyInputs
+    plutusAppId
+    marloweContractId
+    (TransactionInput { interval: SlotInterval slotStart slotEnd, inputs }) = do
     reqId <- liftEffect genUUID
     let
       backSlotInterval :: Back.Slot /\ Back.Slot
@@ -100,18 +130,18 @@ createEndpointMutex = do
 maxRequests :: Int
 maxRequests = 15
 
-invokeMutexedEndpoint ::
-  forall payload m env.
-  EncodeJson payload =>
-  MonadAff m =>
-  ManageContract m =>
-  MonadAsk (MarloweAppEndpointMutexEnv env) m =>
-  PlutusAppId ->
-  UUID ->
-  String ->
-  Lens' EndpointMutex (AVar Unit) ->
-  payload ->
-  m (AjaxResponse Unit)
+invokeMutexedEndpoint
+  :: forall payload m env
+   . EncodeJson payload
+  => MonadAff m
+  => ManageContract m
+  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => PlutusAppId
+  -> UUID
+  -> String
+  -> Lens' EndpointMutex (AVar Unit)
+  -> payload
+  -> m (AjaxResponse Unit)
 invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
   -- There are three mutex involved in this operation:
   --   * The endpointMutex help us avoid making multiple requests to the same endpoint if its not
@@ -146,12 +176,12 @@ invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
 -- The return type is a Maybe of the same input, if the value is Nothing, then we couldn't
 -- find a request that triggered this response. This can happen for example when reloading
 -- the webpage, or if we have two browsers with the same wallet.
-onNewObservableState ::
-  forall env m.
-  MonadAff m =>
-  MonadAsk (MarloweAppEndpointMutexEnv env) m =>
-  LastResult ->
-  m (Maybe LastResult)
+onNewObservableState
+  :: forall env m
+   . MonadAff m
+  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => LastResult
+  -> m (Maybe LastResult)
 onNewObservableState lastResult = case lastResult of
   OK reqId _ -> onNewObservableState' reqId
   SomeError reqId _ _ -> onNewObservableState' reqId
@@ -166,16 +196,17 @@ onNewObservableState lastResult = case lastResult of
       pure lastResult
 
 findReqId :: UUID -> Array (UUID /\ AVar LastResult) -> Maybe (AVar LastResult)
-findReqId reqId = findMap (\(reqId' /\ reqMutex) -> if reqId == reqId' then Just reqMutex else Nothing)
+findReqId reqId = findMap
+  (\(reqId' /\ reqMutex) -> if reqId == reqId' then Just reqMutex else Nothing)
 
 -- TODO: This function is not used yet, but is intended to be used to be able to do the refactor
 --       mentioned in MainFrame.State :: NewObservableState
-waitForResponse ::
-  forall env m.
-  MonadAff m =>
-  MonadAsk (MarloweAppEndpointMutexEnv env) m =>
-  UUID ->
-  m (Maybe LastResult)
+waitForResponse
+  :: forall env m
+   . MonadAff m
+  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => UUID
+  -> m (Maybe LastResult)
 waitForResponse reqId = do
   requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
   -- This read is blocking but does not take the mutex.
@@ -188,12 +219,12 @@ waitForResponse reqId = do
 -- Plutus contracts have endpoints that can be available or not. We get notified by the
 -- websocket message NewActiveEndpoints when the status change, and we use this function
 -- to update some mutex we use to restrict access to unavailable methods.
-onNewActiveEndpoints ::
-  forall env m.
-  MonadAff m =>
-  MonadAsk (MarloweAppEndpointMutexEnv env) m =>
-  Array ActiveEndpoint ->
-  m Unit
+onNewActiveEndpoints
+  :: forall env m
+   . MonadAff m
+  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => Array ActiveEndpoint
+  -> m Unit
 onNewActiveEndpoints endpoints = do
   let
     endpointsName :: Array String

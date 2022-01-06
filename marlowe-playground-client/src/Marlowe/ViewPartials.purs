@@ -14,40 +14,49 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Semantics (Payee(..), TransactionWarning(..))
 import Pretty (showPrettyToken)
 
-displayWarningList ::
-  forall m action.
-  MonadAff m =>
-  Array TransactionWarning ->
-  ComponentHTML action ChildSlots m
+displayWarningList
+  :: forall m action
+   . MonadAff m
+  => Array TransactionWarning
+  -> ComponentHTML action ChildSlots m
 displayWarningList transactionWarnings =
   ol [ classes [ ClassName "indented-enum" ] ]
     $ mapWithIndex
         (\index warning -> li_ $ displayWarning index warning)
         transactionWarnings
 
-warningHint ::
-  forall m action.
-  MonadAff m =>
-  Int ->
-  String ->
-  ComponentHTML action ChildSlots m
+warningHint
+  :: forall m action
+   . MonadAff m
+  => Int
+  -> String
+  -> ComponentHTML action ChildSlots m
 warningHint index msg =
   hint [ "ml-1", "relative", "-top-1" ] ("warning-" <> show index) Auto
     $ div_
-        [ h4 [ classNames [ "no-margins", "text-lg", "font-semibold", "pb-2", "min-w-max" ] ]
+        [ h4
+            [ classNames
+                [ "no-margins"
+                , "text-lg"
+                , "font-semibold"
+                , "pb-2"
+                , "min-w-max"
+                ]
+            ]
             [ text "Warning" ]
         , text msg
         ]
 
-displayWarning ::
-  forall m action.
-  MonadAff m =>
-  Int ->
-  TransactionWarning ->
-  Array (ComponentHTML action ChildSlots m)
+displayWarning
+  :: forall m action
+   . MonadAff m
+  => Int
+  -> TransactionWarning
+  -> Array (ComponentHTML action ChildSlots m)
 displayWarning index (TransactionNonPositiveDeposit party owner tok amount) =
   [ b_ [ text "Non-positive deposit" ]
-  , warningHint index "A non-positive deposit is when the contract asks a participant to make a deposit of a value which is 0 or lower."
+  , warningHint index
+      "A non-positive deposit is when the contract asks a participant to make a deposit of a value which is 0 or lower."
   , text " - Party "
   , b_ [ text $ show party ]
   , text " is asked to deposit "
@@ -61,7 +70,8 @@ displayWarning index (TransactionNonPositiveDeposit party owner tok amount) =
 
 displayWarning index (TransactionNonPositivePay owner payee tok amount) =
   [ b_ [ text "Non-positive pay" ]
-  , warningHint index "A non-positive pay is when the contract needs to pay a participant a value which is 0 or lower."
+  , warningHint index
+      "A non-positive pay is when the contract needs to pay a participant a value which is 0 or lower."
   , text " - The contract is supposed to make a payment of "
   , b_ [ text $ BigInt.toString amount ]
   , text " units of "
@@ -79,7 +89,8 @@ displayWarning index (TransactionNonPositivePay owner payee tok amount) =
 
 displayWarning index (TransactionPartialPay owner payee tok amount expected) =
   [ b_ [ text "Partial pay" ]
-  , warningHint index "A partial pay is when the contract needs to pay a participant a value grater than the funds available in the origin account."
+  , warningHint index
+      "A partial pay is when the contract needs to pay a participant a value grater than the funds available in the origin account."
   , text " - The contract is supposed to make a payment of "
   , b_ [ text $ BigInt.toString expected ]
   , text " units of "
@@ -99,7 +110,8 @@ displayWarning index (TransactionPartialPay owner payee tok amount expected) =
 
 displayWarning index (TransactionShadowing valId oldVal newVal) =
   [ b_ [ text "Shadowing" ]
-  , warningHint index "Shadowing is when a value is re-assigned to the same identifier, which means that we lose the reference to the previous value."
+  , warningHint index
+      "Shadowing is when a value is re-assigned to the same identifier, which means that we lose the reference to the previous value."
   , text " - The contract defined the value with id "
   , b_ [ text (show valId) ]
   , text " before, it was assigned the value "

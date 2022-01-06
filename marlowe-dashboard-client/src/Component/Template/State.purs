@@ -13,8 +13,27 @@ import Component.InputField.State (dummyState, handleAction, mkInitialState) as 
 import Component.InputField.State (formatBigIntValue, getBigIntValue, validate)
 import Component.InputField.Types (Action(..), State) as InputField
 import Component.InputField.Types (class InputFieldError)
-import Component.Template.Lenses (_contractNicknameInput, _contractSetupStage, _contractTemplate, _roleWalletInput, _roleWalletInputs, _slotContentInput, _slotContentInputs, _valueContentInput, _valueContentInputs)
-import Component.Template.Types (Action(..), ContractNicknameError(..), ContractSetupStage(..), Input, RoleError(..), SlotError(..), State, ValueError(..))
+import Component.Template.Lenses
+  ( _contractNicknameInput
+  , _contractSetupStage
+  , _contractTemplate
+  , _roleWalletInput
+  , _roleWalletInputs
+  , _slotContentInput
+  , _slotContentInputs
+  , _valueContentInput
+  , _valueContentInputs
+  )
+import Component.Template.Types
+  ( Action(..)
+  , ContractNicknameError(..)
+  , ContractSetupStage(..)
+  , Input
+  , RoleError(..)
+  , SlotError(..)
+  , State
+  , ValueError(..)
+  )
 import Control.Monad.Reader (class MonadAsk)
 import Data.Array (mapMaybe) as Array
 import Data.BigInt.Argonaut (BigInt)
@@ -38,11 +57,25 @@ import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (Contract) as Extended
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
-import Marlowe.Extended.Metadata (MetaData, NumberFormat(..), _extendedContract, _metaData, _valueParameterFormat, _valueParameterInfo)
+import Marlowe.Extended.Metadata
+  ( MetaData
+  , NumberFormat(..)
+  , _extendedContract
+  , _metaData
+  , _valueParameterFormat
+  , _valueParameterInfo
+  )
 import Marlowe.HasParties (getParties)
 import Marlowe.Semantics (Contract) as Semantic
 import Marlowe.Semantics (Party(..), Slot, TokenName)
-import Marlowe.Template (TemplateContent(..), _slotContent, _valueContent, fillTemplate, getPlaceholderIds, initializeTemplateContent)
+import Marlowe.Template
+  ( TemplateContent(..)
+  , _slotContent
+  , _valueContent
+  , fillTemplate
+  , getPlaceholderIds
+  , initializeTemplateContent
+  )
 import Web.HTML.HTMLElement (focus)
 
 -- see note [dummyState] in MainFrame.State
@@ -61,11 +94,13 @@ initialState =
 
 -- Some actions are handled in `Dashboard.State` because they involve
 -- modifications of that state. See Note [State] in MainFrame.State.
-handleAction ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  Input -> Action -> HalogenM State Action ChildSlots Msg m Unit
+handleAction
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => Input
+  -> Action
+  -> HalogenM State Action ChildSlots Msg m Unit
 handleAction _ (SetContractSetupStage contractSetupStage) = do
   assign _contractSetupStage contractSetupStage
   when (contractSetupStage == Setup) do
@@ -74,7 +109,8 @@ handleAction _ (SetContractSetupStage contractSetupStage) = do
 
 handleAction input (SetTemplate contractTemplate) = do
   let
-    templateContent = initializeTemplateContent $ getPlaceholderIds contractTemplate.extendedContract
+    templateContent = initializeTemplateContent $ getPlaceholderIds
+      contractTemplate.extendedContract
 
     slotContent = view _slotContent templateContent
 
@@ -82,45 +118,55 @@ handleAction input (SetTemplate contractTemplate) = do
 
     roleWalletInputs = mkRoleWalletInputs contractTemplate.extendedContract
 
-    slotContentInputs = mkSlotContentInputs contractTemplate.metaData slotContent
+    slotContentInputs = mkSlotContentInputs contractTemplate.metaData
+      slotContent
 
-    valueContentInputs = mkValueContentInputs contractTemplate.metaData valueContent
+    valueContentInputs = mkValueContentInputs contractTemplate.metaData
+      valueContent
   modify_
     $ set _contractSetupStage Overview
-    <<< set _contractTemplate contractTemplate
-    <<< set _roleWalletInputs roleWalletInputs
-    <<< set _slotContentInputs slotContentInputs
-    <<< set _valueContentInputs valueContentInputs
+        <<< set _contractTemplate contractTemplate
+        <<< set _roleWalletInputs roleWalletInputs
+        <<< set _slotContentInputs slotContentInputs
+        <<< set _valueContentInputs valueContentInputs
   handleAction input $ ContractNicknameInputAction $ InputField.Reset
-  handleAction input $ ContractNicknameInputAction $ InputField.SetValidator contractNicknameError
+  handleAction input $ ContractNicknameInputAction $ InputField.SetValidator
+    contractNicknameError
   handleAction input UpdateRoleWalletValidators
-  setInputValidators input _valueContentInputs ValueContentInputAction valueError
+  setInputValidators input _valueContentInputs ValueContentInputAction
+    valueError
   setInputValidators input _slotContentInputs SlotContentInputAction slotError
 
 handleAction _ (OpenCreateWalletCard _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
-handleAction _ (ContractNicknameInputAction inputFieldAction) = toContractNicknameInput $ InputField.handleAction inputFieldAction
+handleAction _ (ContractNicknameInputAction inputFieldAction) =
+  toContractNicknameInput $ InputField.handleAction inputFieldAction
 
-handleAction input@{ walletLibrary } UpdateRoleWalletValidators = setInputValidators input _roleWalletInputs RoleWalletInputAction $ roleError walletLibrary
+handleAction input@{ walletLibrary } UpdateRoleWalletValidators =
+  setInputValidators input _roleWalletInputs RoleWalletInputAction $ roleError
+    walletLibrary
 
-handleAction _ (RoleWalletInputAction tokenName inputFieldAction) = toRoleWalletInput tokenName $ InputField.handleAction inputFieldAction
+handleAction _ (RoleWalletInputAction tokenName inputFieldAction) =
+  toRoleWalletInput tokenName $ InputField.handleAction inputFieldAction
 
-handleAction _ (SlotContentInputAction key inputFieldAction) = toSlotContentInput key $ InputField.handleAction inputFieldAction
+handleAction _ (SlotContentInputAction key inputFieldAction) =
+  toSlotContentInput key $ InputField.handleAction inputFieldAction
 
-handleAction _ (ValueContentInputAction key inputFieldAction) = toValueContentInput key $ InputField.handleAction inputFieldAction
+handleAction _ (ValueContentInputAction key inputFieldAction) =
+  toValueContentInput key $ InputField.handleAction inputFieldAction
 
 handleAction _ StartContract = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
-setInputValidators ::
-  forall e m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  InputFieldError e =>
-  Input ->
-  Lens' State (Map String (InputField.State e)) ->
-  (String -> (InputField.Action e -> Action)) ->
-  (String -> Maybe e) ->
-  HalogenM State Action ChildSlots Msg m Unit
+setInputValidators
+  :: forall e m
+   . MonadAff m
+  => MonadAsk Env m
+  => InputFieldError e
+  => Input
+  -> Lens' State (Map String (InputField.State e))
+  -> (String -> (InputField.Action e -> Action))
+  -> (String -> Maybe e)
+  -> HalogenM State Action ChildSlots Msg m Unit
 setInputValidators input lens action validator = do
   inputFields <- use lens
   let
@@ -130,15 +176,19 @@ setInputValidators input lens action validator = do
         handleAction input $ action key $ InputField.SetValidator validator
 
 ------------------------------------------------------------
-mkRoleWalletInputs :: Extended.Contract -> Map TokenName (InputField.State RoleError)
-mkRoleWalletInputs contract = Map.fromFoldable $ Array.mapMaybe getRoleInput (Set.toUnfoldable $ getParties contract)
+mkRoleWalletInputs
+  :: Extended.Contract -> Map TokenName (InputField.State RoleError)
+mkRoleWalletInputs contract = Map.fromFoldable $ Array.mapMaybe getRoleInput
+  (Set.toUnfoldable $ getParties contract)
   where
   getRoleInput :: Party -> Maybe (Tuple TokenName (InputField.State RoleError))
   getRoleInput (PK _) = Nothing
 
-  getRoleInput (Role tokenName) = Just (Tuple tokenName $ InputField.mkInitialState Nothing)
+  getRoleInput (Role tokenName) = Just
+    (Tuple tokenName $ InputField.mkInitialState Nothing)
 
-mkSlotContentInputs :: MetaData -> Map String BigInt -> Map String (InputField.State SlotError)
+mkSlotContentInputs
+  :: MetaData -> Map String BigInt -> Map String (InputField.State SlotError)
 mkSlotContentInputs metaData slotContent =
   let
     defaultSlotContent = case metaData.contractType of
@@ -154,17 +204,24 @@ mkSlotContentInputs metaData slotContent =
         inputFieldInitialState = InputField.mkInitialState $ Just DefaultFormat
       in
         case Map.lookup key defaultSlotContent of
-          Just value -> Just $ set _value (formatBigIntValue TimeFormat value) inputFieldInitialState
+          Just value -> Just $ set _value (formatBigIntValue TimeFormat value)
+            inputFieldInitialState
           Nothing -> Just inputFieldInitialState
   in
     Map.mapMaybeWithKey mkSlotContentInput slotContent
 
-mkValueContentInputs :: MetaData -> Map String BigInt -> Map String (InputField.State ValueError)
-mkValueContentInputs metaData valueContent = Map.mapMaybeWithKey valueToInput valueContent
+mkValueContentInputs
+  :: MetaData -> Map String BigInt -> Map String (InputField.State ValueError)
+mkValueContentInputs metaData valueContent = Map.mapMaybeWithKey valueToInput
+  valueContent
   where
-  valueToInput key _ = case OMap.lookup key $ map (view _valueParameterFormat) (view _valueParameterInfo metaData) of
-    Just numberFormat -> Just $ InputField.mkInitialState $ Just numberFormat
-    _ -> Just $ InputField.mkInitialState Nothing
+  valueToInput key _ =
+    case
+      OMap.lookup key $ map (view _valueParameterFormat)
+        (view _valueParameterInfo metaData)
+      of
+      Just numberFormat -> Just $ InputField.mkInitialState $ Just numberFormat
+      _ -> Just $ InputField.mkInitialState Nothing
 
 instantiateExtendedContract :: Slot -> State -> Maybe Semantic.Contract
 instantiateExtendedContract currentSlot state =
@@ -175,15 +232,20 @@ instantiateExtendedContract currentSlot state =
 
     valueContentInputs = view _valueContentInputs state
 
-    slotContent = map (getBigIntValue TimeFormat <<< view _value) slotContentInputs
+    slotContent = map (getBigIntValue TimeFormat <<< view _value)
+      slotContentInputs
 
-    valueParameterFormats = map (view _valueParameterFormat) (view (_contractTemplate <<< _metaData <<< _valueParameterInfo) state)
+    valueParameterFormats = map (view _valueParameterFormat)
+      (view (_contractTemplate <<< _metaData <<< _valueParameterInfo) state)
 
-    getBigIntValueWithDecimals key valueContentInput = case OMap.lookup key valueParameterFormats of
-      Just numberFormat -> Just $ getBigIntValue numberFormat $ view _value valueContentInput
-      _ -> Just $ getBigIntValue DefaultFormat $ view _value valueContentInput
+    getBigIntValueWithDecimals key valueContentInput =
+      case OMap.lookup key valueParameterFormats of
+        Just numberFormat -> Just $ getBigIntValue numberFormat $ view _value
+          valueContentInput
+        _ -> Just $ getBigIntValue DefaultFormat $ view _value valueContentInput
 
-    valueContent = Map.mapMaybeWithKey getBigIntValueWithDecimals valueContentInputs
+    valueContent = Map.mapMaybeWithKey getBigIntValueWithDecimals
+      valueContentInputs
 
     templateContent = TemplateContent { slotContent, valueContent }
 
@@ -194,36 +256,57 @@ instantiateExtendedContract currentSlot state =
     toCore absoluteFilledContract
 
 ------------------------------------------------------------
-toContractNicknameInput ::
-  forall m msg slots.
-  Functor m =>
-  HalogenM (InputField.State ContractNicknameError) (InputField.Action ContractNicknameError) slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
-toContractNicknameInput = mapSubmodule _contractNicknameInput ContractNicknameInputAction
+toContractNicknameInput
+  :: forall m msg slots
+   . Functor m
+  => HalogenM (InputField.State ContractNicknameError)
+       (InputField.Action ContractNicknameError)
+       slots
+       msg
+       m
+       Unit
+  -> HalogenM State Action slots msg m Unit
+toContractNicknameInput = mapSubmodule _contractNicknameInput
+  ContractNicknameInputAction
 
-toRoleWalletInput ::
-  forall m msg slots.
-  Functor m =>
-  TokenName ->
-  HalogenM (InputField.State RoleError) (InputField.Action RoleError) slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
-toRoleWalletInput tokenName = mapMaybeSubmodule (_roleWalletInput tokenName) (RoleWalletInputAction tokenName) InputField.dummyState
+toRoleWalletInput
+  :: forall m msg slots
+   . Functor m
+  => TokenName
+  -> HalogenM (InputField.State RoleError) (InputField.Action RoleError) slots
+       msg
+       m
+       Unit
+  -> HalogenM State Action slots msg m Unit
+toRoleWalletInput tokenName = mapMaybeSubmodule (_roleWalletInput tokenName)
+  (RoleWalletInputAction tokenName)
+  InputField.dummyState
 
-toSlotContentInput ::
-  forall m msg slots.
-  Functor m =>
-  String ->
-  HalogenM (InputField.State SlotError) (InputField.Action SlotError) slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
-toSlotContentInput key = mapMaybeSubmodule (_slotContentInput key) (SlotContentInputAction key) InputField.dummyState
+toSlotContentInput
+  :: forall m msg slots
+   . Functor m
+  => String
+  -> HalogenM (InputField.State SlotError) (InputField.Action SlotError) slots
+       msg
+       m
+       Unit
+  -> HalogenM State Action slots msg m Unit
+toSlotContentInput key = mapMaybeSubmodule (_slotContentInput key)
+  (SlotContentInputAction key)
+  InputField.dummyState
 
-toValueContentInput ::
-  forall m msg slots.
-  Functor m =>
-  String ->
-  HalogenM (InputField.State ValueError) (InputField.Action ValueError) slots msg m Unit ->
-  HalogenM State Action slots msg m Unit
-toValueContentInput key = mapMaybeSubmodule (_valueContentInput key) (ValueContentInputAction key) InputField.dummyState
+toValueContentInput
+  :: forall m msg slots
+   . Functor m
+  => String
+  -> HalogenM (InputField.State ValueError) (InputField.Action ValueError) slots
+       msg
+       m
+       Unit
+  -> HalogenM State Action slots msg m Unit
+toValueContentInput key = mapMaybeSubmodule (_valueContentInput key)
+  (ValueContentInputAction key)
+  InputField.dummyState
 
 ------------------------------------------------------------
 contractNicknameError :: String -> Maybe ContractNicknameError

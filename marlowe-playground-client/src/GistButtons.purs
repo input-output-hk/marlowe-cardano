@@ -30,8 +30,14 @@ authButton intendedAction state =
         div_
           [ modalHeader "Login with github" (Just CloseModal)
           , div [ classes [ modalContent, ClassName "auth-button-container" ] ]
-              [ p_ [ text "We use gists to save your projects, in order to save and load your projects you will need to login to Github." ]
-              , p_ [ text "If you don't wish to login you can still use the Marlowe Playground however you won't be able to save your work." ]
+              [ p_
+                  [ text
+                      "We use gists to save your projects, in order to save and load your projects you will need to login to Github."
+                  ]
+              , p_
+                  [ text
+                      "If you don't wish to login you can still use the Marlowe Playground however you won't be able to save your work."
+                  ]
               , div_
                   [ a
                       [ idPublishGist

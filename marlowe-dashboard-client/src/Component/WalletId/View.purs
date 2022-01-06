@@ -26,13 +26,15 @@ defaultInput =
 render :: forall w. Input -> HH.HTML w PlutusAppId
 render { inputId, label, value } =
   let
-    inputInput = Input.defaultInput { id = inputId, value = UUID.toString $ unwrap value }
+    inputInput = Input.defaultInput
+      { id = inputId, value = UUID.toString $ unwrap value }
   in
     Input.renderWithChildren inputInput \input ->
       [ Label.render Label.defaultInput { for = inputId, text = label }
       , input
       , HH.button
-          [ classNames [ "cursor-pointer", "h-4", "flex", "items-center", "self-center" ]
+          [ classNames
+              [ "cursor-pointer", "h-4", "flex", "items-center", "self-center" ]
           , onClick_ value
           ]
           [ icon Icon.Copy [ "w-6" ] ]

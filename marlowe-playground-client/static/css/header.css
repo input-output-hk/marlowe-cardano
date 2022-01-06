@@ -54,7 +54,7 @@
   padding-bottom: var(--small-margin);
   padding-right: var(--medium-margin);
   background-color: var(--bg-light);
-  border-bottom: rgba(0,0,0,0.1) solid 1px
+  border-bottom: rgba(0, 0, 0, 0.1) solid 1px;
 }
 
 .global-actions h2 {

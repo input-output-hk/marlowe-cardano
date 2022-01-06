@@ -12,7 +12,9 @@ import Test.Unit (TestSuite, suite, test)
 all :: TestSuite
 all =
   suite "Marlowe.Holes.Timeout" do
-    test "Term and Semantic contract has the same timeouts" $ contractQuickCheck (GenerationOptions { withHoles: false, withExtendedConstructs: false }) sameTimeouts
+    test "Term and Semantic contract has the same timeouts" $ contractQuickCheck
+      (GenerationOptions { withHoles: false, withExtendedConstructs: false })
+      sameTimeouts
 
 sameTimeouts :: GenWithHoles Result
 sameTimeouts = do

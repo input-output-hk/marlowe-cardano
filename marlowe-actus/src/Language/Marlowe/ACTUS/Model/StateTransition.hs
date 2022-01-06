@@ -7,18 +7,17 @@ module Language.Marlowe.ACTUS.Model.StateTransition
   )
 where
 
-import           Control.Monad.Reader                             (Reader, reader)
-import           Data.Maybe                                       (fromMaybe, maybeToList)
-import           Data.Time.LocalTime                              (LocalTime)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..), RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractState      (ContractStatePoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), FEB (..), IPCB (..),
-                                                                   OPTP (..), SCEF (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                (ActusNum (..), ActusOps (..), RoleSignOps (..),
-                                                                   YearFractionOps (_y))
-import           Language.Marlowe.ACTUS.Utility.ANN.Annuity       (annuity)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf', sup')
-import           Prelude                                          hiding (Fractional, Num, (*), (+), (-), (/))
+import Control.Monad.Reader (Reader, reader)
+import Data.Maybe (fromMaybe, maybeToList)
+import Data.Time.LocalTime (LocalTime)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractState (ContractStatePoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), FEB (..), IPCB (..), OPTP (..),
+                                                    SCEF (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
+import Language.Marlowe.ACTUS.Utility.ANN.Annuity (annuity)
+import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf', sup')
+import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
 data CtxSTF a = CtxSTF
   { contractTerms :: ContractTermsPoly a

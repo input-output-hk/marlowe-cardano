@@ -10,35 +10,34 @@ module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server
  )
  where
 
-import           Cardano.Mnemonic                                      (mkSomeMnemonic)
-import           Cardano.Prelude                                       hiding (Handler)
-import qualified Cardano.Wallet.Api.Client                             as WBE.Api
-import           Cardano.Wallet.Api.Types                              (ApiVerificationKeyShelley (..))
-import qualified Cardano.Wallet.Api.Types                              as WBE
-import           Marlowe.Run.Webserver.Wallet.CentralizedTestnet.API   (API)
+import Cardano.Mnemonic (mkSomeMnemonic)
+import Cardano.Prelude hiding (Handler)
+import qualified Cardano.Wallet.Api.Client as WBE.Api
+import Cardano.Wallet.Api.Types (ApiVerificationKeyShelley (..))
+import qualified Cardano.Wallet.Api.Types as WBE
+import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.API (API)
 
-import           Cardano.Wallet.Api                                    (WalletKeys)
-import           Cardano.Wallet.Mock.Types                             (WalletInfo (..))
-import qualified Cardano.Wallet.Primitive.AddressDerivation            as WBE
-import qualified Cardano.Wallet.Primitive.Types                        as WBE
+import Cardano.Wallet.Api (WalletKeys)
+import Cardano.Wallet.Mock.Types (WalletInfo (..))
+import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
+import qualified Cardano.Wallet.Primitive.Types as WBE
 
 
-import           Cardano.Wallet.Primitive.AddressDerivation            (Passphrase (Passphrase))
+import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 
-import           Data.String                                           as S
-import qualified Data.Text                                             as Text
-import           Data.Text.Class                                       (FromText (..))
-import           Ledger                                                (PubKeyHash (..))
-import           Marlowe.Run.Webserver.Types                           (Env)
-import           Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError (..), RestorePostData (..))
-import           Marlowe.Run.Webserver.Wallet.Client                   (callWBE, decodeError)
-import           PlutusTx.Builtins.Internal                            (BuiltinByteString (..))
-import           Servant                                               (ServerT, (:<|>) ((:<|>)), (:>))
-import           Servant.Client                                        (ClientError (FailureResponse), ClientM,
-                                                                        ResponseF (responseBody), client)
-import           Text.Regex                                            (Regex)
-import qualified Text.Regex                                            as Regex
-import qualified Wallet.Emulator.Wallet                                as Pab.Wallet
+import Data.String as S
+import qualified Data.Text as Text
+import Data.Text.Class (FromText (..))
+import Ledger (PubKeyHash (..))
+import Marlowe.Run.Webserver.Types (Env)
+import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError (..), RestorePostData (..))
+import Marlowe.Run.Webserver.Wallet.Client (callWBE, decodeError)
+import PlutusTx.Builtins.Internal (BuiltinByteString (..))
+import Servant (ServerT, (:<|>) ((:<|>)), (:>))
+import Servant.Client (ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
+import Text.Regex (Regex)
+import qualified Text.Regex as Regex
+import qualified Wallet.Emulator.Wallet as Pab.Wallet
 
 handlers ::
     MonadIO m =>
