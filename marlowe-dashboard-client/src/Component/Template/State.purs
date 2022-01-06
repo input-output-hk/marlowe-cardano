@@ -7,12 +7,13 @@ module Component.Template.State
   ) where
 
 import Prologue
-import Component.Contacts.Types (WalletLibrary)
+
+import Component.Contacts.Types (AddressBook)
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (dummyState, handleAction, mkInitialState) as InputField
 import Component.InputField.State (formatBigIntValue, getBigIntValue, validate)
-import Component.InputField.Types (Action(..), State) as InputField
 import Component.InputField.Types (class InputFieldError)
+import Component.InputField.Types (Action(..), State) as InputField
 import Component.Template.Lenses
   ( _contractNicknameInput
   , _contractSetupStage
@@ -142,9 +143,9 @@ handleAction _ (OpenCreateWalletCard _) = pure unit -- handled in Dashboard.Stat
 handleAction _ (ContractNicknameInputAction inputFieldAction) =
   toContractNicknameInput $ InputField.handleAction inputFieldAction
 
-handleAction input@{ walletLibrary } UpdateRoleWalletValidators =
-  setInputValidators input _roleWalletInputs RoleWalletInputAction $ roleError
-    walletLibrary
+handleAction input@{ addressBook } UpdateRoleWalletValidators =
+  setInputValidators input _roleWalletInputs RoleWalletInputAction
+    $ roleError addressBook
 
 handleAction _ (RoleWalletInputAction tokenName inputFieldAction) =
   toRoleWalletInput tokenName $ InputField.handleAction inputFieldAction
@@ -314,11 +315,11 @@ contractNicknameError "" = Just EmptyContractNickname
 
 contractNicknameError _ = Nothing
 
-roleError :: WalletLibrary -> String -> Maybe RoleError
+roleError :: AddressBook -> String -> Maybe RoleError
 roleError _ "" = Just EmptyNickname
 
-roleError walletLibrary walletNickname =
-  if Map.member walletNickname walletLibrary then
+roleError addressBook walletNickname =
+  if Map.member walletNickname addressBook then
     Nothing
   else
     Just NonExistentNickname

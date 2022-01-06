@@ -5,6 +5,7 @@ module Page.Dashboard.State
   ) where
 
 import Prologue
+
 import Bridge (toFront)
 import Capability.Contract (class ManageContract)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
@@ -26,18 +27,17 @@ import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses
-  ( _assets
+  ( _addressBook
+  , _assets
   , _cardSection
-  , _pubKeyHash
   , _walletId
   , _walletInfo
-  , _walletLibrary
   , _walletNickname
   )
 import Component.Contacts.State (defaultWalletDetails, getAda)
 import Component.Contacts.State (handleAction, mkInitialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
-import Component.Contacts.Types (CardSection(..), WalletDetails, WalletLibrary)
+import Component.Contacts.Types (AddressBook, CardSection(..), WalletDetails)
 import Component.InputField.Lenses (_value)
 import Component.InputField.Types (Action(..)) as InputField
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
@@ -116,7 +116,7 @@ import Page.Contract.State
   , mkPlaceholderState
   , updateState
   ) as Contract
-import Page.Contract.Types (Action(..), State(..), StartingState) as Contract
+import Page.Contract.Types (Action(..), StartingState, State(..)) as Contract
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
@@ -156,18 +156,13 @@ When we connect a wallet, it has this initial state. Notable is the walletCompan
 `FirstUpdatePending`. Follow the trail of worflow comments to see what happens next.
 -}
 mkInitialState
-  :: WalletLibrary
+  :: AddressBook
   -> WalletDetails
   -> Map PlutusAppId ContractHistory
   -> Map PlutusAppId String
   -> Slot
   -> State
-mkInitialState
-  walletLibrary
-  walletDetails
-  contracts
-  contractNicknames
-  currentSlot =
+mkInitialState contacts walletDetails contracts contractNicknames currentSlot =
   let
     mkInitialContractState followerAppId contractHistory =
       let
@@ -176,7 +171,7 @@ mkInitialState
         Contract.mkInitialState walletDetails currentSlot nickname
           contractHistory
   in
-    { contactsState: Contacts.mkInitialState walletLibrary
+    { contactsState: Contacts.mkInitialState contacts
     , walletDetails
     , walletCompanionStatus: FirstUpdatePending
     , menuOpen: false
@@ -203,10 +198,10 @@ handleAction
   -> HalogenM State Action ChildSlots Msg m Unit
 {- [Workflow 3][0] Disconnect a wallet -}
 handleAction _ DisconnectWallet = do
-  walletLibrary <- use (_contactsState <<< _walletLibrary)
+  addressBook <- use (_contactsState <<< _addressBook)
   walletDetails <- use _walletDetails
   contracts <- use _contracts
-  callMainFrameAction $ MainFrame.EnterWelcomeState walletLibrary walletDetails
+  callMainFrameAction $ MainFrame.EnterWelcomeState addressBook walletDetails
     contracts
 
 handleAction _ (ContactsAction contactsAction) = case contactsAction of
@@ -469,17 +464,15 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) =
         Just contract -> do
           -- the user enters wallet nicknames for roles; here we convert these into pubKeyHashes
           walletDetails <- use _walletDetails
-          walletLibrary <- use (_contactsState <<< _walletLibrary)
+          addressBook <- use (_contactsState <<< _addressBook)
           roleWalletInputs <- use (_templateState <<< _roleWalletInputs)
           let
             roleWallets = map (view _value) roleWalletInputs
 
             roles = mapMaybe
-              ( \walletNickname -> view (_walletInfo <<< _pubKeyHash) <$> lookup
-                  walletNickname
-                  walletLibrary
-              )
+              (\walletNickname -> lookup walletNickname addressBook)
               roleWallets
+          -- roles = mapMaybe (\walletNickname -> view (_walletInfo <<< _pubKeyHash) <$> lookup walletNickname addressBook) roleWallets
           ajaxCreateContract <- createContract walletDetails roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
@@ -516,8 +509,8 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) =
                     "The request to initialise this contract has been submitted."
                   assign _templateState Template.initialState
     _ -> do
-      walletLibrary <- use (_contactsState <<< _walletLibrary)
-      toTemplate $ Template.handleAction { currentSlot, walletLibrary }
+      addressBook <- use (_contactsState <<< _addressBook)
+      toTemplate $ Template.handleAction { currentSlot, addressBook }
         templateAction
 
 -- This action is a bridge from the Contacts to the Template modules. It is used to create a

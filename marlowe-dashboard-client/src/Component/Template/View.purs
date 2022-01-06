@@ -1,9 +1,8 @@
 module Component.Template.View (contractTemplateCard) where
 
 import Prologue hiding (Either(..), div)
-import Component.Contacts.Lenses (_walletNickname)
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (WalletLibrary)
+import Component.Contacts.Types (AddressBook)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (Icon, icon, icon_)
@@ -33,7 +32,6 @@ import Component.Template.Types
   )
 import Css as Css
 import Data.Lens (view)
-import Data.List (toUnfoldable) as List
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
@@ -89,11 +87,11 @@ import Component.Tooltip.Types (ReferenceId(..))
 contractTemplateCard
   :: forall m
    . MonadAff m
-  => WalletLibrary
+  => AddressBook
   -> Assets
   -> State
   -> ComponentHTML Action ChildSlots m
-contractTemplateCard walletLibrary assets state =
+contractTemplateCard addressBook assets state =
   let
     contractSetupStage = view _contractSetupStage state
 
@@ -115,7 +113,7 @@ contractTemplateCard walletLibrary assets state =
       , case contractSetupStage of
           Start -> contractSelection
           Overview -> contractOverview contractTemplate
-          Setup -> contractSetup walletLibrary state
+          Setup -> contractSetup addressBook state
           Review -> contractReview assets state
       ]
 
@@ -273,10 +271,10 @@ contractOverview contractTemplate =
 contractSetup
   :: forall m
    . MonadAff m
-  => WalletLibrary
+  => AddressBook
   -> State
   -> ComponentHTML Action ChildSlots m
-contractSetup walletLibrary state =
+contractSetup addressBook state =
   let
     metaData = view (_contractTemplate <<< _metaData) state
 
@@ -312,10 +310,11 @@ contractSetup walletLibrary state =
           [ h2
               [ classNames [ "text-lg", "font-semibold", "mb-2" ] ]
               [ text $ contractName <> " setup" ]
-          , ContractNicknameInputAction <$> renderInput
-              contractNicknameInputDisplayOptions
-              contractNicknameInput
-          , roleInputs walletLibrary metaData roleWalletInputs
+          , ContractNicknameInputAction
+              <$> renderInput
+                contractNicknameInputDisplayOptions
+                contractNicknameInput
+          , roleInputs addressBook metaData roleWalletInputs
           , parameterInputs metaData slotContentInputs valueContentInputs
           ]
       , div
@@ -518,11 +517,11 @@ parameter label description value =
 roleInputs
   :: forall m
    . MonadAff m
-  => WalletLibrary
+  => AddressBook
   -> MetaData
   -> Map TokenName (InputField.State RoleError)
   -> ComponentHTML Action ChildSlots m
-roleInputs walletLibrary metaData roleWalletInputs =
+roleInputs addressBook metaData roleWalletInputs =
   templateInputsSection Icon.Roles "Roles"
     [ ul_ $ roleInput <$> Map.toUnfoldable roleWalletInputs ]
   where
@@ -555,8 +554,7 @@ roleInputs walletLibrary metaData roleWalletInputs =
     , placeholder: "Choose any nickname"
     , readOnly: false
     , numberFormat: Nothing
-    , valueOptions: List.toUnfoldable $ Map.values $ view _walletNickname <$>
-        walletLibrary
+    , valueOptions: fst <$> Map.toUnfoldable addressBook
     , after: Nothing
     , before: Nothing
     }

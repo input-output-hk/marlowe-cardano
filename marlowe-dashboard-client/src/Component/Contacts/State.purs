@@ -6,40 +6,34 @@ module Component.Contacts.State
   , getAda
   , walletNicknameError
   , walletIdError
-  , parsePlutusAppId
   ) where
 
 import Prologue
+
 import Capability.MainFrameLoop (callMainFrameAction)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , lookupWalletDetails
-  , lookupWalletInfo
-  )
+import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , insertIntoWalletLibrary
+  , insertIntoAddressBook
   )
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses
-  ( _cardSection
-  , _remoteWalletInfo
-  , _walletIdInput
-  , _walletLibrary
-  , _walletNickname
+  ( _addressBook
+  , _addressInput
+  , _cardSection
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
+  , AddressBook
+  , AddressError(..)
   , CardSection(..)
   , State
-  , WalletId(..)
   , WalletDetails
-  , WalletIdError(..)
+  , WalletId(..)
   , WalletInfo(..)
-  , WalletLibrary
   , WalletNickname
   , WalletNicknameError(..)
   )
@@ -47,17 +41,16 @@ import Component.InputField.Lenses (_pristine, _value)
 import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
 import Control.Monad.Reader (class MonadAsk)
-import Data.Array (any)
 import Data.BigInt.Argonaut (BigInt)
 import Data.CodePoint.Unicode (isAlphaNum)
-import Data.Foldable (for_)
+import Data.Foldable (any)
 import Data.Lens (assign, modifying, set, use)
-import Data.Map (isEmpty, filter, insert, lookup, member)
+import Data.Map (insert, lookup, member)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
 import Data.String (codePointFromChar)
-import Data.String.CodeUnits (toCharArray)
-import Data.UUID.Argonaut (emptyUUID, parseUUID)
+import Data.String.CodeUnits (length, toCharArray)
+import Data.UUID.Argonaut (emptyUUID)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -66,19 +59,22 @@ import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
-import Marlowe.Semantics (Assets, Token(..), CurrencySymbol, TokenName)
-import Network.RemoteData (RemoteData(..), fromEither)
+import Marlowe.Semantics
+  ( Assets
+  , CurrencySymbol
+  , PubKeyHash
+  , Token(..)
+  , TokenName
+  )
 import Page.Dashboard.Types (Action(..)) as Dashboard
-import Toast.Types (errorToast, successToast)
-import Types (NotFoundWebData)
+import Toast.Types (successToast)
 
-mkInitialState :: WalletLibrary -> State
-mkInitialState walletLibrary =
-  { walletLibrary
+mkInitialState :: AddressBook -> State
+mkInitialState addressBook =
+  { addressBook
   , cardSection: Home
   , walletNicknameInput: InputField.mkInitialState Nothing
-  , walletIdInput: InputField.mkInitialState Nothing
-  , remoteWalletInfo: NotAsked
+  , addressInput: InputField.mkInitialState Nothing
   }
 
 defaultWalletDetails :: WalletDetails
@@ -114,38 +110,29 @@ handleAction CloseContactsCard = callMainFrameAction $ MainFrame.DashboardAction
 handleAction (SetCardSection cardSection) = do
   case cardSection of
     NewWallet _ -> do
-      walletLibrary <- use _walletLibrary
-      assign _remoteWalletInfo NotAsked
+      addressBook <- use _addressBook
       handleAction $ WalletNicknameInputAction InputField.Reset
-      handleAction $ WalletNicknameInputAction $ InputField.SetValidator $
-        walletNicknameError walletLibrary
-      handleAction $ WalletIdInputAction InputField.Reset
-      handleAction $ WalletIdInputAction $ InputField.SetValidator $
-        walletIdError NotAsked walletLibrary
+      handleAction
+        $ WalletNicknameInputAction
+        $ InputField.SetValidator
+        $ walletNicknameError addressBook
+      handleAction $ AddressInputAction InputField.Reset
+      handleAction
+        $ AddressInputAction
+        $ InputField.SetValidator
+        $ walletIdError addressBook
     _ -> pure unit
   assign _cardSection cardSection
 
 handleAction (SaveWallet mTokenName) = do
   walletNickname <- use (_walletNicknameInput <<< _value)
-  walletIdString <- use (_walletIdInput <<< _value)
-  remoteWalletInfo <- use _remoteWalletInfo
+  addressAsString <- use (_addressInput <<< _value)
   let
-    mWalletId = parsePlutusAppId walletIdString
-  case remoteWalletInfo, mWalletId of
-    Success walletInfo, Just walletId -> do
-      let
-        -- note the empty properties are fine for saved wallets - these will be fetched if/when
-        -- this wallet is picked up
-        walletDetails =
-          { walletNickname
-          , companionAppId: walletId
-          , marloweAppId: PlutusAppId emptyUUID
-          , walletInfo
-          , assets: mempty
-          , previousCompanionAppState: Nothing
-          }
-      modifying _walletLibrary (insert walletNickname walletDetails)
-      insertIntoWalletLibrary walletDetails
+    mAddress = parseAddress addressAsString
+  case mAddress of
+    Just address -> do
+      modifying _addressBook (insert walletNickname address)
+      insertIntoAddressBook walletNickname address
       addToast $ successToast "Contact added"
       case mTokenName of
         -- if a tokenName was also passed, we are inside a template contract and we need to update role
@@ -158,69 +145,23 @@ handleAction (SaveWallet mTokenName) = do
       modify_
         $ set (_walletNicknameInput <<< _value) ""
             <<< set (_walletNicknameInput <<< _pristine) true
-            <<< set (_walletIdInput <<< _value) ""
-            <<< set (_walletIdInput <<< _pristine) true
+            <<< set (_addressInput <<< _value) ""
+            <<< set (_addressInput <<< _pristine) true
     -- TODO: show error feedback to the user (just to be safe - but this should never happen, because
     -- the button to save a new wallet should be disabled in this case)
-    _, _ -> pure unit
+    _ -> pure unit
 
 handleAction CancelNewContactForRole = pure unit -- handled in Dashboard.State
 
 handleAction (WalletNicknameInputAction inputFieldAction) =
   toWalletNicknameInput $ InputField.handleAction inputFieldAction
 
-handleAction (WalletIdInputAction inputFieldAction) = do
-  case inputFieldAction of
-    InputField.SetValue walletIdString -> do
-      -- note we handle the inputFieldAction _first_ so that the InputField value is set - otherwise the
-      -- validation feedback is wrong while the rest is happening
-      toWalletIdInput $ InputField.handleAction inputFieldAction
-      setRemoteWalletInfo NotAsked
-      -- if this is a valid contract ID ...
-      for_ (parsePlutusAppId walletIdString) \walletId -> do
-        setRemoteWalletInfo Loading
-        -- .. lookup wallet info
-        ajaxWalletInfo <- lookupWalletInfo walletId
-        setRemoteWalletInfo $ fromEither ajaxWalletInfo
-    _ -> toWalletIdInput $ InputField.handleAction inputFieldAction
-
-handleAction (ConnectWallet walletNickname companionAppId) = do
-  ajaxWalletDetails <- lookupWalletDetails companionAppId
-  case ajaxWalletDetails of
-    Right walletDetails -> do
-      let
-        walletDetailsWithNickname = set _walletNickname walletNickname
-          walletDetails
-      walletLibrary <- use _walletLibrary
-      callMainFrameAction $ MainFrame.EnterDashboardState walletLibrary
-        walletDetailsWithNickname
-    _ -> do
-      addToast $ errorToast "Unable to use this wallet." $ Just
-        "Details for this wallet could not be loaded."
+handleAction (AddressInputAction inputFieldAction) = toAddressInput $
+  InputField.handleAction inputFieldAction
 
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
   addToast $ successToast "Copied to clipboard"
-
--- TODO: As part of SCP-2865, we should refactor all InputField to be a proper halogen component instead
---       of a sub-component. Then we could remove the SetValidator logic here that requires this function
---       to have all the capabilities that the component has (because we need to use handleAction)
-setRemoteWalletInfo
-  :: forall m
-   . MonadAff m
-  => MonadAsk Env m
-  => ManageMarlowe m
-  => ManageMarloweStorage m
-  => Toast m
-  => MonadClipboard m
-  => (NotFoundWebData WalletInfo)
-  -> HalogenM State Action ChildSlots Msg m Unit
-setRemoteWalletInfo info = do
-  assign _remoteWalletInfo info
-  walletLibrary <- use _walletLibrary
-  handleAction $ WalletIdInputAction $ InputField.SetValidator $ walletIdError
-    info
-    walletLibrary
 
 ------------------------------------------------------------
 toWalletNicknameInput
@@ -236,16 +177,16 @@ toWalletNicknameInput
 toWalletNicknameInput = mapSubmodule _walletNicknameInput
   WalletNicknameInputAction
 
-toWalletIdInput
+toAddressInput
   :: forall m msg slots
    . Functor m
-  => HalogenM (InputField.State WalletIdError) (InputField.Action WalletIdError)
+  => HalogenM (InputField.State AddressError) (InputField.Action AddressError)
        slots
        msg
        m
        Unit
   -> HalogenM State Action slots msg m Unit
-toWalletIdInput = mapSubmodule _walletIdInput WalletIdInputAction
+toAddressInput = mapSubmodule _addressInput AddressInputAction
 
 ------------------------------------------------------------
 -- The cardano Blockchain has Multi-Asset support, each monetary policy is identified
@@ -270,11 +211,11 @@ getAda assets = fromMaybe zero $ lookup adaTokenName =<< lookup
   (unwrap assets)
 
 walletNicknameError
-  :: WalletLibrary -> WalletNickname -> Maybe WalletNicknameError
+  :: AddressBook -> WalletNickname -> Maybe WalletNicknameError
 walletNicknameError _ "" = Just EmptyWalletNickname
 
-walletNicknameError walletLibrary walletNickname =
-  if member walletNickname walletLibrary then
+walletNicknameError addressBook walletNickname =
+  if member walletNickname addressBook then
     Just DuplicateWalletNickname
   else if
     any (\char -> not $ isAlphaNum $ codePointFromChar char) $ toCharArray
@@ -283,26 +224,19 @@ walletNicknameError walletLibrary walletNickname =
   else
     Nothing
 
-walletIdError
-  :: NotFoundWebData WalletInfo
-  -> WalletLibrary
-  -> String
-  -> Maybe WalletIdError
-walletIdError _ _ "" = Just EmptyWalletId
+walletIdError :: AddressBook -> String -> Maybe AddressError
+walletIdError _ "" = Just EmptyAddress
 
-walletIdError remoteDataWalletInfo walletLibrary walletIdString =
-  case parsePlutusAppId walletIdString of
-    Nothing -> Just InvalidWalletId
-    Just plutusAppId
-      | not $ isEmpty $ filter
-          (\walletDetails -> walletDetails.companionAppId == plutusAppId)
-          walletLibrary -> Just DuplicateWalletId
-    _ -> case remoteDataWalletInfo of
-      Success _ -> Nothing
-      Failure _ -> Just NonexistentWalletId
-      _ -> Just UnconfirmedWalletId
+walletIdError addressBook walletIdString = case parseAddress walletIdString of
+  Nothing -> Just InvalidAddress
+  Just address
+    | any (eq address) addressBook -> Just DuplicateAddress
+  _ -> Nothing
 
-parsePlutusAppId :: String -> Maybe PlutusAppId
-parsePlutusAppId plutusAppIdString = case parseUUID plutusAppIdString of
-  Just uuid -> Just $ PlutusAppId uuid
-  Nothing -> Nothing
+-- TODO: As part of 3145, provide a better way to create an Address from a string.
+parseAddress :: String -> Maybe PubKeyHash
+parseAddress addressAsString =
+  if length addressAsString == 56 then
+    Just addressAsString
+  else
+    Nothing

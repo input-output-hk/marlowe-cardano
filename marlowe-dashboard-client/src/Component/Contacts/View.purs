@@ -4,22 +4,24 @@ module Component.Contacts.View
   ) where
 
 import Prelude hiding (div)
+
 import Clipboard (Action(..)) as Clipboard
+import Component.Address.View as Address
 import Component.Contacts.Lenses
-  ( _cardSection
-  , _companionAppId
-  , _walletIdInput
-  , _walletLibrary
+  ( _addressBook
+  , _addressInput
+  , _cardSection
   , _walletNickname
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
+  , AddressBook
+  , AddressError
   , CardSection(..)
   , State
   , WalletDetails
-  , WalletIdError
-  , WalletLibrary
+  , WalletNickname
   , WalletNicknameError
   )
 import Component.Icons (Icon(..)) as Icon
@@ -28,29 +30,27 @@ import Component.InputField.State (validate)
 import Component.InputField.Types (State) as InputField
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
-import Component.WalletId.View as WalletId
 import Css as Css
 import Data.Lens ((^.))
 import Data.Map (isEmpty, toUnfoldable)
 import Data.Maybe (Maybe(..), isJust)
-import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Data.UUID.Argonaut (toString) as UUID
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, text, ul)
+import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, span_, text, ul)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (disabled)
+import Marlowe.Semantics (PubKeyHash)
 
 contactsCard :: forall p. WalletDetails -> State -> HTML p Action
 contactsCard currentWallet state =
   let
-    walletLibrary = state ^. _walletLibrary
+    addressBook = state ^. _addressBook
 
     cardSection = state ^. _cardSection
 
     walletNicknameInput = state ^. _walletNicknameInput
 
-    walletIdInput = state ^. _walletIdInput
+    addressInput = state ^. _addressInput
   in
     div
       [ classNames
@@ -68,12 +68,11 @@ contactsCard currentWallet state =
         , contactsBreadcrumb cardSection
         ]
           <> case cardSection of
-            Home -> walletLibraryCard walletLibrary
-            ViewWallet walletDetails -> walletDetailsCard currentWallet
-              walletDetails
-            NewWallet mTokenName -> newWalletCard walletNicknameInput
-              walletIdInput
-              mTokenName
+            Home -> addressBookCard addressBook
+            ViewWallet nickname address ->
+              contactDetailsCard currentWallet nickname address
+            NewWallet mTokenName ->
+              newWalletCard walletNicknameInput addressInput mTokenName
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action
 contactsBreadcrumb cardSection =
@@ -89,10 +88,10 @@ contactsBreadcrumb cardSection =
     ]
     case cardSection of
       Home -> [ activeItem "Home" ]
-      ViewWallet walletDetails ->
+      ViewWallet nickname _ ->
         [ previousItem "Home" Home
         , arrow
-        , activeItem $ walletDetails ^. _walletNickname
+        , activeItem nickname
         ]
       NewWallet mTokenName ->
         [ previousItem "Home" Home
@@ -132,16 +131,16 @@ contactsBreadcrumb cardSection =
 
   arrow = span [ classNames [ "mt-2" ] ] [ icon_ Icon.Next ]
 
-walletLibraryCard :: forall p. WalletLibrary -> Array (HTML p Action)
-walletLibraryCard walletLibrary =
-  [ if isEmpty walletLibrary then
-      -- If you're here, the walletLibrary can't be empty, because at least your own wallet will
+addressBookCard :: forall p. AddressBook -> Array (HTML p Action)
+addressBookCard addressBook =
+  [ if isEmpty addressBook then
+      -- If you're here, the addressBook can't be empty, because at least your own wallet will
       -- be in there. But that might change when we have real wallet integration, and it's easy
       -- to forget cases like these, so it seems sensible to code for it in case.
       p [ classNames [ "p-4" ] ] [ text "You do not have any contacts." ]
     else
-      ul [ classNames [ "divide-y", "divide-gray" ] ] $ contactLi <$>
-        toUnfoldable walletLibrary
+      ul [ classNames [ "divide-y", "divide-gray" ] ]
+        $ contactLi <$> toUnfoldable addressBook
   , button
       [ classNames $ Css.primaryButton <> Css.withIcon Icon.NewContact <>
           Css.fixedBottomRight
@@ -150,38 +149,35 @@ walletLibraryCard walletLibrary =
       [ text "New contact" ]
   ]
   where
-  contactLi (nickname /\ walletDetails) =
+  contactLi (nickname /\ address) =
     li
       [ classNames
           [ "px-4", "py-2", "hover:cursor-pointer", "hover:text-purple" ]
-      , onClick_ $ SetCardSection $ ViewWallet walletDetails
+      , onClick_ $ SetCardSection $ ViewWallet nickname address
       ]
       [ text nickname ]
 
-walletDetailsCard
-  :: forall p. WalletDetails -> WalletDetails -> Array (HTML p Action)
-walletDetailsCard currentWallet walletDetails =
+contactDetailsCard
+  :: forall p
+   . WalletDetails
+  -> WalletNickname
+  -> PubKeyHash
+  -> Array (HTML p Action)
+contactDetailsCard currentWallet walletNickname address =
   let
-    walletNickname = walletDetails ^. _walletNickname
-
-    companionAppId = walletDetails ^. _companionAppId
-
     isCurrentWallet = walletNickname == currentWallet ^. _walletNickname
 
-    copyWalletId =
-      ( ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<<
-          unwrap
-      )
+    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
         [ h3
             [ classNames [ "text-lg", "font-semibold" ] ]
             [ text walletNickname ]
-        , copyWalletId
-            <$> WalletId.render
-              WalletId.defaultInput
-                { label = "Demo wallet key"
-                , value = companionAppId
+        , copyAddress
+            <$> Address.render
+              Address.defaultInput
+                { label = "Wallet Address"
+                , value = address
                 }
         , walletIdTip
         ]
@@ -204,18 +200,14 @@ walletDetailsCard currentWallet walletDetails =
               ]
               [ text "Using this wallet" ]
           else
-            button
-              [ classNames $ Css.primaryButton <> [ "flex-1", "text-center" ]
-              , onClick_ $ ConnectWallet walletNickname companionAppId
-              ]
-              [ text "Connect wallet" ]
+            span_ []
         ]
     ]
 
 newWalletCard
   :: forall p
    . InputField.State WalletNicknameError
-  -> InputField.State WalletIdError
+  -> InputField.State AddressError
   -> Maybe String
   -> Array (HTML p Action)
 newWalletCard walletNicknameInput walletIdInput mTokenName =
@@ -235,10 +227,10 @@ newWalletCard walletNicknameInput walletIdInput mTokenName =
                   { for = "newWalletNickname", text = "Wallet nickname" }
       }
 
-    walletIdInputDisplayOptions =
+    addressInputDisplayOptions =
       { additionalCss: mempty
-      , id_: "newWalletId"
-      , placeholder: "Wallet ID"
+      , id_: "newAddress"
+      , placeholder: "Address"
       , readOnly: false
       , numberFormat: Nothing
       , valueOptions: mempty
@@ -247,14 +239,14 @@ newWalletCard walletNicknameInput walletIdInput mTokenName =
           Just
             $ Label.render
                 Label.defaultInput
-                  { for = "newWalletId", text = "Wallet nickname" }
+                  { for = "newAddress", text = "Wallet address" }
       }
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
         [ WalletNicknameInputAction <$> renderInput
             walletNicknameInputDisplayOptions
             walletNicknameInput
-        , WalletIdInputAction <$> renderInput walletIdInputDisplayOptions
+        , AddressInputAction <$> renderInput addressInputDisplayOptions
             walletIdInput
         ]
     , div
@@ -281,5 +273,5 @@ walletIdTip =
   p
     [ classNames [ "text-xs", "font-semibold" ] ]
     [ text
-        "Tip: Copy and share your demo wallet ID with others so they can add you to their contracts"
+        "Tip: Copy and share your address with others so they can add you to their contracts"
     ]

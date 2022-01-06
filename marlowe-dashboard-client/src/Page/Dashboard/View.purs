@@ -4,13 +4,16 @@ module Page.Dashboard.View
   ) where
 
 import Prologue hiding (Either(..), div)
+
 import Clipboard (Action(..)) as Clipboard
+import Component.Address.View (defaultInput, render) as Address
 import Component.ConfirmInput.View as ConfirmInput
 import Component.Contacts.Lenses
-  ( _assets
-  , _companionAppId
+  ( _addressBook
+  , _assets
+  , _pubKeyHash
+  , _walletInfo
   , _walletNickname
-  , _walletLibrary
   )
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.Types (WalletDetails)
@@ -21,16 +24,13 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
-import Component.WalletId.View (defaultInput, render) as WalletId
 import Css as Css
 import Data.Compactable (compact)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
-import Data.Newtype (unwrap)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
-import Data.UUID.Argonaut (toString) as UUID
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
@@ -152,7 +152,7 @@ dashboardCard state = case view _card state of
     let
       cardOpen = state ^. _cardOpen
 
-      walletLibrary = state ^. (_contactsState <<< _walletLibrary)
+      addressBook = state ^. (_contactsState <<< _addressBook)
 
       currentWallet = state ^. _walletDetails
 
@@ -176,7 +176,7 @@ dashboardCard state = case view _card state of
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
-                    (contractTemplateCard walletLibrary assets)
+                    (contractTemplateCard addressBook assets)
                     state
                   ContractActionConfirmationCard contractId input ->
                     mapComponentAction
@@ -668,14 +668,11 @@ currentWalletCard walletDetails =
   let
     walletNickname = view _walletNickname walletDetails
 
-    companionAppId = view _companionAppId walletDetails
+    address = view (_walletInfo <<< _pubKeyHash) walletDetails
 
     assets = view _assets walletDetails
 
-    copyWalletId =
-      ( ClipboardAction <<< Clipboard.CopyToClipboard <<< UUID.toString <<<
-          unwrap
-      )
+    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
   in
     div
       [ classNames
@@ -696,8 +693,10 @@ currentWalletCard walletDetails =
           [ h3
               [ classNames [ "font-semibold", "text-lg" ] ]
               [ text walletNickname ]
-          , copyWalletId <$> WalletId.render WalletId.defaultInput
-              { label = "Wallet ID", value = companionAppId }
+          , copyAddress
+              <$> Address.render
+                Address.defaultInput
+                  { label = "Wallet Address", value = address }
           , div_
               [ h4
                   [ classNames [ "font-semibold" ] ]

@@ -8,7 +8,6 @@ module Capability.Marlowe
   , createContract
   , applyTransactionInput
   , redeem
-  , lookupWalletInfo
   , lookupWalletDetails
   , getRoleContracts
   , getFollowerApps
@@ -19,6 +18,7 @@ module Capability.Marlowe
   ) where
 
 import Prologue
+
 import API.Lenses
   ( _cicContract
   , _cicCurrentState
@@ -32,6 +32,7 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
   )
 import AppM (AppM)
 import Bridge (toBack, toFront)
+import Capability.Contract (class ManageContract)
 import Capability.Contract
   ( activateContract
   , getContractInstanceClientState
@@ -39,7 +40,6 @@ import Capability.Contract
   , getWalletContractInstances
   , invokeEndpoint
   ) as Contract
-import Capability.Contract (class ManageContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
@@ -51,7 +51,7 @@ import Component.Contacts.Lenses
   , _walletId
   , _walletInfo
   )
-import Component.Contacts.Types (WalletDetails, WalletId, WalletInfo)
+import Component.Contacts.Types (WalletDetails, WalletId)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError)
@@ -61,7 +61,7 @@ import Data.Array (find)
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
-import Data.Newtype (unwrap, un)
+import Data.Newtype (un, unwrap)
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Halogen (HalogenM, liftAff)
@@ -116,7 +116,6 @@ class
     -> TransactionInput
     -> m (AjaxResponse Unit)
   redeem :: WalletDetails -> MarloweParams -> TokenName -> m (AjaxResponse Unit)
-  lookupWalletInfo :: PlutusAppId -> m (NotFoundAjaxResponse WalletInfo)
   lookupWalletDetails :: PlutusAppId -> m (NotFoundAjaxResponse WalletDetails)
   getRoleContracts
     :: WalletDetails -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
@@ -251,16 +250,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       pubKeyHash = view (_walletInfo <<< _pubKeyHash) walletDetails
     in
       MarloweApp.redeem marloweAppId marloweParams tokenName pubKeyHash
-  -- get the WalletInfo of a wallet given the PlutusAppId of its WalletCompanion
-  lookupWalletInfo companionAppId =
-    runExceptT do
-      clientState <- withExceptT Just $ ExceptT $
-        Contract.getContractInstanceClientState companionAppId
-      case view _cicDefinition clientState of
-        WalletCompanion -> withExceptT Just $ ExceptT $ Wallet.getWalletInfo
-          $ toFront
-          $ view _cicWallet clientState
-        _ -> except $ Left $ Nothing
   -- get the WalletDetails of a wallet given the PlutusAppId of its WalletCompanion
   -- note: this returns an empty walletNickname (because these are only saved locally)
   lookupWalletDetails companionAppId =
@@ -363,18 +352,16 @@ instance monadMarloweHalogenM ::
     marloweParams
   createPendingFollowerApp = lift <<< createPendingFollowerApp
   followContractWithPendingFollowerApp walletDetails marloweParams followAppId =
-    lift $ followContractWithPendingFollowerApp walletDetails marloweParams
+    lift $ followContractWithPendingFollowerApp
+      walletDetails
+      marloweParams
       followAppId
-  createContract walletDetails roles contract = lift $ createContract
-    walletDetails
-    roles
-    contract
-  applyTransactionInput walletDetails marloweParams transactionInput = lift $
-    applyTransactionInput walletDetails marloweParams transactionInput
-  redeem walletDetails marloweParams tokenName = lift $ redeem walletDetails
-    marloweParams
-    tokenName
-  lookupWalletInfo = lift <<< lookupWalletInfo
+  createContract walletDetails roles contract =
+    lift $ createContract walletDetails roles contract
+  applyTransactionInput walletDetails marloweParams transactionInput =
+    lift $ applyTransactionInput walletDetails marloweParams transactionInput
+  redeem walletDetails marloweParams tokenName =
+    lift $ redeem walletDetails marloweParams tokenName
   lookupWalletDetails = lift <<< lookupWalletDetails
   getRoleContracts = lift <<< getRoleContracts
   getFollowerApps = lift <<< getFollowerApps
