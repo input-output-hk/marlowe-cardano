@@ -74,7 +74,7 @@ let
       name = "marlowe-dashboard-client";
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
-        generated = generated-purescript;
+        generated = ./generated;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })

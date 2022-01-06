@@ -75,7 +75,7 @@ let
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
         web-common-playground = webCommonPlayground;
-        generated = generated-purescript;
+        generated = ./generated;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
