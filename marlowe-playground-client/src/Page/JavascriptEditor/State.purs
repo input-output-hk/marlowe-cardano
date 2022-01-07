@@ -20,7 +20,7 @@ import Data.String (drop, joinWith, length, take)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
-import Store (Env)
+import Env (Env)
 import Examples.JS.Contracts as JSE
 import Halogen (Component, HalogenM, gets, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)

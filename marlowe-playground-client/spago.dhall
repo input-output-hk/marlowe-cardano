@@ -66,7 +66,6 @@ You can edit this file as you like.
   , "tailrec"
   , "transformers"
   , "tuples"
-  , "typelevel-prelude"
   , "unfoldable"
   , "web-common"
   , "web-dom"

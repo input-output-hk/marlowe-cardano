@@ -21,7 +21,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.String (Pattern(..), codePointFromChar, contains)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Store (Env)
+import Env (Env)
 import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen as H

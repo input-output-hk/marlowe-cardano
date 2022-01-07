@@ -8,7 +8,7 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
-import Store (Env)
+import Env (Env)
 import Halogen (HalogenM)
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM

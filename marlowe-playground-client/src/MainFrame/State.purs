@@ -28,7 +28,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
-import Store (Env)
+import Env (Env)
 import Gist (Gist, _GistId, gistDescription, gistId)
 import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists

@@ -21,7 +21,7 @@ import Data.NonEmpty ((:|))
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
-import Store (Env)
+import Env (Env)
 import Halogen (HalogenM, liftEffect)
 import Marlowe as Server
 import Marlowe.Extended (toCore)
