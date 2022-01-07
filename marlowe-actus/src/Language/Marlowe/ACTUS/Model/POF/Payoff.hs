@@ -324,6 +324,25 @@ payoff
     { o_rf_CURS
     }
   ContractTermsPoly
+    { contractType = CLM,
+      dayCountConvention = Just dcc,
+      maturityDate
+    }
+  ContractStatePoly
+    { nt,
+      ipac,
+      ipnr,
+      sd
+    }
+  t =
+    let y_sd_t = _y dcc sd t maturityDate
+     in _POF_IP_CLM o_rf_CURS ipac ipnr nt y_sd_t
+payoff
+  IP
+  RiskFactorsPoly
+    { o_rf_CURS
+    }
+  ContractTermsPoly
     { dayCountConvention = Just dcc,
       maturityDate
     }

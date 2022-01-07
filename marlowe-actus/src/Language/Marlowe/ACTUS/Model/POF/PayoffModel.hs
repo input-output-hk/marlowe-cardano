@@ -97,3 +97,7 @@ _POF_TD_COM cntrl ptd qt = _r cntrl * ptd * qt
 -- Call Money (CLM)
 _POF_IED_CLM :: RoleSignOps a => a -> CR -> a -> a
 _POF_IED_CLM o_rf_curs cntrl nt = _zero - o_rf_curs * _r cntrl * nt
+
+_POF_IP_CLM :: ActusNum a => a -> a -> a -> a -> a -> a
+_POF_IP_CLM o_rf_curs ipac ipnr nt y_sd_t = o_rf_curs * (ipac + y_sd_t * ipnr * nt)
+

@@ -694,3 +694,15 @@ _STF_AD_CSH st@ContractStatePoly {} t =
   st
     { sd = t
     }
+
+-- Call Money (CLM)
+_STF_IP_CLM :: (ActusOps a) => ContractTermsPoly a b -> ContractStatePoly a b -> b -> ContractStatePoly a b
+_STF_IP_CLM
+  ContractTermsPoly {}
+  st@ContractStatePoly {}
+  t
+  =
+    st
+      { ipac = _zero,
+        sd = t
+      }

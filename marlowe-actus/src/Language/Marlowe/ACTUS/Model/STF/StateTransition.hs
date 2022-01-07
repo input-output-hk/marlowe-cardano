@@ -62,6 +62,7 @@ stateTransition ev rf t st@ContractStatePoly{..} = reader stateTransition'
           stf PRD ContractTermsPoly {contractType = NAM, dayCountConvention = Just dcc, maturityDate = md} = _STF_PRD_LAM contractTerms st t (_y dcc sd t md) (_y dcc tfp_minus t md) (_y dcc tfp_minus tfp_plus md)
           stf PRD ContractTermsPoly {contractType = ANN, dayCountConvention = Just dcc, maturityDate = md} = _STF_PRD_LAM contractTerms st t (_y dcc sd t md) (_y dcc tfp_minus t md) (_y dcc tfp_minus tfp_plus md)
           stf TD _ = _STF_TD_PAM st t
+          stf IP ContractTermsPoly {contractType = CLM} = _STF_IP_CLM contractTerms st t
           stf IP ContractTermsPoly {dayCountConvention = Just dcc, maturityDate = md} = _STF_IP_PAM contractTerms st t (_y dcc sd t md)
           stf IPCI ContractTermsPoly {contractType = PAM, dayCountConvention = Just dcc, maturityDate = md} = _STF_IPCI_PAM contractTerms st t (_y dcc sd t md)
           stf IPCI ContractTermsPoly {contractType = LAM, dayCountConvention = Just dcc, maturityDate = md} = _STF_IPCI_LAM contractTerms st t (_y dcc sd t md)
