@@ -2,7 +2,7 @@
 let
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
 
-  pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
+  pab-setup-invoker = haskell.packages.plutus-pab-executables.components.exes.plutus-pab-setup;
 
   marlowe-run-backend-invoker = haskell.packages.marlowe-dashboard-server.components.exes.marlowe-dashboard-server;
 

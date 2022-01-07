@@ -14,7 +14,7 @@ build-type: Simple
 
 source-repository head
     type: git
-    location: https://github.com/input-output-hk/plutus
+    location: https://github.com/input-output-hk/plutus-apps
 
 flag defer-plugin-errors
     description:
@@ -28,6 +28,7 @@ common lang
                         DeriveGeneric StandaloneDeriving DeriveLift
                         GeneralizedNewtypeDeriving DeriveFunctor DeriveFoldable
                         DeriveTraversable MultiParamTypeClasses
+                        ImportQualifiedPost
     ghc-options: -Wall -Wnoncanonical-monad-instances
                  -Wincomplete-uni-patterns -Wincomplete-record-updates
                  -Wredundant-constraints -Widentities
@@ -62,6 +63,7 @@ executable doc-doctests
       cardano-api -any,
       flat -any,
       plutus-core -any,
+      plutus-chain-index-core -any,
       plutus-tx -any,
       plutus-ledger -any,
       plutus-ledger-api -any,
@@ -78,7 +80,7 @@ executable doc-doctests
       random -any,
       text -any,
       aeson -any,
-      plutus-chain-index-core -any,
+      plutus-chain-index
 
     if !(impl(ghcjs) || os(ghcjs))
         build-depends: plutus-tx-plugin -any

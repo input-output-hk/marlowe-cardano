@@ -28,6 +28,7 @@ import qualified Ledger.Value as Val
 import MarloweContract (MarloweContract (..))
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import qualified Network.WebSockets as WS
+import Plutus.ChainIndex.Types (Point (PointAtGenesis))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..), pabClient)
 import Plutus.PAB.Webserver.Types (ContractActivationArgs (..), InstanceStatusToClient (..))
@@ -64,6 +65,8 @@ startPab pabConfig = do
               , storageBackend = BeamSqliteBackend
               , cmd = allServices
               , passphrase = Nothing
+              , rollbackHistory = Nothing
+              , resumeFrom = PointAtGenesis
               }
 
   let mc = Just pabConfig
