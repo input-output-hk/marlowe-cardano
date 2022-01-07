@@ -410,3 +410,36 @@ _SCHED_STD_OPTNS
     } = [applyBDCWithCfg scheduleConfig xd]
 _SCHED_STD_OPTNS _ = []
 
+-- Call Money (CLM)
+
+_SCHED_IP_CLM :: ContractTerms -> [ShiftedDay]
+_SCHED_IP_CLM
+  ContractTermsPoly
+    { scheduleConfig,
+      maturityDate = Just md
+    } = [applyBDCWithCfg scheduleConfig md]
+_SCHED_IP_CLM _ = []
+
+_SCHED_IPCI_CLM :: ContractTerms -> [ShiftedDay]
+_SCHED_IPCI_CLM
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Just ipanx,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      capitalizationEndDate = Just ipced,
+      scheduleConfig
+    } =
+    let s = generateRecurrentScheduleWithCorrections ipanx ipcl {includeEndDay = True} md scheduleConfig
+     in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
+_SCHED_IPCI_CLM
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Nothing,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      capitalizationEndDate = Just ipced,
+      scheduleConfig
+    } =
+    let s = generateRecurrentScheduleWithCorrections (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
+     in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
+_SCHED_IPCI_CLM _ = []

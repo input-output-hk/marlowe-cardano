@@ -25,6 +25,7 @@ main = do
   futurTests <- testCasesFromFile [] $ p ++ "actus-tests-futur.json"
   comTests <- testCasesFromFile [] $ p ++ "actus-tests-com.json"
   cshTests <- testCasesFromFile [] $ p ++ "actus-tests-csh.json"
+  clmTests <- testCasesFromFile [] $ p ++ "actus-tests-clm.json"
 
   defaultMain $
     testGroup
@@ -40,6 +41,7 @@ main = do
           , Spec.Marlowe.ACTUS.TestFramework.tests "FUTUR" futurTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "COM" comTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "CSH" cshTests
+          , Spec.Marlowe.ACTUS.TestFramework.tests "CLM" clmTests
           ],
         testGroup
           "ACTUS examples"
