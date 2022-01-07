@@ -104,7 +104,7 @@ source-repository-package
     slotting
     strict-containers
 
--- Copied from plutus-apps
+-- Copied from plutus-core
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
@@ -194,6 +194,7 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
   tag: bf008ce028751cae9fb0b53c3bef20f07c06e333
+  --sha256: 0my3801w1vinc0kf5yh9lxl6saqxgwm6ccg0vvzi104pafcwwcqx
   subdir:
     byron/ledger/impl
     cardano-ledger-core
@@ -280,9 +281,9 @@ source-repository-package
 -- of plutus-apps are also updated
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/plutus-apps
-  tag: d1b65bef0596aa4c9507cd8a4d1a2648c9d7c9c0
-  --sha256: 0zbgpd0g0iaik72mh92y394mrfpzh0jlgyqp54zv7bibfhpc09ck
+  location: https://github.com/bwbush/plutus-apps
+  tag: cb675bc19d5d597cd61305740c350aaa62bf217e
+  --sha256: 0lzgdnly2jq6sbjm3lsipmcpsgyb70i127hgaddhkjspym5z9dw7
   subdir:
     freer-extras
     playground-common
@@ -292,6 +293,7 @@ source-repository-package
     plutus-ledger
     plutus-ledger-constraints
     plutus-pab
+    plutus-pab-executables
     plutus-playground-server
     plutus-use-cases
     quickcheck-dynamic
