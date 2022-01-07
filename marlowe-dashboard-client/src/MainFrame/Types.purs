@@ -12,6 +12,7 @@ import Data.Map (Map)
 import Data.Time.Duration (Minutes)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
+import Halogen.Form as Form
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Slot)
 import Page.Contract.Types (State) as Contract
@@ -53,6 +54,7 @@ type ChildSlots =
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
   , expandSlot :: Expand.Slot Void String
+  , restoreWalletForm :: Form.Slot Action (Tuple String String) Unit
   , toaster :: forall q m. H.Slot q m Unit
   )
 

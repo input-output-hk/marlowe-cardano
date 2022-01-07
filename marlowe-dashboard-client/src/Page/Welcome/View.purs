@@ -5,11 +5,14 @@ module Page.Welcome.View
 
 import Prologue hiding (div)
 
+import Component.Contacts.State (walletNicknameError)
+import Component.Contacts.Types (AddressBook)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
+import Component.Input.View as Input
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (validate)
-import Component.InputField.Types (InputDisplayOptions)
+import Component.InputField.Types (InputDisplayOptions, inputErrorToString)
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
@@ -19,6 +22,8 @@ import Data.List (foldMap)
 import Data.Maybe (isJust, isNothing)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
+import Halogen.Form (Form)
+import Halogen.Form as Form
 import Halogen.HTML
   ( ComponentHTML
   , HTML
@@ -36,6 +41,7 @@ import Halogen.HTML
   , p
   , p_
   , section
+  , slot_
   , span_
   , text
   )
@@ -52,7 +58,10 @@ import Page.Welcome.Lenses
   , _walletMnemonicInput
   , _walletNicknameInput
   )
+import Page.Welcome.State (walletMnemonicError)
 import Page.Welcome.Types (Action(..), Card(..), State)
+import Polyform.Reporter (liftFnR)
+import Type.Proxy (Proxy(..))
 
 welcomeScreen :: forall p. State -> HTML p Action
 welcomeScreen _ =
@@ -265,30 +274,119 @@ generateWalletHelpCard =
       ]
   ]
 
+type NicknameInput =
+  { value :: String
+  , addressBook :: AddressBook
+  }
+
+type MnemonicInput =
+  { value :: String
+  , invalidFromServer :: Maybe String
+  }
+
+-- TODO refactor validation to return Either
+walletNicknameForm :: forall a s m. Monad m => Form a NicknameInput s m String
+walletNicknameForm = liftFnR \{ value, addressBook } ->
+  let
+    error = walletNicknameError addressBook value
+    input = Input.defaultInput
+      { value = value
+      , onChange = Just \v -> Form.Update { value: v, addressBook }
+      , invalid = isJust error
+      , id = "walletNickname"
+      }
+    view =
+      [ div [ classNames [ "relative" ] ]
+          [ Input.renderWithChildren input \i ->
+              [ Label.render Label.defaultInput
+                  { for = "walletNickname", text = "Wallet nickname" }
+              , i
+              ]
+          , p [ classNames $ Css.inputError <> [ "h-5" ] ]
+              case error of
+                Nothing -> [ text "" ]
+                Just e -> [ text $ inputErrorToString e ]
+          ]
+      ]
+  in
+    case error of
+      Nothing -> Tuple (Just value) view
+      Just _ -> Tuple Nothing view
+
+-- TODO create form smart constructor with Writer monad isntance
+mnemonicPhraseForm :: forall a s m. Monad m => Form a MnemonicInput s m String
+mnemonicPhraseForm = liftFnR \{ value, invalidFromServer } ->
+  let
+    error = walletMnemonicError invalidFromServer value
+    input = Input.defaultInput
+      { value = value
+      , onChange = Just \v -> Form.Update { value: v, invalidFromServer }
+      , invalid = isJust error
+      , id = "walletMnemonic"
+      }
+    view =
+      [ div [ classNames [ "relative" ] ]
+          [ Input.renderWithChildren input \i ->
+              [ Label.render Label.defaultInput
+                  { for = "walletMnemonic", text = "Mnemonic phrase" }
+              , i
+              ]
+          , p [ classNames $ Css.inputError <> [ "h-5" ] ]
+              case error of
+                Nothing -> [ text "" ]
+                Just e -> [ text $ inputErrorToString e ]
+          ]
+      ]
+  in
+    case error of
+      Nothing -> Tuple (Just value) view
+      Just _ -> Tuple Nothing view
+
+type RestoreWalletInput = Tuple NicknameInput MnemonicInput
+type RestoreWalletOutput = Tuple String String
+
+restoreWalletForm
+  :: forall a s m
+   . Monad m
+  => Form a RestoreWalletInput s m RestoreWalletOutput
+restoreWalletForm = Form.split walletNicknameForm mnemonicPhraseForm
+
+restoreWalletFormComponent
+  :: forall q action m
+   . MonadAff m
+  => Form.Component q RestoreWalletInput action RestoreWalletOutput m
+restoreWalletFormComponent = Form.component restoreWalletForm
+
 restoreTestnetWalletCard
   :: forall m. MonadAff m => State -> Array (ComponentHTML Action ChildSlots m)
 restoreTestnetWalletCard state =
   let
+    formInput =
+      { classNames: [ "space-y-4" ]
+      , value: Tuple
+          { addressBook: state.addressBook, value: "" }
+          { invalidFromServer: Nothing, value: "" }
+      }
     enteringDashboardState = state ^. _enteringDashboardState
 
     walletNicknameInput = state ^. _walletNicknameInput
 
     walletMnemonicInput = state ^. _walletMnemonicInput
 
-    walletMnemonicDisplayOptions =
-      { additionalCss: mempty
-      , id_: "walletMnemonic"
-      , placeholder: "Enter the mnemonic phrase"
-      , readOnly: false
-      , numberFormat: Nothing
-      , valueOptions: mempty
-      , after: Nothing
-      , before:
-          Just
-            $ Label.render
-                Label.defaultInput
-                  { for = "walletMnemonic", text = "Mnemonic phrase" }
-      }
+    -- walletMnemonicDisplayOptions =
+    --   { additionalCss: mempty
+    --   , id_: "walletMnemonic"
+    --   , placeholder: "Enter the mnemonic phrase"
+    --   , readOnly: false
+    --   , numberFormat: Nothing
+    --   , valueOptions: mempty
+    --   , after: Nothing
+    --   , before:
+    --       Just
+    --         $ Label.render
+    --             Label.defaultInput
+    --               { for = "walletMnemonic", text = "Mnemonic phrase" }
+    --   }
 
     submitButtonEnabled =
       isNothing (validate walletNicknameInput)
@@ -304,11 +402,15 @@ restoreTestnetWalletCard state =
         [ h2
             [ classNames [ "font-bold" ] ]
             [ text $ "Restore testnet wallet" ]
-        , WalletNicknameInputAction <$> renderInput
-            (walletNicknameInputDisplayOptions false)
-            walletNicknameInput
-        , WalletMnemonicInputAction <$> renderInput walletMnemonicDisplayOptions
-            walletMnemonicInput
+        , slot_
+            (Proxy :: _ "restoreWalletForm")
+            unit
+            restoreWalletFormComponent
+            formInput
+        -- TODO integrate into welcome page
+        -- case _ of
+        --   Escalated action -> action
+        --   Updated result -> RestoreWalletResultUpdated result
         , p_
             [ b_ [ text "IMPORTANT:" ]
             -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it

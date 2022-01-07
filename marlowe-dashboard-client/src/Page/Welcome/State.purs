@@ -2,6 +2,7 @@ module Page.Welcome.State
   ( dummyState
   , mkInitialState
   , handleAction
+  , walletMnemonicError
   ) where
 
 import Prologue
