@@ -3,7 +3,13 @@ module BridgeTests
   ) where
 
 import Prologue
-import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError, printJsonDecodeError)
+
+import Control.Monad.Error.Class (class MonadError)
+import Data.Argonaut.Decode
+  ( class DecodeJson
+  , JsonDecodeError
+  , printJsonDecodeError
+  )
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (fromInt)
@@ -11,32 +17,49 @@ import Data.Map as Map
 import Data.String.Regex (replace)
 import Data.String.Regex.Flags (RegexFlags(..))
 import Data.String.Regex.Unsafe (unsafeRegex)
+import Effect.Aff (Error)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Language.Haskell.Interpreter (CompilationError)
-import Marlowe.Semantics (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Slot(..), State(..), Token(..), Value(..), ValueId(..))
+import Marlowe.Semantics
+  ( Action(..)
+  , Bound(..)
+  , Case(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Observation(..)
+  , Party(..)
+  , Payee(..)
+  , Slot(..)
+  , State(..)
+  , Token(..)
+  , Value(..)
+  , ValueId(..)
+  )
 import Node.Encoding (Encoding(UTF8))
 import Node.FS.Sync as FS
-import Test.Unit (TestSuite, Test, failure, success, suite, test)
-import Test.Unit.Assert (equal)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (fail, shouldEqual)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "JSON Serialization" do
+  describe "JSON Serialization" do
     jsonHandling
     serializationTest
 
-jsonHandling :: TestSuite
+jsonHandling :: Spec Unit
 jsonHandling = do
-  test "Json handling" do
-    response1 :: Either JsonDecodeError String <- decodeFile "test/evaluation_response1.json"
+  it "Json handling" do
+    response1 :: Either JsonDecodeError String <- decodeFile
+      "test/evaluation_response1.json"
     assertRight response1
-    error1 :: Either JsonDecodeError (Array CompilationError) <- decodeFile "test/evaluation_error1.json"
+    error1 :: Either JsonDecodeError (Array CompilationError) <- decodeFile
+      "test/evaluation_error1.json"
     assertRight error1
 
-serializationTest :: TestSuite
+serializationTest :: Spec Unit
 serializationTest =
-  test "Contract Serialization" do
+  it "Contract Serialization" do
     -- A simple test that runs the Escrow contract to completion
     let
       ada = Token "" ""
@@ -58,14 +81,36 @@ serializationTest =
           ( When
               [ Case (Deposit alicePk alicePk ada valueExpr)
                   ( Let (ValueId "x") valueExpr
-                      (Pay alicePk (Party bobRole) ada (Cond TrueObs (UseValue (ValueId "x")) (UseValue (ValueId "y"))) Close)
+                      ( Pay alicePk (Party bobRole) ada
+                          ( Cond TrueObs (UseValue (ValueId "x"))
+                              (UseValue (ValueId "y"))
+                          )
+                          Close
+                      )
                   )
-              , Case (Choice choiceId [ Bound (fromInt 0) (fromInt 1), Bound (fromInt 10) (fromInt 20) ])
-                  ( If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` const))
-                      (Pay alicePk (Account alicePk) token (DivValue (AvailableMoney alicePk token) const) Close)
+              , Case
+                  ( Choice choiceId
+                      [ Bound (fromInt 0) (fromInt 1)
+                      , Bound (fromInt 10) (fromInt 20)
+                      ]
+                  )
+                  ( If
+                      ( ChoseSomething choiceId `OrObs`
+                          (ChoiceValue choiceId `ValueEQ` const)
+                      )
+                      ( Pay alicePk (Account alicePk) token
+                          (DivValue (AvailableMoney alicePk token) const)
+                          Close
+                      )
                       Close
                   )
-              , Case (Notify (AndObs (SlotIntervalStart `ValueLT` SlotIntervalEnd) TrueObs)) Close
+              , Case
+                  ( Notify
+                      ( AndObs (SlotIntervalStart `ValueLT` SlotIntervalEnd)
+                          TrueObs
+                      )
+                  )
+                  Close
               ]
               (Slot (fromInt 100))
               Close
@@ -75,7 +120,10 @@ serializationTest =
         State
           { accounts: Map.singleton (Tuple alicePk token) (fromInt 12)
           , choices: Map.singleton choiceId (fromInt 42)
-          , boundValues: Map.fromFoldable [ Tuple (ValueId "x") (fromInt 1), Tuple (ValueId "y") (fromInt 2) ]
+          , boundValues: Map.fromFoldable
+              [ Tuple (ValueId "x") (fromInt 1)
+              , Tuple (ValueId "y") (fromInt 2)
+              ]
           , minSlot: (Slot $ fromInt 123)
           }
 
@@ -83,28 +131,42 @@ serializationTest =
 
       jsonState = encodeStringifyJson state
     expectedStateJson <- liftEffect $ FS.readTextFile UTF8 "test/state.json"
-    bridgedJson <- liftEffect $ FS.readTextFile UTF8 "generated/JSON/contract.json"
-    bridgedStateJson <- liftEffect $ FS.readTextFile UTF8 "generated/JSON/state.json"
+    bridgedJson <- liftEffect $ FS.readTextFile UTF8
+      "generated/JSON/contract.json"
+    bridgedStateJson <- liftEffect $ FS.readTextFile UTF8
+      "generated/JSON/state.json"
     let
-      rx = unsafeRegex "\\s+" (RegexFlags { dotAll: false, global: true, ignoreCase: true, multiline: true, sticky: false, unicode: true })
+      rx = unsafeRegex "\\s+"
+        ( RegexFlags
+            { dotAll: false
+            , global: true
+            , ignoreCase: true
+            , multiline: true
+            , sticky: false
+            , unicode: true
+            }
+        )
 
       expectedState = replace rx "" expectedStateJson
-    equal expectedState jsonState
-    equal (Right contract) (lmap printJsonDecodeError $ parseDecodeJson json)
-    equal (Right contract) (lmap printJsonDecodeError $ parseDecodeJson bridgedJson)
-    equal (Right state) (lmap printJsonDecodeError $ parseDecodeJson bridgedStateJson)
+    shouldEqual expectedState jsonState
+    shouldEqual (Right contract)
+      (lmap printJsonDecodeError $ parseDecodeJson json)
+    shouldEqual (Right contract)
+      (lmap printJsonDecodeError $ parseDecodeJson bridgedJson)
+    shouldEqual (Right state)
+      (lmap printJsonDecodeError $ parseDecodeJson bridgedStateJson)
 
-assertRight :: forall a. Either JsonDecodeError a -> Test
-assertRight (Left err) = failure (printJsonDecodeError err)
+assertRight
+  :: forall m a. MonadError Error m => Either JsonDecodeError a -> m Unit
+assertRight (Left err) = fail (printJsonDecodeError err)
+assertRight (Right _) = pure unit
 
-assertRight (Right _) = success
-
-decodeFile ::
-  forall m a.
-  MonadAff m =>
-  DecodeJson a =>
-  String ->
-  m (Either JsonDecodeError a)
+decodeFile
+  :: forall m a
+   . MonadAff m
+  => DecodeJson a
+  => String
+  -> m (Either JsonDecodeError a)
 decodeFile filename = do
   contents <- liftEffect $ FS.readTextFile UTF8 filename
   pure (parseDecodeJson contents)

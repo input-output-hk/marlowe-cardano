@@ -22,7 +22,11 @@ import Examples.Haskell.Contracts (example) as HE
 import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
-import Language.Haskell.Interpreter (CompilationError(..), InterpreterError(..), InterpreterResult(..))
+import Language.Haskell.Interpreter
+  ( CompilationError(..)
+  , InterpreterError(..)
+  , InterpreterResult(..)
+  )
 import Language.Haskell.Monaco as HM
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
 import Marlowe (postApiCompile)
@@ -34,27 +38,46 @@ import Marlowe.Template (getPlaceholderIds, typeToLens, updateTemplateContent)
 import Monaco (IMarkerData, markerSeverity)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Page.HaskellEditor.Types (Action(..), BottomPanelView(..), State, _bottomPanelState, _compilationResult, _editorReady, _haskellEditorKeybindings, _metadataHintInfo)
+import Page.HaskellEditor.Types
+  ( Action(..)
+  , BottomPanelView(..)
+  , State
+  , _bottomPanelState
+  , _compilationResult
+  , _editorReady
+  , _haskellEditorKeybindings
+  , _metadataHintInfo
+  )
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability)
 import StaticAnalysis.StaticTools (analyseContract)
-import StaticAnalysis.Types (AnalysisExecutionState(..), _analysisExecutionState, _analysisState, _templateContent)
+import StaticAnalysis.Types
+  ( AnalysisExecutionState(..)
+  , _analysisExecutionState
+  , _analysisState
+  , _templateContent
+  )
 import StaticData (haskellBufferLocalStorageKey)
 import Webghc.Server (CompileRequest(..))
 
-toBottomPanel ::
-  forall m a.
-  Functor m =>
-  HalogenM (BottomPanel.State BottomPanelView) (BottomPanel.Action BottomPanelView Action) ChildSlots Void m a ->
-  HalogenM State Action ChildSlots Void m a
+toBottomPanel
+  :: forall m a
+   . Functor m
+  => HalogenM (BottomPanel.State BottomPanelView)
+       (BottomPanel.Action BottomPanelView Action)
+       ChildSlots
+       Void
+       m
+       a
+  -> HalogenM State Action ChildSlots Void m a
 toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 
-handleAction ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  Action ->
-  HalogenM State Action ChildSlots Void m Unit
+handleAction
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => Action
+  -> HalogenM State Action ChildSlots Void m Unit
 handleAction DoNothing = pure unit
 
 handleAction (HandleEditorMessage Monaco.EditorReady) = do
@@ -85,31 +108,38 @@ handleAction Compile = do
     Nothing -> pure unit
     Just code -> do
       assign _compilationResult Loading
-      result <- RemoteData.fromEither <$> runExceptT (postApiCompile $ CompileRequest { code, implicitPrelude: true })
+      result <- RemoteData.fromEither <$> runExceptT
+        (postApiCompile $ CompileRequest { code, implicitPrelude: true })
       assign _compilationResult result
       -- Update the error display.
       case result of
-        Success (Left _) -> handleAction $ BottomPanelAction (BottomPanel.ChangePanel ErrorsView)
+        Success (Left _) -> handleAction $ BottomPanelAction
+          (BottomPanel.ChangePanel ErrorsView)
         Success (Right (InterpreterResult interpretedResult)) ->
           let
             mContract :: Maybe Contract
-            mContract = (fromTerm <=< hush <<< parseContract) interpretedResult.result
+            mContract = (fromTerm <=< hush <<< parseContract)
+              interpretedResult.result
 
             metadataHints :: MetadataHintInfo
             metadataHints = maybe mempty getMetadataHintInfo mContract
           in
             for_ mContract \contract ->
               modify_
-                $ over (_analysisState <<< _templateContent) (updateTemplateContent $ getPlaceholderIds contract)
-                <<< set _metadataHintInfo metadataHints
+                $
+                  over (_analysisState <<< _templateContent)
+                    (updateTemplateContent $ getPlaceholderIds contract)
+                    <<< set _metadataHintInfo metadataHints
         _ -> pure unit
       let
         markers = case result of
           Success (Left errors) -> toMarkers errors
           _ -> []
-      void $ query _haskellEditorSlot unit (Monaco.SetModelMarkers markers identity)
+      void $ query _haskellEditorSlot unit
+        (Monaco.SetModelMarkers markers identity)
 
-handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction action
+handleAction (BottomPanelAction (BottomPanel.PanelAction action)) = handleAction
+  action
 
 handleAction (BottomPanelAction action) = do
   toBottomPanel (BottomPanel.handleAction action)
@@ -121,7 +151,9 @@ handleAction (InitHaskellProject metadataHints contents) = do
   assign _metadataHintInfo metadataHints
   liftEffect $ SessionStorage.setItem haskellBufferLocalStorageKey contents
 
-handleAction (SetIntegerTemplateParam templateType key value) = modifying (_analysisState <<< _templateContent <<< typeToLens templateType) (Map.insert key value)
+handleAction (SetIntegerTemplateParam templateType key value) = modifying
+  (_analysisState <<< _templateContent <<< typeToLens templateType)
+  (Map.insert key value)
 
 handleAction (MetadataAction _) = pure unit
 
@@ -131,32 +163,43 @@ handleAction AnalyseReachabilityContract = analyze analyseReachability
 
 handleAction AnalyseContractForCloseRefund = analyze analyseClose
 
-handleAction ClearAnalysisResults = assign (_analysisState <<< _analysisExecutionState) NoneAsked
+handleAction ClearAnalysisResults = assign
+  (_analysisState <<< _analysisExecutionState)
+  NoneAsked
 
 -- This function runs a static analysis to the compiled code if it compiled successfully.
-analyze ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  (Contract -> HalogenM State Action ChildSlots Void m Unit) ->
-  HalogenM State Action ChildSlots Void m Unit
+analyze
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => (Contract -> HalogenM State Action ChildSlots Void m Unit)
+  -> HalogenM State Action ChildSlots Void m Unit
 analyze doAnalyze = do
   compilationResult <- use _compilationResult
   case compilationResult of
     Success (Right (InterpreterResult interpretedResult)) ->
       let
-        mContract = (fromTerm <=< hush <<< parseContract) interpretedResult.result
+        mContract = (fromTerm <=< hush <<< parseContract)
+          interpretedResult.result
       in
         for_ mContract doAnalyze
     _ -> pure unit
 
-editorSetTheme :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
-editorSetTheme = void $ query _haskellEditorSlot unit (Monaco.SetTheme HM.daylightTheme.name unit)
+editorSetTheme
+  :: forall state action msg m. HalogenM state action ChildSlots msg m Unit
+editorSetTheme = void $ query _haskellEditorSlot unit
+  (Monaco.SetTheme HM.daylightTheme.name unit)
 
-editorSetValue :: forall state action msg m. String -> HalogenM state action ChildSlots msg m Unit
-editorSetValue contents = void $ query _haskellEditorSlot unit (Monaco.SetText contents unit)
+editorSetValue
+  :: forall state action msg m
+   . String
+  -> HalogenM state action ChildSlots msg m Unit
+editorSetValue contents = void $ query _haskellEditorSlot unit
+  (Monaco.SetText contents unit)
 
-editorGetValue :: forall state action msg m. HalogenM state action ChildSlots msg m (Maybe String)
+editorGetValue
+  :: forall state action msg m
+   . HalogenM state action ChildSlots msg m (Maybe String)
 editorGetValue = query _haskellEditorSlot unit (Monaco.GetText identity)
 
 toMarkers :: InterpreterError -> Array IMarkerData

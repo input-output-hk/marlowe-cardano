@@ -1,13 +1,24 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 module Language.Marlowe.SemanticsSerialisation (contractToByteString) where
 
-import           Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
-                                                  Observation (..), Party (..), Payee (..), Token (..), Value (..),
-                                                  ValueId (..))
-import           Language.Marlowe.Serialisation  (intToByteString, listToByteString, packByteString,
-                                                  positiveIntToByteString)
-import           Ledger                          (PubKeyHash (..), Slot (..))
-import           Ledger.Value                    (CurrencySymbol (..), TokenName (..))
-import           PlutusTx.Builtins               (BuiltinByteString, appendByteString)
+import Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..),
+                                        Observation (..), Party (..), Payee (..), Token (..), Value (..), ValueId (..))
+import Language.Marlowe.Serialisation (intToByteString, listToByteString, packByteString, positiveIntToByteString)
+import Ledger (PubKeyHash (..), Slot (..))
+import Ledger.Value (CurrencySymbol (..), TokenName (..))
+import PlutusTx.Prelude
+
+{-# INLINABLE partyToByteString #-}
+{-# INLINABLE choiceIdToByteString #-}
+{-# INLINABLE valueIdToByteString #-}
+{-# INLINABLE tokenToByteString #-}
+{-# INLINABLE observationToByteString #-}
+{-# INLINABLE valueToByteString #-}
+{-# INLINABLE payeeToByteString #-}
+{-# INLINABLE boundToByteString #-}
+{-# INLINABLE actionToByteString #-}
+{-# INLINABLE caseToByteString #-}
+{-# INLINABLE contractToByteString #-}
 
 partyToByteString :: Party -> BuiltinByteString
 partyToByteString (PK (PubKeyHash x))  = positiveIntToByteString 0 `appendByteString` packByteString x
@@ -64,7 +75,7 @@ actionToByteString (Notify obs) = positiveIntToByteString 2 `appendByteString` o
 
 caseToByteString :: Case Contract -> BuiltinByteString
 caseToByteString (Case action cont) = positiveIntToByteString 0 `appendByteString` actionToByteString action `appendByteString` contractToByteString cont
---caseToByteString (MerkleizedCase action bs) = positiveIntToByteString 1 `appendByteString` actionToByteString action `appendByteString` packByteString bs
+caseToByteString (MerkleizedCase action bs) = positiveIntToByteString 1 `appendByteString` actionToByteString action `appendByteString` packByteString bs
 
 contractToByteString :: Contract -> BuiltinByteString
 contractToByteString Close = positiveIntToByteString 0

@@ -4,11 +4,9 @@ module Language.Marlowe.ACTUS.Utility.YearFraction
   ( yearFraction
   )
 where
-
-import           Data.Time                                   (Day, LocalTime (..), TimeOfDay (..), addLocalTime,
-                                                              diffDays, fromGregorian, gregorianMonthLength, isLeapYear,
-                                                              toGregorian)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (DCC (..))
+import Data.Time (Day, LocalTime (..), TimeOfDay (..), addLocalTime, diffDays, fromGregorian, gregorianMonthLength,
+                  isLeapYear, toGregorian)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (DCC (..))
 
 yearFraction :: DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> Double
 yearFraction dcc x y o = yearFraction' dcc (localDay x) (localDay $ clipToMidnight y) (localDay <$> o)

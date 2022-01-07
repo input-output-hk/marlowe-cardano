@@ -8,25 +8,23 @@ module Language.Marlowe.ACTUS.Model.ContractSchedule
   )
 where
 
-import           Control.Applicative                              ((<|>))
-import           Control.Monad                                    (liftM2, liftM4)
-import           Data.Functor                                     ((<&>))
-import           Data.List                                        as L (delete, find, nub)
-import           Data.Maybe                                       (fromMaybe, isJust, isNothing, maybeToList)
-import           Data.Ord                                         (Down (..))
-import           Data.Sort                                        (sortOn)
-import           Data.Time                                        (LocalTime)
-import           Data.Time.Calendar                               (addDays)
-import           Data.Time.LocalTime                              (LocalTime (..), addLocalTime)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (CT (..), ContractTermsPoly (..), Cycle (..), DS (..),
-                                                                   IPCB (..), PPEF (..), PYTP (..), SCEF (..),
-                                                                   ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Domain.Ops                as O (ActusNum (..), ActusOps (..), ScheduleOps (..),
-                                                                        YearFractionOps (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule           (ShiftedDay (..), mkShiftedDay)
-import           Language.Marlowe.ACTUS.Utility.DateShift         (applyBDCWithCfg, applyEOMC)
-import           Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentSchedule, inf, (<+>), (<->))
+import Control.Applicative ((<|>))
+import Control.Monad (liftM2, liftM4)
+import Data.Functor ((<&>))
+import Data.List as L (delete, find, nub)
+import Data.Maybe (fromMaybe, isJust, isNothing, maybeToList)
+import Data.Ord (Down (..))
+import Data.Sort (sortOn)
+import Data.Time (LocalTime)
+import Data.Time.Calendar (addDays)
+import Data.Time.LocalTime (LocalTime (..), addLocalTime)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), Cycle (..), DS (..), IPCB (..),
+                                                    PPEF (..), PYTP (..), SCEF (..), ScheduleConfig (..))
+import Language.Marlowe.ACTUS.Domain.Ops as O (ActusNum (..), ActusOps (..), ScheduleOps (..), YearFractionOps (..))
+import Language.Marlowe.ACTUS.Domain.Schedule (ShiftedDay (..), mkShiftedDay)
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDCWithCfg, applyEOMC)
+import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (generateRecurrentSchedule, inf, (<+>), (<->))
 
 -- |Generate the schedule for a given event type
 schedule :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) =>

@@ -10,11 +10,11 @@ module Language.Marlowe.ACTUS.Utility.ScheduleGenerator
   )
 where
 
-import qualified Data.List                                   as L (delete, init, last, length)
-import           Data.Time                                   (LocalTime (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), ScheduleConfig (..), Stub (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedSchedule, mkShiftedDay)
-import           Language.Marlowe.ACTUS.Utility.DateShift    (applyBDC, applyEOMC, shiftDate)
+import qualified Data.List as L (delete, init, last, length)
+import Data.Time (LocalTime (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (Cycle (..), ScheduleConfig (..), Stub (..))
+import Language.Marlowe.ACTUS.Domain.Schedule (ShiftedSchedule, mkShiftedDay)
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDC, applyEOMC, shiftDate)
 
 maximumMaybe :: Ord a => [a] -> Maybe a
 maximumMaybe [] = Nothing

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -11,70 +12,68 @@ module Spec.Marlowe.Marlowe
     )
 where
 
-import qualified Codec.CBOR.Write                          as Write
-import qualified Codec.Serialise                           as Serialise
-import           Control.Exception                         (SomeException, catch)
-import           Control.Lens                              ((&), (.~))
-import           Control.Monad                             (void)
-import           Control.Monad.Freer                       (run)
-import           Control.Monad.Freer.Error                 (runError)
-import           Data.Aeson                                (decode, encode)
-import           Data.Aeson.Text                           (encodeToLazyText)
-import qualified Data.ByteString                           as BS
-import qualified Data.ByteString.Lazy                      as LB
-import qualified Data.ByteString.Short                     as SBS
-import           Data.Default                              (Default (..))
-import           Data.Either                               (fromRight, isRight)
-import qualified Data.Map.Strict                           as Map
-import           Data.Maybe                                (isJust, isNothing)
-import           Data.Monoid                               (First (..))
-import           Data.Ratio                                ((%))
-import           Data.Set                                  (Set)
-import qualified Data.Set                                  as Set
-import           Data.String
-import qualified Data.Text                                 as T
-import qualified Data.Text.IO                              as T
-import           Data.Text.Lazy                            (toStrict)
-import           Data.UUID                                 (UUID)
-import qualified Data.UUID                                 as UUID
-import           Language.Haskell.Interpreter              (Extension (OverloadedStrings), MonadInterpreter,
-                                                            OptionVal ((:=)), as, interpret, languageExtensions,
-                                                            runInterpreter, set, setImports)
-import           Language.Marlowe.Analysis.FSSemantics
-import           Language.Marlowe.Client
-import           Language.Marlowe.Deserialisation          (byteStringToInt, byteStringToList)
-import           Language.Marlowe.Scripts                  (MarloweInput, mkMarloweStateMachineTransition,
-                                                            rolePayoutScript, smallTypedValidator,
-                                                            smallUntypedValidator, typedValidator)
-import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
-import           Language.Marlowe.SemanticsSerialisation   (contractToByteString)
-import           Language.Marlowe.SemanticsTypes
-import           Language.Marlowe.Serialisation            (intToByteString, listToByteString)
-import           Language.Marlowe.Util
-import           Ledger                                    (Slot (..), pubKeyHash, validatorHash)
-import           Ledger.Ada                                (lovelaceValueOf)
-import           Ledger.Constraints.TxConstraints          (TxConstraints)
-import qualified Ledger.Typed.Scripts                      as Scripts
-import qualified Ledger.Value                              as Val
-import qualified Plutus.Contract.StateMachine              as SM
-import           Plutus.Contract.Test                      hiding ((.&&.))
-import qualified Plutus.Contract.Test                      as T
-import           Plutus.Contract.Types                     (_observableState)
-import qualified Plutus.Trace.Emulator                     as Trace
-import           Plutus.Trace.Emulator.Types               (instContractState)
-import qualified PlutusTx.AssocMap                         as AssocMap
-import           PlutusTx.Builtins                         (emptyByteString)
-import           PlutusTx.Lattice
-import qualified PlutusTx.Prelude                          as P
-import           Spec.Marlowe.Common
-import qualified Streaming.Prelude                         as S
-import           System.IO.Unsafe                          (unsafePerformIO)
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.QuickCheck
-import qualified Wallet.Emulator.Folds                     as Folds
-import           Wallet.Emulator.Stream                    (foldEmulatorStreamM, takeUntilSlot)
+import qualified Codec.CBOR.Write as Write
+import qualified Codec.Serialise as Serialise
+import Control.Exception (SomeException, catch)
+import Control.Lens ((&), (.~))
+import Control.Monad (void)
+import Control.Monad.Freer (run)
+import Control.Monad.Freer.Error (runError)
+import Data.Aeson (decode, encode)
+import Data.Aeson.Text (encodeToLazyText)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.ByteString.Short as SBS
+import Data.Default (Default (..))
+import Data.Either (fromRight, isRight)
+import qualified Data.Map.Strict as Map
+import Data.Maybe (isJust, isNothing)
+import Data.Monoid (First (..))
+import Data.Ratio ((%))
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.String
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import Data.Text.Lazy (toStrict)
+import Data.UUID (UUID)
+import qualified Data.UUID as UUID
+import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
+                                     languageExtensions, runInterpreter, set, setImports)
+import Language.Marlowe.Analysis.FSSemantics
+import Language.Marlowe.Client
+import Language.Marlowe.Deserialisation (byteStringToInt, byteStringToList)
+import Language.Marlowe.Scripts (MarloweInput, mkMarloweStateMachineTransition, rolePayoutScript, smallTypedValidator,
+                                 smallUntypedValidator, typedValidator)
+import Language.Marlowe.Semantics
+import Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
+import Language.Marlowe.SemanticsSerialisation (contractToByteString)
+import Language.Marlowe.SemanticsTypes
+import Language.Marlowe.Serialisation (intToByteString, listToByteString)
+import Language.Marlowe.Util
+import Ledger (Slot (..), pubKeyHash, validatorHash)
+import Ledger.Ada (adaValueOf, lovelaceValueOf)
+import Ledger.Constraints.TxConstraints (TxConstraints)
+import qualified Ledger.Typed.Scripts as Scripts
+import qualified Ledger.Value as Val
+import qualified Plutus.Contract.StateMachine as SM
+import Plutus.Contract.Test hiding ((.&&.))
+import qualified Plutus.Contract.Test as T
+import Plutus.Contract.Types (_observableState)
+import qualified Plutus.Trace.Emulator as Trace
+import Plutus.Trace.Emulator.Types (instContractState)
+import qualified PlutusTx.AssocMap as AssocMap
+import PlutusTx.Builtins (emptyByteString, sha2_256)
+import PlutusTx.Lattice
+import qualified PlutusTx.Prelude as P
+import Spec.Marlowe.Common
+import qualified Streaming.Prelude as S
+import System.IO.Unsafe (unsafePerformIO)
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
+import qualified Wallet.Emulator.Folds as Folds
+import Wallet.Emulator.Stream (foldEmulatorStreamM, takeUntilSlot)
 
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Redundant if" -}
@@ -85,7 +84,11 @@ tests = testGroup "Marlowe"
     , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
     , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
     , testCase "State serializes into valid JSON" stateSerialization
-    , testCase "Validator size is reasonable" validatorSize
+    , testGroup "Validator size is reasonable"
+        [ testCase "StateMachine validator size" stateMachineValidatorSize
+        , testCase "Typed validator size" typedValidatorSize
+        , testCase "Untyped validator size" untypedValidatorSize
+        ]
     , testCase "Mul analysis" mulAnalysisTest
     , testCase "Div analysis" divAnalysisTest
     , testCase "Div tests" divTest
@@ -104,6 +107,9 @@ tests = testGroup "Marlowe"
         , testProperty "Contract (de)serialisation roundtrip" contractBSRoundtripTest
         ]
     , zeroCouponBondTest
+#ifndef DisableMerkleization
+    , merkleizedZeroCouponBondTest
+#endif
     , errorHandlingTest
     , trustFundTest
     ]
@@ -147,10 +153,54 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [IDeposit alicePk alicePk ada 850])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 850])
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [IDeposit alicePk bobPk ada 1000])
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 1000])
+    void $ Trace.waitNSlots 2
+
+    Trace.callEndpoint @"close" aliceHdl reqId
+    Trace.callEndpoint @"close" bobHdl reqId
+    void $ Trace.waitNSlots 2
+
+merkleizedZeroCouponBondTest :: TestTree
+merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkleized Zero Coupon Bond Contract"
+    (assertNoFailedTransactions
+    -- T..&&. emulatorLog (const False) ""
+    T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag alice) (const True) "contract should close"
+    T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
+    T..&&. walletFundsChange alice (lovelaceValueOf 150)
+    T..&&. walletFundsChange bob (lovelaceValueOf (-150))
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (OK reqId "close")) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (OK reqId "close")) "should be OK"
+    ) $ do
+    -- Init a contract
+    let alicePk = PK (walletPubKeyHash alice)
+        bobPk = PK (walletPubKeyHash bob)
+
+    let params = defaultMarloweParams
+
+    let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 850))
+                                                     (sha2_256 (contractToByteString zeroCouponBondStage2))
+                                    ] (Slot 100) Close
+        zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 850)
+                                  (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 1000))
+                                                         (sha2_256 (contractToByteString zeroCouponBondStage3))
+                                        ] (Slot 200) Close)
+        zeroCouponBondStage3 = Close
+
+    bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
+    aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
+
+    Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBondStage1)
+    Trace.waitNSlots 2
+
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
+                                                 [MerkleizedInput (IDeposit alicePk alicePk ada 850) zeroCouponBondStage2])
+    Trace.waitNSlots 2
+
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
+                                               [MerkleizedInput (IDeposit alicePk bobPk ada 1000) zeroCouponBondStage3])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -161,8 +211,8 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
 errorHandlingTest :: TestTree
 errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     (assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice)
-    (\case SomeError _ "apply-inputs" (TransitionError _) -> True
-           _                                              -> False
+    (\case SomeError _ "apply-inputs" _ -> True
+           _                            -> False
     ) "should be fail with SomeError"
     ) $ do
     -- Init a contract
@@ -184,7 +234,7 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [IDeposit alicePk alicePk ada 1000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 1000])
     Trace.waitNSlots 2
     pure ()
 
@@ -195,8 +245,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
     -- T..&&. emulatorLog (const False) ""
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag alice) "contract should not have any errors"
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag bob) "contract should not have any errors"
-    T..&&. walletFundsChange alice (lovelaceValueOf (-256) <> Val.singleton (rolesCurrency params) "alice" 1)
-    T..&&. walletFundsChange bob (lovelaceValueOf 256 <> Val.singleton (rolesCurrency params) "bob" 1)
+    T..&&. walletFundsChange alice (lovelaceValueOf (-2000256) <> Val.singleton (rolesCurrency params) "alice" 1)
+    T..&&. walletFundsChange bob (lovelaceValueOf 2000256 <> Val.singleton (rolesCurrency params) "bob" 1)
     -- TODO Commented out because the new chain index does not allow to fetch
     -- all transactions that modified an address. Need to find an alternative
     -- way.
@@ -227,8 +277,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         (pms, _) : _ -> do
 
             Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, pms, Nothing,
-                [ IChoice chId 256
-                , IDeposit "alice" "alice" ada 256
+                [ NormalInput $ IChoice chId 256
+                , NormalInput $ IDeposit "alice" "alice" ada 256
                 ])
             Trace.waitNSlots 17
 
@@ -236,10 +286,12 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Trace.callEndpoint @"follow" bobFollowHdl pms
             Trace.waitNSlots 2
 
-            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [INotify])
+            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [NormalInput INotify])
 
             Trace.waitNSlots 2
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)
+            Trace.waitNSlots 2
+            Trace.callEndpoint @"redeem" aliceHdl (reqId, pms, "alice", alicePkh)
             void $ Trace.waitNSlots 2
     where
         alicePk = PK $ walletPubKeyHash alice
@@ -285,30 +337,34 @@ uniqueContractHash = do
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
 
-
-validatorSize :: IO ()
-validatorSize = do
+stateMachineValidatorSize :: IO ()
+stateMachineValidatorSize = do
     let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    let validator1 = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
-    let vsize1 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator1
-    let validator2 = smallUntypedValidator defaultMarloweParams
-    let vsize2 = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator2
-    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18000)
-    assertBool ("smallTypedValidator is too large " <> show vsize1) (vsize1 < 15000)
-    assertBool ("smallUntypedValidator is too large " <> show vsize2) (vsize2 < 14000)
+    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18500)
 
+typedValidatorSize :: IO ()
+typedValidatorSize = do
+    let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
+    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15500)
+
+untypedValidatorSize :: IO ()
+untypedValidatorSize = do
+    let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
+    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14500)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
-    extractContractRoles Close @=? mempty
-    extractContractRoles
+    extractNonMerkleizedContractRoles Close @=? mempty
+    extractNonMerkleizedContractRoles
         (Pay (Role "Alice") (Party (Role "Bob")) ada (Constant 1) Close)
             @=? Set.fromList ["Alice", "Bob"]
-    extractContractRoles
+    extractNonMerkleizedContractRoles
         (When [Case (Deposit (Role "Bob") (Role "Alice") ada (Constant 10)) Close] 10 Close)
             @=? Set.fromList ["Alice", "Bob"]
-    extractContractRoles
+    extractNonMerkleizedContractRoles
         (When [Case (Choice (ChoiceId "test" (Role "Alice")) [Bound 0 1]) Close] 10 Close)
             @=? Set.fromList ["Alice"]
 

@@ -79,7 +79,7 @@
     };
     web-common = {
       url = "github:input-output-hk/purescript-web-common";
-      flake = false;
+      flake = true;
     };
   };
 

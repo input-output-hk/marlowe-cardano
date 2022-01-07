@@ -1,9 +1,8 @@
 module Component.Contacts.Lenses
-  ( _walletLibrary
+  ( _addressBook
   , _cardSection
   , _walletNicknameInput
-  , _walletIdInput
-  , _remoteWalletInfo
+  , _addressInput
   , _walletNickname
   , _companionAppId
   , _marloweAppId
@@ -15,7 +14,18 @@ module Component.Contacts.Lenses
   ) where
 
 import Prologue
-import Component.Contacts.Types (CardSection, State, WalletId, WalletIdError, WalletInfo, WalletLibrary, WalletNickname, WalletNicknameError, WalletDetails)
+
+import Component.Contacts.Types
+  ( AddressBook
+  , AddressError
+  , CardSection
+  , State
+  , WalletDetails
+  , WalletId
+  , WalletInfo
+  , WalletNickname
+  , WalletNicknameError
+  )
 import Component.InputField.Types (State) as InputField
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -24,10 +34,9 @@ import Data.Map (Map)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
 import Type.Proxy (Proxy(..))
-import Types (NotFoundWebData)
 
-_walletLibrary :: Lens' State WalletLibrary
-_walletLibrary = prop (Proxy :: _ "walletLibrary")
+_addressBook :: Lens' State AddressBook
+_addressBook = prop (Proxy :: _ "addressBook")
 
 _cardSection :: Lens' State CardSection
 _cardSection = prop (Proxy :: _ "cardSection")
@@ -35,11 +44,8 @@ _cardSection = prop (Proxy :: _ "cardSection")
 _walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
 _walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
 
-_walletIdInput :: Lens' State (InputField.State WalletIdError)
-_walletIdInput = prop (Proxy :: _ "walletIdInput")
-
-_remoteWalletInfo :: Lens' State (NotFoundWebData WalletInfo)
-_remoteWalletInfo = prop (Proxy :: _ "remoteWalletInfo")
+_addressInput :: Lens' State (InputField.State AddressError)
+_addressInput = prop (Proxy :: _ "addressInput")
 
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname
@@ -57,7 +63,8 @@ _walletInfo = prop (Proxy :: _ "walletInfo")
 _assets :: Lens' WalletDetails Assets
 _assets = prop (Proxy :: _ "assets")
 
-_previousCompanionAppState :: Lens' WalletDetails (Maybe (Map MarloweParams MarloweData))
+_previousCompanionAppState :: Lens' WalletDetails
+  (Maybe (Map MarloweParams MarloweData))
 _previousCompanionAppState = prop (Proxy :: _ "previousCompanionAppState")
 
 ------------------------------------------------------------

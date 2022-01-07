@@ -22,24 +22,23 @@ module Language.Marlowe.CLI (
 ) where
 
 
-import           Cardano.Api                 (AsType (AsStakeAddress), NetworkId (..), NetworkMagic (..), SlotNo (..),
-                                              StakeAddressReference (..), deserialiseAddress)
-import           Cardano.Api.Shelley         (StakeAddress (..), fromShelleyStakeCredential)
-import           Control.Monad.Except        (ExceptT, runExceptT, throwError)
-import           Data.Maybe                  (fromMaybe)
-import           Data.Version                (Version, showVersion)
-import           Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer,
-                                              exportValidator)
-import           Language.Marlowe.CLI.Types  (CliError (..), Command (..))
-import           Language.Marlowe.Client     (defaultMarloweParams, marloweParams)
-import           Plutus.V1.Ledger.Api        (CurrencySymbol (..), defaultCostModelParams, toBuiltin)
-import           System.Exit                 (exitFailure)
-import           System.IO                   (hPutStrLn, stderr)
+import Cardano.Api (AsType (AsStakeAddress), NetworkId (..), NetworkMagic (..), SlotNo (..), StakeAddressReference (..),
+                    deserialiseAddress)
+import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
+import Control.Monad.Except (ExceptT, runExceptT, throwError)
+import Data.Maybe (fromMaybe)
+import Data.Version (Version, showVersion)
+import Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer, exportValidator)
+import Language.Marlowe.CLI.Types (CliError (..), Command (..))
+import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
+import Plutus.V1.Ledger.Api (CurrencySymbol (..), defaultCostModelParams, toBuiltin)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
 
-import qualified Data.ByteString.Base16      as Base16 (decode)
-import qualified Data.ByteString.Char8       as BS8 (pack)
-import qualified Data.Text                   as T (pack)
-import qualified Options.Applicative         as O
+import qualified Data.ByteString.Base16 as Base16 (decode)
+import qualified Data.ByteString.Char8 as BS8 (pack)
+import qualified Data.Text as T (pack)
+import qualified Options.Applicative as O
 
 
 -- | Hardwired example.

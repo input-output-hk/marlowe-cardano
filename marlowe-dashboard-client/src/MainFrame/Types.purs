@@ -8,8 +8,9 @@ module MainFrame.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.Contacts.Types (WalletDetails, WalletLibrary)
+import Component.Contacts.Types (AddressBook, WalletDetails)
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
@@ -31,13 +32,15 @@ import WebSocket.Support (FromSocket) as WS
 -- The app exists in one of two main subStates: the "welcome" state for when you have
 -- no wallet, and all you can do is generate one or create a new one; and the "dashboard"
 -- state for when you have selected a wallet, and can do all of the things.
-type State
-  = { webSocketStatus :: WebSocketStatus
-    , currentSlot :: Slot
-    , tzOffset :: Minutes
-    , subState :: Either Welcome.State Dashboard.State
-    , toast :: Toast.State
-    }
+type State =
+  { webSocketStatus :: WebSocketStatus
+  -- TODO: Both currentSlot and tzOffset should be stored in the global store rather than here, but in order
+  --       to remove it from here we need to first change the sub-components that use this into proper components
+  , currentSlot :: Slot
+  , tzOffset :: Minutes
+  , subState :: Either Welcome.State Dashboard.State
+  , toast :: Toast.State
+  }
 
 data WebSocketStatus
   = WebSocketOpen
@@ -48,16 +51,18 @@ derive instance genericWebSocketStatus :: Generic WebSocketStatus _
 instance showWebSocketStatus :: Show WebSocketStatus where
   show WebSocketOpen = "WebSocketOpen"
   show (WebSocketClosed Nothing) = "WebSocketClosed"
-  show (WebSocketClosed (Just closeEvent)) = "WebSocketClosed " <> WS.reason closeEvent
+  show (WebSocketClosed (Just closeEvent)) = "WebSocketClosed " <> WS.reason
+    closeEvent
 
 ------------------------------------------------------------
 type ChildSlots
-  = ( tooltipSlot :: forall query. H.Slot query Void ReferenceId
-    , hintSlot :: forall query. H.Slot query Void String
-    , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
-    , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
-    , expandSlot :: Expand.Slot Void String
-    )
+  =
+  ( tooltipSlot :: forall query. H.Slot query Void ReferenceId
+  , hintSlot :: forall query. H.Slot query Void String
+  , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
+  , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
+  , expandSlot :: Expand.Slot Void String
+  )
 
 ------------------------------------------------------------
 data Query a
@@ -70,8 +75,11 @@ data Msg
 ------------------------------------------------------------
 data Action
   = Init
-  | EnterWelcomeState WalletLibrary WalletDetails (Map PlutusAppId Contract.State)
-  | EnterDashboardState WalletLibrary WalletDetails
+  | EnterWelcomeState
+      AddressBook
+      WalletDetails
+      (Map PlutusAppId Contract.State)
+  | EnterDashboardState AddressBook WalletDetails
   | WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
   | ToastAction Toast.Action

@@ -9,10 +9,10 @@ module Language.Marlowe.ACTUS.Generator.Generator
   )
 where
 
-import           Data.String      (IsString (fromString))
-import           Language.Marlowe (Action (..), Case (..), Contract (..), Observation (..), Party (..), Payee (..),
-                                   Slot (..), Value (..), ada)
-import           Ledger.Value     (TokenName (TokenName))
+import Data.String (IsString (fromString))
+import Language.Marlowe (Action (..), Case (..), Contract (..), Observation (..), Party (..), Payee (..), Slot (..),
+                         Value (..), ada)
+import Ledger.Value (TokenName (TokenName))
 
 invoice :: String -> String -> Value Observation -> Slot -> Contract -> Contract
 invoice from to amount timeout continue =

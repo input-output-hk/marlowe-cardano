@@ -1,38 +1,38 @@
-module Component.WalletId.View
+module Component.Address.View
   ( defaultInput
   , render
   ) where
 
 import Prologue
+
+import Component.Address.Types (Input)
 import Component.Icons (icon)
 import Component.Icons as Icon
 import Component.Input.View as Input
 import Component.Label.View as Label
-import Component.WalletId.Types (Input)
-import Data.Newtype (unwrap)
-import Data.UUID.Argonaut (emptyUUID, toString) as UUID
 import Halogen.Css (classNames)
 import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)
-import Marlowe.PAB (PlutusAppId(..))
+import Marlowe.Semantics (PubKeyHash)
 
 defaultInput :: Input
 defaultInput =
   { inputId: "walletId"
   , label: "Wallet ID"
-  , value: PlutusAppId UUID.emptyUUID
+  , value: mempty
   }
 
-render :: forall w. Input -> HH.HTML w PlutusAppId
+render :: forall w. Input -> HH.HTML w PubKeyHash
 render { inputId, label, value } =
   let
-    inputInput = Input.defaultInput { id = inputId, value = UUID.toString $ unwrap value }
+    inputInput = Input.defaultInput { id = inputId, value = value }
   in
     Input.renderWithChildren inputInput \input ->
       [ Label.render Label.defaultInput { for = inputId, text = label }
       , input
       , HH.button
-          [ classNames [ "cursor-pointer", "h-4", "flex", "items-center", "self-center" ]
+          [ classNames
+              [ "cursor-pointer", "h-4", "flex", "items-center", "self-center" ]
           , onClick_ value
           ]
           [ icon Icon.Copy [ "w-6" ] ]

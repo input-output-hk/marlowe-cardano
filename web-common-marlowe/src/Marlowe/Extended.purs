@@ -3,7 +3,14 @@ module Marlowe.Extended where
 import Prelude
 import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
-import Data.Argonaut (class DecodeJson, class EncodeJson, JsonDecodeError(..), caseJsonObject, decodeJson, encodeJson)
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , JsonDecodeError(..)
+  , caseJsonObject
+  , decodeJson
+  , encodeJson
+  )
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bifunctor (lmap)
@@ -23,8 +30,22 @@ import Data.Traversable (foldMap, traverse)
 import Data.Tuple (Tuple(..))
 import Marlowe.Semantics (caseConstantFrom, getProp, object, requireProp)
 import Marlowe.Semantics as S
-import Marlowe.Template (class Fillable, class Template, Placeholders(..), TemplateContent, fillTemplate, getPlaceholderIds)
-import Text.Pretty (class Args, class Pretty, genericHasArgs, genericHasNestedArgs, genericPretty, pretty)
+import Marlowe.Template
+  ( class Fillable
+  , class Template
+  , Placeholders(..)
+  , TemplateContent
+  , fillTemplate
+  , getPlaceholderIds
+  )
+import Text.Pretty
+  ( class Args
+  , class Pretty
+  , genericHasArgs
+  , genericHasNestedArgs
+  , genericPretty
+  , pretty
+  )
 
 data ContractType
   = Escrow
@@ -53,7 +74,15 @@ instance showContractType :: Show ContractType where
   show v = genericShow v
 
 contractTypeArray :: Array ContractType
-contractTypeArray = [ Escrow, EscrowWithCollateral, ZeroCouponBond, CouponBondGuaranteed, Swap, ContractForDifferences, Other ]
+contractTypeArray =
+  [ Escrow
+  , EscrowWithCollateral
+  , ZeroCouponBond
+  , CouponBondGuaranteed
+  , Swap
+  , ContractForDifferences
+  , Other
+  ]
 
 contractTypeInitials :: ContractType -> String
 contractTypeInitials Escrow = "ES"
@@ -162,11 +191,14 @@ instance toCoreTimeout :: ToCore Timeout S.Slot where
   toCore (Slot x) = Just (S.Slot x)
 
 instance templateTimeout :: Template Timeout Placeholders where
-  getPlaceholderIds (SlotParam slotParamId) = Placeholders (unwrap (mempty :: Placeholders)) { slotPlaceholderIds = Set.singleton slotParamId }
+  getPlaceholderIds (SlotParam slotParamId) = Placeholders
+    (unwrap (mempty :: Placeholders))
+      { slotPlaceholderIds = Set.singleton slotParamId }
   getPlaceholderIds (Slot _) = mempty
 
 instance fillableTimeout :: Fillable Timeout TemplateContent where
-  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $ Map.lookup slotParamId (unwrap placeholders).slotContent
+  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $
+    Map.lookup slotParamId (unwrap placeholders).slotContent
   fillTemplate _ (Slot x) = Slot x
 
 data Value
@@ -240,7 +272,8 @@ instance encodeJsonValue :: EncodeJson Value where
       }
 
 instance decodeJsonValue :: DecodeJson Value where
-  decodeJson = caseConstantFrom valueConstants \json -> Constant <$> decodeJson json <|> decodeObject json
+  decodeJson = caseConstantFrom valueConstants \json ->
+    Constant <$> decodeJson json <|> decodeObject json
     where
     valueConstants =
       Map.fromFoldable
@@ -269,15 +302,15 @@ instance decodeJsonValue :: DecodeJson Value where
         else_ <- getProp "else"
         pure
           $ (AvailableMoney <$> inAccount <*> amountOfToken)
-          <|> (NegValue <$> negate)
-          <|> (AddValue <$> add <*> and)
-          <|> (ConstantParam <$> constantParam)
-          <|> (SubValue <$> value <*> minus)
-          <|> (DivValue <$> divide <*> by)
-          <|> (MulValue <$> multiply <*> times)
-          <|> (ChoiceValue <$> valueOfChoices)
-          <|> (UseValue <$> useValue)
-          <|> (Cond <$> if_ <*> then_ <*> else_)
+              <|> (NegValue <$> negate)
+              <|> (AddValue <$> add <*> and)
+              <|> (ConstantParam <$> constantParam)
+              <|> (SubValue <$> value <*> minus)
+              <|> (DivValue <$> divide <*> by)
+              <|> (MulValue <$> multiply <*> times)
+              <|> (ChoiceValue <$> valueOfChoices)
+              <|> (UseValue <$> useValue)
+              <|> (Cond <$> if_ <*> then_ <*> else_)
 
 instance showValue :: Show Value where
   show (Constant c) = BigInt.toString c
@@ -293,7 +326,8 @@ instance hasArgsValue :: Args Value where
 instance toCoreValue :: ToCore Value S.Value where
   toCore (Constant c) = Just $ S.Constant c
   toCore (ConstantParam _) = Nothing
-  toCore (AvailableMoney accId tok) = S.AvailableMoney <$> pure accId <*> pure tok
+  toCore (AvailableMoney accId tok) = S.AvailableMoney <$> pure accId <*> pure
+    tok
   toCore (NegValue v) = S.NegValue <$> toCore v
   toCore (AddValue lhs rhs) = S.AddValue <$> toCore lhs <*> toCore rhs
   toCore (SubValue lhs rhs) = S.SubValue <$> toCore lhs <*> toCore rhs
@@ -303,27 +337,38 @@ instance toCoreValue :: ToCore Value S.Value where
   toCore SlotIntervalStart = Just $ S.SlotIntervalStart
   toCore SlotIntervalEnd = Just $ S.SlotIntervalEnd
   toCore (UseValue vId) = Just $ S.UseValue vId
-  toCore (Cond obs lhs rhs) = S.Cond <$> toCore obs <*> toCore lhs <*> toCore rhs
+  toCore (Cond obs lhs rhs) = S.Cond <$> toCore obs <*> toCore lhs <*> toCore
+    rhs
 
 instance templateValue :: Template Value Placeholders where
-  getPlaceholderIds (ConstantParam constantParamId) = Placeholders (unwrap (mempty :: Placeholders)) { valuePlaceholderIds = Set.singleton constantParamId }
+  getPlaceholderIds (ConstantParam constantParamId) = Placeholders
+    (unwrap (mempty :: Placeholders))
+      { valuePlaceholderIds = Set.singleton constantParamId }
   getPlaceholderIds (Constant _) = mempty
   getPlaceholderIds (AvailableMoney _ _) = mempty
   getPlaceholderIds (NegValue v) = getPlaceholderIds v
-  getPlaceholderIds (AddValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (SubValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (MulValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (AddValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (SubValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (MulValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
   getPlaceholderIds (ChoiceValue _) = mempty
   getPlaceholderIds SlotIntervalStart = mempty
   getPlaceholderIds SlotIntervalEnd = mempty
   getPlaceholderIds (UseValue _) = mempty
-  getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs <> getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs
+    <> getPlaceholderIds lhs
+    <> getPlaceholderIds rhs
 
 instance fillableValue :: Fillable Value TemplateContent where
   fillTemplate placeholders val = case val of
     Constant _ -> val
-    ConstantParam constantParamId -> maybe val Constant $ Map.lookup constantParamId (unwrap placeholders).valueContent
+    ConstantParam constantParamId -> maybe val Constant $ Map.lookup
+      constantParamId
+      (unwrap placeholders).valueContent
     AvailableMoney _ _ -> val
     NegValue v -> NegValue $ go v
     AddValue lhs rhs -> AddValue (go lhs) (go rhs)
@@ -352,7 +397,8 @@ instance valueHasChoices :: HasChoices Value where
   getChoiceNames SlotIntervalStart = Set.empty
   getChoiceNames SlotIntervalEnd = Set.empty
   getChoiceNames (UseValue _) = Set.empty
-  getChoiceNames (Cond obs lhs rhs) = getChoiceNames obs <> getChoiceNames lhs <> getChoiceNames rhs
+  getChoiceNames (Cond obs lhs rhs) = getChoiceNames obs <> getChoiceNames lhs
+    <> getChoiceNames rhs
 
 data Observation
   = AndObs Observation Observation
@@ -445,14 +491,14 @@ instance decodeJsonObservation :: DecodeJson Observation where
         equalTo <- getProp "equal_to"
         pure
           $ (AndObs <$> both <*> and)
-          <|> (OrObs <$> either <*> or)
-          <|> (NotObs <$> not)
-          <|> (ChoseSomething <$> choseSomethingFor)
-          <|> (ValueGE <$> value <*> gte)
-          <|> (ValueGT <$> value <*> gt)
-          <|> (ValueLT <$> value <*> lt)
-          <|> (ValueLE <$> value <*> lte)
-          <|> (ValueEQ <$> value <*> equalTo)
+              <|> (OrObs <$> either <*> or)
+              <|> (NotObs <$> not)
+              <|> (ChoseSomething <$> choseSomethingFor)
+              <|> (ValueGE <$> value <*> gte)
+              <|> (ValueGT <$> value <*> gt)
+              <|> (ValueLT <$> value <*> lt)
+              <|> (ValueLE <$> value <*> lte)
+              <|> (ValueEQ <$> value <*> equalTo)
 
 instance showObservation :: Show Observation where
   show o = genericShow o
@@ -478,15 +524,22 @@ instance toCoreObservation :: ToCore Observation S.Observation where
   toCore FalseObs = Just S.FalseObs
 
 instance templateObservation :: Template Observation Placeholders where
-  getPlaceholderIds (AndObs lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (OrObs lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (AndObs lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (OrObs lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds
+    rhs
   getPlaceholderIds (NotObs v) = getPlaceholderIds v
   getPlaceholderIds (ChoseSomething _) = mempty
-  getPlaceholderIds (ValueGE lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueGT lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueLT lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueLE lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
-  getPlaceholderIds (ValueEQ lhs rhs) = getPlaceholderIds lhs <> getPlaceholderIds rhs
+  getPlaceholderIds (ValueGE lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueGT lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueLT lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueLE lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
+  getPlaceholderIds (ValueEQ lhs rhs) = getPlaceholderIds lhs <>
+    getPlaceholderIds rhs
   getPlaceholderIds TrueObs = mempty
   getPlaceholderIds FalseObs = mempty
 
@@ -561,8 +614,8 @@ instance decodeJsonAction :: DecodeJson Action where
       notifyIf <- getProp "notify_if"
       pure
         $ (Deposit <$> intoAccount <*> party <*> ofToken <*> deposits)
-        <|> (Choice <$> forChoice <*> chooseBetween)
-        <|> (Notify <$> notifyIf)
+            <|> (Choice <$> forChoice <*> chooseBetween)
+            <|> (Notify <$> notifyIf)
 
 instance showAction :: Show Action where
   show (Choice cid bounds) = "(Choice " <> show cid <> " " <> show bounds <> ")"
@@ -576,7 +629,9 @@ instance hasArgsAction :: Args Action where
   hasNestedArgs a = genericHasNestedArgs a
 
 instance toCoreAction :: ToCore Action S.Action where
-  toCore (Deposit accId party tok val) = S.Deposit <$> pure accId <*> pure party <*> pure tok <*> toCore val
+  toCore (Deposit accId party tok val) = S.Deposit <$> pure accId <*> pure party
+    <*> pure tok
+    <*> toCore val
   toCore (Choice choId bounds) = Just $ S.Choice choId bounds
   toCore (Notify obs) = S.Notify <$> toCore obs
 
@@ -654,7 +709,7 @@ instance decodeJsonCase :: DecodeJson Case where
   decodeJson =
     object "Case"
       $ Just
-      <$> (Case <$> requireProp "case" <*> requireProp "then")
+          <$> (Case <$> requireProp "case" <*> requireProp "then")
 
 instance showCase :: Show Case where
   show (Case action contract) = "Case " <> show action <> " " <> show contract
@@ -679,7 +734,8 @@ instance fillableCase :: Fillable Case TemplateContent where
     go = fillTemplate placeholders
 
 instance caseHasChoices :: HasChoices Case where
-  getChoiceNames (Case action contract) = getChoiceNames action <> getChoiceNames contract
+  getChoiceNames (Case action contract) = getChoiceNames action <>
+    getChoiceNames contract
 
 data Contract
   = Close
@@ -749,10 +805,10 @@ instance decodeJsonContract :: DecodeJson Contract where
         assert <- getProp "assert"
         pure
           $ (Pay <$> fromAccount <*> to <*> token <*> pay <*> _then)
-          <|> (If <$> _if <*> _then <*> _else)
-          <|> (When <$> when <*> timeout <*> timeoutContinuation)
-          <|> (Let <$> _let <*> be <*> _then)
-          <|> (Assert <$> assert <*> _then)
+              <|> (If <$> _if <*> _then <*> _else)
+              <|> (When <$> when <*> timeout <*> timeoutContinuation)
+              <|> (Let <$> _let <*> be <*> _then)
+              <|> (Assert <$> assert <*> _then)
 
 instance showContract :: Show Contract where
   show v = genericShow v
@@ -766,19 +822,32 @@ instance hasArgsContract :: Args Contract where
 
 instance toCoreContract :: ToCore Contract S.Contract where
   toCore Close = Just S.Close
-  toCore (Pay accId payee tok val cont) = S.Pay <$> pure accId <*> toCore payee <*> pure tok <*> toCore val <*> toCore cont
-  toCore (If obs cont1 cont2) = S.If <$> toCore obs <*> toCore cont1 <*> toCore cont2
-  toCore (When cases tim cont) = S.When <$> traverse toCore cases <*> toCore tim <*> toCore cont
-  toCore (Let varId val cont) = S.Let <$> pure varId <*> toCore val <*> toCore cont
+  toCore (Pay accId payee tok val cont) = S.Pay <$> pure accId <*> toCore payee
+    <*> pure tok
+    <*> toCore val
+    <*> toCore cont
+  toCore (If obs cont1 cont2) = S.If <$> toCore obs <*> toCore cont1 <*> toCore
+    cont2
+  toCore (When cases tim cont) = S.When <$> traverse toCore cases <*> toCore tim
+    <*> toCore cont
+  toCore (Let varId val cont) = S.Let <$> pure varId <*> toCore val <*> toCore
+    cont
   toCore (Assert obs cont) = S.Assert <$> toCore obs <*> toCore cont
 
 instance templateContract :: Template Contract Placeholders where
   getPlaceholderIds Close = mempty
-  getPlaceholderIds (Pay _ _ _ val cont) = getPlaceholderIds val <> getPlaceholderIds cont
-  getPlaceholderIds (If obs cont1 cont2) = getPlaceholderIds obs <> getPlaceholderIds cont1 <> getPlaceholderIds cont2
-  getPlaceholderIds (When cases tim cont) = foldMap getPlaceholderIds cases <> getPlaceholderIds tim <> getPlaceholderIds cont
-  getPlaceholderIds (Let _ val cont) = getPlaceholderIds val <> getPlaceholderIds cont
-  getPlaceholderIds (Assert obs cont) = getPlaceholderIds obs <> getPlaceholderIds cont
+  getPlaceholderIds (Pay _ _ _ val cont) = getPlaceholderIds val <>
+    getPlaceholderIds cont
+  getPlaceholderIds (If obs cont1 cont2) = getPlaceholderIds obs
+    <> getPlaceholderIds cont1
+    <> getPlaceholderIds cont2
+  getPlaceholderIds (When cases tim cont) = foldMap getPlaceholderIds cases
+    <> getPlaceholderIds tim
+    <> getPlaceholderIds cont
+  getPlaceholderIds (Let _ val cont) = getPlaceholderIds val <>
+    getPlaceholderIds cont
+  getPlaceholderIds (Assert obs cont) = getPlaceholderIds obs <>
+    getPlaceholderIds cont
 
 instance fillableContract :: Fillable Contract TemplateContent where
   fillTemplate placeholders contract = case contract of
@@ -794,9 +863,13 @@ instance fillableContract :: Fillable Contract TemplateContent where
 
 instance contractHasChoices :: HasChoices Contract where
   getChoiceNames Close = Set.empty
-  getChoiceNames (Pay _ _ _ val cont) = getChoiceNames val <> getChoiceNames cont
-  getChoiceNames (If obs cont1 cont2) = getChoiceNames obs <> getChoiceNames cont1 <> getChoiceNames cont2
-  getChoiceNames (When cases _ cont) = getChoiceNames cases <> getChoiceNames cont
+  getChoiceNames (Pay _ _ _ val cont) = getChoiceNames val <> getChoiceNames
+    cont
+  getChoiceNames (If obs cont1 cont2) = getChoiceNames obs
+    <> getChoiceNames cont1
+    <> getChoiceNames cont2
+  getChoiceNames (When cases _ cont) = getChoiceNames cases <> getChoiceNames
+    cont
   getChoiceNames (Let _ val cont) = getChoiceNames val <> getChoiceNames cont
   getChoiceNames (Assert obs cont) = getChoiceNames obs <> getChoiceNames cont
 
@@ -809,8 +882,11 @@ resolveRelativeTimes (S.Slot baseSlot) contract = relativeContract contract
   relativeContract = case _ of
     Close -> Close
     Pay a p t v contract' -> Pay a p t v (relativeContract contract')
-    If obs contract1 contract2 -> If obs (relativeContract contract1) (relativeContract contract2)
-    When cases timeout contract' -> When (relativeCase <$> cases) (relativeTimeout timeout) (relativeContract contract')
+    If obs contract1 contract2 -> If obs (relativeContract contract1)
+      (relativeContract contract2)
+    When cases timeout contract' -> When (relativeCase <$> cases)
+      (relativeTimeout timeout)
+      (relativeContract contract')
     Let vid v contract' -> Let vid v (relativeContract contract')
     Assert obs contract' -> Assert obs (relativeContract contract')
 
@@ -818,4 +894,5 @@ resolveRelativeTimes (S.Slot baseSlot) contract = relativeContract contract
     Slot t -> Slot $ t + baseSlot
     slotParam -> slotParam
 
-  relativeCase (Case action contract') = Case action (relativeContract contract')
+  relativeCase (Case action contract') = Case action
+    (relativeContract contract')

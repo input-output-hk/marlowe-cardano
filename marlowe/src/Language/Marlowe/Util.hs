@@ -1,17 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Language.Marlowe.Util where
-import           Data.List                       (foldl')
-import           Data.Map.Strict                 (Map)
-import qualified Data.Map.Strict                 as Map
-import           Data.Set                        (Set)
-import qualified Data.Set                        as Set
-import           Data.String
-import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsTypes
-import           Ledger.Ada                      (adaSymbol, adaToken)
-import qualified Ledger.Value                    as Val
-import qualified PlutusTx.Prelude                as P
+import Data.List (foldl')
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.String
+import Language.Marlowe.Semantics
+import Language.Marlowe.SemanticsTypes
+import Ledger.Ada (adaSymbol, adaToken)
+import qualified Ledger.Value as Val
+import qualified PlutusTx.Prelude as P
 
 instance IsString Party where
     fromString s = Role (fromString s)
@@ -45,17 +45,18 @@ getAccountsDiff :: [Payment] -> [Input] -> AccountsDiff
 getAccountsDiff payments inputs =
     foldl' (\acc (p, m) -> addAccountsDiff p m acc) emptyAccountsDiff (incomes ++ outcomes)
   where
-    incomes  = [ (p, Val.singleton cur tok m) | IDeposit _ p (Token cur tok) m <- inputs ]
+    incomes  = [ (p, Val.singleton cur tok m) | IDeposit _ p (Token cur tok) m <- map getInputContent inputs ]
     outcomes = [ (p, P.negate m) | Payment _ (Party p) m  <- payments ]
 
 
 foldMapContract :: Monoid m
-    => (Contract -> m)
+    => (P.BuiltinByteString -> Maybe Contract)
+    -> (Contract -> m)
     -> (Case Contract -> m)
     -> (Observation -> m)
     -> (Value Observation -> m)
     -> Contract -> m
-foldMapContract fcont fcase fobs fvalue contract =
+foldMapContract funmerk fcont fcase fobs fvalue contract =
     fcont contract <> case contract of
         Close                -> mempty
         Pay _ _ _ value cont -> fvalue' value <> go cont
@@ -64,8 +65,10 @@ foldMapContract fcont fcase fobs fvalue contract =
         Let _ value cont     -> fvalue value <> go cont
         Assert obs cont      -> fobs' obs <> go cont
   where
-    go = foldMapContract fcont fcase fobs fvalue
-    fcase' cs@(Case _ cont) = fcase cs <> go cont
+    go = foldMapContract funmerk fcont fcase fobs fvalue
+    fcase' cs = fcase cs <> case cs of
+        Case _ cont            -> go cont
+        MerkleizedCase _ chash -> maybe mempty go (funmerk chash)
     fobs' obs = fobs obs <> case obs of
         AndObs a b  -> fobs' a <> fobs' b
         OrObs  a b  -> fobs' a <> fobs' b
@@ -86,12 +89,17 @@ foldMapContract fcont fcase fobs fvalue contract =
         _            -> mempty
 
 
-foldMapContractValue :: Monoid m => (Value Observation -> m) -> Contract -> m
-foldMapContractValue = foldMapContract (const mempty) (const mempty) (const mempty)
+foldMapNonMerkleizedContract :: Monoid m
+    => (Contract -> m)
+    -> (Case Contract -> m)
+    -> (Observation -> m)
+    -> (Value Observation -> m)
+    -> Contract -> m
+foldMapNonMerkleizedContract = foldMapContract (const Nothing)
 
 
-extractContractRoles :: Contract -> Set Val.TokenName
-extractContractRoles = foldMapContract extract extractCase (const mempty) (const mempty)
+extractNonMerkleizedContractRoles :: Contract -> Set Val.TokenName
+extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extractCase (const mempty) (const mempty)
   where
     extract (Pay from payee _ _ _) = fromParty from <> fromPayee payee
     extract _                      = mempty

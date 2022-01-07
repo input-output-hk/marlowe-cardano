@@ -13,24 +13,29 @@ import Halogen.HTML.Properties (class_, classes, value)
 import MainFrame.Types (ChildSlots)
 import Rename.Types (Action(..), State, _error, _projectName)
 
-handleAction ::
-  forall m.
-  MonadAff m =>
-  Action -> HalogenM State Action ChildSlots Void m Unit
+handleAction
+  :: forall m
+   . MonadAff m
+  => Action
+  -> HalogenM State Action ChildSlots Void m Unit
 handleAction (ChangeInput newName) = assign _projectName newName
 
 handleAction SaveProject = pure unit
 
-render ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
+render
+  :: forall m
+   . MonadAff m
+  => State
+  -> ComponentHTML Action ChildSlots m
 render state =
   div_
     [ modalHeader "Rename Project" Nothing
     , div [ classes [ modalContent ] ]
-        [ input [ class_ (ClassName "project-name-input"), value (state ^. _projectName), onValueChange ChangeInput ]
+        [ input
+            [ class_ (ClassName "project-name-input")
+            , value (state ^. _projectName)
+            , onValueChange ChangeInput
+            ]
         , button
             [ onClick $ const SaveProject
             , classNames [ "btn" ]

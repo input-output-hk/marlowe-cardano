@@ -15,7 +15,16 @@ import Data.Profunctor.Strong (class Strong)
 import Type.Proxy (Proxy(..))
 import Marlowe.Holes (Contract, Term)
 import Marlowe.Semantics (Party)
-import Simulator.Types (ActionInput, ActionInputId(..), ExecutionState(..), ExecutionStateRecord, InitialConditionsRecord, MarloweState, Parties, otherActionsParty)
+import Simulator.Types
+  ( ActionInput
+  , ActionInputId(..)
+  , ExecutionState(..)
+  , ExecutionStateRecord
+  , InitialConditionsRecord
+  , MarloweState
+  , Parties
+  , otherActionsParty
+  )
 
 --------------------------------------------------------------------------
 -- ActionInput and ActionInputId Lenses
@@ -90,7 +99,8 @@ _templateContent = prop (Proxy :: _ "templateContent")
 _SimulationRunning :: Prism' ExecutionState ExecutionStateRecord
 _SimulationRunning =
   prism SimulationRunning
-    $ ( \x -> case x of
+    $
+      ( \x -> case x of
           SimulationRunning record -> Right record
           anotherCase -> Left anotherCase
       )
@@ -99,7 +109,8 @@ _SimulationRunning =
 _SimulationNotStarted :: Prism' ExecutionState InitialConditionsRecord
 _SimulationNotStarted =
   prism SimulationNotStarted
-    $ ( \x -> case x of
+    $
+      ( \x -> case x of
           SimulationNotStarted record -> Right record
           anotherCase -> Left anotherCase
       )
@@ -123,14 +134,31 @@ _holes = prop (Proxy :: _ "holes")
 _result :: forall s a. Lens' { result :: a | s } a
 _result = prop (Proxy :: _ "result")
 
-_marloweState :: forall s. Lens' { marloweState :: NonEmptyList MarloweState | s } (NonEmptyList MarloweState)
+_marloweState
+  :: forall s
+   . Lens' { marloweState :: NonEmptyList MarloweState | s }
+       (NonEmptyList MarloweState)
 _marloweState = prop (Proxy :: _ "marloweState")
 
-_currentMarloweState :: forall s. Lens' { marloweState :: NonEmptyList MarloweState | s } MarloweState
+_currentMarloweState
+  :: forall s
+   . Lens' { marloweState :: NonEmptyList MarloweState | s } MarloweState
 _currentMarloweState = _marloweState <<< _Head
 
-_currentContract :: forall s p. Strong p => Choice p => Optic' p { marloweState :: NonEmptyList MarloweState | s } (Term Contract)
-_currentContract = _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _contract
+_currentContract
+  :: forall s p
+   . Strong p
+  => Choice p
+  => Optic' p { marloweState :: NonEmptyList MarloweState | s } (Term Contract)
+_currentContract = _currentMarloweState <<< _executionState
+  <<< _SimulationRunning
+  <<< _contract
 
-_currentPossibleActions :: forall s p. Strong p => Choice p => Optic' p { marloweState :: NonEmptyList MarloweState | s } Parties
-_currentPossibleActions = _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _possibleActions
+_currentPossibleActions
+  :: forall s p
+   . Strong p
+  => Choice p
+  => Optic' p { marloweState :: NonEmptyList MarloweState | s } Parties
+_currentPossibleActions = _currentMarloweState <<< _executionState
+  <<< _SimulationRunning
+  <<< _possibleActions

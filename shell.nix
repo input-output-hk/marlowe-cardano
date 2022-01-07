@@ -3,10 +3,59 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground;
-  inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt;
+  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground bitte-packages;
+  inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purty-pre-commit;
+  inherit (marlowe) purs-tidy-hook prettier-hook;
+
+  set-xdg = ''
+    export XDG_DATA_HOME="''${XDG_DATA_HOME:-''${HOME}/.local/share}"
+    mkdir -p "''${XDG_DATA_HOME}"
+    export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-''${HOME}/.local/run}"
+    mkdir -p "''${XDG_RUNTIME_DIR}"
+  '';
+
+  launch-node = writeShellScriptBin "launch-node" ''
+    set -eEuo pipefail
+
+    ${set-xdg}
+
+    export NODE_STATE_DIR="''${NODE_STATE_DIR:-''${XDG_DATA_HOME}/node}"
+    mkdir -p "$NODE_STATE_DIR"
+
+    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
+
+    export NOMAD_PORT_node="''${NOMAD_PORT_node:-3001}"
+
+    exec -a entrypoint ${bitte-packages.node}/bin/entrypoint
+  '';
+
+  launch-chain-index = writeShellScriptBin "launch-chain-index" ''
+    set -eEuo pipefail
+
+    ${set-xdg}
+
+    export INDEX_STATE_DIR="''${INDEX_STATE_DIR:-''${XDG_DATA_HOME}/index}"
+    mkdir -p "$INDEX_STATE_DIR"
+
+    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
+
+    export NOMAD_PORT_index="''${NOMAD_PORT_index:-9083}"
+
+    exec -a entrypoint ${bitte-packages.chain-index}/bin/entrypoint
+  '';
+
+  launch-wbe = writeShellScriptBin "launch-wbe" ''
+    set -eEuo pipefail
+
+    ${set-xdg}
+
+    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
+
+    export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
+
+    exec -a entrypoint ${bitte-packages.wbe}/bin/entrypoint
+  '';
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
@@ -27,10 +76,10 @@ let
       stylish-haskell = stylish-haskell;
       nixpkgs-fmt = nixpkgs-fmt;
       shellcheck = pkgs.shellcheck;
-      purty = purty-pre-commit;
     };
     hooks = {
-      purty.enable = true;
+      inherit purs-tidy-hook;
+      prettier = prettier-hook;
       stylish-haskell.enable = true;
       nixpkgs-fmt = {
         enable = true;
@@ -70,6 +119,7 @@ let
     yq
     z3
     zlib
+    nodePackages.prettier
   ] ++ (lib.optionals (!stdenv.isDarwin) [ rPackages.plotly R ]));
 
   # local build inputs ( -> ./nix/pkgs/default.nix )
@@ -77,7 +127,8 @@ let
     cabal-install
     cardano-repo-tool
     fixPngOptimization
-    fixPurty
+    fix-prettier
+    fix-purs-tidy
     fixStylishHaskell
     haskell-language-server
     haskell-language-server-wrapper
@@ -88,7 +139,7 @@ let
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
     purs
-    purty
+    purs-tidy
     spago
     psa
     purescript-language-server
@@ -97,6 +148,10 @@ let
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
+
+    launch-node
+    launch-chain-index
+    launch-wbe
   ]);
 
 in
@@ -120,7 +175,7 @@ haskell.project.shellFor {
   # Point to some source dependencies
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-    export WEB_COMMON_SRC="${webCommon}"
+    export WEB_COMMON_SRC="${webCommon.cleanSrc}"
     export WEB_COMMON_PLAYGROUND_SRC="${webCommonPlayground}"
   '';
 }

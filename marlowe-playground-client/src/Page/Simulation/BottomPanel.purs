@@ -16,26 +16,51 @@ import Halogen.HTML (HTML, br_, div, div_, h4, text)
 import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics (ChoiceId(..), Party, Token, TransactionError, TransactionWarning, ValueId(..), _accounts, _boundValues, _choices)
+import Marlowe.Semantics
+  ( ChoiceId(..)
+  , Party
+  , Token
+  , TransactionError
+  , TransactionWarning
+  , ValueId(..)
+  , _accounts
+  , _boundValues
+  , _choices
+  )
 import Marlowe.ViewPartials (displayWarningList)
 import Page.Simulation.Types (BottomPanelView(..), State)
 import Pretty (renderPrettyParty, renderPrettyToken, showPrettyMoney)
-import Simulator.Lenses (_SimulationRunning, _executionState, _marloweState, _state, _transactionError, _transactionWarnings)
+import Simulator.Lenses
+  ( _SimulationRunning
+  , _executionState
+  , _marloweState
+  , _state
+  , _transactionError
+  , _transactionWarnings
+  )
 
-panelContents ::
-  forall m action.
-  MonadAff m =>
-  MetaData ->
-  State ->
-  BottomPanelView ->
-  ComponentHTML action ChildSlots m
+panelContents
+  :: forall m action
+   . MonadAff m
+  => MetaData
+  -> State
+  -> BottomPanelView
+  -> ComponentHTML action ChildSlots m
 panelContents metadata state CurrentStateView = currentStateView metadata state
 
 panelContents _ state WarningsAndErrorsView =
   let
-    runtimeWarnings = view (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _transactionWarnings) state
+    runtimeWarnings = view
+      ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<<
+          _transactionWarnings
+      )
+      state
 
-    mRuntimeError = join $ preview (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _transactionError) state
+    mRuntimeError = join $ preview
+      ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<<
+          _transactionError
+      )
+      state
   in
     warningsAndErrorsView runtimeWarnings mRuntimeError
 
@@ -49,50 +74,77 @@ currentStateView metadata state =
         , rowData: accountsData
         }
         <> tableRow
-            { title: "Choices"
-            , emptyMessage: "No Choices have been made"
-            , columns: ("Choice ID" /\ "Participant" /\ "Chosen Value")
-            , rowData: choicesData
-            }
+          { title: "Choices"
+          , emptyMessage: "No Choices have been made"
+          , columns: ("Choice ID" /\ "Participant" /\ "Chosen Value")
+          , rowData: choicesData
+          }
         <> tableRow
-            { title: "Let Bindings"
-            , emptyMessage: "No values have been bound"
-            , columns: ("Identifier" /\ "Value" /\ mempty)
-            , rowData: bindingsData
-            }
+          { title: "Let Bindings"
+          , emptyMessage: "No values have been bound"
+          , columns: ("Identifier" /\ "Value" /\ mempty)
+          , rowData: bindingsData
+          }
     )
   where
   accountsData =
     let
-      (accounts :: Array (Tuple (Tuple Party Token) BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _accounts <<< to Map.toUnfoldable)
+      (accounts :: Array (Tuple (Tuple Party Token) BigInt)) = state ^.
+        ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning
+            <<< _state
+            <<< _accounts
+            <<< to Map.toUnfoldable
+        )
 
-      asTuple (Tuple (Tuple accountOwner tok) value) = renderPrettyParty metadata accountOwner /\ renderPrettyToken tok /\ text (showPrettyMoney value)
+      asTuple (Tuple (Tuple accountOwner tok) value) =
+        renderPrettyParty metadata accountOwner /\ renderPrettyToken tok /\ text
+          (showPrettyMoney value)
     in
       map asTuple accounts
 
   choicesData =
     let
-      (choices :: Array (Tuple ChoiceId BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _choices <<< to Map.toUnfoldable)
+      (choices :: Array (Tuple ChoiceId BigInt)) = state ^.
+        ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning
+            <<< _state
+            <<< _choices
+            <<< to Map.toUnfoldable
+        )
 
-      asTuple (Tuple (ChoiceId choiceName choiceOwner) value) = text (show choiceName) /\ renderPrettyParty metadata choiceOwner /\ text (showPrettyMoney value)
+      asTuple (Tuple (ChoiceId choiceName choiceOwner) value) =
+        text (show choiceName) /\ renderPrettyParty metadata choiceOwner /\ text
+          (showPrettyMoney value)
     in
       map asTuple choices
 
   bindingsData =
     let
-      (bindings :: Array (Tuple ValueId BigInt)) = state ^. (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning <<< _state <<< _boundValues <<< to Map.toUnfoldable)
+      (bindings :: Array (Tuple ValueId BigInt)) = state ^.
+        ( _marloweState <<< _Head <<< _executionState <<< _SimulationRunning
+            <<< _state
+            <<< _boundValues
+            <<< to Map.toUnfoldable
+        )
 
-      asTuple (Tuple (ValueId valueId) value) = text (show valueId) /\ text (showPrettyMoney value) /\ text ""
+      asTuple (Tuple (ValueId valueId) value) = text (show valueId)
+        /\ text (showPrettyMoney value)
+        /\ text ""
     in
       map asTuple bindings
 
   tableRow { title, emptyMessage, rowData: [] } = emptyRow title emptyMessage
 
-  tableRow { title, columns, rowData } = headerRow title columns <> foldMap (\dataTuple -> row dataTuple) rowData
+  tableRow { title, columns, rowData } = headerRow title columns <> foldMap
+    (\dataTuple -> row dataTuple)
+    rowData
 
   headerRow title (a /\ b /\ c) =
     [ div [ classes [ rTableCell, first, Classes.header ] ] [ text title ] ]
-      <> map (\x -> div [ classes [ rTableCell, rTableCell, Classes.header ] ] [ text x ]) [ a, b, c ]
+      <> map
+        ( \x -> div [ classes [ rTableCell, rTableCell, Classes.header ] ]
+            [ text x ]
+        )
+        [ a, b, c ]
 
   row (a /\ b /\ c) =
     [ div [ classes [ rTableCell, first ] ] [] ]
@@ -101,15 +153,16 @@ currentStateView metadata state =
   emptyRow title message =
     [ div [ classes [ rTableCell, first, Classes.header ] ]
         [ text title ]
-    , div [ classes [ rTableCell, rTableEmptyRow, Classes.header ] ] [ text message ]
+    , div [ classes [ rTableCell, rTableEmptyRow, Classes.header ] ]
+        [ text message ]
     ]
 
-warningsAndErrorsView ::
-  forall action m.
-  MonadAff m =>
-  Array TransactionWarning ->
-  Maybe TransactionError ->
-  ComponentHTML action ChildSlots m
+warningsAndErrorsView
+  :: forall action m
+   . MonadAff m
+  => Array TransactionWarning
+  -> Maybe TransactionError
+  -> ComponentHTML action ChildSlots m
 warningsAndErrorsView [] Nothing = div_ [ text "No problems found" ]
 
 warningsAndErrorsView [] (Just err) = errorView err
@@ -123,25 +176,27 @@ warningsAndErrorsView warnings (Just err) =
     , warningsView warnings
     ]
 
-warningsView ::
-  forall action m.
-  MonadAff m =>
-  Array TransactionWarning ->
-  ComponentHTML action ChildSlots m
+warningsView
+  :: forall action m
+   . MonadAff m
+  => Array TransactionWarning
+  -> ComponentHTML action ChildSlots m
 warningsView warnings =
   div_
-    [ h4 [ classNames [ "font-semibold", "no-margins", "mb-2" ] ] [ text "Warnings" ]
+    [ h4 [ classNames [ "font-semibold", "no-margins", "mb-2" ] ]
+        [ text "Warnings" ]
     , displayWarningList warnings
     ]
 
-errorView ::
-  forall action m.
-  MonadAff m =>
-  TransactionError ->
-  ComponentHTML action ChildSlots m
+errorView
+  :: forall action m
+   . MonadAff m
+  => TransactionError
+  -> ComponentHTML action ChildSlots m
 errorView err =
   div_
-    [ h4 [ classNames [ "font-semibold", "no-margins", "mb-2" ] ] [ text "Error" ]
+    [ h4 [ classNames [ "font-semibold", "no-margins", "mb-2" ] ]
+        [ text "Error" ]
     -- TODO: Improve the error messages
     , text $ show err
     ]

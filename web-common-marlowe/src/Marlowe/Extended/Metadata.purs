@@ -109,9 +109,10 @@ defaultForFormatType DecimalFormatType = DecimalFormat 0 ""
 defaultForFormatType TimeFormatType = TimeFormat
 
 type ValueParameterInfo
-  = { valueParameterFormat :: NumberFormat
-    , valueParameterDescription :: String
-    }
+  =
+  { valueParameterFormat :: NumberFormat
+  , valueParameterDescription :: String
+  }
 
 _valueParameterFormat :: Lens' ValueParameterInfo NumberFormat
 _valueParameterFormat = prop (Proxy :: _ "valueParameterFormat")
@@ -125,19 +126,29 @@ emptyValueParameterInfo =
   , valueParameterDescription: mempty
   }
 
-getValueParameterInfo :: String -> OMap String ValueParameterInfo -> ValueParameterInfo
-getValueParameterInfo str = fromMaybe emptyValueParameterInfo <<< OMap.lookup str
+getValueParameterInfo
+  :: String -> OMap String ValueParameterInfo -> ValueParameterInfo
+getValueParameterInfo str = fromMaybe emptyValueParameterInfo <<< OMap.lookup
+  str
 
-updateValueParameterInfo :: (ValueParameterInfo -> ValueParameterInfo) -> String -> OMap String ValueParameterInfo -> OMap String ValueParameterInfo
+updateValueParameterInfo
+  :: (ValueParameterInfo -> ValueParameterInfo)
+  -> String
+  -> OMap String ValueParameterInfo
+  -> OMap String ValueParameterInfo
 updateValueParameterInfo f = OMap.alter updateValueParameterInfoEntry
   where
-  updateValueParameterInfoEntry :: Maybe ValueParameterInfo -> Maybe ValueParameterInfo
-  updateValueParameterInfoEntry mValueParameterInfo = Just $ f $ fromMaybe emptyValueParameterInfo mValueParameterInfo
+  updateValueParameterInfoEntry
+    :: Maybe ValueParameterInfo -> Maybe ValueParameterInfo
+  updateValueParameterInfoEntry mValueParameterInfo = Just $ f $ fromMaybe
+    emptyValueParameterInfo
+    mValueParameterInfo
 
 type ChoiceInfo
-  = { choiceFormat :: NumberFormat
-    , choiceDescription :: String
-    }
+  =
+  { choiceFormat :: NumberFormat
+  , choiceDescription :: String
+  }
 
 _choiceFormat :: Lens' ChoiceInfo NumberFormat
 _choiceFormat = prop (Proxy :: _ "choiceFormat")
@@ -154,22 +165,28 @@ emptyChoiceInfo =
 getChoiceInfo :: String -> Map String ChoiceInfo -> ChoiceInfo
 getChoiceInfo str = fromMaybe emptyChoiceInfo <<< Map.lookup str
 
-updateChoiceInfo :: (ChoiceInfo -> ChoiceInfo) -> String -> Map String ChoiceInfo -> Map String ChoiceInfo
+updateChoiceInfo
+  :: (ChoiceInfo -> ChoiceInfo)
+  -> String
+  -> Map String ChoiceInfo
+  -> Map String ChoiceInfo
 updateChoiceInfo f = Map.alter updateChoiceInfoEntry
   where
   updateChoiceInfoEntry :: Maybe ChoiceInfo -> Maybe ChoiceInfo
-  updateChoiceInfoEntry mChoiceInfo = Just $ f $ fromMaybe emptyChoiceInfo mChoiceInfo
+  updateChoiceInfoEntry mChoiceInfo = Just $ f $ fromMaybe emptyChoiceInfo
+    mChoiceInfo
 
 type MetaData
-  = { contractType :: ContractType
-    , contractName :: String
-    , contractShortDescription :: String
-    , contractLongDescription :: String
-    , roleDescriptions :: Map S.TokenName String
-    , slotParameterDescriptions :: OMap String String
-    , valueParameterInfo :: OMap String ValueParameterInfo
-    , choiceInfo :: Map String ChoiceInfo
-    }
+  =
+  { contractType :: ContractType
+  , contractName :: String
+  , contractShortDescription :: String
+  , contractLongDescription :: String
+  , roleDescriptions :: Map S.TokenName String
+  , slotParameterDescriptions :: OMap String String
+  , valueParameterInfo :: OMap String ValueParameterInfo
+  , choiceInfo :: Map String ChoiceInfo
+  }
 
 _contractName :: Lens' MetaData String
 _contractName = prop (Proxy :: _ "contractName")
@@ -208,14 +225,17 @@ emptyContractMetadata =
   }
 
 getChoiceFormat :: MetaData -> String -> NumberFormat
-getChoiceFormat { choiceInfo } choiceName = maybe DefaultFormat (\choiceInfoVal -> choiceInfoVal.choiceFormat) $ Map.lookup choiceName choiceInfo
+getChoiceFormat { choiceInfo } choiceName =
+  maybe DefaultFormat (\choiceInfoVal -> choiceInfoVal.choiceFormat) $
+    Map.lookup choiceName choiceInfo
 
 type MetadataHintInfo
-  = { roles :: Set S.TokenName
-    , slotParameters :: OSet String
-    , valueParameters :: OSet String
-    , choiceNames :: Set String
-    }
+  =
+  { roles :: Set S.TokenName
+  , slotParameters :: OSet String
+  , valueParameters :: OSet String
+  , choiceNames :: Set String
+  }
 
 _roles :: Lens' MetadataHintInfo (Set S.TokenName)
 _roles = prop (Proxy :: _ "roles")
@@ -247,11 +267,12 @@ getMetadataHintInfo contract =
     }
 
 getHintsFromMetadata :: MetaData -> MetadataHintInfo
-getHintsFromMetadata { roleDescriptions
-, slotParameterDescriptions
-, valueParameterInfo
-, choiceInfo
-} =
+getHintsFromMetadata
+  { roleDescriptions
+  , slotParameterDescriptions
+  , valueParameterInfo
+  , choiceInfo
+  } =
   { roles: Map.keys roleDescriptions
   , slotParameters: OMap.keys slotParameterDescriptions
   , valueParameters: OMap.keys valueParameterInfo
@@ -259,9 +280,10 @@ getHintsFromMetadata { roleDescriptions
   }
 
 type ContractTemplate
-  = { metaData :: MetaData
-    , extendedContract :: Contract
-    }
+  =
+  { metaData :: MetaData
+  , extendedContract :: Contract
+  }
 
 _metaData :: Lens' ContractTemplate MetaData
 _metaData = prop (Proxy :: _ "metaData")

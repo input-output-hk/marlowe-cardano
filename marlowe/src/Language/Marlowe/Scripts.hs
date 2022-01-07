@@ -24,26 +24,31 @@
 {-# OPTIONS_GHC -fno-specialise #-}
 
 module Language.Marlowe.Scripts where
-import           Data.Default                     (Default (def))
-import           Language.Marlowe.Semantics
-import           Language.Marlowe.SemanticsTypes  hiding (Contract)
-import           Ledger
-import           Ledger.Ada                       (adaSymbol)
-import           Ledger.Constraints
-import           Ledger.Constraints.OnChain
-import           Ledger.Constraints.TxConstraints
-import qualified Ledger.Interval                  as Interval
-import qualified Ledger.TimeSlot                  as TimeSlot
-import qualified Ledger.Typed.Scripts             as Scripts
-import qualified Ledger.Value                     as Val
-import           Plutus.Contract.StateMachine     (StateMachine (..), Void)
-import qualified Plutus.Contract.StateMachine     as SM
+import Data.Default (Default (def))
+import Language.Marlowe.Semantics
+import Language.Marlowe.SemanticsTypes hiding (Contract)
+import Ledger
+import Ledger.Ada (adaSymbol)
+import Ledger.Constraints
+import Ledger.Constraints.OnChain
+import Ledger.Constraints.TxConstraints
+import qualified Ledger.Interval as Interval
+import qualified Ledger.TimeSlot as TimeSlot
+import qualified Ledger.Typed.Scripts as Scripts
+import qualified Ledger.Value as Val
+import Plutus.Contract.StateMachine (StateMachine (..), Void)
+import qualified Plutus.Contract.StateMachine as SM
 import qualified PlutusTx
-import qualified PlutusTx.AssocMap                as AssocMap
-import           PlutusTx.Prelude
+import qualified PlutusTx.AssocMap as AssocMap
+import PlutusTx.Prelude
+import Unsafe.Coerce
 
 type MarloweSlotRange = (Slot, Slot)
 type MarloweInput = (MarloweSlotRange, [Input])
+
+-- Yeah, I know
+type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
+type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
 
 data TypedMarloweValidator
 
@@ -120,7 +125,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
                         Close -> (payoutConstraints payoutsByParty, zero)
                         _ -> let
                             outputsConstraints = payoutConstraints payoutsByParty
-                            totalIncome = foldMap collectDeposits inputs
+                            totalIncome = foldMap (collectDeposits . getInputContent) inputs
                             totalPayouts = foldMap snd payoutsByParty
                             finalBalance = inputBalance + totalIncome - totalPayouts
                             in (outputsConstraints, finalBalance)
@@ -135,11 +140,11 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
   where
     validateInputs :: MarloweParams -> [Input] -> TxConstraints Void Void
     validateInputs MarloweParams{rolesCurrency} inputs = let
-        (keys, roles) = foldMap validateInputWitness inputs
+        (keys, roles) = foldMap (validateInputWitness . getInputContent) inputs
         mustSpendSetOfRoleTokens = foldMap mustSpendRoleToken (AssocMap.keys roles)
         in foldMap mustBeSignedBy keys <> mustSpendSetOfRoleTokens
       where
-        validateInputWitness :: Input -> ([PubKeyHash], AssocMap.Map TokenName ())
+        validateInputWitness :: InputContent -> ([PubKeyHash], AssocMap.Map TokenName ())
         validateInputWitness input =
             case input of
                 IDeposit _ party _ _         -> validatePartyWitness party
@@ -152,7 +157,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
         mustSpendRoleToken :: TokenName -> TxConstraints Void Void
         mustSpendRoleToken role = mustSpendAtLeast $ Val.singleton rolesCurrency role 1
 
-    collectDeposits :: Input -> Val.Value
+    collectDeposits :: InputContent -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
     collectDeposits _                                     = zero
 
@@ -195,6 +200,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     let (minTime, maxTime) =
             case txInfoValidRange scriptContextTxInfo of
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
+                -- FIXME remove this when mockchain implementation updates to correct one as above
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) True) -> (l, h)
                 _ -> traceError "R0"
     let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
     let minSlot = timeToSlot minTime
@@ -237,7 +244,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
                 checkContinuation = case txOutContract of
                     Close -> True
                     _ -> let
-                        totalIncome = foldMap collectDeposits inputs
+                        totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
                         outConstrs = OutputConstraint
@@ -251,6 +258,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
         Error (TEIntervalError (InvalidInterval _)) -> traceError "E3"
         Error (TEIntervalError (IntervalInPastError _ _)) -> traceError "E4"
         Error TEUselessTransaction -> traceError "E5"
+        Error TEHashMismatch -> traceError "E6"
 
   where
     checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
@@ -261,9 +269,9 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
     allOutputs = txInfoOutputs scriptContextTxInfo
 
     validateInputs :: [Input] -> Bool
-    validateInputs inputs = all validateInputWitness inputs
+    validateInputs inputs = all (validateInputWitness . getInputContent) inputs
       where
-        validateInputWitness :: Input -> Bool
+        validateInputWitness :: InputContent -> Bool
         validateInputWitness input =
             case input of
                 IDeposit _ party _ _         -> validatePartyWitness party
@@ -274,7 +282,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} Marl
             validatePartyWitness (Role role) = traceIfFalse "T" -- "Spent value not OK"
                                                $ Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
 
-    collectDeposits :: Input -> Val.Value
+    collectDeposits :: InputContent -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
     collectDeposits _                                     = zero
 
@@ -321,10 +329,13 @@ smallTypedValidator params = Scripts.mkTypedValidatorParam @TypedMarloweValidato
         wrap = Scripts.wrapValidator
 
 
-smallUntypedValidator :: MarloweParams -> Scripts.Validator
+smallUntypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
 smallUntypedValidator params = let
     wrapped s = Scripts.wrapValidator (smallMarloweValidator s)
-    in mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+    typed = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode params)
+    -- Yeah, I know. It works, though.
+    -- Remove this when Typed Validator has the same size as untyped.
+    in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
 
 
 mkMachineInstance :: MarloweParams -> SM.StateMachineInstance MarloweData MarloweInput

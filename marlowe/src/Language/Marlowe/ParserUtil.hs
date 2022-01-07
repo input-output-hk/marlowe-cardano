@@ -1,8 +1,8 @@
 module Language.Marlowe.ParserUtil where
 
-import qualified Data.Aeson       as JSON
-import           Data.Aeson.Types hiding (Error, Value)
-import           Data.Scientific  (Scientific, floatingOrInteger)
+import qualified Data.Aeson as JSON
+import Data.Aeson.Types hiding (Error, Value)
+import Data.Scientific (Scientific, floatingOrInteger)
 
 getInteger :: Scientific -> Parser Integer
 getInteger x = case (floatingOrInteger x :: Either Double Integer) of

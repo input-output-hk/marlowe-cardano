@@ -1,92 +1,134 @@
 module Marlowe.LintTests where
 
 import Prologue
+
+import Control.Monad.Error.Class (class MonadThrow)
 import Data.Array (singleton)
+import Data.Foldable (for_)
 import Data.List (List(..))
 import Data.Map as Map
 import Data.Set (toUnfoldable)
-import Data.Traversable (sequence_)
+import Data.Tuple (uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
+import Effect.Aff (Error)
 import Marlowe.Linter (State(..), WarningDetail(..), lint)
 import Marlowe.Parser (parseContract)
 import StaticData (marloweContracts)
-import Test.Unit (TestSuite, Test, suite, test, failure)
-import Test.Unit.Assert as Assert
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (fail, shouldEqual)
 
-all :: TestSuite
+all :: Spec Unit
 all = do
-  suite "Marlowe.Linter reports simplification" do
-    test "in Let construct" letSimplifies
-    test "in Deposit construct" depositSimplifies
-    test "in Pay construct" paySimplifies
-    test "in AddValue" addValueSimplifies
-    test "of AddValue with 0 constant" addValueSimplifiesWithZero
-    test "in SubValue" subValueSimplifies
-    test "of SubValue with 0 constant" subValueSimplifiesWithZero
-    test "in If construct" ifSimplifies
-    test "in Notify construct" notifySimplifies
-    test "in Assert construct" assertSimplifies
-    test "in AndObs" andObsSimplifies
-    test "of AndObs with True constant" andObsSimplifiesWithTrue
-    test "in OrObs" orObsSimplifies
-    test "of OrObs with False constant" orObsSimplifiesWithFalse
-    test "of DivValue 0 / _" divZeroSimplified
-    test "of DivValue by 0" divByZeroSimplified
-    test "of DivValue with constant" divConstantSimplified
-    test "Invalid bound in Case" unreachableCaseInvalidBound
-  suite "Marlowe.Linter reports bad pratices" do
-    test "Let shadowing" letShadowing
-    test "Non-increasing timeouts" nonIncreasingTimeouts
-  suite "Marlowe.Linter reports unreachable code" do
-    test "Unreachable If branch (then)" unreachableThen
-    test "Unreachable If branch (else)" unreachableElse
-    test "Unreachable Case (Notify)" unreachableCaseNotify
-    test "Unreachable Case (empty Choice list)" unreachableCaseEmptyChoiceList
-  suite "Marlowe.Linter reports bad contracts" do
-    test "Undefined Let" undefinedLet
-    test "Undefined ChoiceValue" undefinedChoiceValue
-    test "Non-positive Deposit" nonPositiveDeposit
-    test "Non-positive Pay" nonPositivePay
-    test "Pay before deposit" payBeforeWarning
-    test "Pay before deposit in branch" payBeforeWarningBranch
-    test "Pay with insufficient deposit" payInsufficientDeposit
-    test "Pay twice with insufficient deposit for both" payTwiceInsufficientDeposit
-  suite "Marlowe.Linter does not report good contracts" do
-    test "Defined Let" normalLet
-    test "Defined ChoiceValue" normalChoiceValue
-    test "Positive Deposit" positiveDeposit
-    test "Positive Pay" positivePay
-    test "Pay to hole" payToHole
-    test "Pay to account and then Pay" payThroughAccount
-    test "Pay twice" payTwice
-  suite "All examples pass Marlowe.Linter" examplesPassLinter
+  describe "Marlowe.Linter " do
+    it "reports simplification in Let construct" letSimplifies
+    it "reports simplication in Deposit construct" depositSimplifies
+    it "reports simplication in Pay construct" paySimplifies
+    it "reports simplication in AddValue" addValueSimplifies
+    it
+      "reports simplication of AddValue with 0 constant"
+      addValueSimplifiesWithZero
+    it "reports simplication in SubValue" subValueSimplifies
+    it
+      "reports simplication of SubValue with 0 constant"
+      subValueSimplifiesWithZero
+    it "reports simplication in If construct" ifSimplifies
+    it "reports simplication in Notify construct" notifySimplifies
+    it "reports simplication in Assert construct" assertSimplifies
+    it "reports simplication in AndObs" andObsSimplifies
+    it
+      "reports simplication of AndObs with True constant"
+      andObsSimplifiesWithTrue
+    it "reports simplication in OrObs" orObsSimplifies
+    it
+      "reports simplication of OrObs with False constant"
+      orObsSimplifiesWithFalse
+    it "reports simplication of DivValue 0 / _" divZeroSimplified
+    it "reports simplication of DivValue by 0" divByZeroSimplified
+    it "reports simplication of DivValue with constant" divConstantSimplified
+    it "reports simplication Invalid bound in Case" unreachableCaseInvalidBound
+    it "reports bad practices Let shadowing" letShadowing
+    it "reports bad practices Non-increasing timeouts" nonIncreasingTimeouts
+    it "reports unreachable code Unreachable If branch (then)" unreachableThen
+    it "reports unreachable code Unreachable If branch (else)" unreachableElse
+    it
+      "reports unreachable code Unreachable Case (Notify)"
+      unreachableCaseNotify
+    it
+      "reports unreachable code Unreachable Case (empty Choice list)"
+      unreachableCaseEmptyChoiceList
+    it "reports bad contracts Undefined Let" undefinedLet
+    it "reports bad contracts Undefined ChoiceValue" undefinedChoiceValue
+    it "reports bad contracts Non-positive Deposit" nonPositiveDeposit
+    it "reports bad contracts Non-positive Pay" nonPositivePay
+    it "reports bad contracts Pay before deposit" payBeforeWarning
+    it
+      "reports bad contracts Pay before deposit in branch"
+      payBeforeWarningBranch
+    it
+      "reports bad contracts Pay with insufficient deposit"
+      payInsufficientDeposit
+    it
+      "reports bad contracts Pay twice with insufficient deposit for both"
+      payTwiceInsufficientDeposit
+    it "does not report good contracts Defined Let" normalLet
+    it "does not report good contracts Defined ChoiceValue" normalChoiceValue
+    it "does not report good contracts Positive Deposit" positiveDeposit
+    it "does not report good contracts Positive Pay" positivePay
+    it "does not report good contracts Pay to hole" payToHole
+    it
+      "does not report good contracts Pay to account and then Pay"
+      payThroughAccount
+    it "does not report good contracts Pay twice" payTwice
+    let
+      examples :: Array (String /\ String)
+      examples = Map.toUnfoldable marloweContracts
+    for_ examples \(name /\ contract) ->
+      it (show name <> " example passes Marlowe.Linter") do
+        testNoWarning contract
 
 addParenthesis :: String -> String
 addParenthesis str = "(" <> str <> ")"
 
 letContract :: String -> String
-letContract subExpression = "Let \"simplifiableValue\" " <> subExpression <> " Close"
+letContract subExpression = "Let \"simplifiableValue\" " <> subExpression <>
+  " Close"
 
 addContract :: String -> String
-addContract subExpression = "Let \"simplifiableValue\" (AddValue SlotIntervalEnd " <> subExpression <> ") Close"
+addContract subExpression =
+  "Let \"simplifiableValue\" (AddValue SlotIntervalEnd " <> subExpression <>
+    ") Close"
 
 subContract :: String -> String
-subContract subExpression = "Let \"simplifiableValue\" (SubValue SlotIntervalEnd " <> subExpression <> ") Close"
+subContract subExpression =
+  "Let \"simplifiableValue\" (SubValue SlotIntervalEnd " <> subExpression <>
+    ") Close"
 
 depositAndThenDo :: String -> String -> String
-depositAndThenDo subExpression continuation = "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") " <> subExpression <> ") " <> continuation <> "] 10 Close"
+depositAndThenDo subExpression continuation =
+  "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") "
+    <> subExpression
+    <> ") "
+    <> continuation
+    <> "] 10 Close"
 
 depositContract :: String -> String
 depositContract subExpression = depositAndThenDo subExpression "Close"
 
 choiceAndThenDo :: String -> String
-choiceAndThenDo continuation = "When [Case (Choice (ChoiceId \"choice\" (Role \"role\")) [Bound 50 100]) " <> continuation <> "] 5 Close"
+choiceAndThenDo continuation =
+  "When [Case (Choice (ChoiceId \"choice\" (Role \"role\")) [Bound 50 100]) "
+    <> continuation
+    <> "] 5 Close"
 
 payContract :: String -> String
-payContract subExpression = "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") " <> subExpression <> " Close)] 10 Close"
+payContract subExpression =
+  "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") "
+    <> subExpression
+    <> " Close)] 10 Close"
 
 notifyContract :: String -> String
-notifyContract subExpression = "When [Case (Notify " <> subExpression <> ") Close] 10 Close"
+notifyContract subExpression = "When [Case (Notify " <> subExpression <>
+  ") Close] 10 Close"
 
 assertContract :: String -> String
 assertContract subExpression = "Assert " <> subExpression <> " Close"
@@ -95,301 +137,411 @@ ifContract :: String -> String
 ifContract subExpression = "If " <> subExpression <> " Close Close"
 
 andContract :: String -> String
-andContract subExpression = "If (AndObs (ValueLE SlotIntervalEnd (Constant 20)) " <> subExpression <> ") Close Close"
+andContract subExpression =
+  "If (AndObs (ValueLE SlotIntervalEnd (Constant 20)) " <> subExpression <>
+    ") Close Close"
 
 orContract :: String -> String
-orContract subExpression = "If (OrObs (ValueGE SlotIntervalEnd (Constant 5)) " <> subExpression <> ") Close Close"
+orContract subExpression = "If (OrObs (ValueGE SlotIntervalEnd (Constant 5)) "
+  <> subExpression
+  <> ") Close Close"
 
 makeValueSimplificationWarning :: String -> String -> String
-makeValueSimplificationWarning simplifiableExpression simplification = "The value \"" <> simplifiableExpression <> "\" can be simplified to \"" <> simplification <> "\""
+makeValueSimplificationWarning simplifiableExpression simplification =
+  "The value \"" <> simplifiableExpression <> "\" can be simplified to \""
+    <> simplification
+    <> "\""
 
 makeObservationSimplificationWarning :: String -> String -> String
-makeObservationSimplificationWarning simplifiableExpression simplification = "The observation \"" <> simplifiableExpression <> "\" can be simplified to \"" <> simplification <> "\""
+makeObservationSimplificationWarning simplifiableExpression simplification =
+  "The observation \"" <> simplifiableExpression <> "\" can be simplified to \""
+    <> simplification
+    <> "\""
 
-unCurry2 :: forall a b c. (a -> b -> c) -> (a /\ b) -> c
-unCurry2 f (a /\ b) = f a b
+testWarning
+  :: forall m a
+   . MonadThrow Error m
+  => (a -> Array String)
+  -> (a -> String)
+  -> a
+  -> m Unit
+testWarning makeWarning composeExpression expression =
+  case parseContract $ composeExpression expression of
+    Right contractTerm -> do
+      let
+        State st = lint Nil contractTerm
+      shouldEqual
+        (makeWarning expression)
+        $ map show
+        $ toUnfoldable
+        $ st.warnings
+    Left err -> fail (show err)
 
-testWarning :: forall a. (a -> Array String) -> (a -> String) -> a -> Test
-testWarning makeWarning composeExpression expression = case parseContract $ composeExpression expression of
-  Right contractTerm -> do
-    let
-      State st = lint Nil contractTerm
-    Assert.equal (makeWarning expression) $ map show $ toUnfoldable $ st.warnings
-  Left err -> failure (show err)
+testSimplificationWarning
+  :: forall m a b
+   . MonadThrow Error m
+  => (a -> b -> String)
+  -> (a -> String)
+  -> a
+  -> b
+  -> m Unit
+testSimplificationWarning f g simplifiableExpression simplification =
+  testWarning (singleton <<< uncurry f) (g <<< fst)
+    (simplifiableExpression /\ simplification)
 
-testSimplificationWarning :: (String -> String -> String) -> (String -> String) -> String -> String -> Test
-testSimplificationWarning f g simplifiableExpression simplification = testWarning (singleton <<< unCurry2 f) (g <<< fst) (simplifiableExpression /\ simplification)
+testValueSimplificationWarning
+  :: forall m
+   . MonadThrow Error m
+  => (String -> String)
+  -> String
+  -> String
+  -> m Unit
+testValueSimplificationWarning = testSimplificationWarning
+  makeValueSimplificationWarning
 
-testValueSimplificationWarning :: (String -> String) -> String -> String -> Test
-testValueSimplificationWarning = testSimplificationWarning makeValueSimplificationWarning
+testObservationSimplificationWarning
+  :: forall m
+   . MonadThrow Error m
+  => (String -> String)
+  -> String
+  -> String
+  -> m Unit
+testObservationSimplificationWarning = testSimplificationWarning
+  makeObservationSimplificationWarning
 
-testObservationSimplificationWarning :: (String -> String) -> String -> String -> Test
-testObservationSimplificationWarning = testSimplificationWarning makeObservationSimplificationWarning
+testWarningSimple :: forall m. MonadThrow Error m => String -> String -> m Unit
+testWarningSimple expression warning = testWarning (const [ warning ])
+  (const expression)
+  unit
 
-testWarningSimple :: String -> String -> Test
-testWarningSimple expression warning = testWarning (const [ warning ]) (const expression) unit
-
-testNoWarning :: String -> Test
+testNoWarning :: forall m. MonadThrow Error m => String -> m Unit
 testNoWarning expression = testWarning (const []) (const expression) unit
 
-letSimplifies :: Test
+letSimplifies :: forall m. MonadThrow Error m => m Unit
 letSimplifies =
   let
-    simplifiableExpression = "(AddValue (SubValue (Constant 6) (NegValue (Constant -3))) (Constant -5))"
+    simplifiableExpression =
+      "(AddValue (SubValue (Constant 6) (NegValue (Constant -3))) (Constant -5))"
 
     simplification = "(Constant -2)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
-depositSimplifies :: Test
+depositSimplifies :: forall m. MonadThrow Error m => m Unit
 depositSimplifies =
   let
-    simplifiableExpression = "(AddValue (SubValue (Constant 3) (Constant -5)) (NegValue (Constant 7)))"
+    simplifiableExpression =
+      "(AddValue (SubValue (Constant 3) (Constant -5)) (NegValue (Constant 7)))"
 
     simplification = "(Constant 1)"
   in
-    testValueSimplificationWarning depositContract simplifiableExpression simplification
+    testValueSimplificationWarning depositContract simplifiableExpression
+      simplification
 
-paySimplifies :: Test
+paySimplifies :: forall m. MonadThrow Error m => m Unit
 paySimplifies =
   let
-    simplifiableExpression = "(AddValue (SubValue (Constant 6) (Constant -1)) (NegValue (Constant 6)))"
+    simplifiableExpression =
+      "(AddValue (SubValue (Constant 6) (Constant -1)) (NegValue (Constant 6)))"
 
     simplification = "(Constant 1)"
   in
-    testValueSimplificationWarning payContract simplifiableExpression simplification
+    testValueSimplificationWarning payContract simplifiableExpression
+      simplification
 
-addValueSimplifies :: Test
+addValueSimplifies :: forall m. MonadThrow Error m => m Unit
 addValueSimplifies =
   let
-    simplifiableExpression = "(AddValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -5))"
+    simplifiableExpression =
+      "(AddValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -5))"
 
     simplification = "(Constant 1)"
   in
-    testValueSimplificationWarning addContract simplifiableExpression simplification
+    testValueSimplificationWarning addContract simplifiableExpression
+      simplification
 
-addValueSimplifiesWithZero :: Test
+addValueSimplifiesWithZero :: forall m. MonadThrow Error m => m Unit
 addValueSimplifiesWithZero =
   let
-    simplifiableExpression = "(AddValue SlotIntervalEnd (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)))"
+    simplifiableExpression =
+      "(AddValue SlotIntervalEnd (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)))"
 
     simplification = "SlotIntervalEnd"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
-subValueSimplifies :: Test
+subValueSimplifies :: forall m. MonadThrow Error m => m Unit
 subValueSimplifies =
   let
-    simplifiableExpression = "(SubValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -2))"
+    simplifiableExpression =
+      "(SubValue (NegValue (SubValue (Constant -1) (Constant 5))) (Constant -2))"
 
     simplification = "(Constant 8)"
   in
-    testValueSimplificationWarning subContract simplifiableExpression simplification
+    testValueSimplificationWarning subContract simplifiableExpression
+      simplification
 
-subValueSimplifiesWithZero :: Test
+subValueSimplifiesWithZero :: forall m. MonadThrow Error m => m Unit
 subValueSimplifiesWithZero =
   let
-    simplifiableExpression = "(SubValue (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)) SlotIntervalEnd)"
+    simplifiableExpression =
+      "(SubValue (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)) SlotIntervalEnd)"
 
     simplification = "(NegValue SlotIntervalEnd)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
-notifySimplifies :: Test
+notifySimplifies :: forall m. MonadThrow Error m => m Unit
 notifySimplifies =
   let
-    simplifiableExpression = "(OrObs (ValueLT SlotIntervalEnd (Constant 34)) (OrObs (NotObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3))) (NotObs (OrObs TrueObs FalseObs))))"
+    simplifiableExpression =
+      "(OrObs (ValueLT SlotIntervalEnd (Constant 34)) (OrObs (NotObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3))) (NotObs (OrObs TrueObs FalseObs))))"
 
     simplification = "(ValueLT SlotIntervalEnd (Constant 34))"
   in
-    testObservationSimplificationWarning notifyContract simplifiableExpression simplification
+    testObservationSimplificationWarning notifyContract simplifiableExpression
+      simplification
 
-assertSimplifies :: Test
+assertSimplifies :: forall m. MonadThrow Error m => m Unit
 assertSimplifies =
   let
-    simplifiableExpression = "(AndObs (ValueGT (Constant 14) SlotIntervalEnd) (AndObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3)) (OrObs FalseObs TrueObs)))"
+    simplifiableExpression =
+      "(AndObs (ValueGT (Constant 14) SlotIntervalEnd) (AndObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3)) (OrObs FalseObs TrueObs)))"
 
     simplification = "(ValueGT (Constant 14) SlotIntervalEnd)"
   in
-    testObservationSimplificationWarning assertContract simplifiableExpression simplification
+    testObservationSimplificationWarning assertContract simplifiableExpression
+      simplification
 
-ifSimplifies :: Test
+ifSimplifies :: forall m. MonadThrow Error m => m Unit
 ifSimplifies =
   let
-    simplifiableExpression = "(OrObs (ValueGE SlotIntervalEnd (Constant 5)) (AndObs (NotObs (OrObs FalseObs (ValueEQ (AddValue (Constant -2) (Constant 3)) (Constant 1)))) TrueObs))"
+    simplifiableExpression =
+      "(OrObs (ValueGE SlotIntervalEnd (Constant 5)) (AndObs (NotObs (OrObs FalseObs (ValueEQ (AddValue (Constant -2) (Constant 3)) (Constant 1)))) TrueObs))"
 
     simplification = "(ValueGE SlotIntervalEnd (Constant 5))"
   in
-    testObservationSimplificationWarning ifContract simplifiableExpression simplification
+    testObservationSimplificationWarning ifContract simplifiableExpression
+      simplification
 
-andObsSimplifies :: Test
+andObsSimplifies :: forall m. MonadThrow Error m => m Unit
 andObsSimplifies =
   let
-    simplifiableExpression = "(OrObs FalseObs (ValueEQ SlotIntervalEnd (Constant 2)))"
+    simplifiableExpression =
+      "(OrObs FalseObs (ValueEQ SlotIntervalEnd (Constant 2)))"
 
     simplification = "(ValueEQ SlotIntervalEnd (Constant 2))"
   in
-    testObservationSimplificationWarning andContract simplifiableExpression simplification
+    testObservationSimplificationWarning andContract simplifiableExpression
+      simplification
 
-andObsSimplifiesWithTrue :: Test
+andObsSimplifiesWithTrue :: forall m. MonadThrow Error m => m Unit
 andObsSimplifiesWithTrue =
   let
-    simplifiableExpression = "(AndObs TrueObs (ValueLE SlotIntervalEnd (Constant 6)))"
+    simplifiableExpression =
+      "(AndObs TrueObs (ValueLE SlotIntervalEnd (Constant 6)))"
 
     simplification = "(ValueLE SlotIntervalEnd (Constant 6))"
   in
-    testObservationSimplificationWarning ifContract simplifiableExpression simplification
+    testObservationSimplificationWarning ifContract simplifiableExpression
+      simplification
 
-orObsSimplifies :: Test
+orObsSimplifies :: forall m. MonadThrow Error m => m Unit
 orObsSimplifies =
   let
-    simplifiableExpression = "(AndObs TrueObs (ValueEQ SlotIntervalEnd (Constant 12)))"
+    simplifiableExpression =
+      "(AndObs TrueObs (ValueEQ SlotIntervalEnd (Constant 12)))"
 
     simplification = "(ValueEQ SlotIntervalEnd (Constant 12))"
   in
-    testObservationSimplificationWarning orContract simplifiableExpression simplification
+    testObservationSimplificationWarning orContract simplifiableExpression
+      simplification
 
-orObsSimplifiesWithFalse :: Test
+orObsSimplifiesWithFalse :: forall m. MonadThrow Error m => m Unit
 orObsSimplifiesWithFalse =
   let
-    simplifiableExpression = "(OrObs FalseObs (ValueGE SlotIntervalEnd (Constant 3)))"
+    simplifiableExpression =
+      "(OrObs FalseObs (ValueGE SlotIntervalEnd (Constant 3)))"
 
     simplification = "(ValueGE SlotIntervalEnd (Constant 3))"
   in
-    testObservationSimplificationWarning ifContract simplifiableExpression simplification
+    testObservationSimplificationWarning ifContract simplifiableExpression
+      simplification
 
-divZeroSimplified :: Test
+divZeroSimplified :: forall m. MonadThrow Error m => m Unit
 divZeroSimplified =
   let
     simplifiableExpression = "(DivValue (Constant 0) (Constant 3))"
 
     simplification = "(Constant 0)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
-divByZeroSimplified :: Test
+divByZeroSimplified :: forall m. MonadThrow Error m => m Unit
 divByZeroSimplified =
   let
     simplifiableExpression = "(DivValue (Constant 42) (Constant 0))"
 
     simplification = "(Constant 0)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
-divConstantSimplified :: Test
+divConstantSimplified :: forall m. MonadThrow Error m => m Unit
 divConstantSimplified =
   let
     simplifiableExpression = "(DivValue (Constant 7) (Constant -3))"
 
     simplification = "(Constant -2)"
   in
-    testValueSimplificationWarning letContract simplifiableExpression simplification
+    testValueSimplificationWarning letContract simplifiableExpression
+      simplification
 
-letShadowing :: Test
-letShadowing = testWarningSimple "Let \"value\" (Constant 1) (Let \"value\" (Constant 1) Close)" "Let is redefining a ValueId that already exists"
+letShadowing :: forall m. MonadThrow Error m => m Unit
+letShadowing = testWarningSimple
+  "Let \"value\" (Constant 1) (Let \"value\" (Constant 1) Close)"
+  "Let is redefining a ValueId that already exists"
 
-nonIncreasingTimeouts :: Test
-nonIncreasingTimeouts = testWarningSimple "When [] 5 (When [] 5 Close)" "Timeouts should always increase in value"
+nonIncreasingTimeouts :: forall m. MonadThrow Error m => m Unit
+nonIncreasingTimeouts = testWarningSimple "When [] 5 (When [] 5 Close)"
+  "Timeouts should always increase in value"
 
-unreachableThen :: Test
-unreachableThen = testWarningSimple "If FalseObs Close Close" $ show UnreachableContract
+unreachableThen :: forall m. MonadThrow Error m => m Unit
+unreachableThen = testWarningSimple "If FalseObs Close Close" $ show
+  UnreachableContract
 
-unreachableElse :: Test
-unreachableElse = testWarningSimple "If TrueObs Close Close" $ show UnreachableContract
+unreachableElse :: forall m. MonadThrow Error m => m Unit
+unreachableElse = testWarningSimple "If TrueObs Close Close" $ show
+  UnreachableContract
 
-unreachableCaseNotify :: Test
+unreachableCaseNotify :: forall m. MonadThrow Error m => m Unit
 unreachableCaseNotify =
   testWarningSimple "When [Case (Notify FalseObs) Close] 10 Close"
     "This case will never be used, because the Observation is always false"
 
-unreachableCaseEmptyChoiceList :: Test
+unreachableCaseEmptyChoiceList :: forall m. MonadThrow Error m => m Unit
 unreachableCaseEmptyChoiceList =
-  testWarningSimple "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) []) Close] 10 Close"
+  testWarningSimple
+    "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) []) Close] 10 Close"
     $ show UnreachableCaseEmptyChoice
 
-unreachableCaseInvalidBound :: Test
+unreachableCaseInvalidBound :: forall m. MonadThrow Error m => m Unit
 unreachableCaseInvalidBound =
-  testWarningSimple "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) [Bound 0 2, Bound 4 3]) Close] 10 Close"
+  testWarningSimple
+    "When [Case (Choice (ChoiceId \"choice\" (Role \"alice\")) [Bound 0 2, Bound 4 3]) Close] 10 Close"
     $ show InvalidBound
 
-undefinedLet :: Test
-undefinedLet = testWarningSimple (letContract "(UseValue \"simplifiableValue\")") $ show UndefinedUse
+undefinedLet :: forall m. MonadThrow Error m => m Unit
+undefinedLet =
+  testWarningSimple (letContract "(UseValue \"simplifiableValue\")") $ show
+    UndefinedUse
 
-undefinedChoiceValue :: Test
-undefinedChoiceValue = testWarningSimple (choiceAndThenDo (addParenthesis (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role2\")))"))) $ show UndefinedChoice
+undefinedChoiceValue :: forall m. MonadThrow Error m => m Unit
+undefinedChoiceValue =
+  testWarningSimple
+    ( choiceAndThenDo
+        ( addParenthesis
+            (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role2\")))")
+        )
+    ) $ show UndefinedChoice
 
-nonPositiveDeposit :: Test
-nonPositiveDeposit = testWarningSimple (depositContract "(Constant 0)") $ show NegativeDeposit
+nonPositiveDeposit :: forall m. MonadThrow Error m => m Unit
+nonPositiveDeposit = testWarningSimple (depositContract "(Constant 0)") $ show
+  NegativeDeposit
 
-negativeDeposit :: Test
-negativeDeposit = testWarningSimple (depositContract "(Constant -1)") $ show NegativeDeposit
+negativeDeposit :: forall m. MonadThrow Error m => m Unit
+negativeDeposit = testWarningSimple (depositContract "(Constant -1)") $ show
+  NegativeDeposit
 
-nonPositivePay :: Test
-nonPositivePay = testWarningSimple (payContract "(Constant 0)") $ show NegativePayment
+nonPositivePay :: forall m. MonadThrow Error m => m Unit
+nonPositivePay = testWarningSimple (payContract "(Constant 0)") $ show
+  NegativePayment
 
-negativePay :: Test
-negativePay = testWarningSimple (payContract "(Constant -1)") $ show NegativePayment
+negativePay :: forall m. MonadThrow Error m => m Unit
+negativePay = testWarningSimple (payContract "(Constant -1)") $ show
+  NegativePayment
 
-payBeforeWarning :: Test
-payBeforeWarning = testWarningSimple contract "The contract makes a payment from account \"role\" before a deposit has been made"
+payBeforeWarning :: forall m. MonadThrow Error m => m Unit
+payBeforeWarning = testWarningSimple contract
+  "The contract makes a payment from account \"role\" before a deposit has been made"
   where
-  contract = "When [Case (Deposit (Role \"role1\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
+  contract =
+    "When [Case (Deposit (Role \"role1\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
 
-payBeforeWarningBranch :: Test
-payBeforeWarningBranch = testWarningSimple contract "The contract makes a payment from account \"role\" before a deposit has been made"
+payBeforeWarningBranch :: forall m. MonadThrow Error m => m Unit
+payBeforeWarningBranch = testWarningSimple contract
+  "The contract makes a payment from account \"role\" before a deposit has been made"
   where
-  contract = "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") (Constant 10)) Close] 2 (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
+  contract =
+    "When [Case (Deposit (Role \"role\") (Role \"role\") (Token \"\" \"\") (Constant 10)) Close] 2 (Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
 
-payDepositDifferentCurrency :: Test
-payDepositDifferentCurrency = testWarningSimple (depositAndThenDo "(Constant 10)" continuation) "The contract makes a payment from account \"role\" before a deposit has been made"
+payDepositDifferentCurrency :: forall m. MonadThrow Error m => m Unit
+payDepositDifferentCurrency = testWarningSimple
+  (depositAndThenDo "(Constant 10)" continuation)
+  "The contract makes a payment from account \"role\" before a deposit has been made"
   where
-  continuation = "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"0000\" \"0000\") (Constant 10) Close)"
+  continuation =
+    "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"0000\" \"0000\") (Constant 10) Close)"
 
-payInsufficientDeposit :: Test
-payInsufficientDeposit = testWarningSimple (depositAndThenDo "(Constant 9)" continuation) "The contract makes a payment of 10 ADA from account \"role\" but the account only has 9"
+payInsufficientDeposit :: forall m. MonadThrow Error m => m Unit
+payInsufficientDeposit = testWarningSimple
+  (depositAndThenDo "(Constant 9)" continuation)
+  "The contract makes a payment of 10 ADA from account \"role\" but the account only has 9"
   where
-  continuation = "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
+  continuation =
+    "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close)"
 
-payTwiceInsufficientDeposit :: Test
-payTwiceInsufficientDeposit = testWarningSimple (depositAndThenDo "(Constant 9)" continuation) "The contract makes a payment of 5 ADA from account \"role\" but the account only has 4"
+payTwiceInsufficientDeposit :: forall m. MonadThrow Error m => m Unit
+payTwiceInsufficientDeposit = testWarningSimple
+  (depositAndThenDo "(Constant 9)" continuation)
+  "The contract makes a payment of 5 ADA from account \"role\" but the account only has 4"
   where
   continuation =
     "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) "
-      <> "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
+      <>
+        "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
 
-payToHole :: Test
+payToHole :: forall m. MonadThrow Error m => m Unit
 payToHole = testNoWarning contract
   where
-  contract = "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay ?party (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
+  contract =
+    "When [Case (Deposit (Role \"role\" ) (Role \"role\") (Token \"\" \"\") (Constant 100)) (Pay ?party (Party (Role \"role\")) (Token \"\" \"\") (Constant 1) Close)] 10 Close"
 
-payThroughAccount :: Test
-payThroughAccount = testNoWarning (depositAndThenDo "(Constant 10)" continuation)
+payThroughAccount :: forall m. MonadThrow Error m => m Unit
+payThroughAccount = testNoWarning
+  (depositAndThenDo "(Constant 10)" continuation)
   where
   continuation =
     "(Pay (Role \"role\") (Account (Role \"role2\")) (Token \"\" \"\") (Constant 10) "
-      <> "(Pay (Role \"role2\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close))"
+      <>
+        "(Pay (Role \"role2\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 10) Close))"
 
-payTwice :: Test
+payTwice :: forall m. MonadThrow Error m => m Unit
 payTwice = testNoWarning (depositAndThenDo "(Constant 10)" continuation)
   where
   continuation =
     "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) "
-      <> "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
+      <>
+        "(Pay (Role \"role\") (Party (Role \"role\")) (Token \"\" \"\") (Constant 5) Close))"
 
-normalLet :: Test
-normalLet = testNoWarning "Let \"a\" (Constant 0) (Let \"b\" (UseValue \"a\") Close)"
+normalLet :: forall m. MonadThrow Error m => m Unit
+normalLet = testNoWarning
+  "Let \"a\" (Constant 0) (Let \"b\" (UseValue \"a\") Close)"
 
-normalChoiceValue :: Test
-normalChoiceValue = testNoWarning (choiceAndThenDo (addParenthesis (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role\")))")))
+normalChoiceValue :: forall m. MonadThrow Error m => m Unit
+normalChoiceValue = testNoWarning
+  ( choiceAndThenDo
+      ( addParenthesis
+          (payContract "(ChoiceValue (ChoiceId \"choice\" (Role \"role\")))")
+      )
+  )
 
-positiveDeposit :: Test
+positiveDeposit :: forall m. MonadThrow Error m => m Unit
 positiveDeposit = testNoWarning (depositContract "(Constant 1)")
 
-positivePay :: Test
+positivePay :: forall m. MonadThrow Error m => m Unit
 positivePay = testNoWarning (payContract "(Constant 1)")
-
-examplesPassLinter :: TestSuite
-examplesPassLinter = sequence_ (map examplePassesLinter (Map.toUnfoldable marloweContracts) :: Array TestSuite)
-  where
-  examplePassesLinter :: String /\ String -> TestSuite
-  examplePassesLinter (name /\ contract) = test (show name <> " example passes Marlowe.Linter") $ testNoWarning contract

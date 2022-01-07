@@ -39,48 +39,55 @@ humanizeDuration (Seconds seconds)
   | seconds <= 0.0 = "Timed out"
   | seconds <= 60.0 = show (floor seconds) <> "sec left"
   | seconds <= (60.0 * 60.0) =
-    let
-      min = floor (seconds / 60.0)
+      let
+        min = floor (seconds / 60.0)
 
-      sec = floor $ seconds - (Int.toNumber min * 60.0)
-    in
-      show min <> "min " <> show sec <> "s left"
+        sec = floor $ seconds - (Int.toNumber min * 60.0)
+      in
+        show min <> "min " <> show sec <> "s left"
   | seconds < (60.0 * 60.0 * 24.0) =
-    let
-      hours = floor (seconds / 60.0 / 60.0)
+      let
+        hours = floor (seconds / 60.0 / 60.0)
 
-      min = round $ (seconds - (Int.toNumber hours * 60.0 * 60.0)) / 60.0
-    in
-      show hours <> "hr " <> show min <> "m left"
+        min = round $ (seconds - (Int.toNumber hours * 60.0 * 60.0)) / 60.0
+      in
+        show hours <> "hr " <> show min <> "m left"
   | otherwise =
-    let
-      days = floor (seconds / 60.0 / 60.0 / 24.0)
-    in
-      if (days == 1) then
-        "1 day left"
-      else
-        show days <> "days left"
+      let
+        days = floor (seconds / 60.0 / 60.0 / 24.0)
+      in
+        if (days == 1) then
+          "1 day left"
+        else
+          show days <> "days left"
 
 humanizeInterval :: Minutes -> SlotInterval -> String
-humanizeInterval tzOffset (SlotInterval from to) = humanize (formatSlot tzOffset from) (formatSlot tzOffset to)
+humanizeInterval tzOffset (SlotInterval from to) = humanize
+  (formatSlot tzOffset from)
+  (formatSlot tzOffset to)
   where
   humanize Nothing _ = "invalid interval"
 
   humanize _ Nothing = "invalid interval"
 
   humanize (Just (fromDate /\ fromTime)) (Just (toDate /\ toTime))
-    | fromDate == toDate && fromTime == toTime = "on " <> fromDate <> " at " <> fromTime
-    | fromDate == toDate = "on " <> fromDate <> " between " <> fromTime <> " and " <> toTime
-    | otherwise = "between " <> fromDate <> " " <> fromTime <> " and " <> toDate <> " " <> toTime
+    | fromDate == toDate && fromTime == toTime = "on " <> fromDate <> " at " <>
+        fromTime
+    | fromDate == toDate = "on " <> fromDate <> " between " <> fromTime
+        <> " and "
+        <> toTime
+    | otherwise = "between " <> fromDate <> " " <> fromTime <> " and " <> toDate
+        <> " "
+        <> toTime
 
 formatSlot :: Minutes -> Slot -> Maybe (Tuple String String)
 formatSlot tzOffset slot =
   slotToDateTime slot
     <#> \slotDT ->
-        let
-          adjustedDt = adjustTimeZone tzOffset slotDT
-        in
-          formatDate' adjustedDt /\ formatTime' adjustedDt
+      let
+        adjustedDt = adjustTimeZone tzOffset slotDT
+      in
+        formatDate' adjustedDt /\ formatTime' adjustedDt
 
 -- This is a small wrapper around Now.getTimezoneOffset to be used in conjunction with
 -- adjustTimeZone. We need to negate the value in order to substract when we do the
@@ -110,7 +117,8 @@ formatMinutes = Number.format minutesFormatter <<< Int.toNumber
 humanizeOffset :: Minutes -> String
 humanizeOffset (Minutes 0.0) = "GMT"
 
-humanizeOffset (Minutes min) = "GMT" <> (if min < zero then "-" else "+") <> offsetString
+humanizeOffset (Minutes min) = "GMT" <> (if min < zero then "-" else "+") <>
+  offsetString
   where
   min' = floor $ abs min
 
@@ -150,11 +158,15 @@ formatTime' =
 
 humanizeValue :: Token -> BigInt -> String
 -- TODO: use a different currencyFormatter with no decimal places when they're all zero
-humanizeValue (Token "" "") value = "₳ " <> Number.format (numberFormatter 6) (toAda value)
+humanizeValue (Token "" "") value = "₳ " <> Number.format (numberFormatter 6)
+  (toAda value)
 
-humanizeValue (Token "" "dollar") value = "$ " <> Number.format (numberFormatter 2) (toNumber value)
+humanizeValue (Token "" "dollar") value = "$ " <> Number.format
+  (numberFormatter 2)
+  (toNumber value)
 
-humanizeValue (Token _ name) value = Number.format (numberFormatter 0) (toNumber value) <> " " <> name
+humanizeValue (Token _ name) value =
+  Number.format (numberFormatter 0) (toNumber value) <> " " <> name
 
 toAda :: BigInt -> Number
 toAda lovelace = (toNumber lovelace) / 1000000.0

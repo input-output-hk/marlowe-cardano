@@ -9,11 +9,11 @@
 -- be used in on-chain code.
 --
 -----------------------------------------------------------------------------
-
+{-# LANGUAGE NoImplicitPrelude #-}
 module Language.Marlowe.Serialisation(positiveIntToByteString, packByteString, intToByteString, listToByteString) where
 
-import           PlutusTx.Builtins (BuiltinByteString, appendByteString, consByteString, divideInteger, emptyByteString,
-                                    lengthOfByteString, modInteger)
+import PlutusTx.Builtins (divideInteger, modInteger)
+import PlutusTx.Prelude
 
 {-# INLINABLE singletonByteString #-}
 -- | @singletonByteString n@ returns a single-byte 'BuiltinByteString' with the byte represented by
@@ -42,12 +42,18 @@ intToByteString x =
    then positiveIntToByteString (x * 2)
    else positiveIntToByteString (0 - (x * 2 + 1))
 
+{-# INLINABLE genericLength #-}
+genericLength :: [a] -> Integer
+genericLength []    = 0
+genericLength (_:t) = 1 + genericLength t
+
 {-# INLINABLE listToByteString #-}
 -- | @listToByteString f l@ Serialises the list of elements @l@ such that each of
 -- the elements of @l@ can be serialised using the function @f@.
 listToByteString :: (a -> BuiltinByteString) -> [a] -> BuiltinByteString
 listToByteString f l =
-  positiveIntToByteString (fromIntegral $ length l) `appendByteString` listToByteStringAux f l
+  positiveIntToByteString (genericLength l) `appendByteString` listToByteStringAux f l
   where listToByteStringAux :: (a -> BuiltinByteString) -> [a] -> BuiltinByteString
-        listToByteStringAux f' = foldr (appendByteString . f') mempty
+        listToByteStringAux _ []     = mempty
+        listToByteStringAux f' (h:t) = appendByteString (f' h) (listToByteStringAux f' t)
 

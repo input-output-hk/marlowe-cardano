@@ -31,7 +31,12 @@ import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
 import Marlowe.Semantics (Token(..), computeTransaction)
-import Page.Contract.State (currentStep, partyToParticipant, paymentToTransfer, toInput)
+import Page.Contract.State
+  ( currentStep
+  , partyToParticipant
+  , paymentToTransfer
+  , toInput
+  )
 import Page.Contract.Types (Action(..))
 
 render :: forall m. Monad m => Input -> ComponentHTML Action ChildSlots m
@@ -45,13 +50,13 @@ render =
             $ heading H2 [ "leading-none" ]
                 [ text
                     $ "Step "
-                    <> show stepNumber
-                    <> " "
-                    <> case action of
-                        MakeDeposit _ _ _ _ -> "deposit"
-                        MakeChoice _ _ _ -> "choice"
-                        CloseContract -> "close"
-                        _ -> ""
+                        <> show stepNumber
+                        <> " "
+                        <> case action of
+                          MakeDeposit _ _ _ _ -> "deposit"
+                          MakeChoice _ _ _ -> "choice"
+                          CloseContract -> "close"
+                          _ -> ""
                 ]
         , summary input
         , confirmation input
@@ -64,12 +69,13 @@ summary input@{ action, contractState } =
         [ column default []
             [ heading H3 []
                 [ text
-                    $ case action of
+                    $
+                      case action of
                         MakeDeposit _ _ _ _ -> "Deposit"
                         MakeChoice _ _ _ -> "Choice"
                         CloseContract -> "Close"
                         _ -> ""
-                    <> " summary"
+                        <> " summary"
                 ]
             , box Box.Card [] case action of
                 MakeDeposit recipient sender token quantity ->
@@ -98,35 +104,40 @@ summary input@{ action, contractState } =
             $ Expand.expand_ "resultingAction" Expand.Closed (results input)
         ]
 
-results ::
-  forall m.
-  Monad m =>
-  Input ->
-  Expand.State ->
-  Expand.ComponentHTML ChildSlots Void m
+results
+  :: forall m
+   . Monad m
+  => Input
+  -> Expand.State
+  -> Expand.ComponentHTML ChildSlots Void m
 results { action, contractState, currentSlot } = case _ of
   Expand.Opened ->
     layout Icon.ExpandLess
       $ box Box.Card []
-      <$> (fromFoldable $ transfer <<< paymentToTransfer contractState <$> payments)
-      <> if willClose then
-          [ row Row.Between []
-              [ text "Contract finishes"
-              , icon_ Icon.Task
-              ]
-          ]
-        else
-          []
+          <$>
+            ( fromFoldable $ transfer <<< paymentToTransfer contractState <$>
+                payments
+            )
+              <>
+                if willClose then
+                  [ row Row.Between []
+                      [ text "Contract finishes"
+                      , icon_ Icon.Task
+                      ]
+                  ]
+                else
+                  []
   Expand.Closed -> layout Icon.ExpandMore []
   where
   layout icon children =
     column Column.Snug []
-      $ [ row Row.Between [ "items-center" ]
+      $
+        [ row Row.Between [ "items-center" ]
             [ heading H4 [] [ text $ show count <> " resulting actions" ]
             , iconButton icon $ Just Expand.toggle
             ]
         ]
-      <> children
+          <> children
 
   contract = contractState.executionState.contract
 
@@ -144,7 +155,8 @@ results { action, contractState, currentSlot } = case _ of
     _ -> []
 
   willClose = case txOutput of
-    Semantics.TransactionOutput { txOutContract } -> txOutContract == Semantics.Close
+    Semantics.TransactionOutput { txOutContract } -> txOutContract ==
+      Semantics.Close
     _ -> action == CloseContract
 
   count = length payments + if willClose then 1 else 0
@@ -154,7 +166,8 @@ confirmation { action, transactionFeeQuote, walletBalance } =
   column Column.Divided []
     [ sectionBox [ "bg-lightgray" ]
         $ row Row.Between []
-            [ span [ classNames [ "font-semibold", "text-sm" ] ] [ text "Wallet balance:" ]
+            [ span [ classNames [ "font-semibold", "text-sm" ] ]
+                [ text "Wallet balance:" ]
             , amount (Token "" "") walletBalance [ "text-sm" ]
             ]
     , sectionBox []
@@ -185,7 +198,8 @@ confirmation { action, transactionFeeQuote, walletBalance } =
             ]
     , sectionBox []
         $ p [ classNames [ "text-xs" ] ]
-            [ text "*Transaction fees are estimates only and are shown in completed contract steps "
+            [ text
+                "*Transaction fees are estimates only and are shown in completed contract steps "
             , link
                 "https://docs.cardano.org/explore-cardano/fee-structure"
                 []

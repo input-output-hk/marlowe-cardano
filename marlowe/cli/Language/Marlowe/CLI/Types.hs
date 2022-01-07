@@ -32,18 +32,18 @@ module Language.Marlowe.CLI.Types (
 ) where
 
 
-import           Cardano.Api                  (AddressInEra, IsCardanoEra, NetworkId, PlutusScriptV1, Script, SlotNo,
-                                               StakeAddressReference, serialiseAddress, serialiseToTextEnvelope)
-import           Control.Monad.Except         (MonadError, liftEither)
-import           Data.Aeson                   (ToJSON (..), Value, object, (.=))
-import           Data.Bifunctor               (first)
-import           Data.ByteString.Short        (ShortByteString)
-import           Data.String                  (IsString)
-import           GHC.Generics                 (Generic)
-import           Language.Marlowe.CLI.Orphans ()
-import           Language.Marlowe.Scripts     (TypedMarloweValidator)
-import           Ledger.Typed.Scripts         (TypedValidator)
-import           Plutus.V1.Ledger.Api         (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
+import Cardano.Api (AddressInEra, IsCardanoEra, NetworkId, PlutusScriptV1, Script, SlotNo, StakeAddressReference,
+                    serialiseAddress, serialiseToTextEnvelope)
+import Control.Monad.Except (MonadError, liftEither)
+import Data.Aeson (ToJSON (..), Value, object, (.=))
+import Data.Bifunctor (first)
+import Data.ByteString.Short (ShortByteString)
+import Data.String (IsString)
+import GHC.Generics (Generic)
+import Language.Marlowe.CLI.Orphans ()
+import Language.Marlowe.Scripts (TypedMarloweValidator)
+import Ledger.Typed.Scripts (TypedValidator)
+import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
 
 -- | Exception for Marlowe CLI.

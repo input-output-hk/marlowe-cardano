@@ -26,13 +26,17 @@ data MetadataAction
 instance metadataActionShowConstructor :: ShowConstructor MetadataAction where
   showConstructor (SetContractName _) = "SetContractName"
   showConstructor (SetContractType _) = "SetContractType"
-  showConstructor (SetContractShortDescription _) = "SetContractShortDescription"
+  showConstructor (SetContractShortDescription _) =
+    "SetContractShortDescription"
   showConstructor (SetContractLongDescription _) = "SetContractLongDescription"
   showConstructor (SetRoleDescription _ _) = "SetRoleDescription"
   showConstructor (DeleteRoleDescription _) = "DeleteRoleDescription"
-  showConstructor (SetSlotParameterDescription _ _) = "SetSlotParameterDescription"
-  showConstructor (DeleteSlotParameterDescription _) = "DeleteSlotParameterDescription"
-  showConstructor (SetValueParameterDescription _ _) = "SetValueParameterDescription"
+  showConstructor (SetSlotParameterDescription _ _) =
+    "SetSlotParameterDescription"
+  showConstructor (DeleteSlotParameterDescription _) =
+    "DeleteSlotParameterDescription"
+  showConstructor (SetValueParameterDescription _ _) =
+    "SetValueParameterDescription"
   showConstructor (SetValueParameterFormat _ _) = "SetValueParameterFormat"
   showConstructor (DeleteValueParameterInfo _) = "DeleteValueParameterInfo"
   showConstructor (SetChoiceDescription _ _) = "SetChoiceDescription"

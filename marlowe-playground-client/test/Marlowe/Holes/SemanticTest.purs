@@ -1,13 +1,17 @@
 module Marlowe.Holes.SemanticTest where
 
 import Prologue
+
+import Control.Monad.Error.Class (class MonadError)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Either (hush)
+import Data.Foldable (for_)
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (maybe')
 import Data.Tuple.Nested ((/\), type (/\))
+import Effect.Aff (Error)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Marlowe.Extended (toCore)
@@ -15,11 +19,18 @@ import Marlowe.Extended as EM
 import Marlowe.Holes (Term, fromTerm)
 import Marlowe.Holes as T
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics (Input, Party(..), Slot(..), Token(..), TransactionInput, emptyState)
+import Marlowe.Semantics
+  ( Input
+  , Party(..)
+  , Slot(..)
+  , Token(..)
+  , TransactionInput
+  , emptyState
+  )
 import Marlowe.Semantics as S
 import Marlowe.Template (TemplateContent(..), fillTemplate)
-import Test.Unit (Test, TestSuite, failure, success, suite, test)
-import Test.Unit.Assert (equal)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (fail, shouldEqual)
 import Text.Pretty (pretty)
 
 -- For the purposes of this test all transactions can happen in slot 0
@@ -81,60 +92,62 @@ escrowFlows =
   List.fromFoldable
     [ "Everything is alright"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer) zero
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer)
+              zero
+          ]
     , "Seller confirm problem"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
-            , transaction $ S.IChoice (S.ChoiceId "Confirm problem" seller) one
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
+          , transaction $ S.IChoice (S.ChoiceId "Confirm problem" seller) one
+          ]
     , "Dismiss claim"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
-            , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
-            , transaction $ S.IChoice (S.ChoiceId "Dismiss claim" arbiter) zero
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
+          , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
+          , transaction $ S.IChoice (S.ChoiceId "Dismiss claim" arbiter) zero
+          ]
     , "Mediator confirm problem"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
-            , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
-            , transaction $ S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Report problem" buyer) one
+          , transaction $ S.IChoice (S.ChoiceId "Dispute problem" seller) zero
+          , transaction $ S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
+          ]
     , "Mediator confirm problem (multiple actions in same transaction)"
         /\ List.singleton
-            ( multipleInputs
-                $ List.fromFoldable
-                    [ S.IDeposit seller buyer ada escrowPrice
-                    , S.IChoice (S.ChoiceId "Report problem" buyer) one
-                    , S.IChoice (S.ChoiceId "Dispute problem" seller) zero
-                    , S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
-                    ]
-            )
+          ( multipleInputs
+              $ List.fromFoldable
+                  [ S.IDeposit seller buyer ada escrowPrice
+                  , S.IChoice (S.ChoiceId "Report problem" buyer) one
+                  , S.IChoice (S.ChoiceId "Dispute problem" seller) zero
+                  , S.IChoice (S.ChoiceId "Confirm problem" arbiter) one
+                  ]
+          )
     , "Invalid input"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit arbiter arbiter ada escrowPrice
-            ]
+          [ transaction $ S.IDeposit arbiter arbiter ada escrowPrice
+          ]
     , "Timeout 1"
         /\ List.fromFoldable
-            [ timeout (fromInt 61)
-            ]
+          [ timeout (fromInt 61)
+          ]
     , "Timeout 2"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit seller buyer ada escrowPrice
-            , timeout (fromInt 181)
-            ]
+          [ transaction $ S.IDeposit seller buyer ada escrowPrice
+          , timeout (fromInt 181)
+          ]
     -- Because the slot 10 is lower than the first timeout (60), this "timeout" should
     -- not be significant
     , "Everything is alright (with non significant timeout)"
         /\ List.fromFoldable
-            [ timeout (fromInt 10)
-            , transaction $ S.IDeposit seller buyer ada escrowPrice
-            , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer) zero
-            ]
+          [ timeout (fromInt 10)
+          , transaction $ S.IDeposit seller buyer ada escrowPrice
+          , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer)
+              zero
+          ]
     ]
 
 ------------------------------------------------------------------------------------------------------
@@ -177,31 +190,37 @@ contractForDifferencesFlows =
   List.fromFoldable
     [ "Decrease in price"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit party party ada cfdPrice
-            , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-            , timeout (fromInt 35)
-            , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle) (fromInt 90000000)
-            , timeout (fromInt 105)
-            , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle) (fromInt 85000000)
-            ]
+          [ transaction $ S.IDeposit party party ada cfdPrice
+          , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
+          , timeout (fromInt 35)
+          , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
+              (fromInt 90000000)
+          , timeout (fromInt 105)
+          , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
+              (fromInt 85000000)
+          ]
     , "Increase in price"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit party party ada cfdPrice
-            , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-            , timeout (fromInt 35)
-            , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle) (fromInt 90000000)
-            , timeout (fromInt 105)
-            , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle) (fromInt 95000000)
-            ]
+          [ transaction $ S.IDeposit party party ada cfdPrice
+          , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
+          , timeout (fromInt 35)
+          , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
+              (fromInt 90000000)
+          , timeout (fromInt 105)
+          , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
+              (fromInt 95000000)
+          ]
     , "Same price"
         /\ List.fromFoldable
-            [ transaction $ S.IDeposit party party ada cfdPrice
-            , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-            , timeout (fromInt 35)
-            , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle) (fromInt 90000000)
-            , timeout (fromInt 105)
-            , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle) (fromInt 90000000)
-            ]
+          [ transaction $ S.IDeposit party party ada cfdPrice
+          , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
+          , timeout (fromInt 35)
+          , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
+              (fromInt 90000000)
+          , timeout (fromInt 105)
+          , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
+              (fromInt 90000000)
+          ]
     ]
 
 ------------------------------------------------------------------------------------------------------
@@ -211,33 +230,44 @@ contractForDifferencesFlows =
 semanticToTerms :: S.Contract -> Maybe (Term T.Contract)
 semanticToTerms = hush <<< parseContract <<< show <<< pretty
 
-extendedToSemanticAndTerm :: EM.Contract -> Maybe (S.Contract /\ Term T.Contract)
+extendedToSemanticAndTerm
+  :: EM.Contract -> Maybe (S.Contract /\ Term T.Contract)
 extendedToSemanticAndTerm extendedContract = do
   semanticContract <- toCore extendedContract
   termContract <- semanticToTerms semanticContract
   pure $ semanticContract /\ termContract
 
-shouldHaveSameOutput :: S.TransactionOutput -> T.TransactionOutput -> Test
+shouldHaveSameOutput
+  :: forall m
+   . MonadError Error m
+  => S.TransactionOutput
+  -> T.TransactionOutput
+  -> m Unit
 shouldHaveSameOutput (S.TransactionOutput o1) (T.TransactionOutput o2) = do
-  equal o1.txOutWarnings o2.txOutWarnings
-  equal o1.txOutPayments o2.txOutPayments
-  equal o1.txOutState o2.txOutState
-  equal (Just o1.txOutContract) (fromTerm o2.txOutContract)
+  shouldEqual o1.txOutWarnings o2.txOutWarnings
+  shouldEqual o1.txOutPayments o2.txOutPayments
+  shouldEqual o1.txOutState o2.txOutState
+  shouldEqual (Just o1.txOutContract) (fromTerm o2.txOutContract)
 
-shouldHaveSameOutput (S.Error e1) (T.SemanticError e2) = equal e1 e2
+shouldHaveSameOutput (S.Error e1) (T.SemanticError e2) = shouldEqual e1 e2
 
-shouldHaveSameOutput _ T.InvalidContract = failure "The contract is invalid"
+shouldHaveSameOutput _ T.InvalidContract = fail "The contract is invalid"
 
-shouldHaveSameOutput _ _ = failure "The outputs don't match"
+shouldHaveSameOutput _ _ = fail "The outputs don't match"
 
 -- initialSlot :: S.Contract -> Slot
 -- initialSlot = maybe zero (\(Slot slot) -> Slot (slot - fromInt 1)) <<< _.minTime <<< unwrap <<< timeouts
 -- This function test that given an extended contract with a list of transactions, the
 -- result of computing the transaction list is the same for the Semantic and the Term version
-testTransactionList :: EM.Contract -> List S.TransactionInput -> Test
+testTransactionList
+  :: forall m
+   . MonadError Error m
+  => EM.Contract
+  -> List S.TransactionInput
+  -> m Unit
 testTransactionList extendedContract inputs =
   maybe'
-    (\_ -> failure "could not instantiate contract")
+    (\_ -> fail "could not instantiate contract")
     testAllInputs
     (extendedToSemanticAndTerm extendedContract)
   where
@@ -248,7 +278,9 @@ testTransactionList extendedContract inputs =
     in
       testStep inputs state semanticContract termContract
 
-  testStep Nil _ semanticContract termContract = equal (Just semanticContract) (fromTerm termContract)
+  testStep Nil _ semanticContract termContract = shouldEqual
+    (Just semanticContract)
+    (fromTerm termContract)
 
   testStep (input : rest) state semanticContract termContract = do
     let
@@ -257,18 +289,18 @@ testTransactionList extendedContract inputs =
       termOutput = T.computeTransaction input state termContract
     shouldHaveSameOutput semanticOutput termOutput
     case semanticOutput /\ termOutput of
-      S.TransactionOutput o1 /\ T.TransactionOutput o2 -> testStep rest o1.txOutState o1.txOutContract o2.txOutContract
-      _ -> success
+      S.TransactionOutput o1 /\ T.TransactionOutput o2 -> testStep rest
+        o1.txOutState
+        o1.txOutContract
+        o2.txOutContract
+      _ -> pure unit
 
-testFlows :: EM.Contract -> ContractFlows -> TestSuite
-testFlows _ Nil = pure unit
-
-testFlows contract ((flowName /\ flow) : rest) = do
-  test flowName $ testTransactionList contract flow
-  testFlows contract rest
-
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Holes.Semantic" do
-    suite "Escrow flows" $ testFlows escrowContract escrowFlows
-    suite "Contract for differences" $ testFlows contractForDifferences contractForDifferencesFlows
+  describe "Marlowe.Holes.Semantic" do
+    describe "Escrow flows" do
+      for_ escrowFlows \(name /\ flow) ->
+        it name $ testTransactionList escrowContract flow
+    describe "Contract for differences" do
+      for_ contractForDifferencesFlows \(name /\ flow) ->
+        it name $ testTransactionList contractForDifferences flow

@@ -1,15 +1,28 @@
 module Marlowe.GenWithHoles where
 
 import Prologue
+
 import Control.Lazy (class Lazy)
-import Control.Monad.Gen (class MonadGen, chooseBool, chooseFloat, chooseInt, resize, sized)
-import Control.Monad.Reader (class MonadAsk, class MonadReader, ReaderT(..), runReaderT)
+import Control.Monad.Gen
+  ( class MonadGen
+  , chooseBool
+  , chooseFloat
+  , chooseInt
+  , resize
+  , sized
+  )
+import Control.Monad.Reader
+  ( class MonadAsk
+  , class MonadReader
+  , ReaderT(..)
+  , runReaderT
+  )
 import Control.Monad.Rec.Class (class MonadRec)
+import Effect.Aff (Aff)
+import Marlowe.Gen (GenerationOptions)
 import Test.QuickCheck (class Testable)
 import Test.QuickCheck.Gen (Gen)
-import Test.Unit (Test)
-import Test.Unit.QuickCheck (quickCheck)
-import Marlowe.Gen (GenerationOptions)
+import Test.Spec.QuickCheck (quickCheck)
 
 -- TODO: rename to GenContract or similar
 newtype GenWithHoles a
@@ -22,15 +35,18 @@ derive newtype instance genWithGenWithHolessFunctor :: Functor GenWithHoles
 
 derive newtype instance genWithGenWithHolessApply :: Apply GenWithHoles
 
-derive newtype instance genWithGenWithHolessApplicative :: Applicative GenWithHoles
+derive newtype instance genWithGenWithHolessApplicative ::
+  Applicative GenWithHoles
 
 derive newtype instance genWithGenWithHolessBind :: Bind GenWithHoles
 
 instance genWithGenWithHolessMonad :: Monad GenWithHoles
 
-derive newtype instance genWithGenWithHolessMonadAsk :: MonadAsk GenerationOptions GenWithHoles
+derive newtype instance genWithGenWithHolessMonadAsk ::
+  MonadAsk GenerationOptions GenWithHoles
 
-derive newtype instance genWithGenWithHolessMonadReader :: MonadReader GenerationOptions GenWithHoles
+derive newtype instance genWithGenWithHolessMonadReader ::
+  MonadReader GenerationOptions GenWithHoles
 
 instance genWithGenWithHolessLazy :: Lazy (GenWithHoles a) where
   defer f = f unit
@@ -41,7 +57,8 @@ instance genWithGenWithHolessMonadGen :: MonadGen GenWithHoles where
   chooseInt from to = GenWithHoles $ ReaderT $ const $ chooseInt from to
   chooseFloat from to = GenWithHoles $ ReaderT $ const $ chooseFloat from to
   chooseBool = GenWithHoles $ ReaderT $ const $ chooseBool
-  resize f (GenWithHoles (ReaderT g)) = GenWithHoles $ ReaderT $ \b -> resize f (g b)
+  resize f (GenWithHoles (ReaderT g)) = GenWithHoles $ ReaderT $ \b -> resize f
+    (g b)
   sized f =
     GenWithHoles $ ReaderT
       $ \v ->
@@ -53,5 +70,11 @@ instance genWithGenWithHolessMonadGen :: MonadGen GenWithHoles where
                   q v
             )
 
-contractQuickCheck :: forall prop. Testable prop => GenerationOptions -> GenWithHoles prop -> Test
-contractQuickCheck options g = quickCheck $ runReaderT (unGenWithHoles g) options
+contractQuickCheck
+  :: forall prop
+   . Testable prop
+  => GenerationOptions
+  -> GenWithHoles prop
+  -> Aff Unit
+contractQuickCheck options g = quickCheck $ runReaderT (unGenWithHoles g)
+  options

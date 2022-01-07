@@ -45,6 +45,7 @@
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+          (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
@@ -64,10 +65,17 @@
         buildable = true;
         modules = [
           "Paths_marlowe_dashboard_server"
+          "Marlowe/Run/Webserver/Wallet/API"
+          "Marlowe/Run/Webserver/Wallet/Server"
+          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/API"
+          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/Server"
           "Marlowe/Run/Webserver/Server"
           "Marlowe/Run/Webserver/API"
           "Marlowe/Run/Webserver/WebSocket"
           "Marlowe/Run/Webserver/Types"
+          "Marlowe/Run/Webserver/Wallet/Types"
+          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/Types"
+          "Marlowe/Run/Webserver/Wallet/Client"
           ];
         hsSourceDirs = [ "src" ];
         };

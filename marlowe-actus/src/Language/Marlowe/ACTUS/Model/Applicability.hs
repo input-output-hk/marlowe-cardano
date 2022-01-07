@@ -18,10 +18,10 @@ module Language.Marlowe.ACTUS.Model.Applicability
   )
 where
 
-import           Data.Maybe                                  (isJust)
-import           Data.Validation                             (Validation (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), IPCB (..),
-                                                              ScheduleConfig (..), TermValidationError (..))
+import Data.Maybe (isJust)
+import Data.Validation (Validation (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), IPCB (..), ScheduleConfig (..),
+                                                    TermValidationError (..))
 
 -- |Contract terms are validated with applicability rules
 validateTerms ::

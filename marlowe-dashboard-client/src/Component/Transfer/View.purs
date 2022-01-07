@@ -47,11 +47,12 @@ account party { nickname, isCurrentUser } accountTypeLabel =
     , span [ classNames [ "text-xs" ] ]
         [ text
             $ capitalize
-            $ ( case party of
+            $
+              ( case party of
                   PK pk -> accountTypeLabel <> " of " <> pk
                   Role role -> posessive role <> " " <> accountTypeLabel
               )
-            <> if isCurrentUser then " (you)" else ""
+                <> if isCurrentUser then " (you)" else ""
         ]
     ]
   where

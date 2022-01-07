@@ -24,16 +24,17 @@ import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Servant.PureScript (printAjaxError)
 
-handleAction ::
-  forall m.
-  MonadAff m =>
-  MonadAsk Env m =>
-  Action ->
-  HalogenM State Action ChildSlots Void m Unit
+handleAction
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => Action
+  -> HalogenM State Action ChildSlots Void m Unit
 handleAction LoadProjects = do
   assign _projects Loading
   resp <- runExceptT getApiGists
-  assign _projects $ rmap sortGists $ lmap printAjaxError $ RemoteData.fromEither resp
+  assign _projects $ rmap sortGists $ lmap printAjaxError $
+    RemoteData.fromEither resp
 
 handleAction (LoadProject _ _) = pure unit
 
@@ -43,6 +44,9 @@ sortGists :: Array Gist -> Array Gist
 sortGists = sortBy f
   where
   dt :: String -> DateTime
-  dt s = fromMaybe bottom $ map unwrap $ hush (decodeJson $ fromString s :: _ _ ISO)
+  dt s = fromMaybe bottom $ map unwrap $ hush
+    (decodeJson $ fromString s :: _ _ ISO)
 
-  f (Gist { _gistUpdatedAt: a }) (Gist { _gistUpdatedAt: b }) = invert $ compare (dt a) (dt b)
+  f (Gist { _gistUpdatedAt: a }) (Gist { _gistUpdatedAt: b }) = invert $ compare
+    (dt a)
+    (dt b)

@@ -12,19 +12,26 @@ import Data.Foldable (for_)
 import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Unsafe (unsafePerformEffect)
-import Marlowe.Blockly (blockDefinitions, blockToContract, rootBlockName, toBlockly)
+import Marlowe.Blockly
+  ( blockDefinitions
+  , blockToContract
+  , rootBlockName
+  , toBlockly
+  )
 import Marlowe.Gen (genContract, genTerm, GenerationOptions(..))
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (Contract, Term)
 import Marlowe.Parser as Parser
 import Test.QuickCheck (Result, (===))
-import Test.Unit (TestSuite, suite, test)
+import Test.Spec (Spec, describe, it)
 import Text.Extra (stripParens)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Blockly" do
-    test "codeToBlocklyToCode" $ contractQuickCheck (GenerationOptions { withHoles: true, withExtendedConstructs: true }) codeToBlocklyToCode
+  describe "Marlowe.Blockly" do
+    it "codeToBlocklyToCode" $ contractQuickCheck
+      (GenerationOptions { withHoles: true, withExtendedConstructs: true })
+      codeToBlocklyToCode
 
 -- Here we keep using `show` because the Term range is intentionally incorrect when converting from blockly
 -- It uses zero to create a dummy range. By using `show` we can reasonably compare contracts

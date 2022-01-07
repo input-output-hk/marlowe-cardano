@@ -18,31 +18,31 @@ module Spec.Marlowe.ACTUS.TestFramework
   )
   where
 
-import           Control.Applicative                           ((<|>))
-import           Control.Monad                                 (join, mzero)
-import           Control.Monad.Reader                          (Reader, ask, runReader, withReader)
-import           Data.Aeson
-import           Data.ByteString.Lazy                          as B (readFile)
-import           Data.Char                                     (toUpper)
-import           Data.List                                     as L (find, unzip4)
-import           Data.Map                                      as Map (Map, elems, lookup)
-import           Data.Maybe                                    (fromJust, fromMaybe)
-import           Data.Sort                                     (sortOn)
-import           Data.Time                                     (LocalTime (..))
-import           GHC.Generics                                  (Generic)
-import           GHC.Records                                   (getField)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents
-import           Language.Marlowe.ACTUS.Domain.ContractState
-import           Language.Marlowe.ACTUS.Domain.ContractTerms   hiding (Assertion)
-import           Language.Marlowe.ACTUS.Domain.Schedule
-import           Language.Marlowe.ACTUS.Generator.Analysis
-import           Language.Marlowe.ACTUS.Model.ContractSchedule as S (maturity, schedule)
-import           Language.Marlowe.ACTUS.Model.Payoff           (CtxPOF (CtxPOF))
-import           Language.Marlowe.ACTUS.Model.StateTransition  (CtxSTF (..))
-import           Language.Marlowe.ACTUS.Utility.DateShift      (getFollowingBusinessDay)
-import           Test.Tasty
-import           Test.Tasty.HUnit                              (Assertion, assertBool, assertFailure, testCase)
-import           Text.Printf                                   (printf)
+import Control.Applicative ((<|>))
+import Control.Monad (join, mzero)
+import Control.Monad.Reader (Reader, ask, runReader, withReader)
+import Data.Aeson
+import Data.ByteString.Lazy as B (readFile)
+import Data.Char (toUpper)
+import Data.List as L (find, unzip4)
+import Data.Map as Map (Map, elems, lookup)
+import Data.Maybe (fromJust, fromMaybe)
+import Data.Sort (sortOn)
+import Data.Time (LocalTime (..))
+import GHC.Generics (Generic)
+import GHC.Records (getField)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents
+import Language.Marlowe.ACTUS.Domain.ContractState
+import Language.Marlowe.ACTUS.Domain.ContractTerms hiding (Assertion)
+import Language.Marlowe.ACTUS.Domain.Schedule
+import Language.Marlowe.ACTUS.Generator.Analysis
+import Language.Marlowe.ACTUS.Model.ContractSchedule as S (maturity, schedule)
+import Language.Marlowe.ACTUS.Model.Payoff (CtxPOF (CtxPOF))
+import Language.Marlowe.ACTUS.Model.StateTransition (CtxSTF (..))
+import Language.Marlowe.ACTUS.Utility.DateShift (getFollowingBusinessDay)
+import Test.Tasty
+import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
+import Text.Printf (printf)
 
 tests :: String -> [TestCase] -> TestTree
 tests n t =

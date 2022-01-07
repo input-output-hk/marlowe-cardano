@@ -11,9 +11,10 @@ import Routing.Duplex.Generic (noArgs, sum)
 import Routing.Duplex.Generic.Syntax ((/))
 
 type Route
-  = { subroute :: SubRoute
-    , gistId :: Maybe GistId
-    }
+  =
+  { subroute :: SubRoute
+  , gistId :: Maybe GistId
+  }
 
 data SubRoute
   = Home
@@ -32,17 +33,17 @@ route :: RouteDuplex' Route
 route =
   root $ record
     # _gistId
-    := optional (dimap unwrap GistId (param "gistid"))
+        := optional (dimap unwrap GistId (param "gistid"))
     # _subroute
-    := sum
-        { "Home": noArgs
-        , "Simulation": "simulation" / noArgs
-        , "MarloweEditor": "marlowe" / noArgs
-        , "HaskellEditor": "haskell" / noArgs
-        , "JSEditor": "javascript" / noArgs
-        , "Blockly": "blockly" / noArgs
-        , "GithubAuthCallback": "gh-oauth-cb" / noArgs
-        }
+        := sum
+          { "Home": noArgs
+          , "Simulation": "simulation" / noArgs
+          , "MarloweEditor": "marlowe" / noArgs
+          , "HaskellEditor": "haskell" / noArgs
+          , "JSEditor": "javascript" / noArgs
+          , "Blockly": "blockly" / noArgs
+          , "GithubAuthCallback": "gh-oauth-cb" / noArgs
+          }
   where
   _gistId = Proxy :: _ "gistId"
 

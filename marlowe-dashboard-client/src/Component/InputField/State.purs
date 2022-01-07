@@ -8,9 +8,15 @@ module Component.InputField.State
   ) where
 
 import Prologue
-import Component.InputField.Lenses (_dropdownLocked, _dropdownOpen, _pristine, _validator, _value)
+
+import Component.InputField.Lenses
+  ( _dropdownLocked
+  , _dropdownOpen
+  , _pristine
+  , _validator
+  , _value
+  )
 import Component.InputField.Types (class InputFieldError, Action(..), State)
-import Control.Monad.Reader (class MonadAsk)
 import Data.Array (head, last)
 import Data.Array (length, take) as Array
 import Data.BigInt.Argonaut (BigInt)
@@ -22,7 +28,6 @@ import Data.String (Pattern(..), split, splitAt)
 import Data.String (drop, length, take) as String
 import Data.String.Extra (leftPadTo, rightPadTo)
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Halogen (HalogenM, modify_)
 import Marlowe.Extended.Metadata (NumberFormat(..))
 
@@ -45,16 +50,16 @@ mkInitialState mNumberFormat =
     , dropdownLocked: false
     }
 
-handleAction ::
-  forall m e slots msg.
-  MonadAff m =>
-  MonadAsk Env m =>
-  InputFieldError e =>
-  Action e -> HalogenM (State e) (Action e) slots msg m Unit
+handleAction
+  :: forall m e slots msg
+   . MonadAff m
+  => InputFieldError e
+  => Action e
+  -> HalogenM (State e) (Action e) slots msg m Unit
 handleAction (SetValue value) =
   modify_
     $ set _value value
-    <<< set _pristine false
+        <<< set _pristine false
 
 handleAction (SetValueFromDropdown value) = do
   handleAction $ SetValue value
@@ -72,14 +77,15 @@ handleAction (SetValidator validator) = assign _validator validator
 
 handleAction (SetDropdownOpen dropdownOpen) = assign _dropdownOpen dropdownOpen
 
-handleAction (SetDropdownLocked dropdownLocked) = assign _dropdownLocked dropdownLocked
+handleAction (SetDropdownLocked dropdownLocked) = assign _dropdownLocked
+  dropdownLocked
 
 handleAction Reset =
   modify_
     $ set _value mempty
-    <<< set _pristine true
-    <<< set _validator (const Nothing)
-    <<< set _dropdownOpen false
+        <<< set _pristine true
+        <<< set _validator (const Nothing)
+        <<< set _dropdownOpen false
 
 ------------------------------------------------------------
 -- Numeric inputs are interpreted as BigInts, but are entered and stored in the state as
@@ -110,25 +116,30 @@ getBigIntValue (DecimalFormat decimals _) value =
 
     valueBits = Array.take 2 $ split (Pattern ".") absoluteValue
 
-    decimalString = if absoluteValue == "" then "0" else fromMaybe "0" $ head valueBits
+    decimalString =
+      if absoluteValue == "" then "0" else fromMaybe "0" $ head valueBits
 
-    fractionalString = if Array.length valueBits < 2 then "0" else fromMaybe "0" $ last valueBits
+    fractionalString =
+      if Array.length valueBits < 2 then "0" else fromMaybe "0" $ last valueBits
 
     -- if zeros have been deleted from the end of the string, the fractional part will be wrong
-    correctedFractionalString = String.take decimals $ rightPadTo decimals "0" fractionalString
+    correctedFractionalString = String.take decimals $ rightPadTo decimals "0"
+      fractionalString
 
     multiplier = BigInt.fromInt $ Int.pow 10 decimals
 
     dec = fromMaybe zero $ BigInt.fromString decimalString
 
-    frac = fromMaybe zero $ BigInt.fromString $ String.take decimals $ correctedFractionalString
+    frac = fromMaybe zero $ BigInt.fromString $ String.take decimals $
+      correctedFractionalString
   in
     if isNegative then
       -((dec * multiplier) + frac)
     else
       (dec * multiplier) + frac
 
-getBigIntValue TimeFormat value = (BigInt.fromInt 60) * (fromMaybe zero $ BigInt.fromString value)
+getBigIntValue TimeFormat value = (BigInt.fromInt 60) *
+  (fromMaybe zero $ BigInt.fromString value)
 
 -- The basic idea of this function is to take the default string representation (`show value`),
 -- split it where the decimal point is supposed to go, and join the two parts with a decimal point
@@ -165,7 +176,8 @@ formatBigIntValue (DecimalFormat decimals _) value =
     else
       decimalString <> "." <> fractionalString
 
-formatBigIntValue TimeFormat value = BigInt.toString $ value / (BigInt.fromInt 60)
+formatBigIntValue TimeFormat value = BigInt.toString $ value /
+  (BigInt.fromInt 60)
 
 validate :: forall e. InputFieldError e => State e -> Maybe e
 validate state =
