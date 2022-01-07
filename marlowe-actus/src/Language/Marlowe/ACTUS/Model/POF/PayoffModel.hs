@@ -94,3 +94,6 @@ _POF_TD_COM cntrl ptd qt = _r cntrl * ptd * qt
 
 -- Cash (CSH)
 
+-- Call Money (CLM)
+_POF_IED_CLM :: RoleSignOps a => a -> CR -> a -> a
+_POF_IED_CLM o_rf_curs cntrl nt = _zero - o_rf_curs * _r cntrl * nt

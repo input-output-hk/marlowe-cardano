@@ -67,6 +67,17 @@ payoffFs'
     }
   ContractTermsPoly
     { notionalPrincipal = Just nt,
+      contractType = CLM,
+      contractRole
+    }
+  _ _ _ = Just $ _POF_IED_CLM o_rf_CURS contractRole (constnt nt)
+payoffFs'
+  IED
+  RiskFactorsPoly
+    { o_rf_CURS
+    }
+  ContractTermsPoly
+    { notionalPrincipal = Just nt,
       contractRole
     }
   _ _ _ = Just $ _POF_IED_PAM o_rf_CURS contractRole (constnt nt) _zero
