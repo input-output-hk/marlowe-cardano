@@ -282,8 +282,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/bwbush/plutus-apps
-  tag: cb675bc19d5d597cd61305740c350aaa62bf217e
-  --sha256: 0lzgdnly2jq6sbjm3lsipmcpsgyb70i127hgaddhkjspym5z9dw7
+  tag: 1a526e91ccf8ff664d1620634777e011b15ff7da
+  --sha256: 1ab30gwazqp1qg8jsqz5pdlhzmgj0zjpj13mhm3x9gflwip50vak
   subdir:
     freer-extras
     playground-common
