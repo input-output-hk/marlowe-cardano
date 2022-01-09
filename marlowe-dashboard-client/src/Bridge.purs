@@ -14,6 +14,7 @@ import Data.Lens (Iso', iso)
 import Data.Map (Map, fromFoldable, toUnfoldable) as Front
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
+import Ledger.Address (PaymentPubKeyHash(..)) as Back
 import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Semantics (Assets(..), Slot(..)) as Front
 import Network.RemoteData (RemoteData)
@@ -105,9 +106,14 @@ instance currencySymbolBridge :: Bridge Back.CurrencySymbol String where
   toFront (Back.CurrencySymbol { unCurrencySymbol }) = unCurrencySymbol
   toBack unCurrencySymbol = Back.CurrencySymbol { unCurrencySymbol }
 
+-- FIXME: @bwbush, Is this correct?
 instance walletInfoBridge :: Bridge Back.WalletInfo Front.WalletInfo where
-  toFront (Back.WalletInfo { wiWallet, wiPubKeyHash }) = Front.WalletInfo { walletId: toFront wiWallet, pubKeyHash: toFront wiPubKeyHash }
-  toBack (Front.WalletInfo { walletId, pubKeyHash }) = Back.WalletInfo { wiWallet: toBack walletId, wiPubKeyHash: toBack pubKeyHash }
+  toFront (Back.WalletInfo { wiWallet, wiPaymentPubKeyHash }) =
+    let
+      Back.PaymentPubKeyHash { unPaymentPubKeyHash } = wiPaymentPubKeyHash
+    in
+      Front.WalletInfo { walletId: toFront wiWallet, pubKeyHash: toFront unPaymentPubKeyHash }
+  toBack (Front.WalletInfo { walletId, pubKeyHash }) = Back.WalletInfo { wiWallet: toBack walletId, wiPaymentPubKeyHash: Back.PaymentPubKeyHash { unPaymentPubKeyHash: toBack pubKeyHash } }
 
 instance walletBridge :: Bridge Back.Wallet Front.WalletId where
   toFront (Back.Wallet { getWalletId }) = Front.WalletId getWalletId
