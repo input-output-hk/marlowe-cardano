@@ -289,6 +289,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
               when (plutusAppId == marloweAppId) $
                 MarloweApp.onNewActiveEndpoints activeEndpoints
           ContractFinished _ -> pure unit
+          (NewYieldedExportTxs _) -> pure unit -- TODO how to handle this? What is this?
   pure $ Just next
 
 handleQuery (MainFrameActionQuery action next) = do
