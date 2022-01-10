@@ -29,7 +29,7 @@ import Type.Proxy (Proxy(Proxy))
 newtype ContractTermsPoly a = ContractTermsPoly
   { contractId :: String
   , contractType :: CT
-  , contractStructure :: Array ContractStructure
+  , contractStructure :: Array (ContractStructure a)
   , contractRole :: CR
   , settlementCurrency :: Maybe String
   , initialExchangeDate :: Maybe String
@@ -37,6 +37,9 @@ newtype ContractTermsPoly a = ContractTermsPoly
   , scheduleConfig :: ScheduleConfig
   , statusDate :: String
   , contractPerformance :: Maybe PRF
+  , creditEventTypeCovered :: Maybe CETC
+  , coverageOfCreditEnhancement :: Maybe a
+  , guaranteedExposure :: Maybe CEGE
   , cycleOfFee :: Maybe Cycle
   , cycleAnchorDateOfFee :: Maybe String
   , feeAccrued :: Maybe a
@@ -109,7 +112,7 @@ instance encodeJsonContractTermsPoly ::
     ( E.record
         { contractId: E.value :: _ String
         , contractType: E.value :: _ CT
-        , contractStructure: E.value :: _ (Array ContractStructure)
+        , contractStructure: E.value :: _ (Array (ContractStructure a))
         , contractRole: E.value :: _ CR
         , settlementCurrency: (E.maybe E.value) :: _ (Maybe String)
         , initialExchangeDate: (E.maybe E.value) :: _ (Maybe String)
@@ -117,6 +120,9 @@ instance encodeJsonContractTermsPoly ::
         , scheduleConfig: E.value :: _ ScheduleConfig
         , statusDate: E.value :: _ String
         , contractPerformance: (E.maybe E.value) :: _ (Maybe PRF)
+        , creditEventTypeCovered: (E.maybe E.value) :: _ (Maybe CETC)
+        , coverageOfCreditEnhancement: (E.maybe E.value) :: _ (Maybe a)
+        , guaranteedExposure: (E.maybe E.value) :: _ (Maybe CEGE)
         , cycleOfFee: (E.maybe E.value) :: _ (Maybe Cycle)
         , cycleAnchorDateOfFee: (E.maybe E.value) :: _ (Maybe String)
         , feeAccrued: (E.maybe E.value) :: _ (Maybe a)
@@ -193,7 +199,7 @@ instance decodeJsonContractTermsPoly ::
     ( ContractTermsPoly <$> D.record "ContractTermsPoly"
         { contractId: D.value :: _ String
         , contractType: D.value :: _ CT
-        , contractStructure: D.value :: _ (Array ContractStructure)
+        , contractStructure: D.value :: _ (Array (ContractStructure a))
         , contractRole: D.value :: _ CR
         , settlementCurrency: (D.maybe D.value) :: _ (Maybe String)
         , initialExchangeDate: (D.maybe D.value) :: _ (Maybe String)
@@ -201,6 +207,9 @@ instance decodeJsonContractTermsPoly ::
         , scheduleConfig: D.value :: _ ScheduleConfig
         , statusDate: D.value :: _ String
         , contractPerformance: (D.maybe D.value) :: _ (Maybe PRF)
+        , creditEventTypeCovered: (D.maybe D.value) :: _ (Maybe CETC)
+        , coverageOfCreditEnhancement: (D.maybe D.value) :: _ (Maybe a)
+        , guaranteedExposure: (D.maybe D.value) :: _ (Maybe CEGE)
         , cycleOfFee: (D.maybe D.value) :: _ (Maybe Cycle)
         , cycleAnchorDateOfFee: (D.maybe D.value) :: _ (Maybe String)
         , feeAccrued: (D.maybe D.value) :: _ (Maybe a)
@@ -280,7 +289,7 @@ _ContractTermsPoly
    . Iso' (ContractTermsPoly a)
        { contractId :: String
        , contractType :: CT
-       , contractStructure :: Array ContractStructure
+       , contractStructure :: Array (ContractStructure a)
        , contractRole :: CR
        , settlementCurrency :: Maybe String
        , initialExchangeDate :: Maybe String
@@ -288,6 +297,9 @@ _ContractTermsPoly
        , scheduleConfig :: ScheduleConfig
        , statusDate :: String
        , contractPerformance :: Maybe PRF
+       , creditEventTypeCovered :: Maybe CETC
+       , coverageOfCreditEnhancement :: Maybe a
+       , guaranteedExposure :: Maybe CEGE
        , cycleOfFee :: Maybe Cycle
        , cycleAnchorDateOfFee :: Maybe String
        , feeAccrued :: Maybe a
@@ -851,41 +863,49 @@ _ScheduleConfig = _Newtype
 
 --------------------------------------------------------------------------------
 
-newtype ContractStructure = ContractStructure
-  { marketObjectCode :: String
+newtype ContractStructure a = ContractStructure
+  { reference :: Reference a
   , referenceType :: ReferenceType
   , referenceRole :: ReferenceRole
   }
 
-instance encodeJsonContractStructure :: EncodeJson ContractStructure where
+instance encodeJsonContractStructure ::
+  ( EncodeJson a
+  ) =>
+  EncodeJson (ContractStructure a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { marketObjectCode: E.value :: _ String
+        { reference: E.value :: _ (Reference a)
         , referenceType: E.value :: _ ReferenceType
         , referenceRole: E.value :: _ ReferenceRole
         }
     )
 
-instance decodeJsonContractStructure :: DecodeJson ContractStructure where
+instance decodeJsonContractStructure ::
+  ( DecodeJson a
+  ) =>
+  DecodeJson (ContractStructure a) where
   decodeJson = defer \_ -> D.decode $
     ( ContractStructure <$> D.record "ContractStructure"
-        { marketObjectCode: D.value :: _ String
+        { reference: D.value :: _ (Reference a)
         , referenceType: D.value :: _ ReferenceType
         , referenceRole: D.value :: _ ReferenceRole
         }
     )
 
-derive instance genericContractStructure :: Generic ContractStructure _
+derive instance genericContractStructure :: Generic (ContractStructure a) _
 
-derive instance newtypeContractStructure :: Newtype ContractStructure _
+derive instance newtypeContractStructure :: Newtype (ContractStructure a) _
 
 --------------------------------------------------------------------------------
 
-_ContractStructure :: Iso' ContractStructure
-  { marketObjectCode :: String
-  , referenceType :: ReferenceType
-  , referenceRole :: ReferenceRole
-  }
+_ContractStructure
+  :: forall a
+   . Iso' (ContractStructure a)
+       { reference :: Reference a
+       , referenceType :: ReferenceType
+       , referenceRole :: ReferenceRole
+       }
 _ContractStructure = _Newtype
 
 --------------------------------------------------------------------------------
@@ -1004,6 +1024,79 @@ _COVE = prism' (const COVE) case _ of
 _COVI :: Prism' ReferenceRole Unit
 _COVI = prism' (const COVI) case _ of
   COVI -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype Identifier = Identifier
+  { marketObjectCode :: Maybe String
+  , contractIdentifier :: Maybe String
+  }
+
+derive instance eqIdentifier :: Eq Identifier
+
+derive instance ordIdentifier :: Ord Identifier
+
+instance showIdentifier :: Show Identifier where
+  show a = genericShow a
+
+instance encodeJsonIdentifier :: EncodeJson Identifier where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { marketObjectCode: (E.maybe E.value) :: _ (Maybe String)
+        , contractIdentifier: (E.maybe E.value) :: _ (Maybe String)
+        }
+    )
+
+instance decodeJsonIdentifier :: DecodeJson Identifier where
+  decodeJson = defer \_ -> D.decode $
+    ( Identifier <$> D.record "Identifier"
+        { marketObjectCode: (D.maybe D.value) :: _ (Maybe String)
+        , contractIdentifier: (D.maybe D.value) :: _ (Maybe String)
+        }
+    )
+
+derive instance genericIdentifier :: Generic Identifier _
+
+derive instance newtypeIdentifier :: Newtype Identifier _
+
+--------------------------------------------------------------------------------
+
+_Identifier :: Iso' Identifier
+  { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
+_Identifier = _Newtype
+
+--------------------------------------------------------------------------------
+
+data Reference a
+  = ReferenceTerms (ContractTermsPoly a)
+  | ReferenceId Identifier
+
+instance encodeJsonReference :: (EncodeJson a) => EncodeJson (Reference a) where
+  encodeJson = defer \_ -> case _ of
+    ReferenceTerms a -> E.encodeTagged "ReferenceTerms" a E.value
+    ReferenceId a -> E.encodeTagged "ReferenceId" a E.value
+
+instance decodeJsonReference :: (DecodeJson a) => DecodeJson (Reference a) where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "Reference"
+    $ Map.fromFoldable
+        [ "ReferenceTerms" /\ D.content (ReferenceTerms <$> D.value)
+        , "ReferenceId" /\ D.content (ReferenceId <$> D.value)
+        ]
+
+derive instance genericReference :: Generic (Reference a) _
+
+--------------------------------------------------------------------------------
+
+_ReferenceTerms :: forall a. Prism' (Reference a) (ContractTermsPoly a)
+_ReferenceTerms = prism' ReferenceTerms case _ of
+  (ReferenceTerms a) -> Just a
+  _ -> Nothing
+
+_ReferenceId :: forall a. Prism' (Reference a) Identifier
+_ReferenceId = prism' ReferenceId case _ of
+  (ReferenceId a) -> Just a
   _ -> Nothing
 
 --------------------------------------------------------------------------------
@@ -1250,6 +1343,94 @@ _PRF_DF = prism' (const PRF_DF) case _ of
 
 --------------------------------------------------------------------------------
 
+data CETC
+  = CETC_DL
+  | CETC_DQ
+  | CETC_DF
+
+derive instance eqCETC :: Eq CETC
+
+derive instance ordCETC :: Ord CETC
+
+instance showCETC :: Show CETC where
+  show a = genericShow a
+
+instance encodeJsonCETC :: EncodeJson CETC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance decodeJsonCETC :: DecodeJson CETC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance genericCETC :: Generic CETC _
+
+instance enumCETC :: Enum CETC where
+  succ = genericSucc
+  pred = genericPred
+
+instance boundedCETC :: Bounded CETC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CETC_DL :: Prism' CETC Unit
+_CETC_DL = prism' (const CETC_DL) case _ of
+  CETC_DL -> Just unit
+  _ -> Nothing
+
+_CETC_DQ :: Prism' CETC Unit
+_CETC_DQ = prism' (const CETC_DQ) case _ of
+  CETC_DQ -> Just unit
+  _ -> Nothing
+
+_CETC_DF :: Prism' CETC Unit
+_CETC_DF = prism' (const CETC_DF) case _ of
+  CETC_DF -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data CEGE
+  = CEGE_NO
+  | CEGE_NI
+
+derive instance eqCEGE :: Eq CEGE
+
+derive instance ordCEGE :: Ord CEGE
+
+instance showCEGE :: Show CEGE where
+  show a = genericShow a
+
+instance encodeJsonCEGE :: EncodeJson CEGE where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance decodeJsonCEGE :: DecodeJson CEGE where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance genericCEGE :: Generic CEGE _
+
+instance enumCEGE :: Enum CEGE where
+  succ = genericSucc
+  pred = genericPred
+
+instance boundedCEGE :: Bounded CEGE where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CEGE_NO :: Prism' CEGE Unit
+_CEGE_NO = prism' (const CEGE_NO) case _ of
+  CEGE_NO -> Just unit
+  _ -> Nothing
+
+_CEGE_NI :: Prism' CEGE Unit
+_CEGE_NI = prism' (const CEGE_NI) case _ of
+  CEGE_NI -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
 data FEB
   = FEB_A
   | FEB_N
@@ -1454,6 +1635,8 @@ data CT
   | OPTNS
   | FUTUR
   | SWPPV
+  | CEG
+  | CEC
 
 derive instance eqCT :: Eq CT
 
@@ -1518,6 +1701,16 @@ _FUTUR = prism' (const FUTUR) case _ of
 _SWPPV :: Prism' CT Unit
 _SWPPV = prism' (const SWPPV) case _ of
   SWPPV -> Just unit
+  _ -> Nothing
+
+_CEG :: Prism' CT Unit
+_CEG = prism' (const CEG) case _ of
+  CEG -> Just unit
+  _ -> Nothing
+
+_CEC :: Prism' CT Unit
+_CEC = prism' (const CEC) case _ of
+  CEC -> Just unit
   _ -> Nothing
 
 --------------------------------------------------------------------------------
