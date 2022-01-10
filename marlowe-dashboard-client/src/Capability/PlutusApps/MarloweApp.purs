@@ -14,6 +14,7 @@ module Capability.PlutusApps.MarloweApp
   ) where
 
 import Prologue
+
 import AppM (AppM)
 import Bridge (toBack)
 import Capability.Contract (class ManageContract)
@@ -26,9 +27,9 @@ import Capability.PlutusApps.MarloweApp.Lenses
   , _requests
   )
 import Capability.PlutusApps.MarloweApp.Types
-  ( EndpointMutex
+  ( class HasMarloweAppEndpointMutex
+  , EndpointMutex
   , LastResult(..)
-  , MarloweAppEndpointMutexEnv
   )
 import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Argonaut.Core (Json)
@@ -39,7 +40,7 @@ import Data.Lens (Lens', toArrayOf, traversed, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Traversable (for)
-import Data.Tuple.Nested ((/\), type (/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID, genUUID)
 import Effect (Effect)
 import Effect.AVar (AVar)
@@ -51,10 +52,10 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
   , MarloweParams
+  , PubKeyHash
   , SlotInterval(..)
   , TokenName
   , TransactionInput(..)
-  , PubKeyHash
   )
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.V1.Ledger.Crypto (PubKeyHash) as Back
@@ -135,7 +136,8 @@ invokeMutexedEndpoint
    . EncodeJson payload
   => MonadAff m
   => ManageContract m
-  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => MonadAsk env m
+  => HasMarloweAppEndpointMutex env
   => PlutusAppId
   -> UUID
   -> String
@@ -179,7 +181,8 @@ invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
 onNewObservableState
   :: forall env m
    . MonadAff m
-  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => MonadAsk env m
+  => HasMarloweAppEndpointMutex env
   => LastResult
   -> m (Maybe LastResult)
 onNewObservableState lastResult = case lastResult of
@@ -204,7 +207,8 @@ findReqId reqId = findMap
 waitForResponse
   :: forall env m
    . MonadAff m
-  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => MonadAsk env m
+  => HasMarloweAppEndpointMutex env
   => UUID
   -> m (Maybe LastResult)
 waitForResponse reqId = do
@@ -222,7 +226,8 @@ waitForResponse reqId = do
 onNewActiveEndpoints
   :: forall env m
    . MonadAff m
-  => MonadAsk (MarloweAppEndpointMutexEnv env) m
+  => MonadAsk env m
+  => HasMarloweAppEndpointMutex env
   => Array ActiveEndpoint
   -> m Unit
 onNewActiveEndpoints endpoints = do

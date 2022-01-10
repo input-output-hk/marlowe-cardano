@@ -74,7 +74,7 @@ import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
-import Env (Env)
+import Env (Env(..))
 import Halogen
   ( HalogenM
   , getHTMLElementRef
@@ -658,7 +658,7 @@ unsubscribeFromSelectCenteredStep
   => MonadAsk Env m
   => HalogenM State Action ChildSlots Msg m Unit
 unsubscribeFromSelectCenteredStep = do
-  mutex <- asks _.contractStepCarouselSubscription
+  mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
   mSubscription <- liftAff $ AVar.tryTake mutex
   for_ mSubscription unsubscribe
 
@@ -674,7 +674,7 @@ subscribeToSelectCenteredStep = do
     -- We try to update the subscription without blocking, and if we cant (because another
     -- subscription is already present, then we clean this one, so only one subscription can
     -- be active at a time)
-    mutex <- asks _.contractStepCarouselSubscription
+    mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
     mutexUpdated <- liftAff $ AVar.tryPut subscription mutex
     when (not mutexUpdated) $ unsubscribe subscription
 

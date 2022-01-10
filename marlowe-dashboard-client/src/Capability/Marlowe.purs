@@ -65,6 +65,7 @@ import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
@@ -345,7 +346,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 
 sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
 sendWsMessage msg = do
-  wsManager <- asks _.wsManager
+  wsManager <- asks \(Env e) -> e.wsManager
   liftAff
     $ WS.managerWriteOutbound wsManager
     $ WS.SendMessage msg

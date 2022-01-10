@@ -10,7 +10,7 @@ import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (forkAff, launchAff_)
 import Effect.Class (liftEffect)
-import Env (Env, WebSocketManager)
+import Env (Env(..), WebSocketManager)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
@@ -22,7 +22,7 @@ mkEnv :: WebSocketManager -> Effect Env
 mkEnv wsManager = do
   contractStepCarouselSubscription <- AVar.empty
   marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
-  pure
+  pure $ Env
     { ajaxSettings: { baseURL: "/" }
     , contractStepCarouselSubscription
     , marloweAppEndpointMutex
