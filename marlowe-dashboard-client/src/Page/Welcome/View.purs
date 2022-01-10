@@ -5,6 +5,7 @@ module Page.Welcome.View
 
 import Prologue hiding (div)
 
+import Capability.Marlowe (class ManageMarlowe)
 import Componenet.RestoreWalletForm (Msg(..))
 import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Icons (Icon(..)) as Icon
@@ -70,6 +71,7 @@ welcomeCard
   :: forall m
    . MonadAff m
   => CheckMnemonic m
+  => ManageMarlowe m
   => State
   -> ComponentHTML Action ChildSlots m
 welcomeCard state =
@@ -264,6 +266,7 @@ restoreTestnetWalletCard
   :: forall m
    . MonadAff m
   => CheckMnemonic m
+  => ManageMarlowe m
   => State
   -> Array (ComponentHTML Action ChildSlots m)
 restoreTestnetWalletCard state =
@@ -282,7 +285,8 @@ restoreTestnetWalletCard state =
         nicknames
         case _ of
           Closed -> CloseCard
-          Restored _ -> CloseCard
+          Restored nickname walletDetails ->
+            ConnectWallet nickname walletDetails
     ]
 
 -- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)

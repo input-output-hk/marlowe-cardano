@@ -183,7 +183,7 @@ mnemonicPhrase
    . CheckMnemonic m
   => Form (InputSlots s) m MnemonicPhraseInput MnemonicPhrase
 mnemonicPhrase =
-  inputAsync "wallet-mnemonic" "MnemonicPhrase" MP.validator case _ of
+  inputAsync "wallet-mnemonic" "Mnemonic phrase" MP.validator case _ of
     MP.Empty -> "Required."
     MP.WrongWordCount -> "24 words required."
     MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."

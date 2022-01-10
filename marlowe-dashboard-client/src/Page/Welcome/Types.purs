@@ -9,10 +9,8 @@ import Prologue
 import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Component.Contacts.Types (AddressBook, WalletDetails)
-import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
-import Types (NotFoundWebData)
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so
@@ -29,7 +27,6 @@ type State =
   , cardOpen :: Boolean
   , addressBook :: AddressBook
   , walletId :: PlutusAppId
-  , remoteWalletDetails :: NotFoundWebData WalletDetails
   , enteringDashboardState :: Boolean
   }
 
@@ -49,8 +46,7 @@ data Action
   = OpenCard Card
   | CloseCard
   | GenerateWallet
-  | RestoreTestnetWallet WalletNickname MnemonicPhrase
-  | ConnectWallet WalletNickname
+  | ConnectWallet WalletNickname WalletDetails
   | ClearLocalStorage
   | ClipboardAction Clipboard.Action
 
@@ -59,8 +55,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenCard _) = Nothing
   toEvent CloseCard = Nothing
   toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
-  toEvent (RestoreTestnetWallet _ _) =
-    Just $ defaultEvent "RestoreTestnetWallet"
-  toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
+  toEvent (ConnectWallet _ _) = Just $ defaultEvent "ConnectWallet"
   toEvent ClearLocalStorage = Just $ defaultEvent "ClearLocalStorage"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
