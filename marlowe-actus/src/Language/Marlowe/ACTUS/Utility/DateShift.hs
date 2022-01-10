@@ -106,13 +106,15 @@ getPreceedingBusinessDay LocalTime {..} CLDR_MF =
 getPreceedingBusinessDay lt _ = lt
 
 shiftDate :: LocalTime -> Integer -> Period -> LocalTime
-shiftDate LocalTime {..} n p = case p of
-  P_D -> LocalTime {localDay = addDays n localDay, localTimeOfDay = localTimeOfDay}
-  P_W -> LocalTime {localDay = addDays (n * 7) localDay, localTimeOfDay = localTimeOfDay}
-  P_M -> LocalTime {localDay = addGregorianMonthsClip n localDay, localTimeOfDay = localTimeOfDay}
-  P_Q -> LocalTime {localDay = addGregorianMonthsClip (n * 3) localDay, localTimeOfDay = localTimeOfDay}
-  P_H -> LocalTime {localDay = addGregorianMonthsClip (n * 6) localDay, localTimeOfDay = localTimeOfDay}
-  P_Y -> LocalTime {localDay = addGregorianYearsClip n localDay, localTimeOfDay = localTimeOfDay}
+shiftDate LocalTime {..} n p =
+  LocalTime {localDay = case p of
+                          P_D -> addDays n localDay
+                          P_W -> addDays (n * 7) localDay
+                          P_M -> addGregorianMonthsClip n localDay
+                          P_Q -> addGregorianMonthsClip (n * 3) localDay
+                          P_H -> addGregorianMonthsClip (n * 6) localDay
+                          P_Y -> addGregorianYearsClip n localDay
+            , localTimeOfDay = localTimeOfDay}
 
 {- End of Month Convention -}
 applyEOMC :: LocalTime -> Cycle -> EOMC -> LocalTime -> LocalTime
