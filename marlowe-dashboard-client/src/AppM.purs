@@ -9,6 +9,7 @@ import Clipboard (class MonadClipboard, copy)
 import Control.Monad.Reader (class MonadReader, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Trans.Class (lift)
+import Data.MnemonicPhrase (class CheckMnemonic)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -61,3 +62,6 @@ derive newtype instance monadReaderAppM :: MonadReader Env AppM
 
 instance monadClipboardAppM :: MonadClipboard AppM where
   copy = liftEffect <<< copy
+
+instance checkMnemonicAppM :: CheckMnemonic AppM where
+  checkMnemonic _ = pure true

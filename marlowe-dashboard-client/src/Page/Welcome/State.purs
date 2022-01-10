@@ -2,18 +2,13 @@ module Page.Welcome.State
   ( dummyState
   , mkInitialState
   , handleAction
-  , walletMnemonicError
   ) where
 
 import Prologue
 
 import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , lookupWalletDetails
-  , restoreWallet
-  )
+import Capability.Marlowe (class ManageMarlowe, restoreWallet)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , clearAllLocalStorage
@@ -22,35 +17,24 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses
-  ( _companionAppId
-  , _pubKeyHash
-  , _walletInfo
-  , _walletNickname
-  )
-import Component.Contacts.State (walletNicknameError)
-import Component.Contacts.Types (AddressBook, WalletNicknameError)
-import Component.InputField.Lenses (_value)
-import Component.InputField.State (handleAction, mkInitialState) as InputField
-import Component.InputField.Types (Action(..), State) as InputField
+import Component.Contacts.Lenses (_pubKeyHash, _walletInfo, _walletNickname)
+import Component.Contacts.Types (AddressBook)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Control.Monad.Reader (class MonadAsk)
-import Data.Array as Array
-import Data.Lens (assign, modifying, set, use, view, (^.))
+import Data.Lens (assign, modifying, set, use, view)
 import Data.Map (insert)
 import Data.Map as Map
-import Data.String (Pattern(..), split)
 import Data.Time.Duration (Milliseconds(..))
 import Data.UUID.Argonaut (emptyUUID) as UUID
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_, tell)
-import Halogen.Extra (mapSubmodule)
 import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.PAB (PlutusAppId(..))
-import Network.RemoteData (RemoteData(..), fromEither)
+import Network.RemoteData (RemoteData(..))
 import Page.Welcome.Lenses
   ( _addressBook
   , _card
@@ -58,10 +42,8 @@ import Page.Welcome.Lenses
   , _enteringDashboardState
   , _remoteWalletDetails
   , _walletId
-  , _walletMnemonicInput
-  , _walletNicknameInput
   )
-import Page.Welcome.Types (Action(..), Card(..), State, WalletMnemonicError(..))
+import Page.Welcome.Types (Action(..), State)
 import Toast.Types (errorToast, successToast)
 import Web.HTML (window)
 import Web.HTML.Location (reload)
@@ -76,24 +58,10 @@ mkInitialState addressBook =
   { addressBook
   , card: Nothing
   , cardOpen: false
-  , walletNicknameInput: InputField.mkInitialState Nothing
-  , walletMnemonicInput: InputField.mkInitialState Nothing
   , walletId: PlutusAppId UUID.emptyUUID
   , remoteWalletDetails: NotAsked
   , enteringDashboardState: false
   }
-
-words :: String -> Array String
-words = Array.filter (notEq "") <<< split (Pattern " ")
-
-walletMnemonicError :: Maybe String -> String -> Maybe WalletMnemonicError
-walletMnemonicError invalidFromServer phrase =
-  if Just phrase == invalidFromServer then
-    Just InvalidMnemonicFromServer
-  else if 24 /= (Array.length $ words phrase) then
-    Just MnemonicAmountOfWords
-  else
-    Nothing
 
 -- Some actions are handled in `MainFrame.State` because they involve
 -- modifications of that state. See Note [State] in MainFrame.State.
@@ -109,21 +77,7 @@ handleAction
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction (OpenCard card) = do
-  -- TODO: Refactor cards into real halogen components to encapsulate initialization logic. There are multiple
-  -- Reset calls spread over this file.
-  case card of
-    RestoreTestnetWalletCard -> do
-      addressBook <- use _addressBook
-      handleAction $ WalletNicknameInputAction $ InputField.Reset
-      handleAction $ WalletNicknameInputAction $ InputField.SetValidator $
-        walletNicknameError addressBook
-      handleAction $ WalletMnemonicInputAction $ InputField.Reset
-      handleAction $ WalletMnemonicInputAction $ InputField.SetValidator $
-        walletMnemonicError Nothing
-    _ -> pure unit
-  modify_
-    $ set _card (Just card)
-        <<< set _cardOpen true
+  modify_ $ set _card (Just card) <<< set _cardOpen true
 
 handleAction CloseCard = do
   modify_
@@ -131,7 +85,6 @@ handleAction CloseCard = do
         <<< set _enteringDashboardState false
         <<< set _cardOpen false
         <<< set _walletId dummyState.walletId
-  handleAction $ WalletNicknameInputAction $ InputField.Reset
 
 {- [UC-WALLET-TESTNET-1][0] Create a new testnet wallet
 Here we attempt to create a new demo wallet (with everything that entails), and - if successful -
@@ -160,19 +113,13 @@ handleAction GenerateWallet = pure unit
 --     handleAction $ OpenCard UseNewWalletCard
 {- [UC-WALLET-TESTNET-2][0] Restore a testnet wallet
 -}
-handleAction RestoreTestnetWallet = do
-  walletName <- use (_walletNicknameInput <<< _value)
-  mnemonicPhraseStr <- use (_walletMnemonicInput <<< _value)
-  let
-    mnemonicPhrase = words mnemonicPhraseStr
-  result <- restoreWallet { walletName, mnemonicPhrase, passphrase: "" }
+handleAction (RestoreTestnetWallet walletName mnemonicPhrase) = do
+  result <- restoreWallet walletName mnemonicPhrase ""
   case result of
     Left InvalidMnemonic -> do
       tell _submitButtonSlot "restore-wallet" $ SubmitResult
         (Milliseconds 1200.0)
         (Left "Invalid mnemonic")
-      handleAction $ WalletMnemonicInputAction $ InputField.SetValidator $
-        walletMnemonicError (Just mnemonicPhraseStr)
     Left _ -> do
       tell _submitButtonSlot "restore-wallet" $ SubmitResult
         (Milliseconds 1200.0)
@@ -194,24 +141,18 @@ date. This intermediate step makes sure we have the current details before proce
 This is also factored out into a separate handler so that it can be called directly when the user
 selects a wallet nickname from the dropdown menu (as well as indirectly via the previous handler).
 -}
-handleAction (OpenUseWalletCardWithDetails walletDetails) = do
-  assign _remoteWalletDetails Loading
-  ajaxWalletDetails <- lookupWalletDetails $ view _companionAppId walletDetails
-  assign _remoteWalletDetails $ fromEither ajaxWalletDetails
-  case ajaxWalletDetails of
-    Left _ -> handleAction $ OpenCard LocalWalletMissingCard
-    Right _ -> do
-      handleAction $ WalletNicknameInputAction $ InputField.SetValue $ view
-        _walletNickname
-        walletDetails
-      assign _walletId $ walletDetails ^. _companionAppId
-      handleAction $ OpenCard UseWalletCard
-
-handleAction (WalletNicknameInputAction inputFieldAction) =
-  toWalletNicknameInput $ InputField.handleAction inputFieldAction
-
-handleAction (WalletMnemonicInputAction inputFieldAction) =
-  toWalletMnemonicInput $ InputField.handleAction inputFieldAction
+-- handleAction (OpenUseWalletCardWithDetails walletDetails) = do
+--   assign _remoteWalletDetails Loading
+--   ajaxWalletDetails <- lookupWalletDetails $ view _companionAppId walletDetails
+--   assign _remoteWalletDetails $ fromEither ajaxWalletDetails
+--   case ajaxWalletDetails of
+--     Left _ -> handleAction $ OpenCard LocalWalletMissingCard
+--     Right _ -> do
+--       handleAction $ WalletNicknameInputAction $ InputField.SetValue $ view
+--         _walletNickname
+--         walletDetails
+--       assign _walletId $ walletDetails ^. _companionAppId
+--       handleAction $ OpenCard UseWalletCard
 
 {- [Workflow 2][2] Connect a wallet
 This action is triggered by clicking the confirmation button on the UseWalletCard or
@@ -224,12 +165,13 @@ handleAction (ConnectWallet walletNickname) = do
   case remoteWalletDetails of
     Success walletDetails -> do
       let
-        walletDetailsWithNickname = set _walletNickname walletNickname
+        walletDetailsWithNickname = set _walletNickname
+          (WN.toString walletNickname)
           walletDetails
 
         address = view (_walletInfo <<< _pubKeyHash) walletDetailsWithNickname
-      modifying _addressBook $ insert walletNickname address
-      insertIntoAddressBook walletNickname address
+      modifying _addressBook $ insert (WN.toString walletNickname) address
+      insertIntoAddressBook (WN.toString walletNickname) address
       addressBook <- use _addressBook
       callMainFrameAction $ MainFrame.EnterDashboardState addressBook
         walletDetailsWithNickname
@@ -249,30 +191,3 @@ handleAction ClearLocalStorage = do
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
   addToast $ successToast "Copied to clipboard"
-
-------------------------------------------------------------
-toWalletNicknameInput
-  :: forall m msg slots
-   . Functor m
-  => HalogenM (InputField.State WalletNicknameError)
-       (InputField.Action WalletNicknameError)
-       slots
-       msg
-       m
-       Unit
-  -> HalogenM State Action slots msg m Unit
-toWalletNicknameInput = mapSubmodule _walletNicknameInput
-  WalletNicknameInputAction
-
-toWalletMnemonicInput
-  :: forall m msg slots
-   . Functor m
-  => HalogenM (InputField.State WalletMnemonicError)
-       (InputField.Action WalletMnemonicError)
-       slots
-       msg
-       m
-       Unit
-  -> HalogenM State Action slots msg m Unit
-toWalletMnemonicInput = mapSubmodule _walletMnemonicInput
-  WalletMnemonicInputAction

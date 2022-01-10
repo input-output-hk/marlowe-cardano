@@ -5,30 +5,22 @@ module Page.Welcome.View
 
 import Prologue hiding (div)
 
-import Component.Contacts.State (walletNicknameError)
-import Component.Contacts.Types (AddressBook)
+import Componenet.RestoreWalletForm (Msg(..))
+import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
-import Component.Input.View as Input
-import Component.InputField.Lenses (_value)
-import Component.InputField.State (validate)
-import Component.InputField.Types (InputDisplayOptions, inputErrorToString)
-import Component.InputField.View (renderInput)
-import Component.Label.View as Label
-import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Css as Css
 import Data.Lens ((^.))
 import Data.List (foldMap)
-import Data.Maybe (isJust, isNothing)
+import Data.Map as Map
+import Data.MnemonicPhrase (class CheckMnemonic)
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
-import Halogen.Form (Form)
-import Halogen.Form as Form
 import Halogen.HTML
   ( ComponentHTML
   , HTML
   , a
-  , b_
   , br_
   , button
   , div
@@ -41,26 +33,16 @@ import Halogen.HTML
   , p
   , p_
   , section
-  , slot_
+  , slot
   , span_
   , text
   )
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (disabled, href, src, title)
+import Halogen.HTML.Properties (href, src, title)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
-import Network.RemoteData (isSuccess)
-import Page.Welcome.Lenses
-  ( _card
-  , _cardOpen
-  , _enteringDashboardState
-  , _remoteWalletDetails
-  , _walletMnemonicInput
-  , _walletNicknameInput
-  )
-import Page.Welcome.State (walletMnemonicError)
+import Page.Welcome.Lenses (_addressBook, _card, _cardOpen)
 import Page.Welcome.Types (Action(..), Card(..), State)
-import Polyform.Reporter (liftFnR)
 import Type.Proxy (Proxy(..))
 
 welcomeScreen :: forall p. State -> HTML p Action
@@ -85,7 +67,11 @@ welcomeScreen _ =
     ]
 
 welcomeCard
-  :: forall m. MonadAff m => State -> ComponentHTML Action ChildSlots m
+  :: forall m
+   . MonadAff m
+  => CheckMnemonic m
+  => State
+  -> ComponentHTML Action ChildSlots m
 welcomeCard state =
   let
     card = state ^. _card
@@ -102,8 +88,8 @@ welcomeCard state =
           $ (flip foldMap card) \cardType -> case cardType of
               GetStartedHelpCard -> getStartedHelpCard
               GenerateWalletHelpCard -> generateWalletHelpCard
-              UseNewWalletCard -> useNewWalletCard state
-              UseWalletCard -> useWalletCard state
+              UseNewWalletCard -> [] --useNewWalletCard state
+              UseWalletCard -> [] --useWalletCard state
               RestoreTestnetWalletCard -> restoreTestnetWalletCard state
               LocalWalletMissingCard -> localWalletMissingCard
       ]
@@ -274,218 +260,83 @@ generateWalletHelpCard =
       ]
   ]
 
-type NicknameInput =
-  { value :: String
-  , addressBook :: AddressBook
-  }
-
-type MnemonicInput =
-  { value :: String
-  , invalidFromServer :: Maybe String
-  }
-
--- TODO refactor validation to return Either
-walletNicknameForm :: forall a s m. Monad m => Form a NicknameInput s m String
-walletNicknameForm = liftFnR \{ value, addressBook } ->
-  let
-    error = walletNicknameError addressBook value
-    input = Input.defaultInput
-      { value = value
-      , onChange = Just \v -> Form.Update { value: v, addressBook }
-      , invalid = isJust error
-      , id = "walletNickname"
-      }
-    view =
-      [ div [ classNames [ "relative" ] ]
-          [ Input.renderWithChildren input \i ->
-              [ Label.render Label.defaultInput
-                  { for = "walletNickname", text = "Wallet nickname" }
-              , i
-              ]
-          , p [ classNames $ Css.inputError <> [ "h-5" ] ]
-              case error of
-                Nothing -> [ text "" ]
-                Just e -> [ text $ inputErrorToString e ]
-          ]
-      ]
-  in
-    case error of
-      Nothing -> Tuple (Just value) view
-      Just _ -> Tuple Nothing view
-
--- TODO create form smart constructor with Writer monad isntance
-mnemonicPhraseForm :: forall a s m. Monad m => Form a MnemonicInput s m String
-mnemonicPhraseForm = liftFnR \{ value, invalidFromServer } ->
-  let
-    error = walletMnemonicError invalidFromServer value
-    input = Input.defaultInput
-      { value = value
-      , onChange = Just \v -> Form.Update { value: v, invalidFromServer }
-      , invalid = isJust error
-      , id = "walletMnemonic"
-      }
-    view =
-      [ div [ classNames [ "relative" ] ]
-          [ Input.renderWithChildren input \i ->
-              [ Label.render Label.defaultInput
-                  { for = "walletMnemonic", text = "Mnemonic phrase" }
-              , i
-              ]
-          , p [ classNames $ Css.inputError <> [ "h-5" ] ]
-              case error of
-                Nothing -> [ text "" ]
-                Just e -> [ text $ inputErrorToString e ]
-          ]
-      ]
-  in
-    case error of
-      Nothing -> Tuple (Just value) view
-      Just _ -> Tuple Nothing view
-
-type RestoreWalletInput = Tuple NicknameInput MnemonicInput
-type RestoreWalletOutput = Tuple String String
-
-restoreWalletForm
-  :: forall a s m
-   . Monad m
-  => Form a RestoreWalletInput s m RestoreWalletOutput
-restoreWalletForm = Form.split walletNicknameForm mnemonicPhraseForm
-
-restoreWalletFormComponent
-  :: forall q action m
-   . MonadAff m
-  => Form.Component q RestoreWalletInput action RestoreWalletOutput m
-restoreWalletFormComponent = Form.component restoreWalletForm
-
 restoreTestnetWalletCard
-  :: forall m. MonadAff m => State -> Array (ComponentHTML Action ChildSlots m)
+  :: forall m
+   . MonadAff m
+  => CheckMnemonic m
+  => State
+  -> Array (ComponentHTML Action ChildSlots m)
 restoreTestnetWalletCard state =
   let
-    formInput =
-      { classNames: [ "space-y-4" ]
-      , value: Tuple
-          { addressBook: state.addressBook, value: "" }
-          { invalidFromServer: Nothing, value: "" }
-      }
-    enteringDashboardState = state ^. _enteringDashboardState
-
-    walletNicknameInput = state ^. _walletNicknameInput
-
-    walletMnemonicInput = state ^. _walletMnemonicInput
-
-    -- walletMnemonicDisplayOptions =
-    --   { additionalCss: mempty
-    --   , id_: "walletMnemonic"
-    --   , placeholder: "Enter the mnemonic phrase"
-    --   , readOnly: false
-    --   , numberFormat: Nothing
-    --   , valueOptions: mempty
-    --   , after: Nothing
-    --   , before:
-    --       Just
-    --         $ Label.render
-    --             Label.defaultInput
-    --               { for = "walletMnemonic", text = "Mnemonic phrase" }
-    --   }
-
-    submitButtonEnabled =
-      isNothing (validate walletNicknameInput)
-        && isNothing (validate walletMnemonicInput)
-        && not enteringDashboardState
+    nicknames = WN.fromFoldable $ Map.keys $ state ^. _addressBook
   in
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
         , onClick_ CloseCard
         ]
         [ icon_ Icon.Close ]
-    , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
-        [ h2
-            [ classNames [ "font-bold" ] ]
-            [ text $ "Restore testnet wallet" ]
-        , slot_
-            (Proxy :: _ "restoreWalletForm")
-            unit
-            restoreWalletFormComponent
-            formInput
-        -- TODO integrate into welcome page
-        -- case _ of
-        --   Escalated action -> action
-        --   Updated result -> RestoreWalletResultUpdated result
-        , p_
-            [ b_ [ text "IMPORTANT:" ]
-            -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it
-            , text "Do not use a real wallet phrase <read more>"
-            ]
-        , div
-            [ classNames [ "flex", "gap-4" ] ]
-            [ button
-                [ classNames $ Css.secondaryButton <> [ "flex-1" ]
-                , onClick_ CloseCard
-                ]
-                [ text "Cancel" ]
-            , loadingSubmitButton
-                { ref: "restore-wallet"
-                , caption: "Restore Wallet"
-                , styles: [ "flex-1" ]
-                , enabled: submitButtonEnabled
-                , handler: RestoreTestnetWallet
-                }
-            ]
-        ]
+    , slot
+        (Proxy :: _ "restoreWalletForm")
+        unit
+        RestoreWalletForm.component
+        nicknames
+        case _ of
+          Closed -> CloseCard
+          Restored _ -> CloseCard
     ]
 
 -- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
-useNewWalletCard :: forall p. State -> Array (HTML p Action)
-useNewWalletCard state =
-  let
-    enteringDashboardState = state ^. _enteringDashboardState
+-- useNewWalletCard :: forall p. State -> Array (HTML p Action)
+-- useNewWalletCard state =
+--   let
+--     enteringDashboardState = state ^. _enteringDashboardState
 
-    remoteWalletDetails = state ^. _remoteWalletDetails
+--     remoteWalletDetails = state ^. _remoteWalletDetails
 
-    walletNicknameInput = state ^. _walletNicknameInput
+--     walletNicknameInput = state ^. _walletNicknameInput
 
-    walletNickname = walletNicknameInput ^. _value
-  -- walletId = state ^. _walletId
-  in
-    [ a
-        [ classNames [ "absolute", "top-4", "right-4" ]
-        , onClick_ CloseCard
-        ]
-        [ icon_ Icon.Close ]
-    , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
-        [ h2
-            [ classNames [ "font-bold" ] ]
-            [ text $ "Demo wallet generated" ]
-        , WalletNicknameInputAction
-            <$> renderInput
-              (walletNicknameInputDisplayOptions false)
-              walletNicknameInput
-        -- While removing information from the other contacts we have (part of task SCP-3174) I noticed
-        -- that we don't have the right data to show renderAddress in here, which is pointing to the direction
-        -- of removing this view altogether. Once the phase 1 is complete and we are sure we don use this, we can
-        -- remove the view and most likely the walletId and maybe the remoteWalletDetails from the state
-        -- , renderAddress walletId
-        , div
-            [ classNames [ "flex", "gap-4" ] ]
-            [ button
-                [ classNames $ Css.secondaryButton <> [ "flex-1" ]
-                , onClick_ CloseCard
-                ]
-                [ text "Cancel" ]
-            , button
-                [ classNames $ Css.primaryButton <> [ "flex-1" ]
-                , disabled $ isJust (validate walletNicknameInput)
-                    || enteringDashboardState
-                    || not isSuccess remoteWalletDetails
-                , onClick_ $ ConnectWallet walletNickname
-                ]
-                [ text
-                    if enteringDashboardState then "Connecting..."
-                    else "Connect Wallet"
-                ]
-            ]
-        ]
-    ]
+--     walletNickname = walletNicknameInput ^. _value
+--   -- walletId = state ^. _walletId
+--   in
+--     [ a
+--         [ classNames [ "absolute", "top-4", "right-4" ]
+--         , onClick_ CloseCard
+--         ]
+--         [ icon_ Icon.Close ]
+--     , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
+--         [ h2
+--             [ classNames [ "font-bold" ] ]
+--             [ text $ "Demo wallet generated" ]
+--         , WalletNicknameInputAction
+--             <$> renderInput
+--               (walletNicknameInputDisplayOptions false)
+--               walletNicknameInput
+--         -- While removing information from the other contacts we have (part of task SCP-3174) I noticed
+--         -- that we don't have the right data to show renderAddress in here, which is pointing to the direction
+--         -- of removing this view altogether. Once the phase 1 is complete and we are sure we don use this, we can
+--         -- remove the view and most likely the walletId and maybe the remoteWalletDetails from the state
+--         -- , renderAddress walletId
+--         , div
+--             [ classNames [ "flex", "gap-4" ] ]
+--             [ button
+--                 [ classNames $ Css.secondaryButton <> [ "flex-1" ]
+--                 , onClick_ CloseCard
+--                 ]
+--                 [ text "Cancel" ]
+--             , button
+--                 [ classNames $ Css.primaryButton <> [ "flex-1" ]
+--                 , disabled $ isJust (validate walletNicknameInput)
+--                     || enteringDashboardState
+--                     || not isSuccess remoteWalletDetails
+--                 , onClick_ $ ConnectWallet walletNickname
+--                 ]
+--                 [ text
+--                     if enteringDashboardState then "Connecting..."
+--                     else "Connect Wallet"
+--                 ]
+--             ]
+--         ]
+--     ]
 
 -- TODO: Probably remove as part of SCP-3218
 -- renderAddress :: forall p. PubKeyHash -> HTML p Action
@@ -502,70 +353,53 @@ useNewWalletCard state =
 --       , walletIdTip
 --       ]
 -- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
-useWalletCard :: forall p. State -> Array (HTML p Action)
-useWalletCard state =
-  let
-    enteringDashboardState = state ^. _enteringDashboardState
+-- useWalletCard :: forall p. State -> Array (HTML p Action)
+-- useWalletCard state =
+--   let
+--     enteringDashboardState = state ^. _enteringDashboardState
 
-    remoteWalletDetails = state ^. _remoteWalletDetails
+--     remoteWalletDetails = state ^. _remoteWalletDetails
 
-    walletNicknameInput = state ^. _walletNicknameInput
+--     walletNicknameInput = state ^. _walletNicknameInput
 
-    walletNickname = walletNicknameInput ^. _value
-  -- walletId = state ^. _walletId
-  in
-    [ a
-        [ classNames [ "absolute", "top-4", "right-4" ]
-        , onClick_ CloseCard
-        ]
-        [ icon_ Icon.Close ]
-    , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
-        [ h2
-            [ classNames [ "font-bold", "truncate", "w-11/12" ] ]
-            [ text $ "Demo wallet " <> walletNickname ]
-        , WalletNicknameInputAction
-            <$> renderInput
-              (walletNicknameInputDisplayOptions true)
-              walletNicknameInput
-        -- same note that in useNewWalletCard
-        -- , renderAddress walletId
-        , div
-            [ classNames [ "flex", "gap-4" ] ]
-            [ button
-                [ classNames $ Css.secondaryButton <> [ "flex-1" ]
-                , onClick_ CloseCard
-                ]
-                [ text "Cancel" ]
-            , button
-                [ classNames $ Css.primaryButton <> [ "flex-1" ]
-                , onClick_ $ ConnectWallet walletNickname
-                , disabled $ enteringDashboardState || not isSuccess
-                    remoteWalletDetails
-                ]
-                [ text
-                    if enteringDashboardState then "Connecting..."
-                    else "Connect Wallet"
-                ]
-            ]
-        ]
-    ]
-
-walletNicknameInputDisplayOptions
-  :: forall w i. Boolean -> InputDisplayOptions w i
-walletNicknameInputDisplayOptions readOnly =
-  { additionalCss: mempty
-  , id_: "walletNickname"
-  , placeholder: if readOnly then mempty else "Give your wallet a nickname"
-  , readOnly
-  , numberFormat: Nothing
-  , valueOptions: mempty
-  , after: Nothing
-  , before:
-      Just
-        $ Label.render
-            Label.defaultInput
-              { for = "walletNickname", text = "Wallet nickname" }
-  }
+--     walletNickname = walletNicknameInput ^. _value
+--   -- walletId = state ^. _walletId
+--   in
+--     [ a
+--         [ classNames [ "absolute", "top-4", "right-4" ]
+--         , onClick_ CloseCard
+--         ]
+--         [ icon_ Icon.Close ]
+--     , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
+--         [ h2
+--             [ classNames [ "font-bold", "truncate", "w-11/12" ] ]
+--             [ text $ "Demo wallet " <> walletNickname ]
+--         , WalletNicknameInputAction
+--             <$> renderInput
+--               (walletNicknameInputDisplayOptions true)
+--               walletNicknameInput
+--         -- same note that in useNewWalletCard
+--         -- , renderAddress walletId
+--         , div
+--             [ classNames [ "flex", "gap-4" ] ]
+--             [ button
+--                 [ classNames $ Css.secondaryButton <> [ "flex-1" ]
+--                 , onClick_ CloseCard
+--                 ]
+--                 [ text "Cancel" ]
+--             , button
+--                 [ classNames $ Css.primaryButton <> [ "flex-1" ]
+--                 , onClick_ $ ConnectWallet walletNickname
+--                 , disabled $ enteringDashboardState || not isSuccess
+--                     remoteWalletDetails
+--                 ]
+--                 [ text
+--                     if enteringDashboardState then "Connecting..."
+--                     else "Connect Wallet"
+--                 ]
+--             ]
+--         ]
+--     ]
 
 localWalletMissingCard :: forall p. Array (HTML p Action)
 localWalletMissingCard =

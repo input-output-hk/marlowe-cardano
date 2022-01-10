@@ -34,6 +34,7 @@ import Data.Foldable (for_)
 import Data.Lens (assign, set, use, view)
 import Data.Lens.Extra (peruse)
 import Data.Map (keys)
+import Data.MnemonicPhrase (class CheckMnemonic)
 import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
@@ -119,7 +120,8 @@ mkMainFrame
   => Toast m
   => MonadClipboard m
   => MainFrameLoop m
-  => Component Query i Msg m
+  => CheckMnemonic m
+  => Component Query Action Msg m
 mkMainFrame =
   mkComponent
     { initialState: const initialState

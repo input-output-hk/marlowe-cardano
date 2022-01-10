@@ -2,21 +2,15 @@ module Page.Welcome.Types
   ( Action(..)
   , Card(..)
   , State
-  , WalletMnemonicError(..)
   ) where
 
 import Prologue
 
-import Analytics (class IsEvent, defaultEvent, toEvent)
+import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
-import Component.Contacts.Types
-  ( AddressBook
-  , WalletDetails
-  , WalletNickname
-  , WalletNicknameError
-  )
-import Component.InputField.Types (class InputFieldError)
-import Component.InputField.Types (Action, State) as InputField
+import Component.Contacts.Types (AddressBook, WalletDetails)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
 import Types (NotFoundWebData)
 
@@ -34,24 +28,10 @@ type State =
   -- from the right) - and that's much easier to do with media queries.
   , cardOpen :: Boolean
   , addressBook :: AddressBook
-  , walletNicknameInput :: InputField.State WalletNicknameError
-  , walletMnemonicInput :: InputField.State WalletMnemonicError
   , walletId :: PlutusAppId
   , remoteWalletDetails :: NotFoundWebData WalletDetails
   , enteringDashboardState :: Boolean
   }
-
-data WalletMnemonicError
-  = MnemonicAmountOfWords
-  | InvalidMnemonicFromServer
-
-derive instance eqWalletMnemonicError :: Eq WalletMnemonicError
-
-instance inputFieldErrorWalletMnemonicError ::
-  InputFieldError WalletMnemonicError where
-  inputErrorToString MnemonicAmountOfWords = "Mnemonic phrases have 24 words"
-  inputErrorToString InvalidMnemonicFromServer =
-    "The phrase is an invalid mnemonic"
 
 -- TODO: When we implement another wallet connetctor, we should probably move this to
 -- Welcome.Testnet and split the Actions into general wallet logic and Testnet wallet logic
@@ -69,10 +49,7 @@ data Action
   = OpenCard Card
   | CloseCard
   | GenerateWallet
-  | RestoreTestnetWallet
-  | WalletMnemonicInputAction (InputField.Action WalletMnemonicError)
-  | OpenUseWalletCardWithDetails WalletDetails
-  | WalletNicknameInputAction (InputField.Action WalletNicknameError)
+  | RestoreTestnetWallet WalletNickname MnemonicPhrase
   | ConnectWallet WalletNickname
   | ClearLocalStorage
   | ClipboardAction Clipboard.Action
@@ -82,12 +59,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenCard _) = Nothing
   toEvent CloseCard = Nothing
   toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
-  toEvent RestoreTestnetWallet = Just $ defaultEvent "RestoreTestnetWallet"
-  toEvent (WalletMnemonicInputAction inputFieldAction) = toEvent
-    inputFieldAction
-  toEvent (OpenUseWalletCardWithDetails _) = Nothing
-  toEvent (WalletNicknameInputAction inputFieldAction) = toEvent
-    inputFieldAction
+  toEvent (RestoreTestnetWallet _ _) =
+    Just $ defaultEvent "RestoreTestnetWallet"
   toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
   toEvent ClearLocalStorage = Just $ defaultEvent "ClearLocalStorage"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

@@ -3,6 +3,7 @@ module MainFrame.Types where
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
+import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Contacts.Types (AddressBook, WalletDetails)
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
@@ -12,7 +13,6 @@ import Data.Map (Map)
 import Data.Time.Duration (Minutes)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
-import Halogen.Form as Form
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Slot)
 import Page.Contract.Types (State) as Contract
@@ -54,7 +54,7 @@ type ChildSlots =
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
   , expandSlot :: Expand.Slot Void String
-  , restoreWalletForm :: Form.Slot Action (Tuple String String) Unit
+  , restoreWalletForm :: forall query. H.Slot query RestoreWalletForm.Msg Unit
   , toaster :: forall q m. H.Slot q m Unit
   )
 

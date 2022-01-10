@@ -33,7 +33,7 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Validation.Semigroup (V(..))
 import Polyform (Validator)
 import Polyform.Dual as Dual
-import Polyform.Validator (liftFnMV)
+import Polyform.Validator (liftFnMV, liftFnV)
 import Polyform.Validator.Dual (Dual)
 
 data WalletNicknameError
@@ -97,12 +97,14 @@ toString (WalletNickname s) = s
 
 validator
   :: forall m
-   . MonadAsk (Set WalletNickname) m
-  => Validator m WalletNicknameError String WalletNickname
-validator = liftFnMV \s -> asks \used -> V $ fromString used s
+   . Applicative m
+  => Set WalletNickname
+  -> Validator m WalletNicknameError String WalletNickname
+validator used = liftFnV \s -> V $ fromString used s
 
 dual
   :: forall m
-   . MonadAsk (Set WalletNickname) m
-  => Dual m WalletNicknameError String WalletNickname
-dual = Dual.dual validator (pure <<< toString)
+   . Applicative m
+  => Set WalletNickname
+  -> Dual m WalletNicknameError String WalletNickname
+dual used = Dual.dual (validator used) (pure <<< toString)
