@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
+{-| = ACTUS payoff functions -}
 module Language.Marlowe.ACTUS.Model.Payoff
   ( payoff
   , CtxPOF (..)
@@ -15,11 +16,13 @@ import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (
 import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
 import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
+-- |The context for payoff functions
 data CtxPOF a = CtxPOF
   { contractTerms :: ContractTermsPoly a                         -- ^ Contract terms
   , riskFactors   :: EventType -> LocalTime -> RiskFactorsPoly a -- ^ Risk factors as a function of event type and time
   }
 
+-- |The payoff function
 payoff :: (RoleSignOps a, YearFractionOps a) =>
      EventType           -- ^ Event type
   -> LocalTime           -- ^ Time
@@ -125,21 +128,15 @@ payoff ev t st = reader payoff'
         -- Maturity (MD) --
         -------------------
         -- POF_MD_OPTNS
-        pof
-          MD
-          _
-          ContractTermsPoly
-            { contractType = OPTNS
-            }
-          _ = _zero
         -- POF_MD_SWPPV
+        -- POF_MD_CEG
         pof
           MD
           _
           ContractTermsPoly
-            { contractType = SWPPV
+            { contractType
             }
-          _ = _zero
+          _ | contractType `elem` [OPTNS, SWPPV, CEG] = _zero
         -- POF_IED_*
         pof
           MD
@@ -270,6 +267,7 @@ payoff ev t st = reader payoff'
         -- POF_PRD_OPTNS
         -- POF_PRD_FUTUR
         -- POF_PRD_SWPPV
+        -- POF_PRD_CEG
         pof
           PRD
           _
@@ -278,7 +276,7 @@ payoff ev t st = reader payoff'
               priceAtPurchaseDate = Just pprd,
               contractRole
             }
-          _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV] = _negate $ _r contractRole * pprd
+          _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV, CEG] = _negate $ _r contractRole * pprd
         ----------------------
         -- Termination (TD) --
         ----------------------
@@ -465,7 +463,8 @@ payoff ev t st = reader payoff'
         ----------------------
         -- Settlement (STD) --
         ----------------------
-        -- POF_STD_*
+        -- POF_STD_OPTNS
+        -- POF_STD_FUTUR
         pof
           STD
           RiskFactorsPoly
@@ -478,6 +477,19 @@ payoff ev t st = reader payoff'
           ContractStatePoly
             { xa = Just exerciseAmount
             } | contractType `elem` [OPTNS, FUTUR] = o_rf_CURS * _r contractRole * exerciseAmount
+        -- POF_STD_CEG
+        pof
+          STD
+          RiskFactorsPoly
+            { o_rf_CURS
+            }
+          ContractTermsPoly
+            { contractType = CEG
+            }
+          ContractStatePoly
+            { xa = Just exerciseAmount,
+              feac
+            } = o_rf_CURS * (exerciseAmount + feac)
         -------------------------------
         -- Rate Reset (RR) --
         -------------------------------

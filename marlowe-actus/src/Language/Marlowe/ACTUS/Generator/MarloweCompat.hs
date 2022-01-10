@@ -54,7 +54,7 @@ toMarlowe ct =
   ContractTermsPoly
     { contractId = contractId ct,
       contractType = contractType ct,
-      contractStructure = contractStructure ct,
+      contractStructure = map trans (contractStructure ct),
       contractRole = contractRole ct,
       settlementCurrency = settlementCurrency ct,
       initialExchangeDate = initialExchangeDate ct,
@@ -62,6 +62,9 @@ toMarlowe ct =
       scheduleConfig = scheduleConfig ct,
       statusDate = statusDate ct,
       contractPerformance = contractPerformance ct,
+      creditEventTypeCovered = creditEventTypeCovered ct,
+      coverageOfCreditEnhancement = constnt <$> coverageOfCreditEnhancement ct,
+      guaranteedExposure = guaranteedExposure ct,
       cycleOfFee = cycleOfFee ct,
       cycleAnchorDateOfFee = cycleAnchorDateOfFee ct,
       feeAccrued = constnt <$> feeAccrued ct,
@@ -125,3 +128,9 @@ toMarlowe ct =
       enableSettlement = enableSettlement ct,
       constraints = constraints ct
     }
+  where
+    trans :: ContractStructure Double -> ContractStructure (Value Observation)
+    trans cs = cs { reference = case reference cs of
+                                  ReferenceId r    -> ReferenceId r
+                                  ReferenceTerms t -> ReferenceTerms $ toMarlowe t }
+

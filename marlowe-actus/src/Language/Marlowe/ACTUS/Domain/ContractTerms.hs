@@ -11,8 +11,8 @@ module Language.Marlowe.ACTUS.Domain.ContractTerms where
 import Control.Applicative ((<|>))
 import Control.Monad (guard, mzero)
 import Data.Aeson.TH (deriveJSON)
-import Data.Aeson.Types (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String), defaultOptions, object,
-                         parseJSON, toJSON, (.:), (.:?), (.=))
+import Data.Aeson.Types (FromJSON, Options (..), Parser, SumEncoding (..), ToJSON, Value (..), defaultOptions,
+                         genericParseJSON, object, parseJSON, toJSON, (.:), (.:?), (.=))
 import Data.Maybe (fromMaybe)
 import Data.Text as T hiding (reverse, takeWhile)
 import Data.Text.Read as T
@@ -29,6 +29,8 @@ data CT = PAM   -- ^ Principal at maturity
         | OPTNS -- ^ Option
         | FUTUR -- ^ Future
         | SWPPV -- ^ Plain Vanilla Swap
+        | CEG   -- ^ Guarantee
+        | CEC   -- ^ Collateral
         deriving stock (Show, Read, Eq, Generic)
         deriving anyclass (FromJSON, ToJSON)
 
@@ -119,6 +121,21 @@ data PRF = PRF_PF -- ^ Performant
          deriving stock (Show, Read, Eq, Generic)
 
 $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PRF)
+
+-- |CreditEventTypeCovered
+data CETC = CETC_DL -- ^ Delayed
+          | CETC_DQ -- ^ Delinquent
+          | CETC_DF -- ^ Default
+         deriving stock (Show, Read, Eq, Generic)
+
+$(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CETC)
+
+-- |GuaranteedExposure
+data CEGE = CEGE_NO -- ^ Nominal value
+          | CEGE_NI -- ^ Nominal value plus interest
+         deriving stock (Show, Read, Eq, Generic)
+
+$(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CEGE)
 
 -- |FeeBasis
 data FEB = FEB_A -- ^ Absolute value
@@ -307,11 +324,11 @@ data Assertion = NpvAssertionAgainstZeroRiskBond
   deriving anyclass (FromJSON, ToJSON)
 
 -- |Reference type
-data ReferenceType = CNT
-                   | CID
-                   | MOC
-                   | EID
-                   | CST
+data ReferenceType = CNT -- ^ Contract
+                   | CID -- ^ Contract Identifier
+                   | MOC -- ^ Market Object Identifier
+                   | EID -- ^ Legal Entity Identifier
+                   | CST -- ^ Contract Structure
   deriving stock (Eq, Show, Read, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -324,35 +341,44 @@ data ReferenceRole = UDL  -- ^ Underlying
   deriving stock (Eq, Read, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
--- |Market object code
-type MarketObjectCode = String
+-- |Reference object
+data Identifier = Identifier
+  { marketObjectCode   :: Maybe String
+  , contractIdentifier :: Maybe String
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data Reference a = ReferenceTerms (ContractTermsPoly a)
+                 | ReferenceId Identifier
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
+
+instance FromJSON (Reference Double) where
+  parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
 
 -- |Contract structure
-data ContractStructure = ContractStructure
-  {
-    marketObjectCode :: MarketObjectCode
-  , referenceType    :: ReferenceType
-  , referenceRole    :: ReferenceRole
+data ContractStructure a = ContractStructure
+  { reference     :: Reference a
+  , referenceType :: ReferenceType
+  , referenceRole :: ReferenceRole
   }
   deriving stock (Show, Generic)
 
-instance ToJSON ContractStructure where
+instance ToJSON a => ToJSON (ContractStructure a) where
   toJSON ContractStructure{..} =
     object
-      [ "object" .= object [ "marketObjectCode" .= toJSON marketObjectCode ]
+      [ "object"        .= toJSON reference
       , "referenceType" .= toJSON referenceType
       , "referenceRole" .= toJSON referenceRole
       ]
 
-instance FromJSON ContractStructure where
+instance FromJSON (ContractStructure Double) where
   parseJSON (Object v) =
     ContractStructure
-      <$> (v .: "object" >>= obj)
+      <$> v .: "object"
       <*> v .: "referenceType"
       <*> v .: "referenceRole"
-   where
-     obj (Object o) = o .: "marketObjectCode"
-     obj _          = fail "Error parsing ContractStructure"
   parseJSON _ = mzero
 
 {-| ACTUS contract terms and attributes are defined in
@@ -362,7 +388,7 @@ data ContractTermsPoly a = ContractTermsPoly
   { -- General
     contractId                               :: String
   , contractType                             :: CT
-  , contractStructure                        :: [ContractStructure]
+  , contractStructure                        :: [ContractStructure a]
   , contractRole                             :: CR
   , settlementCurrency                       :: Maybe String
 
@@ -376,6 +402,9 @@ data ContractTermsPoly a = ContractTermsPoly
 
   -- Counterparty
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
+  , creditEventTypeCovered                   :: Maybe CETC       -- ^ Credit Event Type Covered
+  , coverageOfCreditEnhancement              :: Maybe a          -- ^ Coverage Of Credit Enhancement
+  , guaranteedExposure                       :: Maybe CEGE       -- ^ Guaranteed Exposure
 
   -- Fees
   , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
@@ -481,11 +510,14 @@ instance FromJSON ContractTerms where
            )
       <*> v .:  "statusDate"
       <*> v .:? "contractPerformance"
+      <*> v .:? "creditEventTypeCovered"
+      <*> v .!? "coverageOfCreditEnhancement"
+      <*> v .!? "guaranteedExposure"
       <*> v .:? "cycleOfFee"
       <*> v .:? "cycleAnchorDateOfFee"
       <*> v .:? "feeAccrued"
       <*> v .:? "feeBasis"
-      <*> v .:? "feeRate"
+      <*> v .!? "feeRate"
       <*> v .:? "cycleAnchorDateOfInterestPayment"
       <*> v .:? "cycleOfInterestPayment"
       <*> v .!? "accruedInterest"

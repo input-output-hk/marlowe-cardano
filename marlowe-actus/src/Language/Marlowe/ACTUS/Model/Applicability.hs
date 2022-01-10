@@ -1,13 +1,32 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.ACTUS.Model.Applicability where
+{-|
+= ACTUS applicability rules
+[Applicability rules](https://www.actusfrf.org/aplicability) are defined per contract type.
+The rules check the consistency of the contract attributes for the given ACTUS contract terms.
+If contract terms are successfully validated, we expect that the contract is meaningful and
+cash flows can be projected.
+
+There are different types of rules, like
+
+  * an attribute is /mandatory/ \/ /optional/ \/ /not applicable/
+  * an attribute is /mandatory/ if another attribute is /present/
+
+-}
+module Language.Marlowe.ACTUS.Model.Applicability
+  ( validateTerms
+  )
+where
 
 import Data.Maybe (isJust)
 import Data.Validation (Validation (..))
 import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (..), IPCB (..), ScheduleConfig (..),
                                                     TermValidationError (..))
 
-validateTerms :: ContractTermsPoly a -> Validation [TermValidationError] (ContractTermsPoly a)
+-- |Contract terms are validated with applicability rules
+validateTerms ::
+  ContractTermsPoly a                                       -- ^ Contract terms
+  -> Validation [TermValidationError] (ContractTermsPoly a) -- ^ Validated contract terms or validation errors
 validateTerms ct@ContractTermsPoly {contractType = PAM, ..} =
   ct
     <$ _NN initialExchangeDate ct "initial exchange date"

@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
+{-| = ACTUS state transformation functions -}
 module Language.Marlowe.ACTUS.Model.StateTransition
   ( stateTransition
   , CtxSTF (..)
@@ -16,19 +17,23 @@ import Language.Marlowe.ACTUS.Domain.ContractTerms (CT (..), ContractTermsPoly (
                                                     SCEF (..))
 import Language.Marlowe.ACTUS.Domain.Ops (ActusNum (..), ActusOps (..), RoleSignOps (..), YearFractionOps (_y))
 import Language.Marlowe.ACTUS.Utility.ANN.Annuity (annuity)
-import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf', sup')
+import Language.Marlowe.ACTUS.Utility.ScheduleGenerator (inf, sup)
 import Prelude hiding (Fractional, Num, (*), (+), (-), (/))
 
+-- |The context for state transitions provides the contract terms in addition with
+-- schedules and the maturity of the contract. Furthermore a function to retrieve
+-- risk factors is available.
 data CtxSTF a = CtxSTF
-  { contractTerms :: ContractTermsPoly a
-  , fpSchedule    :: [LocalTime]
-  , prSchedule    :: [LocalTime]
-  , ipSchedule    :: [LocalTime]
-  , maturity      :: Maybe LocalTime
-  , riskFactors   :: EventType -> LocalTime -> RiskFactorsPoly a
+  { contractTerms :: ContractTermsPoly a                         -- ^ Contract terms
+  , fpSchedule    :: [LocalTime]                                 -- ^ Fee payment schedule
+  , prSchedule    :: [LocalTime]                                 -- ^ Principal redemption schedule
+  , ipSchedule    :: [LocalTime]                                 -- ^ Interest payment schedule
+  , maturity      :: Maybe LocalTime                             -- ^ Maturity
+  , riskFactors   :: EventType -> LocalTime -> RiskFactorsPoly a -- ^ Riskfactors per event and time
   }
 
--- |'stateTransition' updates the contract state based on the contract terms in the reader contrext
+-- |A state transition updates the contract state based on the type of event and the time.
+-- `CtxSTF` provides in particular the contract terms and risk factors.
 stateTransition :: (RoleSignOps a, YearFractionOps a) =>
      EventType                               -- ^ Event type
   -> LocalTime                               -- ^ Time
@@ -441,6 +446,29 @@ stateTransition ev t sn = reader stateTransition'
           st
             | contractType `elem` [PAM, LAM, NAM, ANN] =
               stf PY rf ct st
+        -- STF_PRD_CEG
+        stf
+          PRD
+          _
+          ContractTermsPoly
+            { contractType = CEG,
+              feeRate = Just fer
+            }
+          st = st
+                 { feac = fer,
+                   sd = t
+                 }
+        stf
+          PRD
+          _
+          ContractTermsPoly
+            { contractType = CEG,
+              feeAccrued = Just feac
+            }
+          st = st
+                 { feac = feac,
+                   sd = t
+                 }
         ----------------------
         -- Termination (TD) --
         ----------------------
@@ -979,6 +1007,22 @@ stateTransition ev t sn = reader stateTransition'
               { xa = Just $ xd_payoff - pfut,
                 sd = t
               }
+        -- STF_XD_CEG
+        stf
+          XD
+          RiskFactorsPoly
+            {
+            }
+          ContractTermsPoly
+            { contractType = CEG
+            }
+          st@ContractStatePoly
+            { nt
+            } =
+              st
+                { xa = Just nt,
+                  sd = t
+                }
         -----------------------
         -- Credit Event (CE) --
         -----------------------
@@ -988,9 +1032,9 @@ stateTransition ev t sn = reader stateTransition'
         -------------
         stf _ _ _ _ = sn
 
-        tfp_minus = fromMaybe t (sup' fpSchedule t)
-        tfp_plus = fromMaybe t (inf' fpSchedule t)
-        tpr_plus = fromMaybe t (inf' prSchedule t)
+        tfp_minus = fromMaybe t (sup fpSchedule t)
+        tfp_plus = fromMaybe t (inf fpSchedule t)
+        tpr_plus = fromMaybe t (inf prSchedule t)
 
         prDates = prSchedule ++ maybeToList maturity
         prDatesAfterSd = filter (> sd sn) prDates
