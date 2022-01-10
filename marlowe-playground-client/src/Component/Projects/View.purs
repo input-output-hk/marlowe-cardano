@@ -2,9 +2,16 @@ module Component.Projects.View (render) where
 
 import Prologue hiding (div)
 import Component.Modal.ViewHelpers (modalHeader)
-import Component.Projects.Types (Action(..), Lang(..), State, _projects, modalIsLoading)
+import Component.Projects.Types
+  ( Action(..)
+  , Lang(..)
+  , State
+  , _projects
+  , modalIsLoading
+  )
+import Data.Argonaut (decodeJson, fromString)
 import Data.Array (filter)
-import Data.DateTime.ISO as ISO
+import Data.DateTime.ISO (ISO)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
 import Data.Lens (to, (^.))
 import Data.List (fromFoldable)
@@ -12,21 +19,25 @@ import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff)
 import Gist (Gist, gistCreatedAt, gistDescription, gistId, gistUpdatedAt)
 import Halogen (ClassName(..), ComponentHTML)
-import Halogen.Classes (fontSemibold, modalContent, paddingRight, smallPaddingRight, textSm)
+import Halogen.Classes
+  ( fontSemibold
+  , modalContent
+  , paddingRight
+  , smallPaddingRight
+  , textSm
+  )
 import Halogen.HTML (HTML, a, a_, div, div_, span, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Gists (fileExists, filenames, isPlaygroundGist)
 import Network.RemoteData (RemoteData(..))
-import Prim.TypeError (class Warn, Text)
-import Text.Parsing.Parser (runParser)
 
-render ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
+render
+  :: forall m
+   . MonadAff m
+  => State
+  -> ComponentHTML Action ChildSlots m
 render state =
   if modalIsLoading state then
     text mempty
@@ -40,19 +51,20 @@ render state =
   where
   playgroundGists = filter isPlaygroundGist <$> state ^. _projects
 
-  body (Success []) = span [ class_ (ClassName "empty-result") ] [ text "No saved projects found" ]
+  body (Success []) = span [ class_ (ClassName "empty-result") ]
+    [ text "No saved projects found" ]
 
   body (Success gists) = projectList gists
 
-  body (Failure _) = span [ class_ (ClassName "error") ] [ text "Failed to load gists" ]
+  body (Failure _) = span [ class_ (ClassName "error") ]
+    [ text "Failed to load gists" ]
 
   body _ = text mempty
 
-projectList ::
-  forall p.
-  Warn (Text "SCP-1645: Only 30 projects are loading because of gist pagination. We should probably add infinite scrolling capabilities") =>
-  Array Gist ->
-  HTML p Action
+projectList
+  :: forall p
+   . Array Gist
+  -> HTML p Action
 projectList gists =
   div [ classes [ ClassName "project-list" ] ]
     (headers <> projects)
@@ -61,29 +73,44 @@ projectList gists =
   headers =
     [ "Name", "Created", "Last Updated", "Open" ]
       <#> \name ->
-          div [ classes [ textSm, fontSemibold ] ] [ text name ]
+        div [ classes [ textSm, fontSemibold ] ] [ text name ]
 
   projects :: Array (HTML p Action)
   projects =
     gists
       >>= \gist ->
-          [ div [ classes [ ClassName "project-name", paddingRight ] ] [ gist ^. (gistDescription <<< to text) ]
-          , div [ classes [ ClassName "date", paddingRight ] ] [ gist ^. (gistCreatedAt <<< to formatDate <<< to text) ]
-          , div [ classes [ ClassName "date", paddingRight ] ] [ gist ^. (gistUpdatedAt <<< to formatDate <<< to text) ]
-          , loadLink gist Javascript [ smallPaddingRight, fontSemibold ] $ fileExists filenames.javascript gist
-          , loadLink gist Haskell [ smallPaddingRight, fontSemibold ] $ fileExists filenames.haskell gist
-          , loadLink gist Marlowe [ smallPaddingRight, fontSemibold ] $ fileExists filenames.marlowe gist
-          , loadLink gist Blockly [ fontSemibold ] $ fileExists filenames.blockly gist
-          ]
+        [ div [ classes [ ClassName "project-name", paddingRight ] ]
+            [ gist ^. (gistDescription <<< to text) ]
+        , div [ classes [ ClassName "date", paddingRight ] ]
+            [ gist ^. (gistCreatedAt <<< to formatDate <<< to text) ]
+        , div [ classes [ ClassName "date", paddingRight ] ]
+            [ gist ^. (gistUpdatedAt <<< to formatDate <<< to text) ]
+        , loadLink gist Javascript [ smallPaddingRight, fontSemibold ] $
+            fileExists filenames.javascript gist
+        , loadLink gist Haskell [ smallPaddingRight, fontSemibold ] $ fileExists
+            filenames.haskell
+            gist
+        , loadLink gist Marlowe [ smallPaddingRight, fontSemibold ] $ fileExists
+            filenames.marlowe
+            gist
+        , loadLink gist Blockly [ fontSemibold ] $ fileExists filenames.blockly
+            gist
+        ]
 
   loadLink :: Gist -> Lang -> Array ClassName -> Boolean -> HTML p Action
   loadLink gist lang style = case _ of
-    false -> div [ classes ([ ClassName "language-link", ClassName "disabled" ] <> style) ] $ [ a_ $ [ text $ show lang ] ]
-    true -> div [ classes ([ ClassName "language-link" ] <> style) ] $ [ a [ onClick (const <<< Just $ LoadProject lang (gist ^. gistId)) ] $ [ text $ show lang ] ]
+    false ->
+      div
+        [ classes ([ ClassName "language-link", ClassName "disabled" ] <> style)
+        ] $ [ a_ $ [ text $ show lang ] ]
+    true -> div [ classes ([ ClassName "language-link" ] <> style) ] $
+      [ a [ onClick (const $ LoadProject lang (gist ^. gistId)) ] $
+          [ text $ show lang ]
+      ]
 
 formatDate :: String -> String
-formatDate s = case runParser s ISO.parseISO of
-  Left err -> "Unknown Date"
+formatDate s = case decodeJson $ fromString s :: _ _ ISO of
+  Left _ -> "Unknown Date"
   Right iso ->
     format
       ( fromFoldable

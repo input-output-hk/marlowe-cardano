@@ -4,16 +4,17 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind #-}
 module Spec.Marlowe.Common where
 
-import           Data.Map.Strict  (Map)
+import Data.Map.Strict (Map)
 
-import           Language.Marlowe
-import           Ledger           (pubKeyHash)
+import Language.Marlowe
+import Language.Marlowe.SemanticsSerialisation (contractToByteString)
+import Ledger (pubKeyHash)
 import qualified Ledger
-import           Ledger.Value     (CurrencySymbol (..), TokenName (..))
-import qualified PlutusTx.Ratio   as P
-import           Test.QuickCheck
-import           Wallet           (PubKey (..))
-import           Wallet.Emulator
+import PlutusTx.Builtins (sha2_256)
+import qualified PlutusTx.Ratio as P
+import Test.QuickCheck
+import Wallet (PubKey (..))
+import Wallet.Emulator
 
 newtype MarloweScenario = MarloweScenario { mlInitialBalances :: Map PubKey Ledger.Value }
 
@@ -124,7 +125,6 @@ valueGenSized s
                   , MulValue <$> valueGenSized (s `quot` 2) <*> valueGenSized (s `quot` 2)
                   , DivValue <$> valueGenSized (s `quot` 2) <*> valueGenSized (s `quot` 2)
                   , ChoiceValue <$> choiceIdGen
-                  , Scale <$> rationalGen <*> valueGenSized (s - 1)
                   , Cond  <$> observationGenSized (s `quot` 3)
                           <*> valueGenSized (s `quot` 2)
                           <*> valueGenSized (s `quot` 2)
@@ -162,7 +162,6 @@ shrinkValue value = case value of
                          ++ [MulValue val1 y | y <- shrinkValue val2])
     DivValue val1 val2 -> Constant 0 : val1 : val2 : ([DivValue x val2 | x <- shrinkValue val1]
                          ++ [DivValue val1 y | y <- shrinkValue val2])
-    Scale r val -> Constant 0 : val : [Scale r v | v <- shrinkValue val]
     Cond b val1 val2 -> Constant 0 : val1 : val2 : ([Cond x val1 val2 | x <- shrinkObservation b]
                          ++ [Cond b x val2 | x <- shrinkValue val1]
                          ++ [Cond b val1 y | y <- shrinkValue val2])
@@ -263,12 +262,15 @@ shrinkAction action = case action of
 
 
 caseRelGenSized :: Int -> Integer -> Gen (Case Contract)
-caseRelGenSized s bn = Case <$> actionGenSized s <*> contractRelGenSized s bn
-
+caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
+                                 , (1, MerkleizedCase <$> actionGenSized s <*>
+                                                          (sha2_256 . contractToByteString <$> contractRelGenSized s bn))
+                                 ]
 
 shrinkCase :: Case Contract -> [Case Contract]
 shrinkCase (Case act cont) = [Case act x | x <- shrinkContract cont]
                               ++ [Case y cont | y <- shrinkAction act]
+shrinkCase (MerkleizedCase act bs) = [MerkleizedCase y bs | y <- shrinkAction act]
 
 
 contractRelGenSized :: Int -> Integer -> Gen Contract
@@ -337,14 +339,14 @@ pangramContract = let
     bobRole = Role "Bob"
     constant = Constant 100
     choiceId = ChoiceId "choice" alicePk
-    token = Token (CurrencySymbol "aa") (TokenName "name")
+    token = Token "10" "name"
     valueExpr = AddValue constant (SubValue constant (NegValue constant))
     in Assert TrueObs $ When
         [ Case (Deposit aliceAcc alicePk ada valueExpr)
             (Let (ValueId "x") valueExpr
-                (Pay aliceAcc (Party bobRole) ada (UseValue (ValueId "x")) Close))
+                (Pay aliceAcc (Party bobRole) ada (Cond TrueObs (UseValue (ValueId "x")) (UseValue (ValueId "y"))) Close))
         , Case (Choice choiceId [Bound 0 1, Bound 10 20])
-            (If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` Scale (1 % 10) constant))
+            (If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` constant))
                 (Pay aliceAcc (Account aliceAcc) token (DivValue (AvailableMoney aliceAcc token) constant) Close)
                 Close)
         , Case (Notify (AndObs (SlotIntervalStart `ValueLT` SlotIntervalEnd) TrueObs)) Close

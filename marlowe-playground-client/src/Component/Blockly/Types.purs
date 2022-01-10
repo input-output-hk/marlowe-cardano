@@ -8,32 +8,33 @@ import Blockly.Types as BT
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Halogen (RefLabel(..), SubscriptionId)
 import Marlowe.Linter (Warning)
 
 type State
-  = { blocklyState :: Maybe BT.BlocklyState
-    , errorMessage :: Maybe String
-    , blocklyEventSubscription :: Maybe SubscriptionId
-    , eventsWhileDragging :: Maybe (List BT.BlocklyEvent)
-    -- For some reason the "FinishLoading" event can be triggered when doing an UNDO in some cases
-    -- we only need to fire the BlocklyReady once in the lifetime of this component, so we
-    -- store a flag to avoid firing it multiple times.
-    , blocklyReadyFired :: Boolean
-    }
+  =
+  { blocklyState :: Maybe BT.BlocklyState
+  , errorMessage :: Maybe String
+  , blocklyEventSubscription :: Maybe SubscriptionId
+  , eventsWhileDragging :: Maybe (List BT.BlocklyEvent)
+  -- For some reason the "FinishLoading" event can be triggered when doing an UNDO in some cases
+  -- we only need to fire the BlocklyReady once in the lifetime of this component, so we
+  -- store a flag to avoid firing it multiple times.
+  , blocklyReadyFired :: Boolean
+  }
 
 _blocklyState :: Lens' State (Maybe BT.BlocklyState)
-_blocklyState = prop (SProxy :: SProxy "blocklyState")
+_blocklyState = prop (Proxy :: _ "blocklyState")
 
 _errorMessage :: Lens' State (Maybe String)
-_errorMessage = prop (SProxy :: SProxy "errorMessage")
+_errorMessage = prop (Proxy :: _ "errorMessage")
 
 _blocklyEventSubscription :: Lens' State (Maybe SubscriptionId)
-_blocklyEventSubscription = prop (SProxy :: SProxy "blocklyEventSubscription")
+_blocklyEventSubscription = prop (Proxy :: _ "blocklyEventSubscription")
 
 _blocklyReadyFired :: Lens' State Boolean
-_blocklyReadyFired = prop (SProxy :: SProxy "blocklyReadyFired")
+_blocklyReadyFired = prop (Proxy :: _ "blocklyReadyFired")
 
 emptyState :: State
 emptyState =

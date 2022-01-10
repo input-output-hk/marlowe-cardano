@@ -39,7 +39,8 @@ maxWidthContainer = [ "max-w-xl", "mx-auto", "px-4" ]
 
 --- color gradients
 bgBlueGradient :: Array String
-bgBlueGradient = [ "bg-gradient-to-r", "from-purple", "to-lightpurple", "text-white" ]
+bgBlueGradient =
+  [ "bg-gradient-to-r", "from-purple", "to-lightpurple", "text-white" ]
 
 -- buttons
 button :: Array String
@@ -65,13 +66,16 @@ withAnimation :: Array String
 withAnimation = [ "transition-all", "duration-200" ]
 
 primaryButton :: Array String
-primaryButton = button <> bgBlueGradient <> withShadow <> withAnimation <> [ "font-bold" ]
+primaryButton = button <> bgBlueGradient <> withShadow <> withAnimation <>
+  [ "font-bold" ]
 
 secondaryButton :: Array String
-secondaryButton = button <> withAnimation <> [ "font-bold", "bg-lightgray", "text-black", "hover:shadow" ]
+secondaryButton = button <> withAnimation <>
+  [ "font-bold", "bg-lightgray", "text-black", "hover:shadow" ]
 
 whiteButton :: Array String
-whiteButton = button <> withShadow <> withAnimation <> [ "font-bold", "bg-white" ]
+whiteButton = button <> withShadow <> withAnimation <>
+  [ "font-bold", "bg-white" ]
 
 withIcon :: Icon -> Array String
 withIcon icon = [ "with-icon", "with-icon-" <> iconClass icon ]
@@ -96,8 +100,16 @@ inputBase =
 input :: Boolean -> Array String
 input valid =
   inputBase
-    <> [ "focus:border-transparent", "focus-within:border-transparent", "focus:ring-2", "focus-within:ring-2" ]
-    <> if valid then [ "border-gray", "focus:ring-purple", "focus-within:ring-purple" ] else [ "border-red", "focus:ring-red", "focus-within:ring-red" ]
+    <>
+      [ "focus:border-transparent"
+      , "focus-within:border-transparent"
+      , "focus:ring-2"
+      , "focus-within:ring-2"
+      ]
+    <>
+      if valid then
+        [ "border-gray", "focus:ring-purple", "focus-within:ring-purple" ]
+      else [ "border-red", "focus:ring-red", "focus-within:ring-red" ]
 
 -- use this on pseudo select elements, because the focus ring doesn't play well with the dropdown
 inputNoFocus :: Boolean -> Array String
@@ -152,7 +164,16 @@ hasNestedLabel :: Array String
 hasNestedLabel = [ "-mt-4" ]
 
 nestedLabel :: Array String
-nestedLabel = [ "relative", "z-10", "left-2", "top-2.5", "px-1", "bg-white", "text-xs", "font-semibold" ]
+nestedLabel =
+  [ "relative"
+  , "z-10"
+  , "left-2"
+  , "top-2.5"
+  , "px-1"
+  , "bg-white"
+  , "text-xs"
+  , "font-semibold"
+  ]
 
 --- cards
 cardOverlay :: Boolean -> Array String
@@ -169,10 +190,13 @@ cardOverlay visible =
   , "transition-opacity"
   , "duration-400"
   ]
-    <> if visible then [ "opacity-1" ] else [ "opacity-0", "pointer-events-none" ]
+    <>
+      if visible then [ "opacity-1" ]
+      else [ "opacity-0", "pointer-events-none" ]
 
 sidebarCardOverlay :: Boolean -> Array String
-sidebarCardOverlay visible = cardOverlay visible <> [ "lg:justify-end", "lg:duration-500" ]
+sidebarCardOverlay visible = cardOverlay visible <>
+  [ "lg:justify-end", "lg:duration-500" ]
 
 cardBase :: Boolean -> Array String
 cardBase visible =
@@ -237,7 +261,14 @@ embeddedVideo = [ "absolute", "top-0", "left-0", "w-full", "h-full" ]
 
 --- miscellaneous
 iconCircle :: Boolean -> Array String
-iconCircle enabled = [ "inline-flex", "items-center", "justify-center", "w-8", "h-8", "rounded-full" ] <> if enabled then bgBlueGradient else [ "bg-lightgray", "text-darkgray" ]
+iconCircle enabled =
+  [ "inline-flex"
+  , "items-center"
+  , "justify-center"
+  , "w-8"
+  , "h-8"
+  , "rounded-full"
+  ] <> if enabled then bgBlueGradient else [ "bg-lightgray", "text-darkgray" ]
 
 fixedBottomRight :: Array String
 fixedBottomRight = [ "absolute", "bottom-4", "right-4" ]

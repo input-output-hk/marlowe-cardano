@@ -10,14 +10,20 @@ The [marlowe-pab](https://github.com/input-output-hk/marlowe-cardano/tree/master
 
 ### Starting the backend server
 
-Marlowe Run requires a running instance of the Marlowe PAB to work:
+Marlowe Run requires a running instance of the Marlowe PAB to work, and the PAB requires a running testnet, a WalletBackEnd and a chain-index:
 
 ```bash
-$ plutus-pab-migrate
-$ marlowe-pab-server
+# Run these first 3 commands in separate terminals
+[nix-shell] $ launch-node
+[nix-shell] $ launch-wbe
+[nix-shell] $ launch-chain-index
+# Then we can start the Marlowe PAB and the Marlowe Run Backend
+[nix-shell] $ cd marlowe-dashboard-client
+[nix-shell] $ plutus-pab-migrate
+[nix-shell] $ marlowe-run-server
 ```
 
-The first command (`plutus-pab-migrate`) initialises the database needed to run the Marlowe PAB. You should only need to do this once, but you might need to do it again if the PAB code changes in ways that require modifications to the database schema.
+The command (`plutus-pab-migrate`) initialises the database needed to run the Marlowe PAB. You should only need to do this once, but you might need to do it again if the PAB code changes in ways that require modifications to the database schema.
 
 Note that if you have a local `pab-core.db` file already when you run `plutus-pab-migrate`, you may get the following error:
 
@@ -53,7 +59,7 @@ The following outlines some essentials for actually working on the Marlowe Run c
 Apart from the `start` script introduced above there are a few scripts for the most frequent tasks during development. For example, in order to run a webpack server in development mode with automatic reloading use **webpack:server**:
 
 ```
-$ npm run webpack:server
+$ npm run build:webpack:dev
 ```
 
 This is the final step of the `start` script described above, and is all you need to get up and running subsequently if you have already installed the npm modules and generated the PureScript bridge code.

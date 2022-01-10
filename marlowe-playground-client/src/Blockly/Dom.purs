@@ -5,10 +5,6 @@
 -- This module offers some helpers so we can interpret the results of workspaceToDom in a single
 -- effectful computation and later on work with the representation without the need for Effect.
 --
--- The decision to use this intermediate representation instead of parsing the nodes directly was made
--- because both ActusBlockly and MarloweBlockly have the same representation.
---
---
 -- We can use the following Marlowe contract and it's XML representation to understand the
 -- different constructors we expose.
 --
@@ -76,31 +72,31 @@ import Data.Compactable (separate)
 import Data.Either (note')
 import Data.Lens (Lens', _1, view)
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Web.DOM (Element, Node)
+import Web.DOM (Element)
 import Web.DOM.Element as Element
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.DOM.Node as Node
-import Web.DOM.NodeList as NodeList
 import Web.DOM.ParentNode as ParentNode
 
 type Block
-  = { id :: String
-    , type :: String
-    -- In the XML the children of a block are stored/represented as an array of elements, but to simplify
-    -- consumption we use a JS native Object (like a `Map String a` but with better performance).
-    -- This decision implies that we cannot have two childs properties with the same `name`, but I think we shouldn't
-    -- anyway, and if we do, we are going to have the same kind of error later on, while transforming from Dom -> Term
-    , children :: Object BlockChild
-    }
+  =
+  { id :: String
+  , type :: String
+  -- In the XML the children of a block are stored/represented as an array of elements, but to simplify
+  -- consumption we use a JS native Object (like a `Map String a` but with better performance).
+  -- This decision implies that we cannot have two childs properties with the same `name`, but I think we shouldn't
+  -- anyway, and if we do, we are going to have the same kind of error later on, while transforming from Dom -> Term
+  , children :: Object BlockChild
+  }
 
 _id :: Lens' Block String
-_id = prop (SProxy :: SProxy "id")
+_id = prop (Proxy :: _ "id")
 
 data BlockChild
   -- A Field is visually represented as a label and an editable field, for example
@@ -131,23 +127,34 @@ data ReadDomError
 -- NOTE: In some errors the element is not currently used to display the error. The idea is that we could later Change
 --       the signature to Effect String and traverse the parents of the element to provide error location information.
 explainError :: ReadDomError -> String
-explainError (TypeMismatch element expectedType) = "Element is of the wrong type (" <> show expectedType <> " expected, " <> show (Element.tagName element) <> " received)"
+explainError (TypeMismatch element expectedType) =
+  "Element is of the wrong type (" <> show expectedType <> " expected, "
+    <> show (Element.tagName element)
+    <> " received)"
 
-explainError (MissingProperty element missingProperty) = "Element is missing required property " <> show missingProperty
+explainError (MissingProperty _ missingProperty) =
+  "Element is missing required property " <> show missingProperty
 
-explainError (SingleChildExpected element elementCount) = "Element was expected to have a single child, and it had " <> show elementCount
+explainError (SingleChildExpected _ elementCount) =
+  "Element was expected to have a single child, and it had " <> show
+    elementCount
 
-explainError (RootElementNotFound rootBlockName) = "The element with id " <> show rootBlockName <> " was not found."
+explainError (RootElementNotFound rootBlockName) = "The element with id "
+  <> show rootBlockName
+  <> " was not found."
 
-explainError (IncorrectSiblingNesting node) = "Incorrect <next> element found outside the scope of a <statement> and inside of a " <> node <> " node"
+explainError (IncorrectSiblingNesting node) =
+  "Incorrect <next> element found outside the scope of a <statement> and inside of a "
+    <> node
+    <> " node"
 
 -- | Read and parse the DOM nodes of a blockly workspace.
-getDom ::
-  forall m.
-  MonadEffect m =>
-  MonadThrow ReadDomError m =>
-  BlocklyState ->
-  m Block
+getDom
+  :: forall m
+   . MonadEffect m
+  => MonadThrow ReadDomError m
+  => BlocklyState
+  -> m Block
 getDom { blockly, workspace, rootBlockName } = do
   rootElement <- liftEffect $ workspaceToDom blockly workspace
   if Element.tagName rootElement /= "xml" then
@@ -219,10 +226,8 @@ getDom { blockly, workspace, rootBlockName } = do
       _ -> throwError $ SingleChildExpected element $ length children
 
   getChildren :: Element -> Effect (Array Element)
-  getChildren element = HTMLCollection.toArray =<< (ParentNode.children $ Element.toParentNode element)
-
-  getChildNodes :: Element -> Effect (Array Node)
-  getChildNodes element = NodeList.toArray =<< (Node.childNodes $ Element.toNode element)
+  getChildren element = HTMLCollection.toArray =<<
+    (ParentNode.children $ Element.toParentNode element)
 
   getElementText :: Element -> Effect String
   getElementText = Node.textContent <<< Element.toNode

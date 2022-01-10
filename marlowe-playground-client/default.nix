@@ -43,22 +43,25 @@ let
     };
   };
 
-  client = buildPursPackage {
-    inherit pkgs nodeModules;
-    src = cleanSrc;
-    checkPhase = ''
-      ${pkgs.nodejs}/bin/npm run test
-    '';
-    name = "marlowe-playground-client";
-    extraSrcs = {
-      web-common = webCommon.cleanSrc;
-      web-common-marlowe = webCommonMarlowe;
-      web-common-playground = webCommonPlayground;
-      generated = generated-purescript;
-    };
-    packages = pkgs.callPackage ./packages.nix { };
-    spagoPackages = pkgs.callPackage ./spago-packages.nix { };
-  };
+  client = pkgs.lib.overrideDerivation
+    (buildPursPackage {
+      inherit pkgs nodeModules;
+      src = cleanSrc;
+      checkPhase = ''
+        ${pkgs.nodejs}/bin/npm run test
+      '';
+      name = "marlowe-playground-client";
+      extraSrcs = {
+        web-common-marlowe = webCommonMarlowe;
+        web-common-playground = webCommonPlayground;
+        generated = generated-purescript;
+      };
+      spagoPackages = pkgs.callPackage ./spago-packages.nix { };
+    })
+    (_: {
+      WEB_COMMON_SRC = webCommon.cleanSrc;
+      WEB_COMMON_PLAYGROUND_SRC = webCommonPlayground;
+    });
 in
 {
   inherit client generate-purescript start-backend;

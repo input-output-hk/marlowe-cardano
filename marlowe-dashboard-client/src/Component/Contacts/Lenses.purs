@@ -1,68 +1,75 @@
 module Component.Contacts.Lenses
-  ( _walletLibrary
+  ( _addressBook
   , _cardSection
   , _walletNicknameInput
-  , _walletIdInput
-  , _remoteWalletInfo
+  , _addressInput
   , _walletNickname
   , _companionAppId
   , _marloweAppId
   , _walletInfo
   , _assets
   , _previousCompanionAppState
-  , _wallet
+  , _walletId
   , _pubKeyHash
   ) where
 
 import Prologue
+
+import Component.Contacts.Types
+  ( AddressBook
+  , AddressError
+  , CardSection
+  , State
+  , WalletDetails
+  , WalletId
+  , WalletInfo
+  , WalletNickname
+  , WalletNicknameError
+  )
 import Component.InputField.Types (State) as InputField
-import Component.Contacts.Types (CardSection, State, Wallet, WalletIdError, WalletInfo, WalletLibrary, WalletNickname, WalletNicknameError, WalletDetails)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Data.Symbol (SProxy(..))
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
-import Types (WebData)
+import Type.Proxy (Proxy(..))
 
-_walletLibrary :: Lens' State WalletLibrary
-_walletLibrary = prop (SProxy :: SProxy "walletLibrary")
+_addressBook :: Lens' State AddressBook
+_addressBook = prop (Proxy :: _ "addressBook")
 
 _cardSection :: Lens' State CardSection
-_cardSection = prop (SProxy :: SProxy "cardSection")
+_cardSection = prop (Proxy :: _ "cardSection")
 
 _walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
-_walletNicknameInput = prop (SProxy :: SProxy "walletNicknameInput")
+_walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
 
-_walletIdInput :: Lens' State (InputField.State WalletIdError)
-_walletIdInput = prop (SProxy :: SProxy "walletIdInput")
-
-_remoteWalletInfo :: Lens' State (WebData WalletInfo)
-_remoteWalletInfo = prop (SProxy :: SProxy "remoteWalletInfo")
+_addressInput :: Lens' State (InputField.State AddressError)
+_addressInput = prop (Proxy :: _ "addressInput")
 
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname
-_walletNickname = prop (SProxy :: SProxy "walletNickname")
+_walletNickname = prop (Proxy :: _ "walletNickname")
 
 _companionAppId :: Lens' WalletDetails PlutusAppId
-_companionAppId = prop (SProxy :: SProxy "companionAppId")
+_companionAppId = prop (Proxy :: _ "companionAppId")
 
 _marloweAppId :: Lens' WalletDetails PlutusAppId
-_marloweAppId = prop (SProxy :: SProxy "marloweAppId")
+_marloweAppId = prop (Proxy :: _ "marloweAppId")
 
 _walletInfo :: Lens' WalletDetails WalletInfo
-_walletInfo = prop (SProxy :: SProxy "walletInfo")
+_walletInfo = prop (Proxy :: _ "walletInfo")
 
 _assets :: Lens' WalletDetails Assets
-_assets = prop (SProxy :: SProxy "assets")
+_assets = prop (Proxy :: _ "assets")
 
-_previousCompanionAppState :: Lens' WalletDetails (Maybe (Map MarloweParams MarloweData))
-_previousCompanionAppState = prop (SProxy :: SProxy "previousCompanionAppState")
+_previousCompanionAppState :: Lens' WalletDetails
+  (Maybe (Map MarloweParams MarloweData))
+_previousCompanionAppState = prop (Proxy :: _ "previousCompanionAppState")
 
 ------------------------------------------------------------
-_wallet :: Lens' WalletInfo Wallet
-_wallet = _Newtype <<< prop (SProxy :: SProxy "wallet")
+_walletId :: Lens' WalletInfo WalletId
+_walletId = _Newtype <<< prop (Proxy :: _ "walletId")
 
 _pubKeyHash :: Lens' WalletInfo PubKeyHash
-_pubKeyHash = _Newtype <<< prop (SProxy :: SProxy "pubKeyHash")
+_pubKeyHash = _Newtype <<< prop (Proxy :: _ "pubKeyHash")

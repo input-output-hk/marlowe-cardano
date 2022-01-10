@@ -8,17 +8,17 @@
 
 module Language.Marlowe.ACTUS.Domain.ContractTerms where
 
-import           Control.Applicative ((<|>))
-import           Control.Monad       (guard, mzero)
-import           Data.Aeson.TH       (deriveJSON)
-import           Data.Aeson.Types    (FromJSON, Options (..), Parser, ToJSON, Value (Null, Object, String),
-                                      defaultOptions, object, parseJSON, toJSON, (.:), (.:?), (.=))
-import           Data.Maybe          (fromMaybe)
-import           Data.Text           as T hiding (reverse, takeWhile)
-import           Data.Text.Read      as T
-import           Data.Time           (Day, LocalTime)
-import           GHC.Generics        (Generic)
-import qualified Language.Marlowe    as Marlowe (Observation, Value)
+import Control.Applicative ((<|>))
+import Control.Monad (guard, mzero)
+import Data.Aeson.TH (deriveJSON)
+import Data.Aeson.Types (FromJSON, Options (..), Parser, SumEncoding (..), ToJSON, Value (..), defaultOptions,
+                         genericParseJSON, object, parseJSON, toJSON, (.:), (.:?), (.=))
+import Data.Maybe (fromMaybe)
+import Data.Text as T hiding (reverse, takeWhile)
+import Data.Text.Read as T
+import Data.Time (Day, LocalTime)
+import GHC.Generics (Generic)
+import qualified Language.Marlowe as Marlowe (Observation, Value)
 
 -- |ContractType
 data CT = PAM   -- ^ Principal at maturity
@@ -31,6 +31,9 @@ data CT = PAM   -- ^ Principal at maturity
         | COM   -- ^ Commodity
         | CSH   -- ^ Cash
         | CLM   -- ^ Call Money
+        | SWPPV -- ^ Plain Vanilla Swap
+        | CEG   -- ^ Guarantee
+        | CEC   -- ^ Collateral
         deriving stock (Show, Read, Eq, Generic)
         deriving anyclass (FromJSON, ToJSON)
 
@@ -121,6 +124,21 @@ data PRF = PRF_PF -- ^ Performant
          deriving stock (Show, Read, Eq, Generic)
 
 $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PRF)
+
+-- |CreditEventTypeCovered
+data CETC = CETC_DL -- ^ Delayed
+          | CETC_DQ -- ^ Delinquent
+          | CETC_DF -- ^ Default
+         deriving stock (Show, Read, Eq, Generic)
+
+$(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CETC)
+
+-- |GuaranteedExposure
+data CEGE = CEGE_NO -- ^ Nominal value
+          | CEGE_NI -- ^ Nominal value plus interest
+         deriving stock (Show, Read, Eq, Generic)
+
+$(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CEGE)
 
 -- |FeeBasis
 data FEB = FEB_A -- ^ Absolute value
@@ -309,11 +327,11 @@ data Assertion = NpvAssertionAgainstZeroRiskBond
   deriving anyclass (FromJSON, ToJSON)
 
 -- |Reference type
-data ReferenceType = CNT
-                   | CID
-                   | MOC
-                   | EID
-                   | CST
+data ReferenceType = CNT -- ^ Contract
+                   | CID -- ^ Contract Identifier
+                   | MOC -- ^ Market Object Identifier
+                   | EID -- ^ Legal Entity Identifier
+                   | CST -- ^ Contract Structure
   deriving stock (Eq, Show, Read, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -326,98 +344,111 @@ data ReferenceRole = UDL  -- ^ Underlying
   deriving stock (Eq, Read, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
--- |Market object code
-type MarketObjectCode = String
+-- |Reference object
+data Identifier = Identifier
+  { marketObjectCode   :: Maybe String
+  , contractIdentifier :: Maybe String
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data Reference a = ReferenceTerms (ContractTermsPoly a)
+                 | ReferenceId Identifier
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
+
+instance FromJSON (Reference Double) where
+  parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
 
 -- |Contract structure
-data ContractStructure = ContractStructure
-  {
-    marketObjectCode :: MarketObjectCode
-  , referenceType    :: ReferenceType
-  , referenceRole    :: ReferenceRole
+data ContractStructure a = ContractStructure
+  { reference     :: Reference a
+  , referenceType :: ReferenceType
+  , referenceRole :: ReferenceRole
   }
   deriving stock (Show, Generic)
 
-instance ToJSON ContractStructure where
+instance ToJSON a => ToJSON (ContractStructure a) where
   toJSON ContractStructure{..} =
     object
-      [ "object" .= object [ "marketObjectCode" .= toJSON marketObjectCode ]
+      [ "object"        .= toJSON reference
       , "referenceType" .= toJSON referenceType
       , "referenceRole" .= toJSON referenceRole
       ]
 
-instance FromJSON ContractStructure where
+instance FromJSON (ContractStructure Double) where
   parseJSON (Object v) =
     ContractStructure
-      <$> (v .: "object" >>= obj)
+      <$> v .: "object"
       <*> v .: "referenceType"
       <*> v .: "referenceRole"
-   where
-     obj (Object o) = o .: "marketObjectCode"
-     obj _          = fail "Error parsing ContractStructure"
   parseJSON _ = mzero
 
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-data ContractTermsPoly a b = ContractTermsPoly
+data ContractTermsPoly a = ContractTermsPoly
   { -- General
     contractId                               :: String
   , contractType                             :: CT
-  , contractStructure                        :: [ContractStructure]
+  , contractStructure                        :: [ContractStructure a]
   , contractRole                             :: CR
   , settlementCurrency                       :: Maybe String
 
   -- Calendar
-  , initialExchangeDate                      :: Maybe b          -- ^ Initial Exchange Date
+  , initialExchangeDate                      :: Maybe LocalTime  -- ^ Initial Exchange Date
   , dayCountConvention                       :: Maybe DCC        -- ^ Day Count Convention
   , scheduleConfig                           :: ScheduleConfig
 
   -- Contract Identification
-  , statusDate                               :: b                -- ^ Status Date
+  , statusDate                               :: LocalTime        -- ^ Status Date
 
   -- Counterparty
   , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
+  , creditEventTypeCovered                   :: Maybe CETC       -- ^ Credit Event Type Covered
+  , coverageOfCreditEnhancement              :: Maybe a          -- ^ Coverage Of Credit Enhancement
+  , guaranteedExposure                       :: Maybe CEGE       -- ^ Guaranteed Exposure
 
   -- Fees
   , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
-  , cycleAnchorDateOfFee                     :: Maybe b          -- ^ Cycle Anchor Date Of Fee
+  , cycleAnchorDateOfFee                     :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Fee
   , feeAccrued                               :: Maybe a          -- ^ Fee Accrued
   , feeBasis                                 :: Maybe FEB        -- ^ Fee Basis
   , feeRate                                  :: Maybe a          -- ^ Fee Rate
 
   -- Interest
-  , cycleAnchorDateOfInterestPayment         :: Maybe b          -- ^ Cycle Anchor Date Of Interest Payment
+  , cycleAnchorDateOfInterestPayment         :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Interest Payment
   , cycleOfInterestPayment                   :: Maybe Cycle      -- ^ Cycle Of Interest Payment
   , accruedInterest                          :: Maybe a          -- ^ Accrued Interest
-  , capitalizationEndDate                    :: Maybe b          -- ^ Capitalization End Date
-  , cycleAnchorDateOfInterestCalculationBase :: Maybe b          -- ^ Cycle Anchor Date Of Interest Calculation Base
+  , capitalizationEndDate                    :: Maybe LocalTime  -- ^ Capitalization End Date
+  , cycleAnchorDateOfInterestCalculationBase :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Interest Calculation Base
   , cycleOfInterestCalculationBase           :: Maybe Cycle      -- ^ Cycle Of Interest Calculation Base
   , interestCalculationBase                  :: Maybe IPCB       -- ^ Interest Calculation Base
   , interestCalculationBaseA                 :: Maybe a          -- ^ Interest Calculation Base Amount
   , nominalInterestRate                      :: Maybe a          -- ^ Nominal Interest Rate
+  , nominalInterestRate2                     :: Maybe a          -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
   , interestScalingMultiplier                :: Maybe a          -- ^ Interest Scaling Multiplier
 
   -- Dates
-  , maturityDate                             :: Maybe b          -- ^ Maturity Date
-  , amortizationDate                         :: Maybe b          -- ^ Amortization Date
-  , exerciseDate                             :: Maybe b          -- ^ Exercise Date
+  , maturityDate                             :: Maybe LocalTime  -- ^ Maturity Date
+  , amortizationDate                         :: Maybe LocalTime  -- ^ Amortization Date
+  , exerciseDate                             :: Maybe LocalTime  -- ^ Exercise Date
 
   -- Notional Principal
   , notionalPrincipal                        :: Maybe a          -- ^ Notional Principal
   , premiumDiscountAtIED                     :: Maybe a          -- ^ Premium Discount At IED
-  , cycleAnchorDateOfPrincipalRedemption     :: Maybe b          -- ^ Cycle Anchor Date Of Principal Redemption
+  , cycleAnchorDateOfPrincipalRedemption     :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Principal Redemption
   , cycleOfPrincipalRedemption               :: Maybe Cycle      -- ^ Cycle Of Principal Redemption
   , nextPrincipalRedemptionPayment           :: Maybe a          -- ^ Next Principal Redemption Payment
-  , purchaseDate                             :: Maybe b          -- ^ Purchase Date
+  , purchaseDate                             :: Maybe LocalTime  -- ^ Purchase Date
   , priceAtPurchaseDate                      :: Maybe a          -- ^ Price At Purchase Date
-  , terminationDate                          :: Maybe b          -- ^ Termination Date
+  , terminationDate                          :: Maybe LocalTime  -- ^ Termination Date
   , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
   , quantity                                 :: Maybe a          -- ^ Quantity
 
   -- Scaling Index
   , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
-  , cycleAnchorDateOfScalingIndex            :: Maybe b          -- ^ Cycle Anchor Date Of Scaling Index
+  , cycleAnchorDateOfScalingIndex            :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Scaling Index
   , cycleOfScalingIndex                      :: Maybe Cycle      -- ^ Cycle Of Scaling Index
   , scalingEffect                            :: Maybe SCEF       -- ^ Scaling Effect
   , scalingIndexAtContractDealDate           :: Maybe a          -- ^ Scaling Index At Contract Deal Date
@@ -426,7 +457,7 @@ data ContractTermsPoly a b = ContractTermsPoly
 
   -- Optionality
   , cycleOfOptionality                       :: Maybe Cycle      -- ^ Cycle Of Optionality
-  , cycleAnchorDateOfOptionality             :: Maybe b          -- ^ Cycle Anchor Date Of Optionality
+  , cycleAnchorDateOfOptionality             :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Optionality
   , optionType                               :: Maybe OPTP       -- ^ Option Type
   , optionStrike1                            :: Maybe a          -- ^ Option Strike 1
   , optionExerciseType                       :: Maybe OPXT       -- ^ Option Exercise Type
@@ -444,7 +475,7 @@ data ContractTermsPoly a b = ContractTermsPoly
 
   -- Rate Reset
   , cycleOfRateReset                         :: Maybe Cycle      -- ^ Cycle Of Rate Reset
-  , cycleAnchorDateOfRateReset               :: Maybe b          -- ^ Cycle Anchor Date Of Rate Reset
+  , cycleAnchorDateOfRateReset               :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Rate Reset
   , nextResetRate                            :: Maybe a          -- ^ Next Reset Rate
   , rateSpread                               :: Maybe a          -- ^ Rate Spread
   , rateMultiplier                           :: Maybe a          -- ^ Rate Multiplier
@@ -456,12 +487,11 @@ data ContractTermsPoly a b = ContractTermsPoly
 
   -- Dividend
   , cycleOfDividend                          :: Maybe Cycle      -- ^ Cycle Of Dividend
-  , cycleAnchorDateOfDividend                :: Maybe b          -- ^ Cycle Anchor Date Of Dividend
+  , cycleAnchorDateOfDividend                :: Maybe LocalTime  -- ^ Cycle Anchor Date Of Dividend
   , nextDividendPaymentAmount                :: Maybe a          -- ^ Next Dividend Payment Amount
 
   , enableSettlement                         :: Bool             -- ^ Enable settlement currency
   , constraints                              :: Maybe Assertions -- ^ Assertions
-  , collateralAmount                         :: Integer          -- ^ Collateral Amount
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON)
@@ -484,11 +514,14 @@ instance FromJSON ContractTerms where
            )
       <*> v .:  "statusDate"
       <*> v .:? "contractPerformance"
+      <*> v .:? "creditEventTypeCovered"
+      <*> v .!? "coverageOfCreditEnhancement"
+      <*> v .!? "guaranteedExposure"
       <*> v .:? "cycleOfFee"
       <*> v .:? "cycleAnchorDateOfFee"
       <*> v .:? "feeAccrued"
       <*> v .:? "feeBasis"
-      <*> v .:? "feeRate"
+      <*> v .!? "feeRate"
       <*> v .:? "cycleAnchorDateOfInterestPayment"
       <*> v .:? "cycleOfInterestPayment"
       <*> v .!? "accruedInterest"
@@ -498,6 +531,7 @@ instance FromJSON ContractTerms where
       <*> v .:? "interestCalculationBase"
       <*> v .!? "interestCalculationBaseAmount"
       <*> v .!? "nominalInterestRate"
+      <*> v .!? "nominalInterestRate2"
       <*> v .!? "interestScalingMultiplier"
       <*> v .:? "maturityDate"
       <*> v .:? "amortizationDate"
@@ -546,13 +580,12 @@ instance FromJSON ContractTerms where
       <*> v .:? "nextDividendPaymentAmount"
       <*> (fromMaybe False <$> (v .:? "enableSettlement"))
       <*> v .:? "constraints"
-      <*> (fromMaybe 0 <$> (v .:? "collateralAmount"))
     where
       (.!?) w s = w .:? s <|> (fmap read <$> w .:? s)
   parseJSON _ = mzero
 
-type ContractTerms = ContractTermsPoly Double LocalTime
-type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation) (Marlowe.Value Marlowe.Observation)
+type ContractTerms = ContractTermsPoly Double
+type ContractTermsMarlowe = ContractTermsPoly (Marlowe.Value Marlowe.Observation)
 
 setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues ct@ContractTermsPoly {..} =

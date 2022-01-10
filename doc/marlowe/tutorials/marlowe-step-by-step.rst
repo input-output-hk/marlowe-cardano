@@ -88,7 +88,7 @@ return the value of the USD/ADA conversion rate.
 Note, that we support only whole numbers as choice inputs. How then do
 we use current ADA/USD price, which might be $0.098924? We simply multiply the
 price by 10\ :sup:`8`, so the price would appear as 9892400. You can
-``Scale`` the value after doing your calculations.
+``DivValue`` the value after doing your calculations.
 
 For example, you’d like to buy USDT for 12 ADA, using Oracle price.
 
@@ -111,7 +111,7 @@ Scale the result down by 10\ :sup:`6` to get amount in USDT cents.
 
 ::
 
-   Scale (1%1000000) (UseValue (ValueId "amount of USDT in microcents")
+   DivValue (UseValue (ValueId "amount of USDT in microcents")) (Constant 1000000)
 
 If
 --

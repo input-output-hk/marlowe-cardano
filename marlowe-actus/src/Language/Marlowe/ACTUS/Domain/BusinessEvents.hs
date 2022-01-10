@@ -4,9 +4,9 @@
 
 module Language.Marlowe.ACTUS.Domain.BusinessEvents where
 
-import           Data.Aeson.Types (FromJSON, ToJSON)
-import           GHC.Generics     (Generic)
-import           Language.Marlowe (Observation, Value)
+import Data.Aeson.Types (FromJSON, ToJSON)
+import GHC.Generics (Generic)
+import Language.Marlowe (Observation, Value)
 
 {-| ACTUS event types
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json
@@ -19,6 +19,8 @@ data EventType =
     | PY   -- ^ Penalty Payment
     | PP   -- ^ Principal Prepayment (unscheduled event)
     | IP   -- ^ Interest Payment
+    | IPFX -- ^ Interest Payment Fixed Leg
+    | IPFL -- ^ Interest Payment Floating Leg
     | IPCI -- ^ Interest Capitalization
     | CE   -- ^ Credit Event
     | RRF  -- ^ Rate Reset Fixing with Known Rate

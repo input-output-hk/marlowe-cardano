@@ -2,13 +2,14 @@
 module Marlowe.ContractTests where
 
 import Prologue
+
 import Control.Bind (bindFlipped)
 import Control.Monad.Gen (class MonadGen, chooseInt, elements, oneOf)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (StateT, evalStateT, execState, get, gets, lift)
 import Data.Array.NonEmpty (NonEmptyArray, fromArray)
-import Data.BigInteger (BigInteger)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Either (hush)
 import Data.Int (round)
 import Data.Lens (_Just, preview, previewOn, (^.))
@@ -29,24 +30,42 @@ import Marlowe.Extended as EM
 import Marlowe.Holes (Term(..), fromTerm)
 import Marlowe.Holes as T
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Contract(..), Input(..), Party(..), Token(..), TransactionError, TransactionWarning)
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Contract(..)
+  , Input(..)
+  , Party(..)
+  , Token(..)
+  , TransactionError
+  , TransactionWarning
+  )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Page.Simulation.State (mkState)
 import Page.Simulation.Types as Simulation
 import Partial.Unsafe (unsafePartial)
-import Simulator.Lenses (_SimulationRunning, _currentContract, _currentMarloweState, _currentPossibleActions, _executionState, _marloweState, _transactionError, _transactionWarnings)
+import Simulator.Lenses
+  ( _SimulationRunning
+  , _currentContract
+  , _currentMarloweState
+  , _currentPossibleActions
+  , _executionState
+  , _marloweState
+  , _transactionError
+  , _transactionWarnings
+  )
 import Simulator.State (applyInput, getAllActions, moveToSlot, startSimulation)
 import Simulator.Types (ActionInput(..))
 import Test.QuickCheck (Result(..))
 import Test.QuickCheck.Gen (Gen)
-import Test.Unit (TestSuite, suite, test)
-import Test.Unit.Assert (equal)
-import Test.Unit.QuickCheck (quickCheck)
+import Test.Spec (Spec, describe, it)
+import Test.Spec.Assertions (shouldEqual)
+import Test.Spec.QuickCheck (quickCheck)
 import Text.Pretty (pretty)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Contract Tests" do
+  describe "Contract Tests" do
     examplesMatch
     escrowSimpleFlow
     exampleContractsHaveNoErrors
@@ -54,30 +73,36 @@ all =
 -- We don't currently have a function that goes from semantic contract to term contract, so for the purposes
 -- of these test we print it and parse it.
 toTerm :: EM.Contract -> Term T.Contract
-toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $ pretty contract
+toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $
+  pretty contract
 
 contractToExtended :: String -> Maybe EM.Contract
-contractToExtended contract = case parseContract contract of -- We reuse the extended Marlowe parser for now since it is a superset
-  Right parsedContract -> fromTerm parsedContract
-  Left error -> Nothing
+contractToExtended = fromTerm <=< hush <<< parseContract
 
-examplesMatch :: TestSuite
+examplesMatch :: Spec Unit
 examplesMatch =
-  suite "Purescript and Haskell examples match" do
-    test "Simple escrow"
-      $ equal (Just Escrow.fullExtendedContract) (contractToExtended Contracts.escrow)
-    test "Escrow with collateral"
-      $ equal (Just EscrowWithCollateral.fullExtendedContract) (contractToExtended Contracts.escrowWithCollateral)
-    test "Zero coupon bond"
-      $ equal (Just ZeroCouponBond.fullExtendedContract) (contractToExtended Contracts.zeroCouponBond)
-    test "Coupon bond guaranteed"
-      $ equal (Just CouponBondGuaranteed.extendedContract) (contractToExtended Contracts.couponBondGuaranteed)
-    test "Swap"
-      $ equal (Just Swap.fullExtendedContract) (contractToExtended Contracts.swap)
-    test "Contract for differences"
-      $ equal (Just ContractForDifferences.extendedContract) (contractToExtended Contracts.contractForDifferences)
-    test "Contract for differences with oracle"
-      $ equal (Just ContractForDifferencesWithOracle.extendedContract) (contractToExtended Contracts.contractForDifferencesWithOracle)
+  describe "Purescript and Haskell examples match" do
+    it "Simple escrow"
+      $ shouldEqual (Just Escrow.fullExtendedContract)
+          (contractToExtended Contracts.escrow)
+    it "Escrow with collateral"
+      $ shouldEqual (Just EscrowWithCollateral.fullExtendedContract)
+          (contractToExtended Contracts.escrowWithCollateral)
+    it "Zero coupon bond"
+      $ shouldEqual (Just ZeroCouponBond.fullExtendedContract)
+          (contractToExtended Contracts.zeroCouponBond)
+    it "Coupon bond guaranteed"
+      $ shouldEqual (Just CouponBondGuaranteed.extendedContract)
+          (contractToExtended Contracts.couponBondGuaranteed)
+    it "Swap"
+      $ shouldEqual (Just Swap.fullExtendedContract)
+          (contractToExtended Contracts.swap)
+    it "Contract for differences"
+      $ shouldEqual (Just ContractForDifferences.extendedContract)
+          (contractToExtended Contracts.contractForDifferences)
+    it "Contract for differences with oracle"
+      $ shouldEqual (Just ContractForDifferencesWithOracle.extendedContract)
+          (contractToExtended Contracts.contractForDifferencesWithOracle)
 
 seller :: Party
 seller = Role "Seller"
@@ -98,14 +123,14 @@ filledEscrow =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Payment deadline" /\ BigInteger.fromInt 10
-                  , "Complaint response deadline" /\ BigInteger.fromInt 50
-                  , "Complaint deadline" /\ BigInteger.fromInt 100
-                  , "Mediation deadline" /\ BigInteger.fromInt 1000
+                  [ "Payment deadline" /\ BigInt.fromInt 10
+                  , "Complaint response deadline" /\ BigInt.fromInt 50
+                  , "Complaint deadline" /\ BigInt.fromInt 100
+                  , "Mediation deadline" /\ BigInt.fromInt 1000
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Price" /\ BigInteger.fromInt 450
+                  [ "Price" /\ BigInt.fromInt 450
                   ]
             }
         )
@@ -117,11 +142,11 @@ filledEscrowWithCollateral =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
-                  [ "Price" /\ BigInteger.fromInt 450
-                  , "Collateral amount" /\ BigInteger.fromInt 500
+                  [ "Price" /\ BigInt.fromInt 450
+                  , "Collateral amount" /\ BigInt.fromInt 500
                   ]
             }
         )
@@ -135,13 +160,13 @@ filledZeroCouponBond =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Interest" /\ BigInteger.fromInt 100
-                  , "Amount" /\ BigInteger.fromInt 200
+                  [ "Interest" /\ BigInt.fromInt 100
+                  , "Amount" /\ BigInt.fromInt 200
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Interest" /\ BigInteger.fromInt 100
-                  , "Amount" /\ BigInteger.fromInt 200
+                  [ "Interest" /\ BigInt.fromInt 100
+                  , "Amount" /\ BigInt.fromInt 200
                   ]
             }
         )
@@ -153,11 +178,11 @@ filledCouponBondGuaranteed =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
-                  [ "Interest instalment" /\ BigInteger.fromInt 100
-                  , "Principal" /\ BigInteger.fromInt 200
+                  [ "Interest instalment" /\ BigInt.fromInt 100
+                  , "Principal" /\ BigInt.fromInt 200
                   ]
             }
         )
@@ -169,11 +194,11 @@ filledSwap =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: mempty
+            { slotContent: Map.empty
             , valueContent:
                 Map.fromFoldable
-                  [ "Amount of Ada" /\ BigInteger.fromInt 1500000
-                  , "Amount of dollars" /\ BigInteger.fromInt 1
+                  [ "Amount of Ada" /\ BigInt.fromInt 1500000
+                  , "Amount of dollars" /\ BigInt.fromInt 1
                   ]
             }
         )
@@ -187,17 +212,17 @@ filledContractForDifferences =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInteger.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInteger.fromInt 20
-                  , "First window beginning" /\ BigInteger.fromInt 30
-                  , "First window deadline" /\ BigInteger.fromInt 40
-                  , "Second window beginning" /\ BigInteger.fromInt 100
-                  , "Second window deadline" /\ BigInteger.fromInt 110
+                  [ "Party deposit deadline" /\ BigInt.fromInt 10
+                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
+                  , "First window beginning" /\ BigInt.fromInt 30
+                  , "First window deadline" /\ BigInt.fromInt 40
+                  , "Second window beginning" /\ BigInt.fromInt 100
+                  , "Second window deadline" /\ BigInt.fromInt 110
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Amount paid by party" /\ BigInteger.fromInt 100000000
-                  , "Amount paid by counterparty" /\ BigInteger.fromInt 100000000
+                  [ "Amount paid by party" /\ BigInt.fromInt 100000000
+                  , "Amount paid by counterparty" /\ BigInt.fromInt 100000000
                   ]
             }
         )
@@ -211,18 +236,18 @@ filledContractForDifferencesWithOracle =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInteger.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInteger.fromInt 20
-                  , "First window beginning" /\ BigInteger.fromInt 30
-                  , "First window deadline" /\ BigInteger.fromInt 40
-                  , "Second window beginning" /\ BigInteger.fromInt 100
-                  , "Second window deadline" /\ BigInteger.fromInt 110
+                  [ "Party deposit deadline" /\ BigInt.fromInt 10
+                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
+                  , "First window beginning" /\ BigInt.fromInt 30
+                  , "First window deadline" /\ BigInt.fromInt 40
+                  , "Second window beginning" /\ BigInt.fromInt 100
+                  , "Second window deadline" /\ BigInt.fromInt 110
                   ]
             , valueContent:
                 Map.fromFoldable
-                  [ "Amount paid by party" /\ BigInteger.fromInt 100000000
-                  , "Amount paid by counterparty" /\ BigInteger.fromInt 100000000
-                  , "Amount of Ada to use as asset" /\ BigInteger.fromInt 100000000
+                  [ "Amount paid by party" /\ BigInt.fromInt 100000000
+                  , "Amount paid by counterparty" /\ BigInt.fromInt 100000000
+                  , "Amount of Ada to use as asset" /\ BigInt.fromInt 100000000
                   ]
             }
         )
@@ -232,16 +257,16 @@ filledContractForDifferencesWithOracle =
 -- TODO:  We should combine this test with the ones defined in Marlowe.Holes.SemanticTest
 --       so that we can have a single definition of contracts and flows, and then test what we care in each one. In semantic
 --       test we care that the compute transaction of term and semantic are the same, in here we care about the output of the simulation.
-escrowSimpleFlow :: TestSuite
+escrowSimpleFlow :: Spec Unit
 escrowSimpleFlow =
-  test "Escrow" do
+  it "Escrow" do
     -- A simple test that runs the Escrow contract to completion
     let
-      deposit = IDeposit seller buyer ada (BigInteger.fromInt 450)
+      deposit = IDeposit seller buyer ada (BigInt.fromInt 450)
 
-      choice1 = IChoice ((ChoiceId "Report problem") buyer) (BigInteger.fromInt 1)
+      choice1 = IChoice ((ChoiceId "Report problem") buyer) (BigInt.fromInt 1)
 
-      choice2 = IChoice ((ChoiceId "Confirm problem") seller) (BigInteger.fromInt 1)
+      choice2 = IChoice ((ChoiceId "Confirm problem") seller) (BigInt.fromInt 1)
 
       finalState =
         (flip execState mkState) do
@@ -253,29 +278,32 @@ escrowSimpleFlow =
       finalContract = previewOn finalState _currentContract
 
       txError = do
-        executionState <- preview (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning) finalState
+        executionState <- preview
+          (_marloweState <<< _Head <<< _executionState <<< _SimulationRunning)
+          finalState
         executionState ^. _transactionError
-    equal Nothing txError
-    equal (Just Close) (fromTerm =<< finalContract)
+    shouldEqual Nothing txError
+    shouldEqual (Just Close) (fromTerm =<< finalContract)
     pure unit
 
 --
-exampleContractsHaveNoErrors :: TestSuite
+exampleContractsHaveNoErrors :: Spec Unit
 exampleContractsHaveNoErrors =
-  suite "Provided Examples don't throw errors nor have warnings" do
+  describe "Provided Examples don't throw errors nor have warnings" do
     contractHasNoErrors "Simple Escrow" filledEscrow
     contractHasNoErrors "Escrow with collateral" filledEscrowWithCollateral
     contractHasNoErrors "Zero coupon bond" filledZeroCouponBond
     contractHasNoErrors "Coupon bond guaranteed" filledCouponBondGuaranteed
     contractHasNoErrors "Swap" filledSwap
     contractHasNoErrors "Contract for differences" filledContractForDifferences
-    contractHasNoErrors "Contract for differences with oracle" filledContractForDifferencesWithOracle
+    contractHasNoErrors "Contract for differences with oracle"
+      filledContractForDifferencesWithOracle
 
 -- This is a property based test that checks that for a given contract, the possible actions available
 -- during the simulation don't throw errors nor warnings.
-contractHasNoErrors :: String -> Term T.Contract -> TestSuite
+contractHasNoErrors :: String -> Term T.Contract -> Spec Unit
 contractHasNoErrors contractName contract =
-  test contractName
+  it contractName
     $ quickCheck
     $ evalStateT property mkState
   where
@@ -285,12 +313,14 @@ contractHasNoErrors contractName contract =
     runContract (Just contract)
 
   -- When the possible action is a Choose, we need to generate a random value inside the provided Bound.
-  -- We use this function (which looses precision) in order to select a small integer and wrap it in a BigInteger
-  looselyToInt :: BigInteger -> Int
-  looselyToInt = round <<< BigInteger.toNumber
+  -- We use this function (which looses precision) in order to select a small integer and wrap it in a BigInt
+  looselyToInt :: BigInt -> Int
+  looselyToInt = round <<< BigInt.toNumber
 
-  genValueInBound :: forall m. MonadGen m => MonadRec m => Bound -> m BigInteger
-  genValueInBound (Bound from to) = BigInteger.fromInt <$> chooseInt (looselyToInt from) (looselyToInt to)
+  genValueInBound :: forall m. MonadGen m => MonadRec m => Bound -> m BigInt
+  genValueInBound (Bound from to) = BigInt.fromInt <$> chooseInt
+    (looselyToInt from)
+    (looselyToInt to)
 
   -- TODO: For the moment it was not needed, as none of the examples triggered a warning nor an error
   --       but we should add an extra parameter to runContract that includes the current Action list
@@ -315,17 +345,29 @@ contractHasNoErrors contractName contract =
         action <- lift $ elements possibleActions
         case action of
           MoveToSlot slot -> moveToSlot slot
-          DepositInput accountId party token value -> applyInput $ IDeposit accountId party token value
+          DepositInput accountId party token value -> applyInput $ IDeposit
+            accountId
+            party
+            token
+            value
           ChoiceInput choiceId bounds value -> do
-            randomValue <- lift $ oneOf $ pure value :| (genValueInBound <$> bounds)
+            randomValue <- lift $ oneOf $ pure value :|
+              (genValueInBound <$> bounds)
             applyInput $ IChoice choiceId randomValue
           NotifyInput -> applyInput INotify
-        (mError :: Maybe TransactionError) <- gets $ preview (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _transactionError <<< _Just)
-        (mWarnings :: Maybe (Array TransactionWarning)) <- gets $ preview (_currentMarloweState <<< _executionState <<< _SimulationRunning <<< _transactionWarnings)
+        (mError :: Maybe TransactionError) <- gets $ preview
+          ( _currentMarloweState <<< _executionState <<< _SimulationRunning
+              <<< _transactionError
+              <<< _Just
+          )
+        (mWarnings :: Maybe (Array TransactionWarning)) <- gets $ preview
+          ( _currentMarloweState <<< _executionState <<< _SimulationRunning <<<
+              _transactionWarnings
+          )
         mContract <- gets (preview _currentContract)
         case mError, mWarnings of
           -- TODO: If we run into this message, we'll need to implement the refactor described in runContract to know how to reach this state
           Nothing, Just [] -> runContract mContract
-          Just err, _ -> pure $ Failed "it has errors"
-          _, Just warnings -> pure $ Failed "it has warnings"
+          Just _, _ -> pure $ Failed "it has errors"
+          _, Just _ -> pure $ Failed "it has warnings"
           _, _ -> pure $ Failed "Wrong simulation state"

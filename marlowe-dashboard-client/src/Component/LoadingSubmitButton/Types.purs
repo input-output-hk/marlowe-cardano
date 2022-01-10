@@ -1,34 +1,32 @@
 module Component.LoadingSubmitButton.Types where
 
 import Prologue
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Time.Duration (Milliseconds)
 import Halogen (RefLabel(..))
 import Network.RemoteData (RemoteData)
 
-_submitButtonSlot :: SProxy "submitButtonSlot"
-_submitButtonSlot = SProxy
+_submitButtonSlot :: Proxy "submitButtonSlot"
+_submitButtonSlot = Proxy
 
 type State
-  = { caption :: String
-    , styles :: Array String
-    , enabled :: Boolean
-    , status :: RemoteData String String
-    , buttonHeight :: Number
-    }
+  =
+  { caption :: String
+  , styles :: Array String
+  , enabled :: Boolean
+  , status :: RemoteData String String
+  , buttonHeight :: Number
+  }
 
 type Input
-  = { caption :: String
-    , styles :: Array String
-    , enabled :: Boolean
-    }
+  =
+  { caption :: String
+  , styles :: Array String
+  , enabled :: Boolean
+  }
 
 data Query a
   = SubmitResult Milliseconds (Either String String) a
-
-data Message
-  = OnSubmit
-  | OnResultAnimationFinish
 
 data Action
   = Submit

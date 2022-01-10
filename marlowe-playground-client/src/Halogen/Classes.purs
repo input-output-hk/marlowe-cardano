@@ -187,7 +187,8 @@ underline = ClassName "underline"
 activeClass :: forall a. (a -> Boolean) -> Getter' a (Array ClassName)
 activeClass p = to \x -> if p x then [ active ] else []
 
-activeClasses :: forall r i a. (a -> Boolean) -> Getter' a (IProp ( class :: String | r ) i)
+activeClasses
+  :: forall r i a. (a -> Boolean) -> Getter' a (IProp (class :: String | r) i)
 activeClasses p = activeClass p <<< to classes
 
 rTable :: ClassName
@@ -234,7 +235,8 @@ spanText :: forall p i. String -> HTML p i
 spanText s = span [] [ text s ]
 
 spanTextBreakWord :: forall p i. String -> HTML p i
-spanTextBreakWord s = span [ classes [ ClassName "break-word-span" ] ] [ text s ]
+spanTextBreakWord s = span [ classes [ ClassName "break-word-span" ] ]
+  [ text s ]
 
 minimizeIcon :: Boolean -> Array ClassName
 minimizeIcon true = [ ClassName "minimize-icon", ClassName "expanded" ]
@@ -430,7 +432,8 @@ hidden = ClassName "hidden"
 --       we need to use the same resets and unify these styles in a style guide.
 --- color gradients
 bgBlueGradient :: Array String
-bgBlueGradient = [ "bg-gradient-to-r", "from-purple", "to-lightpurple", "text-white" ]
+bgBlueGradient =
+  [ "bg-gradient-to-r", "from-purple", "to-lightpurple", "text-white" ]
 
 -- buttons
 button :: Array String

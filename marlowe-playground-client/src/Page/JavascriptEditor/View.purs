@@ -8,38 +8,86 @@ import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
 import Data.Lens (to, view, (^.))
+import Data.Maybe (maybe)
 import Data.String (Pattern(..), split)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML)
-import Halogen.Classes (bgWhite, flex, flexCol, flexGrow, fullHeight, group, maxH70p, minH0, overflowHidden, paddingX, spaceBottom)
+import Halogen.Classes
+  ( bgWhite
+  , flex
+  , flexCol
+  , flexGrow
+  , fullHeight
+  , group
+  , maxH70p
+  , minH0
+  , overflowHidden
+  , paddingX
+  , spaceBottom
+  )
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
-import Halogen.HTML (HTML, a, button, code_, div, div_, option, pre_, section, section_, select, slot, text)
+import Halogen.HTML
+  ( HTML
+  , a
+  , button
+  , code_
+  , div
+  , div_
+  , option
+  , pre_
+  , section
+  , section_
+  , select
+  , slot
+  , text
+  )
 import Halogen.HTML.Events (onClick, onSelectedIndexChange)
-import Halogen.HTML.Properties (class_, classes, enabled, href)
-import Halogen.HTML.Properties as HTML
-import Language.Javascript.Interpreter (CompilationError(..), InterpreterResult(..))
+import Halogen.HTML.Properties as HP
+import Language.Javascript.Interpreter
+  ( CompilationError(..)
+  , InterpreterResult(..)
+  )
 import MainFrame.Types (ChildSlots, _jsEditorSlot)
 import Marlowe.Extended.Metadata (MetaData)
 import Page.JavascriptEditor.State (mkEditor)
-import Page.JavascriptEditor.Types (Action(..), BottomPanelView(..), State, _bottomPanelState, _compilationResult, _keybindings, _metadataHintInfo)
+import Page.JavascriptEditor.Types
+  ( Action(..)
+  , BottomPanelView(..)
+  , State
+  , _bottomPanelState
+  , _compilationResult
+  , _keybindings
+  , _metadataHintInfo
+  )
 import Page.JavascriptEditor.Types as JS
-import StaticAnalysis.BottomPanel (analysisResultPane, analyzeButton, clearButton)
-import StaticAnalysis.Types (_analysisExecutionState, _analysisState, isCloseAnalysisLoading, isNoneAsked, isReachabilityLoading, isStaticLoading)
+import StaticAnalysis.BottomPanel
+  ( analysisResultPane
+  , analyzeButton
+  , clearButton
+  )
+import StaticAnalysis.Types
+  ( _analysisExecutionState
+  , _analysisState
+  , isCloseAnalysisLoading
+  , isNoneAsked
+  , isReachabilityLoading
+  , isStaticLoading
+  )
 import Text.Pretty (pretty)
 
-render ::
-  forall m.
-  MonadAff m =>
-  MetaData ->
-  State ->
-  ComponentHTML Action ChildSlots m
+render
+  :: forall m
+   . MonadAff m
+  => MetaData
+  -> State
+  -> ComponentHTML Action ChildSlots m
 render metadata state =
-  div [ classes [ flex, flexCol, fullHeight ] ]
-    [ section [ classes [ paddingX, minH0, flexGrow, overflowHidden ] ]
-        [ jsEditor state ]
-    , section [ classes [ paddingX, maxH70p ] ]
+  div [ HP.classes [ flex, flexCol, fullHeight ] ]
+    [ section [ HP.classes [ paddingX, minH0, flexGrow, overflowHidden ] ]
+        [ jsEditor ]
+    , section [ HP.classes [ paddingX, maxH70p ] ]
         [ renderSubmodule
             _bottomPanelState
             BottomPanelAction
@@ -58,11 +106,12 @@ render metadata state =
   -- TODO: improve this wrapper helper
   actionWrapper = BottomPanel.PanelAction
 
-  wrapBottomPanelContents panelView = bimap (map actionWrapper) actionWrapper $ panelContents state metadata panelView
+  wrapBottomPanelContents panelView = bimap (map actionWrapper) actionWrapper $
+    panelContents state metadata panelView
 
 otherActions :: forall p. State -> HTML p Action
 otherActions state =
-  div [ classes [ group ] ]
+  div [ HP.classes [ group ] ]
     [ editorOptions state
     , compileButton state
     , sendToSimulationButton state
@@ -71,8 +120,8 @@ otherActions state =
 sendToSimulationButton :: forall p. State -> HTML p Action
 sendToSimulationButton state =
   button
-    [ onClick $ const $ Just SendResultToSimulator
-    , enabled enabled'
+    [ onClick $ const SendResultToSimulator
+    , HP.enabled enabled'
     , classNames [ "btn" ]
     ]
     [ text "Send To Simulator" ]
@@ -85,34 +134,31 @@ sendToSimulationButton state =
 
 editorOptions :: forall p. State -> HTML p Action
 editorOptions state =
-  div [ class_ (ClassName "editor-options") ]
+  div [ HP.class_ (ClassName "editor-options") ]
     [ select
-        [ HTML.id_ "editor-options"
-        , HTML.value $ show $ state ^. _keybindings
-        , onSelectedIndexChange (\idx -> ChangeKeyBindings <$> toEnum idx)
+        [ HP.id "editor-options"
+        , HP.value $ show $ state ^. _keybindings
+        , onSelectedIndexChange (maybe DoNothing ChangeKeyBindings <<< toEnum)
         ]
         (map keybindingItem (upFromIncluding bottom))
     ]
   where
   keybindingItem item =
     if state ^. _keybindings == item then
-      option [ class_ (ClassName "selected-item"), HTML.value (show item) ] [ text $ show item ]
+      option [ HP.class_ (ClassName "selected-item"), HP.value (show item) ]
+        [ text $ show item ]
     else
-      option [ HTML.value (show item) ] [ text $ show item ]
+      option [ HP.value (show item) ] [ text $ show item ]
 
-jsEditor ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
-jsEditor state = slot _jsEditorSlot unit mkEditor unit (Just <<< HandleEditorMessage)
+jsEditor :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
+jsEditor = slot _jsEditorSlot unit mkEditor unit HandleEditorMessage
 
 compileButton :: forall p. State -> HTML p Action
 compileButton state =
   button
-    [ onClick $ const $ Just Compile
-    , enabled enabled'
-    , classes classes'
+    [ onClick $ const Compile
+    , HP.enabled enabled'
+    , HP.classes classes'
     ]
     [ text buttonText ]
   where
@@ -129,47 +175,67 @@ compileButton state =
   classes' =
     [ ClassName "btn" ]
       <> case view _compilationResult state of
-          JS.CompiledSuccessfully _ -> [ ClassName "success" ]
-          JS.CompilationError _ -> [ ClassName "error" ]
-          _ -> []
+        JS.CompiledSuccessfully _ -> [ ClassName "success" ]
+        JS.CompilationError _ -> [ ClassName "error" ]
+        _ -> []
 
-panelContents ::
-  forall m.
-  MonadAff m =>
-  State ->
-  MetaData ->
-  BottomPanelView ->
-  ComponentHTML Action ChildSlots m
+panelContents
+  :: forall m
+   . MonadAff m
+  => State
+  -> MetaData
+  -> BottomPanelView
+  -> ComponentHTML Action ChildSlots m
 panelContents state _ GeneratedOutputView =
   section_ case view _compilationResult state of
     JS.CompiledSuccessfully (InterpreterResult result) ->
-      [ div [ classes [ bgWhite, spaceBottom, ClassName "code" ] ]
+      [ div [ HP.classes [ bgWhite, spaceBottom, ClassName "code" ] ]
           numberedText
       ]
       where
-      numberedText = (code_ <<< Array.singleton <<< text) <$> split (Pattern "\n") ((show <<< pretty <<< _.result) result)
+      numberedText = (code_ <<< Array.singleton <<< text) <$> split
+        (Pattern "\n")
+        ((show <<< pretty <<< _.result) result)
     _ -> [ text "There is no generated code" ]
 
 panelContents state metadata StaticAnalysisView =
   section_
     ( [ analysisResultPane metadata SetIntegerTemplateParam state
-      , analyzeButton loadingWarningAnalysis analysisEnabled "Analyse for warnings" AnalyseContract
-      , analyzeButton loadingReachability analysisEnabled "Analyse reachability" AnalyseReachabilityContract
-      , analyzeButton loadingCloseAnalysis analysisEnabled "Analyse for refunds on Close" AnalyseContractForCloseRefund
+      , analyzeButton loadingWarningAnalysis analysisEnabled
+          "Analyse for warnings"
+          AnalyseContract
+      , analyzeButton loadingReachability analysisEnabled "Analyse reachability"
+          AnalyseReachabilityContract
+      , analyzeButton loadingCloseAnalysis analysisEnabled
+          "Analyse for refunds on Close"
+          AnalyseContractForCloseRefund
       , clearButton clearEnabled "Clear" ClearAnalysisResults
       ]
-        <> (if isCompiled then [] else [ div [ classes [ ClassName "choice-error" ] ] [ text "JavaScript code needs to be compiled in order to run static analysis" ] ])
+        <>
+          ( if isCompiled then []
+            else
+              [ div [ HP.classes [ ClassName "choice-error" ] ]
+                  [ text
+                      "JavaScript code needs to be compiled in order to run static analysis"
+                  ]
+              ]
+          )
     )
   where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isStaticLoading
+  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
+    <<< to isStaticLoading
 
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<< to isReachabilityLoading
+  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isReachabilityLoading
 
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isCloseAnalysisLoading
+  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isCloseAnalysisLoading
 
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isNoneAsked
+  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
+    isNoneAsked
 
-  anyAnalysisLoading = loadingWarningAnalysis || loadingReachability || loadingCloseAnalysis
+  anyAnalysisLoading = loadingWarningAnalysis || loadingReachability ||
+    loadingCloseAnalysis
 
   analysisEnabled = not anyAnalysisLoading && isCompiled
 
@@ -184,17 +250,37 @@ panelContents state _ ErrorsView =
     JS.CompilationError err -> [ compilationErrorPane err ]
     _ -> [ text "No errors" ]
 
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents state metadata MetadataView = metadataView
+  (state ^. _metadataHintInfo)
+  metadata
+  MetadataAction
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
-compilationErrorPane (RawError error) = div_ [ text "There was an error when running the JavaScript code:", code_ [ pre_ [ text $ error ] ] ]
+compilationErrorPane (RawError error) = div_
+  [ text "There was an error when running the JavaScript code:"
+  , code_ [ pre_ [ text $ error ] ]
+  ]
 
-compilationErrorPane (JSONParsingError error) = div_ [ text "There was an error when parsing the resulting JSON:", code_ [ pre_ [ text $ error ] ], text "Please, use the JS API provided (see tutorial and examples). If you did use the JS API and still get this error, kindly report the problem at ", a [ href "https://github.com/input-output-hk/marlowe-cardano/issues/new" ] [ text "https://github.com/input-output-hk/marlowe-cardano/issues/new" ], text " including the code that caused the error. Thank you" ]
+compilationErrorPane (JSONParsingError error) =
+  div_
+    [ text "There was an error when parsing the resulting JSON:"
+    , code_ [ pre_ [ text $ error ] ]
+    , text
+        "Please, use the JS API provided (see tutorial and examples). If you did use the JS API and still get this error, kindly report the problem at "
+    , a
+        [ HP.href
+            "https://github.com/input-output-hk/marlowe-cardano/issues/new"
+        ]
+        [ text "https://github.com/input-output-hk/marlowe-cardano/issues/new" ]
+    , text " including the code that caused the error. Thank you"
+    ]
 
 compilationErrorPane (CompilationError error) =
   div
-    [ class_ $ ClassName "compilation-error"
+    [ HP.class_ $ ClassName "compilation-error"
     ]
-    [ text $ "There is a syntax error in line " <> show error.row <> ", column " <> show error.column <> ":"
+    [ text $ "There is a syntax error in line " <> show error.row <> ", column "
+        <> show error.column
+        <> ":"
     , code_ [ pre_ [ text $ String.joinWith "\n" error.text ] ]
     ]

@@ -10,8 +10,8 @@ module Marlowe.Slot
   ) where
 
 import Prelude
-import Data.BigInteger (fromInt)
-import Data.BigInteger as BigInteger
+import Data.BigInt.Argonaut (fromInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime, adjust, diff)
 import Data.DateTime.Instant (instant, toDateTime)
 import Data.Either (Either(..))
@@ -21,8 +21,6 @@ import Data.List (fromFoldable)
 import Data.Maybe (Maybe(..), fromJust)
 import Data.Newtype (unwrap)
 import Data.Time.Duration (Milliseconds(..), Seconds(..))
-import Effect (Effect)
-import Effect.Now (now)
 import Marlowe.Semantics (Slot(..))
 import Partial.Unsafe (unsafePartial)
 
@@ -38,8 +36,8 @@ shelleyInitialSlot = Slot $ fromInt 0
 -- Note [Datetime to slot]: The `plutus-pab.yaml` config file can specify
 -- the datetime of slot zero. To synchronise with the frontend, this should
 -- be set to `shelleyLaunchDate - (shelleyInitialSlot * 1000)` (because there
--- is 1 slot per second). On the current estimates this comes to 1591566291000,
--- which is 2020-06-07 21:44:51 UTC.
+-- is 1 slot per second). On the current estimates this comes to 1596059091000,
+-- which is 2020-07-29 21:44:51 UTC.
 shelleyLaunchDate :: DateTime
 shelleyLaunchDate =
   let
@@ -49,7 +47,7 @@ shelleyLaunchDate =
     unsafePartial $ fromJust $ toDateTime <$> instant epoch
 
 secondsDiff :: Slot -> Slot -> Seconds
-secondsDiff a b = Seconds $ BigInteger.toNumber $ unwrap $ a - b
+secondsDiff a b = Seconds $ BigInt.toNumber $ unwrap $ a - b
 
 slotToDateTime :: Slot -> Maybe DateTime
 slotToDateTime slot =
@@ -64,7 +62,7 @@ dateTimeToSlot datetime =
     secondsDiff' :: Seconds
     secondsDiff' = diff datetime shelleyLaunchDate
   in
-    shelleyInitialSlot + (Slot $ BigInteger.fromInt $ round $ unwrap secondsDiff')
+    shelleyInitialSlot + (Slot $ BigInt.fromInt $ round $ unwrap secondsDiff')
 
 dateTimeStringToSlot :: String -> Maybe Slot
 dateTimeStringToSlot dateTimeString =

@@ -1,71 +1,131 @@
-module Blockly.Internal where
+module Blockly.Internal
+  ( AlignDirection(..)
+  , Arg(..)
+  , BasicBlockDefinition
+  , BlockDefinition(..)
+  , ElementId(..)
+  , GridConfig
+  , Pair(..)
+  , XML(..)
+  , addBlockTypes
+  , addChangeListener
+  , block
+  , blockType
+  , centerOnBlock
+  , clearUndoStack
+  , clearWorkspace
+  , connect
+  , connectToOutput
+  , connectToPrevious
+  , createBlocklyInstance
+  , defaultBlockDefinition
+  , fieldName
+  , fieldRow
+  , getBlockById
+  , getBlockType
+  , getInputWithName
+  , hideChaff
+  , initializeWorkspace
+  , inputList
+  , inputName
+  , inputType
+  , loadWorkspace
+  , newBlock
+  , nextConnection
+  , previousConnection
+  , removeChangeListener
+  , render
+  , resize
+  , select
+  , setFieldText
+  , style
+  , typedArguments
+  , updateToolbox
+  , workspaceToDom
+  , workspaceXML
+  , x
+  , xml
+  , y
+  ) where
 
 import Prologue
 import Blockly.Toolbox (Toolbox, encodeToolbox)
-import Blockly.Types (Block, Blockly, BlocklyState, Workspace)
+import Blockly.Types
+  ( Block
+  , Blockly
+  , BlocklyState
+  , Connection
+  , Field
+  , Input
+  , Workspace
+  )
 import Data.Argonaut.Core (Json)
 import Data.Array (catMaybes)
-import Data.Newtype (class Newtype, unwrap)
-import Data.Symbol (SProxy(..))
-import Data.Traversable (class Foldable, for_, traverse_)
+import Data.Array as Array
+import Data.Newtype (class Newtype)
+import Data.Number (infinity)
+import Data.Traversable (class Foldable, traverse_)
 import Effect (Effect)
 import Effect.Exception (throw)
-import Effect.Uncurried (EffectFn1, EffectFn2, EffectFn3, EffectFn4, runEffectFn1, runEffectFn2, runEffectFn3, runEffectFn4)
 import Foreign (Foreign)
-import Global (infinity)
 import Halogen.HTML (AttrName(..), ElemName(..), Node)
 import Halogen.HTML.Elements (element)
 import Halogen.HTML.Properties (IProp, attr)
 import Record as Record
 import Simple.JSON (class WriteForeign)
 import Simple.JSON as JSON
+import Type.Proxy (Proxy(..))
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.Event.EventTarget (EventListener)
-import Web.HTML (HTMLElement, window)
+import Web.HTML (window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
 
 type GridConfig
-  = { spacing :: Int
-    , length :: Int
-    , colour :: String
-    , snap :: Boolean
-    }
+  =
+  { spacing :: Int
+  , length :: Int
+  , colour :: String
+  , snap :: Boolean
+  }
 
 type ZoomConfig
-  = { controls :: Boolean
-    , wheel :: Boolean
-    , startScale :: Number
-    , maxScale :: Number
-    , minScale :: Number
-    , scaleSpeed :: Number
-    }
+  =
+  { controls :: Boolean
+  , wheel :: Boolean
+  , startScale :: Number
+  , maxScale :: Number
+  , minScale :: Number
+  , scaleSpeed :: Number
+  }
 
 type Move
-  = { scrollbars :: Boolean
-    , drag :: Boolean
-    , wheel :: Boolean
-    }
+  =
+  { scrollbars :: Boolean
+  , drag :: Boolean
+  , wheel :: Boolean
+  }
 
 type WorkspaceConfig
-  = { toolbox :: Json
-    , collapse :: Boolean
-    , comments :: Boolean
-    , disable :: Boolean
-    , maxBlocks :: Number
-    , trashcan :: Boolean
-    , horizontalLayout :: Boolean
-    , toolboxPosition :: String
-    , css :: Boolean
-    , media :: String
-    , rtl :: Boolean
-    , sounds :: Boolean
-    , oneBasedIndex :: Boolean
-    , move :: Move
-    , zoom :: ZoomConfig
-    , grid :: GridConfig
-    }
+  =
+  { toolbox :: Json
+  , collapse :: Boolean
+  , comments :: Boolean
+  , disable :: Boolean
+  , maxBlocks :: Number
+  , trashcan :: Boolean
+  , horizontalLayout :: Boolean
+  , toolboxPosition :: String
+  , css :: Boolean
+  , media :: String
+  , rtl :: Boolean
+  , sounds :: Boolean
+  , oneBasedIndex :: Boolean
+  , move :: Move
+  , zoom :: ZoomConfig
+  , grid :: GridConfig
+  }
 
 newtype XML
   = XML String
@@ -78,63 +138,91 @@ derive newtype instance monoidXML :: Monoid XML
 
 derive newtype instance eqXML :: Eq XML
 
-foreign import getElementById_ :: EffectFn1 String HTMLElement
+foreign import createWorkspace
+  :: Blockly -> String -> WorkspaceConfig -> Effect Workspace
 
-foreign import createBlocklyInstance_ :: Effect Blockly
+foreign import resize :: Blockly -> Workspace -> Effect Unit
 
-foreign import createWorkspace_ :: EffectFn3 Blockly String WorkspaceConfig Workspace
+foreign import addChangeListener :: Workspace -> EventListener -> Effect Unit
 
-foreign import resizeBlockly_ :: EffectFn2 Blockly Workspace Unit
+foreign import removeChangeListener :: Workspace -> EventListener -> Effect Unit
 
-foreign import addBlockType_ :: EffectFn3 Blockly String Foreign Unit
+foreign import render :: Workspace -> Effect Unit
 
-foreign import initializeWorkspace_ :: EffectFn3 Blockly Workspace Element Unit
+foreign import workspaceXML :: Blockly -> Workspace -> Effect XML
 
-foreign import addChangeListener_ :: EffectFn2 Workspace EventListener Unit
-
-foreign import removeChangeListener_ :: EffectFn2 Workspace EventListener Unit
-
-foreign import render_ :: EffectFn1 Workspace Unit
-
-foreign import getBlockById_ :: forall a. EffectFn4 (a -> Maybe a) (Maybe a) Workspace String (Maybe Block)
-
-foreign import workspaceXML_ :: EffectFn2 Blockly Workspace XML
-
-foreign import loadWorkspace_ :: EffectFn3 Blockly Workspace XML Unit
+foreign import loadWorkspace :: Blockly -> Workspace -> XML -> Effect Unit
 
 -- This function exposes the blockly state in the global window so it's easier to debug/test functionalities
 -- It is only called once per editor at the creation of the editor, so it doesn't consume resources and
 -- could be left enabled.
-foreign import debugBlockly_ :: EffectFn2 String BlocklyState Unit
+foreign import debugBlockly :: String -> BlocklyState -> Effect Unit
 
-foreign import workspaceToDom_ :: EffectFn2 Blockly Workspace Element
+foreign import workspaceToDom :: Blockly -> Workspace -> Effect Element
 
-foreign import select_ :: EffectFn1 Block Unit
+foreign import select :: Block -> Effect Unit
 
-foreign import centerOnBlock_ :: EffectFn2 Workspace String Unit
+foreign import centerOnBlock :: Workspace -> String -> Effect Unit
 
-foreign import hideChaff_ :: EffectFn1 Blockly Unit
+foreign import hideChaff :: Blockly -> Effect Unit
 
-foreign import getBlockType_ :: EffectFn1 Block String
+foreign import getBlockType :: Block -> String
 
-foreign import updateToolbox_ :: EffectFn2 Json Workspace Unit
+foreign import clearUndoStack :: Workspace -> Effect Unit
 
-foreign import clearUndoStack_ :: EffectFn1 Workspace Unit
+foreign import isWorkspaceEmpty :: Workspace -> Effect Boolean
 
-foreign import isWorkspaceEmpty_ :: EffectFn1 Workspace Boolean
+foreign import setGroup :: Blockly -> Boolean -> Effect Unit
 
-foreign import setGroup_ :: EffectFn2 Blockly Boolean Unit
+foreign import inputList :: Block -> Array Input
+
+foreign import connectToPrevious :: Block -> Input -> Effect Unit
+
+foreign import previousConnection :: Block -> Connection
+
+foreign import nextConnection :: Block -> Connection
+
+foreign import connect :: Connection -> Connection -> Effect Unit
+
+foreign import connectToOutput :: Block -> Input -> Effect Unit
+
+foreign import newBlock :: Workspace -> String -> Effect Block
+
+foreign import inputName :: Input -> String
+
+foreign import inputType :: Input -> Int
+
+foreign import clearWorkspace :: Workspace -> Effect Unit
+
+foreign import fieldRow :: Input -> Array Field
+
+foreign import setFieldText :: Field -> String -> Effect Unit
+
+foreign import fieldName :: Field -> String
+
+getInputWithName :: String -> Array Input -> Maybe Input
+getInputWithName n = Array.find (eq n <<< inputName)
 
 newtype ElementId
   = ElementId String
 
 derive instance newtypeElementId :: Newtype ElementId _
 
-createBlocklyInstance :: String -> ElementId -> ElementId -> Toolbox -> Effect BlocklyState
-createBlocklyInstance rootBlockName (ElementId workspaceElementId) (ElementId blocksElementId) toolbox = do
+foreign import createBlocklyInstance_ :: Effect Blockly
+
+-- TODO: Now that ActusBlockly is removed we should pass two Elements instead
+-- of two ElementIds.
+createBlocklyInstance
+  :: String -> ElementId -> ElementId -> Toolbox -> Effect BlocklyState
+createBlocklyInstance
+  rootBlockName
+  (ElementId workspaceElementId)
+  (ElementId blocksElementId)
+  toolbox = do
   blockly <- createBlocklyInstance_
-  workspace <- runEffectFn3 createWorkspace_ blockly workspaceElementId config
-  runEffectFn2 debugBlockly_ workspaceElementId { blockly, workspace, rootBlockName, blocksElementId }
+  workspace <- createWorkspace blockly workspaceElementId config
+  debugBlockly workspaceElementId
+    { blockly, workspace, rootBlockName, blocksElementId }
   pure { blockly, workspace, rootBlockName, blocksElementId }
   where
   config =
@@ -172,8 +260,7 @@ createBlocklyInstance rootBlockName (ElementId workspaceElementId) (ElementId bl
         }
     }
 
-resize :: Blockly -> Workspace -> Effect Unit
-resize = runEffectFn2 resizeBlockly_
+foreign import addBlockType_ :: Blockly -> String -> Foreign -> Effect Unit
 
 addBlockType :: Blockly -> BlockDefinition -> Effect Unit
 addBlockType blockly (BlockDefinition fields) =
@@ -182,62 +269,34 @@ addBlockType blockly (BlockDefinition fields) =
 
     type' = fields.type
   in
-    runEffectFn3 addBlockType_ blockly type' definition
+    addBlockType_ blockly type' definition
 
-addBlockTypes :: forall f. Foldable f => Blockly -> f BlockDefinition -> Effect Unit
+addBlockTypes
+  :: forall f. Foldable f => Blockly -> f BlockDefinition -> Effect Unit
 addBlockTypes blocklyState = traverse_ (addBlockType blocklyState)
+
+foreign import initializeWorkspace_
+  :: Blockly -> Workspace -> Element -> Effect Unit
 
 initializeWorkspace :: BlocklyState -> Effect Unit
 initializeWorkspace bs = do
-  mBlockElement <- getElementById bs.blocksElementId =<< (map toNonElementParentNode $ document =<< window)
+  mBlockElement <- getElementById bs.blocksElementId =<<
+    (map toNonElementParentNode $ document =<< window)
   case mBlockElement of
-    Just blocksElement -> runEffectFn3 initializeWorkspace_ bs.blockly bs.workspace blocksElement
+    Just blocksElement -> initializeWorkspace_ bs.blockly bs.workspace
+      blocksElement
     Nothing -> throw "Blocks element not found"
 
-addChangeListener :: Workspace -> EventListener -> Effect Unit
-addChangeListener = runEffectFn2 addChangeListener_
-
-removeChangeListener :: Workspace -> EventListener -> Effect Unit
-removeChangeListener = runEffectFn2 removeChangeListener_
-
-render :: Workspace -> Effect Unit
-render = runEffectFn1 render_
+foreign import getBlockById_
+  :: forall a. (Block -> a) -> a -> Workspace -> String -> Effect a
 
 getBlockById :: Workspace -> String -> Effect (Maybe Block)
-getBlockById = runEffectFn4 getBlockById_ Just Nothing
+getBlockById = getBlockById_ Just Nothing
 
-workspaceXML :: Blockly -> Workspace -> Effect XML
-workspaceXML = runEffectFn2 workspaceXML_
-
-loadWorkspace :: Blockly -> Workspace -> XML -> Effect Unit
-loadWorkspace = runEffectFn3 loadWorkspace_
-
-workspaceToDom :: Blockly -> Workspace -> Effect Element
-workspaceToDom = runEffectFn2 workspaceToDom_
-
-select :: Block -> Effect Unit
-select = runEffectFn1 select_
-
-centerOnBlock :: Workspace -> String -> Effect Unit
-centerOnBlock = runEffectFn2 centerOnBlock_
-
-hideChaff :: Blockly -> Effect Unit
-hideChaff = runEffectFn1 hideChaff_
-
-getBlockType :: Block -> Effect String
-getBlockType = runEffectFn1 getBlockType_
+foreign import updateToolbox_ :: Json -> Workspace -> Effect Unit
 
 updateToolbox :: Toolbox -> Workspace -> Effect Unit
-updateToolbox toolbox = runEffectFn2 updateToolbox_ (encodeToolbox toolbox)
-
-clearUndoStack :: Workspace -> Effect Unit
-clearUndoStack = runEffectFn1 clearUndoStack_
-
-isWorkspaceEmpty :: Workspace -> Effect Boolean
-isWorkspaceEmpty = runEffectFn1 isWorkspaceEmpty_
-
-setGroup :: Blockly -> Boolean -> Effect Unit
-setGroup = runEffectFn2 setGroup_
+updateToolbox = updateToolbox_ <<< encodeToolbox
 
 data Pair
   = Pair String String
@@ -250,7 +309,13 @@ data Arg
   | Dropdown { name :: String, options :: Array Pair }
   | Checkbox { name :: String, checked :: Boolean }
   | Colour { name :: String, colour :: String }
-  | Number { name :: String, value :: Number, min :: Maybe Number, max :: Maybe Number, precision :: Maybe Number }
+  | Number
+      { name :: String
+      , value :: Number
+      , min :: Maybe Number
+      , max :: Maybe Number
+      , precision :: Maybe Number
+      }
   | Angle { name :: String, angle :: Number }
   | Variable { name :: String, variable :: String }
   -- Dates don't work in Blockly, see: https://developers.google.com/blockly/guides/create-custom-blocks/fields/built-in-fields/date
@@ -264,61 +329,78 @@ data Arg
   | DummyCentre
 
 argType :: Arg -> Maybe { name :: String, check :: String }
-argType (Value { name, check }) = Just { name, check }
+argType (Value { name: _name, check }) = Just { name: _name, check }
 
-argType (Statement { name, check }) = Just { name, check }
+argType (Statement { name: _name, check }) = Just { name: _name, check }
 
 argType _ = Nothing
 
-type_ :: SProxy "type"
-type_ = SProxy
+type_ :: Proxy "type"
+type_ = Proxy
 
 instance writeForeignArg :: WriteForeign Arg where
-  writeImpl (Input fields) = JSON.write $ Record.insert type_ "field_input" fields
-  writeImpl (Dropdown fields) = JSON.write $ Record.insert type_ "field_dropdown" fields
-  writeImpl (Checkbox fields) = JSON.write $ Record.insert type_ "field_checkbox" fields
-  writeImpl (Colour fields) = JSON.write $ Record.insert type_ "field_colour" fields
-  writeImpl (Number fields) = JSON.write $ Record.insert type_ "field_number" fields
-  writeImpl (Angle fields) = JSON.write $ Record.insert type_ "field_angle" fields
-  writeImpl (Variable fields) = JSON.write $ Record.insert type_ "field_variable" fields
+  writeImpl (Input fields) = JSON.write $ Record.insert type_ "field_input"
+    fields
+  writeImpl (Dropdown fields) = JSON.write $ Record.insert type_
+    "field_dropdown"
+    fields
+  writeImpl (Checkbox fields) = JSON.write $ Record.insert type_
+    "field_checkbox"
+    fields
+  writeImpl (Colour fields) = JSON.write $ Record.insert type_ "field_colour"
+    fields
+  writeImpl (Number fields) = JSON.write $ Record.insert type_ "field_number"
+    fields
+  writeImpl (Angle fields) = JSON.write $ Record.insert type_ "field_angle"
+    fields
+  writeImpl (Variable fields) = JSON.write $ Record.insert type_
+    "field_variable"
+    fields
   writeImpl (Date fields) = JSON.write $ Record.insert type_ "field_date" fields
-  writeImpl (Label fields) = JSON.write $ Record.insert type_ "field_label" fields
-  writeImpl (Image fields) = JSON.write $ Record.insert type_ "field_image" fields
-  writeImpl (Value fields) = JSON.write $ Record.insert type_ "input_value" fields
-  writeImpl (Statement fields) = JSON.write $ Record.insert type_ "input_statement" fields
-  writeImpl DummyRight = JSON.write $ { type: "input_dummy", align: Right }
-  writeImpl DummyLeft = JSON.write $ { type: "input_dummy", align: Left }
-  writeImpl DummyCentre = JSON.write $ { type: "input_dummy", align: Centre }
+  writeImpl (Label fields) = JSON.write $ Record.insert type_ "field_label"
+    fields
+  writeImpl (Image fields) = JSON.write $ Record.insert type_ "field_image"
+    fields
+  writeImpl (Value fields) = JSON.write $ Record.insert type_ "input_value"
+    fields
+  writeImpl (Statement fields) = JSON.write $ Record.insert type_
+    "input_statement"
+    fields
+  writeImpl DummyRight = JSON.write $ { type: "input_dummy", align: AlignRight }
+  writeImpl DummyLeft = JSON.write $ { type: "input_dummy", align: AlignLeft }
+  writeImpl DummyCentre = JSON.write $
+    { type: "input_dummy", align: AlignCentre }
 
 data AlignDirection
-  = Left
-  | Centre
-  | Right
+  = AlignLeft
+  | AlignCentre
+  | AlignRight
 
 instance writeForeignAlignDirection :: WriteForeign AlignDirection where
-  writeImpl Left = JSON.write "LEFT"
-  writeImpl Centre = JSON.write "CENTRE"
-  writeImpl Right = JSON.write "RIGHT"
+  writeImpl AlignLeft = JSON.write "LEFT"
+  writeImpl AlignCentre = JSON.write "CENTRE"
+  writeImpl AlignRight = JSON.write "RIGHT"
 
 type BasicBlockDefinition r
-  = ( message0 :: String
-    , args0 :: Array Arg
-    , lastDummyAlign0 :: AlignDirection
-    , colour :: String
-    , fieldValue :: Maybe Pair
-    , helpUrl :: String
-    , inputsInline :: Maybe Boolean
-    , nextStatement :: Maybe String
-    , output :: Maybe String
-    , previousStatement :: Maybe String
-    , tooltip :: Maybe String
-    , extensions :: Array String
-    , mutator :: Maybe String
-    | r
-    )
+  =
+  ( message0 :: String
+  , args0 :: Array Arg
+  , lastDummyAlign0 :: AlignDirection
+  , colour :: String
+  , fieldValue :: Maybe Pair
+  , helpUrl :: String
+  , inputsInline :: Maybe Boolean
+  , nextStatement :: Maybe String
+  , output :: Maybe String
+  , previousStatement :: Maybe String
+  , tooltip :: Maybe String
+  , extensions :: Array String
+  , mutator :: Maybe String
+  | r
+  )
 
 newtype BlockDefinition
-  = BlockDefinition (Record (BasicBlockDefinition ( type :: String )))
+  = BlockDefinition (Record (BasicBlockDefinition (type :: String)))
 
 derive instance newtypeBlockDefinition :: Newtype BlockDefinition _
 
@@ -340,7 +422,7 @@ defaultBlockDefinition ::
   }
 defaultBlockDefinition =
   { fieldValue: Nothing
-  , lastDummyAlign0: Left
+  , lastDummyAlign0: AlignLeft
   , args0: []
   , helpUrl: ""
   , inputsInline: Just true
@@ -355,26 +437,22 @@ defaultBlockDefinition =
 typedArguments :: BlockDefinition -> Array { name :: String, check :: String }
 typedArguments (BlockDefinition { args0 }) = catMaybes $ argType <$> args0
 
-xml :: forall p i. Node ( id :: String, style :: String ) p i
+xml :: forall p i. Node (id :: String, style :: String) p i
 xml = element (ElemName "xml")
 
-block :: forall p i. Node ( id :: String, type :: String, x :: String, y :: String ) p i
+block
+  :: forall p i
+   . Node (id :: String, type :: String, x :: String, y :: String) p i
 block = element (ElemName "block")
 
-blockType :: forall i r. String -> IProp ( type :: String | r ) i
+blockType :: forall i r. String -> IProp (type :: String | r) i
 blockType = attr (AttrName "type")
 
-style :: forall i r. String -> IProp ( style :: String | r ) i
+style :: forall i r. String -> IProp (style :: String | r) i
 style = attr (AttrName "style")
 
-colour :: forall i r. String -> IProp ( colour :: String | r ) i
-colour = attr (AttrName "colour")
-
-name :: forall i r. String -> IProp ( name :: String | r ) i
-name = attr (AttrName "name")
-
-x :: forall i r. String -> IProp ( x :: String | r ) i
+x :: forall i r. String -> IProp (x :: String | r) i
 x = attr (AttrName "x")
 
-y :: forall i r. String -> IProp ( y :: String | r ) i
+y :: forall i r. String -> IProp (y :: String | r) i
 y = attr (AttrName "y")

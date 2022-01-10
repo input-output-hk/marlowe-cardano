@@ -14,12 +14,12 @@
       identifier = { name = "marlowe-actus"; version = "0.1.0.0"; };
       license = "Apache-2.0";
       copyright = "";
-      maintainer = "dmytro.kondratiuk@iohk.io";
-      author = "Dmytro Kondratiuk";
+      maintainer = "Yves Hauser <yves.hauser@iohk.io>";
+      author = "Dmytro Kondratiuk, Yves Hauser";
       homepage = "";
       url = "";
-      synopsis = "Marlowe ACTUS: standardised financial contracts on Cardano Computation Layer";
-      description = "implementation of ACTUS contracts on Marlowe";
+      synopsis = "Marlowe ACTUS: Standardised financial contracts with Marlowe";
+      description = "/marlowe-actus/ is an implementation of the [ACTUS](https://www.actusfrf.org)\nspecification in Haskell together with generators for Marlowe contracts.\n\nACTUS is a [taxonomy](https://www.actusfrf.org/taxonomy) of financial contracts that\nuniformly specifies projected cash flows per contract type. A contract is evolved\nover time, i.e. state changes are triggered from event schedules and performed by\nstate transformation functions, projected cash flows are determined by payoff\nfunctions. Future contract state and payoff might depend on observable values, like\nuser provided input (a choice for example) or market values\nobserved by an Oracle.\n\nThe implementation is tested against the [reference test cases](https://github.com/actusfrf/actus-tests) provided by the\nACTUS foundation.";
       buildType = "Simple";
       isLocal = true;
       detailLevel = "FullDetails";
@@ -62,17 +62,11 @@
           "Language/Marlowe/ACTUS/Generator/GeneratorFs"
           "Language/Marlowe/ACTUS/Generator/GeneratorStatic"
           "Language/Marlowe/ACTUS/Generator/MarloweCompat"
-          "Language/Marlowe/ACTUS/Model/POF/PayoffModel"
-          "Language/Marlowe/ACTUS/Model/POF/Payoff"
-          "Language/Marlowe/ACTUS/Model/POF/PayoffFs"
-          "Language/Marlowe/ACTUS/Model/STF/StateTransitionModel"
-          "Language/Marlowe/ACTUS/Model/STF/StateTransition"
-          "Language/Marlowe/ACTUS/Model/STF/StateTransitionFs"
-          "Language/Marlowe/ACTUS/Model/SCHED/ContractScheduleModel"
-          "Language/Marlowe/ACTUS/Model/SCHED/ContractSchedule"
-          "Language/Marlowe/ACTUS/Model/INIT/StateInitializationModel"
-          "Language/Marlowe/ACTUS/Model/APPL/Applicability"
-          "Language/Marlowe/ACTUS/Model/APPL/ApplicabilityModel"
+          "Language/Marlowe/ACTUS/Model/Applicability"
+          "Language/Marlowe/ACTUS/Model/ContractSchedule"
+          "Language/Marlowe/ACTUS/Model/StateInitialization"
+          "Language/Marlowe/ACTUS/Model/StateTransition"
+          "Language/Marlowe/ACTUS/Model/Payoff"
           "Language/Marlowe/ACTUS/Utility/ANN/Annuity"
           "Language/Marlowe/ACTUS/Utility/DateShift"
           "Language/Marlowe/ACTUS/Utility/ScheduleGenerator"
@@ -109,6 +103,8 @@
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
             (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."sort" or (errorHandler.buildDepError "sort"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             ];
           buildable = true;

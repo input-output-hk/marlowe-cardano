@@ -7,15 +7,28 @@ module Examples.PureScript.EscrowWithCollateral
   ) where
 
 import Prelude
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested (type (/\), (/\))
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
-import Marlowe.Semantics (Bound(..), ChoiceId(..), Party(..), Token(..), ChoiceName)
+import Marlowe.Semantics
+  ( Bound(..)
+  , ChoiceId(..)
+  , Party(..)
+  , Token(..)
+  , ChoiceName
+  )
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }
@@ -30,7 +43,7 @@ fixedTimeoutContract =
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInteger
+defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
     [ "Collateral deposit by seller timeout" /\ fromInt 600
@@ -53,7 +66,8 @@ seller :: Party
 seller = Role "Seller"
 
 burnAddress :: Party
-burnAddress = PK "0000000000000000000000000000000000000000000000000000000000000000"
+burnAddress = PK
+  "0000000000000000000000000000000000000000000000000000000000000000"
 
 price :: Value
 price = ConstantParam "Price"
@@ -94,7 +108,7 @@ deposit timeout timeoutContinuation continuation =
     timeout
     timeoutContinuation
 
-choice :: ChoiceName -> Party -> BigInteger -> Contract -> Case
+choice :: ChoiceName -> Party -> BigInt -> Contract -> Case
 choice choiceName chooser choiceValue continuation =
   Case
     ( Choice (ChoiceId choiceName chooser)
@@ -102,7 +116,12 @@ choice choiceName chooser choiceValue continuation =
     )
     continuation
 
-choices :: Timeout -> Party -> Contract -> Array (BigInteger /\ ChoiceName /\ Contract) -> Contract
+choices
+  :: Timeout
+  -> Party
+  -> Contract
+  -> Array (BigInt /\ ChoiceName /\ Contract)
+  -> Contract
 choices timeout chooser timeoutContinuation list =
   When
     ( do
@@ -123,7 +142,8 @@ fullExtendedContract =
     $ choices disputeTimeout buyer Close
         [ (zero /\ "Everything is alright" /\ Close)
         , ( one /\ "Report problem"
-              /\ ( sellerToBuyer
+              /\
+                ( sellerToBuyer
                     $ choices answerTimeout seller Close
                         [ (one /\ "Confirm problem" /\ Close)
                         , (zero /\ "Dispute problem" /\ burnCollaterals Close)

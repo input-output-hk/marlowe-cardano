@@ -5,7 +5,7 @@ license: Apache-2.0
 license-files:
   LICENSE
   NOTICE
-author: David Smith
+author: David Smith, Hernán Rajchert
 category: Web
 build-type: Simple
 extra-source-files:
@@ -13,30 +13,53 @@ extra-source-files:
 
 source-repository head
     type: git
-    location: https://github.com/iohk/plutus
+    location: https://github.com/input-output-hk/marlowe-cardano
 
 library
+    default-extensions: NoImplicitPrelude
     exposed-modules:
-        Server
-        API
-        WebSocket
+        Marlowe.Run.Webserver.Server
+        Marlowe.Run.Webserver.API
+        Marlowe.Run.Webserver.WebSocket
+        Marlowe.Run.Webserver.Types
+        Marlowe.Run.Webserver.Wallet.Types
+        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types
+        Marlowe.Run.Webserver.Wallet.Client
+    other-modules:
+        Paths_marlowe_dashboard_server
+        Marlowe.Run.Webserver.Wallet.API
+        Marlowe.Run.Webserver.Wallet.Server
+        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.API
+        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server
     hs-source-dirs:
         src
     default-language: Haskell2010
+    ghc-options: -fwarn-unused-imports
     build-depends:
         aeson -any,
         base >=4.7 && <5,
+        bytestring -any,
+        cardano-addresses -any,
+        cardano-wallet-core -any,
+        cardano-prelude -any,
         http-client -any,
         http-client-tls -any,
         monad-logger -any,
         mtl -any,
         playground-common -any,
+        plutus-ledger -any,
+        plutus-ledger-api -any,
+        plutus-tx -any,
+        plutus-pab -any,
+        plutus-contract -any,
+        regex-compat -any,
         servant >= 0.16,
         servant-client -any,
         servant-client-core -any,
         servant-server -any,
         servant-websockets -any,
         text -any,
+        text-class -any,
         wai-app-static -any,
         wai-cors -any,
         websockets -any,

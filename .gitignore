@@ -78,15 +78,15 @@ pkgs/.stack
 **/yarn-error.log
 **/yarn.lock
 **/.psci_modules/
-**/.psc-package/
-**/.psc-package2nix/
 **/.spago/
 **/.spago2nix/
+.psa-stash
 
 # Backend config files
 marlowe-playground-server/playground.yaml
 plutus-playground-server/playground.yaml
 plutus-pab/plutus-pab.yaml
+marlowe-dashboard-server/config.json
 
 # Misc
 .history/

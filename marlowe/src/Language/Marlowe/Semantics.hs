@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveAnyClass             #-}
@@ -22,6 +23,7 @@
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 
+
 {-| = Marlowe: financial contracts domain specific language for blockchain
 
 Here we present a reference implementation of Marlowe, domain-specific language targeted at
@@ -42,31 +44,33 @@ and actions (i.e. /Choices/) are passed as
 
 module Language.Marlowe.Semantics where
 
-import           Control.Applicative             ((<*>), (<|>))
-import qualified Data.Aeson                      as JSON
-import           Data.Aeson.Types                hiding (Error, Value)
-import qualified Data.Foldable                   as F
-import           Data.Scientific                 (Scientific)
-import           Data.Text                       (pack)
-import           Deriving.Aeson
-import           Language.Marlowe.ParserUtil     (getInteger, withInteger)
-import           Language.Marlowe.Pretty         (Pretty (..))
-import           Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..),
-                                                  Environment (..), Input (..), IntervalError (..), IntervalResult (..),
-                                                  Money, Observation (..), Party, Payee (..), SlotInterval, State (..),
-                                                  Token (..), Value (..), ValueId, inBounds)
-import           Ledger                          (Slot (..), ValidatorHash)
-import           Ledger.Value                    (CurrencySymbol (..))
-import qualified Ledger.Value                    as Val
-import           PlutusTx                        (makeIsDataIndexed)
-import qualified PlutusTx.AssocMap               as Map
-import qualified PlutusTx.Builtins               as Builtins
-import           PlutusTx.Lift                   (makeLift)
-import           PlutusTx.Prelude                hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
-import           PlutusTx.Ratio                  (denominator, numerator)
-import           Prelude                         (mapM, (<$>))
-import qualified Prelude                         as Haskell
-import           Text.PrettyPrint.Leijen         (comma, hang, lbrace, line, rbrace, space, text, (<>))
+import Control.Applicative ((<*>), (<|>))
+import qualified Data.Aeson as JSON
+import Data.Aeson.Types hiding (Error, Value)
+import qualified Data.Foldable as F
+import Data.Scientific (Scientific)
+import Data.Text (pack)
+import Deriving.Aeson
+import Language.Marlowe.ParserUtil (getInteger, withInteger)
+import Language.Marlowe.Pretty (Pretty (..))
+#ifndef DisableMerkleization
+import Language.Marlowe.SemanticsSerialisation (contractToByteString)
+#endif
+import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
+                                        Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
+                                        Observation (..), Party, Payee (..), SlotInterval, State (..), Token (..),
+                                        Value (..), ValueId, getAction, getInputContent, inBounds)
+import Ledger (Slot (..), ValidatorHash)
+import Ledger.Value (CurrencySymbol (..))
+import qualified Ledger.Value as Val
+import PlutusTx (makeIsDataIndexed)
+import qualified PlutusTx.AssocMap as Map
+import qualified PlutusTx.Builtins as Builtins
+import PlutusTx.Lift (makeLift)
+import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
+import Prelude (mapM, (<$>))
+import qualified Prelude as Haskell
+import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, (<>))
 
 {- HLINT ignore "Avoid restricted function" -}
 
@@ -82,6 +86,8 @@ import           Text.PrettyPrint.Leijen         (comma, hang, lbrace, line, rbr
 {-# INLINABLE giveMoney #-}
 {-# INLINABLE reduceContractStep #-}
 {-# INLINABLE reduceContractUntilQuiescent #-}
+{-# INLINABLE applyAction #-}
+{-# INLINABLE getContinuation #-}
 {-# INLINABLE applyCases #-}
 {-# INLINABLE applyInput #-}
 {-# INLINABLE convertReduceWarnings #-}
@@ -137,6 +143,7 @@ data ApplyWarning = ApplyNoWarning
 -- | Result of 'applyCases'
 data ApplyResult = Applied ApplyWarning State Contract
                  | ApplyNoMatchError
+                 | ApplyHashMismatch
   deriving stock (Haskell.Show)
 
 
@@ -144,6 +151,7 @@ data ApplyResult = Applied ApplyWarning State Contract
 data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] State Contract
                     | ApplyAllNoMatchError
                     | ApplyAllAmbiguousSlotIntervalError
+                    | ApplyAllHashMismatch
   deriving stock (Haskell.Show)
 
 
@@ -164,6 +172,7 @@ data TransactionError = TEAmbiguousSlotIntervalError
                       | TEApplyNoMatchError
                       | TEIntervalError IntervalError
                       | TEUselessTransaction
+                      | TEHashMismatch
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -255,10 +264,6 @@ evalValue env state value = let
                                    else let -- reminder == 1/2
                                 qIsEven = q `Builtins.remainderInteger` 2 == 0
                                 in if qIsEven then q else q + signum n * signum d
-        Scale s rhs          -> let (n, d) = (numerator s, denominator s)
-                                    nn = eval rhs * n
-                                    (q, r) = nn `quotRem` d in
-                                if abs r * 2 < abs d then q else q + signum nn * signum d
         ChoiceValue choiceId ->
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
@@ -409,8 +414,9 @@ reduceContractUntilQuiescent env state contract = let
     reductionLoop reduced env state contract warnings payments =
         case reduceContractStep env state contract of
             Reduced warning effect newState cont -> let
-                newWarnings = if warning == ReduceNoWarning then warnings
-                              else warning : warnings
+                newWarnings = case warning of
+                                ReduceNoWarning -> warnings
+                                _               -> warning : warnings
                 newPayments  = case effect of
                     ReduceWithPayment payment -> payment : payments
                     ReduceNoPayment           -> payments
@@ -421,38 +427,57 @@ reduceContractUntilQuiescent env state contract = let
 
     in reductionLoop False env state contract [] []
 
+data ApplyAction = AppliedAction ApplyWarning State
+                 | NotAppliedAction
+  deriving stock (Haskell.Show)
 
--- | Apply a single Input to the contract (assumes the contract is reduced)
+-- | Try to apply a single input content to a single action
+applyAction :: Environment -> State -> InputContent -> Action -> ApplyAction
+applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party2 tok2 val) =
+    if accId1 == accId2 && party1 == party2 && tok1 == tok2 && amount == evalValue env state val
+    then let warning = if amount > 0 then ApplyNoWarning
+                       else ApplyNonPositiveDeposit party2 accId2 tok2 amount
+             newAccounts = addMoneyToAccount accId1 tok1 amount (accounts state)
+             newState = state { accounts = newAccounts }
+         in AppliedAction warning newState
+    else NotAppliedAction
+applyAction _ state (IChoice choId1 choice) (Choice choId2 bounds) =
+    if choId1 == choId2 && inBounds choice bounds
+    then let newState = state { choices = Map.insert choId1 choice (choices state) }
+         in AppliedAction ApplyNoWarning newState
+    else NotAppliedAction
+applyAction env state INotify (Notify obs)
+    | evalObservation env state obs = AppliedAction ApplyNoWarning state
+applyAction _ _ _ _ = NotAppliedAction
+
+-- | Try to get a continuation from a pair of Input and Case
+getContinuation :: Input -> Case Contract -> Maybe Contract
+getContinuation (NormalInput _) (Case _ continuation) = Just continuation
+#ifndef DisableMerkleization
+getContinuation (MerkleizedInput _ continuation) (MerkleizedCase _ continuationHash) =
+    if Builtins.sha2_256 (contractToByteString continuation) == continuationHash
+    then Just continuation
+    else Nothing
+#endif
+getContinuation _ _ = Nothing
+
 applyCases :: Environment -> State -> Input -> [Case Contract] -> ApplyResult
-applyCases env state input cases = case (input, cases) of
-    (IDeposit accId1 party1 tok1 amount,
-        Case (Deposit accId2 party2 tok2 val) cont : rest) ->
-        if accId1 == accId2 && party1 == party2 && tok1 == tok2
-                && amount == evalValue env state val
-        then let
-            warning = if amount > 0 then ApplyNoWarning
-                      else ApplyNonPositiveDeposit party2 accId2 tok2 amount
-            newAccounts = addMoneyToAccount accId1 tok1 amount (accounts state)
-            newState = state { accounts = newAccounts }
-            in Applied warning newState cont
-        else applyCases env state input rest
-    (IChoice choId1 choice, Case (Choice choId2 bounds) cont : rest) ->
-        if choId1 == choId2 && inBounds choice bounds
-        then let
-            newState = state { choices = Map.insert choId1 choice (choices state) }
-            in Applied ApplyNoWarning newState cont
-        else applyCases env state input rest
-    (INotify, Case (Notify obs) cont : _)
-        | evalObservation env state obs -> Applied ApplyNoWarning state cont
-    (_, _ : rest) -> applyCases env state input rest
-    (_, []) -> ApplyNoMatchError
-
+applyCases env state input (headCase : tailCase) =
+    let inputContent = getInputContent input :: InputContent
+        action = getAction headCase :: Action
+        maybeContinuation = getContinuation input headCase :: Maybe Contract
+    in case applyAction env state inputContent action of
+         AppliedAction warning newState ->
+           case maybeContinuation of
+             Just continuation -> Applied warning newState continuation
+             Nothing           -> ApplyHashMismatch
+         NotAppliedAction -> applyCases env state input tailCase
+applyCases _ _ _ [] = ApplyNoMatchError
 
 -- | Apply a single @Input@ to a current contract
 applyInput :: Environment -> State -> Input -> Contract -> ApplyResult
 applyInput env state input (When cases _ _) = applyCases env state input cases
 applyInput _ _ _ _                          = ApplyNoMatchError
-
 
 -- | Propagate 'ReduceWarning' to 'TransactionWarning'
 convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning]
@@ -467,7 +492,6 @@ convertReduceWarnings = foldr (\warn acc -> case warn of
     ReduceAssertionFailed ->
         TransactionAssertionFailed : acc
     ) []
-
 
 -- | Apply a list of Inputs to the contract
 applyAllInputs :: Environment -> State -> Contract -> [Input] -> ApplyAllResult
@@ -504,6 +528,7 @@ applyAllInputs env state contract inputs = let
                                 ++ convertApplyWarning applyWarn)
                             (payments ++ pays)
                     ApplyNoMatchError -> ApplyAllNoMatchError
+                    ApplyHashMismatch -> ApplyAllHashMismatch
     in applyAllLoop False env state contract inputs [] []
   where
     convertApplyWarning :: ApplyWarning -> [TransactionWarning]
@@ -532,10 +557,11 @@ computeTransaction tx state contract = let
                                            , txOutContract = cont }
             ApplyAllNoMatchError -> Error TEApplyNoMatchError
             ApplyAllAmbiguousSlotIntervalError -> Error TEAmbiguousSlotIntervalError
+            ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
 
--- | Calculates an upper bound for the maximum lifespan of a contract
+-- | Calculates an upper bound for the maximum lifespan of a contract (assuming is not merkleized)
 contractLifespanUpperBound :: Contract -> Slot
 contractLifespanUpperBound contract = case contract of
     Close -> 0
@@ -543,7 +569,7 @@ contractLifespanUpperBound contract = case contract of
     If _ contract1 contract2 ->
         max (contractLifespanUpperBound contract1) (contractLifespanUpperBound contract2)
     When cases timeout subContract -> let
-        contractsLifespans = fmap (\(Case _ cont) -> contractLifespanUpperBound cont) cases
+        contractsLifespans = [contractLifespanUpperBound c | Case _ c <- cases]
         in Haskell.maximum (timeout : contractLifespanUpperBound subContract : contractsLifespans)
     Let _ _ cont -> contractLifespanUpperBound cont
     Assert _ cont -> contractLifespanUpperBound cont

@@ -28,24 +28,20 @@
 let
   inherit (packages) pkgs marlowe sources;
   inherit (marlowe) haskell;
+  inherit (haskell.packages.cardano-wallet.components.exes) cardano-wallet;
+  inherit (haskell.packages.plutus-chain-index.components.exes) plutus-chain-index;
+  inherit (haskell.packages.marlowe-dashboard-server.components.exes) marlowe-dashboard-server;
 in
 rec {
   inherit pkgs marlowe;
 
-  inherit (marlowe) web-ghc;
+  inherit (marlowe) webCommon web-ghc;
 
   inherit (haskell.packages.marlowe.components.exes) marlowe-pab;
 
   # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
   # we switch to flakes.
-  webCommon = pkgs.callPackage (sources.plutus-apps + "/web-common") { inherit (marlowe.lib) gitignore-nix; };
-  webCommonPlutus = pkgs.callPackage (sources.plutus-apps + "/web-common-plutus") { inherit (marlowe.lib) gitignore-nix; };
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
-  plutus-pab = pkgs.recurseIntoAttrs (pkgs.callPackage (sources.plutus-apps + "/plutus-pab-client") {
-    inherit (marlowe.lib) buildPursPackage buildNodeModules gitignore-nix filterNpm;
-    inherit haskell webCommon webCommonPlutus;
-  });
-
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (marlowe.lib) gitignore-nix; };
 
   marlowe-playground = pkgs.recurseIntoAttrs rec {
@@ -57,17 +53,18 @@ rec {
 
   marlowe-dashboard = pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-dashboard-client {
-      inherit haskell plutus-pab;
+      inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
-    }) client server-setup-invoker marlowe-invoker generated-purescript generate-purescript start-backend;
+    }) client pab-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
   };
 
   tests = import ./nix/tests/default.nix {
     inherit pkgs docs sources;
     inherit (marlowe.lib) gitignore-nix;
-    inherit (marlowe) fixStylishHaskell fixPurty fixPngOptimization;
-    inherit marlowe-playground marlowe-dashboard web-ghc plutus-pab marlowe-pab;
+    inherit (marlowe) fixStylishHaskell fix-purs-tidy fix-prettier fixPngOptimization;
+    inherit (haskell) plutus-pab;
+    inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;
   };
 
@@ -77,5 +74,8 @@ rec {
   inherit (sources) actus-tests;
 
   # Packages needed for the bitte deployment
-  bitte-packages = import ./bitte { inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs; };
+  bitte-packages = import ./bitte {
+    inherit marlowe-playground web-ghc marlowe-pab marlowe-dashboard docs pkgs sources cardano-wallet plutus-chain-index marlowe-dashboard-server;
+    inherit (marlowe) cardano-node;
+  };
 }

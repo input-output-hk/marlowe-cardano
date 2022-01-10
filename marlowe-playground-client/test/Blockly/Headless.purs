@@ -14,7 +14,8 @@ foreign import initializeWorkspace_ :: EffectFn2 Blockly Workspace Unit
 foreign import newBlock_ :: EffectFn2 Workspace String Block
 
 initializeWorkspace :: BlocklyState -> Effect Unit
-initializeWorkspace state = runEffectFn2 initializeWorkspace_ state.blockly state.workspace
+initializeWorkspace state = runEffectFn2 initializeWorkspace_ state.blockly
+  state.workspace
 
 createBlocklyInstance :: String -> Effect BlocklyState
 createBlocklyInstance rootBlockName = do

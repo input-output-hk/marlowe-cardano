@@ -35,7 +35,7 @@
         depends = [
           (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
           (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
-          (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+          (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
@@ -45,62 +45,62 @@
           (hsPkgs."aeson-pretty" or (errorHandler.buildDepError "aeson-pretty"))
           (hsPkgs."async" or (errorHandler.buildDepError "async"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."beam-core" or (errorHandler.buildDepError "beam-core"))
+          (hsPkgs."beam-migrate" or (errorHandler.buildDepError "beam-migrate"))
+          (hsPkgs."beam-sqlite" or (errorHandler.buildDepError "beam-sqlite"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."cardano-slotting" or (errorHandler.buildDepError "cardano-slotting"))
+          (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
           (hsPkgs."cryptonite" or (errorHandler.buildDepError "cryptonite"))
+          (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+          (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
           (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
           (hsPkgs."generic-arbitrary" or (errorHandler.buildDepError "generic-arbitrary"))
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
+          (hsPkgs."iohk-monitoring" or (errorHandler.buildDepError "iohk-monitoring"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+          (hsPkgs."lobemo-backend-ekg" or (errorHandler.buildDepError "lobemo-backend-ekg"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network-mux" or (errorHandler.buildDepError "network-mux"))
+          (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
           (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-          (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
           (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
+          (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
           (hsPkgs."quickcheck-instances" or (errorHandler.buildDepError "quickcheck-instances"))
           (hsPkgs."row-types" or (errorHandler.buildDepError "row-types"))
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
           (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
+          (hsPkgs."servant-openapi3" or (errorHandler.buildDepError "servant-openapi3"))
+          (hsPkgs."servant-options" or (errorHandler.buildDepError "servant-options"))
+          (hsPkgs."servant-purescript" or (errorHandler.buildDepError "servant-purescript"))
           (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
           (hsPkgs."servant-swagger-ui" or (errorHandler.buildDepError "servant-swagger-ui"))
-          (hsPkgs."servant-openapi3" or (errorHandler.buildDepError "servant-openapi3"))
-          (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
-          (hsPkgs."servant-options" or (errorHandler.buildDepError "servant-options"))
-          (hsPkgs."tagged" or (errorHandler.buildDepError "tagged"))
-          (hsPkgs."servant-purescript" or (errorHandler.buildDepError "servant-purescript"))
           (hsPkgs."servant-websockets" or (errorHandler.buildDepError "servant-websockets"))
+          (hsPkgs."sqlite-simple" or (errorHandler.buildDepError "sqlite-simple"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+          (hsPkgs."tagged" or (errorHandler.buildDepError "tagged"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
+          (hsPkgs."text-class" or (errorHandler.buildDepError "text-class"))
+          (hsPkgs."time" or (errorHandler.buildDepError "time"))
+          (hsPkgs."time-units" or (errorHandler.buildDepError "time-units"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
-          (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
           (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
           (hsPkgs."wai-cors" or (errorHandler.buildDepError "wai-cors"))
-          (hsPkgs."Win32-network" or (errorHandler.buildDepError "Win32-network"))
+          (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
           (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
+          (hsPkgs."Win32-network" or (errorHandler.buildDepError "Win32-network"))
           (hsPkgs."yaml" or (errorHandler.buildDepError "yaml"))
-          (hsPkgs."iohk-monitoring" or (errorHandler.buildDepError "iohk-monitoring"))
-          (hsPkgs."lobemo-backend-ekg" or (errorHandler.buildDepError "lobemo-backend-ekg"))
-          (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
-          (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
-          (hsPkgs."time" or (errorHandler.buildDepError "time"))
-          (hsPkgs."time-units" or (errorHandler.buildDepError "time-units"))
-          (hsPkgs."beam-core" or (errorHandler.buildDepError "beam-core"))
-          (hsPkgs."beam-sqlite" or (errorHandler.buildDepError "beam-sqlite"))
-          (hsPkgs."beam-migrate" or (errorHandler.buildDepError "beam-migrate"))
-          (hsPkgs."sqlite-simple" or (errorHandler.buildDepError "sqlite-simple"))
-          (hsPkgs."cardano-crypto-class" or (errorHandler.buildDepError "cardano-crypto-class"))
-          (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           ];
         build-tools = [
           (hsPkgs.buildPackages.cardano-node.components.exes.cardano-node or (pkgs.buildPackages.cardano-node or (errorHandler.buildToolDepError "cardano-node:cardano-node")))
@@ -110,6 +110,7 @@
         modules = [
           "Servant/Extra"
           "Cardano/Api/NetworkId/Extra"
+          "Cardano/Api/ProtocolParameters"
           "Cardano/BM/Data/Tracer/Extras"
           "Cardano/Chain"
           "Cardano/ChainIndex/ChainIndex"
@@ -237,6 +238,7 @@
           buildable = true;
           modules = [
             "ContractExample/AtomicSwap"
+            "ContractExample/IntegrationTest"
             "ContractExample/PayToWallet"
             "ContractExample/WaitForTx"
             "ContractExample"
@@ -262,6 +264,60 @@
             ];
           buildable = true;
           hsSourceDirs = [ "examples/uniswap" ];
+          mainPath = [ "Main.hs" ];
+          };
+        "plutus-pab-local-cluster" = {
+          depends = [
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
+            (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."text-class" or (errorHandler.buildDepError "text-class"))
+            (hsPkgs."beam-sqlite" or (errorHandler.buildDepError "beam-sqlite"))
+            (hsPkgs."sqlite-simple" or (errorHandler.buildDepError "sqlite-simple"))
+            (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
+            (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
+            (hsPkgs."beam-migrate" or (errorHandler.buildDepError "beam-migrate"))
+            (hsPkgs."plutus-use-cases" or (errorHandler.buildDepError "plutus-use-cases"))
+            (hsPkgs."cardano-wallet" or (errorHandler.buildDepError "cardano-wallet"))
+            (hsPkgs."cardano-wallet-cli" or (errorHandler.buildDepError "cardano-wallet-cli"))
+            (hsPkgs."cardano-wallet-launcher" or (errorHandler.buildDepError "cardano-wallet-launcher"))
+            (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
+            (hsPkgs."cardano-wallet-core-integration" or (errorHandler.buildDepError "cardano-wallet-core-integration"))
+            (hsPkgs."iohk-monitoring" or (errorHandler.buildDepError "iohk-monitoring"))
+            (hsPkgs."lobemo-backend-ekg" or (errorHandler.buildDepError "lobemo-backend-ekg"))
+            (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
+            (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
+            (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+            (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
+            (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
+            (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
+            (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
+            (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+            (hsPkgs."row-types" or (errorHandler.buildDepError "row-types"))
+            (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
+            (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
+            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
+            (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
+            (hsPkgs."servant-client-core" or (errorHandler.buildDepError "servant-client-core"))
+            (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
+            ];
+          buildable = true;
+          modules = [
+            "ContractExample"
+            "ContractExample/AtomicSwap"
+            "ContractExample/IntegrationTest"
+            "ContractExample/PayToWallet"
+            "ContractExample/WaitForTx"
+            ];
+          hsSourceDirs = [ "local-cluster" "examples" ];
           mainPath = [ "Main.hs" ];
           };
         "plutus-pab-test-psgenerator" = {
@@ -303,6 +359,7 @@
           buildable = true;
           modules = [
             "ContractExample/AtomicSwap"
+            "ContractExample/IntegrationTest"
             "ContractExample/PayToWallet"
             "Plutus/PAB/Effects/Contract/ContractTest"
             "Plutus/PAB/Simulator/Test"
@@ -346,7 +403,7 @@
             (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
             (hsPkgs."either" or (errorHandler.buildDepError "either"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
-            (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+            (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
             (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
             (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -418,7 +475,7 @@
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-            (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+            (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
             (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
             (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
             (hsPkgs."plutus-use-cases" or (errorHandler.buildDepError "plutus-use-cases"))
@@ -451,6 +508,7 @@
             "ContractExample"
             "ContractExample/WaitForTx"
             "ContractExample/AtomicSwap"
+            "ContractExample/IntegrationTest"
             "ContractExample/PayToWallet"
             "Plutus/PAB/CoreSpec"
             "Plutus/PAB/CliSpec"
@@ -508,6 +566,7 @@
             "ContractExample"
             "ContractExample/WaitForTx"
             "ContractExample/AtomicSwap"
+            "ContractExample/IntegrationTest"
             "ContractExample/PayToWallet"
             "Plutus/PAB/CliSpec"
             "Plutus/PAB/Effects/Contract/ContractTest"

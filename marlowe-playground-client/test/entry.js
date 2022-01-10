@@ -1,6 +1,7 @@
+import "../grammar.ne";
+import { stringify, parse } from "json-bigint";
 
-import '../grammar.ne';
+JSON.stringify = stringify;
+JSON.parse = parse;
 
-import {main} from './Main.purs';
-
-main();
+require("./Main.purs").main();

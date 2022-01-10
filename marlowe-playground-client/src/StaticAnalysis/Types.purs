@@ -2,17 +2,27 @@ module StaticAnalysis.Types where
 
 import Prologue
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)
 import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Tuple.Nested (type (/\))
 import Marlowe.Template (TemplateContent)
-import Marlowe.Semantics (AccountId, Case, Contract, Observation, Payee, Timeout, Token, Value, ValueId)
+import Marlowe.Semantics
+  ( AccountId
+  , Case
+  , Contract
+  , Observation
+  , Payee
+  , Timeout
+  , Token
+  , Value
+  , ValueId
+  )
 import Marlowe.Semantics as S
 import Marlowe.Symbolic.Types.Response (Result)
 import Network.RemoteData (isLoading)
@@ -20,15 +30,17 @@ import Types (WarningAnalysisData)
 
 -------------------------------------------------------------------------------
 type AnalysisState
-  = { templateContent :: TemplateContent
-    , analysisExecutionState :: AnalysisExecutionState
-    }
+  =
+  { templateContent :: TemplateContent
+  , analysisExecutionState :: AnalysisExecutionState
+  }
 
 _templateContent :: forall s a. Lens' { templateContent :: a | s } a
-_templateContent = prop (SProxy :: SProxy "templateContent")
+_templateContent = prop (Proxy :: _ "templateContent")
 
-_analysisExecutionState :: forall s a. Lens' { analysisExecutionState :: a | s } a
-_analysisExecutionState = prop (SProxy :: SProxy "analysisExecutionState")
+_analysisExecutionState
+  :: forall s a. Lens' { analysisExecutionState :: a | s } a
+_analysisExecutionState = prop (Proxy :: _ "analysisExecutionState")
 
 initAnalysisState :: AnalysisState
 initAnalysisState =
@@ -42,8 +54,9 @@ data AnalysisExecutionState
   | ReachabilityAnalysis MultiStageAnalysisData
   | CloseAnalysis MultiStageAnalysisData
 
-_analysisState :: forall s. Lens' { analysisState :: AnalysisState | s } AnalysisState
-_analysisState = prop (SProxy :: SProxy "analysisState")
+_analysisState
+  :: forall s. Lens' { analysisState :: AnalysisState | s } AnalysisState
+_analysisState = prop (Proxy :: _ "analysisState")
 
 isStaticLoading :: AnalysisExecutionState -> Boolean
 isStaticLoading (WarningAnalysis remoteData) = isLoading remoteData
@@ -78,22 +91,24 @@ data MultiStageAnalysisData
   | AnalysisFinishedAndPassed
 
 type AnalysisCounterExamplesRecord
-  = { originalState :: S.State
-    , originalContract :: Contract
-    , counterExampleSubcontracts :: NonEmptyList ContractPath
-    }
+  =
+  { originalState :: S.State
+  , originalContract :: Contract
+  , counterExampleSubcontracts :: NonEmptyList ContractPath
+  }
 
 type AnalysisInProgressRecord
-  = { currPath :: ContractPath
-    , currContract :: Contract
-    , currChildren :: RemainingSubProblemInfo
-    , originalState :: S.State
-    , originalContract :: Contract
-    , subproblems :: RemainingSubProblemInfo
-    , numSubproblems :: Int
-    , numSolvedSubproblems :: Int
-    , counterExampleSubcontracts :: List ContractPath
-    }
+  =
+  { currPath :: ContractPath
+  , currContract :: Contract
+  , currChildren :: RemainingSubProblemInfo
+  , originalState :: S.State
+  , originalContract :: Contract
+  , subproblems :: RemainingSubProblemInfo
+  , numSubproblems :: Int
+  , numSolvedSubproblems :: Int
+  , counterExampleSubcontracts :: List ContractPath
+  }
 
 -------------------------------------------------------------------------------
 type ContractPath
@@ -131,12 +146,14 @@ data ContractZipper
   | HeadZip
 
 type MultiStageAnalysisProblemDef
-  = { expandSubproblemImpl :: ContractZipper -> Contract -> (ContractPath /\ Contract)
-    , isValidSubproblemImpl :: ContractZipper -> Contract -> Boolean
-    , analysisDataSetter :: MultiStageAnalysisData -> AnalysisExecutionState
-    , shouldExamineChildren :: Boolean -> Boolean
-    , isProblemCounterExample :: Boolean -> Boolean
-    }
+  =
+  { expandSubproblemImpl ::
+      ContractZipper -> Contract -> (ContractPath /\ Contract)
+  , isValidSubproblemImpl :: ContractZipper -> Contract -> Boolean
+  , analysisDataSetter :: MultiStageAnalysisData -> AnalysisExecutionState
+  , shouldExamineChildren :: Boolean -> Boolean
+  , isProblemCounterExample :: Boolean -> Boolean
+  }
 
 type PrefixMap
   = Map ContractPathStep (Set (NonEmptyList ContractPathStep))

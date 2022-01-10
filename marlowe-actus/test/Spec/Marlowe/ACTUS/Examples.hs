@@ -5,19 +5,21 @@ module Spec.Marlowe.ACTUS.Examples
     (tests)
 where
 
-import           Data.Aeson                                       (eitherDecode)
-import           Data.ByteString.Lazy                             as B (readFile)
-import           Data.Maybe                                       (fromJust)
-import           Data.Time.LocalTime
-import           Data.Validation                                  (Validation (..))
-import           Language.Marlowe
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType (..), RiskFactors, RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms
-import           Language.Marlowe.ACTUS.Generator.GeneratorFs
-import           Language.Marlowe.ACTUS.Generator.GeneratorStatic
-import qualified Ledger.Value                                     as Val
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import Data.Aeson (eitherDecode)
+import Data.ByteString.Lazy as B (readFile)
+import Data.Maybe (fromJust)
+import Data.Time.LocalTime
+import Data.Validation (Validation (..))
+import Language.Marlowe
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors, RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms
+import Language.Marlowe.ACTUS.Domain.Ops
+import Language.Marlowe.ACTUS.Generator.GeneratorFs
+import Language.Marlowe.ACTUS.Generator.GeneratorStatic
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (toMarlowe)
+import qualified Ledger.Value as Val
+import Test.Tasty
+import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "Marlowe represenation of sample ACTUS contracts"
@@ -53,12 +55,12 @@ ex_pam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_pam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
           Failure _ -> assertFailure "Terms validation should not fail"
           Success contract ->
-            let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
-                ip = IDeposit (Role "party") "party" ada 200
-                redemption = IDeposit (Role "party") "party" ada 10000
+            let principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+                ip = NormalInput $ IDeposit (Role "party") "party" ada 200
+                redemption = NormalInput $ IDeposit (Role "party") "party" ada 10000
 
                 out =
                   computeTransaction
@@ -81,7 +83,7 @@ ex_pam1 =
                     (emptyState 0)
                     contract
              in case out of
-                  Error _ -> assertFailure "Transactions are not expected to fail"
+                  Error err -> assertFailure $ "Transactions are not expected to fail: " ++ show err
                   TransactionOutput txWarn txPay _ con -> do
                     assertBool "Contract is in Close" $ con == Close
                     assertBool "No warnings" $ null txWarn
@@ -114,12 +116,12 @@ ex_lam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_lam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
           Failure _ -> assertFailure "Terms validation should not fail"
-          Success contract -> do
-            let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
-                pr i = IDeposit (Role "party") "party" ada i
-                ip i = IDeposit (Role "party") "party" ada i
+          Success contract ->
+            let principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+                pr i = NormalInput $ IDeposit (Role "party") "party" ada i
+                ip i = NormalInput $ IDeposit (Role "party") "party" ada i
                 out =
                   computeTransaction
                     ( TransactionInput
@@ -175,12 +177,12 @@ ex_nam1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_nam1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
         Failure _ -> assertFailure "Terms validation should not fail"
-        Success contract -> do
-          let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
-              pr i = IDeposit (Role "party") "party" ada i
-              ip i = IDeposit (Role "party") "party" ada i
+        Success contract ->
+          let principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+              pr i = NormalInput $ IDeposit (Role "party") "party" ada i
+              ip i = NormalInput $ IDeposit (Role "party") "party" ada i
               out =
                 computeTransaction
                   ( TransactionInput
@@ -236,12 +238,12 @@ ex_ann1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_ann1.json"
     >>= either
       ( \err -> assertFailure ("Error parsing file: " ++ err))
-      ( \ct -> case genFsContract defaultRiskFactors ct of
+      ( \ct -> case genFsContract defaultRiskFactors (toMarlowe ct) of
         Failure _ -> assertFailure "Terms validation should not fail"
-        Success contract -> do
-          let principal = IDeposit (Role "counterparty") "counterparty" ada 10000
-              pr i = IDeposit (Role "party") "party" ada i
-              ip i = IDeposit (Role "party") "party" ada i
+        Success contract ->
+          let principal = NormalInput $ IDeposit (Role "counterparty") "counterparty" ada 10000
+              pr i = NormalInput $ IDeposit (Role "party") "party" ada i
+              ip i = NormalInput $ IDeposit (Role "party") "party" ada i
               out =
                 computeTransaction
                   ( TransactionInput
@@ -282,9 +284,9 @@ ex_optns1 =
     msg err = putStr err
     run ct = case genStaticContract rf ct of
       Failure _ -> assertFailure "Terms validation should not fail"
-      Success contract -> -- Prelude.writeFile "option2.marlowe" (show $ pretty contract)
-          let principal = IDeposit (Role "counterparty") "counterparty" ada
-              ex = IDeposit (Role "party") "party" ada
+      Success contract ->
+          let principal = NormalInput . IDeposit (Role "counterparty") "counterparty" ada
+              ex = NormalInput . IDeposit (Role "party") "party" ada
               out =
                 computeTransaction
                   ( TransactionInput
@@ -328,22 +330,22 @@ ex_optns1 =
             }
 
 
--- |ex_optns1 defines a contract of type OPTNS
+-- |ex_com1 defines a contract of type COM
 ex_com1 :: IO ()
 ex_com1 =
   contractFromFile "test/Spec/Marlowe/ACTUS/ex_com1.json"
     >>= either msg run
   where
     msg err = putStr err
-    run ct = case genStaticContract rf ct of
+    run ct = case genFsContract defaultRiskFactors (toMarlowe ct) of
       Failure _ -> assertFailure "Terms validation should not fail"
       Success contract ->
-          let principal = IDeposit (Role "party") "party" ada
+          let principal = NormalInput . IDeposit (Role "party") "party" ada
               out =
                 computeTransaction
                   ( TransactionInput
                       (0, 0)
-                      [ principal $ 2*700
+                      [ principal 1400
                       ]
                   )
                   (emptyState 0)
@@ -358,42 +360,18 @@ ex_com1 =
                   let tc = totalPayments (Party "counterparty") txPay
                   assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400)
 
-      where
-        rf :: EventType -> LocalTime -> RiskFactors
-        rf XD d
-          | d == (fromJust $ maturityDate ct) =
-            RiskFactorsPoly
-              { o_rf_CURS = 1.0,
-                o_rf_RRMO = 1.0,
-                o_rf_SCMO = 1.0,
-                pp_payoff = 0.0,
-                xd_payoff = 120.0,
-                dv_payoff = 0.0
-              }
-        rf _ _ =
-          RiskFactorsPoly
-            { o_rf_CURS = 1.0,
-              o_rf_RRMO = 1.0,
-              o_rf_SCMO = 1.0,
-              pp_payoff = 0.0,
-              xd_payoff = 0.0,
-              dv_payoff = 0.0
-            }
-
-
-
 contractFromFile :: FilePath -> IO (Either String ContractTerms)
 contractFromFile f = eitherDecode <$> B.readFile f
 
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
+defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactorsPoly a
 defaultRiskFactors _ _ =
   RiskFactorsPoly
-    { o_rf_CURS = 1.0,
-      o_rf_RRMO = 1.0,
-      o_rf_SCMO = 1.0,
-      pp_payoff = 0.0,
-      xd_payoff = 0.0,
-      dv_payoff = 0.0
+    { o_rf_CURS = _one,
+      o_rf_RRMO = _one,
+      o_rf_SCMO = _one,
+      pp_payoff = _zero,
+      xd_payoff = _zero,
+      dv_payoff = _zero
     }
 
 -- |totalPayments calculates the sum of the payments provided as argument

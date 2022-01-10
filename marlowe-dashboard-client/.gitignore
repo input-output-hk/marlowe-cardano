@@ -8,10 +8,9 @@ output/
 yarn-error.log
 yarn.lock
 .psci_modules/
-.psc-package/
-.psc-package2nix/
 .spago/
 .spago2nix/
 # contracts is a symlink provided via the nix build
 # and should be ignored
 contracts
+marlowe-run.json

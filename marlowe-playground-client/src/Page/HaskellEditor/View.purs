@@ -8,37 +8,86 @@ import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Enum (toEnum, upFromIncluding)
 import Data.Lens (_Right, has, to, view, (^.))
+import Data.Maybe (maybe)
 import Data.String (Pattern(..), split)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ClassName(..), ComponentHTML)
-import Halogen.Classes (bgWhite, flex, flexCol, flexGrow, fullHeight, group, maxH70p, minH0, overflowHidden, paddingX, spaceBottom)
+import Halogen.Classes
+  ( bgWhite
+  , flex
+  , flexCol
+  , flexGrow
+  , fullHeight
+  , group
+  , maxH70p
+  , minH0
+  , overflowHidden
+  , paddingX
+  , spaceBottom
+  )
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
-import Halogen.HTML (HTML, button, code_, div, div_, option, pre_, section, section_, select, slot, text)
+import Halogen.HTML
+  ( HTML
+  , button
+  , code_
+  , div
+  , div_
+  , option
+  , pre_
+  , section
+  , section_
+  , select
+  , slot
+  , text
+  )
 import Halogen.HTML.Events (onClick, onSelectedIndexChange)
 import Halogen.HTML.Properties (class_, classes, enabled)
-import Halogen.HTML.Properties as HTML
+import Halogen.HTML.Properties as HP
 import Halogen.Monaco (monacoComponent)
-import Language.Haskell.Interpreter (CompilationError(..), InterpreterError(..), InterpreterResult(..))
+import Language.Haskell.Interpreter
+  ( CompilationError(..)
+  , InterpreterError(..)
+  , InterpreterResult(..)
+  )
 import Language.Haskell.Monaco as HM
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
 import Marlowe.Extended.Metadata (MetaData)
 import Network.RemoteData (RemoteData(..), _Success)
-import Page.HaskellEditor.Types (Action(..), BottomPanelView(..), State, _bottomPanelState, _compilationResult, _haskellEditorKeybindings, _metadataHintInfo)
-import StaticAnalysis.BottomPanel (analysisResultPane, analyzeButton, clearButton)
-import StaticAnalysis.Types (_analysisExecutionState, _analysisState, isCloseAnalysisLoading, isNoneAsked, isReachabilityLoading, isStaticLoading)
+import Page.HaskellEditor.Types
+  ( Action(..)
+  , BottomPanelView(..)
+  , State
+  , _bottomPanelState
+  , _compilationResult
+  , _haskellEditorKeybindings
+  , _metadataHintInfo
+  )
+import StaticAnalysis.BottomPanel
+  ( analysisResultPane
+  , analyzeButton
+  , clearButton
+  )
+import StaticAnalysis.Types
+  ( _analysisExecutionState
+  , _analysisState
+  , isCloseAnalysisLoading
+  , isNoneAsked
+  , isReachabilityLoading
+  , isStaticLoading
+  )
 
-render ::
-  forall m.
-  MonadAff m =>
-  MetaData ->
-  State ->
-  ComponentHTML Action ChildSlots m
+render
+  :: forall m
+   . MonadAff m
+  => MetaData
+  -> State
+  -> ComponentHTML Action ChildSlots m
 render metadata state =
   div [ classes [ flex, flexCol, fullHeight ] ]
     [ section [ classes [ paddingX, minH0, flexGrow, overflowHidden ] ]
-        [ haskellEditor state ]
+        [ haskellEditor ]
     , section [ classes [ paddingX, maxH70p ] ]
         [ renderSubmodule
             _bottomPanelState
@@ -58,7 +107,8 @@ render metadata state =
   -- TODO: improve this wrapper helper
   actionWrapper = BottomPanel.PanelAction
 
-  wrapBottomPanelContents panelView = bimap (map actionWrapper) actionWrapper $ panelContents state metadata panelView
+  wrapBottomPanelContents panelView = bimap (map actionWrapper) actionWrapper $
+    panelContents state metadata panelView
 
 otherActions :: forall p. State -> HTML p Action
 otherActions state =
@@ -75,34 +125,29 @@ editorOptions :: forall p. State -> HTML p Action
 editorOptions state =
   div [ class_ (ClassName "editor-options") ]
     [ select
-        [ HTML.id_ "editor-options"
-        , HTML.value $ show $ state ^. _haskellEditorKeybindings
-        , onSelectedIndexChange (\idx -> ChangeKeyBindings <$> toEnum idx)
+        [ HP.id "editor-options"
+        , HP.value $ show $ state ^. _haskellEditorKeybindings
+        , onSelectedIndexChange (maybe DoNothing ChangeKeyBindings <<< toEnum)
         ]
         (map keybindingItem (upFromIncluding bottom))
     ]
   where
   keybindingItem item =
     if state ^. _haskellEditorKeybindings == item then
-      option [ class_ (ClassName "selected-item"), HTML.value (show item) ] [ text $ show item ]
+      option [ class_ (ClassName "selected-item"), HP.value (show item) ]
+        [ text $ show item ]
     else
-      option [ HTML.value (show item) ] [ text $ show item ]
+      option [ HP.value (show item) ] [ text $ show item ]
 
-haskellEditor ::
-  forall m.
-  MonadAff m =>
-  State ->
-  ComponentHTML Action ChildSlots m
-haskellEditor state = slot _haskellEditorSlot unit component unit (Just <<< HandleEditorMessage)
+haskellEditor :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
+haskellEditor = slot _haskellEditorSlot unit component unit HandleEditorMessage
   where
-  setup editor = pure unit
-
-  component = monacoComponent $ HM.settings setup
+  component = monacoComponent $ HM.settings $ const $ pure unit
 
 compileButton :: forall p. State -> HTML p Action
 compileButton state =
   button
-    [ onClick $ const $ Just Compile
+    [ onClick $ const Compile
     , enabled enabled'
     , classes classes'
     ]
@@ -120,14 +165,14 @@ compileButton state =
   classes' =
     [ ClassName "btn" ]
       <> case view _compilationResult state of
-          Success (Right _) -> [ ClassName "success" ]
-          Success (Left _) -> [ ClassName "error" ]
-          _ -> []
+        Success (Right _) -> [ ClassName "success" ]
+        Success (Left _) -> [ ClassName "error" ]
+        _ -> []
 
 sendToSimulationButton :: forall p. State -> HTML p Action
 sendToSimulationButton state =
   button
-    [ onClick $ const $ Just SendResultToSimulator
+    [ onClick $ const SendResultToSimulator
     , enabled enabled'
     , classNames [ "btn" ]
     ]
@@ -139,7 +184,13 @@ sendToSimulationButton state =
     Success (Right (InterpreterResult _)) -> true
     _ -> false
 
-panelContents :: forall m. MonadAff m => State -> MetaData -> BottomPanelView -> ComponentHTML Action ChildSlots m
+panelContents
+  :: forall m
+   . MonadAff m
+  => State
+  -> MetaData
+  -> BottomPanelView
+  -> ComponentHTML Action ChildSlots m
 panelContents state _ GeneratedOutputView =
   section_ case view _compilationResult state of
     Success (Right (InterpreterResult result)) ->
@@ -147,29 +198,49 @@ panelContents state _ GeneratedOutputView =
           numberedText
       ]
       where
-      numberedText = (code_ <<< Array.singleton <<< text) <$> split (Pattern "\n") result.result
+      numberedText = (code_ <<< Array.singleton <<< text) <$> split
+        (Pattern "\n")
+        result.result
     _ -> [ text "There is no generated code" ]
 
 panelContents state metadata StaticAnalysisView =
   section_
     ( [ analysisResultPane metadata SetIntegerTemplateParam state
-      , analyzeButton loadingWarningAnalysis analysisEnabled "Analyse for warnings" AnalyseContract
-      , analyzeButton loadingReachability analysisEnabled "Analyse reachability" AnalyseReachabilityContract
-      , analyzeButton loadingCloseAnalysis analysisEnabled "Analyse for refunds on Close" AnalyseContractForCloseRefund
+      , analyzeButton loadingWarningAnalysis analysisEnabled
+          "Analyse for warnings"
+          AnalyseContract
+      , analyzeButton loadingReachability analysisEnabled "Analyse reachability"
+          AnalyseReachabilityContract
+      , analyzeButton loadingCloseAnalysis analysisEnabled
+          "Analyse for refunds on Close"
+          AnalyseContractForCloseRefund
       , clearButton clearEnabled "Clear" ClearAnalysisResults
       ]
-        <> (if isCompiled then [] else [ div [ classes [ ClassName "choice-error" ] ] [ text "Haskell code needs to be compiled in order to run static analysis" ] ])
+        <>
+          ( if isCompiled then []
+            else
+              [ div [ classes [ ClassName "choice-error" ] ]
+                  [ text
+                      "Haskell code needs to be compiled in order to run static analysis"
+                  ]
+              ]
+          )
     )
   where
-  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isStaticLoading
+  loadingWarningAnalysis = state ^. _analysisState <<< _analysisExecutionState
+    <<< to isStaticLoading
 
-  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<< to isReachabilityLoading
+  loadingReachability = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isReachabilityLoading
 
-  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isCloseAnalysisLoading
+  loadingCloseAnalysis = state ^. _analysisState <<< _analysisExecutionState <<<
+    to isCloseAnalysisLoading
 
-  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to isNoneAsked
+  noneAskedAnalysis = state ^. _analysisState <<< _analysisExecutionState <<< to
+    isNoneAsked
 
-  anyAnalysisLoading = loadingWarningAnalysis || loadingReachability || loadingCloseAnalysis
+  anyAnalysisLoading = loadingWarningAnalysis || loadingReachability ||
+    loadingCloseAnalysis
 
   analysisEnabled = not anyAnalysisLoading && isCompiled
 
@@ -183,7 +254,10 @@ panelContents state _ ErrorsView =
     Success (Left (CompilationErrors errors)) -> map compilationErrorPane errors
     _ -> [ text "No errors" ]
 
-panelContents state metadata MetadataView = metadataView (state ^. _metadataHintInfo) metadata MetadataAction
+panelContents state metadata MetadataView = metadataView
+  (state ^. _metadataHintInfo)
+  metadata
+  MetadataAction
 
 compilationErrorPane :: forall p. CompilationError -> HTML p Action
 compilationErrorPane (RawError error) = div_ [ text error ]
@@ -192,6 +266,7 @@ compilationErrorPane (CompilationError error) =
   div
     [ class_ $ ClassName "compilation-error"
     ]
-    [ text $ "Line " <> show error.row <> ", Column " <> show error.column <> ":"
+    [ text $ "Line " <> show error.row <> ", Column " <> show error.column <>
+        ":"
     , code_ [ pre_ [ text $ String.joinWith "\n" error.text ] ]
     ]

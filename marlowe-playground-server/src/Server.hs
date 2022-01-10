@@ -11,54 +11,52 @@
 
 module Server where
 
-import           API
+import API
 import qualified Auth
-import           Auth.Types                                       (OAuthClientId (OAuthClientId),
-                                                                   OAuthClientSecret (OAuthClientSecret))
-import           Control.Monad.Except                             (ExceptT, runExceptT, throwError)
-import           Control.Monad.IO.Class                           (MonadIO, liftIO)
-import           Control.Monad.Logger                             (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
-import           Control.Monad.Reader                             (ReaderT, runReaderT)
-import           Data.Aeson                                       (FromJSON, ToJSON, eitherDecode, encode)
-import           Data.Aeson                                       as Aeson
-import           Data.Bits                                        (toIntegralSized)
-import qualified Data.ByteString.Lazy.Char8                       as BSL
-import qualified Data.HashMap.Strict                              as HM
-import           Data.Proxy                                       (Proxy (Proxy))
-import           Data.String                                      as S
-import           Data.Text                                        (Text)
-import qualified Data.Text                                        as Text
-import           Data.Time.LocalTime                              (LocalTime)
-import           Data.Time.Units                                  (Second, toMicroseconds)
-import qualified Data.Validation                                  as Validation
-import           GHC.Generics                                     (Generic)
-import           Language.Haskell.Interpreter                     (InterpreterError (CompilationErrors),
-                                                                   InterpreterResult)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents     (EventType, RiskFactors, RiskFactorsPoly (..))
-import           Language.Marlowe.ACTUS.Domain.ContractTerms      (ContractTerms)
-import           Language.Marlowe.ACTUS.Domain.Schedule           (CashFlow)
-import           Language.Marlowe.ACTUS.Generator.Analysis        (genProjectedCashflows)
-import           Language.Marlowe.ACTUS.Generator.GeneratorFs     (genFsContract)
-import           Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
-import           Language.Marlowe.Pretty                          (pretty)
-import           Network.HTTP.Client.Conduit                      (defaultManagerSettings, managerResponseTimeout,
-                                                                   responseTimeoutMicro)
-import           Network.HTTP.Conduit                             (newManager)
-import           Network.HTTP.Simple                              (getResponseBody, httpJSON)
-import           Network.Wai.Middleware.Cors                      (cors, corsRequestHeaders, simpleCorsResourcePolicy)
-import           Servant                                          (Application, Handler (Handler), Server, ServerError,
-                                                                   err400, errBody, hoistServer, serve, (:<|>) ((:<|>)),
-                                                                   (:>))
-import           Servant.Client                                   (ClientEnv, mkClientEnv, parseBaseUrl)
-import           System.Environment                               (lookupEnv)
-import           System.IO                                        (hPutStrLn, stderr)
-import qualified Web.JWT                                          as JWT
-import           Webghc.Client                                    (runscript)
-import           Webghc.Server                                    (CompileRequest)
+import Auth.Types (OAuthClientId (OAuthClientId), OAuthClientSecret (OAuthClientSecret))
+import Control.Monad.Except (ExceptT, runExceptT, throwError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Logger (LoggingT, MonadLogger, logInfoN, runStderrLoggingT)
+import Control.Monad.Reader (ReaderT, runReaderT)
+import Data.Aeson (FromJSON, ToJSON, eitherDecode, encode)
+import Data.Aeson as Aeson
+import Data.Bits (toIntegralSized)
+import qualified Data.ByteString.Lazy.Char8 as BSL
+import qualified Data.HashMap.Strict as HM
+import Data.Proxy (Proxy (Proxy))
+import Data.String as S
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Data.Time.LocalTime (LocalTime)
+import Data.Time.Units (Second, toMicroseconds)
+import qualified Data.Validation as Validation
+import GHC.Generics (Generic)
+import Language.Haskell.Interpreter (InterpreterError (CompilationErrors), InterpreterResult)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType, RiskFactors, RiskFactorsPoly (..))
+import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, ContractTermsMarlowe, ContractTermsPoly (..))
+import Language.Marlowe.ACTUS.Domain.Ops (ActusOps, _one, _zero)
+import Language.Marlowe.ACTUS.Domain.Schedule (CashFlow)
+import Language.Marlowe.ACTUS.Generator.Analysis (genProjectedCashflows)
+import Language.Marlowe.ACTUS.Generator.GeneratorFs (genFsContract)
+import Language.Marlowe.ACTUS.Generator.GeneratorStatic (genStaticContract)
+import Language.Marlowe.ACTUS.Generator.MarloweCompat (toMarlowe)
+import Language.Marlowe.Pretty (pretty)
+import Network.HTTP.Client.Conduit (defaultManagerSettings, managerResponseTimeout, responseTimeoutMicro)
+import Network.HTTP.Conduit (newManager)
+import Network.HTTP.Simple (getResponseBody, httpJSON)
+import Network.Wai.Middleware.Cors (cors, corsRequestHeaders, simpleCorsResourcePolicy)
+import Servant (Application, Handler (Handler), Server, ServerError, err400, errBody, hoistServer, serve,
+                (:<|>) ((:<|>)), (:>))
+import Servant.Client (ClientEnv, mkClientEnv, parseBaseUrl)
+import System.Environment (lookupEnv)
+import System.IO (hPutStrLn, stderr)
+import qualified Web.JWT as JWT
+import Webghc.Client (runscript)
+import Webghc.Server (CompileRequest)
 
 genActusContract :: ContractTerms -> Handler String
 genActusContract terms =
-    case genFsContract defaultRiskFactors terms of
+    case genFsContract defaultRiskFactors (toMarlowe terms) of
         -- Should probably send this as a server error and handle it properly on the front end
         Validation.Failure errs -> pure (unlines . (:) "ACTUS Term Validation Failed:" . map ((++) "    " . show) $ errs)
         Validation.Success c -> pure . show . pretty $ c
@@ -72,15 +70,15 @@ genActusContractStatic terms =
 genActusCashflows :: ContractTerms -> Handler [CashFlow]
 genActusCashflows terms = pure $ genProjectedCashflows defaultRiskFactors terms
 
-defaultRiskFactors :: EventType -> LocalTime -> RiskFactors
+defaultRiskFactors :: ActusOps a => EventType -> LocalTime -> RiskFactorsPoly a
 defaultRiskFactors _ _ =
     RiskFactorsPoly
-        { o_rf_CURS = 1.0,
-          o_rf_RRMO = 1.0,
-          o_rf_SCMO = 1.0,
-          pp_payoff = 0.0,
-          xd_payoff = 0.0,
-          dv_payoff = 0.0
+        { o_rf_CURS = _one,
+          o_rf_RRMO = _one,
+          o_rf_SCMO = _one,
+          pp_payoff = _zero,
+          xd_payoff = _zero,
+          dv_payoff = _zero
         }
 
 oracle :: MonadIO m => String -> String -> m Value

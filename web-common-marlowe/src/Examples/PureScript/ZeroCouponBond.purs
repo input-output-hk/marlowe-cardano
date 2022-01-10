@@ -7,12 +7,19 @@ module Examples.PureScript.ZeroCouponBond
   ) where
 
 import Prelude
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested ((/\))
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Semantics (Party(..), Token(..))
@@ -30,7 +37,7 @@ fixedTimeoutContract =
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInteger
+defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
     [ "Loan deadline" /\ fromInt 600

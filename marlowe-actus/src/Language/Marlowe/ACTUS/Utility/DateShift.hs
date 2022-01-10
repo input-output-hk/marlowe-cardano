@@ -2,16 +2,21 @@
 
 module Language.Marlowe.ACTUS.Utility.DateShift
   ( applyBDC
+  , applyEOMC
   , applyBDCWithCfg
   , getPreceedingBusinessDay
   , getFollowingBusinessDay
+  , moveToEndOfMonth
+  , shiftDate
   )
 where
 
-import           Data.Time                                   (LocalTime (..), addDays, toGregorian)
-import           Data.Time.Calendar.WeekDate                 (toWeekDate)
-import           Language.Marlowe.ACTUS.Domain.ContractTerms (BDC (..), Calendar (..), ScheduleConfig (..))
-import           Language.Marlowe.ACTUS.Domain.Schedule      (ShiftedDay (..))
+import Data.Time (LocalTime (..), addDays, toGregorian)
+import Data.Time.Calendar (addGregorianMonthsClip, addGregorianYearsClip, fromGregorian, gregorianMonthLength)
+import Data.Time.Calendar.WeekDate (toWeekDate)
+import Language.Marlowe.ACTUS.Domain.ContractTerms (BDC (..), Calendar (..), Cycle (..), EOMC (..), Period (..),
+                                                    ScheduleConfig (..))
+import Language.Marlowe.ACTUS.Domain.Schedule (ShiftedDay (..))
 
 {- Business Day Convention -}
 
@@ -99,3 +104,40 @@ getPreceedingBusinessDay LocalTime {..} CLDR_MF =
         _         -> localDay
    in LocalTime {localDay = day, localTimeOfDay = localTimeOfDay}
 getPreceedingBusinessDay lt _ = lt
+
+shiftDate :: LocalTime -> Integer -> Period -> LocalTime
+shiftDate LocalTime {..} n p =
+  LocalTime {localDay = case p of
+                          P_D -> addDays n localDay
+                          P_W -> addDays (n * 7) localDay
+                          P_M -> addGregorianMonthsClip n localDay
+                          P_Q -> addGregorianMonthsClip (n * 3) localDay
+                          P_H -> addGregorianMonthsClip (n * 6) localDay
+                          P_Y -> addGregorianYearsClip n localDay
+            , localTimeOfDay = localTimeOfDay}
+
+{- End of Month Convention -}
+applyEOMC :: LocalTime -> Cycle -> EOMC -> LocalTime -> LocalTime
+applyEOMC s Cycle {..} endOfMonthConvention date
+  | isLastDayOfMonthWithLessThan31Days s
+    && p /= P_D
+    && p /= P_W
+    && endOfMonthConvention == EOMC_EOM
+  = moveToEndOfMonth date
+  | otherwise
+  = date
+
+isLastDayOfMonthWithLessThan31Days :: LocalTime -> Bool
+isLastDayOfMonthWithLessThan31Days LocalTime {..} =
+  let (year, month, day) = toGregorian localDay
+      isLastDay = gregorianMonthLength year month == day
+   in day < 31 && isLastDay
+
+moveToEndOfMonth :: LocalTime -> LocalTime
+moveToEndOfMonth LocalTime {..} =
+  let (year, month, _) = toGregorian localDay
+      monthLength = gregorianMonthLength year month
+   in LocalTime
+        { localDay = fromGregorian year month monthLength,
+          localTimeOfDay = localTimeOfDay
+        }

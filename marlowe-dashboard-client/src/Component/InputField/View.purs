@@ -3,9 +3,27 @@ module Component.InputField.View (renderInput) where
 import Prologue hiding (div, min)
 import Component.Input.Types (InputType(..)) as Input
 import Component.Input.View (renderWithChildren) as Input
-import Component.InputField.Lenses (_additionalCss, _after, _before, _dropdownLocked, _dropdownOpen, _pristine, _placeholder, _readOnly, _value, _valueOptions, _numberFormat, _id_)
+import Component.InputField.Lenses
+  ( _after
+  , _before
+  , _dropdownLocked
+  , _dropdownOpen
+  , _id_
+  , _numberFormat
+  , _placeholder
+  , _pristine
+  , _readOnly
+  , _value
+  , _valueOptions
+  )
 import Component.InputField.State (validate)
-import Component.InputField.Types (class InputFieldError, Action(..), InputDisplayOptions, State, inputErrorToString)
+import Component.InputField.Types
+  ( class InputFieldError
+  , Action(..)
+  , InputDisplayOptions
+  , State
+  , inputErrorToString
+  )
 import Control.Alt ((<|>))
 import Control.MonadPlus (guard)
 import Css as Css
@@ -21,21 +39,14 @@ import Halogen.HTML.Events (onMouseEnter, onMouseLeave)
 import Halogen.HTML.Events.Extra (onClick_)
 import Marlowe.Extended.Metadata (NumberFormat(..))
 
-inputCss :: forall w i. InputDisplayOptions w i -> Boolean -> Array String
-inputCss { readOnly: true } = Css.inputNoFocus
-
-inputCss _ = Css.input
-
-getTabIndex :: forall w i. InputDisplayOptions w i -> Int
-getTabIndex { readOnly: true } = -1
-
-getTabIndex _ = 0
-
-renderInput :: forall p e. InputFieldError e => InputDisplayOptions p (Action e) -> State e -> HTML p (Action e)
+renderInput
+  :: forall p e
+   . InputFieldError e
+  => InputDisplayOptions p (Action e)
+  -> State e
+  -> HTML p (Action e)
 renderInput options state =
   let
-    additionalCss = options ^. _additionalCss
-
     pristine = state ^. _pristine
 
     error = inputErrorToString <$> validate state <* guard (not pristine)
@@ -53,11 +64,15 @@ renderInput options state =
       $ compact
           [ Just
               $ Input.renderWithChildren
-                  { inputType: maybe Input.Text (const Input.Numeric) numberFormat
+                  { inputType: maybe Input.Text (const Input.Numeric)
+                      numberFormat
                   , autocomplete: false
                   , onBlur:
                       (FormatValue <$> numberFormat)
-                        <|> (guard (not $ state ^. _dropdownLocked) $> SetDropdownOpen false)
+                        <|>
+                          ( guard (not $ state ^. _dropdownLocked) $>
+                              SetDropdownOpen false
+                          )
                   , onFocus: Just $ SetDropdownOpen true
                   , noHighlight: not $ null valueOptions
                   , id: options ^. _id_
@@ -68,26 +83,38 @@ renderInput options state =
                   }
               $ \input ->
                   compact
-                    [ options ^. _before <|> stringToSpan <$> (decimalFormatLabel =<< numberFormat)
+                    [ options ^. _before <|> stringToSpan <$>
+                        (decimalFormatLabel =<< numberFormat)
                     , Just input
-                    , options ^. _after <|> filter (_ == TimeFormat) numberFormat $> stringToSpan "minutes"
+                    , options ^. _after <|>
+                        filter (_ == TimeFormat) numberFormat $> stringToSpan
+                          "minutes"
                     ]
           , guard (not $ null valueOptions)
-              $> let
-                  matchingValueOptions = filter (contains (Pattern $ toLower value) <<< toLower) valueOptions
+              $>
+                let
+                  matchingValueOptions = filter
+                    (contains (Pattern $ toLower value) <<< toLower)
+                    valueOptions
                 in
                   div
-                    [ classNames $ Css.pseudoDropdown (dropdownOpen && not null matchingValueOptions)
-                    , onMouseEnter $ const $ Just $ SetDropdownLocked true
-                    , onMouseLeave $ const $ Just $ SetDropdownLocked false
+                    [ classNames $ Css.pseudoDropdown
+                        (dropdownOpen && not null matchingValueOptions)
+                    , onMouseEnter $ const $ SetDropdownLocked true
+                    , onMouseLeave $ const $ SetDropdownLocked false
                     ]
                     ( matchingValueOptions
                         <#> \option ->
-                            a
-                              [ classNames [ "block", "p-4", "hover:bg-black", "hover:text-white" ]
-                              , onClick_ $ SetValueFromDropdown option
-                              ]
-                              [ text option ]
+                          a
+                            [ classNames
+                                [ "block"
+                                , "p-4"
+                                , "hover:bg-black"
+                                , "hover:text-white"
+                                ]
+                            , onClick_ $ SetValueFromDropdown option
+                            ]
+                            [ text option ]
                     )
           , Just
               $ div

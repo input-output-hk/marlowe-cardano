@@ -43,7 +43,7 @@
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
-          (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+          (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
@@ -62,6 +62,8 @@
           "Language/Marlowe/Deserialisation"
           "Language/Marlowe/Extended"
           "Language/Marlowe/Semantics"
+          "Language/Marlowe/SemanticsDeserialisation"
+          "Language/Marlowe/SemanticsSerialisation"
           "Language/Marlowe/SemanticsTypes"
           "Language/Marlowe/Client"
           "Language/Marlowe/Util"
@@ -99,6 +101,36 @@
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "") ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) "";
           };
+        "marlowe-cli" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."aeson-pretty" or (errorHandler.buildDepError "aeson-pretty"))
+            (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
+            (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/CLI"
+            "Language/Marlowe/CLI/Export"
+            "Language/Marlowe/CLI/Orphans"
+            "Language/Marlowe/CLI/Types"
+            "Paths_marlowe"
+            ];
+          hsSourceDirs = [ "cli" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
         };
       tests = {
         "marlowe-test-long-running" = {
@@ -117,7 +149,7 @@
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
-            (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+            (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
             (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
             (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
@@ -157,7 +189,7 @@
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."cborg" or (errorHandler.buildDepError "cborg"))
-            (hsPkgs."plutus-chain-index" or (errorHandler.buildDepError "plutus-chain-index"))
+            (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
             (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
             (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))

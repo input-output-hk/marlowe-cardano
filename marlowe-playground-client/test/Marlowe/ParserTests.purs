@@ -8,22 +8,25 @@ import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (Contract)
 import Marlowe.Parser (parseContract)
 import Test.QuickCheck (Result, (===))
-import Test.Unit (TestSuite, suite, test)
+import Test.Spec (Spec, describe, it)
 import Text.Pretty (genericPretty)
 
-all :: TestSuite
+all :: Spec Unit
 all =
-  suite "Marlowe.Parser" do
+  describe "Marlowe.Parser" do
     let
-      genOpts = GenerationOptions { withHoles: false, withExtendedConstructs: true }
-    test "Contract Parser" $ contractQuickCheck genOpts contractParser
-    test "Pretty Contract Parser" $ contractQuickCheck genOpts prettyContractParser
+      genOpts = GenerationOptions
+        { withHoles: false, withExtendedConstructs: true }
+    it "Contract Parser" $ contractQuickCheck genOpts contractParser
+    it "Pretty Contract Parser" $ contractQuickCheck genOpts
+      prettyContractParser
 
 contractParser :: GenWithHoles Result
 contractParser = do
   v <- genContract
   let
-    contractWithNoParens = fromMaybe (show v) (stripPrefix (Pattern "(") (show v) >>= stripSuffix (Pattern ")"))
+    contractWithNoParens = fromMaybe (show v)
+      (stripPrefix (Pattern "(") (show v) >>= stripSuffix (Pattern ")"))
 
     result = parseContract contractWithNoParens
 
@@ -36,7 +39,8 @@ prettyContractParser = do
   let
     prettyContract = trim <<< show <<< genericPretty $ v
 
-    contractWithNoParens = fromMaybe prettyContract (stripPrefix (Pattern "(") prettyContract >>= stripSuffix (Pattern ")"))
+    contractWithNoParens = fromMaybe prettyContract
+      (stripPrefix (Pattern "(") prettyContract >>= stripSuffix (Pattern ")"))
 
     result = parseContract contractWithNoParens
 

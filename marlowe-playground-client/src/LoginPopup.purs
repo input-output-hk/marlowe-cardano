@@ -2,7 +2,8 @@ module LoginPopup where
 
 import Prologue
 import Auth (AuthRole)
-import Control.Monad.Except (runExcept)
+import Data.Argonaut.Encode (encodeJson)
+import Data.Argonaut.Foreign (decodeForeign)
 import Data.Either (hush)
 import Data.Traversable (for_)
 import Effect (Effect)
@@ -10,9 +11,13 @@ import Effect.Aff (Aff, finally, makeAff, nonCanceler)
 import Effect.Class (liftEffect)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import Foreign.Generic.Class (encode, decode)
 import Web.Event.Event (Event, EventType(..))
-import Web.Event.EventTarget (EventListener, addEventListener, eventListener, removeEventListener)
+import Web.Event.EventTarget
+  ( EventListener
+  , addEventListener
+  , eventListener
+  , removeEventListener
+  )
 import Web.HTML as Web
 import Web.HTML.Location (replace, origin)
 import Web.HTML.Window (outerHeight, outerWidth)
@@ -53,7 +58,7 @@ openLoginPopup = do
     decodeMessageEvent :: Event -> Maybe AuthRole
     decodeMessageEvent event = do
       data' <- MessageEvent.data_ <$> MessageEvent.fromEvent event
-      hush <<< runExcept <<< decode $ data'
+      hush <<< decodeForeign $ data'
 
     messageEvent = EventType "message"
 
@@ -98,12 +103,12 @@ informParentAndClose authRole = do
   targetOrigin <- origin location
   Window.opener window
     >>= case _ of
-        -- If the function is called from a poput window (expected behaviour)
-        -- then we comunicate the login result with our parent window and close
-        -- the popup
-        Just parent -> do
-          postMessage (encode authRole) targetOrigin parent
-          close window
-        -- If someone access the github callback url directly, we redirect them to
-        -- the home page
-        Nothing -> replace "/" location
+      -- If the function is called from a poput window (expected behaviour)
+      -- then we comunicate the login result with our parent window and close
+      -- the popup
+      Just parent -> do
+        postMessage (encodeJson authRole) targetOrigin parent
+        close window
+      -- If someone access the github callback url directly, we redirect them to
+      -- the home page
+      Nothing -> replace "/" location

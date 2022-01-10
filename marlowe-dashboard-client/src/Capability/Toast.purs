@@ -12,13 +12,14 @@ import Toast.Types (ToastMessage, Action(..))
 
 -- This class allows any component to trigger a toast notification
 class
-  MainFrameLoop m <= Toast m where
+  MainFrameLoop m <=
+  Toast m where
   addToast :: ToastMessage -> m Unit
 
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
 -- satisfy the compiler
 instance toastAppM :: Toast AppM where
-  addToast toast = pure unit
+  addToast _ = pure unit
 
 instance toastHalogenM :: Toast (HalogenM state action slots MainFrame.Msg m) where
   addToast toast = callMainFrameAction $ MainFrame.ToastAction $ AddToast toast

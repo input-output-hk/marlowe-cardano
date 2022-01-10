@@ -17,18 +17,19 @@ $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlow
 # Download javascript dependencies
 npm install
 # Install purescript depdendencies
-npm run purs:compile
+npm run build:spago
+# Precompile js dependencies bundle
+npm run build:webpack:dev:vendor
 ```
 
-Then run `npm run webpack:server` for an auto-reloading dev build on https://localhost:8009
+Then run `npm run build:webpack:dev` for an auto-reloading dev build on https://localhost:8009
 
 ## Adding dependencies
 
 * Javascript dependencies are managed with npm, so add them to [package.json](./package.json)
-* purescript dependencies are managed with psc-package so add them to [psc-package.json](./psc-package.json)
-* purescript uses package sets managed by spago so if the package set doesn't contain a dependency you can add it to [packages.dhall](./packages.dhall)
+* purescript uses package sets managed by spago so if the package set doesn't contain a dependency you can add it to [../packages.dhall](../packages.dhall)
 
-Whenever you change `psc-package.json` or `packages.dhall` you need to make sure that all dependencies can still properly be resolved and built.
+Whenever you change `packages.dhall` you need to make sure that all dependencies can still properly be resolved and built.
 You can do so using the `update-client-deps` script:
 
 - Inside the nix-shell environment: `update-client-deps`
@@ -58,11 +59,13 @@ message during the build with the actual hash value.
 
 ## Code formatting
 
-The code is formatted using [purty](https://gitlab.com/joneshf/purty), and there is a CI task that will fail if the code is not properly formatted. You can apply purty to the project by calling:
+The code is formatted using [purs-tidy](https://github.com/natefaubion/purescript-tidy), and there is a CI task that will fail if the code is not properly formatted. You can apply purs-tidy to the project by calling:
 
 ```bash
-nix-shell shell.nix --run fix-purty
+nix-shell shell.nix --run fix-purs-tidy
 ```
+
+The code is formatted using [purs-tidy](https://github.com/natefaubion/purescript-tidy), and there is a CI task that will fail if the code is not properly formatted. You can apply purs-tidy to the project by calling:
 
 ## VSCode notes
 

@@ -6,20 +6,22 @@ import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.Array as Array
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', to, view)
 import Data.Lens.Record (prop)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Template (IntegerTemplateType)
 import Monaco (IMarkerData)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
-import Text.Parsing.StringParser (Pos)
 import Web.HTML.Event.DragEvent (DragEvent)
+
+type Pos
+  = Int
 
 data Action
   = ChangeKeyBindings KeyBindings
@@ -36,12 +38,13 @@ data Action
   | InitMarloweProject String
   | SelectHole (Maybe String)
   | MetadataAction MetadataAction
-  | SetIntegerTemplateParam IntegerTemplateType String BigInteger
+  | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | AnalyseContract
   | AnalyseReachabilityContract
   | AnalyseContractForCloseRefund
   | ClearAnalysisResults
   | Save
+  | DoNothing
 
 defaultEvent :: String -> Event
 defaultEvent s = A.defaultEvent $ "MarloweEditor." <> s
@@ -52,7 +55,8 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (HandleDragEvent _) = Just $ defaultEvent "HandleDragEvent"
   toEvent (HandleDropEvent _) = Just $ defaultEvent "HandleDropEvent"
   toEvent (MoveToPosition _ _) = Just $ defaultEvent "MoveToPosition"
-  toEvent (LoadScript script) = Just $ (defaultEvent "LoadScript") { label = Just script }
+  toEvent (LoadScript script) = Just $ (defaultEvent "LoadScript")
+    { label = Just script }
   toEvent (SetEditorText _) = Just $ defaultEvent "SetEditorText"
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent (ShowErrorDetail _) = Just $ defaultEvent "ShowErrorDetail"
@@ -60,13 +64,18 @@ instance actionIsEvent :: IsEvent Action where
   toEvent ViewAsBlockly = Just $ defaultEvent "ViewAsBlockly"
   toEvent (InitMarloweProject _) = Just $ defaultEvent "InitMarloweProject"
   toEvent (SelectHole _) = Just $ defaultEvent "SelectHole"
-  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction") { label = Just $ showConstructor action }
-  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (MetadataAction action) = Just $ (defaultEvent "MetadataAction")
+    { label = Just $ showConstructor action }
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent AnalyseContract = Just $ defaultEvent "AnalyseContract"
-  toEvent AnalyseReachabilityContract = Just $ defaultEvent "AnalyseReachabilityContract"
-  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent "AnalyseContractForCloseRefund"
+  toEvent AnalyseReachabilityContract = Just $ defaultEvent
+    "AnalyseReachabilityContract"
+  toEvent AnalyseContractForCloseRefund = Just $ defaultEvent
+    "AnalyseContractForCloseRefund"
   toEvent ClearAnalysisResults = Just $ defaultEvent "ClearAnalysisResults"
   toEvent Save = Just $ defaultEvent "Save"
+  toEvent DoNothing = Nothing
 
 data BottomPanelView
   = StaticAnalysisView
@@ -82,44 +91,45 @@ instance showBottomPanelView :: Show BottomPanelView where
   show = genericShow
 
 type State
-  = { keybindings :: KeyBindings
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , showErrorDetail :: Boolean
-    , selectedHole :: Maybe String
-    , metadataHintInfo :: MetadataHintInfo
-    , analysisState :: AnalysisState
-    , editorErrors :: Array IMarkerData
-    , editorWarnings :: Array IMarkerData
-    , hasHoles :: Boolean
-    , editorReady :: Boolean
-    }
+  =
+  { keybindings :: KeyBindings
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , showErrorDetail :: Boolean
+  , selectedHole :: Maybe String
+  , metadataHintInfo :: MetadataHintInfo
+  , analysisState :: AnalysisState
+  , editorErrors :: Array IMarkerData
+  , editorWarnings :: Array IMarkerData
+  , hasHoles :: Boolean
+  , editorReady :: Boolean
+  }
 
 _keybindings :: Lens' State KeyBindings
-_keybindings = prop (SProxy :: SProxy "keybindings")
+_keybindings = prop (Proxy :: _ "keybindings")
 
 _showErrorDetail :: Lens' State Boolean
-_showErrorDetail = prop (SProxy :: SProxy "showErrorDetail")
+_showErrorDetail = prop (Proxy :: _ "showErrorDetail")
 
 _selectedHole :: Lens' State (Maybe String)
-_selectedHole = prop (SProxy :: SProxy "selectedHole")
+_selectedHole = prop (Proxy :: _ "selectedHole")
 
 _metadataHintInfo :: Lens' State MetadataHintInfo
-_metadataHintInfo = prop (SProxy :: SProxy "metadataHintInfo")
+_metadataHintInfo = prop (Proxy :: _ "metadataHintInfo")
 
 _editorErrors :: forall s a. Lens' { editorErrors :: a | s } a
-_editorErrors = prop (SProxy :: SProxy "editorErrors")
+_editorErrors = prop (Proxy :: _ "editorErrors")
 
 _editorWarnings :: forall s a. Lens' { editorWarnings :: a | s } a
-_editorWarnings = prop (SProxy :: SProxy "editorWarnings")
+_editorWarnings = prop (Proxy :: _ "editorWarnings")
 
 _bottomPanelState :: Lens' State (BottomPanel.State BottomPanelView)
-_bottomPanelState = prop (SProxy :: SProxy "bottomPanelState")
+_bottomPanelState = prop (Proxy :: _ "bottomPanelState")
 
 _hasHoles :: Lens' State Boolean
-_hasHoles = prop (SProxy :: SProxy "hasHoles")
+_hasHoles = prop (Proxy :: _ "hasHoles")
 
 _editorReady :: Lens' State Boolean
-_editorReady = prop (SProxy :: SProxy "editorReady")
+_editorReady = prop (Proxy :: _ "editorReady")
 
 initialState :: State
 initialState =

@@ -5,9 +5,9 @@ import Prologue
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
-import Data.BigInteger (BigInteger)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Data.List.Types (NonEmptyList)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
@@ -19,19 +19,20 @@ import Simulator.Types (MarloweState)
 
 --
 type State
-  = { showRightPanel :: Boolean
-    , bottomPanelState :: BottomPanel.State BottomPanelView
-    , marloweState :: NonEmptyList MarloweState
-    , helpContext :: HelpContext
-    -- List of decoration ids used by the monaco editor to track the running contract
-    , decorationIds :: Array String
-    }
+  =
+  { showRightPanel :: Boolean
+  , bottomPanelState :: BottomPanel.State BottomPanelView
+  , marloweState :: NonEmptyList MarloweState
+  , helpContext :: HelpContext
+  -- List of decoration ids used by the monaco editor to track the running contract
+  , decorationIds :: Array String
+  }
 
 data Action
   = HandleEditorMessage Monaco.Message
   -- marlowe actions
   | SetInitialSlot Slot
-  | SetIntegerTemplateParam IntegerTemplateType String BigInteger
+  | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | StartSimulation
   | MoveSlot Slot
   | SetSlot Slot
@@ -55,7 +56,8 @@ defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
   toEvent (SetInitialSlot _) = Just $ defaultEvent "SetInitialSlot"
-  toEvent (SetIntegerTemplateParam templateType key value) = Just $ defaultEvent "SetIntegerTemplateParam"
+  toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
+    "SetIntegerTemplateParam"
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent (MoveSlot _) = Just $ defaultEvent "MoveSlot"
   toEvent (SetSlot _) = Just $ defaultEvent "SetSlot"
@@ -64,7 +66,8 @@ instance isEventAction :: IsEvent Action where
   toEvent ResetSimulator = Just $ defaultEvent "ResetSimulator"
   toEvent Undo = Just $ defaultEvent "Undo"
   toEvent (LoadContract _) = Just $ defaultEvent "LoadContract"
-  toEvent (ChangeHelpContext help) = Just $ (defaultEvent "ChangeHelpContext") { label = Just $ show help }
+  toEvent (ChangeHelpContext help) = Just $ (defaultEvent "ChangeHelpContext")
+    { label = Just $ show help }
   toEvent (ShowRightPanel _) = Just $ defaultEvent "ShowRightPanel"
   toEvent (BottomPanelAction action) = A.toEvent action
   toEvent EditSource = Just $ defaultEvent "EditSource"

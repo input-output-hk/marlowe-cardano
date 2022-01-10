@@ -18,55 +18,49 @@ import qualified API
 import qualified Auth
 import qualified ContractForDifferences
 import qualified ContractForDifferencesWithOracle
-import           Control.Applicative                          ((<|>))
-import           Control.Lens                                 (set, (&))
-import           Control.Monad.Reader                         (MonadReader)
+import Control.Applicative ((<|>))
+import Control.Lens (set, (&))
+import Control.Monad.Reader (MonadReader)
 import qualified CouponBondGuaranteed
-import           Data.Aeson                                   (encode)
-import qualified Data.ByteString                              as BS
-import qualified Data.ByteString.Char8                        as BS8
-import qualified Data.ByteString.Lazy.Char8                   as Char8
-import           Data.Monoid                                  ()
-import           Data.Proxy                                   (Proxy (Proxy))
-import qualified Data.Set                                     as Set ()
-import qualified Data.Text.Encoding                           as T ()
-import qualified Data.Text.IO                                 as T ()
+import Data.Aeson (encode)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy.Char8 as Char8
+import Data.Monoid ()
+import Data.Proxy (Proxy (Proxy))
+import qualified Data.Set as Set ()
+import qualified Data.Text.Encoding as T ()
+import qualified Data.Text.IO as T ()
 import qualified Escrow
 import qualified EscrowWithCollateral
 import qualified Example
-import           Language.Haskell.Interpreter                 (CompilationError, InterpreterError, InterpreterResult,
-                                                               SourceCode, Warning)
-import qualified Language.Marlowe                             as S
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
-import qualified Language.Marlowe.ACTUS.Domain.ContractTerms  as CT
-import           Language.Marlowe.ACTUS.Domain.Schedule       as SC (CashFlow)
-import           Language.Marlowe.Extended
-import           Language.Marlowe.SemanticsTypes              (State (..))
-import           Language.PureScript.Bridge                   (BridgePart, Language (Haskell), PSType, SumType,
-                                                               TypeInfo (TypeInfo), buildBridge, genericShow, mkSumType,
-                                                               psTypeParameters, typeModule, typeName, writePSTypesWith,
-                                                               (^==))
-import           Language.PureScript.Bridge.Builder           (BridgeData)
-import           Language.PureScript.Bridge.CodeGenSwitches   (ForeignOptions (ForeignOptions), defaultSwitch,
-                                                               genForeign)
-import           Language.PureScript.Bridge.PSTypes           (psNumber, psString)
-import           Language.PureScript.Bridge.TypeParameters    (A, B)
-import           Marlowe.Contracts                            (contractForDifferences, contractForDifferencesWithOracle,
-                                                               couponBondGuaranteed, escrow, escrowWithCollateral,
-                                                               example, swap, zeroCouponBond)
-import qualified Marlowe.Symbolic.Server                      as MS
-import qualified Marlowe.Symbolic.Types.Request               as MSReq
-import qualified Marlowe.Symbolic.Types.Response              as MSRes
+import Language.Haskell.Interpreter (CompilationError, InterpreterError, InterpreterResult, SourceCode, Warning)
+import qualified Language.Marlowe as S
+import Language.Marlowe.ACTUS.Domain.BusinessEvents as BV (EventType)
+import qualified Language.Marlowe.ACTUS.Domain.ContractTerms as CT
+import Language.Marlowe.ACTUS.Domain.Schedule as SC
+import Language.Marlowe.Extended
+import Language.Marlowe.SemanticsTypes (State (..))
+import Language.PureScript.Bridge (BridgePart, Language (Haskell), PSType, SumType, TypeInfo (TypeInfo), argonaut,
+                                   buildBridge, equal, genericShow, mkSumType, order, psTypeParameters, typeModule,
+                                   typeName, writePSTypes, (^==))
+import Language.PureScript.Bridge.Builder (BridgeData)
+import Language.PureScript.Bridge.PSTypes (psString)
+import Language.PureScript.Bridge.TypeParameters (A)
+import Marlowe.Contracts (contractForDifferences, contractForDifferencesWithOracle, couponBondGuaranteed, escrow,
+                          escrowWithCollateral, example, swap, zeroCouponBond)
+import qualified Marlowe.Symbolic.Server as MS
+import qualified Marlowe.Symbolic.Types.Request as MSReq
+import qualified Marlowe.Symbolic.Types.Response as MSRes
 import qualified PSGenerator.Common
-import qualified PlutusTx.AssocMap                            as Map
-import           Servant                                      ((:<|>), (:>))
-import           Servant.PureScript                           (HasBridge, Settings, _generateSubscriberAPI,
-                                                               apiModuleName, defaultBridge, defaultSettings,
-                                                               languageBridge, writeAPIModuleWithSettings)
+import qualified PlutusTx.AssocMap as Map
+import Servant ((:<|>), (:>))
+import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
+                           writeAPIModuleWithSettings)
 import qualified Swap
-import           System.Directory                             (createDirectoryIfMissing)
-import           System.FilePath                              ((</>))
-import qualified Webghc.Server                                as Webghc
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath ((</>))
+import qualified Webghc.Server as Webghc
 import qualified ZeroCouponBond
 
 
@@ -92,6 +86,28 @@ stateBridge = do
     typeModule ^== "Language.Marlowe.SemanticsTypes"
     psState
 
+psObservation :: MonadReader BridgeData m => m PSType
+psObservation =
+    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Observation" <$>
+    psTypeParameters
+
+observationBridge :: BridgePart
+observationBridge = do
+    typeName ^== "Observation"
+    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    psObservation
+
+psValue :: MonadReader BridgeData m => m PSType
+psValue =
+    TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "Value" <$>
+    psTypeParameters
+
+valueBridge :: BridgePart
+valueBridge = do
+    typeName ^== "Value"
+    typeModule ^== "Language.Marlowe.SemanticsTypes"
+    psValue
+
 psTransactionInput :: MonadReader BridgeData m => m PSType
 psTransactionInput =
     TypeInfo "marlowe-playground-client" "Marlowe.Semantics" "TransactionInput" <$>
@@ -114,9 +130,6 @@ transactionWarningBridge = do
     typeModule ^== "Language.Marlowe.Semantics"
     psTransactionWarning
 
-doubleBridge :: BridgePart
-doubleBridge = typeName ^== "Double" >> return psNumber
-
 dayBridge :: BridgePart
 dayBridge = typeName ^== "Day" >> return psString
 
@@ -125,16 +138,18 @@ timeBridge = typeName ^== "LocalTime" >> return psString
 
 myBridge :: BridgePart
 myBridge =
-    PSGenerator.Common.aesonBridge <|> PSGenerator.Common.containersBridge <|>
+    PSGenerator.Common.aesonBridge <|>
+    PSGenerator.Common.containersBridge <|>
     PSGenerator.Common.languageBridge <|>
     PSGenerator.Common.ledgerBridge <|>
     PSGenerator.Common.servantBridge <|>
     PSGenerator.Common.miscBridge <|>
-    doubleBridge <|>
     dayBridge <|>
     timeBridge <|>
     contractBridge <|>
     stateBridge <|>
+    observationBridge <|>
+    valueBridge <|>
     transactionInputBridge <|>
     transactionWarningBridge <|>
     defaultBridge
@@ -152,49 +167,47 @@ myTypes =
     PSGenerator.Common.ledgerTypes <>
     PSGenerator.Common.walletTypes <>
     PSGenerator.Common.playgroundTypes <>
-    [ mkSumType (Proxy @SourceCode)
-    , mkSumType (Proxy @CompilationError)
-    , mkSumType (Proxy @InterpreterError)
-    , mkSumType (Proxy @Warning)
-    , mkSumType (Proxy @(InterpreterResult A))
-    , (genericShow <*> mkSumType) (Proxy @MSRes.Response)
-    , (genericShow <*> mkSumType) (Proxy @MSRes.Result)
-    , mkSumType (Proxy @MSReq.Request)
-    , mkSumType (Proxy :: Proxy (CT.ContractTermsPoly A B))
-    , mkSumType (Proxy @CT.PYTP)
-    , mkSumType (Proxy @CT.PPEF)
-    , mkSumType (Proxy @CT.SCEF)
-    , mkSumType (Proxy @CT.OPTP)
-    , mkSumType (Proxy @CT.OPXT)
-    , mkSumType (Proxy @CT.DS)
-    , mkSumType (Proxy @CT.Cycle)
-    , mkSumType (Proxy @CT.Period)
-    , mkSumType (Proxy @CT.Stub)
-    , mkSumType (Proxy @CT.ScheduleConfig)
-    , mkSumType (Proxy @CT.ContractStructure)
-    , mkSumType (Proxy @CT.ReferenceType)
-    , mkSumType (Proxy @CT.ReferenceRole)
-    , mkSumType (Proxy @CT.DCC)
-    , mkSumType (Proxy @CT.BDC)
-    , mkSumType (Proxy @CT.EOMC)
-    , mkSumType (Proxy @CT.PRF)
-    , mkSumType (Proxy @CT.FEB)
-    , mkSumType (Proxy @CT.IPCB)
-    , mkSumType (Proxy @CT.CR)
-    , mkSumType (Proxy @CT.CT)
-    , mkSumType (Proxy @CT.Calendar)
-    , mkSumType (Proxy @CT.Assertion)
-    , mkSumType (Proxy @CT.Assertions)
-    , mkSumType (Proxy @CT.AssertionContext)
-    , mkSumType (Proxy @SC.CashFlow)
-    , mkSumType (Proxy @BV.EventType)
-    , mkSumType (Proxy @Webghc.CompileRequest)
+    [ argonaut $ mkSumType @SourceCode
+    , argonaut $ mkSumType @CompilationError
+    , argonaut $ mkSumType @InterpreterError
+    , argonaut $ mkSumType @Warning
+    , argonaut $ mkSumType @(InterpreterResult A)
+    , genericShow . argonaut $ mkSumType @MSRes.Response
+    , genericShow . argonaut $ mkSumType @MSRes.Result
+    , argonaut $ mkSumType @MSReq.Request
+    , argonaut $ mkSumType @(CT.ContractTermsPoly A)
+    , equal . order . genericShow . argonaut $ mkSumType @CT.PYTP
+    , equal . order . genericShow . argonaut $ mkSumType @CT.PPEF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.SCEF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.OPTP
+    , equal . order . genericShow . argonaut $ mkSumType @CT.OPXT
+    , equal . order . genericShow . argonaut $ mkSumType @CT.DS
+    , argonaut $ mkSumType @CT.Cycle
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Period
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Stub
+    , argonaut $ mkSumType @CT.ScheduleConfig
+    , argonaut $ mkSumType @CT.ContractStructure
+    , equal . order . genericShow . argonaut $ mkSumType @CT.ReferenceType
+    , equal . order . genericShow . argonaut $ mkSumType @CT.ReferenceRole
+    , equal . order . genericShow . argonaut $ mkSumType @CT.DCC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.BDC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.EOMC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.PRF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.FEB
+    , equal . order . genericShow . argonaut $ mkSumType @CT.IPCB
+    , equal . order . genericShow . argonaut $ mkSumType @CT.CR
+    , equal . order . genericShow . argonaut $ mkSumType @CT.CT
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Calendar
+    , argonaut $ mkSumType @CT.Assertion
+    , argonaut $ mkSumType @CT.Assertions
+    , argonaut $ mkSumType @CT.AssertionContext
+    , argonaut $ mkSumType @Webghc.CompileRequest
+    , argonaut $ mkSumType @(SC.CashFlowPoly A)
+    , equal . order . genericShow . argonaut $ mkSumType @BV.EventType
     ]
 
 mySettings :: Settings
-mySettings =
-    (defaultSettings & set apiModuleName "Marlowe")
-        {_generateSubscriberAPI = False}
+mySettings = defaultSettings & set apiModuleName "Marlowe"
 
 multilineString :: BS.ByteString -> BS.ByteString -> BS.ByteString
 multilineString name value =
@@ -237,7 +250,7 @@ writePangramJson outputDir = do
 
     let
 
-        alicePk = S.PK "4ecde0775d081e45f06141416cbc3afed4c44a08c93ea31281e25c8fa03548b9"
+        alicePk = S.PK "a2c20c77887ace1cd986193e4e75babd8993cfd56995cd5cfce609c2"
 
         bobRole = S.Role "Bob"
 
@@ -256,8 +269,8 @@ writePangramJson outputDir = do
                         ( S.Let (S.ValueId "x") valueExpr
                             (S.Pay alicePk (S.Party bobRole) ada (S.Cond S.TrueObs (S.UseValue (S.ValueId "x")) (S.UseValue (S.ValueId "y"))) S.Close)
                         )
-                    , S.Case (S.Choice choiceId [ S.Bound 0 1 ])
-                        ( S.If (S.ChoseSomething choiceId `S.OrObs` (S.ChoiceValue choiceId `S.ValueEQ` S.Scale (1 S.% 10) const100))
+                    , S.Case (S.Choice choiceId [Bound 0 1, Bound 10 20])
+                        ( S.If (S.ChoseSomething choiceId `S.OrObs` (S.ChoiceValue choiceId `S.ValueEQ` const100))
                             (S.Pay alicePk (S.Account alicePk) token (S.DivValue (S.AvailableMoney alicePk token) const100) S.Close)
                             S.Close
                         )
@@ -283,11 +296,11 @@ type Web = ("api" :> (API.API :<|> Auth.FrontendAPI)) :<|> MS.API :<|> Webghc.Fr
 
 generate :: FilePath -> IO ()
 generate outputDir = do
+    writePSTypes outputDir (buildBridge myBridge) myTypes
     writeAPIModuleWithSettings
         mySettings
         outputDir
         myBridgeProxy
         (Proxy @Web)
-    writePSTypesWith (defaultSwitch <> genForeign (ForeignOptions True)) outputDir (buildBridge myBridge) myTypes
     writeUsecases outputDir
     writePangramJson outputDir

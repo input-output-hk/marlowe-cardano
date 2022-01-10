@@ -7,12 +7,19 @@ module Examples.PureScript.Swap
   ) where
 
 import Prelude
-import Data.BigInteger (BigInteger, fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map as Map
 import Data.Map (Map)
 import Data.Tuple.Nested ((/\))
 import Examples.Metadata as Metadata
-import Marlowe.Extended (Action(..), Case(..), Contract(..), Payee(..), Timeout(..), Value(..))
+import Marlowe.Extended
+  ( Action(..)
+  , Case(..)
+  , Contract(..)
+  , Payee(..)
+  , Timeout(..)
+  , Value(..)
+  )
 import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Marlowe.Semantics (Party(..), Token(..))
@@ -30,7 +37,7 @@ fixedTimeoutContract =
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInteger
+defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
     [ "Timeout for Ada deposit" /\ fromInt 600
@@ -65,10 +72,11 @@ dollars :: Token
 dollars = Token "85bb65" "dollar"
 
 type SwapParty
-  = { party :: Party
-    , currency :: Token
-    , amount :: Value
-    }
+  =
+  { party :: Party
+  , currency :: Token
+  , amount :: Value
+  }
 
 adaProvider :: SwapParty
 adaProvider =
@@ -94,7 +102,10 @@ makeDeposit src timeout timeoutContinuation continuation =
     timeoutContinuation
 
 makePayment :: SwapParty -> SwapParty -> Contract -> Contract
-makePayment src dest continuation = Pay src.party (Party $ dest.party) src.currency src.amount continuation
+makePayment src dest continuation = Pay src.party (Party $ dest.party)
+  src.currency
+  src.amount
+  continuation
 
 fullExtendedContract :: Contract
 fullExtendedContract =

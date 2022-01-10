@@ -8,13 +8,18 @@ import Data.Foldable (for_)
 import Data.Lens (assign)
 import Data.Lens.Extra (peruse)
 import Data.Time.Duration (Milliseconds(..))
-import Effect.Aff (error)
+import Effect.Class (liftEffect)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
-import Halogen (HalogenM, RefLabel(..), getHTMLElementRef, subscribe, unsubscribe)
+import Halogen
+  ( HalogenM
+  , RefLabel(..)
+  , getHTMLElementRef
+  , subscribe
+  , unsubscribe
+  )
 import Halogen.Animation (animateAndWaitUntilFinishSubscription)
-import Halogen.Query.EventSource (EventSource)
-import Halogen.Query.EventSource as EventSource
+import Halogen.Subscription as HS
 import Toast.Lenses (_expanded, _mToast, _timeoutSubscription)
 import Toast.Types (Action(..), State, ToastMessage)
 
@@ -23,25 +28,19 @@ defaultState =
   { mToast: Nothing
   }
 
-toastTimeoutSubscription ::
-  forall m.
-  MonadAff m =>
-  ToastMessage ->
-  EventSource m Action
+toastTimeoutSubscription :: ToastMessage -> HS.Emitter Action
 toastTimeoutSubscription toast =
-  EventSource.affEventSource \emitter -> do
-    fiber <-
-      Aff.forkAff do
-        Aff.delay $ Milliseconds toast.timeout
-        EventSource.emit emitter ToastTimeout
-        EventSource.close emitter
-    pure $ EventSource.Finalizer $ Aff.killFiber (error "removing aff") fiber
+  HS.makeEmitter \push -> do
+    Aff.launchAff_ do
+      Aff.delay $ Milliseconds toast.timeout
+      liftEffect $ push ToastTimeout
+    pure $ pure unit
 
-handleAction ::
-  forall m slots msg.
-  MonadAff m =>
-  Action ->
-  HalogenM State Action slots msg m Unit
+handleAction
+  :: forall m slots msg
+   . MonadAff m
+  => Action
+  -> HalogenM State Action slots msg m Unit
 handleAction (AddToast toast) = do
   timeoutSubscription <- subscribe $ toastTimeoutSubscription toast
   assign _mToast (Just { message: toast, expanded: false, timeoutSubscription })
@@ -55,4 +54,6 @@ handleAction CloseToast = assign _mToast Nothing
 
 handleAction ToastTimeout = do
   mElement <- getHTMLElementRef (RefLabel "collapsed-toast")
-  for_ mElement $ subscribe <<< animateAndWaitUntilFinishSubscription "to-bottom" CloseToast
+  for_ mElement $ subscribe <<< animateAndWaitUntilFinishSubscription
+    "to-bottom"
+    CloseToast

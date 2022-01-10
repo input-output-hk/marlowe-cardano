@@ -8,17 +8,17 @@
 
 module Spec.Marlowe.ACTUS.QCGenerator where
 
-import qualified Data.List                                    as L
-import qualified Data.Map                                     as M
-import           Data.Maybe                                   (catMaybes)
-import           Data.Time
-import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
-import           Data.Time.Clock.System                       (SystemTime (MkSystemTime), utcToSystemTime)
-import           Language.Marlowe.ACTUS.Domain.BusinessEvents
-import           Language.Marlowe.ACTUS.Domain.ContractTerms
-import           Language.Marlowe.ACTUS.Domain.Schedule
-import           Language.Marlowe.ACTUS.Generator.Analysis
-import           Test.QuickCheck
+import qualified Data.List as L
+import qualified Data.Map as M
+import Data.Maybe (catMaybes)
+import Data.Time
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Time.Clock.System (SystemTime (MkSystemTime), utcToSystemTime)
+import Language.Marlowe.ACTUS.Domain.BusinessEvents
+import Language.Marlowe.ACTUS.Domain.ContractTerms
+import Language.Marlowe.ACTUS.Domain.Schedule
+import Language.Marlowe.ACTUS.Generator.Analysis
+import Test.QuickCheck
 
 largeamount :: Gen Double
 largeamount = choose (0.0, 10000000.0)
@@ -90,6 +90,7 @@ contractTermsGen' ct = do
   let sd = LocalTime (addDays (-2) $ localDay ied) (localTimeOfDay ied)
 
   interest <- percentage
+  interest2 <- percentage
   notional <- largeamount
   pdied <- zeroOr smallamount
 
@@ -170,6 +171,12 @@ contractTermsGen' ct = do
       { contractId = "0",
         contractType = ct,
         contractStructure = [],
+        scheduleConfig =
+          ScheduleConfig
+            { calendar = Just calendar,
+              endOfMonthConvention = Just eomc,
+              businessDayConvention = Just bdc
+            },
         initialExchangeDate = Just ied,
         statusDate = sd,
         maturityDate = Just maturityDate,
@@ -185,13 +192,10 @@ contractTermsGen' ct = do
         priceAtTerminationDate = priceAtTerminationDate <$ terminationDate,
         dayCountConvention = Just dcc,
         prepaymentEffect = Just ppef,
+        -- Counterparty
         contractPerformance = Just PRF_PF,
-        scheduleConfig =
-          ScheduleConfig
-            { calendar = Just calendar,
-              endOfMonthConvention = Just eomc,
-              businessDayConvention = Just bdc
-            },
+        creditEventTypeCovered = Just CETC_DF,
+        coverageOfCreditEnhancement = Nothing,
         -- Penalties
         penaltyRate = Just penaltyrate,
         penaltyType = Just penaltytype,
@@ -229,6 +233,7 @@ contractTermsGen' ct = do
         cycleOfInterestPayment = Just interestPaymentCycle,
         cycleAnchorDateOfInterestPayment = interestPaymentAnchor,
         nominalInterestRate = Just interest,
+        nominalInterestRate2 = Just interest2,
         accruedInterest = accruedInterest,
         cycleOfPrincipalRedemption = case ct of
           PAM -> Nothing
@@ -254,8 +259,7 @@ contractTermsGen' ct = do
         nextDividendPaymentAmount = Nothing,
         -- enable settlement currency
         enableSettlement = False,
-        constraints = Nothing,
-        collateralAmount = 0
+        constraints = Nothing
       }
 
 riskAtTGen :: Gen RiskFactors

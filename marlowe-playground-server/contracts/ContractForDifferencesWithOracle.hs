@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module ContractForDifferencesWithOracle where
 
-import           Language.Marlowe.Extended
+import Language.Marlowe.Extended
 
 main :: IO ()
 main = print . pretty $ contract
@@ -59,7 +59,8 @@ gtLtEq value1 value2 gtContinuation ltContinuation eqContinuation =
 
 recordEndPrice :: ValueId -> ChoiceId -> ChoiceId -> Contract -> Contract
 recordEndPrice name choiceId1 choiceId2 =
-    Let name (Scale (1%10_000_000_000_000_000) (MulValue priceBeginning (MulValue (ChoiceValue choiceId1) (ChoiceValue choiceId2))))
+    Let name (DivValue (MulValue priceBeginning (MulValue (ChoiceValue choiceId1) (ChoiceValue choiceId2)))
+                       (Constant 10_000_000_000_000_000))
 
 recordDifference :: ValueId -> Value -> Value -> Contract -> Contract
 recordDifference name val1 val2 = Let name (SubValue val1 val2)
