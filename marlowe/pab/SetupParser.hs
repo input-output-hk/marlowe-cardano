@@ -13,13 +13,12 @@
 
 module SetupParser (parseOptions, AppOpts(..), NoConfigCommand(..)) where
 
-import           Cardano.BM.Data.Severity (Severity (..))
-import qualified Data.Aeson               as JSON
-import           GHC.Generics             (Generic)
-import           Options.Applicative      (CommandFields, Mod, Parser, argument, command, customExecParser,
-                                           disambiguate, flag, fullDesc, help, helper, idm, info, long, metavar, option,
-                                           prefs, progDesc, short, showHelpOnEmpty, showHelpOnError, str, subparser,
-                                           value)
+import Cardano.BM.Data.Severity (Severity (..))
+import qualified Data.Aeson as JSON
+import GHC.Generics (Generic)
+import Options.Applicative (CommandFields, Mod, Parser, argument, command, customExecParser, disambiguate, flag,
+                            fullDesc, help, helper, idm, info, long, metavar, option, prefs, progDesc, short,
+                            showHelpOnEmpty, showHelpOnError, str, subparser, value)
 
 data NoConfigCommand =
     PSGenerator -- ^ Generate purescript bridge code

@@ -15,18 +15,18 @@ module Main
     ( main
     ) where
 
-import           SetupParser                      (AppOpts (..), NoConfigCommand (..), parseOptions)
+import SetupParser (AppOpts (..), NoConfigCommand (..), parseOptions)
 
-import qualified Cardano.BM.Configuration.Model   as CM
-import           Control.Monad.Logger             (logErrorN, runStdoutLoggingT)
-import           Data.Proxy                       (Proxy (..))
-import           Data.Text.Extras                 (tshow)
-import           MarloweContract                  (MarloweContract)
+import qualified Cardano.BM.Configuration.Model as CM
+import Control.Monad.Logger (logErrorN, runStdoutLoggingT)
+import Data.Proxy (Proxy (..))
+import Data.Text.Extras (tshow)
+import MarloweContract (MarloweContract)
 import qualified Plutus.PAB.Monitoring.Monitoring as LM
-import qualified Plutus.PAB.Run.PSGenerator       as PSGenerator
-import           Plutus.PAB.Types                 (PABError)
+import qualified Plutus.PAB.Run.PSGenerator as PSGenerator
+import Plutus.PAB.Types (PABError)
 
-import           System.Exit                      (ExitCode (ExitFailure), exitSuccess, exitWith)
+import System.Exit (ExitCode (ExitFailure), exitSuccess, exitWith)
 
 runNoConfigCommand ::
     NoConfigCommand
