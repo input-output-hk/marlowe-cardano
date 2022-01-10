@@ -130,8 +130,7 @@ toMarlowe ct =
     }
   where
     trans :: ContractStructure Double -> ContractStructure (Value Observation)
-    trans cs =
-      case reference cs of
-        ReferenceId r    -> cs { reference = ReferenceId r }
-        ReferenceTerms t -> cs { reference = ReferenceTerms (toMarlowe t) }
+    trans cs = cs { reference = case reference cs of
+                                  ReferenceId r    -> ReferenceId r
+                                  ReferenceTerms t -> ReferenceTerms $ toMarlowe t }
 
