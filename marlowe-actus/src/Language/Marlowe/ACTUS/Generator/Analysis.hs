@@ -136,16 +136,16 @@ genStates scs stn =
       Reader (CtxSTF a) Bool
     filtersStates (ev, ShiftedDay {..}, _) =
       do ct@ContractTermsPoly {..} <- contractTerms <$> ask
-         case contractType of
-            PAM -> return $ isNothing purchaseDate || Just calculationDay >= purchaseDate
-            LAM -> return $ isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-            NAM -> return $ isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-            ANN ->
-              let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-                  b2 = let m = maturityDate <|> amortizationDate <|> S.maturity ct in isNothing m || Just calculationDay <= m
-               in return $ b1 && b2
-            SWPPV -> return $ isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
-            _ -> return True
+         return $ case contractType of
+                    PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+                    LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                    NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                    ANN ->
+                      let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                          b2 = let m = maturityDate <|> amortizationDate <|> S.maturity ct in isNothing m || Just calculationDay <= m
+                       in b1 && b2
+                    SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                    _ -> True
 
 -- |Generate payoffs
 genPayoffs :: (RoleSignOps a, YearFractionOps a) =>
