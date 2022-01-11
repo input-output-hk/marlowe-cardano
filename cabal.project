@@ -1,5 +1,5 @@
 -- Bump this if you need newer packages
-index-state: 2021-08-14T00:00:00Z
+index-state: 2021-10-20T00:00:00Z
 
 packages: doc
           marlowe
@@ -36,6 +36,9 @@ constraints:
   -- ones they reuse the one from 'some', but there isn't e.g. a proper version
   -- constraint from dependent-sum-template (which is the library we actually use).
   , dependent-sum > 0.6.2.0
+  -- Newer Hashable have instances for Set, which breaks beam-migrate
+  -- which declares its own instances of Hashable Set
+  , hashable < 1.3.4.0
 
 -- Copied from plutus-apps
 package cardano-ledger-alonzo
@@ -45,6 +48,16 @@ package ouroboros-consensus-shelley
 package ouroboros-consensus-cardano
   optimization: False
 package cardano-api
+  optimization: False
+package cardano-wallet
+  optimization: False
+package cardano-wallet-core
+  optimization: False
+package cardano-wallet-cli
+  optimization: False
+package cardano-wallet-launcher
+  optimization: False
+package cardano-wallet-core-integration
   optimization: False
 
 -- Copied from plutus-apps
@@ -63,19 +76,21 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/servant-purescript.git
-  tag: 1abfc8ad0ed56b3159a5fffc556f65a2145493b9
+  tag: 6746a0bd441e90978669cc6a229cbeb1220d4a1c
 
 -- Copied from plutus-apps
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-crypto.git
-  tag: 07397f0e50da97eaa0575d93bee7ac4b2b2576ec
+  tag: f73079303f663e028288f9f4a9e08bcca39a923e
+  --sha256: 1n87i15x54s0cjkh3nsxs4r1x016cdw1fypwmr68936n3xxsjn6q
 
 -- Copied from plutus-apps
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 4ea7e2d927c9a7f78ddc69738409a5827ab66b98
+  tag: 654f5b7c76f7cc57900b4ddc664a82fc3b925fb0
+  --sha256: 0j4x9zbx5dkww82sqi086h39p456iq5xr476ylmrnpwcpfb4xai4
   subdir:
     base-deriving-via
     binary
@@ -88,11 +103,12 @@ source-repository-package
     slotting
     strict-containers
 
--- Copied from plutus-apps
+-- Copied from plutus-core
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: fd773f7a58412131512b9f694ab95653ac430852
+  tag: bb4ed71ba8e587f672d06edf9d2e376f4b055555
+  --sha256: 00h10l5mmiza9819p9v5q5749nb9pzgi20vpzpy1d34zmh6gf1cj
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -109,9 +125,11 @@ source-repository-package
 -- Copied from plutus-apps
 source-repository-package
   type: git
-  location: https://github.com/j-mueller/cardano-wallet
-  tag: 6be73ab852c0592713dfe78218856d4a8a0ee69e
+  location: https://github.com/input-output-hk/cardano-wallet
+  tag: 760140e238a5fbca61d1b286d7a80ece058dc729
+  --sha256: 014njpddrlqm9bbab636h2gf58zkm0bx04i1jsn07vh5j3k0gri6
   subdir:
+    lib/dbvar
     lib/text-class
     lib/strict-non-empty-containers
     lib/core
@@ -126,7 +144,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 1f4973f36f689d6da75b5d351fb124d66ef1057d
+  tag: d613de3d872ec8b4a5da0c98afb443f322dc4dab
+  --sha256: 0lfbipfdrzay8v1pcazx0qgkda3d1j0505yig9jrml9j7991rmhl
   subdir:
     monoidal-synchronisation
     typed-protocols
@@ -172,8 +191,9 @@ source-repository-package
 -- Copied from plutus-apps
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-ledger-specs
+  location: https://github.com/input-output-hk/cardano-ledger
   tag: bf008ce028751cae9fb0b53c3bef20f07c06e333
+  --sha256: 0my3801w1vinc0kf5yh9lxl6saqxgwm6ccg0vvzi104pafcwwcqx
   subdir:
     byron/ledger/impl
     cardano-ledger-core
@@ -194,19 +214,25 @@ source-repository-package
     libs/cardano-ledger-pretty
     semantics/small-steps-test
 
-
 -- A lot of marlowe dependencies have to be synchronized with the dependencies of
 -- cardano-node. If you update cardano-node, please make sure that all dependencies
 -- of cardano-node are also updated.
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node.git
-  tag: b6ca519f97a0e795611a63174687e6bb70c9f752
+  tag: 4f65fb9a27aa7e3a1873ab4211e412af780a3648
+  --sha256: 00k9fqrm0gphjji23x0nc9z6bqh8bqrncgivn3mi3csacjzicrrx
   subdir:
     cardano-api
     cardano-node
     cardano-cli
-    cardano-config
+
+-- Copied from plutus-apps
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-config
+  tag: e9de7a2cf70796f6ff26eac9f9540184ded0e4e6
+  --sha256: 1wm1c99r5zvz22pdl8nhkp13falvqmj8dgkm8fxskwa9ydqz01ld
 
 -- Copied from plutus-apps
 source-repository-package
@@ -238,23 +264,25 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus
-  tag: 3f089ccf0ca746b399c99afe51e063b0640af547
+  tag: 2721c59fd2302b75c4138456c29fd5b509e8340a
+  --sha256: 02g8pzldyfl4pm8sy22yd3l2fr3zpyhwkvv9x3h9lsf6lfx5wi7k
   subdir:
-    plutus-core
     plutus-ledger-api
-    plutus-tx
-    plutus-tx-plugin
     word-array
     prettyprinter-configurable
     stubs/plutus-ghc-stub
+    plutus-core
+    plutus-tx
+    plutus-tx-plugin
 
 -- A lot of marlowe dependencies have to be syncronized with the dependencies of
 -- plutus-apps. If you update plutus-apps, please make sure that all dependencies
 -- of plutus-apps are also updated
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/plutus-apps
-  tag: 404af7ac3e27ebcb218c05f79d9a70ca966407c9
+  location: https://github.com/bwbush/plutus-apps
+  tag: e7aecd5e745957200ff1eddc407c029010440c5b
+  --sha256: 0d59bp61dyc16fjw7x6wr9pf1igzahy5isa28s1yypxi0jzicwws
   subdir:
     freer-extras
     playground-common
@@ -262,7 +290,10 @@ source-repository-package
     plutus-chain-index-core
     plutus-contract
     plutus-ledger
+    plutus-ledger-constraints
     plutus-pab
+    plutus-pab-executables
+    plutus-playground-server
     plutus-use-cases
     quickcheck-dynamic
     web-ghc

@@ -58,6 +58,7 @@
           "PlutusTx/Lift/THUtils"
           "PlutusTx/Lift/Instances"
           "PlutusTx"
+          "PlutusTx/Coverage"
           "PlutusTx/TH"
           "PlutusTx/Prelude"
           "PlutusTx/Evaluation"
@@ -124,11 +125,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "16";
+      url = "17";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "16";
+      url = "17";
       rev = "minimal";
       sha256 = "";
       };

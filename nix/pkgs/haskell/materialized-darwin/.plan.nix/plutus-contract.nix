@@ -10,7 +10,7 @@
   {
     flags = { defer-plugin-errors = false; };
     package = {
-      specVersion = "2.2";
+      specVersion = "3.0";
       identifier = { name = "plutus-contract"; version = "0.1.0.0"; };
       license = "Apache-2.0";
       copyright = "";
@@ -37,6 +37,7 @@
           (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+          (hsPkgs."plutus-ledger-constraints" or (errorHandler.buildDepError "plutus-ledger-constraints"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
@@ -93,6 +94,8 @@
           "Plutus/Contract/Request"
           "Plutus/Contract/Checkpoint"
           "Plutus/Contract/Constraints"
+          "Plutus/Contract/Logging"
+          "Plutus/Contract/Oracle"
           "Plutus/Contract/State"
           "Plutus/Contract/Schema"
           "Plutus/Contract/Trace"
@@ -124,6 +127,7 @@
           "Wallet"
           "Wallet/API"
           "Wallet/Effects"
+          "Wallet/Error"
           "Wallet/Graph"
           "Wallet/Types"
           "Plutus/Trace"
@@ -144,7 +148,10 @@
           "Plutus/Trace/Tag"
           ] ++ (pkgs.lib).optionals (!(compiler.isGhcjs && true || system.isGhcjs || system.isWindows)) [
           "Plutus/Contract/Test"
+          "Plutus/Contract/Test/Coverage"
           "Plutus/Contract/Test/ContractModel"
+          "Plutus/Contract/Test/ContractModel/Internal"
+          "Plutus/Contract/Test/ContractModel/CrashTolerance"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -154,6 +161,7 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."cardano-api".components.sublibs.gen or (errorHandler.buildDepError "cardano-api:gen"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
             (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
@@ -172,6 +180,7 @@
             (hsPkgs."plutus-chain-index-core" or (errorHandler.buildDepError "plutus-chain-index-core"))
             (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
             (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+            (hsPkgs."plutus-ledger-constraints" or (errorHandler.buildDepError "plutus-ledger-constraints"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
@@ -189,6 +198,8 @@
             "Spec/State"
             "Spec/ThreadToken"
             "Spec/Secrets"
+            "Spec/Plutus/Contract/Wallet"
+            "Spec/Plutus/Contract/Oracle"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];
@@ -197,11 +208,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "17";
+      url = "18";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "17";
+      url = "18";
       rev = "minimal";
       sha256 = "";
       };
