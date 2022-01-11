@@ -3,6 +3,7 @@ module MainFrame.State (mkMainFrame, handleAction) where
 import Prologue
 
 import Bridge (toFront)
+import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
   , getFollowerApps
@@ -39,15 +40,22 @@ import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
-import Halogen (Component, HalogenM, liftEffect, mkComponent, mkEval, modify_)
-import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
+import Halogen
+  ( Component
+  , HalogenM
+  , defaultEval
+  , liftEffect
+  , mkComponent
+  , mkEval
+  , modify_
+  )
+import Halogen.Extra (mapMaybeSubmodule)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Humanize (getTimezoneOffset)
 import MainFrame.Lenses
   ( _currentSlot
   , _dashboardState
   , _subState
-  , _toast
   , _tzOffset
   , _webSocketStatus
   , _welcomeState
@@ -73,8 +81,6 @@ import Plutus.PAB.Webserver.Types
   , InstanceStatusToClient(..)
   )
 import Store as Store
-import Toast.State (defaultState, handleAction) as Toast
-import Toast.Types (Action, State) as Toast
 import Toast.Types
   ( decodedAjaxErrorToast
   , decodingErrorToast
@@ -105,25 +111,24 @@ the code. Comments are added throughout with the format "[Workflow n][m]" - so y
 code for e.g. "[Workflow 4]" to see all of the steps involved in starting a contract.
 -}
 mkMainFrame
-  :: forall m
+  :: forall i m
    . MonadAff m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => Toast m
   => MonadClipboard m
-  => Component Query Action Msg m
+  => MainFrameLoop m
+  => Component Query i Msg m
 mkMainFrame =
   mkComponent
     { initialState: const initialState
     , render: render
     , eval:
-        mkEval
-          { handleQuery
-          , handleAction
-          , receive: const Nothing
-          , initialize: Just Init
-          , finalize: Nothing
+        mkEval defaultEval
+          { handleQuery = handleQuery
+          , handleAction = handleAction
+          , initialize = Just Init
           }
     }
 
@@ -132,7 +137,6 @@ initialState =
   { webSocketStatus: WebSocketClosed Nothing
   , currentSlot: zero -- this will be updated as soon as the websocket connection is working
   , subState: Left Welcome.dummyState
-  , toast: Toast.defaultState
   , tzOffset: Minutes 0.0 -- This will be updated on MainFrame.Init
   }
 
@@ -144,6 +148,7 @@ handleQuery
   => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
+  => MainFrameLoop m
   => Query a
   -> HalogenM State Action ChildSlots Msg m (Maybe a)
 handleQuery (ReceiveWebSocketMessage msg next) = do
@@ -313,6 +318,7 @@ handleAction
   => ManageMarloweStorage m
   => Toast m
   => MonadClipboard m
+  => MainFrameLoop m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction Init = do
@@ -383,9 +389,6 @@ handleAction (DashboardAction dashboardAction) = do
   tzOffset <- use _tzOffset
   toDashboard $ Dashboard.handleAction { currentSlot, tzOffset } dashboardAction
 
-handleAction (ToastAction toastAction) = toToast $ Toast.handleAction
-  toastAction
-
 ------------------------------------------------------------
 -- Note [dummyState]: In order to map a submodule whose state might not exist, we need
 -- to provide a dummyState for that submodule. Halogen would use this dummyState to play
@@ -405,10 +408,3 @@ toDashboard
   -> HalogenM State Action slots msg m Unit
 toDashboard = mapMaybeSubmodule _dashboardState DashboardAction
   Dashboard.dummyState
-
-toToast
-  :: forall m msg slots
-   . Functor m
-  => HalogenM Toast.State Toast.Action slots msg m Unit
-  -> HalogenM State Action slots msg m Unit
-toToast = mapSubmodule _toast ToastAction

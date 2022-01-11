@@ -1,16 +1,15 @@
-module Toast.State
-  ( defaultState
-  , handleAction
-  ) where
+module Toast.State (component) where
 
 import Prologue
+
 import Data.Foldable (for_)
 import Data.Lens (assign)
 import Data.Lens.Extra (peruse)
 import Data.Time.Duration (Milliseconds(..))
-import Effect.Class (liftEffect)
+import Data.Traversable (traverse)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
+import Effect.Class (liftEffect)
 import Halogen
   ( HalogenM
   , RefLabel(..)
@@ -18,14 +17,36 @@ import Halogen
   , subscribe
   , unsubscribe
   )
+import Halogen as H
 import Halogen.Animation (animateAndWaitUntilFinishSubscription)
+import Halogen.Store.Connect (connect)
+import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
-import Toast.Lenses (_expanded, _mToast, _timeoutSubscription)
+import Store as Store
+import Toast.Lenses (_expanded, _timeoutSubscription)
 import Toast.Types (Action(..), State, ToastMessage)
+import Toast.View (renderToast)
 
-defaultState :: State
-defaultState =
-  { mToast: Nothing
+component
+  :: forall query input msg m
+   . MonadAff m
+  => MonadStore Store.Action Store.Store m
+  => H.Component query input msg m
+component =
+  connect (selectEq _.toast) $ H.mkComponent
+    { initialState: deriveState <<< _.context
+    , render: renderToast
+    , eval: H.mkEval H.defaultEval
+        { handleAction = handleAction
+        , receive = Just <<< Receive <<< _.context
+        }
+    }
+
+deriveState :: Maybe ToastMessage -> State
+deriveState mToast =
+  { mToast: mToast <#> { message: _, expanded: false }
+  , timeoutSubscription: Nothing
   }
 
 toastTimeoutSubscription :: ToastMessage -> HS.Emitter Action
@@ -39,18 +60,21 @@ toastTimeoutSubscription toast =
 handleAction
   :: forall m slots msg
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => Action
   -> HalogenM State Action slots msg m Unit
-handleAction (AddToast toast) = do
-  timeoutSubscription <- subscribe $ toastTimeoutSubscription toast
-  assign _mToast (Just { message: toast, expanded: false, timeoutSubscription })
+handleAction (Receive mToast) = do
+  H.put $ deriveState mToast
+  sub <- traverse (subscribe <<< toastTimeoutSubscription) mToast
+  H.modify_ _ { timeoutSubscription = sub }
 
 handleAction ExpandToast = do
   mSubscriptionId <- peruse _timeoutSubscription
   assign _expanded true
+  H.modify_ _ { timeoutSubscription = Nothing }
   for_ mSubscriptionId unsubscribe
 
-handleAction CloseToast = assign _mToast Nothing
+handleAction CloseToast = updateStore Store.ClearToast
 
 handleAction ToastTimeout = do
   mElement <- getHTMLElementRef (RefLabel "collapsed-toast")
