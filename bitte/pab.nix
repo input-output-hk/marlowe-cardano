@@ -27,7 +27,10 @@ let
     };
 
     walletServerConfig = {
-      baseUrl = "@NOMAD_ADDR_wbe@";
+      tag = "LocalWalletConfig";
+      walletSettings = {
+        baseUrl = "@NOMAD_ADDR_wbe@";
+      };
     };
 
     nodeServerConfig = {
@@ -58,6 +61,14 @@ let
     requestProcessingConfig = {
       requestProcessingInterval = 1;
     };
+
+    developmentOptions = {
+      pabRollbackHistory = null;
+      pabResumeFrom = {
+        tag = "PointAtGenesis";
+      };
+    };
+
   });
 
   dbFile = "$PAB_STATE_DIR/pab.db";

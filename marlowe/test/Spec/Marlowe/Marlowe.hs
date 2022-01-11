@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -51,7 +52,7 @@ import Language.Marlowe.SemanticsSerialisation (contractToByteString)
 import Language.Marlowe.SemanticsTypes
 import Language.Marlowe.Serialisation (intToByteString, listToByteString)
 import Language.Marlowe.Util
-import Ledger (Slot (..), pubKeyHash, validatorHash)
+import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
 import Ledger.Constraints.TxConstraints (TxConstraints)
 import qualified Ledger.Typed.Scripts as Scripts
@@ -123,14 +124,18 @@ reqId :: UUID
 reqId = UUID.nil
 
 
+walletPubKeyHash :: Wallet -> PubKeyHash
+walletPubKeyHash = unPaymentPubKeyHash . mockWalletPaymentPubKeyHash
+
+
 zeroCouponBondTest :: TestTree
 zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond Contract"
     (assertNoFailedTransactions
     -- T..&&. emulatorLog (const False) ""
     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag alice) (const True) "contract should close"
     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
-    T..&&. walletFundsChange alice (lovelaceValueOf 150)
-    T..&&. walletFundsChange bob (lovelaceValueOf (-150))
+    T..&&. walletFundsChange alice (lovelaceValueOf 15_000_000)
+    T..&&. walletFundsChange bob (lovelaceValueOf (-15_000_000))
     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (OK reqId "close")) "should be OK"
     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (OK reqId "close")) "should be OK"
     ) $ do
@@ -141,10 +146,10 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     let params = defaultMarloweParams
 
     let zeroCouponBond = When [ Case
-            (Deposit alicePk alicePk ada (Constant 850))
-            (Pay alicePk (Party bobPk) ada (Constant 850)
+            (Deposit alicePk alicePk ada (Constant 75_000_000))
+            (Pay alicePk (Party bobPk) ada (Constant 75_000_000)
                 (When
-                    [ Case (Deposit alicePk bobPk ada (Constant 1000)) Close] (Slot 200) Close
+                    [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (Slot 200) Close
                 ))] (Slot 100) Close
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
@@ -153,10 +158,10 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 850])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 75_000_000])
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 1000])
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 90_000_000])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -169,8 +174,8 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     -- T..&&. emulatorLog (const False) ""
     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag alice) (const True) "contract should close"
     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
-    T..&&. walletFundsChange alice (lovelaceValueOf 150)
-    T..&&. walletFundsChange bob (lovelaceValueOf (-150))
+    T..&&. walletFundsChange alice (lovelaceValueOf 15_000_000)
+    T..&&. walletFundsChange bob (lovelaceValueOf (-15_000_000))
     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (OK reqId "close")) "should be OK"
     T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (OK reqId "close")) "should be OK"
     ) $ do
@@ -180,11 +185,11 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
 
     let params = defaultMarloweParams
 
-    let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 850))
+    let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
                                                      (sha2_256 (contractToByteString zeroCouponBondStage2))
                                     ] (Slot 100) Close
-        zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 850)
-                                  (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 1000))
+        zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 75_000_000)
+                                  (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
                                                          (sha2_256 (contractToByteString zeroCouponBondStage3))
                                         ] (Slot 200) Close)
         zeroCouponBondStage3 = Close
@@ -196,11 +201,11 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
-                                                 [MerkleizedInput (IDeposit alicePk alicePk ada 850) zeroCouponBondStage2])
+                                                 [MerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
-                                               [MerkleizedInput (IDeposit alicePk bobPk ada 1000) zeroCouponBondStage3])
+                                               [MerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -222,10 +227,10 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     let params = defaultMarloweParams
 
     let zeroCouponBond = When [ Case
-            (Deposit alicePk alicePk ada (Constant 850))
-            (Pay alicePk (Party bobPk) ada (Constant 850)
+            (Deposit alicePk alicePk ada (Constant 75_000_000))
+            (Pay alicePk (Party bobPk) ada (Constant 75_000_000)
                 (When
-                    [ Case (Deposit alicePk bobPk ada (Constant 1000)) Close] (Slot 200) Close
+                    [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (Slot 200) Close
                 ))] (Slot 100) Close
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
@@ -234,9 +239,13 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 1000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 90_000_000])
     Trace.waitNSlots 2
     pure ()
+
+
+minAda :: Integer
+minAda = 2_000_000
 
 
 trustFundTest :: TestTree
@@ -245,8 +254,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
     -- T..&&. emulatorLog (const False) ""
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag alice) "contract should not have any errors"
     T..&&. assertNotDone marlowePlutusContract (Trace.walletInstanceTag bob) "contract should not have any errors"
-    T..&&. walletFundsChange alice (lovelaceValueOf (-2000256) <> Val.singleton (rolesCurrency params) "alice" 1)
-    T..&&. walletFundsChange bob (lovelaceValueOf 2000256 <> Val.singleton (rolesCurrency params) "bob" 1)
+    T..&&. walletFundsChange alice (lovelaceValueOf (-minAda-25_600_000) <> Val.singleton (rolesCurrency params) "alice" 1)
+    T..&&. walletFundsChange bob (lovelaceValueOf (minAda+25_600_000) <> Val.singleton (rolesCurrency params) "bob" 1)
     -- TODO Commented out because the new chain index does not allow to fetch
     -- all transactions that modified an address. Need to find an alternative
     -- way.
@@ -277,8 +286,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         (pms, _) : _ -> do
 
             Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, pms, Nothing,
-                [ NormalInput $ IChoice chId 256
-                , NormalInput $ IDeposit "alice" "alice" ada 256
+                [ NormalInput $ IChoice chId 25_600_000
+                , NormalInput $ IDeposit "alice" "alice" ada 25_600_000
                 ])
             Trace.waitNSlots 17
 
@@ -299,7 +308,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         chId = ChoiceId "1" alicePk
 
         contract = When [
-            Case (Choice chId [Bound 10 1500])
+            Case (Choice chId [Bound 10 90_000_000])
                 (When [Case
                     (Deposit "alice" "alice" ada (ChoiceValue chId))
                         (When [Case (Notify (SlotIntervalStart `ValueGE` Constant 15))
@@ -341,19 +350,19 @@ stateMachineValidatorSize :: IO ()
 stateMachineValidatorSize = do
     let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18500)
+    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18900)
 
 typedValidatorSize :: IO ()
 typedValidatorSize = do
     let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15500)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15600)
 
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14500)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14750)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
@@ -483,9 +492,9 @@ divAnalysisTest = do
             Close
             (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
     result <- warningsTrace (contract 11 2)
-    assertBool "Analysis ok" $ isRight result && fromRight False (fmap isNothing result)
+    assertBool "Analysis ok" $ isRight result && either (const False) isNothing result
     result <- warningsTrace (contract 9 2)
-    assertBool "Analysis ok" $ isRight result && fromRight False (fmap isJust result)
+    assertBool "Analysis ok" $ isRight result && either (const False) isJust result
 
     let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
@@ -604,4 +613,3 @@ integerListBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen [Int
 
 contractBSRoundtripTest :: Property
 contractBSRoundtripTest = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract (\contract -> byteStringToContract (contractToByteString contract) === Just (contract, emptyByteString))
-

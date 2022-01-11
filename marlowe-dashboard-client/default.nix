@@ -1,24 +1,22 @@
 { pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, buildPursPackage, buildNodeModules, filterNpm }:
 let
+  marlowe-setup-invoker = haskell.packages.marlowe.components.exes.marlowe-pab-setup;
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
-
-  pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
 
   marlowe-run-backend-invoker = haskell.packages.marlowe-dashboard-server.components.exes.marlowe-dashboard-server;
 
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
     mkdir $out
-    ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
-    ln -s ${./plutus-pab.yaml} plutus-pab.yaml
-    ${marlowe-invoker}/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $out
+    ${marlowe-setup-invoker}/bin/marlowe-pab-setup psgenerator $out
+    ${marlowe-setup-invoker}/bin/marlowe-pab-setup psapigenerator $out
     ${marlowe-run-backend-invoker}/bin/marlowe-dashboard-server psgenerator $out
   '';
 
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
     generatedDir=./generated
     rm -rf $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.pab-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-setup-invoker)/bin/marlowe-pab-setup psgenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-setup-invoker)/bin/marlowe-pab-setup psapigenerator $generatedDir
     $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server psgenerator $generatedDir
   '';
 
@@ -65,5 +63,5 @@ let
     });
 in
 {
-  inherit client marlowe-invoker marlowe-run-backend-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker marlowe-run-backend-invoker marlowe-setup-invoker generate-purescript generated-purescript start-backend;
 }

@@ -28,6 +28,7 @@ import Control.Lens
 import Control.Monad (forM_, void)
 import Control.Monad.Error.Lens (catching, throwing, throwing_)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
+import Data.Bifunctor (second)
 import Data.Either (rights)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
@@ -46,8 +47,8 @@ import qualified Language.Marlowe.Semantics as Marlowe
 import Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
 import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
-import Ledger (CurrencySymbol, Datum (..), PubKeyHash, Slot (..), TokenName, TxOut (..), TxOutRef, inScripts,
-               txOutValue)
+import Ledger (CurrencySymbol, Datum (..), PaymentPubKeyHash (..), PubKeyHash, Slot (..), TokenName, TxOut (..),
+               TxOutRef, inScripts, txOutValue)
 import qualified Ledger
 import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
 import Ledger.Address (pubKeyHashAddress, scriptHashAddress)
@@ -289,7 +290,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
-        ownPubKey <- Contract.ownPubKeyHash
+        ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners contract
         slot <- currentSlot
         let marloweData = MarloweData {
@@ -315,6 +316,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         marlowePlutusContract
     redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, pkh) -> catchError reqId "redeem" $ do
         let address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
+        let ppkh = PaymentPubKeyHash pkh
         utxos <- utxosAt address
         let spendPayoutConstraints tx ref txout = let
                 expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData role)
@@ -325,7 +327,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                         -- we spend the rolePayoutScript address
                         Constraints.mustSpendScriptOutput ref unitRedeemer
                         -- and pay to a token owner
-                            <> Constraints.mustPayToPubKey pkh amount
+                            <> Constraints.mustPayToPubKey ppkh amount
                     _ -> tx
 
         let spendPayouts = Map.foldlWithKey spendPayoutConstraints mempty utxos
@@ -341,9 +343,9 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
               validator = rolePayoutScript rolesCurrency
               lookups = Constraints.otherScript validator
                   <> Constraints.unspentOutputs utxos
-                  <> Constraints.ownPubKeyHash pkh
+                  <> Constraints.ownPaymentPubKeyHash ppkh
             tx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx @Void lookups constraints)
-            _ <- submitUnbalancedTx tx
+            _ <- submitUnbalancedTx $ Constraints.adjustUnbalancedTx tx
             tell $ OK reqId "redeem"
 
         marlowePlutusContract
@@ -448,7 +450,7 @@ setupMarloweParams
     -> Contract MarloweContractState s e
         (MarloweParams, TxConstraints i o, ScriptLookups a)
 setupMarloweParams owners contract = mapError (review _MarloweError) $ do
-    ownAddress <- pubKeyHashAddress <$> Contract.ownPubKeyHash
+    ownAddress <- (`pubKeyHashAddress` Nothing) <$> Contract.ownPaymentPubKeyHash
     let roles = extractNonMerkleizedContractRoles contract
     if Set.null roles
     then do
@@ -458,7 +460,7 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
         pure (params, mempty, mempty)
     else if roles `Set.isSubsetOf` Set.fromList (AssocMap.keys owners)
     then do
-        let tokens = fmap (\role -> (role, 1)) $ Set.toList roles
+        let tokens = fmap (, 1) $ Set.toList roles
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
         utxo <- utxosAt ownAddress
         let theCurrency = Currency.OneShotCurrency
@@ -473,7 +475,7 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
         let rolesSymbol = Ledger.scriptCurrencySymbol curVali
         let minAdaTxOut = adaValueOf 2
         let giveToParty (role, pkh) = Constraints.mustPayToPubKey pkh (Val.singleton rolesSymbol role 1 <> minAdaTxOut)
-        let distributeRoleTokens = foldMap giveToParty (AssocMap.toList owners)
+        let distributeRoleTokens = foldMap giveToParty $ second PaymentPubKeyHash <$> AssocMap.toList owners
         let params = MarloweParams
                 { rolesCurrency = rolesSymbol
                 , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesSymbol }
@@ -583,8 +585,8 @@ marloweCompanionContract = checkExistingRoleTokens
   where
     checkExistingRoleTokens = do
         -- Get the existing unspend outputs of the wallet that activated the companion contract
-        pkh <- Contract.ownPubKeyHash
-        let ownAddress = pubKeyHashAddress pkh
+        pkh <- Contract.ownPaymentPubKeyHash
+        let ownAddress = pubKeyHashAddress pkh Nothing
         -- Filter those outputs for role tokens and notify the WebSocket subscribers
         -- NOTE: CombinedWSStreamToServer has an API to subscribe to WS notifications
         utxo <- utxosAt ownAddress
@@ -710,13 +712,13 @@ mkStep params typedValidator range input = do
                                     { txOwnInputs = inputConstraints
                                     , txOwnOutputs = outputConstraints
                                     }
-                    pk <- Contract.ownPubKeyHash
+                    pk <- Contract.ownPaymentPubKeyHash
                     let lookups:: ScriptLookups TypedMarloweValidator
-                        lookups = lookups1 { Constraints.slOwnPubkeyHash = Just pk }
+                        lookups = lookups1 { Constraints.slOwnPaymentPubKeyHash = Just pk }
                     utx <- either (throwing _ConstraintResolutionError)
                                 pure
                                 (Constraints.mkTx lookups smtConstraints)
-                    submitTxConfirmed utx
+                    submitTxConfirmed $ Constraints.adjustUnbalancedTx utx
                     pure (SM.stateData newState)
                 Nothing -> throwError TransitionError
 

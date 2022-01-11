@@ -19,9 +19,9 @@ let
     };
 
     walletServerConfig = {
-      baseUrl = "http://localhost:${builtins.toString cfg.walletPort}";
-      wallet = {
-        getWallet = cfg.defaultWallet;
+      tag = "LocalWalletConfig";
+      walletSettings = {
+        baseUrl = "http://localhost:${builtins.toString cfg.walletPort}";
       };
     };
 
@@ -61,6 +61,13 @@ let
       spBaseUrl = "http://localhost:${builtins.toString cfg.signingProcessPort}";
       spWallet = {
         getWallet = "${builtins.toString cfg.defaultWallet}";
+      };
+    };
+
+    developmentOptions = {
+      pabRollbackHistory = null;
+      pabResumeFrom = {
+        tag = "PointAtGenesis";
       };
     };
 
