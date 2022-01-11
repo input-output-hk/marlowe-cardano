@@ -226,7 +226,7 @@
     },
     "gitignore": {
       "inputs": {
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1634151530,
@@ -307,7 +307,7 @@
         "type": "github"
       }
     },
-    "haskell-nix": {
+    "haskellNix": {
       "inputs": {
         "HTTP": "HTTP",
         "cabal-32": "cabal-32",
@@ -320,7 +320,7 @@
         "hpc-coveralls": "hpc-coveralls",
         "nix-tools": "nix-tools",
         "nixpkgs": [
-          "haskell-nix",
+          "haskellNix",
           "nixpkgs-2111"
         ],
         "nixpkgs-2003": "nixpkgs-2003",
@@ -379,7 +379,7 @@
     },
     "naersk": {
       "inputs": {
-        "nixpkgs": "nixpkgs_5"
+        "nixpkgs": "nixpkgs_6"
       },
       "locked": {
         "lastModified": 1629707199,
@@ -493,11 +493,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1641341958,
-        "narHash": "sha256-Hap6YDHNd438BqZC+Jag7Q9ALhHxSTxG3xYpcAw3Tb8=",
+        "lastModified": 1611878570,
+        "narHash": "sha256-BnAaAtUZJp2mvBawi/Rulp74cDo46JfalaB1Svg87ik=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "6b1102d94bac18d5e8d3907e5f71abf9b1766cea",
+        "rev": "5a1c008bae84cba12d75662d1154077fa311cd5e",
         "type": "github"
       },
       "original": {
@@ -507,11 +507,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1634301554,
-        "narHash": "sha256-yx2NECo6Jrx8mpvEyeeUb98jxlKXeADdqbWkD05LikE=",
+        "lastModified": 1641341958,
+        "narHash": "sha256-Hap6YDHNd438BqZC+Jag7Q9ALhHxSTxG3xYpcAw3Tb8=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "7ee297f96d0a1c5008e00015d4f28280545c04eb",
+        "rev": "6b1102d94bac18d5e8d3907e5f71abf9b1766cea",
         "type": "github"
       },
       "original": {
@@ -521,11 +521,11 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1641341958,
-        "narHash": "sha256-Hap6YDHNd438BqZC+Jag7Q9ALhHxSTxG3xYpcAw3Tb8=",
+        "lastModified": 1634301554,
+        "narHash": "sha256-yx2NECo6Jrx8mpvEyeeUb98jxlKXeADdqbWkD05LikE=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "6b1102d94bac18d5e8d3907e5f71abf9b1766cea",
+        "rev": "7ee297f96d0a1c5008e00015d4f28280545c04eb",
         "type": "github"
       },
       "original": {
@@ -548,6 +548,20 @@
       }
     },
     "nixpkgs_6": {
+      "locked": {
+        "lastModified": 1641341958,
+        "narHash": "sha256-Hap6YDHNd438BqZC+Jag7Q9ALhHxSTxG3xYpcAw3Tb8=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "6b1102d94bac18d5e8d3907e5f71abf9b1766cea",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
+    "nixpkgs_7": {
       "locked": {
         "lastModified": 1641229786,
         "narHash": "sha256-WPPcLNbVu6ryj772GooUpF285LOvRHdOo/UNJgPnFYI=",
@@ -596,6 +610,24 @@
         "type": "github"
       }
     },
+    "ops-lib": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1640104874,
+        "narHash": "sha256-78gzRoruGSniYUArTg6LZO3GOKsT4wqBnVyTgfure+w=",
+        "owner": "input-output-hk",
+        "repo": "ops-lib",
+        "rev": "0043b25363116f8f52c6b47e577a5d6c4086320d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "ops-lib",
+        "type": "github"
+      }
+    },
     "plutus-apps": {
       "flake": false,
       "locked": {
@@ -631,7 +663,7 @@
     "pre-commit-hooks": {
       "inputs": {
         "flake-utils": "flake-utils_4",
-        "nixpkgs": "nixpkgs_4"
+        "nixpkgs": "nixpkgs_5"
       },
       "locked": {
         "lastModified": 1634595438,
@@ -666,7 +698,7 @@
     "rnix-lsp": {
       "inputs": {
         "naersk": "naersk",
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_7",
         "utils": "utils"
       },
       "locked": {
@@ -692,10 +724,11 @@
         "gitignore-nix": "gitignore-nix",
         "hackage-nix": "hackage-nix",
         "haskell-language-server": "haskell-language-server",
-        "haskell-nix": "haskell-nix",
+        "haskellNix": "haskellNix",
         "iohk-nix": "iohk-nix",
         "nixpkgs": "nixpkgs",
         "npmlock2nix": "npmlock2nix",
+        "ops-lib": "ops-lib",
         "plutus-apps": "plutus-apps",
         "plutus-core": "plutus-core",
         "pre-commit-hooks-nix": "pre-commit-hooks-nix",
@@ -772,7 +805,7 @@
         "easy-purescript-nix-source": "easy-purescript-nix-source",
         "flake-utils": "flake-utils_3",
         "gitignore": "gitignore",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "pre-commit-hooks": "pre-commit-hooks",
         "rnix-lsp": "rnix-lsp"
       },

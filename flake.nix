@@ -19,7 +19,7 @@
       ref = "nixpkgs-unstable";
     };
 
-    haskell-nix = {
+    haskellNix = {
       # TODO: fix ref usage to master
       url = "github:input-output-hk/haskell.nix?rev=df363a0b30abbeb8b40a9223fe8ec224b4d6d358";
     };
@@ -57,6 +57,7 @@
       url = "github:tweag/npmlock2nix";
       flake = false;
     };
+    ops-lib.url = "github:input-output-hk/ops-lib";
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;
@@ -83,28 +84,28 @@
     };
   };
 
-  outputs = { self, flake-utils, nixpkgs, haskell-nix, hackage-nix, stackage-nix, ... }@inputs:
-    (flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
+  outputs = { self, flake-utils, nixpkgs, haskellNix, hackage-nix, stackage-nix, ops-lib, ... }@inputs:
+      (flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = (nixpkgs.lib.attrValues haskell-nix.overlays);
-        };
-        haskellNix = import haskell-nix {
-          inherit pkgs;
-          sourcesOverride = {
-            hackage = hackage-nix;
-            stackage = stackage-nix;
-          };
+        overlays = [
+          haskellNix.overlay
+          (import ./nix/overlays/marlowe.nix)
+          (import ./nix/overlays/nixpkgs-overrides.nix)
+          (import ./nix/overlays/r.nix)
+        ];
+
+        pkgsForSystem = system: import nixpkgs {
+          inherit overlays system;
+          inherit (haskellNix) config;
         };
 
-        topLevel = import ./. {
-          inherit system haskellNix;
-          sources = inputs;
-        };
-      in
-      {
+        pkgs = pkgsForSystem system;
+        hydraUtils = ops-lib.lib.mkHydraUtils pkgsForSystem;
+        inherit (hydraUtils) collectHydraSets mkHydraSet;
+        flake = pkgs.marloweProject.flake { };
+      in flake // {
         inherit pkgs;
-        packages = topLevel.bitte-packages;
-      }));
+      } // (collectHydraSets [
+        #(mkHydraSet [ "marlowe" ] [ "x86_64-linux" ])
+      ])));
 }
