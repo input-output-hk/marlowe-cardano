@@ -74,12 +74,12 @@ let
       name = "marlowe-dashboard-client";
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
-        generated = ./generated;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
       WEB_COMMON_SRC = webCommon.cleanSrc;
+      WEB_COMMON_MARLOWE_SRC = webCommonMarlowe;
     });
 in
 {

@@ -88,38 +88,6 @@ module.exports = {
         },
       },
       {
-        test: /\.purs$/,
-        use: isDevelopment
-          ? []
-          : [
-              {
-                loader: "purs-loader",
-                options: {
-                  bundle: !isDevelopment,
-                  psc: "psa",
-                  pscArgs: {
-                    strict: true,
-                    censorLib: true,
-                    stash: isDevelopment,
-                    isLib: ["generated", ".spago"],
-                  },
-                  spago: isDevelopment,
-                  watch: isDevelopment,
-                  src: isDevelopment
-                    ? []
-                    : [
-                        ".spago/*/*/src/**/*.purs",
-                        "src/**/*.purs",
-                        "test/**/*.purs",
-                        "generated/**/*.purs",
-                        "../web-common-marlowe/src/**/*.purs",
-                        `${process.env.WEB_COMMON_PLAYGROUND_SRC}/src/**/*.purs`,
-                      ],
-                },
-              },
-            ],
-      },
-      {
         test: /\.tsx?$/,
         loader: "ts-loader",
       },
@@ -150,7 +118,7 @@ module.exports = {
       static: path.resolve(__dirname, "./static"),
       src: path.resolve(__dirname, "./src"),
     },
-    extensions: [".js", ".ts", ".tsx"].concat(isDevelopment ? [] : [".purs"]),
+    extensions: [".js", ".ts", ".tsx"],
     fallback: {
       vm: require.resolve("vm-browserify"),
     },

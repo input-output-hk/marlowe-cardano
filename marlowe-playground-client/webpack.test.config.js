@@ -29,31 +29,6 @@ module.exports = {
         loader: "ts-loader",
       },
       {
-        test: /\.purs$/,
-        use: [
-          {
-            loader: "purs-loader",
-            options: {
-              psc: "psa",
-              pscArgs: {
-                strict: true,
-                censorLib: true,
-                stash: true,
-                isLib: ["generated", ".spago"],
-              },
-              src: [
-                ".spago/*/*/src/**/*.purs",
-                "src/**/*.purs",
-                "test/**/*.purs",
-                "generated/**/*.purs",
-                "../web-common-marlowe/src/**/*.purs",
-                `${process.env.WEB_COMMON_PLAYGROUND_SRC}/src/**/*.purs`,
-              ],
-            },
-          },
-        ],
-      },
-      {
         test: /\.(gif|png|jpe?g|svg)$/i,
         use: "url-loader",
       },
@@ -72,7 +47,7 @@ module.exports = {
       static: path.resolve(__dirname, "./static"),
       src: path.resolve(__dirname, "./src"),
     },
-    extensions: [".purs", ".js", ".ts"],
+    extensions: [".js", ".ts"],
   },
   resolveLoader: {
     modules: ["node_modules", path.resolve(__dirname, ".")],
