@@ -1,7 +1,7 @@
 module Component.MetadataTab.Types where
 
 import Marlowe.Extended (ContractType)
-import Marlowe.Extended.Metadata (NumberFormat, MetaData)
+import Marlowe.Extended.Metadata (NumberFormat)
 import Marlowe.Semantics as S
 
 class ShowConstructor a where
