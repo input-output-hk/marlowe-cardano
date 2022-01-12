@@ -112,6 +112,7 @@
     "gitignore": {
       "inputs": {
         "nixpkgs": [
+          "web-common",
           "nixpkgs"
         ]
       },
@@ -213,6 +214,7 @@
     "naersk": {
       "inputs": {
         "nixpkgs": [
+          "web-common",
           "nixpkgs"
         ]
       },
@@ -314,6 +316,7 @@
       "inputs": {
         "flake-utils": "flake-utils_3",
         "nixpkgs": [
+          "web-common",
           "nixpkgs"
         ]
       },
@@ -351,6 +354,7 @@
       "inputs": {
         "naersk": "naersk",
         "nixpkgs": [
+          "web-common",
           "nixpkgs"
         ],
         "utils": "utils"
@@ -447,11 +451,11 @@
         "rnix-lsp": "rnix-lsp"
       },
       "locked": {
-        "lastModified": 1639586076,
-        "narHash": "sha256-HL3Ikg/pvdLbWBy3QciKXfLXqY0QZ9v+ualqYicfXMo=",
+        "lastModified": 1642002017,
+        "narHash": "sha256-jya3jNTLR6WflV1r46UCsU2DY5vzyB5br4lgKYeN8M4=",
         "owner": "input-output-hk",
         "repo": "purescript-web-common",
-        "rev": "71be4b2b2788aecdcb568a957339de4e16d260d4",
+        "rev": "ce0aa8a99e830b7c709612ecfae1c4095c9d7ecd",
         "type": "github"
       },
       "original": {
