@@ -13,9 +13,8 @@ pabWebserverConfig:
   permissiveCorsPolicy: False
 
 walletServerConfig:
-  baseUrl: http://localhost:9081
-  wallet:
-    getWallet: 1
+  tag: LocalWalletConfig
+    baseUrl: http://localhost:9081
 
 nodeServerConfig:
   mscBaseUrl: http://localhost:9082
@@ -49,6 +48,11 @@ signingProcessConfig:
 
 metadataServerConfig:
   mdBaseUrl: http://localhost:9085
+
+developmentOptions:
+  pabRollbackHistory: null
+  pabResumeFrom:
+    tag: PointAtGenesis
 
 # Optional timeout (in seconds) for calls to endpoints that are not currently
 # available. If this is not set, calls to unavailable endpoints fail
