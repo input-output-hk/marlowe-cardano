@@ -10,7 +10,6 @@ module Data.WalletNickname
 
 import Prologue
 
-import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -33,7 +32,7 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Validation.Semigroup (V(..))
 import Polyform (Validator)
 import Polyform.Dual as Dual
-import Polyform.Validator (liftFnMV, liftFnV)
+import Polyform.Validator (liftFnV)
 import Polyform.Validator.Dual (Dual)
 
 data WalletNicknameError
