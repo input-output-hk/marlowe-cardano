@@ -6,4 +6,4 @@ var JSONbig = require("json-bigint");
 JSON.stringify = JSONbig.stringify;
 JSON.parse = JSONbig.parse;
 
-require("./src/Main.purs").main();
+require("./output/Main").main();

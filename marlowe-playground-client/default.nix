@@ -1,4 +1,15 @@
-{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, webCommonPlayground, buildPursPackage, buildNodeModules, filterNpm }:
+{ pkgs
+, gitignore-nix
+, haskell
+, webCommon
+, webCommonMarlowe
+, webCommonPlayground
+, buildPursPackage
+, buildNodeModules
+, filterNpm
+, purs-tidy
+, prettier
+}:
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
@@ -10,12 +21,22 @@ let
   generated-purescript = pkgs.runCommand "marlowe-playground-purescript" { } ''
     mkdir $out
     ${playground-exe}/bin/marlowe-playground-server psgenerator $out
+    cp ${builtins.path { name = "tidyrc.json"; path = ../.tidyrc.json; } } $out/.tidyrc.json
+    cp ${builtins.path { name = "tidyoperators"; path = ../.tidyoperators; } } $out/.tidyoperators
+    cd $out
+    ${purs-tidy}/bin/purs-tidy format-in-place $out
+    ${prettier}/bin/prettier -w $out
+    rm $out/.tidyrc.json
+    rm $out/.tidyoperators
   '';
 
   # generate-purescript: script to create purescript bridge code
   generate-purescript = pkgs.writeShellScriptBin "marlowe-playground-generate-purs" ''
     rm -rf ./generated
     ${build-playground-exe}/bin/marlowe-playground-server psgenerator generated
+    cd ..
+    ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-playground-client/generated
+    ${prettier}/bin/prettier -w ./marlowe-playground-client/generated
   '';
 
   # start-backend: script to start the plutus-playground-server
@@ -54,16 +75,16 @@ let
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
         web-common-playground = webCommonPlayground;
-        generated = generated-purescript;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
       WEB_COMMON_SRC = webCommon.cleanSrc;
       WEB_COMMON_PLAYGROUND_SRC = webCommonPlayground;
+      WEB_COMMON_MARLOWE_SRC = webCommonMarlowe;
     });
 in
 {
-  inherit client generate-purescript start-backend;
+  inherit client generated-purescript generate-purescript start-backend;
   server = playground-exe;
 }

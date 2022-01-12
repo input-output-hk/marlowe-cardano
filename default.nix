@@ -48,7 +48,9 @@ rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit haskell webCommon webCommonMarlowe webCommonPlayground;
-    }) client server generate-purescript start-backend;
+      inherit (marlowe) purs-tidy;
+      inherit (pkgs.nodePackages) prettier;
+    }) client server generated-purescript generate-purescript start-backend;
   };
 
   marlowe-dashboard = pkgs.recurseIntoAttrs rec {
@@ -56,6 +58,8 @@ rec {
       inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
+      inherit (marlowe) purs-tidy;
+      inherit (pkgs.nodePackages) prettier;
     }) client marlowe-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
   };
 
@@ -66,6 +70,8 @@ rec {
     inherit (haskell) plutus-pab;
     inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;
+    run-generated = marlowe-dashboard.generated-purescript;
+    play-generated = marlowe-playground.generated-purescript;
   };
 
   docs = import ./nix/docs.nix { inherit pkgs marlowe; };
