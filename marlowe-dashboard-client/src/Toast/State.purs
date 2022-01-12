@@ -38,7 +38,7 @@ component =
     { initialState: deriveState <<< _.context
     , render: renderToast
     , eval: H.mkEval H.defaultEval
-        { handleAction = handleAction
+        { handleAction = \action -> clearSubscription *> handleAction action
         , receive = Just <<< Receive <<< _.context
         }
     }
@@ -69,10 +69,7 @@ handleAction (Receive mToast) = do
   H.modify_ _ { timeoutSubscription = sub }
 
 handleAction ExpandToast = do
-  mSubscriptionId <- peruse _timeoutSubscription
   assign _expanded true
-  H.modify_ _ { timeoutSubscription = Nothing }
-  for_ mSubscriptionId unsubscribe
 
 handleAction CloseToast = updateStore Store.ClearToast
 
@@ -81,3 +78,11 @@ handleAction ToastTimeout = do
   for_ mElement $ subscribe <<< animateAndWaitUntilFinishSubscription
     "to-bottom"
     CloseToast
+
+clearSubscription
+  :: forall m slots msg
+   . HalogenM State Action slots msg m Unit
+clearSubscription = do
+  mSubscriptionId <- peruse _timeoutSubscription
+  for_ mSubscriptionId unsubscribe
+  H.modify_ _ { timeoutSubscription = Nothing }
