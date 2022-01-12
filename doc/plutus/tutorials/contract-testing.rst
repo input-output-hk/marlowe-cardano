@@ -1190,7 +1190,7 @@ We can run this test as follows:
 Quantifiers in dynamic logic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As well as writing unit tests in the :hsobj:`Plutus.Contract.Test.ContractModel.DL` monad, we can add random
+As well as writing unit tests in the `Plutus.Contract.Test.ContractModel.DL` monad, we can add random
 generation. For example, if we wanted to generalize the unit test
 above a little to lock a random amount of Ada in the contract, then
 we could instead write:
@@ -1199,15 +1199,15 @@ we could instead write:
    :start-after: START unitTest v2
    :end-before: END unitTest v2
 
-Here :hsobj:`Plutus.Contract.Test.ContractModel.forAllQ` lets us generate a random value using
-:hsobj:`Test.QuickCheck.DynamicLogic.Quantify.chooseQ`:
+Here `Plutus.Contract.Test.ContractModel.forAllQ` lets us generate a random value using
+`Test.QuickCheck.DynamicLogic.Quantify.chooseQ`:
 
 .. literalinclude:: GameModel.hs
    :start-after: START chooseQ type
    :end-before: END chooseQ type
 
-:hsobj:`Plutus.Contract.Test.ContractModel.forAllQ` takes a
-:hsobj:`Test.QuickCheck.DynamicLogic.Quantify.Quantification`, which resembles a QuickCheck
+`Plutus.Contract.Test.ContractModel.forAllQ` takes a
+`Test.QuickCheck.DynamicLogic.Quantify.Quantification`, which resembles a QuickCheck
 generator, but with a more limited API to support its use in dynamic
 logic.
 
