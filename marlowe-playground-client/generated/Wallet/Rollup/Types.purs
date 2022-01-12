@@ -22,7 +22,7 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Plutus.V1.Ledger.Crypto (PubKeyHash)
+import Ledger.Address (PaymentPubKeyHash)
 import Plutus.V1.Ledger.Tx (Tx, TxIn, TxOut)
 import Plutus.V1.Ledger.TxId (TxId)
 import Plutus.V1.Ledger.Value (Value)
@@ -138,7 +138,7 @@ _InputNotFound = prism' InputNotFound case _ of
 --------------------------------------------------------------------------------
 
 data BeneficialOwner
-  = OwnedByPubKey PubKeyHash
+  = OwnedByPaymentPubKey PaymentPubKeyHash
   | OwnedByScript String
 
 derive instance eqBeneficialOwner :: Eq BeneficialOwner
@@ -150,14 +150,14 @@ instance showBeneficialOwner :: Show BeneficialOwner where
 
 instance encodeJsonBeneficialOwner :: EncodeJson BeneficialOwner where
   encodeJson = defer \_ -> case _ of
-    OwnedByPubKey a -> E.encodeTagged "OwnedByPubKey" a E.value
+    OwnedByPaymentPubKey a -> E.encodeTagged "OwnedByPaymentPubKey" a E.value
     OwnedByScript a -> E.encodeTagged "OwnedByScript" a E.value
 
 instance decodeJsonBeneficialOwner :: DecodeJson BeneficialOwner where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "BeneficialOwner"
     $ Map.fromFoldable
-        [ "OwnedByPubKey" /\ D.content (OwnedByPubKey <$> D.value)
+        [ "OwnedByPaymentPubKey" /\ D.content (OwnedByPaymentPubKey <$> D.value)
         , "OwnedByScript" /\ D.content (OwnedByScript <$> D.value)
         ]
 
@@ -165,9 +165,9 @@ derive instance genericBeneficialOwner :: Generic BeneficialOwner _
 
 --------------------------------------------------------------------------------
 
-_OwnedByPubKey :: Prism' BeneficialOwner PubKeyHash
-_OwnedByPubKey = prism' OwnedByPubKey case _ of
-  (OwnedByPubKey a) -> Just a
+_OwnedByPaymentPubKey :: Prism' BeneficialOwner PaymentPubKeyHash
+_OwnedByPaymentPubKey = prism' OwnedByPaymentPubKey case _ of
+  (OwnedByPaymentPubKey a) -> Just a
   _ -> Nothing
 
 _OwnedByScript :: Prism' BeneficialOwner String

@@ -4,7 +4,7 @@ module Plutus.Contract.Effects where
 import Prelude
 
 import Control.Lazy (defer)
-import Control.Monad.Freer.Extras.Pagination (Page, PageQuery)
+import Control.Monad.Freer.Extras.Pagination (PageQuery)
 import Data.Argonaut.Core (jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
@@ -23,16 +23,16 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
-import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
+import Ledger.Address (PaymentPubKeyHash)
 import Ledger.Constraints.OffChain (UnbalancedTx)
 import Ledger.TimeSlot (SlotConversionError)
 import Ledger.Tx (ChainIndexTxOut)
+import Plutus.ChainIndex.Api (IsUtxoResponse, TxosResponse, UtxosResponse)
 import Plutus.ChainIndex.Tx (ChainIndexTx)
 import Plutus.ChainIndex.Types (RollbackState, Tip, TxOutState)
 import Plutus.V1.Ledger.Address (Address)
 import Plutus.V1.Ledger.Credential (Credential)
-import Plutus.V1.Ledger.Crypto (PubKeyHash)
 import Plutus.V1.Ledger.Interval (Interval)
 import Plutus.V1.Ledger.Scripts
   ( DatumHash
@@ -59,12 +59,13 @@ data PABReq
   | CurrentSlotReq
   | CurrentTimeReq
   | OwnContractInstanceIdReq
-  | OwnPublicKeyHashReq
+  | OwnPaymentPublicKeyHashReq
   | ChainIndexQueryReq ChainIndexQuery
   | BalanceTxReq UnbalancedTx
   | WriteBalancedTxReq (Either RawJson Tx)
   | ExposeEndpointReq ActiveEndpoint
   | PosixTimeRangeToContainedSlotRangeReq (Interval POSIXTime)
+  | YieldUnbalancedTxReq UnbalancedTx
 
 derive instance eqPABReq :: Eq PABReq
 
@@ -85,8 +86,8 @@ instance encodeJsonPABReq :: EncodeJson PABReq where
     CurrentTimeReq -> encodeJson { tag: "CurrentTimeReq", contents: jsonNull }
     OwnContractInstanceIdReq -> encodeJson
       { tag: "OwnContractInstanceIdReq", contents: jsonNull }
-    OwnPublicKeyHashReq -> encodeJson
-      { tag: "OwnPublicKeyHashReq", contents: jsonNull }
+    OwnPaymentPublicKeyHashReq -> encodeJson
+      { tag: "OwnPaymentPublicKeyHashReq", contents: jsonNull }
     ChainIndexQueryReq a -> E.encodeTagged "ChainIndexQueryReq" a E.value
     BalanceTxReq a -> E.encodeTagged "BalanceTxReq" a E.value
     WriteBalancedTxReq a -> E.encodeTagged "WriteBalancedTxReq" a
@@ -96,6 +97,7 @@ instance encodeJsonPABReq :: EncodeJson PABReq where
       "PosixTimeRangeToContainedSlotRangeReq"
       a
       E.value
+    YieldUnbalancedTxReq a -> E.encodeTagged "YieldUnbalancedTxReq" a E.value
 
 instance decodeJsonPABReq :: DecodeJson PABReq where
   decodeJson = defer \_ -> D.decode
@@ -112,7 +114,7 @@ instance decodeJsonPABReq :: DecodeJson PABReq where
         , "CurrentSlotReq" /\ pure CurrentSlotReq
         , "CurrentTimeReq" /\ pure CurrentTimeReq
         , "OwnContractInstanceIdReq" /\ pure OwnContractInstanceIdReq
-        , "OwnPublicKeyHashReq" /\ pure OwnPublicKeyHashReq
+        , "OwnPaymentPublicKeyHashReq" /\ pure OwnPaymentPublicKeyHashReq
         , "ChainIndexQueryReq" /\ D.content (ChainIndexQueryReq <$> D.value)
         , "BalanceTxReq" /\ D.content (BalanceTxReq <$> D.value)
         , "WriteBalancedTxReq" /\ D.content
@@ -120,6 +122,7 @@ instance decodeJsonPABReq :: DecodeJson PABReq where
         , "ExposeEndpointReq" /\ D.content (ExposeEndpointReq <$> D.value)
         , "PosixTimeRangeToContainedSlotRangeReq" /\ D.content
             (PosixTimeRangeToContainedSlotRangeReq <$> D.value)
+        , "YieldUnbalancedTxReq" /\ D.content (YieldUnbalancedTxReq <$> D.value)
         ]
 
 derive instance genericPABReq :: Generic PABReq _
@@ -171,10 +174,11 @@ _OwnContractInstanceIdReq = prism' (const OwnContractInstanceIdReq) case _ of
   OwnContractInstanceIdReq -> Just unit
   _ -> Nothing
 
-_OwnPublicKeyHashReq :: Prism' PABReq Unit
-_OwnPublicKeyHashReq = prism' (const OwnPublicKeyHashReq) case _ of
-  OwnPublicKeyHashReq -> Just unit
-  _ -> Nothing
+_OwnPaymentPublicKeyHashReq :: Prism' PABReq Unit
+_OwnPaymentPublicKeyHashReq = prism' (const OwnPaymentPublicKeyHashReq)
+  case _ of
+    OwnPaymentPublicKeyHashReq -> Just unit
+    _ -> Nothing
 
 _ChainIndexQueryReq :: Prism' PABReq ChainIndexQuery
 _ChainIndexQueryReq = prism' ChainIndexQueryReq case _ of
@@ -203,6 +207,11 @@ _PosixTimeRangeToContainedSlotRangeReq = prism'
     (PosixTimeRangeToContainedSlotRangeReq a) -> Just a
     _ -> Nothing
 
+_YieldUnbalancedTxReq :: Prism' PABReq UnbalancedTx
+_YieldUnbalancedTxReq = prism' YieldUnbalancedTxReq case _ of
+  (YieldUnbalancedTxReq a) -> Just a
+  _ -> Nothing
+
 --------------------------------------------------------------------------------
 
 data PABResp
@@ -215,13 +224,14 @@ data PABResp
   | CurrentSlotResp Slot
   | CurrentTimeResp POSIXTime
   | OwnContractInstanceIdResp ContractInstanceId
-  | OwnPublicKeyHashResp PubKeyHash
+  | OwnPaymentPublicKeyHashResp PaymentPubKeyHash
   | ChainIndexQueryResp ChainIndexResponse
   | BalanceTxResp BalanceTxResponse
   | WriteBalancedTxResp WriteBalancedTxResponse
   | ExposeEndpointResp EndpointDescription (EndpointValue RawJson)
   | PosixTimeRangeToContainedSlotRangeResp
       (Either SlotConversionError (Interval Slot))
+  | YieldUnbalancedTxResp Unit
 
 derive instance eqPABResp :: Eq PABResp
 
@@ -245,7 +255,10 @@ instance encodeJsonPABResp :: EncodeJson PABResp where
     CurrentTimeResp a -> E.encodeTagged "CurrentTimeResp" a E.value
     OwnContractInstanceIdResp a -> E.encodeTagged "OwnContractInstanceIdResp" a
       E.value
-    OwnPublicKeyHashResp a -> E.encodeTagged "OwnPublicKeyHashResp" a E.value
+    OwnPaymentPublicKeyHashResp a -> E.encodeTagged
+      "OwnPaymentPublicKeyHashResp"
+      a
+      E.value
     ChainIndexQueryResp a -> E.encodeTagged "ChainIndexQueryResp" a E.value
     BalanceTxResp a -> E.encodeTagged "BalanceTxResp" a E.value
     WriteBalancedTxResp a -> E.encodeTagged "WriteBalancedTxResp" a E.value
@@ -255,6 +268,7 @@ instance encodeJsonPABResp :: EncodeJson PABResp where
       "PosixTimeRangeToContainedSlotRangeResp"
       a
       (E.either E.value E.value)
+    YieldUnbalancedTxResp a -> E.encodeTagged "YieldUnbalancedTxResp" a E.unit
 
 instance decodeJsonPABResp :: DecodeJson PABResp where
   decodeJson = defer \_ -> D.decode
@@ -273,7 +287,8 @@ instance decodeJsonPABResp :: DecodeJson PABResp where
         , "CurrentTimeResp" /\ D.content (CurrentTimeResp <$> D.value)
         , "OwnContractInstanceIdResp" /\ D.content
             (OwnContractInstanceIdResp <$> D.value)
-        , "OwnPublicKeyHashResp" /\ D.content (OwnPublicKeyHashResp <$> D.value)
+        , "OwnPaymentPublicKeyHashResp" /\ D.content
+            (OwnPaymentPublicKeyHashResp <$> D.value)
         , "ChainIndexQueryResp" /\ D.content (ChainIndexQueryResp <$> D.value)
         , "BalanceTxResp" /\ D.content (BalanceTxResp <$> D.value)
         , "WriteBalancedTxResp" /\ D.content (WriteBalancedTxResp <$> D.value)
@@ -283,6 +298,8 @@ instance decodeJsonPABResp :: DecodeJson PABResp where
             ( PosixTimeRangeToContainedSlotRangeResp <$>
                 (D.either D.value D.value)
             )
+        , "YieldUnbalancedTxResp" /\ D.content
+            (YieldUnbalancedTxResp <$> D.unit)
         ]
 
 derive instance genericPABResp :: Generic PABResp _
@@ -339,9 +356,9 @@ _OwnContractInstanceIdResp = prism' OwnContractInstanceIdResp case _ of
   (OwnContractInstanceIdResp a) -> Just a
   _ -> Nothing
 
-_OwnPublicKeyHashResp :: Prism' PABResp PubKeyHash
-_OwnPublicKeyHashResp = prism' OwnPublicKeyHashResp case _ of
-  (OwnPublicKeyHashResp a) -> Just a
+_OwnPaymentPublicKeyHashResp :: Prism' PABResp PaymentPubKeyHash
+_OwnPaymentPublicKeyHashResp = prism' OwnPaymentPublicKeyHashResp case _ of
+  (OwnPaymentPublicKeyHashResp a) -> Just a
   _ -> Nothing
 
 _ChainIndexQueryResp :: Prism' PABResp ChainIndexResponse
@@ -373,6 +390,11 @@ _PosixTimeRangeToContainedSlotRangeResp = prism'
     (PosixTimeRangeToContainedSlotRangeResp a) -> Just a
     _ -> Nothing
 
+_YieldUnbalancedTxResp :: Prism' PABResp Unit
+_YieldUnbalancedTxResp = prism' YieldUnbalancedTxResp case _ of
+  (YieldUnbalancedTxResp a) -> Just a
+  _ -> Nothing
+
 --------------------------------------------------------------------------------
 
 data ChainIndexQuery
@@ -386,6 +408,8 @@ data ChainIndexQuery
   | UtxoSetMembership TxOutRef
   | UtxoSetAtAddress (PageQuery TxOutRef) Credential
   | UtxoSetWithCurrency (PageQuery TxOutRef) AssetClass
+  | TxsFromTxIds (Array TxId)
+  | TxoSetAtAddress (PageQuery TxOutRef) Credential
   | GetTip
 
 derive instance eqChainIndexQuery :: Eq ChainIndexQuery
@@ -408,6 +432,9 @@ instance encodeJsonChainIndexQuery :: EncodeJson ChainIndexQuery where
       (E.tuple (E.value >/\< E.value))
     UtxoSetWithCurrency a b -> E.encodeTagged "UtxoSetWithCurrency" (a /\ b)
       (E.tuple (E.value >/\< E.value))
+    TxsFromTxIds a -> E.encodeTagged "TxsFromTxIds" a E.value
+    TxoSetAtAddress a b -> E.encodeTagged "TxoSetAtAddress" (a /\ b)
+      (E.tuple (E.value >/\< E.value))
     GetTip -> encodeJson { tag: "GetTip", contents: jsonNull }
 
 instance decodeJsonChainIndexQuery :: DecodeJson ChainIndexQuery where
@@ -428,6 +455,9 @@ instance decodeJsonChainIndexQuery :: DecodeJson ChainIndexQuery where
             (D.tuple $ UtxoSetAtAddress </$\> D.value </*\> D.value)
         , "UtxoSetWithCurrency" /\ D.content
             (D.tuple $ UtxoSetWithCurrency </$\> D.value </*\> D.value)
+        , "TxsFromTxIds" /\ D.content (TxsFromTxIds <$> D.value)
+        , "TxoSetAtAddress" /\ D.content
+            (D.tuple $ TxoSetAtAddress </$\> D.value </*\> D.value)
         , "GetTip" /\ pure GetTip
         ]
 
@@ -487,6 +517,17 @@ _UtxoSetWithCurrency = prism' (\{ a, b } -> (UtxoSetWithCurrency a b)) case _ of
   (UtxoSetWithCurrency a b) -> Just { a, b }
   _ -> Nothing
 
+_TxsFromTxIds :: Prism' ChainIndexQuery (Array TxId)
+_TxsFromTxIds = prism' TxsFromTxIds case _ of
+  (TxsFromTxIds a) -> Just a
+  _ -> Nothing
+
+_TxoSetAtAddress :: Prism' ChainIndexQuery
+  { a :: PageQuery TxOutRef, b :: Credential }
+_TxoSetAtAddress = prism' (\{ a, b } -> (TxoSetAtAddress a b)) case _ of
+  (TxoSetAtAddress a b) -> Just { a, b }
+  _ -> Nothing
+
 _GetTip :: Prism' ChainIndexQuery Unit
 _GetTip = prism' (const GetTip) case _ of
   GetTip -> Just unit
@@ -502,9 +543,11 @@ data ChainIndexResponse
   | TxOutRefResponse (Maybe ChainIndexTxOut)
   | RedeemerHashResponse (Maybe String)
   | TxIdResponse (Maybe ChainIndexTx)
-  | UtxoSetMembershipResponse (Tuple Tip Boolean)
-  | UtxoSetAtResponse (Tuple Tip (Page TxOutRef))
-  | UtxoSetWithCurrencyResponse (Tuple Tip (Page TxOutRef))
+  | UtxoSetMembershipResponse IsUtxoResponse
+  | UtxoSetAtResponse UtxosResponse
+  | UtxoSetWithCurrencyResponse UtxosResponse
+  | TxIdsResponse (Array ChainIndexTx)
+  | TxoSetAtResponse TxosResponse
   | GetTipResponse Tip
 
 derive instance eqChainIndexResponse :: Eq ChainIndexResponse
@@ -528,13 +571,14 @@ instance encodeJsonChainIndexResponse :: EncodeJson ChainIndexResponse where
       (E.maybe E.value)
     TxIdResponse a -> E.encodeTagged "TxIdResponse" a (E.maybe E.value)
     UtxoSetMembershipResponse a -> E.encodeTagged "UtxoSetMembershipResponse" a
-      (E.tuple (E.value >/\< E.value))
-    UtxoSetAtResponse a -> E.encodeTagged "UtxoSetAtResponse" a
-      (E.tuple (E.value >/\< E.value))
+      E.value
+    UtxoSetAtResponse a -> E.encodeTagged "UtxoSetAtResponse" a E.value
     UtxoSetWithCurrencyResponse a -> E.encodeTagged
       "UtxoSetWithCurrencyResponse"
       a
-      (E.tuple (E.value >/\< E.value))
+      E.value
+    TxIdsResponse a -> E.encodeTagged "TxIdsResponse" a E.value
+    TxoSetAtResponse a -> E.encodeTagged "TxoSetAtResponse" a E.value
     GetTipResponse a -> E.encodeTagged "GetTipResponse" a E.value
 
 instance decodeJsonChainIndexResponse :: DecodeJson ChainIndexResponse where
@@ -555,11 +599,12 @@ instance decodeJsonChainIndexResponse :: DecodeJson ChainIndexResponse where
             (RedeemerHashResponse <$> (D.maybe D.value))
         , "TxIdResponse" /\ D.content (TxIdResponse <$> (D.maybe D.value))
         , "UtxoSetMembershipResponse" /\ D.content
-            (UtxoSetMembershipResponse <$> (D.tuple (D.value </\> D.value)))
-        , "UtxoSetAtResponse" /\ D.content
-            (UtxoSetAtResponse <$> (D.tuple (D.value </\> D.value)))
+            (UtxoSetMembershipResponse <$> D.value)
+        , "UtxoSetAtResponse" /\ D.content (UtxoSetAtResponse <$> D.value)
         , "UtxoSetWithCurrencyResponse" /\ D.content
-            (UtxoSetWithCurrencyResponse <$> (D.tuple (D.value </\> D.value)))
+            (UtxoSetWithCurrencyResponse <$> D.value)
+        , "TxIdsResponse" /\ D.content (TxIdsResponse <$> D.value)
+        , "TxoSetAtResponse" /\ D.content (TxoSetAtResponse <$> D.value)
         , "GetTipResponse" /\ D.content (GetTipResponse <$> D.value)
         ]
 
@@ -602,20 +647,29 @@ _TxIdResponse = prism' TxIdResponse case _ of
   (TxIdResponse a) -> Just a
   _ -> Nothing
 
-_UtxoSetMembershipResponse :: Prism' ChainIndexResponse (Tuple Tip Boolean)
+_UtxoSetMembershipResponse :: Prism' ChainIndexResponse IsUtxoResponse
 _UtxoSetMembershipResponse = prism' UtxoSetMembershipResponse case _ of
   (UtxoSetMembershipResponse a) -> Just a
   _ -> Nothing
 
-_UtxoSetAtResponse :: Prism' ChainIndexResponse (Tuple Tip (Page TxOutRef))
+_UtxoSetAtResponse :: Prism' ChainIndexResponse UtxosResponse
 _UtxoSetAtResponse = prism' UtxoSetAtResponse case _ of
   (UtxoSetAtResponse a) -> Just a
   _ -> Nothing
 
-_UtxoSetWithCurrencyResponse :: Prism' ChainIndexResponse
-  (Tuple Tip (Page TxOutRef))
+_UtxoSetWithCurrencyResponse :: Prism' ChainIndexResponse UtxosResponse
 _UtxoSetWithCurrencyResponse = prism' UtxoSetWithCurrencyResponse case _ of
   (UtxoSetWithCurrencyResponse a) -> Just a
+  _ -> Nothing
+
+_TxIdsResponse :: Prism' ChainIndexResponse (Array ChainIndexTx)
+_TxIdsResponse = prism' TxIdsResponse case _ of
+  (TxIdsResponse a) -> Just a
+  _ -> Nothing
+
+_TxoSetAtResponse :: Prism' ChainIndexResponse TxosResponse
+_TxoSetAtResponse = prism' TxoSetAtResponse case _ of
+  (TxoSetAtResponse a) -> Just a
   _ -> Nothing
 
 _GetTipResponse :: Prism' ChainIndexResponse Tip

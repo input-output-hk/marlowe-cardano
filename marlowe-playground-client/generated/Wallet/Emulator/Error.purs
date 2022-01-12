@@ -20,16 +20,22 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Ledger.Address (PaymentPubKeyHash)
+import Ledger.Constraints.OffChain (MkTxError)
 import Ledger.Index (ValidationError)
 import Ledger.Tx.CardanoAPI (ToCardanoError)
-import Plutus.V1.Ledger.Crypto (PubKeyHash)
+import Plutus.V1.Ledger.Ada (Ada)
+import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
 
 data WalletAPIError
   = InsufficientFunds String
-  | PrivateKeyNotFound PubKeyHash
+  | ChangeHasLessThanNAda Value Ada
+  | PaymentPrivateKeyNotFound PaymentPubKeyHash
   | ValidationError ValidationError
   | ToCardanoError ToCardanoError
+  | PaymentMkTxError MkTxError
+  | RemoteClientFunctionNotYetSupported String
   | OtherError String
 
 derive instance eqWalletAPIError :: Eq WalletAPIError
@@ -40,9 +46,17 @@ instance showWalletAPIError :: Show WalletAPIError where
 instance encodeJsonWalletAPIError :: EncodeJson WalletAPIError where
   encodeJson = defer \_ -> case _ of
     InsufficientFunds a -> E.encodeTagged "InsufficientFunds" a E.value
-    PrivateKeyNotFound a -> E.encodeTagged "PrivateKeyNotFound" a E.value
+    ChangeHasLessThanNAda a b -> E.encodeTagged "ChangeHasLessThanNAda" (a /\ b)
+      (E.tuple (E.value >/\< E.value))
+    PaymentPrivateKeyNotFound a -> E.encodeTagged "PaymentPrivateKeyNotFound" a
+      E.value
     ValidationError a -> E.encodeTagged "ValidationError" a E.value
     ToCardanoError a -> E.encodeTagged "ToCardanoError" a E.value
+    PaymentMkTxError a -> E.encodeTagged "PaymentMkTxError" a E.value
+    RemoteClientFunctionNotYetSupported a -> E.encodeTagged
+      "RemoteClientFunctionNotYetSupported"
+      a
+      E.value
     OtherError a -> E.encodeTagged "OtherError" a E.value
 
 instance decodeJsonWalletAPIError :: DecodeJson WalletAPIError where
@@ -50,9 +64,15 @@ instance decodeJsonWalletAPIError :: DecodeJson WalletAPIError where
     $ D.sumType "WalletAPIError"
     $ Map.fromFoldable
         [ "InsufficientFunds" /\ D.content (InsufficientFunds <$> D.value)
-        , "PrivateKeyNotFound" /\ D.content (PrivateKeyNotFound <$> D.value)
+        , "ChangeHasLessThanNAda" /\ D.content
+            (D.tuple $ ChangeHasLessThanNAda </$\> D.value </*\> D.value)
+        , "PaymentPrivateKeyNotFound" /\ D.content
+            (PaymentPrivateKeyNotFound <$> D.value)
         , "ValidationError" /\ D.content (ValidationError <$> D.value)
         , "ToCardanoError" /\ D.content (ToCardanoError <$> D.value)
+        , "PaymentMkTxError" /\ D.content (PaymentMkTxError <$> D.value)
+        , "RemoteClientFunctionNotYetSupported" /\ D.content
+            (RemoteClientFunctionNotYetSupported <$> D.value)
         , "OtherError" /\ D.content (OtherError <$> D.value)
         ]
 
@@ -65,9 +85,15 @@ _InsufficientFunds = prism' InsufficientFunds case _ of
   (InsufficientFunds a) -> Just a
   _ -> Nothing
 
-_PrivateKeyNotFound :: Prism' WalletAPIError PubKeyHash
-_PrivateKeyNotFound = prism' PrivateKeyNotFound case _ of
-  (PrivateKeyNotFound a) -> Just a
+_ChangeHasLessThanNAda :: Prism' WalletAPIError { a :: Value, b :: Ada }
+_ChangeHasLessThanNAda = prism' (\{ a, b } -> (ChangeHasLessThanNAda a b))
+  case _ of
+    (ChangeHasLessThanNAda a b) -> Just { a, b }
+    _ -> Nothing
+
+_PaymentPrivateKeyNotFound :: Prism' WalletAPIError PaymentPubKeyHash
+_PaymentPrivateKeyNotFound = prism' PaymentPrivateKeyNotFound case _ of
+  (PaymentPrivateKeyNotFound a) -> Just a
   _ -> Nothing
 
 _ValidationError :: Prism' WalletAPIError ValidationError
@@ -79,6 +105,18 @@ _ToCardanoError :: Prism' WalletAPIError ToCardanoError
 _ToCardanoError = prism' ToCardanoError case _ of
   (ToCardanoError a) -> Just a
   _ -> Nothing
+
+_PaymentMkTxError :: Prism' WalletAPIError MkTxError
+_PaymentMkTxError = prism' PaymentMkTxError case _ of
+  (PaymentMkTxError a) -> Just a
+  _ -> Nothing
+
+_RemoteClientFunctionNotYetSupported :: Prism' WalletAPIError String
+_RemoteClientFunctionNotYetSupported = prism'
+  RemoteClientFunctionNotYetSupported
+  case _ of
+    (RemoteClientFunctionNotYetSupported a) -> Just a
+    _ -> Nothing
 
 _OtherError :: Prism' WalletAPIError String
 _OtherError = prism' OtherError case _ of

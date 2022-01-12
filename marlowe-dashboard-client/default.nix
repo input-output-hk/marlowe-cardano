@@ -20,8 +20,8 @@ let
     ${marlowe-setup-invoker}/bin/marlowe-pab-setup psgenerator $out
     ${marlowe-setup-invoker}/bin/marlowe-pab-setup psapigenerator $out
     ${marlowe-run-backend-invoker}/bin/marlowe-dashboard-server psgenerator $out
-    cp ${../.tidyrc.json} $out/.tidyrc.json
-    cp ${../.tidyoperators} $out/.tidyoperators
+    cp ${builtins.path { name = "tidyrc.json"; path = ../.tidyrc.json; } } $out/.tidyrc.json
+    cp ${builtins.path { name = "tidyoperators"; path = ../.tidyoperators; } } $out/.tidyoperators
     cd $out
     ${purs-tidy}/bin/purs-tidy format-in-place $out
     ${prettier}/bin/prettier -w $out

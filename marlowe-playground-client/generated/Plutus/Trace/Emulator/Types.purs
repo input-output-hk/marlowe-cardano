@@ -284,7 +284,9 @@ _Freezing = prism' (const Freezing) case _ of
 --------------------------------------------------------------------------------
 
 newtype ContractInstanceTag = ContractInstanceTag
-  { unContractInstanceTag :: String }
+  { unContractInstanceTag :: String
+  , shortContractInstanceTag :: String
+  }
 
 derive instance eqContractInstanceTag :: Eq ContractInstanceTag
 
@@ -294,13 +296,17 @@ instance showContractInstanceTag :: Show ContractInstanceTag where
 instance encodeJsonContractInstanceTag :: EncodeJson ContractInstanceTag where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { unContractInstanceTag: E.value :: _ String }
+        { unContractInstanceTag: E.value :: _ String
+        , shortContractInstanceTag: E.value :: _ String
+        }
     )
 
 instance decodeJsonContractInstanceTag :: DecodeJson ContractInstanceTag where
   decodeJson = defer \_ -> D.decode $
     ( ContractInstanceTag <$> D.record "ContractInstanceTag"
-        { unContractInstanceTag: D.value :: _ String }
+        { unContractInstanceTag: D.value :: _ String
+        , shortContractInstanceTag: D.value :: _ String
+        }
     )
 
 derive instance genericContractInstanceTag :: Generic ContractInstanceTag _
@@ -310,7 +316,7 @@ derive instance newtypeContractInstanceTag :: Newtype ContractInstanceTag _
 --------------------------------------------------------------------------------
 
 _ContractInstanceTag :: Iso' ContractInstanceTag
-  { unContractInstanceTag :: String }
+  { unContractInstanceTag :: String, shortContractInstanceTag :: String }
 _ContractInstanceTag = _Newtype
 
 --------------------------------------------------------------------------------

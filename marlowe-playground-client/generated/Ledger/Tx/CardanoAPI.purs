@@ -70,7 +70,6 @@ data ToCardanoError
   | MissingMintingPolicyRedeemer
   | MissingMintingPolicy
   | ScriptPurposeNotSupported ScriptTag
-  | PublicKeyInputsNotSupported
   | Tag String ToCardanoError
 
 derive instance eqToCardanoError :: Eq ToCardanoError
@@ -99,8 +98,6 @@ instance encodeJsonToCardanoError :: EncodeJson ToCardanoError where
       { tag: "MissingMintingPolicy", contents: jsonNull }
     ScriptPurposeNotSupported a -> E.encodeTagged "ScriptPurposeNotSupported" a
       E.value
-    PublicKeyInputsNotSupported -> encodeJson
-      { tag: "PublicKeyInputsNotSupported", contents: jsonNull }
     Tag a b -> E.encodeTagged "Tag" (a /\ b) (E.tuple (E.value >/\< E.value))
 
 instance decodeJsonToCardanoError :: DecodeJson ToCardanoError where
@@ -120,7 +117,6 @@ instance decodeJsonToCardanoError :: DecodeJson ToCardanoError where
         , "MissingMintingPolicy" /\ pure MissingMintingPolicy
         , "ScriptPurposeNotSupported" /\ D.content
             (ScriptPurposeNotSupported <$> D.value)
-        , "PublicKeyInputsNotSupported" /\ pure PublicKeyInputsNotSupported
         , "Tag" /\ D.content (D.tuple $ Tag </$\> D.value </*\> D.value)
         ]
 
@@ -186,12 +182,6 @@ _ScriptPurposeNotSupported :: Prism' ToCardanoError ScriptTag
 _ScriptPurposeNotSupported = prism' ScriptPurposeNotSupported case _ of
   (ScriptPurposeNotSupported a) -> Just a
   _ -> Nothing
-
-_PublicKeyInputsNotSupported :: Prism' ToCardanoError Unit
-_PublicKeyInputsNotSupported = prism' (const PublicKeyInputsNotSupported)
-  case _ of
-    PublicKeyInputsNotSupported -> Just unit
-    _ -> Nothing
 
 _Tag :: Prism' ToCardanoError { a :: String, b :: ToCardanoError }
 _Tag = prism' (\{ a, b } -> (Tag a b)) case _ of

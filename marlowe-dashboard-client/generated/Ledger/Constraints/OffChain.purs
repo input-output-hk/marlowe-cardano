@@ -21,12 +21,13 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Ledger.Address (PaymentPubKey, PaymentPubKeyHash)
 import Ledger.Typed.Tx (ConnectionError)
-import Plutus.V1.Ledger.Crypto (PubKey, PubKeyHash)
 import Plutus.V1.Ledger.Interval (Interval)
 import Plutus.V1.Ledger.Scripts (DatumHash)
 import Plutus.V1.Ledger.Time (POSIXTime)
-import Plutus.V1.Ledger.Tx (Tx, TxOut, TxOutRef)
+import Plutus.V1.Ledger.Tx (Tx, TxOutRef)
+import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
 
 data MkTxError
@@ -140,8 +141,9 @@ _CannotSatisfyAny = prism' (const CannotSatisfyAny) case _ of
 
 newtype UnbalancedTx = UnbalancedTx
   { unBalancedTxTx :: Tx
-  , unBalancedTxRequiredSignatories :: Map PubKeyHash (Maybe PubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
+  , unBalancedTxRequiredSignatories ::
+      Map PaymentPubKeyHash (Maybe PaymentPubKey)
+  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
   , unBalancedTxValidityTimeRange :: Interval POSIXTime
   }
 
@@ -156,9 +158,9 @@ instance encodeJsonUnbalancedTx :: EncodeJson UnbalancedTx where
         { unBalancedTxTx: E.value :: _ Tx
         , unBalancedTxRequiredSignatories:
             (E.dictionary E.value (E.maybe E.value)) :: _
-              (Map PubKeyHash (Maybe PubKey))
+              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
-            (E.dictionary E.value E.value) :: _ (Map TxOutRef TxOut)
+            (E.dictionary E.value E.value) :: _ (Map TxOutRef ScriptOutput)
         , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
         }
     )
@@ -169,9 +171,9 @@ instance decodeJsonUnbalancedTx :: DecodeJson UnbalancedTx where
         { unBalancedTxTx: D.value :: _ Tx
         , unBalancedTxRequiredSignatories:
             (D.dictionary D.value (D.maybe D.value)) :: _
-              (Map PubKeyHash (Maybe PubKey))
+              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
-            (D.dictionary D.value D.value) :: _ (Map TxOutRef TxOut)
+            (D.dictionary D.value D.value) :: _ (Map TxOutRef ScriptOutput)
         , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)
         }
     )
@@ -184,8 +186,53 @@ derive instance newtypeUnbalancedTx :: Newtype UnbalancedTx _
 
 _UnbalancedTx :: Iso' UnbalancedTx
   { unBalancedTxTx :: Tx
-  , unBalancedTxRequiredSignatories :: Map PubKeyHash (Maybe PubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
+  , unBalancedTxRequiredSignatories ::
+      Map PaymentPubKeyHash (Maybe PaymentPubKey)
+  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
   , unBalancedTxValidityTimeRange :: Interval POSIXTime
   }
 _UnbalancedTx = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype ScriptOutput = ScriptOutput
+  { scriptOutputValidatorHash :: String
+  , scriptOutputValue :: Value
+  , scriptOutputDatumHash :: DatumHash
+  }
+
+derive instance eqScriptOutput :: Eq ScriptOutput
+
+instance showScriptOutput :: Show ScriptOutput where
+  show a = genericShow a
+
+instance encodeJsonScriptOutput :: EncodeJson ScriptOutput where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { scriptOutputValidatorHash: E.value :: _ String
+        , scriptOutputValue: E.value :: _ Value
+        , scriptOutputDatumHash: E.value :: _ DatumHash
+        }
+    )
+
+instance decodeJsonScriptOutput :: DecodeJson ScriptOutput where
+  decodeJson = defer \_ -> D.decode $
+    ( ScriptOutput <$> D.record "ScriptOutput"
+        { scriptOutputValidatorHash: D.value :: _ String
+        , scriptOutputValue: D.value :: _ Value
+        , scriptOutputDatumHash: D.value :: _ DatumHash
+        }
+    )
+
+derive instance genericScriptOutput :: Generic ScriptOutput _
+
+derive instance newtypeScriptOutput :: Newtype ScriptOutput _
+
+--------------------------------------------------------------------------------
+
+_ScriptOutput :: Iso' ScriptOutput
+  { scriptOutputValidatorHash :: String
+  , scriptOutputValue :: Value
+  , scriptOutputDatumHash :: DatumHash
+  }
+_ScriptOutput = _Newtype

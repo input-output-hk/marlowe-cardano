@@ -295,6 +295,7 @@ newtype ContractInstanceClientState a = ContractInstanceClientState
   , cicWallet :: Wallet
   , cicDefinition :: a
   , cicStatus :: ContractActivityStatus
+  , cicYieldedExportTxs :: Array RawJson
   }
 
 instance showContractInstanceClientState ::
@@ -315,6 +316,7 @@ instance encodeJsonContractInstanceClientState ::
         , cicWallet: E.value :: _ Wallet
         , cicDefinition: E.value :: _ a
         , cicStatus: E.value :: _ ContractActivityStatus
+        , cicYieldedExportTxs: E.value :: _ (Array RawJson)
         }
     )
 
@@ -330,6 +332,7 @@ instance decodeJsonContractInstanceClientState ::
         , cicWallet: D.value :: _ Wallet
         , cicDefinition: D.value :: _ a
         , cicStatus: D.value :: _ ContractActivityStatus
+        , cicYieldedExportTxs: D.value :: _ (Array RawJson)
         }
     )
 
@@ -349,6 +352,7 @@ _ContractInstanceClientState
        , cicWallet :: Wallet
        , cicDefinition :: a
        , cicStatus :: ContractActivityStatus
+       , cicYieldedExportTxs :: Array RawJson
        }
 _ContractInstanceClientState = _Newtype
 
@@ -357,6 +361,7 @@ _ContractInstanceClientState = _Newtype
 data InstanceStatusToClient
   = NewObservableState RawJson
   | NewActiveEndpoints (Array ActiveEndpoint)
+  | NewYieldedExportTxs (Array RawJson)
   | ContractFinished (Maybe RawJson)
 
 instance showInstanceStatusToClient :: Show InstanceStatusToClient where
@@ -366,6 +371,7 @@ instance encodeJsonInstanceStatusToClient :: EncodeJson InstanceStatusToClient w
   encodeJson = defer \_ -> case _ of
     NewObservableState a -> E.encodeTagged "NewObservableState" a E.value
     NewActiveEndpoints a -> E.encodeTagged "NewActiveEndpoints" a E.value
+    NewYieldedExportTxs a -> E.encodeTagged "NewYieldedExportTxs" a E.value
     ContractFinished a -> E.encodeTagged "ContractFinished" a (E.maybe E.value)
 
 instance decodeJsonInstanceStatusToClient :: DecodeJson InstanceStatusToClient where
@@ -374,6 +380,7 @@ instance decodeJsonInstanceStatusToClient :: DecodeJson InstanceStatusToClient w
     $ Map.fromFoldable
         [ "NewObservableState" /\ D.content (NewObservableState <$> D.value)
         , "NewActiveEndpoints" /\ D.content (NewActiveEndpoints <$> D.value)
+        , "NewYieldedExportTxs" /\ D.content (NewYieldedExportTxs <$> D.value)
         , "ContractFinished" /\ D.content
             (ContractFinished <$> (D.maybe D.value))
         ]
@@ -391,6 +398,11 @@ _NewObservableState = prism' NewObservableState case _ of
 _NewActiveEndpoints :: Prism' InstanceStatusToClient (Array ActiveEndpoint)
 _NewActiveEndpoints = prism' NewActiveEndpoints case _ of
   (NewActiveEndpoints a) -> Just a
+  _ -> Nothing
+
+_NewYieldedExportTxs :: Prism' InstanceStatusToClient (Array RawJson)
+_NewYieldedExportTxs = prism' NewYieldedExportTxs case _ of
+  (NewYieldedExportTxs a) -> Just a
   _ -> Nothing
 
 _ContractFinished :: Prism' InstanceStatusToClient (Maybe RawJson)

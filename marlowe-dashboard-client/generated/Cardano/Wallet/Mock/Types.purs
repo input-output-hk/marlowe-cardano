@@ -20,13 +20,13 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Plutus.V1.Ledger.Crypto (PubKeyHash)
+import Ledger.Address (PaymentPubKeyHash)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Wallet (Wallet)
 
 newtype WalletInfo = WalletInfo
   { wiWallet :: Wallet
-  , wiPubKeyHash :: PubKeyHash
+  , wiPaymentPubKeyHash :: PaymentPubKeyHash
   }
 
 instance showWalletInfo :: Show WalletInfo where
@@ -36,7 +36,7 @@ instance encodeJsonWalletInfo :: EncodeJson WalletInfo where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { wiWallet: E.value :: _ Wallet
-        , wiPubKeyHash: E.value :: _ PubKeyHash
+        , wiPaymentPubKeyHash: E.value :: _ PaymentPubKeyHash
         }
     )
 
@@ -44,7 +44,7 @@ instance decodeJsonWalletInfo :: DecodeJson WalletInfo where
   decodeJson = defer \_ -> D.decode $
     ( WalletInfo <$> D.record "WalletInfo"
         { wiWallet: D.value :: _ Wallet
-        , wiPubKeyHash: D.value :: _ PubKeyHash
+        , wiPaymentPubKeyHash: D.value :: _ PaymentPubKeyHash
         }
     )
 
@@ -55,5 +55,5 @@ derive instance newtypeWalletInfo :: Newtype WalletInfo _
 --------------------------------------------------------------------------------
 
 _WalletInfo :: Iso' WalletInfo
-  { wiWallet :: Wallet, wiPubKeyHash :: PubKeyHash }
+  { wiWallet :: Wallet, wiPaymentPubKeyHash :: PaymentPubKeyHash }
 _WalletInfo = _Newtype

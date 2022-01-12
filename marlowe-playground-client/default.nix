@@ -21,8 +21,8 @@ let
   generated-purescript = pkgs.runCommand "marlowe-playground-purescript" { } ''
     mkdir $out
     ${playground-exe}/bin/marlowe-playground-server psgenerator $out
-    cp ${../.tidyrc.json} $out/.tidyrc.json
-    cp ${../.tidyoperators} $out/.tidyoperators
+    cp ${builtins.path { name = "tidyrc.json"; path = ../.tidyrc.json; } } $out/.tidyrc.json
+    cp ${builtins.path { name = "tidyoperators"; path = ../.tidyoperators; } } $out/.tidyoperators
     cd $out
     ${purs-tidy}/bin/purs-tidy format-in-place $out
     ${prettier}/bin/prettier -w $out

@@ -27,6 +27,7 @@ import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
+import Plutus.V1.Ledger.Ada (Ada)
 import Plutus.V1.Ledger.Crypto (PubKey, PubKeyHash, Signature)
 import Plutus.V1.Ledger.Scripts
   ( DatumHash
@@ -78,6 +79,7 @@ data ValidationError
   | InvalidSignature PubKey Signature
   | ValueNotPreserved Value Value
   | NegativeValue Tx
+  | ValueContainsLessThanMinAda Tx Ada
   | NonAdaFees Tx
   | ScriptFailure ScriptError
   | CurrentSlotOutOfRange Slot
@@ -105,6 +107,10 @@ instance encodeJsonValidationError :: EncodeJson ValidationError where
     ValueNotPreserved a b -> E.encodeTagged "ValueNotPreserved" (a /\ b)
       (E.tuple (E.value >/\< E.value))
     NegativeValue a -> E.encodeTagged "NegativeValue" a E.value
+    ValueContainsLessThanMinAda a b -> E.encodeTagged
+      "ValueContainsLessThanMinAda"
+      (a /\ b)
+      (E.tuple (E.value >/\< E.value))
     NonAdaFees a -> E.encodeTagged "NonAdaFees" a E.value
     ScriptFailure a -> E.encodeTagged "ScriptFailure" a E.value
     CurrentSlotOutOfRange a -> E.encodeTagged "CurrentSlotOutOfRange" a E.value
@@ -130,6 +136,8 @@ instance decodeJsonValidationError :: DecodeJson ValidationError where
         , "ValueNotPreserved" /\ D.content
             (D.tuple $ ValueNotPreserved </$\> D.value </*\> D.value)
         , "NegativeValue" /\ D.content (NegativeValue <$> D.value)
+        , "ValueContainsLessThanMinAda" /\ D.content
+            (D.tuple $ ValueContainsLessThanMinAda </$\> D.value </*\> D.value)
         , "NonAdaFees" /\ D.content (NonAdaFees <$> D.value)
         , "ScriptFailure" /\ D.content (ScriptFailure <$> D.value)
         , "CurrentSlotOutOfRange" /\ D.content
@@ -183,6 +191,13 @@ _NegativeValue :: Prism' ValidationError Tx
 _NegativeValue = prism' NegativeValue case _ of
   (NegativeValue a) -> Just a
   _ -> Nothing
+
+_ValueContainsLessThanMinAda :: Prism' ValidationError { a :: Tx, b :: Ada }
+_ValueContainsLessThanMinAda = prism'
+  (\{ a, b } -> (ValueContainsLessThanMinAda a b))
+  case _ of
+    (ValueContainsLessThanMinAda a b) -> Just { a, b }
+    _ -> Nothing
 
 _NonAdaFees :: Prism' ValidationError Tx
 _NonAdaFees = prism' NonAdaFees case _ of
