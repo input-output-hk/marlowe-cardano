@@ -51,7 +51,7 @@ type Form slots m input a =
 form
   :: forall s m i a
    . Functor m
-  => (i -> FormM s i m (R (Array (H.ComponentHTML i s m)) a))
+  => (i -> FormM i m (R (Array (H.ComponentHTML i s m)) a))
   -> Form s m i a
 form = Reporter <<< Star <<< map (MaybeT <<< WriterT <<< unwrap)
 

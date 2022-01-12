@@ -5,9 +5,10 @@ import Prelude
 
 import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Control.Monad.Free (Free, hoistFree, liftF)
+import Control.Monad.Free.Class (class MonadFree, wrapFree)
 import Control.Monad.Reader (class MonadAsk, class MonadReader, ask, local)
 import Control.Monad.Rec.Class (class MonadRec)
-import Control.Monad.State (class MonadState, StateT, gets, mapStateT)
+import Control.Monad.State (class MonadState, StateT, gets, mapStateT, state)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.Writer (class MonadTell, tell)
 import Data.Lens (appendModifying)
@@ -25,74 +26,62 @@ data FormF input m a
   = SetInput input a
   | Lift (m a)
 
-derive instance functorFormF :: Functor m => Functor (FormF input m)
+newtype FormM input m a = FormM (StateT FormState (Free (FormF input m)) a)
 
-newtype FormM :: forall k. k -> Type -> (Type -> Type) -> Type -> Type
-newtype FormM slots input m a =
-  FormM (StateT FormState (Free (FormF input m)) a)
+derive instance Functor m => Functor (FormF input m)
 
-setInput :: forall s i m. i -> FormM s i m Unit
-setInput i = FormM $ lift $ liftF $ SetInput i unit
+setInput :: forall i m. Applicative m => i -> FormM i m Unit
+setInput i = wrapFree $ SetInput i $ pure unit
 
-derive instance newtypeFormM :: Newtype (FormM s i m a) _
-derive instance functorFormM :: Functor m => Functor (FormM s i m)
-derive newtype instance applyFormM :: Apply m => Apply (FormM s i m)
-derive newtype instance applicativeFormM ::
-  Applicative m =>
-  Applicative (FormM s i m)
+derive instance Newtype (FormM i m a) _
+derive instance Functor m => Functor (FormM i m)
+derive newtype instance Apply m => Apply (FormM i m)
+derive newtype instance Applicative m => Applicative (FormM i m)
+derive newtype instance Functor m => MonadFree (FormF i m) (FormM i m)
 
-derive newtype instance bindFormM :: Bind m => Bind (FormM s i m)
-instance monadFormM :: Monad m => Monad (FormM s i m)
-derive newtype instance monadRecFormM :: MonadRec m => MonadRec (FormM s i m)
+derive newtype instance Bind m => Bind (FormM i m)
+instance Monad m => Monad (FormM i m)
+derive newtype instance MonadRec m => MonadRec (FormM i m)
 
-derive newtype instance semigroupFormM ::
-  ( Apply m
-  , Semigroup a
-  ) =>
-  Semigroup (FormM s i m a)
+derive newtype instance (Apply m, Semigroup a) => Semigroup (FormM i m a)
 
-derive newtype instance monoidFormM ::
-  ( Applicative m
-  , Monoid a
-  ) =>
-  Monoid (FormM s i m a)
+derive newtype instance (Applicative m, Monoid a) => Monoid (FormM i m a)
 
-instance monadTransFormM :: MonadTrans (FormM s i) where
+instance MonadTrans (FormM i) where
   lift = FormM <<< lift <<< liftF <<< Lift
 
-instance monadEffectFormM :: MonadEffect m => MonadEffect (FormM s i m) where
+instance MonadEffect m => MonadEffect (FormM i m) where
   liftEffect = lift <<< liftEffect
 
-instance monadAffFormM :: MonadAff m => MonadAff (FormM s i m) where
+instance MonadAff m => MonadAff (FormM i m) where
   liftAff = lift <<< liftAff
 
-instance monadThrowFormM :: MonadThrow e m => MonadThrow e (FormM s i m) where
+instance MonadThrow e m => MonadThrow e (FormM i m) where
   throwError = lift <<< throwError
 
-instance monadtellFormM :: MonadTell w m => MonadTell w (FormM s i m) where
+instance MonadTell w m => MonadTell w (FormM i m) where
   tell = lift <<< tell
 
-instance monadAskFormM :: MonadAsk r m => MonadAsk r (FormM s i m) where
+instance MonadAsk r m => MonadAsk r (FormM i m) where
   ask = lift ask
 
-instance monadReaderFormM :: MonadReader r m => MonadReader r (FormM s i m) where
+instance MonadReader r m => MonadReader r (FormM i m) where
   local f =
     over FormM
       $ mapStateT
       $ hoistFree (hoistFormF (local f))
 
-derive newtype instance monadStateFormM ::
-  Monad m =>
-  MonadState FormState (FormM sl i m)
+instance MonadState s m => MonadState s (FormM i m) where
+  state = lift <<< state
 
-uniqueId :: forall s i m. Monad m => String -> FormM s i m String
-uniqueId candidate = do
+hoistFormF :: forall i m n. (m ~> n) -> FormF i m ~> FormF i n
+hoistFormF _ (SetInput i a) = SetInput i a
+hoistFormF a (Lift m) = Lift $ a m
+
+uniqueId :: forall i m. Monad m => String -> FormM i m String
+uniqueId candidate = FormM do
   count <- gets $ Map.lookup candidate <<< unwrap
   appendModifying identity (SemigroupMap (Map.singleton candidate (Additive 1)))
   pure $ candidate <> case count of
     Nothing -> ""
     Just (Additive i) -> "-" <> show i
-
-hoistFormF :: forall i m n. (m ~> n) -> FormF i m ~> FormF i n
-hoistFormF _ (SetInput i a) = SetInput i a
-hoistFormF a (Lift m) = Lift $ a m
