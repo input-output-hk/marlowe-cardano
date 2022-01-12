@@ -28,7 +28,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-instantiate release.nix --arg checkMaterialization true --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   nixpkgsFmt-test:
     strategy:
@@ -45,7 +45,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-build -A tests.nixpkgsFmt --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   generated-test:
     strategy:
@@ -62,7 +62,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-build -A tests.generated --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   purs-tidy-test:
     strategy:
@@ -79,7 +79,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-build -A tests.pursTidy --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   prettier-test:
     strategy:
@@ -96,7 +96,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-build -A tests.prettier --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   shellcheck-test:
     strategy:
@@ -113,7 +113,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-build -A tests.shellcheck --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   stylish-haskell-test:
     strategy:
@@ -130,7 +130,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: nix-build -A tests.stylishHaskell --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   hydra-workaround:
     strategy:
@@ -147,7 +147,7 @@ jobs:
             ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/*.nix') }}-
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-
-      - uses: nixbuild/nix-quick-install-action@v8
+      - uses: nixbuild/nix-quick-install-action@v9
       - run: |
           nix-build - -I . --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}" << EOF
           let
