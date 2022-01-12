@@ -24,7 +24,7 @@ import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.Form (Form)
 import Halogen.Form as Form
-import Halogen.Form.FormM (setInput, uniqueId)
+import Halogen.Form.FormM (uniqueId, update)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
@@ -103,10 +103,10 @@ inputAsync baseId label validator renderError =
         case value of
           "" -> pure $ NotAsked
           _ -> do
-            setInput (AsyncInput value Loading)
+            update (AsyncInput value Loading)
             V result <- lift $ Validator.runValidator validator value
             let newRemote = fromEither result
-            setInput (AsyncInput value newRemote)
+            update (AsyncInput value newRemote)
             pure newRemote
       r -> pure r
     case remote' of

@@ -74,7 +74,7 @@ subform lens (Reporter (Star f)) = Reporter $ Star \i ->
     adaptAction j = set lens j i
 
     adaptFormF :: FormF j m ~> FormF i m
-    adaptFormF (SetInput j a) = SetInput (set lens j i) a
+    adaptFormF (Update j a) = Update (set lens j i) a
     adaptFormF (Lift m) = Lift m
   in
     mapMaybeT
@@ -167,7 +167,7 @@ useForm f initialInput = Hooks.do
         nextVersionRef <- liftEffect $ Ref.new initialVersion
         let
           interpretFormF :: FormF i m ~> Hooks.HookM m
-          interpretFormF (SetInput i a) = do
+          interpretFormF (Update i a) = do
             withVersionCheck initialVersion 0 versionAVar do
               Hooks.put inputId i
               liftEffect $ Ref.modify_ (add 1) nextVersionRef

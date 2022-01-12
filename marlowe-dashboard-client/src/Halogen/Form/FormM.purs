@@ -23,15 +23,15 @@ import Effect.Class (class MonadEffect, liftEffect)
 type FormState = SemigroupMap String (Additive Int)
 
 data FormF input m a
-  = SetInput input a
+  = Update input a
   | Lift (m a)
 
 newtype FormM input m a = FormM (StateT FormState (Free (FormF input m)) a)
 
 derive instance Functor m => Functor (FormF input m)
 
-setInput :: forall i m. Applicative m => i -> FormM i m Unit
-setInput i = wrapFree $ SetInput i $ pure unit
+update :: forall i m. Applicative m => i -> FormM i m Unit
+update i = wrapFree $ Update i $ pure unit
 
 derive instance Newtype (FormM i m a) _
 derive instance Functor m => Functor (FormM i m)
@@ -75,7 +75,7 @@ instance MonadState s m => MonadState s (FormM i m) where
   state = lift <<< state
 
 hoistFormF :: forall i m n. (m ~> n) -> FormF i m ~> FormF i n
-hoistFormF _ (SetInput i a) = SetInput i a
+hoistFormF _ (Update i a) = Update i a
 hoistFormF a (Lift m) = Lift $ a m
 
 uniqueId :: forall i m. Monad m => String -> FormM i m String
