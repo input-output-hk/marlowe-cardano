@@ -15,7 +15,7 @@ import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import MainFrame.State (mkMainFrame)
-import MainFrame.Types (Action(..), Msg(..), Query(..))
+import MainFrame.Types (Msg(..), Query(..))
 import WebSocket.Support as WS
 
 mkEnv :: WebSocketManager -> Effect Env
@@ -34,10 +34,10 @@ main = do
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
     env <- liftEffect $ mkEnv wsManager
-    let store = { currentSlot: zero }
+    let store = { currentSlot: zero, toast: Nothing }
     body <- awaitBody
     rootComponent <- runAppM env store mkMainFrame
-    driver <- runUI rootComponent Init body
+    driver <- runUI rootComponent unit body
     void
       $ forkAff
       $ WS.runWebSocketManager

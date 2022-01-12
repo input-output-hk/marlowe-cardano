@@ -4,22 +4,22 @@ module Capability.Toast
   ) where
 
 import Prologue
+
 import AppM (AppM)
-import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
+import Control.Monad.Trans.Class (lift)
 import Halogen (HalogenM)
-import MainFrame.Types (Action(..), Msg) as MainFrame
-import Toast.Types (ToastMessage, Action(..))
+import Halogen.Store.Monad (updateStore)
+import Store (Action(..))
+import Toast.Types (ToastMessage)
 
 -- This class allows any component to trigger a toast notification
-class
-  MainFrameLoop m <=
-  Toast m where
+class Monad m <= Toast m where
   addToast :: ToastMessage -> m Unit
 
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
 -- satisfy the compiler
 instance toastAppM :: Toast AppM where
-  addToast _ = pure unit
+  addToast = updateStore <<< ShowToast
 
-instance toastHalogenM :: Toast (HalogenM state action slots MainFrame.Msg m) where
-  addToast toast = callMainFrameAction $ MainFrame.ToastAction $ AddToast toast
+instance toastHalogenM :: Toast m => Toast (HalogenM state action slots msg m) where
+  addToast = lift <<< addToast

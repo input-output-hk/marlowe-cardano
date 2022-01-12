@@ -1,11 +1,4 @@
-module MainFrame.Types
-  ( State
-  , WebSocketStatus(..)
-  , ChildSlots
-  , Query(..)
-  , Msg(..)
-  , Action(..)
-  ) where
+module MainFrame.Types where
 
 import Prologue
 
@@ -25,7 +18,7 @@ import Page.Contract.Types (State) as Contract
 import Page.Dashboard.Types (Action, State) as Dashboard
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
-import Toast.Types (Action, State) as Toast
+import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
 import WebSocket.Support (FromSocket) as WS
 
@@ -39,7 +32,6 @@ type State =
   , currentSlot :: Slot
   , tzOffset :: Minutes
   , subState :: Either Welcome.State Dashboard.State
-  , toast :: Toast.State
   }
 
 data WebSocketStatus
@@ -55,14 +47,17 @@ instance showWebSocketStatus :: Show WebSocketStatus where
     closeEvent
 
 ------------------------------------------------------------
-type ChildSlots
-  =
+type ChildSlots =
   ( tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
   , expandSlot :: Expand.Slot Void String
+  , toaster :: forall q m. H.Slot q m Unit
   )
+
+_toaster :: Proxy "toaster"
+_toaster = Proxy
 
 ------------------------------------------------------------
 data Query a
@@ -82,7 +77,6 @@ data Action
   | EnterDashboardState AddressBook WalletDetails
   | WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
-  | ToastAction Toast.Action
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
@@ -92,4 +86,3 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (EnterDashboardState _ _) = Just $ defaultEvent "EnterDashboardState"
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction
-  toEvent (ToastAction toastAction) = toEvent toastAction

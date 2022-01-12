@@ -11,6 +11,7 @@ module Toast.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.Icons (Icon(..))
@@ -19,8 +20,7 @@ import Halogen (SubscriptionId)
 import Servant.PureScript (AjaxError)
 import Types (DecodedAjaxError)
 
-type ToastMessage
-  =
+type ToastMessage =
   { shortDescription :: String
   , longDescription :: Maybe String
   , icon :: Icon
@@ -31,7 +31,7 @@ type ToastMessage
   }
 
 data Action
-  = AddToast ToastMessage
+  = Receive (Maybe ToastMessage)
   | ExpandToast
   | CloseToast
   | ToastTimeout
@@ -40,23 +40,21 @@ defaultEvent :: String -> Event
 defaultEvent s = A.defaultEvent $ "Toast." <> s
 
 instance actionIsEvent :: IsEvent Action where
-  toEvent (AddToast _) = Just $ defaultEvent "AddToast"
+  toEvent (Receive _) = Just $ defaultEvent "Receive"
   toEvent ExpandToast = Just $ defaultEvent "ExpandToast"
   toEvent CloseToast = Just $ defaultEvent "CloseToast"
   toEvent ToastTimeout = Just $ defaultEvent "ToastTimeout"
 
 -- TODO: For now the state and actions can only represent a single toast. If you open a new toast
 --       it will replace the current one. We could later on extend this to have multiple messages
-type ToastState
-  =
+type ToastState =
   { message :: ToastMessage
   , expanded :: Boolean
-  , timeoutSubscription :: SubscriptionId
   }
 
-type State
-  =
+type State =
   { mToast :: Maybe ToastState
+  , timeoutSubscription :: Maybe SubscriptionId
   }
 
 successToast :: String -> ToastMessage
