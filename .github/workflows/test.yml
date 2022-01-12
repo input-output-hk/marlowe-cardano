@@ -2,8 +2,8 @@ name: "Tests"
 env:
   CACHE_NAME: marlowe-temp
   ALLOWED_URIS: "https://github.com https://api.github.com"
-  TRUSTED_PUBLIC_KEYS: "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-  SUBSTITUTERS: "https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/"
+  TRUSTED_PUBLIC_KEYS: "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec="
+  SUBSTITUTERS: "https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/ https://marlowe-temp.cachix.org"
 on:
   push:
     branches-ignore:
