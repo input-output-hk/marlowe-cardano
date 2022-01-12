@@ -339,13 +339,9 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
 uniqueContractHash :: IO ()
 uniqueContractHash = do
-    let params cs = MarloweParams
-            { rolesCurrency = cs
-            , rolePayoutValidatorHash = validatorHash (rolePayoutScript cs) }
-
-    let hash1 = Scripts.validatorHash $ typedValidator (params "11")
-    let hash2 = Scripts.validatorHash $ typedValidator (params "22")
-    let hash3 = Scripts.validatorHash $ typedValidator (params "22")
+    let hash1 = Scripts.validatorHash $ typedValidator (marloweParams "11")
+    let hash2 = Scripts.validatorHash $ typedValidator (marloweParams "22")
+    let hash3 = Scripts.validatorHash $ typedValidator (marloweParams "22")
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
 

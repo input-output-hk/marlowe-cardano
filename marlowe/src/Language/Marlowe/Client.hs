@@ -54,9 +54,11 @@ import           Ledger.Ada                       (adaSymbol, adaToken, adaValue
 import           Ledger.Address                   (pubKeyHashAddress, scriptHashAddress)
 import           Ledger.Constraints
 import qualified Ledger.Constraints               as Constraints
+import           Ledger.Constraints.OffChain      (UnbalancedTx (..))
 import           Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval                  as Interval
 import           Ledger.Scripts                   (datumHash, unitRedeemer)
+import           Ledger.TimeSlot                  (SlotConfig (..), slotRangeToPOSIXTimeRange)
 import qualified Ledger.Tx                        as Tx
 import           Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts             as Scripts
@@ -67,6 +69,7 @@ import           Plutus.ChainIndex                (ChainIndexTx (..), _ValidTx, 
 import           Plutus.Contract                  as Contract
 import           Plutus.Contract.StateMachine     (AsSMContractError (..), Void)
 import qualified Plutus.Contract.StateMachine     as SM
+import           Plutus.Contract.Unsafe           (unsafeGetSlotConfig)
 import           Plutus.Contract.Wallet           (getUnspentOutput)
 import qualified Plutus.Contracts.Currency        as Currency
 import qualified PlutusTx
@@ -292,6 +295,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         -- See Note [The contract is not ready]
         ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners contract
+        logInfo $ "Marlowe contract created with parameters: " <> show params
         slot <- currentSlot
         let marloweData = MarloweData {
                 marloweContract = contract,
@@ -454,13 +458,11 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
     let roles = extractNonMerkleizedContractRoles contract
     if Set.null roles
     then do
-        let params = MarloweParams
-                { rolesCurrency = adaSymbol
-                , rolePayoutValidatorHash = defaultRolePayoutValidatorHash }
+        let params = marloweParams adaSymbol
         pure (params, mempty, mempty)
     else if roles `Set.isSubsetOf` Set.fromList (AssocMap.keys owners)
     then do
-        let tokens = fmap (, 1) $ Set.toList roles
+        let tokens = (, 1) <$> Set.toList roles
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
         utxo <- utxosAt ownAddress
         let theCurrency = Currency.OneShotCurrency
@@ -476,9 +478,7 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
         let minAdaTxOut = adaValueOf 2
         let giveToParty (role, pkh) = Constraints.mustPayToPubKey pkh (Val.singleton rolesSymbol role 1 <> minAdaTxOut)
         let distributeRoleTokens = foldMap giveToParty $ second PaymentPubKeyHash <$> AssocMap.toList owners
-        let params = MarloweParams
-                { rolesCurrency = rolesSymbol
-                , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesSymbol }
+        let params = marloweParams rolesSymbol
         pure (params, mintTx <> distributeRoleTokens, lookups)
     else do
         let missingRoles = roles `Set.difference` Set.fromList (AssocMap.keys owners)
@@ -558,7 +558,8 @@ applyInputs params typedValidator slotInterval inputs = mapError (review _Marlow
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
     { rolesCurrency = rolesCurrency
-    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency }
+    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency
+    , slotConfig = let SlotConfig{..} = unsafeGetSlotConfig in (scSlotLength, scSlotZeroTime)}  -- FIXME: This is temporary, until SCP-3050 is completed.
 
 
 defaultMarloweParams :: MarloweParams
@@ -685,6 +686,15 @@ mkStep ::
     -> [Input]
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep params typedValidator range input = do
+    let
+      range' =
+        Interval.Interval
+          (Interval.LowerBound (Interval.Finite $ fst range) True )
+          (Interval.UpperBound (Interval.Finite $ snd range) False)
+      times =
+        slotRangeToPOSIXTimeRange
+          (uncurry SlotConfig $ slotConfig params)
+          range'
     maybeState <- getOnChainState typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
@@ -718,7 +728,12 @@ mkStep params typedValidator range input = do
                     utx <- either (throwing _ConstraintResolutionError)
                                 pure
                                 (Constraints.mkTx lookups smtConstraints)
-                    submitTxConfirmed $ Constraints.adjustUnbalancedTx utx
+                    let utx' = utx
+                               {
+                                 unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
+                               , unBalancedTxValidityTimeRange = times
+                               }
+                    submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
                     pure (SM.stateData newState)
                 Nothing -> throwError TransitionError
 
