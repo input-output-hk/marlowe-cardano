@@ -14,7 +14,6 @@ pabWebserverConfig:
 
 walletServerConfig:
   tag: LocalWalletConfig
-  walletSettings:
     baseUrl: http://localhost:9081
 
 nodeServerConfig:

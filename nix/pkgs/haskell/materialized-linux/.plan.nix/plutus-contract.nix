@@ -107,6 +107,7 @@
           "Plutus/Contract/StateMachine/ThreadToken"
           "Plutus/Contract/Tx"
           "Plutus/Contract/Types"
+          "Plutus/Contract/Unsafe"
           "Plutus/Contract/Util"
           "Plutus/Contract/Wallet"
           "Plutus/Contract/Typed/Tx"

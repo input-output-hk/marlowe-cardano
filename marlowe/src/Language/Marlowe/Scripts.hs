@@ -191,22 +191,18 @@ smallMarloweValidator
     -> [Input]
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
-    let slotConfig = def :: TimeSlot.SlotConfig
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig = (scSlotLength, scSlotZeroTime)} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
     let ownInput = case findOwnInput ctx of
             Just i -> i
             _      -> traceError "I0" {-"Can't find validation input"-}
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
-    let (minTime, maxTime) =
-            case txInfoValidRange scriptContextTxInfo of
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
+    let interval =
+            case TimeSlot.posixTimeRangeToContainedSlotRange TimeSlot.SlotConfig{..} $ txInfoValidRange scriptContextTxInfo of
+                -- FIXME restore this when mockchain implementation updates to correct one
+--              Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
                 -- FIXME remove this when mockchain implementation updates to correct one as above
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) True) -> (l, h)
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) _   ) (Interval.UpperBound (Interval.Finite h) _    ) -> (l, h)
                 _ -> traceError "R0"
-    let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
-    let minSlot = timeToSlot minTime
-    let maxSlot = timeToSlot maxTime
-    let interval = (minSlot, maxSlot)
     let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
 
     {-  We do not check that a transaction contains exact input payments.

@@ -8,7 +8,7 @@
 
 { writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket }:
 let
-  slotZeroTime = 1596059091000; # POSIX time of slot zeron is milliseconds. See note [Datetime to slot] in Marlowe.Slot
+  slotZeroTime = 1638215277000; # POSIX time of slot zeron is milliseconds. See note [Datetime to slot] in Marlowe.Slot
   slotLengthMillis = 1000;
 
   constantFee = 10; # Constant fee per transaction in lovelace
@@ -27,10 +27,7 @@ let
     };
 
     walletServerConfig = {
-      tag = "LocalWalletConfig";
-      walletSettings = {
-        baseUrl = "@NOMAD_ADDR_wbe@";
-      };
+      baseUrl = "@NOMAD_ADDR_wbe@";
     };
 
     nodeServerConfig = {
@@ -51,6 +48,7 @@ let
       mscKeptBlocks = 100000;
       mscInitialTxWallets = [ ];
       mscNodeMode = "AlonzoNode";
+      mscProtocolParametersJsonPath = "../marlowe-dashboard-client/private-testnet.protocol";
     };
 
     chainIndexConfig = {
@@ -61,14 +59,6 @@ let
     requestProcessingConfig = {
       requestProcessingInterval = 1;
     };
-
-    developmentOptions = {
-      pabRollbackHistory = null;
-      pabResumeFrom = {
-        tag = "PointAtGenesis";
-      };
-    };
-
   });
 
   dbFile = "$PAB_STATE_DIR/pab.db";
