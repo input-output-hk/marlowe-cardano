@@ -121,7 +121,7 @@ mkMainFrame
   => MonadClipboard m
   => MainFrameLoop m
   => CheckMnemonic m
-  => Component Query Action Msg m
+  => Component Query i Msg m
 mkMainFrame =
   mkComponent
     { initialState: const initialState
