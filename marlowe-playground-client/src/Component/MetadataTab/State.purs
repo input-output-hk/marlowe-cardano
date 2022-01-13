@@ -3,9 +3,14 @@ module Component.MetadataTab.State (carryMetadataAction) where
 import Prologue hiding (div)
 
 import Component.MetadataTab.Types (MetadataAction(..))
+import Contrib.Data.Unfoldable (Move) as Unfoldable
+import Data.Array ((!!))
 import Data.Lens (assign, modifying, over, set)
 import Data.Map as Map
+import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
+import Data.Maybe (fromMaybe)
+import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Query (HalogenM)
 import MainFrame.Types
@@ -33,6 +38,16 @@ import Marlowe.Extended.Metadata
   )
 import Servant.PureScript (class MonadAjax)
 
+moveTo
+  :: forall key value
+   . Ord key
+  => Unfoldable.Move
+  -> OMap key value
+  -> OMap key value
+moveTo move m = fromMaybe m do
+  key /\ _ <- OMap.toUnfoldable m !! move.from
+  OMap.moveTo move.to key m
+
 carryMetadataAction
   :: forall m
    . MonadAff m
@@ -53,12 +68,16 @@ carryMetadataAction action = do
       tokenName
     SetSlotParameterDescription slotParam description ->
       over _slotParameterDescriptions $ OMap.insert slotParam description
+    MoveSlotParameterDescription move -> over _slotParameterDescriptions $
+      moveTo move
     DeleteSlotParameterDescription slotParam -> over _slotParameterDescriptions
       $ OMap.delete slotParam
     SetValueParameterDescription valueParameterName description ->
       over _valueParameterInfo $ updateValueParameterInfo
         (setValueParameterDescription description)
         valueParameterName
+    MoveValueParameterDescription move ->
+      over _valueParameterInfo $ moveTo move
     SetValueParameterFormat valueParameterName format ->
       over _valueParameterInfo $ updateValueParameterInfo
         (setValueParameterFormat format)

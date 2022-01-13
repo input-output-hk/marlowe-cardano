@@ -36,10 +36,10 @@ nextVersion (OrderingVersion i) = OrderingVersion (i + 1)
 -- | with the new one so we have to ignore all events till everything is
 -- | repainted
 type State
-  = { orderingVersion :: OrderingVersion, dragging :: Maybe Int }
+  = { orderingVersion :: OrderingVersion, dragged :: Maybe Int }
 
 initialState :: State
-initialState = { orderingVersion: OrderingVersion 0, dragging: Nothing }
+initialState = { orderingVersion: OrderingVersion 0, dragged: Nothing }
 
 data Action
   = DragStart OrderingVersion DragEvent Int
@@ -81,7 +81,7 @@ mkGenDragHandlers orderingVersion =
     let
       onDragStart :: forall r. DragHandler r Action
       onDragStart =
-        Events.onDragStart \event ->
+        Events.onDragStart \event -> do
           DragStart orderingVersion event idx
 
       onDragEnd :: forall r. DragHandler r Action
@@ -118,12 +118,12 @@ handleAction
   -> State
   -> m (Maybe State)
 handleAction handleReordering action state = case action of
-  DragStart orderingVersion event dragging ->
+  DragStart orderingVersion event dragged ->
     if
-      ( orderingVersion == state.orderingVersion && state.dragging /= Just
-          dragging
+      ( orderingVersion == state.orderingVersion && state.dragged /= Just
+          dragged
       ) then
-      pure $ Just $ state { dragging = Just dragging }
+      pure $ Just $ state { dragged = Just dragged }
     else do
       liftEffect $ preventDefault (DragEvent.toEvent event)
       pure Nothing
@@ -131,24 +131,24 @@ handleAction handleReordering action state = case action of
     pure
       $
         Alternative.guard
-          (isJust state.dragging)
-          $> state { dragging = Nothing }
+          (isJust state.dragged)
+          $> state { dragged = Nothing }
   MoveTo orderingVersion idx ->
     runMaybeT do
-      dragging <- hoistMaybe state.dragging
+      dragged <- hoistMaybe state.dragged
       st /\ f <-
         hoistMaybe $
           Alternative.guard
-            (state.orderingVersion == orderingVersion && dragging /= idx)
+            (state.orderingVersion == orderingVersion && dragged /= idx)
             $> do
               let
                 orderingVersion' = nextVersion state.orderingVersion
 
                 state' =
-                  { dragging: Just idx, orderingVersion: orderingVersion' }
+                  { dragged: Just idx, orderingVersion: orderingVersion' }
 
-                -- f i = fromMaybe i (Unfoldable.moveTo dragging idx i)
-                move = { from: dragging, to: idx }
+                -- f i = fromMaybe i (Unfoldable.moveTo dragged idx i)
+                move = { from: dragged, to: idx }
               state' /\ move
       lift $ handleReordering f
       pure st

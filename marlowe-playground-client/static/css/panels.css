@@ -40,6 +40,12 @@ button.minus-btn {
   height: 25px;
 }
 
+button.move-btn {
+  padding: 0;
+  width: 25px;
+  height: 25px;
+}
+
 button.minus-btn.disabled {
   background: lightgray;
 }
@@ -362,4 +368,20 @@ button.minus-btn:hover {
 .metadata-prop-create {
   grid-column-start: 4;
   grid-column-end: 5;
+}
+
+.metadata-sortable-form-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.metadata-sortable-form-row .metadata-prop-edit {
+  flex-basis: 30%;
+}
+.metadata-sortable-form-row .metadata-prop-label {
+  flex-basis: 45%;
+}
+
+.metadata-sortable-form-row .metadata-prop-not-defined {
+  flex-basis: 75%;
 }

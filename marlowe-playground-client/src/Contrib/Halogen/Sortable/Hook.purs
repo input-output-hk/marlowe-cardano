@@ -21,17 +21,17 @@ import Halogen.Hooks.Extra.Hooks (UseGet, UseStateFn, useGet, useModifyState_)
 import Web.Event.Event (preventDefault) as Event
 import Web.HTML.Event.DragEvent (toEvent) as DragEvent
 
-foreign import data UseSortable :: Hooks.HookType
-
 type State
   =
-  { dragging :: Maybe Int
+  { dragged :: Maybe Int
   , orderingVersion :: Sortable.OrderingVersion
   , move :: Maybe Unfoldable.Move
   }
 
 type UseSortable'
   = UseStateFn State <> UseGet State <> Hooks.Pure
+
+foreign import data UseSortable :: Hooks.HookType
 
 instance newtypeUseSortable :: HookNewtype UseSortable UseSortable'
 
@@ -41,7 +41,7 @@ useSortable
   => Hook
        m
        UseSortable
-       { dragging :: Maybe Int
+       { dragged :: Maybe Int
        , genDragHandlers :: GenDragHandlers (HookM m Unit)
        , reordering ::
            { move :: Maybe Unfoldable.Move
@@ -54,7 +54,7 @@ useSortable = Hooks.wrap hook
   hook = Hooks.do
     state /\ modifyState <-
       useModifyState_
-        { dragging: Sortable.initialState.dragging
+        { dragged: Sortable.initialState.dragged
         , orderingVersion: Sortable.initialState.orderingVersion
         , move: Nothing
         }
@@ -67,46 +67,43 @@ useSortable = Hooks.wrap hook
               Sortable.DragHandlers
                 { onDragStart:
                     Events.onDragStart \event -> do
-                      { dragging, orderingVersion } <- getState
+                      { dragged, orderingVersion } <- getState
                       if
-                        ( orderingVersion == state.orderingVersion && dragging
-                            /= Just idx
+                        ( orderingVersion == state.orderingVersion && dragged /=
+                            Just idx
                         ) then
-                        modifyState _ { dragging = Just idx }
+                        modifyState _ { dragged = Just idx }
                       else do
                         liftEffect $ Event.preventDefault
                           (DragEvent.toEvent event)
                 , onDragEnd:
                     Events.onDragEnd
                       $ \_ -> do
-                          { dragging } <- getState
-                          when (isJust dragging) do
-                            modifyState _ { dragging = Nothing }
+                          { dragged } <- getState
+                          when (isJust dragged) do
+                            modifyState _ { dragged = Nothing }
                 , onDragEnter:
-                    Events.onDragEnter
-                      $ \_ ->
-                          getState
-                            >>= case _ of
-                              { dragging: Just dragging, orderingVersion }
-                                | orderingVersion == state.orderingVersion &&
-                                    dragging /= idx -> do
-                                    let
-                                      orderingVersion' = Sortable.nextVersion
-                                        orderingVersion
+                    Events.onDragEnter $ const $ getState >>= case _ of
+                      { dragged: Just dragged, orderingVersion }
+                        | orderingVersion == state.orderingVersion &&
+                            dragged /= idx -> do
+                            let
+                              orderingVersion' = Sortable.nextVersion
+                                orderingVersion
 
-                                      move = Just { from: dragging, to: idx }
+                              move = Just { from: dragged, to: idx }
 
-                                      state' =
-                                        { dragging: Just idx
-                                        , orderingVersion: orderingVersion'
-                                        , move
-                                        }
-                                    modifyState $ const state'
-                              _ -> pure unit
+                              state' =
+                                { dragged: Just idx
+                                , orderingVersion: orderingVersion'
+                                , move
+                                }
+                            modifyState $ const state'
+                      _ -> pure unit
                 }
           handlers /\ (idx + 1)
     Hooks.pure
-      { dragging: state.dragging
+      { dragged: state.dragged
       , genDragHandlers
       , reordering:
           { move: state.move
@@ -114,18 +111,27 @@ useSortable = Hooks.wrap hook
           }
       }
 
-useSortable'
+-- | A handy shortcut which keeps track of ordering version
+-- | runs provided reordering effect only when necessary.
+type UseApplySortable' = UseSortable <> UseEffect <> UseEffect
+
+foreign import data UseApplySortable :: Hooks.HookType
+
+instance newtypeUseApplySortable ::
+  HookNewtype UseApplySortable UseApplySortable'
+
+useApplySortable
   :: forall m
    . MonadEffect m
   => (Unfoldable.Move -> HookM m Unit)
   -> Hook
        m
-       (UseSortable <> UseEffect <> UseEffect)
-       { dragging :: Maybe Int
+       UseApplySortable
+       { dragged :: Maybe Int
        , genDragHandlers :: GenDragHandlers (HookM m Unit)
        }
-useSortable' handleReordering = Hooks.do
-  { dragging, genDragHandlers, reordering } <- useSortable
+useApplySortable handleReordering = Hooks.wrap $ Hooks.do
+  { dragged, genDragHandlers, reordering } <- useSortable
   Hooks.captures { version: reordering.version }
     $ flip Hooks.useTickEffect do
         case reordering.move of
@@ -133,6 +139,6 @@ useSortable' handleReordering = Hooks.do
           Nothing -> pure unit
         pure Nothing
   Hooks.pure
-    { dragging
+    { dragged
     , genDragHandlers
     }
