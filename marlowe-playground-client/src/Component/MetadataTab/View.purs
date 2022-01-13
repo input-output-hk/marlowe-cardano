@@ -16,6 +16,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
+import Data.Monoid (guard) as Monoid
 import Data.Set (Set, toUnfoldable)
 import Data.Set.Ordered.OSet (OSet)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -31,6 +32,7 @@ import Halogen.HTML
   , input
   , option
   , select
+  , span
   , text
   )
 import Halogen.HTML.Events (onClick, onValueChange)
@@ -73,48 +75,63 @@ import Marlowe.Extended.Metadata
   , isDefaultFormat
   , toString
   )
+import Record (merge, set) as Record
+import Type.Prelude (Proxy(..))
+
+type SubformOptsRow v =
+  ( key :: String
+  , value :: v
+  , needed :: Boolean
+  , sortable :: Boolean
+  , typeNameTitle :: String
+  , typeNameSmall :: String
+  )
+
+type SubformOpts v = { | SubformOptsRow v }
+
+propLabel :: forall a p. { sortable :: Boolean, title :: String } -> HTML p a
+propLabel { sortable, title } = div [ class_ $ ClassName "metadata-prop-label" ]
+  $
+    Monoid.guard sortable
+      [ span [ class_ $ ClassName "metadata-prop-drag" ] [ text "☰" ] ]
+      <> [ text $ title ]
 
 onlyDescriptionRenderer
   :: forall a p r
    . { delete :: String -> a, set :: String -> String -> a | r }
-  -> String
-  -> String
-  -> Boolean
-  -> String
-  -> String
+  -> SubformOpts String
   -> Array (HTML p a)
 onlyDescriptionRenderer
   actions
-  key
-  info
-  needed
-  typeNameTitle
-  typeNameSmall =
-  [ div [ class_ $ ClassName "metadata-prop-label" ]
-      [ text $ typeNameTitle <> " " <> show key <> ": " ]
+  opts =
+  [ propLabel
+      { sortable: opts.sortable
+      , title: opts.typeNameTitle <> " " <> show opts.key <> ": "
+      }
   , div [ class_ $ ClassName "metadata-prop-edit" ]
       [ input
           [ type_ InputText
-          , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
+          , placeholder $ "Description for " <> opts.typeNameSmall <> " " <>
+              show opts.key
           , class_ $ ClassName "metadata-input"
-          , value info
-          , onValueChange $ actions.set key
+          , value opts.value
+          , onValueChange $ actions.set opts.key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
           [ classes
-              [ if needed then plusBtn else minusBtn
+              [ if opts.needed then plusBtn else minusBtn
               , ClassName "align-top"
               , btn
               ]
-          , onClick $ const $ actions.delete key
+          , onClick $ const $ actions.delete opts.key
           ]
           [ text "-" ]
       ]
   ]
     <>
-      if needed then []
+      if opts.needed then []
       else
         [ div
             [ classes
@@ -125,30 +142,35 @@ onlyDescriptionRenderer
             [ text "Not used" ]
         ]
 
-type FormattedNumberInfo a
-  =
-  { key :: String
-  , description :: String
-  , format :: NumberFormat
-  , setFormat :: String -> NumberFormat -> a
+type FormattedNumberInfo a =
+  { setFormat :: String -> NumberFormat -> a
   , setDescription :: String -> String -> a
   , deleteInfo :: String -> a
+  | SubformOptsRow
+      { description :: String
+      , format :: NumberFormat
+      }
   }
 
 formattedNumberMetadataRenderer
   :: forall a p
    . FormattedNumberInfo a
-  -> Boolean
-  -> String
-  -> String
   -> Array (HTML p a)
 formattedNumberMetadataRenderer
-  { key, description, format, setFormat, setDescription, deleteInfo }
-  needed
-  typeNameTitle
-  typeNameSmall =
-  [ div [ class_ $ ClassName "metadata-prop-label" ]
-      [ text $ typeNameTitle <> " " <> show key <> ": " ]
+  { key
+  , needed
+  , value: { description, format }
+  , setFormat
+  , setDescription
+  , deleteInfo
+  , typeNameTitle
+  , typeNameSmall
+  , sortable
+  } =
+  [ propLabel
+      { sortable: sortable
+      , title: typeNameTitle <> " " <> show key <> ": "
+      }
   , div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
       [ select
           [ class_ $ ClassName "metadata-input"
@@ -249,19 +271,22 @@ formattedNumberMetadataRenderer
 
 choiceMetadataRenderer
   :: forall p
-   . String
-  -> ChoiceInfo
-  -> Boolean
-  -> String
-  -> String
+   . SubformOpts ChoiceInfo
   -> Array (HTML p MetadataAction)
-choiceMetadataRenderer key { choiceDescription, choiceFormat } =
+choiceMetadataRenderer
+  { key, needed, value, sortable, typeNameTitle, typeNameSmall } =
   formattedNumberMetadataRenderer
     { key: key
-    , description: choiceDescription
-    , format: choiceFormat
+    , value:
+        { description: value.choiceDescription
+        , format: value.choiceFormat
+        }
+    , needed
     , setFormat: SetChoiceFormat
     , setDescription: SetChoiceDescription
+    , sortable
+    , typeNameTitle
+    , typeNameSmall
     , deleteInfo: DeleteChoiceInfo
     }
 
@@ -271,7 +296,7 @@ metadataList
   => { set :: String -> v -> a | r }
   -> Map String c
   -> Set String
-  -> (String -> c -> Boolean -> String -> String -> Array (HTML p a))
+  -> (SubformOpts c -> Array (HTML p a))
   -> String
   -> String
   -> Array (HTML p a)
@@ -292,9 +317,14 @@ metadataList
         ( concatMap
             ( \(key /\ val) ->
                 ( case val of
-                    Just (info /\ needed) -> metadataRenderer key info needed
-                      typeNameTitle
-                      typeNameSmall
+                    Just (value /\ needed) -> metadataRenderer
+                      { key
+                      , value
+                      , needed
+                      , typeNameTitle
+                      , typeNameSmall
+                      , sortable: false
+                      }
                     Nothing ->
                       [ div
                           [ classes
@@ -313,6 +343,7 @@ metadataList
                               [ text "+" ]
                           ]
                       ]
+
                 )
             )
             $ Map.toUnfoldable combinedMap
@@ -348,7 +379,7 @@ sortableMetadataList
      }
   -> OMap String c
   -> OSet String
-  -> (String -> c -> Boolean -> String -> String -> Array (HTML p a))
+  -> (SubformOpts c -> Array (HTML p a))
   -> String
   -> String
   -> Array (HTML p a)
@@ -365,52 +396,50 @@ sortableMetadataList
       actions.dragging.genDragHandlers
       (OMap.toUnfoldable combinedMap :: Array _)
     itemsCount = Array.length items
-
-    sortableRow h = div $
-      if itemsCount > 1 then
-        [ h.onDragEnd
-        , h.onDragStart
-        , h.onDragEnter
-        , class_ $ ClassName "metadata-sortable-form-row"
-        , draggable true
-        ]
-      else
-        [ class_ $ ClassName "metadata-sortable-form-row" ]
+    sortable = itemsCount > 1
+    row key value needed h = do
+      let
+        props =
+          if sortable then
+            [ h.onDragEnd
+            , h.onDragStart
+            , h.onDragEnter
+            , class_ $ ClassName "metadata-sortable-form-row"
+            , draggable true
+            ]
+          else
+            [ class_ $ ClassName "metadata-sortable-form-row" ]
+        children = metadataRenderer
+          { key, needed, typeNameTitle, typeNameSmall, sortable, value }
+      div props children
   if OMap.isEmpty combinedMap then
     []
-  else AB.build
-    $
-      AB.cons do
-        div [ class_ $ ClassName "metadata-group-title" ]
-          [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]
-        <> items `flip foldMapDefaultL` \(DragHandlers h /\ key /\ val) ->
-          case val of
-            Just (info /\ needed) -> AB.cons $ sortableRow h
-              $ metadataRenderer key info needed typeNameTitle typeNameSmall
-                  <>
-                    [ button
-                        [ classes [ btn, ClassName "move-btn" ] ]
-                        [ text "↕" ]
+  else AB.build $
+    AB.cons do
+      div [ class_ $ ClassName "metadata-group-title" ]
+        [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]
+      <> items `flip foldMapDefaultL` \(DragHandlers h /\ key /\ item) ->
+        case item of
+          Just (val /\ needed) -> AB.cons $ row key val needed h
+          Nothing -> AB.cons $ div
+            [ class_ $ ClassName "metadata-sortable-form-row" ]
+            [ div
+                [ classes
+                    [ ClassName "metadata-error"
+                    , ClassName "metadata-prop-not-defined"
                     ]
-            Nothing -> AB.cons $ div
-              [ class_ $ ClassName "metadata-sortable-form-row" ]
-              [ div
-                  [ classes
-                      [ ClassName "metadata-error"
-                      , ClassName "metadata-prop-not-defined"
-                      ]
-                  ]
-                  [ text $ typeNameTitle <> " " <> show key <>
-                      " meta-data not defined"
-                  ]
-              , div [ class_ $ ClassName "metadata-prop-create" ]
-                  [ button
-                      [ classes [ minusBtn, ClassName "align-top", btn ]
-                      , onClick $ const $ actions.set key mempty
-                      ]
-                      [ text "+" ]
-                  ]
-              ]
+                ]
+                [ text $ typeNameTitle <> " " <> show key <>
+                    " meta-data not defined"
+                ]
+            , div [ class_ $ ClassName "metadata-prop-create" ]
+                [ button
+                    [ classes [ minusBtn, ClassName "align-top", btn ]
+                    , onClick $ const $ actions.set key mempty
+                    ]
+                    [ text "+" ]
+                ]
+            ]
   where
   mergeMaps
     :: forall c2
@@ -535,35 +564,48 @@ metadataView handlers metadataHints metadata = div_
         choiceMetadataRenderer
         "Choice"
         "choice"
-  , div [ classes [ ClassName "sortable-metadata-form" ] ] do
-      let
-        actions =
-          { delete: handlers.raise <<< DeleteSlotParameterDescription
-          , dragging: handlers.dragging.slotParameterDescriptions
-          , set: map handlers.raise <<< SetSlotParameterDescription
-          }
-        render = onlyDescriptionRenderer actions
-      generateSortableMetadataList
-        actions
-        _slotParameterDescriptions
-        _slotParameters
-        render
-        "Slot parameter"
-        "slot parameter"
+  , div
+      [ classes
+          [ ClassName "sortable-metadata-form"
+          , ClassName "metadata-only-description"
+          ]
+      ]
+      do
+        let
+          actions =
+            { delete: handlers.raise <<< DeleteSlotParameterDescription
+            , dragging: handlers.dragging.slotParameterDescriptions
+            , set: map handlers.raise <<< SetSlotParameterDescription
+            }
+          render = onlyDescriptionRenderer actions
+        generateSortableMetadataList
+          actions
+          _slotParameterDescriptions
+          _slotParameters
+          render
+          "Slot parameter"
+          "slot parameter"
   , div [ classes [ ClassName "sortable-metadata-form" ] ] do
       let
         actions =
           { set: map handlers.raise <<< SetValueParameterDescription
           , dragging: handlers.dragging.valueParameterInfos
           }
-        render key vp = formattedNumberMetadataRenderer
-          { key: key
-          , description: vp.valueParameterDescription
-          , format: vp.valueParameterFormat
-          , setFormat: map handlers.raise <<< SetValueParameterFormat
-          , setDescription: map handlers.raise <<< SetValueParameterDescription
-          , deleteInfo: handlers.raise <<< DeleteValueParameterInfo
-          }
+        render opts = do
+          let
+            value =
+              { description: opts.value.valueParameterDescription
+              , format: opts.value.valueParameterFormat
+              }
+          formattedNumberMetadataRenderer
+            $ Record.set (Proxy :: Proxy "value") value
+            $ Record.merge
+                { setFormat: map handlers.raise <<< SetValueParameterFormat
+                , setDescription: map handlers.raise <<<
+                    SetValueParameterDescription
+                , deleteInfo: handlers.raise <<< DeleteValueParameterInfo
+                }
+                opts
 
       generateSortableMetadataList
         actions
@@ -580,13 +622,7 @@ metadataView handlers metadataHints metadata = div_
     => { set :: String -> v -> b | r }
     -> Lens' MetaData (Map String c)
     -> Lens' MetadataHintInfo (Set String)
-    -> ( String
-         -> c
-         -> Boolean
-         -> String
-         -> String
-         -> Array (HTML p b)
-       )
+    -> (SubformOpts c -> Array (HTML p b))
     -> String
     -> String
     -> Array (HTML p b)
@@ -602,13 +638,7 @@ metadataView handlers metadataHints metadata = div_
        }
     -> Lens' MetaData (OMap String c)
     -> Lens' MetadataHintInfo (OSet String)
-    -> ( String
-         -> c
-         -> Boolean
-         -> String
-         -> String
-         -> Array (HTML p a)
-       )
+    -> (SubformOpts c -> Array (HTML p a))
     -> String
     -> String
     -> Array (HTML p a)

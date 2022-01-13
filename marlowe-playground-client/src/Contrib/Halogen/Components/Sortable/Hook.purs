@@ -69,11 +69,10 @@ useSortable = Hooks.wrap hook
                     Events.onDragStart \event -> do
                       { dragged, orderingVersion } <- getState
                       if
-                        ( orderingVersion == state.orderingVersion && dragged /=
-                            Just idx
-                        ) then
+                        orderingVersion == state.orderingVersion && dragged /=
+                          Just idx then
                         modifyState _ { dragged = Just idx }
-                      else do
+                      else
                         liftEffect $ Event.preventDefault
                           (DragEvent.toEvent event)
                 , onDragEnd:
@@ -86,19 +85,13 @@ useSortable = Hooks.wrap hook
                     Events.onDragEnter $ const $ getState >>= case _ of
                       { dragged: Just dragged, orderingVersion }
                         | orderingVersion == state.orderingVersion &&
-                            dragged /= idx -> do
-                            let
-                              orderingVersion' = Sortable.nextVersion
-                                orderingVersion
-
-                              move = Just { from: dragged, to: idx }
-
-                              state' =
-                                { dragged: Just idx
-                                , orderingVersion: orderingVersion'
-                                , move
-                                }
-                            modifyState $ const state'
+                            dragged /= idx ->
+                            modifyState $ const
+                              { dragged: Just idx
+                              , orderingVersion: Sortable.nextVersion
+                                  orderingVersion
+                              , move: Just { from: dragged, to: idx }
+                              }
                       _ -> pure unit
                 }
           handlers /\ (idx + 1)

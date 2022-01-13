@@ -31,8 +31,8 @@ nextVersion :: OrderingVersion -> OrderingVersion
 nextVersion (OrderingVersion i) = OrderingVersion (i + 1)
 
 -- | We have to keep ordering version because sorting can trigger
--- | reordering which assynchronously is repainted. If in between
--- | we trigger some other reordering it is going to be inconsisten
+-- | reordering which asynchronously is repainted. If in between
+-- | we trigger some other reordering it is going to be inconsistent
 -- | with the new one so we have to ignore all events till everything is
 -- | repainted
 type State
@@ -140,16 +140,11 @@ handleAction handleReordering action state = case action of
         hoistMaybe $
           Alternative.guard
             (state.orderingVersion == orderingVersion && dragged /= idx)
-            $> do
-              let
-                orderingVersion' = nextVersion state.orderingVersion
-
-                state' =
-                  { dragged: Just idx, orderingVersion: orderingVersion' }
-
-                -- f i = fromMaybe i (Unfoldable.moveTo dragged idx i)
-                move = { from: dragged, to: idx }
-              state' /\ move
+            $> Tuple
+              { dragged: Just idx
+              , orderingVersion: nextVersion state.orderingVersion
+              }
+              { from: dragged, to: idx }
       lift $ handleReordering f
       pure st
 

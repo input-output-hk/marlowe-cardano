@@ -21,7 +21,7 @@ move
   -> f a
   -> Maybe (g a)
 move { from, to } foldable = do
-  when (to > length foldable)
+  when (to < 0 || to > length foldable)
     Nothing
   let
     foldStep idx elem acc
@@ -30,17 +30,11 @@ move { from, to } foldable = do
 
     { elem, items } = foldrWithIndex foldStep { elem: Nothing, items: List.Nil }
       foldable
-  let
-    unfoldStep seed@{ idx, elem, items } = do
-      let
-        idx' = idx + 1
-
-        result
-          | idx == to = Just (elem /\ seed { idx = idx' })
-          | otherwise = do
-              { head, tail } <- List.uncons items
-              Just (head /\ seed { idx = idx', items = tail })
-      result
+    unfoldStep seed@{ idx, elem, items }
+      | idx == to = Just (elem /\ seed { idx = idx + 1 })
+      | otherwise = do
+          { head, tail } <- List.uncons items
+          Just (head /\ seed { idx = idx + 1, items = tail })
   -- | There is no UnfoldableWithIndex unfortunatelly... yet:
   -- | https://github.com/purescript/purescript-foldable-traversable/issues/84
   -- | so we have to carry the index ourselves.
