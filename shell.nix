@@ -110,6 +110,7 @@ let
 
   # build inputs from nixpkgs ( -> ./nix/default.nix )
   nixpkgsInputs = (with pkgs; [
+    arion
     cacert
     editorconfig-core-c
     ghcid
