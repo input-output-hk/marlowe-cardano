@@ -39,6 +39,8 @@ rec {
 
   inherit (haskell.packages.marlowe.components.exes) marlowe-pab;
 
+  inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
+
   # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
   # we switch to flakes.
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };

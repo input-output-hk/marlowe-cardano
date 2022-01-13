@@ -84,6 +84,7 @@ let
           # Things that need plutus-tx-plugin
           marlowe.package.buildable = false; # Would also require libpq
           marlowe-actus.package.buildable = false;
+          marlowe-cli.package.buildable = false;
           marlowe-dashboard-server.package.buildable = false;
           marlowe-playground-server.package.buildable = false; # Would also require libpq
           marlowe-symbolic.package.buildable = false;
