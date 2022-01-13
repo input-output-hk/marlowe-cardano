@@ -48,7 +48,7 @@ let
       mscKeptBlocks = 100000;
       mscInitialTxWallets = [ ];
       mscNodeMode = "AlonzoNode";
-      mscProtocolParametersJsonPath = "../marlowe-dashboard-client/private-testnet.protocol";
+      mscProtocolParametersJsonPath = ../marlowe-dashboard-client/private-testnet.protocol;
     };
 
     chainIndexConfig = {

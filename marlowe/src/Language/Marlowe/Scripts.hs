@@ -198,10 +198,9 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slot
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
     let interval =
             case TimeSlot.posixTimeRangeToContainedSlotRange TimeSlot.SlotConfig{..} $ txInfoValidRange scriptContextTxInfo of
-                -- FIXME restore this when mockchain implementation updates to correct one
---              Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
-                -- FIXME remove this when mockchain implementation updates to correct one as above
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) _   ) (Interval.UpperBound (Interval.Finite h) _    ) -> (l, h)
+                -- FIXME: Recheck this, but it appears that any inclusiveness can appear at either bound when milliseconds
+                --        of POSIX time is converted from slot number.
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) _) (Interval.UpperBound (Interval.Finite h) _) -> (l, h)
                 _ -> traceError "R0"
     let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
 
