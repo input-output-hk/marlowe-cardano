@@ -9,6 +9,7 @@ module Data.Address
 
 import Prologue
 
+import Data.Argonaut (class DecodeJson, class EncodeJson)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -67,6 +68,8 @@ newtype Address = Address String
 derive instance Eq Address
 derive instance Ord Address
 derive newtype instance Show Address
+derive newtype instance DecodeJson Address
+derive newtype instance EncodeJson Address
 
 fromString :: Set Address -> String -> Either AddressError Address
 fromString used s

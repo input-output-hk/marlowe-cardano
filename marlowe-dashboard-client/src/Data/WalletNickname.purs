@@ -10,6 +10,7 @@ module Data.WalletNickname
 
 import Prologue
 
+import Data.Argonaut (class DecodeJson, class EncodeJson)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -72,6 +73,8 @@ newtype WalletNickname = WalletNickname String
 derive instance eqWalletNickname :: Eq WalletNickname
 derive instance ordWalletNickname :: Ord WalletNickname
 derive newtype instance showWalletNickname :: Show WalletNickname
+derive newtype instance DecodeJson WalletNickname
+derive newtype instance EncodeJson WalletNickname
 
 nicknameRegex :: Regex
 nicknameRegex = unsafeRegex "^[a-z0-9]+$" ignoreCase
