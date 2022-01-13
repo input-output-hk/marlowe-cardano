@@ -8,6 +8,9 @@ module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types where
 import Cardano.Prelude
 import Data.Aeson.Types (FromJSON, ToJSON)
 
+newtype CheckPostData = CheckPostData [Text]
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
 
 data RestorePostData =
     RestorePostData
@@ -24,4 +27,3 @@ data RestoreError =
     | FetchPubKeyHashError
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON)
-

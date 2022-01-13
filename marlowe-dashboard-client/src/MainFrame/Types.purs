@@ -3,6 +3,7 @@ module MainFrame.Types where
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
+import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Contacts.Types (AddressBook, WalletDetails)
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
@@ -53,6 +54,7 @@ type ChildSlots =
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
   , expandSlot :: Expand.Slot Void String
+  , restoreWalletForm :: forall query. H.Slot query RestoreWalletForm.Msg Unit
   , toaster :: forall q m. H.Slot q m Unit
   )
 

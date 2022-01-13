@@ -2,7 +2,9 @@ module MainFrame.View where
 
 import Prologue hiding (div)
 
+import Capability.Marlowe (class ManageMarlowe)
 import Data.Lens (view, (^.))
+import Data.MnemonicPhrase (class CheckMnemonic)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -27,6 +29,8 @@ render
   :: forall m
    . MonadAff m
   => MonadStore Store.Action Store.Store m
+  => CheckMnemonic m
+  => ManageMarlowe m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =

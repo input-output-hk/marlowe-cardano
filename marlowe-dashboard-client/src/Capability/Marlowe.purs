@@ -26,10 +26,7 @@ import API.Lenses
   , _cicWallet
   , _observableState
   )
-import API.Marlowe.Run.Wallet.CentralizedTestnet
-  ( RestoreError(..)
-  , RestoreWalletOptions
-  )
+import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.Contract (class ManageContract)
@@ -61,9 +58,14 @@ import Data.Array (find)
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.MnemonicPhrase as MP
 import Data.Newtype (un, unwrap)
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
+import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
@@ -94,7 +96,11 @@ class
   ) <=
   ManageMarlowe m where
   createWallet :: m (AjaxResponse WalletDetails)
-  restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletDetails)
+  restoreWallet
+    :: WalletNickname
+    -> MnemonicPhrase
+    -> String
+    -> m (Either RestoreError WalletDetails)
   followContract
     :: WalletDetails
     -> MarloweParams
@@ -151,8 +157,12 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
-  restoreWallet options = do
-    mWalletInfo <- Wallet.restoreWallet options
+  restoreWallet walletName mnemonicPhrase passphrase = do
+    mWalletInfo <- Wallet.restoreWallet
+      { walletName: WN.toString walletName
+      , mnemonicPhrase: map MP.wordToString $ MP.toWords mnemonicPhrase
+      , passphrase
+      }
     case mWalletInfo of
       Left err -> pure $ Left err
       Right walletInfo -> do
@@ -336,7 +346,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 
 sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
 sendWsMessage msg = do
-  wsManager <- asks _.wsManager
+  wsManager <- asks \(Env e) -> e.wsManager
   liftAff
     $ WS.managerWriteOutbound wsManager
     $ WS.SendMessage msg
@@ -346,7 +356,7 @@ instance monadMarloweHalogenM ::
   ) =>
   ManageMarlowe (HalogenM state action slots msg m) where
   createWallet = lift createWallet
-  restoreWallet = lift <<< restoreWallet
+  restoreWallet = map (map (map lift)) restoreWallet
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams
