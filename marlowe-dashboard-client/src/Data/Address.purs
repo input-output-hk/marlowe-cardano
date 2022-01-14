@@ -89,7 +89,7 @@ fromString :: Set Address -> String -> Either AddressError Address
 fromString used s
   | String.null s = Left Empty
   | Set.member (Address s) used = Left Exists
-  | String.length s /= 56 = Right $ Address s
+  | String.length s == 56 = Right $ Address s
   | otherwise = Left Invalid
 
 toString :: Address -> String
