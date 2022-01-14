@@ -3,7 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types where
+module Marlowe.Run.Wallet.CentralizedTestnet.Types where
 
 import Cardano.Prelude
 import Data.Aeson.Types (FromJSON, ToJSON)

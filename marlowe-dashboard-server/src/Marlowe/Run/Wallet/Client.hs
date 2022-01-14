@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Webserver.Wallet.Client
+module Marlowe.Run.Wallet.Client
  ( callWBE
  , decodeError
  )
@@ -16,7 +16,7 @@ import qualified Data.Aeson.Types as Aeson
 
 import qualified Data.ByteString.Lazy as BL
 
-import Marlowe.Run.Webserver.Types (Env)
+import Marlowe.Run.Types (Env)
 import Servant.Client (ClientError, ClientM, runClientM)
 
 callWBE :: MonadIO m => MonadReader Env m => ClientM a -> m (Either ClientError a)

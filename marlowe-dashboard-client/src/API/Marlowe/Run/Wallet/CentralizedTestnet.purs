@@ -5,13 +5,14 @@ module API.Marlowe.Run.Wallet.CentralizedTestnet
   ) where
 
 import Prologue
+
 import API.Request (doPostRequestWith)
 import Cardano.Wallet.Mock.Types (WalletInfo)
 import Control.Monad.Except (runExceptT)
 import Data.Argonaut (encodeJson)
 import Data.Argonaut.Decode.Aeson as D
 import Effect.Aff.Class (class MonadAff)
-import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types
+import Marlowe.Run.Wallet.CentralizedTestnet.Types
   ( RestoreError(..)
   , RestorePostData(..)
   ) as BE

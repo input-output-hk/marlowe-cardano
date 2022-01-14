@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Webserver.Types where
+module Marlowe.Run.Types where
 
 import Servant.Client (ClientEnv)
 

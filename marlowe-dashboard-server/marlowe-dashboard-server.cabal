@@ -18,19 +18,19 @@ source-repository head
 library
     default-extensions: NoImplicitPrelude
     exposed-modules:
-        Marlowe.Run.Webserver.Server
-        Marlowe.Run.Webserver.API
-        Marlowe.Run.Webserver.WebSocket
-        Marlowe.Run.Webserver.Types
-        Marlowe.Run.Webserver.Wallet.Types
-        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types
-        Marlowe.Run.Webserver.Wallet.Client
+        Marlowe.Run.Server
+        Marlowe.Run.API
+        Marlowe.Run.WebSocket
+        Marlowe.Run.Types
+        Marlowe.Run.Wallet.Types
+        Marlowe.Run.Wallet.CentralizedTestnet.Types
+        Marlowe.Run.Wallet.Client
     other-modules:
         Paths_marlowe_dashboard_server
-        Marlowe.Run.Webserver.Wallet.API
-        Marlowe.Run.Webserver.Wallet.Server
-        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.API
-        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server
+        Marlowe.Run.Wallet.API
+        Marlowe.Run.Wallet.Server
+        Marlowe.Run.Wallet.CentralizedTestnet.API
+        Marlowe.Run.Wallet.CentralizedTestnet.Server
     hs-source-dirs:
         src
     default-language: Haskell2010

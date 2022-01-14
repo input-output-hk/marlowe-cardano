@@ -27,7 +27,7 @@ import Halogen.Store.Monad
   , updateStore
   )
 import Marlowe (postApiWalletCentralizedtestnetCheckmnemonic)
-import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (CheckPostData(..))
+import Marlowe.Run.Wallet.CentralizedTestnet.Types (CheckPostData(..))
 import Store as Store
 
 newtype AppM a = AppM (ReaderT Env (StoreT Store.Action Store.Store Aff) a)

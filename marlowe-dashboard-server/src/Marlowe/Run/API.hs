@@ -1,10 +1,10 @@
 {-# LANGUAGE DataKinds     #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Marlowe.Run.Webserver.API where
+module Marlowe.Run.API where
 
 import Cardano.Prelude
-import qualified Marlowe.Run.Webserver.Wallet.API as Wallet
+import qualified Marlowe.Run.Wallet.API as Wallet
 import Servant.API (Get, JSON, PlainText, Raw, (:<|>), (:>))
 import Servant.API.WebSocket (WebSocketPending)
 

@@ -98,7 +98,7 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
-import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds(..))
+import Marlowe.Run.Wallet.Types (GetTotalFunds(..))
 import Marlowe.Semantics
   ( MarloweData
   , MarloweParams

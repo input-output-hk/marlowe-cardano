@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Webserver.Wallet.Server
+module Marlowe.Run.Wallet.Server
  ( handlers
  )
  where
@@ -17,10 +17,10 @@ import Cardano.Prelude hiding (Handler)
 
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import qualified Cardano.Wallet.Api.Types as WBE
-import Marlowe.Run.Webserver.Types (Env)
-import Marlowe.Run.Webserver.Wallet.API (API)
-import qualified Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server as CentralizedTestnet
-import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds (..))
+import Marlowe.Run.Types (Env)
+import Marlowe.Run.Wallet.API (API)
+import qualified Marlowe.Run.Wallet.CentralizedTestnet.Server as CentralizedTestnet
+import Marlowe.Run.Wallet.Types (GetTotalFunds (..))
 import Servant (ServerT, (:<|>) ((:<|>)))
 -- FIXME: I don't like to use a Emulator type here, but we'd need to publish some changes upstream to the PAB to fix this
 import Wallet.Emulator (WalletId (..))
@@ -32,7 +32,7 @@ import Cardano.Wallet.Primitive.Types.TokenPolicy (unTokenName, unTokenPolicyId)
 import Cardano.Wallet.Primitive.Types.TokenQuantity (TokenQuantity (..))
 import Data.Quantity (getPercentage, getQuantity)
 import GHC.Natural (naturalToInteger)
-import Marlowe.Run.Webserver.Wallet.Client (callWBE)
+import Marlowe.Run.Wallet.Client (callWBE)
 import qualified Plutus.V1.Ledger.Ada as Ledger
 import qualified Plutus.V1.Ledger.Value as Ledger
 

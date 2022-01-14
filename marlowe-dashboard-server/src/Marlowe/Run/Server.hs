@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Webserver.Server
+module Marlowe.Run.Server
  ( handlers
  , initializeServerContext
  , WBEConfig(..)
@@ -13,7 +13,7 @@ module Marlowe.Run.Webserver.Server
  where
 
 import Cardano.Prelude hiding (Handler)
-import Marlowe.Run.Webserver.API (API)
+import Marlowe.Run.API (API)
 import Prelude (userError)
 
 
@@ -23,9 +23,9 @@ import Data.Aeson as Aeson
 import Data.String as S
 import qualified Data.Text as Text
 import Data.Version (showVersion)
-import Marlowe.Run.Webserver.Types (Env)
-import qualified Marlowe.Run.Webserver.Wallet.Server as Wallet
-import qualified Marlowe.Run.Webserver.WebSocket as WS
+import Marlowe.Run.Types (Env)
+import qualified Marlowe.Run.Wallet.Server as Wallet
+import qualified Marlowe.Run.WebSocket as WS
 import qualified Paths_marlowe_dashboard_server as Package.Paths
 import Servant (Handler (Handler), Server, ServerError, hoistServer, serveDirectoryFileServer, (:<|>) ((:<|>)))
 

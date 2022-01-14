@@ -3,7 +3,7 @@
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Marlowe.Run.Webserver.WebSocket where
+module Marlowe.Run.WebSocket where
 
 import Cardano.Prelude
 import Data.Aeson (FromJSON)

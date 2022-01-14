@@ -4,7 +4,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Webserver.Wallet.Types where
+module Marlowe.Run.Wallet.Types where
 
 import Cardano.Prelude
 import Data.Aeson.Types (ToJSON)
@@ -16,4 +16,3 @@ data GetTotalFunds =
         }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON)
-

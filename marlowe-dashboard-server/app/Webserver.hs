@@ -7,9 +7,9 @@ module Webserver where
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Proxy (Proxy (Proxy))
-import Marlowe.Run.Webserver.API (API)
-import Marlowe.Run.Webserver.Server (AppConfig (..), WBEConfig (..), initializeServerContext)
-import qualified Marlowe.Run.Webserver.Server as Server
+import Marlowe.Run.API (API)
+import Marlowe.Run.Server (AppConfig (..), WBEConfig (..), initializeServerContext)
+import qualified Marlowe.Run.Server as Server
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Wai.Handler.Warp as Warp
 import Servant (serve)

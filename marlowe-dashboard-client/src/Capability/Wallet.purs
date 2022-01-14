@@ -9,19 +9,20 @@ module Capability.Wallet
   ) where
 
 import Prologue
+
+import API.Marlowe.Run.Wallet as WBE
 import API.Marlowe.Run.Wallet.CentralizedTestnet
   ( RestoreError
   , RestoreWalletOptions
   )
 import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
-import API.Marlowe.Run.Wallet as WBE
 import API.MockWallet as MockAPI
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
-import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds)
+import Marlowe.Run.Wallet.Types (GetTotalFunds)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
 
