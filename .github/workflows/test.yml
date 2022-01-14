@@ -70,5 +70,6 @@ jobs:
           nix --extra-experimental-features 'nix-command flakes' flake lock --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
           nix-shell --command "cd marlowe-playground-client && (update-client-deps || update-client-deps)" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}" # Double-call to work around bug in spago2nix on first fetch
           nix-shell --command "cd marlowe-dashboard-client && (update-client-deps || update-client-deps)" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}" # Double-call to work around bug in spago2nix on first fetch
-          nix-shell --command "updateMaterialized" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
+          # Disabled until we can find a way to run it only for Linux
+          # nix-shell --command "updateMaterialized" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
           git diff --exit-code
