@@ -45,8 +45,8 @@ let
     export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
     cat > marlowe-run.json <<EOF
     {
-      "getWbeConfig": { "_wbeHost": "localhost", "_wbePort": $NOMAD_PORT_wbe },
-      "getStaticPath": "/var/empty"
+      "wbeConfig": { "host": "localhost", "port": $NOMAD_PORT_wbe },
+      "staticPath": "/var/empty"
     }
     EOF
     (trap 'kill 0' SIGINT;
