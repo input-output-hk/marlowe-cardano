@@ -33,9 +33,9 @@ let
   inherit (haskell.packages.marlowe-dashboard-server.components.exes) marlowe-dashboard-server;
 in
 rec {
-  inherit pkgs marlowe;
+  inherit pkgs marlowe cardano-wallet plutus-chain-index;
 
-  inherit (marlowe) webCommon web-ghc;
+  inherit (marlowe) webCommon web-ghc cardano-node cardano-cli;
 
   inherit (haskell.packages.marlowe.components.exes) marlowe-pab;
 
