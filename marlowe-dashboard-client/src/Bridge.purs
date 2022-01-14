@@ -150,11 +150,6 @@ instance bridgeAddress :: Bridge Back.PubKeyHash Address where
     fromRight A.empty $ A.fromString mempty getPubKeyHash
   toBack address = Back.PubKeyHash { getPubKeyHash: A.toString address }
 
--- TODO: Marlowe.Semantics.PubKeyHash is currently just an alias for String
-instance pubKeyHashBridge :: Bridge Back.PubKeyHash String where
-  toFront (Back.PubKeyHash { getPubKeyHash }) = getPubKeyHash
-  toBack getPubKeyHash = Back.PubKeyHash { getPubKeyHash }
-
 instance bridgePlutusAppId :: Bridge ContractInstanceId PlutusAppId where
   toFront (ContractInstanceId { unContractInstanceId }) = PlutusAppId
     unContractInstanceId
