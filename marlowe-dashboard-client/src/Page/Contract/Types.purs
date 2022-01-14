@@ -13,11 +13,13 @@ module Page.Contract.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent, defaultEvent)
-import Component.Contacts.Types (WalletDetails, WalletNickname)
+import Component.Contacts.Types (WalletDetails)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
+import Data.WalletNickname (WalletNickname)
 import Halogen (RefLabel(..))
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
@@ -38,15 +40,15 @@ data State
   = Starting StartingState
   | Started StartedState
 
-type StartingState
-  =
+type StartingState =
+  -- TODO fix primitive obsession
   { nickname :: String
   , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
   }
 
-type StartedState
-  =
+type StartedState =
+  -- TODO fix primitive obsession
   { nickname :: String
   , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
@@ -58,10 +60,12 @@ type StartedState
   -- Which step is selected. This index is 0 based and should be between [0, previousSteps.length]
   -- (both sides inclusive). This is because the array represent the past steps and the
   -- executionState has the current state and visually we can select any one of them.
+  -- TODO: fix primitive obsession - maybe a zipper is a better representation
+  -- than an index + the execution state?
   , selectedStep :: Int
   , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
-  -- Theser are the roles and PK's that the "logged-in" user has in this contract.
+  -- These are the roles and PK's that the "logged-in" user has in this contract.
   , userParties :: Set Party
   -- These are the possible actions a user can make in the current step (grouped by part). We store this
   -- mainly because extractNamedActions and expandAndGroupByRole could potentially be unperformant to compute
@@ -69,15 +73,13 @@ type StartedState
   , namedActions :: Array (Tuple Party (Array NamedAction))
   }
 
-type StepBalance
-  =
+type StepBalance =
   { atStart :: Accounts
   , atEnd :: Maybe Accounts
   }
 
 -- Represents a historical step in a contract's life.
-type PreviousStep
-  =
+type PreviousStep =
   { tab :: Tab
   , expandPayments :: Boolean
   , resultingPayments :: Array Payment
@@ -85,8 +87,7 @@ type PreviousStep
   , state :: PreviousStepState
   }
 
-type TimeoutInfo
-  =
+type TimeoutInfo =
   { slot :: Slot
   , missedActions :: Array (Tuple Party (Array NamedAction))
   }
@@ -101,8 +102,7 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
-type Input
-  =
+type Input =
   { currentSlot :: Slot
   , tzOffset :: Minutes
   , walletDetails :: WalletDetails
@@ -111,6 +111,7 @@ type Input
 
 data Action
   = SelectSelf
+  -- TODO: fix primitive obsession
   | SetNickname String
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
@@ -119,9 +120,11 @@ data Action
   | AskConfirmation NamedAction
   | CancelConfirmation
   -- The SelectStep action is what changes the model and causes the card to seem bigger.
+  -- TODO: refactor this stuff - why are there two actions?
   | SelectStep Int
   -- The MoveToStep action scrolls the step carousel so that the indicated step is at the center (without changing the model).
   | MoveToStep Int
+  -- TODO: seems like all the carousel stuff shoule be moved to a component
   | CarouselOpened
   | CarouselClosed
 

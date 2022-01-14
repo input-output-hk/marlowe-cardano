@@ -8,20 +8,17 @@ import Prelude hiding (div)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View as Address
 import Component.Contacts.Lenses
-  ( _addressBook
-  , _addressInput
+  ( _addressInput
   , _cardSection
   , _walletNickname
   , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
-  , AddressBook
   , AddressError
   , CardSection(..)
   , State
   , WalletDetails
-  , WalletNickname
   , WalletNicknameError
   )
 import Component.Icons (Icon(..)) as Icon
@@ -31,21 +28,23 @@ import Component.InputField.Types (State) as InputField
 import Component.InputField.View (renderInput)
 import Component.Label.View as Label
 import Css as Css
+import Data.Address (Address)
+import Data.Address as A
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AddressBook
 import Data.Lens ((^.))
-import Data.Map (isEmpty, toUnfoldable)
 import Data.Maybe (Maybe(..), isJust)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, span_, text, ul)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (disabled)
-import Marlowe.Semantics (PubKeyHash)
 
-contactsCard :: forall p. WalletDetails -> State -> HTML p Action
-contactsCard currentWallet state =
+contactsCard :: forall p. AddressBook -> WalletDetails -> State -> HTML p Action
+contactsCard addressBook currentWallet state =
   let
-    addressBook = state ^. _addressBook
-
     cardSection = state ^. _cardSection
 
     walletNicknameInput = state ^. _walletNicknameInput
@@ -91,7 +90,7 @@ contactsBreadcrumb cardSection =
       ViewWallet nickname _ ->
         [ previousItem "Home" Home
         , arrow
-        , activeItem nickname
+        , activeItem $ WN.toString nickname
         ]
       NewWallet mTokenName ->
         [ previousItem "Home" Home
@@ -133,14 +132,14 @@ contactsBreadcrumb cardSection =
 
 addressBookCard :: forall p. AddressBook -> Array (HTML p Action)
 addressBookCard addressBook =
-  [ if isEmpty addressBook then
+  [ if AddressBook.isEmpty addressBook then
       -- If you're here, the addressBook can't be empty, because at least your own wallet will
       -- be in there. But that might change when we have real wallet integration, and it's easy
       -- to forget cases like these, so it seems sensible to code for it in case.
       p [ classNames [ "p-4" ] ] [ text "You do not have any contacts." ]
     else
       ul [ classNames [ "divide-y", "divide-gray" ] ]
-        $ contactLi <$> toUnfoldable addressBook
+        $ contactLi <$> AddressBook.toUnfoldable addressBook
   , button
       [ classNames $ Css.primaryButton <> Css.withIcon Icon.NewContact <>
           Css.fixedBottomRight
@@ -155,30 +154,25 @@ addressBookCard addressBook =
           [ "px-4", "py-2", "hover:cursor-pointer", "hover:text-purple" ]
       , onClick_ $ SetCardSection $ ViewWallet nickname address
       ]
-      [ text nickname ]
+      [ text $ WN.toString nickname ]
 
 contactDetailsCard
   :: forall p
    . WalletDetails
   -> WalletNickname
-  -> PubKeyHash
+  -> Address
   -> Array (HTML p Action)
 contactDetailsCard currentWallet walletNickname address =
   let
     isCurrentWallet = walletNickname == currentWallet ^. _walletNickname
 
-    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
+    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard <<< A.toString
   in
     [ div [ classNames [ "space-y-4", "p-4" ] ]
         [ h3
             [ classNames [ "text-lg", "font-semibold" ] ]
-            [ text walletNickname ]
-        , copyAddress
-            <$> Address.render
-              Address.defaultInput
-                { label = "Wallet Address"
-                , value = address
-                }
+            [ text $ WN.toString walletNickname ]
+        , copyAddress <$> Address.render (Address.defaultInput address)
         , walletIdTip
         ]
     , div

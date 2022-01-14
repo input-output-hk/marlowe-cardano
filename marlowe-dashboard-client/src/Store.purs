@@ -6,17 +6,20 @@ module Store
 
 import Prologue
 
+import Data.AddressBook (AddressBook)
 import Marlowe.Semantics (Slot)
 import Toast.Types (ToastMessage)
 
 type Store =
-  { currentSlot :: Slot
+  { addressBook :: AddressBook
+  , currentSlot :: Slot
   , toast :: Maybe ToastMessage
   }
 
 data Action
   = AdvanceToSlot Slot
   | ShowToast ToastMessage
+  | ModifyAddressBook (AddressBook -> AddressBook)
   | ClearToast
 
 reduce :: Store -> Action -> Store
@@ -27,3 +30,4 @@ reduce store = case _ of
   AdvanceToSlot newSlot -> store { currentSlot = newSlot }
   ShowToast msg -> store { toast = Just msg }
   ClearToast -> store { toast = Nothing }
+  ModifyAddressBook f -> store { addressBook = f store.addressBook }

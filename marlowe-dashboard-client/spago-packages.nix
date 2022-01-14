@@ -917,6 +917,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "polyform" = pkgs.stdenv.mkDerivation {
+        name = "polyform";
+        version = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript-polyform/polyform";
+          rev = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
+          sha256 = "0n77rmfsq85bzf4klggp004hbfcrj0hlmn80syqca34i1l268hwm";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "precise" = pkgs.stdenv.mkDerivation {
         name = "precise";
         version = "v5.1.0";
@@ -984,6 +996,18 @@ let
           url = "https://github.com/purescript/purescript-quickcheck.git";
           rev = "990fa1cf14b48b827d9b2d115b1c6977c4b0a76d";
           sha256 = "1dxchng3r2mad0505a0c7cc35vs1f7y2xb5i13p59jpdz6ijqa9k";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "quickcheck-laws" = pkgs.stdenv.mkDerivation {
+        name = "quickcheck-laws";
+        version = "v6.0.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript-contrib/purescript-quickcheck-laws.git";
+          rev = "464597522e5e001adc2619676584871f423b9ea0";
+          sha256 = "1m397bh2w5a0wvms8rjgfxh71m7krmfkgk11j5krhz86b72k3izd";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -1260,6 +1284,18 @@ let
           url = "https://github.com/purescript/purescript-validation.git";
           rev = "2d50284b192e71c9ca6aff87747b0d980c1ca657";
           sha256 = "0yfb97nk7179hp0r2iylj74wl7rnl1y2x6dh5hlipxg1kpq9yydk";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "variant" = pkgs.stdenv.mkDerivation {
+        name = "variant";
+        version = "v7.0.3";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-variant.git";
+          rev = "3f12411ede5edd342d25340c1babce9ae81d6793";
+          sha256 = "1q2pky3gf177ihy2zjzqvp1cj18ycaki9vm4ghw18p7hf256lqmc";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

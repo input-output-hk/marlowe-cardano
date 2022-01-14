@@ -20,15 +20,16 @@ module Page.Contract.Lenses
   ) where
 
 import Prologue
-import Component.Contacts.Types (WalletNickname)
+
 import Data.Lens (Lens', Prism', lens', prism')
 import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Type.Proxy (Proxy(..))
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname (WalletNickname)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics (Party)
-import Page.Contract.Types (StartedState, State(..), StartingState)
+import Page.Contract.Types (StartedState, StartingState, State(..))
+import Type.Proxy (Proxy(..))
 
 _Starting :: Prism' State StartingState
 _Starting =

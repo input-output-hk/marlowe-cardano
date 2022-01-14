@@ -8,7 +8,6 @@ module Component.Template.State
 
 import Prologue
 
-import Component.Contacts.Types (AddressBook)
 import Component.InputField.Lenses (_value)
 import Component.InputField.State (dummyState, handleAction, mkInitialState) as InputField
 import Component.InputField.State (formatBigIntValue, getBigIntValue, validate)
@@ -35,8 +34,11 @@ import Component.Template.Types
   , State
   , ValueError(..)
   )
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AB
 import Data.Array (mapMaybe) as Array
 import Data.BigInt.Argonaut (BigInt)
+import Data.Either (hush)
 import Data.Lens (Lens', assign, set, use, view)
 import Data.Map (Map)
 import Data.Map as Map
@@ -44,6 +46,8 @@ import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (isNothing)
 import Data.Set (toUnfoldable) as Set
 import Data.Traversable (for, traverse)
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Examples.PureScript.ContractForDifferences (defaultSlotContent) as ContractForDifferences
@@ -142,7 +146,7 @@ handleAction _ (ContractNicknameInputAction inputFieldAction) =
 
 handleAction input@{ addressBook } UpdateRoleWalletValidators =
   setInputValidators input _roleWalletInputs RoleWalletInputAction
-    $ roleError addressBook
+    $ roleError addressBook <<< hush <<< WN.fromString mempty
 
 handleAction _ (RoleWalletInputAction tokenName inputFieldAction) =
   toRoleWalletInput tokenName $ InputField.handleAction inputFieldAction
@@ -311,11 +315,11 @@ contractNicknameError "" = Just EmptyContractNickname
 
 contractNicknameError _ = Nothing
 
-roleError :: AddressBook -> String -> Maybe RoleError
-roleError _ "" = Just EmptyNickname
+roleError :: AddressBook -> Maybe WalletNickname -> Maybe RoleError
+roleError _ Nothing = Just EmptyNickname
 
-roleError addressBook walletNickname =
-  if Map.member walletNickname addressBook then
+roleError addressBook (Just walletNickname) =
+  if AB.containsNickname walletNickname addressBook then
     Nothing
   else
     Just NonExistentNickname

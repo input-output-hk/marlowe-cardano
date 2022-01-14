@@ -26,10 +26,7 @@ import API.Lenses
   , _cicWallet
   , _observableState
   )
-import API.Marlowe.Run.Wallet.CentralizedTestnet
-  ( RestoreError(..)
-  , RestoreWalletOptions
-  )
+import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.Contract (class ManageContract)
@@ -54,6 +51,7 @@ import Component.Contacts.Lenses
 import Component.Contacts.Types (WalletDetails, WalletId)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
+import Data.Address (Address)
 import Data.Argonaut.Decode (JsonDecodeError)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (filter) as Array
@@ -61,9 +59,14 @@ import Data.Array (find)
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.MnemonicPhrase as MP
 import Data.Newtype (un, unwrap)
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
+import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
@@ -71,7 +74,6 @@ import Marlowe.Semantics
   ( Contract
   , MarloweData
   , MarloweParams
-  , PubKeyHash
   , TokenName
   , TransactionInput
   )
@@ -94,7 +96,11 @@ class
   ) <=
   ManageMarlowe m where
   createWallet :: m (AjaxResponse WalletDetails)
-  restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletDetails)
+  restoreWallet
+    :: WalletNickname
+    -> MnemonicPhrase
+    -> String
+    -> m (Either RestoreError WalletDetails)
   followContract
     :: WalletDetails
     -> MarloweParams
@@ -107,7 +113,7 @@ class
     -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createContract
     :: WalletDetails
-    -> Map TokenName PubKeyHash
+    -> Map TokenName Address
     -> Contract
     -> m (AjaxResponse Unit)
   applyTransactionInput
@@ -143,7 +149,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         ajaxMarloweAppId <- Contract.activateContract MarloweApp walletId
         let
           createWalletDetails companionAppId marloweAppId =
-            { walletNickname: ""
+            { walletNickname: WN.new
             , companionAppId
             , marloweAppId
             , walletInfo
@@ -151,8 +157,12 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
-  restoreWallet options = do
-    mWalletInfo <- Wallet.restoreWallet options
+  restoreWallet walletName mnemonicPhrase passphrase = do
+    mWalletInfo <- Wallet.restoreWallet
+      { walletName: WN.toString walletName
+      , mnemonicPhrase: map MP.wordToString $ MP.toWords mnemonicPhrase
+      , passphrase
+      }
     case mWalletInfo of
       Left err -> pure $ Left err
       Right walletInfo -> do
@@ -172,7 +182,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           walletId
         let
           createWalletDetails companionAppId marloweAppId =
-            { walletNickname: ""
+            { walletNickname: walletName
             , companionAppId
             , marloweAppId
             , walletInfo
@@ -247,9 +257,9 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     let
       marloweAppId = view _marloweAppId walletDetails
 
-      pubKeyHash = view (_walletInfo <<< _pubKeyHash) walletDetails
+      address = view (_walletInfo <<< _pubKeyHash) walletDetails
     in
-      MarloweApp.redeem marloweAppId marloweParams tokenName pubKeyHash
+      MarloweApp.redeem marloweAppId marloweParams tokenName address
   -- get the WalletDetails of a wallet given the PlutusAppId of its WalletCompanion
   -- note: this returns an empty walletNickname (because these are only saved locally)
   lookupWalletDetails companionAppId =
@@ -269,7 +279,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             of
             Just marloweApp ->
               pure
-                { walletNickname: mempty
+                { walletNickname: WN.new
                 , companionAppId
                 , marloweAppId: toFront $ view _cicContract marloweApp
                 , walletInfo
@@ -336,7 +346,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 
 sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
 sendWsMessage msg = do
-  wsManager <- asks _.wsManager
+  wsManager <- asks \(Env e) -> e.wsManager
   liftAff
     $ WS.managerWriteOutbound wsManager
     $ WS.SendMessage msg
@@ -346,7 +356,7 @@ instance monadMarloweHalogenM ::
   ) =>
   ManageMarlowe (HalogenM state action slots msg m) where
   createWallet = lift createWallet
-  restoreWallet = lift <<< restoreWallet
+  restoreWallet = map (map (map lift)) restoreWallet
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams
