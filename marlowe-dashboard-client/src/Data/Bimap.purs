@@ -4,6 +4,7 @@ module Data.Bimap
   , deleteL
   , deleteR
   , fromFoldable
+  , empty
   , insert
   , keysL
   , keysR

@@ -14,7 +14,6 @@ import Capability.Marlowe
   )
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , getAddressBook
   , getContractNicknames
   )
 import Capability.PlutusApps.MarloweApp as MarloweApp
@@ -29,9 +28,12 @@ import Component.Contacts.Lenses
   , _walletInfo
   )
 import Control.Monad.Reader (class MonadAsk)
+import Control.Monad.State (modify_)
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AB
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Foldable (for_)
-import Data.Lens (assign, set, use, view)
+import Data.Lens (assign, use, view)
 import Data.Lens.Extra (peruse)
 import Data.Map (keys)
 import Data.MnemonicPhrase (class CheckMnemonic)
@@ -41,20 +43,14 @@ import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
-import Halogen
-  ( Component
-  , HalogenM
-  , defaultEval
-  , liftEffect
-  , mkComponent
-  , mkEval
-  , modify_
-  )
+import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen.Extra (mapMaybeSubmodule)
+import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
-import Humanize (getTimezoneOffset)
+import Halogen.Store.Select (selectEq)
 import MainFrame.Lenses
-  ( _currentSlot
+  ( _addressBook
+  , _currentSlot
   , _dashboardState
   , _subState
   , _tzOffset
@@ -64,6 +60,7 @@ import MainFrame.Lenses
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
+  , Input
   , Msg
   , Query(..)
   , State
@@ -72,10 +69,9 @@ import MainFrame.Types
 import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts, _walletDetails)
-import Page.Dashboard.State (dummyState, handleAction, mkInitialState) as Dashboard
+import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.Types (Action(..), State) as Dashboard
-import Page.Welcome.Lenses (_addressBook)
-import Page.Welcome.State (dummyState, handleAction, mkInitialState) as Welcome
+import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
@@ -112,7 +108,7 @@ the code. Comments are added throughout with the format "[Workflow n][m]" - so y
 code for e.g. "[Workflow 4]" to see all of the steps involved in starting a contract.
 -}
 mkMainFrame
-  :: forall i m
+  :: forall m
    . MonadAff m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
@@ -121,25 +117,31 @@ mkMainFrame
   => MonadClipboard m
   => MainFrameLoop m
   => CheckMnemonic m
-  => Component Query i Msg m
+  => Component Query Input Msg m
 mkMainFrame =
-  mkComponent
-    { initialState: const initialState
+  connect (selectEq _.addressBook) $ mkComponent
+    { initialState: deriveState emptyState
     , render: render
     , eval:
         mkEval defaultEval
           { handleQuery = handleQuery
           , handleAction = handleAction
-          , initialize = Just Init
           }
     }
 
-initialState :: State
-initialState =
-  { webSocketStatus: WebSocketClosed Nothing
+emptyState :: State
+emptyState =
+  { addressBook: AB.empty
+  , tzOffset: Minutes 0.0 -- this will be updated in deriveState
+  , webSocketStatus: WebSocketClosed Nothing
   , currentSlot: zero -- this will be updated as soon as the websocket connection is working
-  , subState: Left Welcome.dummyState
-  , tzOffset: Minutes 0.0 -- This will be updated on MainFrame.Init
+  , subState: Left Welcome.initialState
+  }
+
+deriveState :: State -> Connected AddressBook Input -> State
+deriveState state { context, input } = state
+  { addressBook = context
+  , tzOffset = input.tzOffset
   }
 
 handleQuery
@@ -323,19 +325,13 @@ handleAction
   => MainFrameLoop m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction Init = do
-  tzOffset <- liftEffect getTimezoneOffset
-  addressBook <- getAddressBook
-  modify_
-    $ set (_welcomeState <<< _addressBook) addressBook
-        <<< set _tzOffset tzOffset
-
+handleAction (Receive input) = modify_ $ flip deriveState input
 {- [Workflow 3][1] Disconnect a wallet
 
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
 need to unsubscribe from all the apps related to the wallet that was previously connected.
 -}
-handleAction (EnterWelcomeState addressBook walletDetails followerApps) = do
+handleAction (EnterWelcomeState walletDetails followerApps) = do
   let
     followerAppIds :: Array PlutusAppId
     followerAppIds = Set.toUnfoldable $ keys followerApps
@@ -343,7 +339,7 @@ handleAction (EnterWelcomeState addressBook walletDetails followerApps) = do
   unsubscribeFromPlutusApp $ view _companionAppId walletDetails
   unsubscribeFromPlutusApp $ view _marloweAppId walletDetails
   for_ followerAppIds unsubscribeFromPlutusApp
-  assign _subState $ Left $ Welcome.mkInitialState addressBook
+  assign _subState $ Left Welcome.initialState
 
 {- [Workflow 2][3] Connect a wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
@@ -354,7 +350,7 @@ these apps (and avoiding the UI bug of saying "you have no contracts" when in fa
 finished loading them yet) is a bit convoluted - follow the trail of workflow comments to see how
 it works.
 -}
-handleAction (EnterDashboardState addressBook walletDetails) = do
+handleAction (EnterDashboardState walletDetails) = do
   ajaxFollowerApps <- getFollowerApps walletDetails
   currentSlot <- use _currentSlot
   case ajaxFollowerApps of
@@ -377,19 +373,23 @@ handleAction (EnterDashboardState addressBook walletDetails) = do
       assign _subState
         $ Right
         $ Dashboard.mkInitialState
-            addressBook
             walletDetails
             followerApps
             contractNicknames
             currentSlot
 
-handleAction (WelcomeAction welcomeAction) = toWelcome $ Welcome.handleAction
-  welcomeAction
+handleAction (WelcomeAction wa) = do
+  mWelcomeState <- peruse _welcomeState
+  for_ mWelcomeState \ws -> toWelcome ws $ Welcome.handleAction wa
 
-handleAction (DashboardAction dashboardAction) = do
+handleAction (DashboardAction da) = do
   currentSlot <- use _currentSlot
   tzOffset <- use _tzOffset
-  toDashboard $ Dashboard.handleAction { currentSlot, tzOffset } dashboardAction
+  addressBook <- use _addressBook
+  mDashboardState <- peruse _dashboardState
+  for_ mDashboardState \ds ->
+    toDashboard ds
+      $ Dashboard.handleAction { addressBook, currentSlot, tzOffset } da
 
 ------------------------------------------------------------
 -- Note [dummyState]: In order to map a submodule whose state might not exist, we need
@@ -399,14 +399,15 @@ handleAction (DashboardAction dashboardAction) = do
 toWelcome
   :: forall m msg slots
    . Functor m
-  => HalogenM Welcome.State Welcome.Action slots msg m Unit
+  => Welcome.State
+  -> HalogenM Welcome.State Welcome.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-toWelcome = mapMaybeSubmodule _welcomeState WelcomeAction Welcome.dummyState
+toWelcome = mapMaybeSubmodule _welcomeState WelcomeAction
 
 toDashboard
   :: forall m msg slots
    . Functor m
-  => HalogenM Dashboard.State Dashboard.Action slots msg m Unit
+  => Dashboard.State
+  -> HalogenM Dashboard.State Dashboard.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
 toDashboard = mapMaybeSubmodule _dashboardState DashboardAction
-  Dashboard.dummyState

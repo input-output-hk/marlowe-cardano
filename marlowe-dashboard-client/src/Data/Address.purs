@@ -2,6 +2,7 @@ module Data.Address
   ( Address
   , AddressError(..)
   , dual
+  , empty
   , fromString
   , toString
   , validator
@@ -9,7 +10,13 @@ module Data.Address
 
 import Prologue
 
-import Data.Argonaut (class DecodeJson, class EncodeJson)
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , JsonDecodeError(..)
+  , decodeJson
+  )
+import Data.Bifunctor (lmap)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -68,8 +75,15 @@ newtype Address = Address String
 derive instance Eq Address
 derive instance Ord Address
 derive newtype instance Show Address
-derive newtype instance DecodeJson Address
 derive newtype instance EncodeJson Address
+
+instance DecodeJson Address where
+  decodeJson =
+    lmap (const $ TypeMismatch "Address") <<< fromString Set.empty
+      <=< decodeJson
+
+empty :: Address
+empty = Address "00000000000000000000000000000000000000000000000000000000"
 
 fromString :: Set Address -> String -> Either AddressError Address
 fromString used s

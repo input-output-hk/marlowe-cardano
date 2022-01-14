@@ -1,6 +1,5 @@
 module Component.Contacts.Lenses
-  ( _addressBook
-  , _cardSection
+  ( _cardSection
   , _walletNicknameInput
   , _addressInput
   , _walletNickname
@@ -16,27 +15,24 @@ module Component.Contacts.Lenses
 import Prologue
 
 import Component.Contacts.Types
-  ( AddressBook
-  , AddressError
+  ( AddressError
   , CardSection
   , State
   , WalletDetails
   , WalletId
   , WalletInfo
-  , WalletNickname
   , WalletNicknameError
   )
 import Component.InputField.Types (State) as InputField
+import Data.Address (Address)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
+import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
+import Marlowe.Semantics (Assets, MarloweData, MarloweParams)
 import Type.Proxy (Proxy(..))
-
-_addressBook :: Lens' State AddressBook
-_addressBook = prop (Proxy :: _ "addressBook")
 
 _cardSection :: Lens' State CardSection
 _cardSection = prop (Proxy :: _ "cardSection")
@@ -71,5 +67,5 @@ _previousCompanionAppState = prop (Proxy :: _ "previousCompanionAppState")
 _walletId :: Lens' WalletInfo WalletId
 _walletId = _Newtype <<< prop (Proxy :: _ "walletId")
 
-_pubKeyHash :: Lens' WalletInfo PubKeyHash
+_pubKeyHash :: Lens' WalletInfo Address
 _pubKeyHash = _Newtype <<< prop (Proxy :: _ "pubKeyHash")

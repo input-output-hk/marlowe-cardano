@@ -51,6 +51,7 @@ import Component.Contacts.Lenses
 import Component.Contacts.Types (WalletDetails, WalletId)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
+import Data.Address (Address)
 import Data.Argonaut.Decode (JsonDecodeError)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (filter) as Array
@@ -73,7 +74,6 @@ import Marlowe.Semantics
   ( Contract
   , MarloweData
   , MarloweParams
-  , PubKeyHash
   , TokenName
   , TransactionInput
   )
@@ -113,7 +113,7 @@ class
     -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createContract
     :: WalletDetails
-    -> Map TokenName PubKeyHash
+    -> Map TokenName Address
     -> Contract
     -> m (AjaxResponse Unit)
   applyTransactionInput
@@ -149,7 +149,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         ajaxMarloweAppId <- Contract.activateContract MarloweApp walletId
         let
           createWalletDetails companionAppId marloweAppId =
-            { walletNickname: ""
+            { walletNickname: WN.new
             , companionAppId
             , marloweAppId
             , walletInfo
@@ -182,7 +182,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           walletId
         let
           createWalletDetails companionAppId marloweAppId =
-            { walletNickname: ""
+            { walletNickname: walletName
             , companionAppId
             , marloweAppId
             , walletInfo
@@ -257,9 +257,9 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     let
       marloweAppId = view _marloweAppId walletDetails
 
-      pubKeyHash = view (_walletInfo <<< _pubKeyHash) walletDetails
+      address = view (_walletInfo <<< _pubKeyHash) walletDetails
     in
-      MarloweApp.redeem marloweAppId marloweParams tokenName pubKeyHash
+      MarloweApp.redeem marloweAppId marloweParams tokenName address
   -- get the WalletDetails of a wallet given the PlutusAppId of its WalletCompanion
   -- note: this returns an empty walletNickname (because these are only saved locally)
   lookupWalletDetails companionAppId =
@@ -279,7 +279,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             of
             Just marloweApp ->
               pure
-                { walletNickname: mempty
+                { walletNickname: WN.new
                 , companionAppId
                 , marloweAppId: toFront $ view _cicContract marloweApp
                 , walletInfo

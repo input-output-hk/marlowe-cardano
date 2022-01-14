@@ -11,11 +11,11 @@ import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Css as Css
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AddressBook
 import Data.Lens ((^.))
 import Data.List (foldMap)
-import Data.Map as Map
 import Data.MnemonicPhrase (class CheckMnemonic)
-import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -42,7 +42,7 @@ import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, src, title)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
-import Page.Welcome.Lenses (_addressBook, _card, _cardOpen)
+import Page.Welcome.Lenses (_card, _cardOpen)
 import Page.Welcome.Types (Action(..), Card(..), State)
 import Type.Proxy (Proxy(..))
 
@@ -72,9 +72,10 @@ welcomeCard
    . MonadAff m
   => CheckMnemonic m
   => ManageMarlowe m
-  => State
+  => AddressBook
+  -> State
   -> ComponentHTML Action ChildSlots m
-welcomeCard state =
+welcomeCard addressBook state =
   let
     card = state ^. _card
 
@@ -92,7 +93,7 @@ welcomeCard state =
               GenerateWalletHelpCard -> generateWalletHelpCard
               UseNewWalletCard -> [] --useNewWalletCard state
               UseWalletCard -> [] --useWalletCard state
-              RestoreTestnetWalletCard -> restoreTestnetWalletCard state
+              RestoreTestnetWalletCard -> restoreTestnetWalletCard addressBook
               LocalWalletMissingCard -> localWalletMissingCard
       ]
 
@@ -267,11 +268,11 @@ restoreTestnetWalletCard
    . MonadAff m
   => CheckMnemonic m
   => ManageMarlowe m
-  => State
+  => AddressBook
   -> Array (ComponentHTML Action ChildSlots m)
-restoreTestnetWalletCard state =
+restoreTestnetWalletCard addressBook =
   let
-    nicknames = WN.fromFoldable $ Map.keys $ state ^. _addressBook
+    nicknames = AddressBook.nicknames addressBook
   in
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
@@ -288,122 +289,6 @@ restoreTestnetWalletCard state =
           Restored nickname walletDetails ->
             ConnectWallet nickname walletDetails
     ]
-
--- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
--- useNewWalletCard :: forall p. State -> Array (HTML p Action)
--- useNewWalletCard state =
---   let
---     enteringDashboardState = state ^. _enteringDashboardState
-
---     remoteWalletDetails = state ^. _remoteWalletDetails
-
---     walletNicknameInput = state ^. _walletNicknameInput
-
---     walletNickname = walletNicknameInput ^. _value
---   -- walletId = state ^. _walletId
---   in
---     [ a
---         [ classNames [ "absolute", "top-4", "right-4" ]
---         , onClick_ CloseCard
---         ]
---         [ icon_ Icon.Close ]
---     , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
---         [ h2
---             [ classNames [ "font-bold" ] ]
---             [ text $ "Demo wallet generated" ]
---         , WalletNicknameInputAction
---             <$> renderInput
---               (walletNicknameInputDisplayOptions false)
---               walletNicknameInput
---         -- While removing information from the other contacts we have (part of task SCP-3174) I noticed
---         -- that we don't have the right data to show renderAddress in here, which is pointing to the direction
---         -- of removing this view altogether. Once the phase 1 is complete and we are sure we don use this, we can
---         -- remove the view and most likely the walletId and maybe the remoteWalletDetails from the state
---         -- , renderAddress walletId
---         , div
---             [ classNames [ "flex", "gap-4" ] ]
---             [ button
---                 [ classNames $ Css.secondaryButton <> [ "flex-1" ]
---                 , onClick_ CloseCard
---                 ]
---                 [ text "Cancel" ]
---             , button
---                 [ classNames $ Css.primaryButton <> [ "flex-1" ]
---                 , disabled $ isJust (validate walletNicknameInput)
---                     || enteringDashboardState
---                     || not isSuccess remoteWalletDetails
---                 , onClick_ $ ConnectWallet walletNickname
---                 ]
---                 [ text
---                     if enteringDashboardState then "Connecting..."
---                     else "Connect Wallet"
---                 ]
---             ]
---         ]
---     ]
-
--- TODO: Probably remove as part of SCP-3218
--- renderAddress :: forall p. PubKeyHash -> HTML p Action
--- renderAddress address =
---   let
---     copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
---   in
---     div
---       [ classNames [] ]
---       [ copyAddress
---           <$> Address.render
---             Address.defaultInput
---               { label = "Demo wallet ID", value = address }
---       , walletIdTip
---       ]
--- TODO: Most likely remove or adapt all [Workflow 2][X] functionality (SCP-3218)
--- useWalletCard :: forall p. State -> Array (HTML p Action)
--- useWalletCard state =
---   let
---     enteringDashboardState = state ^. _enteringDashboardState
-
---     remoteWalletDetails = state ^. _remoteWalletDetails
-
---     walletNicknameInput = state ^. _walletNicknameInput
-
---     walletNickname = walletNicknameInput ^. _value
---   -- walletId = state ^. _walletId
---   in
---     [ a
---         [ classNames [ "absolute", "top-4", "right-4" ]
---         , onClick_ CloseCard
---         ]
---         [ icon_ Icon.Close ]
---     , div [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
---         [ h2
---             [ classNames [ "font-bold", "truncate", "w-11/12" ] ]
---             [ text $ "Demo wallet " <> walletNickname ]
---         , WalletNicknameInputAction
---             <$> renderInput
---               (walletNicknameInputDisplayOptions true)
---               walletNicknameInput
---         -- same note that in useNewWalletCard
---         -- , renderAddress walletId
---         , div
---             [ classNames [ "flex", "gap-4" ] ]
---             [ button
---                 [ classNames $ Css.secondaryButton <> [ "flex-1" ]
---                 , onClick_ CloseCard
---                 ]
---                 [ text "Cancel" ]
---             , button
---                 [ classNames $ Css.primaryButton <> [ "flex-1" ]
---                 , onClick_ $ ConnectWallet walletNickname
---                 , disabled $ enteringDashboardState || not isSuccess
---                     remoteWalletDetails
---                 ]
---                 [ text
---                     if enteringDashboardState then "Connecting..."
---                     else "Connect Wallet"
---                 ]
---             ]
---         ]
---     ]
 
 localWalletMissingCard :: forall p. Array (HTML p Action)
 localWalletMissingCard =

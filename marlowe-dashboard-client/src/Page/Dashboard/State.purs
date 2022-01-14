@@ -1,6 +1,5 @@
 module Page.Dashboard.State
-  ( dummyState
-  , handleAction
+  ( handleAction
   , mkInitialState
   ) where
 
@@ -27,17 +26,16 @@ import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses
-  ( _addressBook
-  , _assets
+  ( _assets
   , _cardSection
   , _walletId
   , _walletInfo
   , _walletNickname
   )
-import Component.Contacts.State (defaultWalletDetails, getAda)
+import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, mkInitialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
-import Component.Contacts.Types (AddressBook, CardSection(..), WalletDetails)
+import Component.Contacts.Types (CardSection(..), WalletDetails)
 import Component.InputField.Lenses (_value)
 import Component.InputField.Types (Action(..)) as InputField
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
@@ -52,7 +50,10 @@ import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State) as Template
 import Component.Template.Types (ContractSetupStage(..))
 import Control.Monad.Reader (class MonadAsk)
+import Data.AddressBook as AB
 import Data.Array (null)
+import Data.Either (hush)
+import Data.Filterable (filterMap)
 import Data.Foldable (for_)
 import Data.Lens
   ( _Just
@@ -80,12 +81,12 @@ import Data.Map
   , mapMaybeWithKey
   , toUnfoldable
   )
-import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (delete, fromFoldable, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
@@ -104,7 +105,7 @@ import Marlowe.Semantics
   , Party(..)
   , Payee(..)
   , Payment(..)
-  , Slot(..)
+  , Slot
   , _marloweContract
   )
 import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
@@ -146,23 +147,17 @@ import Toast.Types
   , successToast
   )
 
--- see note [dummyState] in MainFrame.State
-dummyState :: State
-dummyState = mkInitialState Map.empty defaultWalletDetails Map.empty Map.empty
-  (Slot zero)
-
 {- [Workflow 2][4] Connect a wallet
 When we connect a wallet, it has this initial state. Notable is the walletCompanionStatus of
 `FirstUpdatePending`. Follow the trail of worflow comments to see what happens next.
 -}
 mkInitialState
-  :: AddressBook
-  -> WalletDetails
+  :: WalletDetails
   -> Map PlutusAppId ContractHistory
   -> Map PlutusAppId String
   -> Slot
   -> State
-mkInitialState contacts walletDetails contracts contractNicknames currentSlot =
+mkInitialState walletDetails contracts contractNicknames currentSlot =
   let
     mkInitialContractState followerAppId contractHistory =
       let
@@ -171,7 +166,7 @@ mkInitialState contacts walletDetails contracts contractNicknames currentSlot =
         Contract.mkInitialState walletDetails currentSlot nickname
           contractHistory
   in
-    { contactsState: Contacts.mkInitialState contacts
+    { contactsState: Contacts.mkInitialState
     , walletDetails
     , walletCompanionStatus: FirstUpdatePending
     , menuOpen: false
@@ -198,15 +193,14 @@ handleAction
   -> HalogenM State Action ChildSlots Msg m Unit
 {- [Workflow 3][0] Disconnect a wallet -}
 handleAction _ DisconnectWallet = do
-  addressBook <- use (_contactsState <<< _addressBook)
   walletDetails <- use _walletDetails
   contracts <- use _contracts
-  callMainFrameAction $ MainFrame.EnterWelcomeState addressBook walletDetails
-    contracts
+  callMainFrameAction $ MainFrame.EnterWelcomeState walletDetails contracts
 
-handleAction _ (ContactsAction contactsAction) = case contactsAction of
-  Contacts.CancelNewContactForRole -> assign _card $ Just ContractTemplateCard
-  _ -> toContacts $ Contacts.handleAction contactsAction
+handleAction { addressBook } (ContactsAction contactsAction) =
+  case contactsAction of
+    Contacts.CancelNewContactForRole -> assign _card $ Just ContractTemplateCard
+    _ -> toContacts $ Contacts.handleAction addressBook contactsAction
 
 handleAction _ ToggleMenu = modifying _menuOpen not
 
@@ -444,7 +438,7 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
       handleAction input $ ContractAction followerAppId $
         Contract.CancelConfirmation
 
-handleAction input@{ currentSlot } (TemplateAction templateAction) =
+handleAction input@{ currentSlot, addressBook } (TemplateAction templateAction) =
   case templateAction of
     Template.OpenCreateWalletCard tokenName -> do
       modify_
@@ -464,15 +458,13 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) =
         Just contract -> do
           -- the user enters wallet nicknames for roles; here we convert these into pubKeyHashes
           walletDetails <- use _walletDetails
-          addressBook <- use (_contactsState <<< _addressBook)
           roleWalletInputs <- use (_templateState <<< _roleWalletInputs)
           let
-            roleWallets = map (view _value) roleWalletInputs
+            roleWallets =
+              filterMap (hush <<< WN.fromString mempty <<< view _value)
+                roleWalletInputs
 
-            roles = mapMaybe
-              (\walletNickname -> lookup walletNickname addressBook)
-              roleWallets
-          -- roles = mapMaybe (\walletNickname -> view (_walletInfo <<< _pubKeyHash) <$> lookup walletNickname addressBook) roleWallets
+            roles = mapMaybe (flip AB.lookupAddress addressBook) roleWallets
           ajaxCreateContract <- createContract walletDetails roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
@@ -509,15 +501,18 @@ handleAction input@{ currentSlot } (TemplateAction templateAction) =
                     "The request to initialise this contract has been submitted."
                   assign _templateState Template.initialState
     _ -> do
-      addressBook <- use (_contactsState <<< _addressBook)
       toTemplate $ Template.handleAction { addressBook } templateAction
 
+-- FIXME: this all feels like a horrible hack that should be refactored.
 -- This action is a bridge from the Contacts to the Template modules. It is used to create a
 -- contract for a specific role during contract setup.
 handleAction input (SetContactForRole tokenName walletNickname) = do
   handleAction input $ TemplateAction Template.UpdateRoleWalletValidators
-  handleAction input $ TemplateAction $ Template.RoleWalletInputAction tokenName
-    $ InputField.SetValue walletNickname
+  handleAction input
+    $ TemplateAction
+    $ Template.RoleWalletInputAction tokenName
+    $ InputField.SetValue
+    $ WN.toString walletNickname
   -- we assign the card directly rather than calling the OpenCard action, because this action is
   -- triggered when the ContactsCard is open, and we don't want to animate opening and closing
   -- cards - we just want to switch instantly back to this card

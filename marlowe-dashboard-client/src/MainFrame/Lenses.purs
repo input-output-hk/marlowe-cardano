@@ -1,14 +1,8 @@
-module MainFrame.Lenses
-  ( _webSocketStatus
-  , _currentSlot
-  , _tzOffset
-  , _subState
-  , _welcomeState
-  , _dashboardState
-  ) where
+module MainFrame.Lenses where
 
 import Prologue
 
+import Data.AddressBook (AddressBook)
 import Data.Lens (Lens', Traversal')
 import Data.Lens.Prism.Either (_Left, _Right)
 import Data.Lens.Record (prop)
@@ -24,6 +18,9 @@ _webSocketStatus = prop (Proxy :: _ "webSocketStatus")
 
 _currentSlot :: Lens' State Slot
 _currentSlot = prop (Proxy :: _ "currentSlot")
+
+_addressBook :: Lens' State AddressBook
+_addressBook = prop (Proxy :: _ "addressBook")
 
 _tzOffset :: Lens' State Minutes
 _tzOffset = prop (Proxy :: _ "tzOffset")
