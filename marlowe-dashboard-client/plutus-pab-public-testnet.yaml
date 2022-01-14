@@ -1,0 +1,64 @@
+dbConfig:
+  dbConfigFile: marlowe-pab-public-testnet.db
+  dbConfigPoolSize: 20
+
+pabWebserverConfig:
+  baseUrl: http://localhost:9080
+  staticDir: ../marlowe-dashboard-client/dist
+  permissiveCorsPolicy: False
+
+walletServerConfig:
+  tag: LocalWalletConfig
+  walletSettings:
+    baseUrl: http://localhost:8090
+
+nodeServerConfig:
+  mscSocketPath: public-testnet.socket                    # Public Marlowe testnet
+  mscBaseUrl: "localhost"                                 # Not used by real nodes.
+  mscKeptBlocks: 2160                                     # Not used by real nodes.
+  mscNetworkId: "1564"                                    # Public Marlowe testnet.
+  mscSlotConfig:                                          # Public Marlowe testnet.
+    scSlotZeroTime: 1594369216000                         # Public Marlowe testnet.
+    scSlotLength: 1000                                    # Public Marlowe testnet.
+  mscFeeConfig:                                           # Not used by real nodes.
+    fcConstantFee:                                        # Not used by real nodes.
+      getLovelace: 10                                     # Not used by real nodes.
+    fcScriptsFeeFactor: 1.0                               # Not used by real nodes.
+  mscInitialTxWallets: []                                 # Not used by real nodes.
+  mscNodeMode: AlonzoNode                                 # Public Marlowe testnet.
+  mscProtocolParametersJsonPath: public-testnet.protocol  # Public Marlowe testnet.
+
+chainIndexConfig:
+  ciBaseUrl: http://localhost:9083
+  ciWatchedAddresses: []
+
+requestProcessingConfig:
+  requestProcessingInterval: 1
+
+signingProcessConfig:               # Apparently not used by real nodes.
+  spBaseUrl: http://localhost:9084  # Apparently not used by real nodes.
+  spWallet:                         # Apparently not used by real nodes.
+    getWallet: 1                    # Apparently not used by real nodes.
+
+metadataServerConfig:               # Apparently not used by real nodes.
+  mdBaseUrl: http://localhost:9085  # Apparently not used by real nodes.
+
+developmentOptions:
+  pabRollbackHistory: null
+  pabResumeFrom:
+    tag: PointAtGenesis
+
+# Optional timeout (in seconds) for calls to endpoints that are not currently
+# available. If this is not set, calls to unavailable endpoints fail
+# immediately.
+# The endpoints on Marlowe contracts are always available, so in principle
+# this isn't an issue here. However, there is a split second between creating
+# a contract and the endpoints first becoming available - so having this set
+# ensures that the first attempt to call an endpoint (immediately after
+# creating the contract) won't fail.
+endpointTimeout: 5
+
+# Optional EKG Server Config
+# ----
+# monitoringConfig:
+#   monitoringPort: 9090

@@ -336,13 +336,9 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
 uniqueContractHash :: IO ()
 uniqueContractHash = do
-    let params cs = MarloweParams
-            { rolesCurrency = cs
-            , rolePayoutValidatorHash = validatorHash (rolePayoutScript cs) }
-
-    let hash1 = Scripts.validatorHash $ typedValidator (params "11")
-    let hash2 = Scripts.validatorHash $ typedValidator (params "22")
-    let hash3 = Scripts.validatorHash $ typedValidator (params "22")
+    let hash1 = Scripts.validatorHash $ typedValidator (marloweParams "11")
+    let hash2 = Scripts.validatorHash $ typedValidator (marloweParams "22")
+    let hash3 = Scripts.validatorHash $ typedValidator (marloweParams "22")
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
 
@@ -356,13 +352,13 @@ typedValidatorSize :: IO ()
 typedValidatorSize = do
     let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 15600)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 16000)
 
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
     let validator = Scripts.validatorScript $ smallUntypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 14750)
+    assertBool ("smallUntypedValidator is too large " <> show vsize) (vsize < 15200)
 
 extractContractRolesTest :: IO ()
 extractContractRolesTest = do
