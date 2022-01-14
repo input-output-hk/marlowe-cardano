@@ -1,6 +1,7 @@
 module Marlowe.Semantics where
 
 import Prologue
+
 import Control.Alt ((<|>))
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
@@ -120,9 +121,6 @@ next =
       <*> pure unit
 
 type PubKey
-  = String
-
-type PubKeyHash
   = String
 
 data Party

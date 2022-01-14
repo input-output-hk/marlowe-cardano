@@ -8,9 +8,8 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
-import Component.Contacts.Types (AddressBook, WalletDetails)
+import Component.Contacts.Types (WalletDetails)
 import Data.WalletNickname (WalletNickname)
-import Marlowe.PAB (PlutusAppId)
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so
@@ -25,8 +24,6 @@ type State =
   -- cards has to be different for different screen sizes (on large screens some cards slide in
   -- from the right) - and that's much easier to do with media queries.
   , cardOpen :: Boolean
-  , addressBook :: AddressBook
-  , walletId :: PlutusAppId
   , enteringDashboardState :: Boolean
   }
 

@@ -4,6 +4,7 @@ module Page.Contract.View
   ) where
 
 import Prologue hiding (div)
+
 import Component.Contacts.State (adaToken)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
@@ -32,10 +33,11 @@ import Data.String (take, trim)
 import Data.String.Extra (capitalize)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (lifeCycleSlot, LifecycleEvent(..))
+import Halogen.Extra (LifecycleEvent(..), lifeCycleSlot)
 import Halogen.HTML
   ( HTML
   , a
@@ -857,13 +859,13 @@ currentStepActions _ state =
 participantWithNickname :: StartedState -> Party -> String
 participantWithNickname state party =
   let
-    mNickname :: Maybe String
     mNickname = join $ Map.lookup party (state ^. _participants)
   in
     capitalize case party, mNickname of
       -- TODO: For the demo we wont have PK, but eventually we probably want to limit the amount of characters
       PK publicKey, _ -> publicKey
-      Role roleName, Just nickname -> roleName <> " (" <> nickname <> ")"
+      Role roleName, Just nickname -> roleName <> " (" <> WN.toString nickname
+        <> ")"
       Role roleName, Nothing -> roleName
 
 accountIndicator

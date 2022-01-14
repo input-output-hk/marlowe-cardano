@@ -4,12 +4,20 @@ module Data.WalletNickname
   , dual
   , fromFoldable
   , fromString
+  , new
   , validator
   , toString
   ) where
 
 import Prologue
 
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , JsonDecodeError(..)
+  , decodeJson
+  )
+import Data.Bifunctor (lmap)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -69,12 +77,21 @@ instance showWalletNicknameError :: Show WalletNicknameError where
 
 newtype WalletNickname = WalletNickname String
 
-derive instance eqWalletNickname :: Eq WalletNickname
-derive instance ordWalletNickname :: Ord WalletNickname
-derive newtype instance showWalletNickname :: Show WalletNickname
+derive instance Eq WalletNickname
+derive instance Ord WalletNickname
+derive newtype instance Show WalletNickname
+derive newtype instance EncodeJson WalletNickname
+
+instance DecodeJson WalletNickname where
+  decodeJson =
+    lmap (const $ TypeMismatch "WalletId") <<< fromString Set.empty
+      <=< decodeJson
 
 nicknameRegex :: Regex
 nicknameRegex = unsafeRegex "^[a-z0-9]+$" ignoreCase
+
+new :: WalletNickname
+new = WalletNickname "newWallet"
 
 fromFoldable :: forall f. Foldable f => f String -> Set WalletNickname
 fromFoldable = Set.map WalletNickname <<< Set.fromFoldable

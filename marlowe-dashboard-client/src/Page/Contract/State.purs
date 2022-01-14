@@ -24,10 +24,11 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast, addToast)
 import Component.Contacts.Lenses (_assets, _pubKeyHash, _walletInfo)
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (WalletDetails, WalletNickname)
+import Component.Contacts.Types (WalletDetails)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Address as A
 import Data.Array
   ( difference
   , filter
@@ -70,6 +71,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.Unfoldable as Unfoldable
+import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -324,7 +326,7 @@ getUserParties walletDetails marloweParams =
     roleTokens = foldMap (Set.map Role <<< Map.keys <<< Map.filter ((/=) zero))
       mCurrencyTokens
   in
-    Set.insert (PK pubKeyHash) roleTokens
+    Set.insert (PK $ A.toString pubKeyHash) roleTokens
 
 withStarted
   :: forall action slots msg m

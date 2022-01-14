@@ -32,6 +32,7 @@ import Capability.PlutusApps.MarloweApp.Types
   , LastResult(..)
   )
 import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Address (Address)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
@@ -52,7 +53,6 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
   , MarloweParams
-  , PubKeyHash
   , SlotInterval(..)
   , TokenName
   , TransactionInput(..)
@@ -69,7 +69,7 @@ import Wallet.Types (_EndpointDescription)
 class MarloweApp m where
   createContract
     :: PlutusAppId
-    -> Map TokenName PubKeyHash
+    -> Map TokenName Address
     -> Contract
     -> m (AjaxResponse Unit)
   applyInputs
@@ -80,7 +80,7 @@ class MarloweApp m where
     :: PlutusAppId
     -> MarloweParams
     -> TokenName
-    -> PubKeyHash
+    -> Address
     -> m (AjaxResponse Unit)
 
 instance marloweAppM :: MarloweApp AppM where

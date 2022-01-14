@@ -1,7 +1,9 @@
 module Component.Transfer.Types where
 
 import Prologue
+
 import Data.BigInt.Argonaut (BigInt)
+import Data.WalletNickname (WalletNickname)
 import Marlowe.Semantics (AccountId, Party, Token)
 
 -- Here's my justification for why this module should exist:
@@ -17,8 +19,7 @@ import Marlowe.Semantics (AccountId, Party, Token)
 --
 -- Note that all the types are basically the same. The additional data
 -- constructors are purely to make the model more self-documenting
-type Transfer
-  =
+type Transfer =
   { sender :: Participant
   , recipient :: Participant
   , token :: Token
@@ -31,11 +32,7 @@ data Termini
   | AccountToWallet AccountId Party
   | WalletToAccount Party AccountId
 
-type Participant
-  =
-  { nickname :: Maybe String
+type Participant =
+  { nickname :: Maybe WalletNickname
   , isCurrentUser :: Boolean
   }
-
-type Nickname
-  = String

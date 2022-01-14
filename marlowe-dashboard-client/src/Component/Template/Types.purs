@@ -12,9 +12,9 @@ module Component.Template.Types
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.Contacts.Types (AddressBook)
 import Component.InputField.Types (class InputFieldError)
 import Component.InputField.Types (Action, State) as InputField
+import Data.AddressBook (AddressBook)
 import Data.Map (Map)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Semantics (TokenName)

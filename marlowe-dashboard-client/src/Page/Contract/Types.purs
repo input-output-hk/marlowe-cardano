@@ -13,11 +13,13 @@ module Page.Contract.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent, defaultEvent)
-import Component.Contacts.Types (WalletDetails, WalletNickname)
+import Component.Contacts.Types (WalletDetails)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
+import Data.WalletNickname (WalletNickname)
 import Halogen (RefLabel(..))
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
@@ -38,15 +40,13 @@ data State
   = Starting StartingState
   | Started StartedState
 
-type StartingState
-  =
+type StartingState =
   { nickname :: String
   , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
   }
 
-type StartedState
-  =
+type StartedState =
   { nickname :: String
   , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
@@ -69,15 +69,13 @@ type StartedState
   , namedActions :: Array (Tuple Party (Array NamedAction))
   }
 
-type StepBalance
-  =
+type StepBalance =
   { atStart :: Accounts
   , atEnd :: Maybe Accounts
   }
 
 -- Represents a historical step in a contract's life.
-type PreviousStep
-  =
+type PreviousStep =
   { tab :: Tab
   , expandPayments :: Boolean
   , resultingPayments :: Array Payment
@@ -101,8 +99,7 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
-type Input
-  =
+type Input =
   { currentSlot :: Slot
   , tzOffset :: Minutes
   , walletDetails :: WalletDetails
@@ -111,7 +108,7 @@ type Input
 
 data Action
   = SelectSelf
-  | SetNickname String
+  | SetNickname String -- NOT a wallet nickname. todo add ContractNickname type
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
   | SelectTab Int Tab
