@@ -1,5 +1,5 @@
 module Component.Contacts.State
-  ( mkInitialState
+  ( initialState
   , handleAction
   , adaToken
   , getAda
@@ -52,11 +52,11 @@ import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Semantics (Assets, CurrencySymbol, Token(..), TokenName)
-import Page.Dashboard.Types (Action(..)) as Dashboard
+import Page.Dashboard.Types as Dashboard
 import Toast.Types (successToast)
 
-mkInitialState :: State
-mkInitialState =
+initialState :: State
+initialState =
   { cardSection: Home
   , walletNicknameInput: InputField.mkInitialState Nothing
   , addressInput: InputField.mkInitialState Nothing

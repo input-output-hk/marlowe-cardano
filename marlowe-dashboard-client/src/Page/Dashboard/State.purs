@@ -33,7 +33,7 @@ import Component.Contacts.Lenses
   , _walletNickname
   )
 import Component.Contacts.State (getAda)
-import Component.Contacts.State (handleAction, mkInitialState) as Contacts
+import Component.Contacts.State (handleAction, initialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..), WalletDetails)
 import Component.InputField.Lenses (_value)
@@ -166,7 +166,7 @@ mkInitialState walletDetails contracts contractNicknames currentSlot =
         Contract.mkInitialState walletDetails currentSlot nickname
           contractHistory
   in
-    { contactsState: Contacts.mkInitialState
+    { contactsState: Contacts.initialState
     , walletDetails
     , walletCompanionStatus: FirstUpdatePending
     , menuOpen: false
