@@ -22,12 +22,14 @@ import Marlowe.Semantics (TokenName)
 type State =
   { contractSetupStage :: ContractSetupStage
   , contractTemplate :: ContractTemplate
+  -- TODO move to a Form
   , contractNicknameInput :: InputField.State ContractNicknameError
   , roleWalletInputs :: Map TokenName (InputField.State RoleError)
   , slotContentInputs :: Map String (InputField.State SlotError)
   , valueContentInputs :: Map String (InputField.State ValueError)
   }
 
+-- TODO make this an actual ADT, not just a dumb enum(b)
 data ContractSetupStage
   = Start
   | Overview

@@ -1,6 +1,7 @@
 module Marlowe.Extended where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut
@@ -148,6 +149,7 @@ instance arrayHasChoices :: HasChoices a => HasChoices (Array a) where
 instance sChoiceIdHasChoices :: HasChoices S.ChoiceId where
   getChoiceNames (S.ChoiceId choiceName _) = Set.singleton choiceName
 
+-- TODO fix primitive obsession
 data Timeout
   = SlotParam String
   | Slot BigInt

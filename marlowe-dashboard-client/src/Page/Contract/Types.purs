@@ -41,12 +41,14 @@ data State
   | Started StartedState
 
 type StartingState =
+  -- TODO fix primitive obsession
   { nickname :: String
   , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
   }
 
 type StartedState =
+  -- TODO fix primitive obsession
   { nickname :: String
   , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
@@ -58,10 +60,12 @@ type StartedState =
   -- Which step is selected. This index is 0 based and should be between [0, previousSteps.length]
   -- (both sides inclusive). This is because the array represent the past steps and the
   -- executionState has the current state and visually we can select any one of them.
+  -- TODO: fix primitive obsession - maybe a zipper is a better representation
+  -- than an index + the execution state?
   , selectedStep :: Int
   , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
-  -- Theser are the roles and PK's that the "logged-in" user has in this contract.
+  -- These are the roles and PK's that the "logged-in" user has in this contract.
   , userParties :: Set Party
   -- These are the possible actions a user can make in the current step (grouped by part). We store this
   -- mainly because extractNamedActions and expandAndGroupByRole could potentially be unperformant to compute
@@ -83,8 +87,7 @@ type PreviousStep =
   , state :: PreviousStepState
   }
 
-type TimeoutInfo
-  =
+type TimeoutInfo =
   { slot :: Slot
   , missedActions :: Array (Tuple Party (Array NamedAction))
   }
@@ -108,7 +111,8 @@ type Input =
 
 data Action
   = SelectSelf
-  | SetNickname String -- NOT a wallet nickname. todo add ContractNickname type
+  -- TODO: fix primitive obsession
+  | SetNickname String
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
   | SelectTab Int Tab
@@ -116,9 +120,11 @@ data Action
   | AskConfirmation NamedAction
   | CancelConfirmation
   -- The SelectStep action is what changes the model and causes the card to seem bigger.
+  -- TODO: refactor this stuff - why are there two actions?
   | SelectStep Int
   -- The MoveToStep action scrolls the step carousel so that the indicated step is at the center (without changing the model).
   | MoveToStep Int
+  -- TODO: seems like all the carousel stuff shoule be moved to a component
   | CarouselOpened
   | CarouselClosed
 

@@ -31,6 +31,7 @@ type State =
   , walletCompanionStatus :: WalletCompanionStatus
   , menuOpen :: Boolean
   , card :: Maybe Card
+  -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
   -- TODO: SCP-3208 Move contract state to halogen store
   , contracts :: Map PlutusAppId Contract.State

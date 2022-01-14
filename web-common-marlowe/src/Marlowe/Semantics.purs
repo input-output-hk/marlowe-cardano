@@ -120,6 +120,7 @@ next =
       <*> maybe (Left $ AtIndex ix MissingValue) decodeJson (arr !! ix)
       <*> pure unit
 
+-- TODO: fix primitive obsession
 type PubKey
   = String
 
@@ -162,9 +163,11 @@ type Timeout
 type Money
   = Assets
 
+-- TODO: fix primitive obsession
 type CurrencySymbol
   = String
 
+-- TODO: fix primitive obsession
 type TokenName
   = String
 
@@ -178,8 +181,7 @@ instance encodeJsonToken :: EncodeJson Token where
       , token_name: tok
       }
 
-type TokenJson
-  =
+type TokenJson =
   { currency :: { unCurrencySymbol :: String }
   , token :: { unTokenName :: String }
   }
@@ -215,15 +217,19 @@ instance hasArgsToken :: Args Token where
   hasArgs = genericHasArgs
   hasNestedArgs = genericHasNestedArgs
 
+-- TODO: fix primitive obsession
 type ChosenNum
   = BigInt
 
+-- TODO: fix primitive obsession
 type Accounts
   = Map (Tuple AccountId Token) BigInt
 
+-- TODO: fix primitive obsession
 type ChoiceName
   = String
 
+-- TODO: fix primitive obsession
 newtype Assets
   = Assets (Map CurrencySymbol (Map TokenName BigInt))
 
@@ -305,9 +311,11 @@ derive newtype instance euclideanRingAda :: EuclideanRing Ada
 
 instance commutativeRingAda :: CommutativeRing Ada
 
+-- TODO: remove or make a newtype
 type AccountId
   = Party
 
+-- TODO: extract module
 data ChoiceId
   = ChoiceId String Party
 
@@ -347,6 +355,7 @@ instance hasArgsChoiceId :: Args ChoiceId where
 choiceOwner :: ChoiceId -> Party
 choiceOwner (ChoiceId _ owner) = owner
 
+-- TODO: extract module
 newtype ValueId
   = ValueId String
 
@@ -372,6 +381,7 @@ instance hasArgsValueId :: Args ValueId where
   hasArgs _ = false
   hasNestedArgs _ = false
 
+-- TODO: extract module
 data Rational
   = Rational BigInt BigInt
 
@@ -634,6 +644,7 @@ above v (SlotInterval _ to) = v > to
 anyWithin :: forall f. Foldable f => Slot -> f SlotInterval -> Boolean
 anyWithin v = any (\(SlotInterval from to) -> v >= from && v <= to)
 
+-- TODO: extract module
 data SlotInterval
   = SlotInterval Slot Slot
 
@@ -658,6 +669,7 @@ ivFrom (SlotInterval from _) = from
 ivTo :: SlotInterval -> Slot
 ivTo (SlotInterval _ to) = to
 
+-- TODO: extract module
 data Bound
   = Bound BigInt BigInt
 
@@ -915,10 +927,10 @@ instance hasArgsContract :: Args Contract where
   hasArgs a = genericHasArgs a
   hasNestedArgs a = genericHasNestedArgs a
 
-newtype State
-  = State
+newtype State = State
   { accounts :: Accounts
   , choices :: Map ChoiceId ChosenNum
+  -- TODO: fix primitive obsession
   , boundValues :: Map ValueId BigInt
   -- The minSlot is a lower bound for the current slot. When we are in the context of a Wallet or Dashboard
   -- we can just ask the time and calculate the current blockchain slot. But when we just have the context
@@ -981,6 +993,7 @@ makeEnvironment l h = Environment
   { slotInterval: SlotInterval (Slot h) (Slot l) }
 
 data Input
+  -- TODO: fix primitive obsession
   = IDeposit AccountId Party Token BigInt
   | IChoice ChoiceId ChosenNum
   | INotify
@@ -1113,10 +1126,13 @@ instance showReduceEffect :: Show ReduceEffect where
 
 data ReduceWarning
   = ReduceNoWarning
+  -- TODO: fix primitive obsession
   | ReduceNonPositivePay AccountId Payee Token BigInt
   ---------------------- v src v dest v paid v expected
+  -- TODO: fix primitive obsession
   | ReducePartialPay AccountId Payee Token BigInt BigInt
   -------------------------- v oldVal  v newVal
+  -- TODO: fix primitive obsession
   | ReduceShadowing ValueId BigInt BigInt
   | ReduceAssertionFailed
 
@@ -1154,6 +1170,7 @@ instance showReduceResult :: Show ReduceResult where
 
 data ApplyWarning
   = ApplyNoWarning
+  -- TODO: fix primitive obsession
   | ApplyNonPositiveDeposit Party AccountId Token BigInt
 
 derive instance genericApplyWarning :: Generic ApplyWarning _
@@ -1179,7 +1196,12 @@ instance showApplyResult :: Show ApplyResult where
   show = genericShow
 
 data ApplyAllResult
-  = ApplyAllSuccess Boolean (List TransactionWarning) (List Payment) State
+  -- TODO: fix primitive obsession
+  = ApplyAllSuccess
+      Boolean
+      (List TransactionWarning)
+      (List Payment)
+      State
       Contract
   | ApplyAllNoMatchError
   | ApplyAllAmbiguousSlotIntervalError
@@ -1192,10 +1214,14 @@ instance showApplyAllResult :: Show ApplyAllResult where
   show = genericShow
 
 data TransactionWarning
+  -- TODO: fix primitive obsession
   = TransactionNonPositiveDeposit Party AccountId Token BigInt
+  -- TODO: fix primitive obsession
   | TransactionNonPositivePay AccountId Payee Token BigInt
+  -- TODO: fix primitive obsession
   | TransactionPartialPay AccountId Payee Token BigInt BigInt
   --                         ^ src    ^ dest       ^ paid     ^ expected
+  -- TODO: fix primitive obsession
   | TransactionShadowing ValueId BigInt BigInt
   --                           oldVal ^  newVal ^
   | TransactionAssertionFailed
@@ -1395,8 +1421,7 @@ derive instance eqTransactionOutput :: Eq TransactionOutput
 instance showTransactionOutput :: Show TransactionOutput where
   show = genericShow
 
-newtype MarloweData
-  = MarloweData
+newtype MarloweData = MarloweData
   { marloweContract :: Contract
   , marloweState :: State
   }
@@ -1417,9 +1442,9 @@ _marloweContract = _Newtype <<< prop (Proxy :: _ "marloweContract")
 _marloweState :: Lens' MarloweData State
 _marloweState = _Newtype <<< prop (Proxy :: _ "marloweState")
 
-newtype MarloweParams
-  = MarloweParams
+newtype MarloweParams = MarloweParams
   { rolePayoutValidatorHash :: ValidatorHash
+  -- TODO: write a custom decoder/encoder to get rid of this unnecessary record
   , rolesCurrency :: { unCurrencySymbol :: CurrencySymbol } -- this is to ensure the serialisation matches the backend
   }
 
@@ -1443,6 +1468,7 @@ _rolesCurrency :: Lens' MarloweParams CurrencySymbol
 _rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop
   (Proxy :: _ "unCurrencySymbol")
 
+-- TODO: fix primitive obsession
 type ValidatorHash
   = String
 
