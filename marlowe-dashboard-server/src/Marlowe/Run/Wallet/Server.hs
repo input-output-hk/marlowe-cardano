@@ -13,32 +13,28 @@ module Marlowe.Run.Wallet.Server
  where
 
 import Cardano.Prelude hiding (Handler)
-
-
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import qualified Cardano.Wallet.Api.Types as WBE
-import Marlowe.Run.Types (Env)
-import Marlowe.Run.Wallet.API (API)
-import qualified Marlowe.Run.Wallet.CentralizedTestnet.Server as CentralizedTestnet
-import Marlowe.Run.Wallet.Types (GetTotalFunds (..))
-import Servant (ServerT, (:<|>) ((:<|>)))
--- FIXME: I don't like to use a Emulator type here, but we'd need to publish some changes upstream to the PAB to fix this
-import Wallet.Emulator (WalletId (..))
-
 import Cardano.Wallet.Primitive.SyncProgress (SyncProgress (..))
 import Cardano.Wallet.Primitive.Types.Hash (getHash)
 import Cardano.Wallet.Primitive.Types.TokenMap (AssetId (..), TokenMap, toFlatList)
 import Cardano.Wallet.Primitive.Types.TokenPolicy (unTokenName, unTokenPolicyId)
 import Cardano.Wallet.Primitive.Types.TokenQuantity (TokenQuantity (..))
 import Data.Quantity (getPercentage, getQuantity)
+import Data.Text.Class (FromText (fromText))
 import GHC.Natural (naturalToInteger)
+import Marlowe.Run.Types (Env, valueToDto)
+import Marlowe.Run.Wallet.API (API, GetTotalFundsResponse (..))
+import qualified Marlowe.Run.Wallet.CentralizedTestnet.Server as CentralizedTestnet
 import Marlowe.Run.Wallet.Client (callWBE)
 import qualified Plutus.V1.Ledger.Ada as Ledger
 import qualified Plutus.V1.Ledger.Value as Ledger
+import Servant (ServerError, ServerT, err400, err404, (:<|>) ((:<|>)))
 
 handlers ::
     MonadIO m =>
     MonadReader Env m =>
+    MonadError ServerError m =>
     ServerT API m
 handlers = getTotalFunds :<|> CentralizedTestnet.handlers
 
@@ -61,13 +57,15 @@ wbeTokenMapToLedgerValue tokenMap =
 
 getTotalFunds ::
     MonadIO m =>
+    MonadError ServerError m =>
     MonadReader Env m =>
-    WalletId ->
-    m GetTotalFunds
-getTotalFunds (WalletId walletId) = do
+    Text ->
+    m GetTotalFundsResponse
+getTotalFunds walletIdText = do
+    walletId <- either (const $ throwError err400) pure $ fromText walletIdText
     result <- callWBE $ WBE.Api.getWallet WBE.Api.walletClient (WBE.ApiT walletId)
     case result of
-        Left err -> pure $ GetTotalFunds mempty 0
+        Left _ -> throwError err404
         Right WBE.ApiWallet{WBE.id = WBE.ApiT walletId, WBE.balance = balance, WBE.state = WBE.ApiT state, WBE.assets = assets} ->
             let
                 WBE.ApiT tokenMap = WBE.total (assets :: WBE.ApiWalletAssetsBalance)
@@ -81,4 +79,4 @@ getTotalFunds (WalletId walletId) = do
                     Syncing q -> fromRational $ getPercentage $ getQuantity q
                     _         -> 0
             in
-                pure $ GetTotalFunds (adaValue <> assetsAsValues) syncStatus
+                pure $ GetTotalFundsResponse (valueToDto $ adaValue <> assetsAsValues) syncStatus

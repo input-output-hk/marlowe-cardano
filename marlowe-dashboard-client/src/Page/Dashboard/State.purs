@@ -5,7 +5,6 @@ module Page.Dashboard.State
 
 import Prologue
 
-import Bridge (toFront)
 import Capability.Contract (class ManageContract)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe
@@ -98,9 +97,10 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
-import Marlowe.Run.Wallet.Types (GetTotalFunds(..))
+import Marlowe.Run.Wallet.API (GetTotalFundsResponse(..))
 import Marlowe.Semantics
-  ( MarloweData
+  ( Assets(..)
+  , MarloweData
   , MarloweParams
   , Party(..)
   , Payee(..)
@@ -567,9 +567,9 @@ updateTotalFunds
 updateTotalFunds = do
   walletId <- use (_walletDetails <<< _walletInfo <<< _walletId)
   response <- getWalletTotalFunds walletId
-  for_ response \(GetTotalFunds { assets }) ->
+  for_ response \(GetTotalFundsResponse { assets }) ->
     modify_
-      $ set (_walletDetails <<< _assets) (toFront assets)
+      $ set (_walletDetails <<< _assets) (Assets assets)
 
 toContacts
   :: forall m msg slots

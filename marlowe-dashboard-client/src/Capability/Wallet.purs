@@ -22,7 +22,7 @@ import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
-import Marlowe.Run.Wallet.Types (GetTotalFunds)
+import Marlowe.Run.Wallet.API (GetTotalFundsResponse)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
 
@@ -34,7 +34,7 @@ class
   restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletInfo)
   submitWalletTransaction :: WalletId -> Tx -> m (AjaxResponse Unit)
   getWalletInfo :: WalletId -> m (AjaxResponse WalletInfo)
-  getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFunds)
+  getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFundsResponse)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
 instance monadWalletAppM :: ManageWallet AppM where

@@ -18,16 +18,16 @@ source-repository head
 library
     default-extensions: NoImplicitPrelude
     exposed-modules:
+        Marlowe.Run
         Marlowe.Run.Server
         Marlowe.Run.API
+        Marlowe.Run.Wallet.API
         Marlowe.Run.WebSocket
         Marlowe.Run.Types
-        Marlowe.Run.Wallet.Types
         Marlowe.Run.Wallet.CentralizedTestnet.Types
         Marlowe.Run.Wallet.Client
     other-modules:
         Paths_marlowe_dashboard_server
-        Marlowe.Run.Wallet.API
         Marlowe.Run.Wallet.Server
         Marlowe.Run.Wallet.CentralizedTestnet.API
         Marlowe.Run.Wallet.CentralizedTestnet.Server
@@ -39,6 +39,7 @@ library
         aeson -any,
         base >=4.7 && <5,
         bytestring -any,
+        containers -any,
         cardano-addresses -any,
         cardano-wallet-core -any,
         cardano-prelude -any,

@@ -9,7 +9,7 @@ import API.Url (toUrlPiece)
 import Component.Contacts.Types (WalletId)
 import Control.Monad.Error.Class (class MonadError)
 import Effect.Aff.Class (class MonadAff)
-import Marlowe.Run.Wallet.Types (GetTotalFunds) as BE
+import Marlowe.Run.Wallet.API (GetTotalFundsResponse) as BE
 import Servant.PureScript (AjaxError)
 
 getTotalFunds
@@ -17,7 +17,7 @@ getTotalFunds
    . MonadAff m
   => MonadError AjaxError m
   => WalletId
-  -> m BE.GetTotalFunds
+  -> m BE.GetTotalFundsResponse
 getTotalFunds wallet =
   doGetRequest
     $ "/api/wallet/"
