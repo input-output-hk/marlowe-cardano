@@ -23,7 +23,7 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.String (joinWith)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Marlowe.Run.Wallet.API (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.API (GetTotalFundsDto)
 import Marlowe.Run.Wallet.CentralizedTestnet.Types
   ( CheckPostData
   , RestoreError
@@ -107,7 +107,7 @@ getApiWalletByWalletidGettotalfunds
   => MonadError AjaxError m
   => MonadAff m
   => String
-  -> m GetTotalFundsResponse
+  -> m GetTotalFundsDto
 getApiWalletByWalletidGettotalfunds wallet_id = do
   spSettings <- asks spSettings
   let baseURL = spSettings.baseURL

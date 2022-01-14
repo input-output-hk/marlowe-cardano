@@ -24,17 +24,17 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
 
-newtype GetTotalFundsResponse = GetTotalFundsResponse
+newtype GetTotalFundsDto = GetTotalFundsDto
   { assets :: Map String (Map String BigInt)
   , sync :: Number
   }
 
-derive instance eqGetTotalFundsResponse :: Eq GetTotalFundsResponse
+derive instance eqGetTotalFundsDto :: Eq GetTotalFundsDto
 
-instance showGetTotalFundsResponse :: Show GetTotalFundsResponse where
+instance showGetTotalFundsDto :: Show GetTotalFundsDto where
   show a = genericShow a
 
-instance encodeJsonGetTotalFundsResponse :: EncodeJson GetTotalFundsResponse where
+instance encodeJsonGetTotalFundsDto :: EncodeJson GetTotalFundsDto where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { assets:
@@ -44,9 +44,9 @@ instance encodeJsonGetTotalFundsResponse :: EncodeJson GetTotalFundsResponse whe
         }
     )
 
-instance decodeJsonGetTotalFundsResponse :: DecodeJson GetTotalFundsResponse where
+instance decodeJsonGetTotalFundsDto :: DecodeJson GetTotalFundsDto where
   decodeJson = defer \_ -> D.decode $
-    ( GetTotalFundsResponse <$> D.record "GetTotalFundsResponse"
+    ( GetTotalFundsDto <$> D.record "GetTotalFundsDto"
         { assets:
             (D.dictionary D.value (D.dictionary D.value D.value)) :: _
               (Map String (Map String BigInt))
@@ -54,12 +54,12 @@ instance decodeJsonGetTotalFundsResponse :: DecodeJson GetTotalFundsResponse whe
         }
     )
 
-derive instance genericGetTotalFundsResponse :: Generic GetTotalFundsResponse _
+derive instance genericGetTotalFundsDto :: Generic GetTotalFundsDto _
 
-derive instance newtypeGetTotalFundsResponse :: Newtype GetTotalFundsResponse _
+derive instance newtypeGetTotalFundsDto :: Newtype GetTotalFundsDto _
 
 --------------------------------------------------------------------------------
 
-_GetTotalFundsResponse :: Iso' GetTotalFundsResponse
+_GetTotalFundsDto :: Iso' GetTotalFundsDto
   { assets :: Map String (Map String BigInt), sync :: Number }
-_GetTotalFundsResponse = _Newtype
+_GetTotalFundsDto = _Newtype

@@ -97,7 +97,7 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
-import Marlowe.Run.Wallet.API (GetTotalFundsResponse(..))
+import Marlowe.Run.Wallet.API (GetTotalFundsDto(..))
 import Marlowe.Semantics
   ( Assets(..)
   , MarloweData
@@ -567,7 +567,7 @@ updateTotalFunds
 updateTotalFunds = do
   walletId <- use (_walletDetails <<< _walletInfo <<< _walletId)
   response <- getWalletTotalFunds walletId
-  for_ response \(GetTotalFundsResponse { assets }) ->
+  for_ response \(GetTotalFundsDto { assets }) ->
     modify_
       $ set (_walletDetails <<< _assets) (Assets assets)
 
