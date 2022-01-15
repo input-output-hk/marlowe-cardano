@@ -1,0 +1,3 @@
+*.plutus
+*.protocol
+tx-*.*

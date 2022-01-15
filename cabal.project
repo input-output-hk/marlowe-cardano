@@ -7,6 +7,7 @@ packages: doc
           marlowe-playground-server
           marlowe-dashboard-server
           marlowe-symbolic
+          marlowe-cli
 
 -- We never, ever, want this.
 write-ghc-environment-files: never

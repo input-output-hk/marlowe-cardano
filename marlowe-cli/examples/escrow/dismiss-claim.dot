@@ -1,0 +1,33 @@
+digraph escrow {
+
+minAda [shape=oval, label="Mediator deposits minimum ADA.", penwidth=3, style=filled, fillcolor=lightgray]
+
+deposit [shape=rectangle, label="Buyer deposits funds.", penwidth=3, style=filled, fillcolor=lightgray]
+
+problem [shape=diamond, label="Does the buyer\nreport a problem?", penwidth=3, style=filled, fillcolor=lightgray]
+
+dispute [shape=diamond, label="Does the seller dispute\nthat there is a problem?", penwidth=3, style=filled, fillcolor=lightgray]
+
+mediate [shape=diamond, label="Mediator decides.", penwidth=3, style=filled, fillcolor=lightgray]
+
+sale [shape=oval, label="Seller receives purchase price.\nMediator receives minimum ADA.", penwidth=3, style=filled, fillcolor=lightgray]
+
+refund [shape=oval, label="Buyer receives refund.\nMediator receives minimum ADA."]
+
+minAda -> deposit [penwidth=3]
+
+deposit -> problem [penwidth=3]
+
+problem -> sale [label="Everything is alright."]
+
+problem -> dispute [label="Report problem.", penwidth=3]
+
+dispute -> refund [label="Confirm problem."]
+
+dispute -> mediate [label="Dispute problem.", penwidth=3]
+
+mediate -> sale [label="Dismiss claim.", penwidth=3]
+
+mediate -> refund [label="Confirm claim."]
+
+}

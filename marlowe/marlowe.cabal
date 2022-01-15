@@ -245,34 +245,3 @@ executable marlowe-pab-setup
     uuid -any
   if !(impl(ghcjs) || os(ghcjs))
     build-depends: plutus-tx-plugin -any
-
--- | The PAB Specialised to the marlowe contract(s)
-executable marlowe-cli
-  import: lang
-  main-is: Main.hs
-  hs-source-dirs: cli
-  other-modules:
-    Language.Marlowe.CLI
-    Language.Marlowe.CLI.Export
-    Language.Marlowe.CLI.Orphans
-    Language.Marlowe.CLI.Types
-    Paths_marlowe
-  autogen-modules:
-    Paths_marlowe
-  ghc-options:
-    -threaded
-  build-depends:
-    base >= 4.9 && < 5,
-    aeson -any,
-    aeson-pretty -any,
-    base16-bytestring -any,
-    bytestring -any,
-    cardano-api -any,
-    marlowe -any,
-    mtl -any,
-    optparse-applicative -any,
-    plutus-ledger -any,
-    plutus-ledger-api -any,
-    plutus-tx -any,
-    serialise -any,
-    text -any,

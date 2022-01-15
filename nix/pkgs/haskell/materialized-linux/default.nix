@@ -811,6 +811,7 @@
         base-deriving-via = ./.plan.nix/base-deriving-via.nix;
         non-integral = ./.plan.nix/non-integral.nix;
         plutus-contract = ./.plan.nix/plutus-contract.nix;
+        marlowe-cli = ./.plan.nix/marlowe-cli.nix;
         iohk-monitoring = ./.plan.nix/iohk-monitoring.nix;
         io-sim = ./.plan.nix/io-sim.nix;
         cardano-crypto-test = ./.plan.nix/cardano-crypto-test.nix;
@@ -991,6 +992,9 @@
           "plutus-contract" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
+          "marlowe-cli" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "iohk-monitoring" = {
             flags = {
               "performance-test-queue" = lib.mkOverride 900 false;
@@ -1120,6 +1124,7 @@
           "io-streams".components.library.planned = lib.mkOverride 900 true;
           "regex-compat".components.library.planned = lib.mkOverride 900 true;
           "semigroupoids".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
           "iohk-monitoring".components.library.planned = lib.mkOverride 900 true;
           "insert-ordered-containers".components.library.planned = lib.mkOverride 900 true;
           "non-integral".components.library.planned = lib.mkOverride 900 true;
@@ -1195,6 +1200,7 @@
           "marlowe-actus".components.library.planned = lib.mkOverride 900 true;
           "extra".components.library.planned = lib.mkOverride 900 true;
           "base-compat-batteries".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-cli".components.exes."marlowe-cli".planned = lib.mkOverride 900 true;
           "doctest".components.exes."doctest".planned = lib.mkOverride 900 true;
           "sort".components.library.planned = lib.mkOverride 900 true;
           "lobemo-backend-trace-forwarder".components.library.planned = lib.mkOverride 900 true;
@@ -1404,7 +1410,6 @@
           "time-locale-compat".components.library.planned = lib.mkOverride 900 true;
           "jwt".components.library.planned = lib.mkOverride 900 true;
           "shelley-spec-ledger-test".components.library.planned = lib.mkOverride 900 true;
-          "marlowe".components.exes."marlowe-cli".planned = lib.mkOverride 900 true;
           "ekg".components.library.planned = lib.mkOverride 900 true;
           "web-ghc".components.library.planned = lib.mkOverride 900 true;
           "th-lift-instances".components.library.planned = lib.mkOverride 900 true;

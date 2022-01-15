@@ -1,0 +1,6 @@
+*.plutus
+*.skey
+*.vkey
+tx-*.*
+utxo-*.*
+*.diff
