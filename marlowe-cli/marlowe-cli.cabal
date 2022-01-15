@@ -1,0 +1,105 @@
+cabal-version: 2.2
+name: marlowe-cli
+version: 0.1.0.0
+license: Apache-2.0
+license-files:
+  LICENSE
+  NOTICE
+build-type: Simple
+maintainer: brian.bush@iohk.io
+stability: experimental
+author: Brian W Bush
+synopsis:
+  Command-line tool for running Marlowe financial contracts on Cardano Computation Layer
+description:
+  Command-line tool for the reference implementation of Marlowe, domain-specific language targeted at
+  the execution of financial contracts in the style of Peyton Jones et al on Cardano Computation Layer.
+category: Language
+extra-doc-files: ReadMe.md
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-cli
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+common lang
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
+library
+  import: lang
+  hs-source-dirs: src
+  exposed-modules:
+    Language.Marlowe.CLI.Command
+    Language.Marlowe.CLI.Command.Contract
+    Language.Marlowe.CLI.Command.Input
+    Language.Marlowe.CLI.Command.Parse
+    Language.Marlowe.CLI.Command.Role
+    Language.Marlowe.CLI.Command.Run
+    Language.Marlowe.CLI.Command.Template
+    Language.Marlowe.CLI.Command.Transaction
+    Language.Marlowe.CLI.Command.Util
+    Language.Marlowe.CLI.Examples
+    Language.Marlowe.CLI.Examples.Escrow
+    Language.Marlowe.CLI.Examples.Swap
+    Language.Marlowe.CLI.Examples.Trivial
+    Language.Marlowe.CLI.Examples.ZeroCouponBond
+    Language.Marlowe.CLI.Export
+    Language.Marlowe.CLI.IO
+    Language.Marlowe.CLI.Orphans
+    Language.Marlowe.CLI.Run
+    Language.Marlowe.CLI.Transaction
+    Language.Marlowe.CLI.Types
+    Paths_marlowe_cli
+  build-depends:
+    base >= 4.9 && < 5,
+    aeson -any,
+    aeson-pretty -any,
+    base16-bytestring -any,
+    bytestring -any,
+    cardano-api -any,
+    cardano-ledger-alonzo -any,
+    containers -any,
+    marlowe -any,
+    mtl -any,
+    optparse-applicative -any,
+    ouroboros-network -any,
+    plutus-ledger -any,
+    plutus-ledger-api -any,
+    plutus-tx -any,
+    regex-posix -any,
+    serialise -any,
+    split -any,
+    text -any,
+    unordered-containers -any,
+
+executable marlowe-cli
+  import: lang
+  hs-source-dirs: app
+  main-is: Main.hs
+  other-modules:
+    Paths_marlowe_cli
+  autogen-modules:
+    Paths_marlowe_cli
+  build-depends:
+    base >= 4.9 && < 5,
+    cardano-config -any,
+    marlowe-cli -any,
+    text -any,
+  ghc-options:
+    -threaded

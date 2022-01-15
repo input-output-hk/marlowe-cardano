@@ -1,0 +1,162 @@
+{
+    "constructor": 0,
+    "fields": [
+        {
+            "constructor": 0,
+            "fields": [
+                {
+                    "map": [
+                        {
+                            "v": {
+                                "int": 3000000
+                            },
+                            "k": {
+                                "constructor": 0,
+                                "fields": [
+                                    {
+                                        "constructor": 0,
+                                        "fields": [
+                                            {
+                                                "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "constructor": 0,
+                                        "fields": [
+                                            {
+                                                "bytes": ""
+                                            },
+                                            {
+                                                "bytes": ""
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "map": []
+                },
+                {
+                    "map": []
+                },
+                {
+                    "int": 40000000
+                }
+            ]
+        },
+        {
+            "constructor": 3,
+            "fields": [
+                {
+                    "list": [
+                        {
+                            "constructor": 0,
+                            "fields": [
+                                {
+                                    "constructor": 0,
+                                    "fields": [
+                                        {
+                                            "constructor": 0,
+                                            "fields": [
+                                                {
+                                                    "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 0,
+                                            "fields": [
+                                                {
+                                                    "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 0,
+                                            "fields": [
+                                                {
+                                                    "bytes": ""
+                                                },
+                                                {
+                                                    "bytes": ""
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 1,
+                                            "fields": [
+                                                {
+                                                    "int": 10000000
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "constructor": 1,
+                                    "fields": [
+                                        {
+                                            "constructor": 0,
+                                            "fields": [
+                                                {
+                                                    "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 1,
+                                            "fields": [
+                                                {
+                                                    "constructor": 0,
+                                                    "fields": [
+                                                        {
+                                                            "bytes": "0a11b0c7e25dc5d9c63171bdf39d9741b901dc903e12b4e162348e07"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 0,
+                                            "fields": [
+                                                {
+                                                    "bytes": ""
+                                                },
+                                                {
+                                                    "bytes": ""
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 1,
+                                            "fields": [
+                                                {
+                                                    "int": 5000000
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "constructor": 0,
+                                            "fields": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "int": 90000000
+                },
+                {
+                    "constructor": 0,
+                    "fields": []
+                }
+            ]
+        }
+    ]
+}
