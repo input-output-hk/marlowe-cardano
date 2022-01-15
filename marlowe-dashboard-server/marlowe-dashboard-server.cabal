@@ -21,6 +21,7 @@ library
         Marlowe.Run
         Marlowe.Run.Server
         Marlowe.Run.API
+        Marlowe.Run.Dto
         Marlowe.Run.Wallet.API
         Marlowe.Run.WebSocket
         Marlowe.Run.Types

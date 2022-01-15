@@ -11,13 +11,13 @@ module Marlowe.Run.Wallet.Server where
 import Cardano.Prelude hiding (Handler)
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import qualified Cardano.Wallet.Api.Types as WBE
-import Data.Text.Class (FromText (fromText))
+import Marlowe.Run.Dto (WalletIdDto, dtoHandler)
 import Marlowe.Run.Types (Env)
 import Marlowe.Run.Wallet (getTotalFunds)
-import Marlowe.Run.Wallet.API (API, GetTotalFundsDto (..), getTotalFundsToDto)
+import Marlowe.Run.Wallet.API (API, GetTotalFundsResponse (..))
 import qualified Marlowe.Run.Wallet.CentralizedTestnet.Server as CentralizedTestnet
 import Marlowe.Run.Wallet.Client (callWBE)
-import Servant (ServerError, ServerT, err400, err404, (:<|>) ((:<|>)))
+import Servant (ServerError, ServerT, err404, (:<|>) ((:<|>)))
 
 handlers ::
     MonadIO m =>
@@ -30,12 +30,12 @@ handleGetTotalFunds ::
     MonadIO m =>
     MonadError ServerError m =>
     MonadReader Env m =>
-    Text ->
-    m GetTotalFundsDto
-handleGetTotalFunds walletIdText = do
-    walletId <- either (const $ throwError err400) pure $ fromText walletIdText
+    WalletIdDto ->
+    m GetTotalFundsResponse
+handleGetTotalFunds =
     let
         getWallet =
             either (const $ throwError err404) pure
             <=< callWBE . WBE.Api.getWallet WBE.Api.walletClient . WBE.ApiT
-    getTotalFundsToDto <$> getTotalFunds getWallet walletId
+    in
+        dtoHandler $ getTotalFunds getWallet

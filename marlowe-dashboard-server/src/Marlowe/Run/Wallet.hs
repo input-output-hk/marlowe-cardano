@@ -40,13 +40,13 @@ wbeTokenMapToLedgerValue tokenMap =
             )
             (toFlatList tokenMap)
 
-data GetTotalFunds = GetTotalFunds { assets :: !Value , sync :: !Double }
+data GetTotalFundsResponse = GetTotalFundsResponse { assets :: !Value , sync :: !Double }
 
 getTotalFunds ::
     Monad m =>
     (WalletId -> m WBE.ApiWallet) ->
     WalletId ->
-    m GetTotalFunds
+    m GetTotalFundsResponse
 getTotalFunds getWallet walletId = do
     wallet <- getWallet walletId
     let WBE.ApiT walletId = WBE.id wallet
@@ -61,4 +61,4 @@ getTotalFunds getWallet walletId = do
             Ready     -> 1
             Syncing q -> fromRational $ getPercentage $ getQuantity q
             _         -> 0
-    pure $ GetTotalFunds (adaValue <> assetsAsValues) syncStatus
+    pure $ GetTotalFundsResponse (adaValue <> assetsAsValues) syncStatus

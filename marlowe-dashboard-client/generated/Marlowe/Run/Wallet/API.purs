@@ -11,55 +11,50 @@ import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
-import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Marlowe.Run.Dto (AssetsDto)
 import Type.Proxy (Proxy(Proxy))
 
-newtype GetTotalFundsDto = GetTotalFundsDto
-  { assets :: Map String (Map String BigInt)
+newtype GetTotalFundsResponse = GetTotalFundsResponse
+  { assets :: AssetsDto
   , sync :: Number
   }
 
-derive instance eqGetTotalFundsDto :: Eq GetTotalFundsDto
+derive instance eqGetTotalFundsResponse :: Eq GetTotalFundsResponse
 
-instance showGetTotalFundsDto :: Show GetTotalFundsDto where
+instance showGetTotalFundsResponse :: Show GetTotalFundsResponse where
   show a = genericShow a
 
-instance encodeJsonGetTotalFundsDto :: EncodeJson GetTotalFundsDto where
+instance encodeJsonGetTotalFundsResponse :: EncodeJson GetTotalFundsResponse where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { assets:
-            (E.dictionary E.value (E.dictionary E.value E.value)) :: _
-              (Map String (Map String BigInt))
+        { assets: E.value :: _ AssetsDto
         , sync: E.value :: _ Number
         }
     )
 
-instance decodeJsonGetTotalFundsDto :: DecodeJson GetTotalFundsDto where
+instance decodeJsonGetTotalFundsResponse :: DecodeJson GetTotalFundsResponse where
   decodeJson = defer \_ -> D.decode $
-    ( GetTotalFundsDto <$> D.record "GetTotalFundsDto"
-        { assets:
-            (D.dictionary D.value (D.dictionary D.value D.value)) :: _
-              (Map String (Map String BigInt))
+    ( GetTotalFundsResponse <$> D.record "GetTotalFundsResponse"
+        { assets: D.value :: _ AssetsDto
         , sync: D.value :: _ Number
         }
     )
 
-derive instance genericGetTotalFundsDto :: Generic GetTotalFundsDto _
+derive instance genericGetTotalFundsResponse :: Generic GetTotalFundsResponse _
 
-derive instance newtypeGetTotalFundsDto :: Newtype GetTotalFundsDto _
+derive instance newtypeGetTotalFundsResponse :: Newtype GetTotalFundsResponse _
 
 --------------------------------------------------------------------------------
 
-_GetTotalFundsDto :: Iso' GetTotalFundsDto
-  { assets :: Map String (Map String BigInt), sync :: Number }
-_GetTotalFundsDto = _Newtype
+_GetTotalFundsResponse :: Iso' GetTotalFundsResponse
+  { assets :: AssetsDto, sync :: Number }
+_GetTotalFundsResponse = _Newtype

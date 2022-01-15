@@ -1,30 +1,32 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Marlowe.Run.Wallet.API where
 
 import Cardano.Prelude
 import Data.Aeson (ToJSON)
-import Marlowe.Run.Types (ValueDto, valueToDto)
-import Marlowe.Run.Wallet (GetTotalFunds (..))
+import Marlowe.Run.Dto (AssetsDto, ToDto (..), WalletIdDto)
+import qualified Marlowe.Run.Wallet as Domain
 import qualified Marlowe.Run.Wallet.CentralizedTestnet.API as CentralizedTestnet
 import Servant.API (Capture, Get, JSON, (:<|>), (:>))
 
-data GetTotalFundsDto =
-    GetTotalFundsDto
-        { assets :: !ValueDto
+data GetTotalFundsResponse =
+    GetTotalFundsResponse
+        { assets :: !AssetsDto
         , sync   :: !Double
         }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (ToJSON)
 
-getTotalFundsToDto :: GetTotalFunds -> GetTotalFundsDto
-getTotalFundsToDto GetTotalFunds{..} = GetTotalFundsDto (valueToDto assets) sync
+instance ToDto Domain.GetTotalFundsResponse GetTotalFundsResponse where
+    toDto Domain.GetTotalFundsResponse{..} =
+        GetTotalFundsResponse (toDto assets) sync
 
 type API =
-    (Capture "wallet-id" Text :> "get-total-funds" :> Get '[JSON] GetTotalFundsDto)
+    (Capture "wallet-id" WalletIdDto :> "get-total-funds" :> Get '[JSON] GetTotalFundsResponse)
     :<|> ("centralized-testnet" :> CentralizedTestnet.API)

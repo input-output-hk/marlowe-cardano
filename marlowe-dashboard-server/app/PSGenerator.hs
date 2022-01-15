@@ -7,7 +7,6 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module PSGenerator
   ( generate,
@@ -20,12 +19,13 @@ import Data.Monoid ()
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
-import Language.PureScript.Bridge (BridgePart, Language (Haskell), SumType, argonaut, buildBridge, typeModule, typeName,
+import Language.PureScript.Bridge (BridgePart, Language (Haskell), SumType, argonaut, buildBridge, typeName,
                                    writePSTypes, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import Marlowe.Run.API (HTTPAPI)
-import Marlowe.Run.Wallet.API (GetTotalFundsDto)
+import Marlowe.Run.Dto
+import Marlowe.Run.Wallet.API (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
@@ -37,21 +37,6 @@ doubleBridge = typeName ^== "Double" >> return psNumber
 dayBridge :: BridgePart
 dayBridge = typeName ^== "Day" >> return psString
 
-currencySymbolBridge :: BridgePart
-currencySymbolBridge = do
-  typeName ^== "CurrencySymbolDto"
-  typeModule ^== "Marlowe.Run.Types"
-  pure psString
-
-tokenNameBridge :: BridgePart
-tokenNameBridge = do
-  typeName ^== "TokenNameDto"
-  typeModule ^== "Marlowe.Run.Types"
-  pure psString
-
-dtoBridge :: BridgePart
-dtoBridge = currencySymbolBridge <|> tokenNameBridge
-
 myBridge :: BridgePart
 myBridge =
   PSGenerator.Common.aesonBridge <|> PSGenerator.Common.containersBridge
@@ -62,7 +47,6 @@ myBridge =
     <|> doubleBridge
     <|> dayBridge
     <|> defaultBridge
-    <|> dtoBridge
 
 data MyBridge
 
@@ -72,20 +56,31 @@ myBridgeProxy = Proxy
 instance HasBridge MyBridge where
   languageBridge _ = buildBridge myBridge
 
+dto :: SumType 'Haskell -> SumType 'Haskell
+dto = equal . genericShow . argonaut
+
+-- FIXME: remove all of this shared stuff from plutus-apps. We should only be
+-- exporting API types to PureScript, and those should all be defined
+-- internally in this project. With a multi-repo setup, there is far too much
+-- potential for breakage with updates.
 myTypes :: [SumType 'Haskell]
 myTypes =
     PSGenerator.Common.ledgerTypes <>
     PSGenerator.Common.walletTypes <>
-    -- FIXME: this includes the EndpointDescription, probably they should be sepparated from the playground
     PSGenerator.Common.playgroundTypes <>
-
-  [ equal . genericShow . argonaut $ mkSumType @StreamToServer,
-    equal . genericShow . argonaut $ mkSumType @StreamToClient,
-    equal . order . genericShow . argonaut $ mkSumType @RestoreError,
-    equal . genericShow . argonaut $ mkSumType @RestorePostData,
-    equal . genericShow . argonaut $ mkSumType @CheckPostData,
-    equal . genericShow . argonaut $ mkSumType @GetTotalFundsDto
-  ]
+    ( dto <$>
+      [ mkSumType @StreamToServer,
+        mkSumType @StreamToClient,
+        mkSumType @RestorePostData,
+        mkSumType @CheckPostData,
+        mkSumType @GetTotalFundsResponse,
+        mkSumType @CurrencySymbolDto,
+        mkSumType @TokenNameDto,
+        mkSumType @WalletIdDto,
+        mkSumType @AssetsDto,
+        order . mkSumType @RestoreError
+      ]
+    )
 
 mySettings :: Settings
 mySettings = defaultSettings & set apiModuleName "Marlowe"
