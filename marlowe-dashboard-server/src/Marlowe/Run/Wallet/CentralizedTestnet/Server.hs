@@ -12,36 +12,31 @@ module Marlowe.Run.Wallet.CentralizedTestnet.Server
 
 import Cardano.Mnemonic (mkSomeMnemonic)
 import Cardano.Prelude hiding (Handler)
+import Cardano.Wallet.Api (WalletKeys)
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import Cardano.Wallet.Api.Types (ApiVerificationKeyShelley (..))
 import qualified Cardano.Wallet.Api.Types as WBE
-import Marlowe.Run.Wallet.CentralizedTestnet.API (API)
-
-import Cardano.Wallet.Api (WalletKeys)
 import Cardano.Wallet.Mock.Types (WalletInfo (..))
+import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
 import qualified Cardano.Wallet.Primitive.Types as WBE
-
-
-import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
-
 import Data.String as S
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
 import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
-import Marlowe.Run.Types (Env)
+import Marlowe.Run.Wallet.CentralizedTestnet.API (API)
 import Marlowe.Run.Wallet.CentralizedTestnet.Types (CheckPostData (..), RestoreError (..), RestorePostData (..))
 import Marlowe.Run.Wallet.Client (callWBE, decodeError)
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
 import Servant (ServerT, (:<|>) ((:<|>)), (:>))
-import Servant.Client (ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
+import Servant.Client (ClientEnv, ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
 import Text.Regex (Regex)
 import qualified Text.Regex as Regex
 import qualified Wallet.Emulator.Wallet as Pab.Wallet
 
 handlers ::
     MonadIO m =>
-    MonadReader Env m =>
+    MonadReader ClientEnv m =>
     ServerT API m
 handlers = restoreWallet :<|> checkMnemonic
 
@@ -55,7 +50,7 @@ checkMnemonic (CheckPostData  phrase) =
 -- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
 restoreWallet ::
      MonadIO m =>
-     MonadReader Env m =>
+     MonadReader ClientEnv m =>
      RestorePostData ->
      m (Either RestoreError WalletInfo)
 restoreWallet postData = runExceptT $ do
@@ -80,7 +75,7 @@ restoreWallet postData = runExceptT $ do
 
 getPubKeyHashFromWallet ::
     MonadIO m =>
-    MonadReader Env m =>
+    MonadReader ClientEnv m =>
     WBE.WalletId ->
     m (Either ClientError PubKeyHash)
 getPubKeyHashFromWallet walletId = let
@@ -104,7 +99,7 @@ getPubKeyHashFromWallet walletId = let
 
 createOrRestoreWallet ::
     MonadIO m =>
-    MonadReader Env m =>
+    MonadReader ClientEnv m =>
     RestorePostData ->
     WBE.ApiMnemonicT '[15, 18, 21, 24] ->
     m (Either ClientError WBE.WalletId)

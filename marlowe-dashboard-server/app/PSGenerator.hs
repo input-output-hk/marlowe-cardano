@@ -78,7 +78,7 @@ myTypes =
         mkSumType @TokenNameDto,
         mkSumType @WalletIdDto,
         mkSumType @AssetsDto,
-        order . mkSumType @RestoreError
+        order $ mkSumType @RestoreError
       ]
     )
 
