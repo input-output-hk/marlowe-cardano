@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Wallet.Client
+module Marlowe.Run.Wallet.V1.Client
  ( callWBE
  , decodeError
  )

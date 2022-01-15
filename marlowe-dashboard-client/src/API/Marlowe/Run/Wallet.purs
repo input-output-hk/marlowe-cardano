@@ -10,7 +10,7 @@ import Control.Monad.Error.Class (class MonadError)
 import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff)
 import Marlowe.Run.Dto (WalletIdDto)
-import Marlowe.Run.Wallet.API (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
 import Servant.PureScript (AjaxError)
 
 getTotalFunds
@@ -20,4 +20,4 @@ getTotalFunds
   => WalletIdDto
   -> m GetTotalFundsResponse
 getTotalFunds wallet =
-  doGetRequest $ "/api/wallet/" <> unwrap wallet <> "/get-total-funds"
+  doGetRequest $ "/api/wallet/v1/" <> unwrap wallet <> "/get-total-funds"

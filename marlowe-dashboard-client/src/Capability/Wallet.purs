@@ -23,7 +23,7 @@ import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
-import Marlowe.Run.Wallet.API as BE
+import Marlowe.Run.Wallet.V1.API as BE
 import Marlowe.Semantics (Assets)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)

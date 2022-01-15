@@ -24,8 +24,8 @@ import Data.Newtype (unwrap)
 import Data.String (joinWith)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Marlowe.Run.Dto (WalletIdDto)
-import Marlowe.Run.Wallet.API (GetTotalFundsResponse)
-import Marlowe.Run.Wallet.CentralizedTestnet.Types
+import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CheckPostData
   , RestoreError
   , RestorePostData
@@ -101,7 +101,7 @@ getApiVersion = do
     Left err -> throwError $ { request: affReq, description: DecodingError err }
     Right body -> pure body
 
-getApiWalletByWalletidGettotalfunds
+getApiWalletV1ByWalletidGettotalfunds
   :: forall env m
    . HasSPSettings env
   => MonadAsk env m
@@ -109,7 +109,7 @@ getApiWalletByWalletidGettotalfunds
   => MonadAff m
   => WalletIdDto
   -> m GetTotalFundsResponse
-getApiWalletByWalletidGettotalfunds wallet_id = do
+getApiWalletV1ByWalletidGettotalfunds wallet_id = do
   spSettings <- asks spSettings
   let baseURL = spSettings.baseURL
   let httpMethod = Left GET
@@ -128,6 +128,8 @@ getApiWalletByWalletidGettotalfunds wallet_id = do
         <> "api"
         <> "/"
         <> "wallet"
+        <> "/"
+        <> "v1"
         <> "/"
         <> encodeURIComponent (toURLPiece wallet_id)
         <> "/"
@@ -160,7 +162,7 @@ getApiWalletByWalletidGettotalfunds wallet_id = do
     Left err -> throwError $ { request: affReq, description: DecodingError err }
     Right body -> pure body
 
-postApiWalletCentralizedtestnetRestore
+postApiWalletV1CentralizedtestnetRestore
   :: forall env m
    . HasSPSettings env
   => MonadAsk env m
@@ -168,7 +170,7 @@ postApiWalletCentralizedtestnetRestore
   => MonadAff m
   => RestorePostData
   -> m (Either RestoreError WalletInfo)
-postApiWalletCentralizedtestnetRestore reqBody = do
+postApiWalletV1CentralizedtestnetRestore reqBody = do
   spSettings <- asks spSettings
   let baseURL = spSettings.baseURL
   let httpMethod = Left POST
@@ -187,6 +189,8 @@ postApiWalletCentralizedtestnetRestore reqBody = do
         <> "api"
         <> "/"
         <> "wallet"
+        <> "/"
+        <> "v1"
         <> "/"
         <> "centralized-testnet"
         <> "/"
@@ -223,7 +227,7 @@ postApiWalletCentralizedtestnetRestore reqBody = do
     Left err -> throwError $ { request: affReq, description: DecodingError err }
     Right body -> pure body
 
-postApiWalletCentralizedtestnetCheckmnemonic
+postApiWalletV1CentralizedtestnetCheckmnemonic
   :: forall env m
    . HasSPSettings env
   => MonadAsk env m
@@ -231,7 +235,7 @@ postApiWalletCentralizedtestnetCheckmnemonic
   => MonadAff m
   => CheckPostData
   -> m Boolean
-postApiWalletCentralizedtestnetCheckmnemonic reqBody = do
+postApiWalletV1CentralizedtestnetCheckmnemonic reqBody = do
   spSettings <- asks spSettings
   let baseURL = spSettings.baseURL
   let httpMethod = Left POST
@@ -250,6 +254,8 @@ postApiWalletCentralizedtestnetCheckmnemonic reqBody = do
         <> "api"
         <> "/"
         <> "wallet"
+        <> "/"
+        <> "v1"
         <> "/"
         <> "centralized-testnet"
         <> "/"

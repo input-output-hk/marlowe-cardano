@@ -6,7 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-module Marlowe.Run.Wallet where
+module Marlowe.Run.Wallet.V1 where
 
 import Cardano.Prelude hiding (Handler)
 import qualified Cardano.Wallet.Api.Types as WBE (ApiT (..), ApiWallet (..), ApiWalletAssetsBalance (..),

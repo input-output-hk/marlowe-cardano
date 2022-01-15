@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Marlowe.Run.Wallet.CentralizedTestnet.Server
+module Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
  ( handlers
  )
  where
@@ -24,9 +24,9 @@ import Data.String as S
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
 import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
-import Marlowe.Run.Wallet.CentralizedTestnet.API (API)
-import Marlowe.Run.Wallet.CentralizedTestnet.Types (CheckPostData (..), RestoreError (..), RestorePostData (..))
-import Marlowe.Run.Wallet.Client (callWBE, decodeError)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.API (API)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData (..), RestoreError (..), RestorePostData (..))
+import Marlowe.Run.Wallet.V1.Client (callWBE, decodeError)
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
 import Servant (ServerT, (:<|>) ((:<|>)), (:>))
 import Servant.Client (ClientEnv, ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)

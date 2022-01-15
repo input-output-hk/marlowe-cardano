@@ -25,8 +25,8 @@ import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Dto
-import Marlowe.Run.Wallet.API (GetTotalFundsResponse)
-import Marlowe.Run.Wallet.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
+import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
 import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
