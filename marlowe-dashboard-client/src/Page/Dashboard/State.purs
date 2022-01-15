@@ -97,10 +97,8 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
-import Marlowe.Run.Wallet.API (GetTotalFundsDto(..))
 import Marlowe.Semantics
-  ( Assets(..)
-  , MarloweData
+  ( MarloweData
   , MarloweParams
   , Party(..)
   , Payee(..)
@@ -567,9 +565,9 @@ updateTotalFunds
 updateTotalFunds = do
   walletId <- use (_walletDetails <<< _walletInfo <<< _walletId)
   response <- getWalletTotalFunds walletId
-  for_ response \(GetTotalFundsDto { assets }) ->
+  for_ response \({ assets }) ->
     modify_
-      $ set (_walletDetails <<< _assets) (Assets assets)
+      $ set (_walletDetails <<< _assets) assets
 
 toContacts
   :: forall m msg slots

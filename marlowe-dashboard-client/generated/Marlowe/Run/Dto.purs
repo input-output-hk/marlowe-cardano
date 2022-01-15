@@ -24,6 +24,32 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
 
+newtype AssetsDto = AssetsDto (Map CurrencySymbolDto (Map TokenNameDto BigInt))
+
+derive instance eqAssetsDto :: Eq AssetsDto
+
+instance showAssetsDto :: Show AssetsDto where
+  show a = genericShow a
+
+instance encodeJsonAssetsDto :: EncodeJson AssetsDto where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    (E.dictionary E.value (E.dictionary E.value E.value))
+
+instance decodeJsonAssetsDto :: DecodeJson AssetsDto where
+  decodeJson = defer \_ -> D.decode $
+    (AssetsDto <$> (D.dictionary D.value (D.dictionary D.value D.value)))
+
+derive instance genericAssetsDto :: Generic AssetsDto _
+
+derive instance newtypeAssetsDto :: Newtype AssetsDto _
+
+--------------------------------------------------------------------------------
+
+_AssetsDto :: Iso' AssetsDto (Map CurrencySymbolDto (Map TokenNameDto BigInt))
+_AssetsDto = _Newtype
+
+--------------------------------------------------------------------------------
+
 newtype CurrencySymbolDto = CurrencySymbolDto String
 
 derive instance eqCurrencySymbolDto :: Eq CurrencySymbolDto
@@ -36,6 +62,8 @@ instance encodeJsonCurrencySymbolDto :: EncodeJson CurrencySymbolDto where
 
 instance decodeJsonCurrencySymbolDto :: DecodeJson CurrencySymbolDto where
   decodeJson = defer \_ -> D.decode $ (CurrencySymbolDto <$> D.value)
+
+derive instance ordCurrencySymbolDto :: Ord CurrencySymbolDto
 
 derive instance genericCurrencySymbolDto :: Generic CurrencySymbolDto _
 
@@ -61,6 +89,8 @@ instance encodeJsonTokenNameDto :: EncodeJson TokenNameDto where
 instance decodeJsonTokenNameDto :: DecodeJson TokenNameDto where
   decodeJson = defer \_ -> D.decode $ (TokenNameDto <$> D.value)
 
+derive instance ordTokenNameDto :: Ord TokenNameDto
+
 derive instance genericTokenNameDto :: Generic TokenNameDto _
 
 derive instance newtypeTokenNameDto :: Newtype TokenNameDto _
@@ -85,6 +115,8 @@ instance encodeJsonWalletIdDto :: EncodeJson WalletIdDto where
 instance decodeJsonWalletIdDto :: DecodeJson WalletIdDto where
   decodeJson = defer \_ -> D.decode $ (WalletIdDto <$> D.value)
 
+derive instance ordWalletIdDto :: Ord WalletIdDto
+
 derive instance genericWalletIdDto :: Generic WalletIdDto _
 
 derive instance newtypeWalletIdDto :: Newtype WalletIdDto _
@@ -93,29 +125,3 @@ derive instance newtypeWalletIdDto :: Newtype WalletIdDto _
 
 _WalletIdDto :: Iso' WalletIdDto String
 _WalletIdDto = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype AssetsDto = AssetsDto (Map CurrencySymbolDto (Map TokenNameDto BigInt))
-
-derive instance eqAssetsDto :: Eq AssetsDto
-
-instance showAssetsDto :: Show AssetsDto where
-  show a = genericShow a
-
-instance encodeJsonAssetsDto :: EncodeJson AssetsDto where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    (E.dictionary E.value (E.dictionary E.value E.value))
-
-instance decodeJsonAssetsDto :: DecodeJson AssetsDto where
-  decodeJson = defer \_ -> D.decode $
-    (AssetsDto <$> (D.dictionary D.value (D.dictionary D.value D.value)))
-
-derive instance genericAssetsDto :: Generic AssetsDto _
-
-derive instance newtypeAssetsDto :: Newtype AssetsDto _
-
---------------------------------------------------------------------------------
-
-_AssetsDto :: Iso' AssetsDto (Map CurrencySymbolDto (Map TokenNameDto BigInt))
-_AssetsDto = _Newtype

@@ -25,53 +25,6 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
 
-data RestoreError
-  = InvalidMnemonic
-  | RestoreWalletError
-  | FetchPubKeyHashError
-
-derive instance eqRestoreError :: Eq RestoreError
-
-derive instance ordRestoreError :: Ord RestoreError
-
-instance showRestoreError :: Show RestoreError where
-  show a = genericShow a
-
-instance encodeJsonRestoreError :: EncodeJson RestoreError where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonRestoreError :: DecodeJson RestoreError where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericRestoreError :: Generic RestoreError _
-
-instance enumRestoreError :: Enum RestoreError where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedRestoreError :: Bounded RestoreError where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_InvalidMnemonic :: Prism' RestoreError Unit
-_InvalidMnemonic = prism' (const InvalidMnemonic) case _ of
-  InvalidMnemonic -> Just unit
-  _ -> Nothing
-
-_RestoreWalletError :: Prism' RestoreError Unit
-_RestoreWalletError = prism' (const RestoreWalletError) case _ of
-  RestoreWalletError -> Just unit
-  _ -> Nothing
-
-_FetchPubKeyHashError :: Prism' RestoreError Unit
-_FetchPubKeyHashError = prism' (const FetchPubKeyHashError) case _ of
-  FetchPubKeyHashError -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 newtype RestorePostData = RestorePostData
   { getMnemonicPhrase :: Array String
   , getPassphrase :: String
@@ -137,3 +90,50 @@ derive instance newtypeCheckPostData :: Newtype CheckPostData _
 
 _CheckPostData :: Iso' CheckPostData (Array String)
 _CheckPostData = _Newtype
+
+--------------------------------------------------------------------------------
+
+data RestoreError
+  = InvalidMnemonic
+  | RestoreWalletError
+  | FetchPubKeyHashError
+
+derive instance eqRestoreError :: Eq RestoreError
+
+instance showRestoreError :: Show RestoreError where
+  show a = genericShow a
+
+instance encodeJsonRestoreError :: EncodeJson RestoreError where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance decodeJsonRestoreError :: DecodeJson RestoreError where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance ordRestoreError :: Ord RestoreError
+
+derive instance genericRestoreError :: Generic RestoreError _
+
+instance enumRestoreError :: Enum RestoreError where
+  succ = genericSucc
+  pred = genericPred
+
+instance boundedRestoreError :: Bounded RestoreError where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_InvalidMnemonic :: Prism' RestoreError Unit
+_InvalidMnemonic = prism' (const InvalidMnemonic) case _ of
+  InvalidMnemonic -> Just unit
+  _ -> Nothing
+
+_RestoreWalletError :: Prism' RestoreError Unit
+_RestoreWalletError = prism' (const RestoreWalletError) case _ of
+  RestoreWalletError -> Just unit
+  _ -> Nothing
+
+_FetchPubKeyHashError :: Prism' RestoreError Unit
+_FetchPubKeyHashError = prism' (const FetchPubKeyHashError) case _ of
+  FetchPubKeyHashError -> Just unit
+  _ -> Nothing

@@ -74,10 +74,10 @@ myTypes =
         mkSumType @RestorePostData,
         mkSumType @CheckPostData,
         mkSumType @GetTotalFundsResponse,
-        mkSumType @CurrencySymbolDto,
-        mkSumType @TokenNameDto,
-        mkSumType @WalletIdDto,
         mkSumType @AssetsDto,
+        order $ mkSumType @CurrencySymbolDto,
+        order $ mkSumType @TokenNameDto,
+        order $ mkSumType @WalletIdDto,
         order $ mkSumType @RestoreError
       ]
     )
