@@ -256,14 +256,14 @@ The server is generally silent, except for a few messages like when wallets are 
 In a terminal for the dashboard client, run the following:
 
 ```bash
-nix-shell marlowe-cardano/shell.nix --run "cd marlowe-cardano/marlowe-dashboard-client; npm run start"
+nix-shell marlowe-cardano/shell.nix --run "cd marlowe-cardano/marlowe-dashboard-client; spago build; npm run start"
 ```
 
 Compilation and other messages will appear. Visit http://localhost:8009.
 
 ## Deployment Diagram
 
-![Marlowe Run Deployment on Private Testnet](testnet-deployment.md)
+![Marlowe Run Deployment on Private Testnet](testnet-deployment.svg)
 
 
 ## Notes and Troubleshooting

@@ -66,6 +66,7 @@
         buildable = true;
         modules = [
           "Paths_marlowe_dashboard_server"
+          "Marlowe/Run/Wallet"
           "Marlowe/Run/Wallet/Server"
           "Marlowe/Run/Wallet/CentralizedTestnet/API"
           "Marlowe/Run/Wallet/CentralizedTestnet/Server"
