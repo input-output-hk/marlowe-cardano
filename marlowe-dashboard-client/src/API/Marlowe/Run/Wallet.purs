@@ -20,4 +20,4 @@ getTotalFunds
   => WalletIdDto
   -> m GetTotalFundsResponse
 getTotalFunds wallet =
-  doGetRequest $ "/api/wallet/v1/" <> unwrap wallet <> "/get-total-funds"
+  doGetRequest $ "/api/wallet/v1/" <> unwrap wallet <> "/total-funds"

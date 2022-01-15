@@ -101,7 +101,7 @@ getApiVersion = do
     Left err -> throwError $ { request: affReq, description: DecodingError err }
     Right body -> pure body
 
-getApiWalletV1ByWalletidGettotalfunds
+getApiWalletV1ByWalletidTotalfunds
   :: forall env m
    . HasSPSettings env
   => MonadAsk env m
@@ -109,7 +109,7 @@ getApiWalletV1ByWalletidGettotalfunds
   => MonadAff m
   => WalletIdDto
   -> m GetTotalFundsResponse
-getApiWalletV1ByWalletidGettotalfunds wallet_id = do
+getApiWalletV1ByWalletidTotalfunds wallet_id = do
   spSettings <- asks spSettings
   let baseURL = spSettings.baseURL
   let httpMethod = Left GET
@@ -133,7 +133,7 @@ getApiWalletV1ByWalletidGettotalfunds wallet_id = do
         <> "/"
         <> encodeURIComponent (toURLPiece wallet_id)
         <> "/"
-        <> "get-total-funds"
+        <> "total-funds"
         <> queryString
   let
     reqHeaders =

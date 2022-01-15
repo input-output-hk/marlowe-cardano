@@ -28,5 +28,5 @@ instance ToDto Domain.GetTotalFundsResponse GetTotalFundsResponse where
         GetTotalFundsResponse (toDto assets) sync
 
 type API =
-    (Capture "wallet-id" WalletIdDto :> "get-total-funds" :> Get '[JSON] GetTotalFundsResponse)
+    (Capture "wallet-id" WalletIdDto :> "total-funds" :> Get '[JSON] GetTotalFundsResponse)
     :<|> ("centralized-testnet" :> CentralizedTestnet.API)
