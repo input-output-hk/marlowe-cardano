@@ -113,3 +113,27 @@ _RestorePostData :: Iso' RestorePostData
   , getWalletName :: String
   }
 _RestorePostData = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype CheckPostData = CheckPostData (Array String)
+
+derive instance eqCheckPostData :: Eq CheckPostData
+
+instance showCheckPostData :: Show CheckPostData where
+  show a = genericShow a
+
+instance encodeJsonCheckPostData :: EncodeJson CheckPostData where
+  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
+
+instance decodeJsonCheckPostData :: DecodeJson CheckPostData where
+  decodeJson = defer \_ -> D.decode $ (CheckPostData <$> D.value)
+
+derive instance genericCheckPostData :: Generic CheckPostData _
+
+derive instance newtypeCheckPostData :: Newtype CheckPostData _
+
+--------------------------------------------------------------------------------
+
+_CheckPostData :: Iso' CheckPostData (Array String)
+_CheckPostData = _Newtype

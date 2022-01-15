@@ -9,8 +9,11 @@ import Prologue
 
 import Cardano.Wallet.Mock.Types (WalletInfo(..)) as Back
 import Component.Contacts.Types (WalletId(..), WalletInfo(..)) as Front
+import Data.Address (Address)
+import Data.Address as A
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
+import Data.Either (fromRight)
 import Data.Lens (Iso', iso)
 import Data.Map (Map, fromFoldable, toUnfoldable) as Front
 import Data.Newtype (unwrap)
@@ -142,10 +145,10 @@ instance walletBridge :: Bridge Back.Wallet Front.WalletId where
   toFront (Back.Wallet { getWalletId }) = Front.WalletId getWalletId
   toBack (Front.WalletId getWalletId) = Back.Wallet { getWalletId }
 
--- TODO: Marlowe.Semantics.PubKeyHash is currently just an alias for String
-instance pubKeyHashBridge :: Bridge Back.PubKeyHash String where
-  toFront (Back.PubKeyHash { getPubKeyHash }) = getPubKeyHash
-  toBack getPubKeyHash = Back.PubKeyHash { getPubKeyHash }
+instance bridgeAddress :: Bridge Back.PubKeyHash Address where
+  toFront (Back.PubKeyHash { getPubKeyHash }) =
+    fromRight A.empty $ A.fromString mempty getPubKeyHash
+  toBack address = Back.PubKeyHash { getPubKeyHash: A.toString address }
 
 instance bridgePlutusAppId :: Bridge ContractInstanceId PlutusAppId where
   toFront (ContractInstanceId { unContractInstanceId }) = PlutusAppId

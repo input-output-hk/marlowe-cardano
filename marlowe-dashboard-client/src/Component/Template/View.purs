@@ -1,8 +1,8 @@
 module Component.Template.View (contractTemplateCard) where
 
 import Prologue hiding (Either(..), div)
+
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (AddressBook)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (Icon, icon, icon_)
@@ -30,13 +30,18 @@ import Component.Template.Types
   , State
   , ValueError
   )
+import Component.Tooltip.State (tooltip)
+import Component.Tooltip.Types (ReferenceId(..))
 import Css as Css
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AB
 import Data.Lens (view)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -81,8 +86,6 @@ import Marlowe.PAB (contractCreationFee)
 import Marlowe.Semantics (Assets, TokenName)
 import Marlowe.Template (orderContentUsingMetadata)
 import Text.Markdown.TrimmedInline (markdownToHTML)
-import Component.Tooltip.State (tooltip)
-import Component.Tooltip.Types (ReferenceId(..))
 
 contractTemplateCard
   :: forall m
@@ -554,7 +557,7 @@ roleInputs addressBook metaData roleWalletInputs =
     , placeholder: "Choose any nickname"
     , readOnly: false
     , numberFormat: Nothing
-    , valueOptions: fst <$> Map.toUnfoldable addressBook
+    , valueOptions: WN.toString <<< fst <$> AB.toUnfoldable addressBook
     , after: Nothing
     , before: Nothing
     }

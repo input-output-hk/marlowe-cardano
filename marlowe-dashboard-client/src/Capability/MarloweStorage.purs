@@ -1,8 +1,9 @@
 module Capability.MarloweStorage
   ( class ManageMarloweStorage
+  , addressBookLocalStorageKey
   , clearAllLocalStorage
-  , getAddressBook
-  , insertIntoAddressBook
+  , modifyAddressBook
+  , modifyAddressBook_
   , getContractNicknames
   , insertIntoContractNicknames
   , getContracts
@@ -15,8 +16,8 @@ module Capability.MarloweStorage
 import Prologue
 
 import AppM (AppM)
-import Component.Contacts.Types (AddressBook, WalletNickname)
 import Control.Monad.Except (lift)
+import Data.AddressBook (AddressBook)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Either (hush)
 import Data.Map (Map, insert, lookup)
@@ -24,14 +25,11 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Effect.Class (liftEffect)
 import Halogen (HalogenM)
+import Halogen.Store.Monad (getStore, updateStore)
 import LocalStorage (Key(..), getItem, removeItem, setItem)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics
-  ( MarloweData
-  , MarloweParams
-  , PubKeyHash
-  , TransactionInput
-  )
+import Marlowe.Semantics (MarloweData, MarloweParams, TransactionInput)
+import Store (Action(..))
 
 addressBookLocalStorageKey :: Key
 addressBookLocalStorageKey = Key "addressBook"
@@ -50,8 +48,7 @@ class
   ManageMarloweStorage m where
   clearAllLocalStorage :: m Unit
   -- Address book
-  getAddressBook :: m AddressBook
-  insertIntoAddressBook :: WalletNickname -> PubKeyHash -> m Unit
+  modifyAddressBook :: (AddressBook -> AddressBook) -> m AddressBook
   -- contract nicknames
   getContractNicknames :: m (Map PlutusAppId String)
   insertIntoContractNicknames :: PlutusAppId -> String -> m Unit
@@ -63,6 +60,13 @@ class
   getWalletRoleContracts :: String -> m (Map MarloweParams MarloweData)
   insertWalletRoleContracts :: String -> MarloweParams -> MarloweData -> m Unit
 
+modifyAddressBook_
+  :: forall m
+   . ManageMarloweStorage m
+  => (AddressBook -> AddressBook)
+  -> m Unit
+modifyAddressBook_ = void <<< modifyAddressBook
+
 instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
   clearAllLocalStorage =
     liftEffect do
@@ -70,16 +74,14 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       removeItem contractNicknamesLocalStorageKey
       removeItem contractsLocalStorageKey
       removeItem walletRoleContractsLocalStorageKey
-  getAddressBook = do
-    mWalletLibraryJson <- liftEffect $ getItem addressBookLocalStorageKey
-    pure $ fromMaybe Map.empty $ hush <<< parseDecodeJson =<< mWalletLibraryJson
-  insertIntoAddressBook walletNickname pubKeyHash = do
-    addressBook <- getAddressBook
-    let
-      updatedWalletLibrary = insert walletNickname pubKeyHash addressBook
+  modifyAddressBook f = do
+    updateStore $ ModifyAddressBook f
+    addressBook <- _.addressBook <$> getStore
     liftEffect
       $ setItem addressBookLocalStorageKey
-      $ encodeStringifyJson updatedWalletLibrary
+      $ encodeStringifyJson addressBook
+    pure addressBook
+
   -- contract nicknames
   getContractNicknames = do
     mContractNicknamesJson <- liftEffect $ getItem
@@ -125,9 +127,7 @@ instance manageMarloweStorageHalogenM ::
   ManageMarloweStorage m =>
   ManageMarloweStorage (HalogenM state action slots msg m) where
   clearAllLocalStorage = lift clearAllLocalStorage
-  getAddressBook = lift getAddressBook
-  insertIntoAddressBook nickname address =
-    lift $ insertIntoAddressBook nickname address
+  modifyAddressBook = lift <<< modifyAddressBook
   getContractNicknames = lift getContractNicknames
   insertIntoContractNicknames plutusAppId nickname = lift $
     insertIntoContractNicknames plutusAppId nickname

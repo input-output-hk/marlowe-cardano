@@ -3,6 +3,39 @@ let upstream =
 
 let overrides = {=}
 
-let additions = {=}
+let additions =
+      { polyform =
+        { dependencies =
+          [ "arrays"
+          , "bifunctors"
+          , "control"
+          , "effect"
+          , "either"
+          , "enums"
+          , "functors"
+          , "identity"
+          , "invariant"
+          , "lists"
+          , "maybe"
+          , "newtype"
+          , "parallel"
+          , "partial"
+          , "prelude"
+          , "profunctor"
+          , "psci-support"
+          , "quickcheck"
+          , "quickcheck-laws"
+          , "record"
+          , "transformers"
+          , "tuples"
+          , "typelevel-prelude"
+          , "unsafe-coerce"
+          , "validation"
+          , "variant"
+          ]
+        , repo = "https://github.com/purescript-polyform/polyform"
+        , version = "d177fa5e04a29babf0f86cf57561ea6bf2317c36"
+        }
+      }
 
 in  upstream // overrides // additions

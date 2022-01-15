@@ -14,6 +14,7 @@ module Page.Dashboard.Lenses
   ) where
 
 import Prologue
+
 import Component.Contacts.Types (State) as Contacts
 import Component.Contacts.Types (WalletDetails)
 import Component.Template.Types (State) as Template

@@ -1,7 +1,5 @@
 module Component.Contacts.Types
   ( State
-  , AddressBook
-  , WalletNickname
   , WalletDetails
   , WalletInfo(..)
   , WalletId(..)
@@ -18,31 +16,28 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.InputField.Types (class InputFieldError)
 import Component.InputField.Types (Action, State) as InputField
+import Data.Address (Address)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
+import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams, PubKeyHash)
+import Marlowe.Semantics (Assets, MarloweData, MarloweParams)
 
 type State =
-  { addressBook :: AddressBook
-  , cardSection :: CardSection
+  { cardSection :: CardSection
   , walletNicknameInput :: InputField.State WalletNicknameError
   , addressInput :: InputField.State AddressError
   }
 
--- TODO: The changes to this code take us closer to
---       "SCP-3145 Use addresses instead of WalletId in the UI", but we still need to show
---       an actual BECH32 address instead of a PubKeyHash (which is only a subpart of the address)
-type AddressBook = Map WalletNickname PubKeyHash
-
-type WalletNickname = String
-
 -- TODO: Move this data type away from the Contacts module and possibly rename.
 --       A good location might just be a global Wallet module, and the name
 --       could be plain `Wallet` or maybe `Wallet.State` (using qualified imports)
+-- TODO: Consider hiding internal representation and creating an API instead
+--       (raw records are primitive obsession, especially when they are shared so
+--       pervasively).
 type WalletDetails =
   { walletNickname :: WalletNickname
   , companionAppId :: PlutusAppId
@@ -52,6 +47,8 @@ type WalletDetails =
   -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
   -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
   -- really has changed anything
+  -- FIXME - push this check up into the WS client (it's a hacky fix for an integration
+  -- problem, not part of the business logic)
   , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
   }
 
@@ -59,7 +56,7 @@ type WalletDetails =
 -- its "own-public-key"
 newtype WalletInfo = WalletInfo
   { walletId :: WalletId
-  , pubKeyHash :: PubKeyHash
+  , pubKeyHash :: Address
   }
 
 derive instance newtypeWalletInfo :: Newtype WalletInfo _
@@ -72,6 +69,7 @@ derive newtype instance encodeWalletInfo :: EncodeJson WalletInfo
 
 derive newtype instance decodeJsonWalletInfo :: DecodeJson WalletInfo
 
+-- TODO fix primitive obsession
 newtype WalletId = WalletId String
 
 derive instance newtypeWalletId :: Newtype WalletId _
@@ -88,8 +86,8 @@ derive newtype instance toUrlPieceWalletId :: ToUrlPiece WalletId
 
 data CardSection
   = Home
-  -- TODO: as part of SCP-3145 change PubKeyHash to BECH32 address
-  | ViewWallet WalletNickname PubKeyHash
+  | ViewWallet WalletNickname Address
+  -- TODO fix primitive obsession
   | NewWallet (Maybe String)
 
 derive instance eqCardSection :: Eq CardSection

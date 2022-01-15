@@ -9,11 +9,13 @@ module Marlowe.Execution.Types
   ) where
 
 import Prologue
+
 import Data.BigInt.Argonaut (BigInt)
 import Data.List (List)
 import Data.Map (Map)
 import Marlowe.Semantics
   ( AccountId
+  , Accounts
   , Bound
   , ChoiceId
   , ChosenNum
@@ -25,7 +27,6 @@ import Marlowe.Semantics
   , Token
   , TransactionInput
   , ValueId
-  , Accounts
   )
 import Marlowe.Semantics (State) as Semantic
 
@@ -38,8 +39,7 @@ import Marlowe.Semantics (State) as Semantic
 -- At a later point, we might want to refactor the execution state to live outside the component
 -- state, as a global state (using https://github.com/thomashoneyman/purescript-halogen-store),
 -- and minimize the amount of cached information.
-type State
-  =
+type State =
   { semanticState :: Semantic.State
   , contract :: Contract
   , history :: Array PastState
@@ -47,8 +47,7 @@ type State
   , mNextTimeout :: Maybe Slot
   }
 
-type TimeoutInfo
-  =
+type TimeoutInfo =
   { slot :: Slot
   , missedActions :: Array NamedAction
   }
@@ -57,8 +56,7 @@ data PastAction
   = InputAction
   | TimeoutAction TimeoutInfo
 
-type PastState
-  =
+type PastState =
   { balancesAtStart :: Accounts
   , action :: PastAction
   , txInput :: TransactionInput
@@ -69,8 +67,7 @@ type PastState
 -- The contract and state usually goes together and allows you to speficy the "overall state"
 -- of a contract.
 -- TODO: see if we can come up with a better name and maybe move it to Marlowe.Semantic
-type ContractAndState
-  =
+type ContractAndState =
   { contract :: Contract
   , state :: Semantic.State
   }
@@ -83,8 +80,7 @@ type ContractAndState
 -- allows us to extract the NamedActions that need to be applied next. Also, we store the timeouts
 -- as an Array because it is possible that multiple continuations have timedout before we advance
 -- the contract.
-type PendingTimeouts
-  =
+type PendingTimeouts =
   { continuation :: ContractAndState
   , timeouts :: Array TimeoutInfo
   }

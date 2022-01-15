@@ -24,10 +24,11 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast, addToast)
 import Component.Contacts.Lenses (_assets, _pubKeyHash, _walletInfo)
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (WalletDetails, WalletNickname)
+import Component.Contacts.Types (WalletDetails)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Address as A
 import Data.Array
   ( difference
   , filter
@@ -70,11 +71,12 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.Unfoldable as Unfoldable
+import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
-import Env (Env)
+import Env (Env(..))
 import Halogen
   ( HalogenM
   , getHTMLElementRef
@@ -324,7 +326,7 @@ getUserParties walletDetails marloweParams =
     roleTokens = foldMap (Set.map Role <<< Map.keys <<< Map.filter ((/=) zero))
       mCurrencyTokens
   in
-    Set.insert (PK pubKeyHash) roleTokens
+    Set.insert (PK $ A.toString pubKeyHash) roleTokens
 
 withStarted
   :: forall action slots msg m
@@ -658,7 +660,7 @@ unsubscribeFromSelectCenteredStep
   => MonadAsk Env m
   => HalogenM State Action ChildSlots Msg m Unit
 unsubscribeFromSelectCenteredStep = do
-  mutex <- asks _.contractStepCarouselSubscription
+  mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
   mSubscription <- liftAff $ AVar.tryTake mutex
   for_ mSubscription unsubscribe
 
@@ -674,7 +676,7 @@ subscribeToSelectCenteredStep = do
     -- We try to update the subscription without blocking, and if we cant (because another
     -- subscription is already present, then we clean this one, so only one subscription can
     -- be active at a time)
-    mutex <- asks _.contractStepCarouselSubscription
+    mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
     mutexUpdated <- liftAff $ AVar.tryPut subscription mutex
     when (not mutexUpdated) $ unsubscribe subscription
 

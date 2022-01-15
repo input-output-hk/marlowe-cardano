@@ -1,6 +1,7 @@
 module Marlowe.Extended.Metadata where
 
 import Prologue
+
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
@@ -144,8 +145,7 @@ updateValueParameterInfo f = OMap.alter updateValueParameterInfoEntry
     emptyValueParameterInfo
     mValueParameterInfo
 
-type ChoiceInfo
-  =
+type ChoiceInfo =
   { choiceFormat :: NumberFormat
   , choiceDescription :: String
   }
@@ -176,15 +176,18 @@ updateChoiceInfo f = Map.alter updateChoiceInfoEntry
   updateChoiceInfoEntry mChoiceInfo = Just $ f $ fromMaybe emptyChoiceInfo
     mChoiceInfo
 
-type MetaData
-  =
+type MetaData =
   { contractType :: ContractType
+  -- TODO: fix primitive obsession
   , contractName :: String
   , contractShortDescription :: String
   , contractLongDescription :: String
   , roleDescriptions :: Map S.TokenName String
+  -- TODO: fix primitive obsession (what is the key supposed to be?)
   , slotParameterDescriptions :: OMap String String
+  -- TODO: fix primitive obsession (what is the key supposed to be?)
   , valueParameterInfo :: OMap String ValueParameterInfo
+  -- TODO: fix primitive obsession (what is the key supposed to be?)
   , choiceInfo :: Map String ChoiceInfo
   }
 

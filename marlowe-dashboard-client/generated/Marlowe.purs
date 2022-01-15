@@ -24,7 +24,8 @@ import Data.Newtype (unwrap)
 import Data.String (joinWith)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types
-  ( RestoreError
+  ( CheckPostData
+  , RestoreError
   , RestorePostData
   )
 import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds)
@@ -209,6 +210,69 @@ postApiWalletCentralizedtestnetRestore reqBody = do
   let
     decoder =
       (D.either D.value D.value)
+  result <- liftAff $ request affReq
+  response <- case result of
+    Left err -> throwError $
+      { request: affReq, description: ConnectingError err }
+    Right r -> pure r
+  when (unwrap response.status < 200 || unwrap response.status >= 299)
+    $ throwError
+    $ { request: affReq, description: UnexpectedHTTPStatus response }
+  case D.decode decoder response.body of
+    Left err -> throwError $ { request: affReq, description: DecodingError err }
+    Right body -> pure body
+
+postApiWalletCentralizedtestnetCheckmnemonic
+  :: forall env m
+   . HasSPSettings env
+  => MonadAsk env m
+  => MonadError AjaxError m
+  => MonadAff m
+  => CheckPostData
+  -> m Boolean
+postApiWalletCentralizedtestnetCheckmnemonic reqBody = do
+  spSettings <- asks spSettings
+  let baseURL = spSettings.baseURL
+  let httpMethod = Left POST
+  let
+    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
+    encodeQueryItem name val = name <> "=" <> toURLPiece val
+  let
+    queryArgs :: Array String
+    queryArgs =
+      []
+  let
+    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
+  let
+    reqURL =
+      baseURL
+        <> "api"
+        <> "/"
+        <> "wallet"
+        <> "/"
+        <> "centralized-testnet"
+        <> "/"
+        <> "check-mnemonic"
+        <> queryString
+  let
+    reqHeaders =
+      [
+      ]
+  let
+    affReq =
+      defaultRequest
+        { method = httpMethod
+        , url = reqURL
+        , headers = defaultRequest.headers <> reqHeaders
+        , responseFormat = Response.json
+        , content = Just
+            $ Request.json
+            $ flip E.encode reqBody
+            $ E.value
+        }
+  let
+    decoder =
+      D.value
   result <- liftAff $ request affReq
   response <- case result of
     Left err -> throwError $

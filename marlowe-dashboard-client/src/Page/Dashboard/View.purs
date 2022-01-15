@@ -9,8 +9,7 @@ import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
 import Component.ConfirmInput.View as ConfirmInput
 import Component.Contacts.Lenses
-  ( _addressBook
-  , _assets
+  ( _assets
   , _pubKeyHash
   , _walletInfo
   , _walletNickname
@@ -25,12 +24,15 @@ import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
 import Css as Css
+import Data.Address as A
+import Data.AddressBook (AddressBook)
 import Data.Compactable (compact)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
@@ -115,7 +117,7 @@ dashboardScreen { currentSlot, tzOffset } state =
             ]
               <> applyWhen cardOpen [ "lg:mr-sidebar" ]
       ]
-      [ dashboardHeader walletNickname menuOpen
+      [ dashboardHeader (WN.toString walletNickname) menuOpen
       , div
           [ classNames [ "relative" ] ] -- this wrapper is relative because the mobile menu is absolutely positioned inside it
           [ mobileMenu menuOpen
@@ -146,14 +148,13 @@ dashboardScreen { currentSlot, tzOffset } state =
 dashboardCard
   :: forall m
    . MonadAff m
-  => State
+  => AddressBook
+  -> State
   -> ComponentHTML Action ChildSlots m
-dashboardCard state = case view _card state of
+dashboardCard addressBook state = case view _card state of
   Just card ->
     let
       cardOpen = state ^. _cardOpen
-
-      addressBook = state ^. (_contactsState <<< _addressBook)
 
       currentWallet = state ^. _walletDetails
 
@@ -173,7 +174,7 @@ dashboardCard state = case view _card state of
                   TutorialsCard -> tutorialsCard
                   CurrentWalletCard -> currentWalletCard currentWallet
                   ContactsCard -> renderSubmodule _contactsState ContactsAction
-                    (contactsCard currentWallet)
+                    (contactsCard addressBook currentWallet)
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
@@ -673,7 +674,7 @@ currentWalletCard walletDetails =
 
     assets = view _assets walletDetails
 
-    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard
+    copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard <<< A.toString
   in
     div
       [ classNames
@@ -693,11 +694,8 @@ currentWalletCard walletDetails =
           ]
           [ h3
               [ classNames [ "font-semibold", "text-lg" ] ]
-              [ text walletNickname ]
-          , copyAddress
-              <$> Address.render
-                Address.defaultInput
-                  { label = "Wallet Address", value = address }
+              [ text $ WN.toString walletNickname ]
+          , copyAddress <$> Address.render (Address.defaultInput address)
           , div_
               [ h4
                   [ classNames [ "font-semibold" ] ]
