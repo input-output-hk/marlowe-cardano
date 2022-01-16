@@ -402,7 +402,7 @@ echo "Here are the UTxOs at the mediator $MEDIATOR_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$MEDIATOR_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
-# Clean Up
+echo "## Clean Up"
 
 echo "Send the funds back to the buyer, so that the test can be run again."
 

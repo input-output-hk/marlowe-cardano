@@ -4,3 +4,4 @@
 tx-*.*
 utxo-*.*
 *.diff
+*.png

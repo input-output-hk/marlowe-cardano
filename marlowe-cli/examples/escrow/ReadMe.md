@@ -23,38 +23,38 @@ The [Marlowe escrow contract](../../src/Language/Marlowe/CLI/Examples/Escrow.hs)
 <pre>
 When
   [
-    Case (Deposit seller buyer ada 256)
+    Case (Deposit (Role "Francis Beaumont (the seller)") (Role "Thomas Middleton (the buyer)") ada 256)
       ( When
         [
-          Case (Choice (ChoiceId "Everything is alright" (PK "6d96cdffd43fd91d22b19e7013192b023cf39180773f9ad909abea79")) [Bound 0 0])
+          Case (Choice (ChoiceId "Everything is alright" (Role "Thomas Middleton (the buyer)")) [Bound 0 0])
             Close
-        , Case (Choice (ChoiceId "Report problem" (PK "6d96cdffd43fd91d22b19e7013192b023cf39180773f9ad909abea79")) [Bound 1 1])
-            ( Pay seller (Account buyer) ada 256 )
+        , Case (Choice (ChoiceId "Report problem" (Role "Thomas Middleton (the buyer)")) [Bound 1 1])
+            ( Pay (Role "Francis Beaumont (the seller)") (Account (Role "Thomas Middleton (the buyer)")) ada 256 )
             ( When
               [
-                Case (Choice (ChoiceId "Confirm problem" (PK "d735da025e42bdfeb92e325fc530da3ac732a47726c6cee666a6ea5a")) [Bound 1 1])
+                Case (Choice (ChoiceId "Confirm problem" (Role "Francis Beaumont (the seller)")) [Bound 1 1])
                   Close
-              , Case (Choice (ChoiceId "Dispute problem" (PK "d735da025e42bdfeb92e325fc530da3ac732a47726c6cee666a6ea5a")) [Bound 0 0])
+              , Case (Choice (ChoiceId "Dispute problem" (Role "Francis Beaumont (the seller)")) [Bound 0 0])
                 ( When
                   [
-                    Case (Choice (ChoiceId "Dismiss claim" (PK "2e0e34cb70301903309c3c5b81000280f31a807de62153302d4aa274")) [Bound 0 0])
-                      ( Pay buyer (Account seller) ada 256 )
+                    Case (Choice (ChoiceId "Dismiss claim" (Role "Christopher Marlowe (the mediator)")) [Bound 0 0])
+                      ( Pay (Role "Thomas Middleton (the buyer)") (Account (Role "Francis Beaumont (the seller)")) ada 256 )
                       Close
-                  , Case (Choice (ChoiceId "Confirm claim" (PK "2e0e34cb70301903309c3c5b81000280f31a807de62153302d4aa274")) [Bound 1 1])
+                  , Case (Choice (ChoiceId "Confirm claim" (Role "Christopher Marlowe (the mediator)")) [Bound 1 1])
                       Close
                   ]
-                  2159803
+                  (SlotParam "Mediation deadline")
                   Close
                 )
               ]
-              2073403
+              (SlotParam "Dispute deadline")
             ) Close
         ]
-        1987003
+        (SlotParam "Complaint deadline")
         Close
       )
   ]
-  1900603
+  (SlotParam "Payment deadline")
   Close
 </pre>
 </td>
