@@ -1,6 +1,5 @@
 module Capability.Wallet
   ( class ManageWallet
-  , GetTotalFundsResponse
   , createWallet
   , restoreWallet
   , submitWalletTransaction
@@ -11,7 +10,6 @@ module Capability.Wallet
 
 import Prologue
 
-import API.Marlowe.Run.Wallet as WBE
 import API.Marlowe.Run.Wallet.CentralizedTestnet
   ( RestoreError
   , RestoreWalletOptions
@@ -23,22 +21,12 @@ import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
-import Marlowe.Run.Wallet.V1.API as BE
+import Marlowe as WBE
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics (Assets)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
 import Unsafe.Coerce (unsafeCoerce)
-
-type GetTotalFundsResponse =
-  { assets :: Assets
-  , sync :: Number
-  }
-
--- TODO create a Dto module to replace Bridge (but where decoding can fail).
--- This will mirror backend architecture.
-getTotalFundsResponseFromDto
-  :: BE.GetTotalFundsResponse -> GetTotalFundsResponse
-getTotalFundsResponseFromDto = unsafeCoerce
 
 -- FIXME: Abstract away AjaxResponse (just return an `m ResponseType` and
 -- handle API failures in the concrete Monad instance).
@@ -57,10 +45,7 @@ instance monadWalletAppM :: ManageWallet AppM where
     MockAPI.submitWalletTransaction (toBack wallet) tx
   getWalletInfo wallet = map (map toFront) $ runExceptT $ MockAPI.getWalletInfo
     (toBack wallet)
-  getWalletTotalFunds walletId = runExceptT
-    $ map getTotalFundsResponseFromDto
-    $ WBE.getTotalFunds
-    $ unsafeCoerce walletId -- TODO create DTO module like backend
+  getWalletTotalFunds = runExceptT <<< WBE.getApiWalletV1ByWalletidTotalfunds
   signTransaction wallet tx = runExceptT $ MockAPI.signTransaction
     (toBack wallet)
     tx

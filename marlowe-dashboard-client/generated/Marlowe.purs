@@ -8,6 +8,7 @@ import Affjax.RequestBody (json) as Request
 import Affjax.RequestHeader (RequestHeader(..))
 import Affjax.ResponseFormat (json) as Response
 import Cardano.Wallet.Mock.Types (WalletInfo)
+import Component.Contacts.Types (WalletId)
 import Control.Monad.Error.Class (class MonadError, throwError)
 import Control.Monad.Reader.Class (class MonadAsk, asks)
 import Data.Argonaut.Decode (decodeJson)
@@ -23,8 +24,7 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.String (joinWith)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Marlowe.Run.Dto (WalletIdDto)
-import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CheckPostData
   , RestoreError
@@ -107,7 +107,7 @@ getApiWalletV1ByWalletidTotalfunds
   => MonadAsk env m
   => MonadError AjaxError m
   => MonadAff m
-  => WalletIdDto
+  => WalletId
   -> m GetTotalFundsResponse
 getApiWalletV1ByWalletidTotalfunds wallet_id = do
   spSettings <- asks spSettings

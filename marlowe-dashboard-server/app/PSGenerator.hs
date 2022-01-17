@@ -19,12 +19,11 @@ import Data.Monoid ()
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
-import Language.PureScript.Bridge (BridgePart, Language (Haskell), SumType, argonaut, buildBridge, typeName,
-                                   writePSTypes, (^==))
+import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), SumType, TypeInfo (..), argonaut,
+                                   buildBridge, typeName, writePSTypes, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import Marlowe.Run.API (HTTPAPI)
-import Marlowe.Run.Dto
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
@@ -37,6 +36,12 @@ doubleBridge = typeName ^== "Double" >> return psNumber
 dayBridge :: BridgePart
 dayBridge = typeName ^== "Day" >> return psString
 
+psWalletId :: TypeInfo 'PureScript
+psWalletId = TypeInfo "marlowe-dashboard-client" "Component.Contacts.Types" "WalletId" []
+
+walletIdBridge :: BridgePart
+walletIdBridge = typeName ^== "HttpWalletId" >> return psWalletId
+
 myBridge :: BridgePart
 myBridge =
   PSGenerator.Common.aesonBridge <|> PSGenerator.Common.containersBridge
@@ -47,6 +52,7 @@ myBridge =
     <|> doubleBridge
     <|> dayBridge
     <|> defaultBridge
+    <|> walletIdBridge
 
 data MyBridge
 
@@ -59,10 +65,6 @@ instance HasBridge MyBridge where
 dto :: SumType 'Haskell -> SumType 'Haskell
 dto = equal . genericShow . argonaut
 
--- FIXME: remove all of this shared stuff from plutus-apps. We should only be
--- exporting API types to PureScript, and those should all be defined
--- internally in this project. With a multi-repo setup, there is far too much
--- potential for breakage with updates.
 myTypes :: [SumType 'Haskell]
 myTypes =
     PSGenerator.Common.ledgerTypes <>
@@ -74,10 +76,6 @@ myTypes =
         mkSumType @RestorePostData,
         mkSumType @CheckPostData,
         mkSumType @GetTotalFundsResponse,
-        mkSumType @AssetsDto,
-        order $ mkSumType @CurrencySymbolDto,
-        order $ mkSumType @TokenNameDto,
-        order $ mkSumType @WalletIdDto,
         order $ mkSumType @RestoreError
       ]
     )

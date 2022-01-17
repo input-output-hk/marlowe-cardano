@@ -19,7 +19,6 @@ library
     default-extensions: NoImplicitPrelude
     exposed-modules:
         Marlowe.Run.API
-        Marlowe.Run.Dto
         Marlowe.Run.Server
         Marlowe.Run.Wallet.V1.API
         Marlowe.Run.Wallet.V1.CentralizedTestnet.Types

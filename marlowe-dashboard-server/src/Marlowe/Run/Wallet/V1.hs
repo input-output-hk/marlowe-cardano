@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -17,6 +19,7 @@ import Cardano.Wallet.Primitive.Types.Hash (getHash)
 import Cardano.Wallet.Primitive.Types.TokenMap (AssetId (..), TokenMap, toFlatList)
 import Cardano.Wallet.Primitive.Types.TokenPolicy (unTokenName, unTokenPolicyId)
 import Cardano.Wallet.Primitive.Types.TokenQuantity (TokenQuantity (..))
+import Data.Aeson (ToJSON)
 import Data.Quantity (getPercentage, getQuantity)
 import GHC.Natural (naturalToInteger)
 import qualified Plutus.V1.Ledger.Ada as Ledger
@@ -40,7 +43,9 @@ wbeTokenMapToLedgerValue tokenMap =
             )
             (toFlatList tokenMap)
 
-data GetTotalFundsResponse = GetTotalFundsResponse { assets :: !Value , sync :: !Double }
+data GetTotalFundsResponse = GetTotalFundsResponse { assets :: !Value, sync :: !Double }
+    deriving stock (Eq, Show, Generic)
+    deriving anyclass (ToJSON)
 
 getTotalFunds ::
     Monad m =>

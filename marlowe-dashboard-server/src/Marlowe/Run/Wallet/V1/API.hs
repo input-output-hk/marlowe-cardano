@@ -6,27 +6,27 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module Marlowe.Run.Wallet.V1.API where
+module Marlowe.Run.Wallet.V1.API
+    ( HttpWalletId(..)
+    , API
+    , GetTotalFundsResponse
+    ) where
 
 import Cardano.Prelude
-import Data.Aeson (ToJSON)
-import Marlowe.Run.Dto (AssetsDto, ToDto (..), WalletIdDto)
-import qualified Marlowe.Run.Wallet.V1 as Domain
+
+import Cardano.Wallet.Primitive.Types (WalletId)
+import qualified Data.Text as T
+import Data.Text.Class (FromText (fromText), TextDecodingError (getTextDecodingError))
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import qualified Marlowe.Run.Wallet.V1.CentralizedTestnet.API as CentralizedTestnet
+import Servant (FromHttpApiData (..))
 import Servant.API (Capture, Get, JSON, (:<|>), (:>))
 
-data GetTotalFundsResponse =
-    GetTotalFundsResponse
-        { assets :: !AssetsDto
-        , sync   :: !Double
-        }
-    deriving stock (Eq, Generic, Show)
-    deriving anyclass (ToJSON)
+newtype HttpWalletId = HttpWalletId WalletId
 
-instance ToDto Domain.GetTotalFundsResponse GetTotalFundsResponse where
-    toDto Domain.GetTotalFundsResponse{..} =
-        GetTotalFundsResponse (toDto assets) sync
+instance FromHttpApiData HttpWalletId where
+    parseUrlPiece = bimap (T.pack . getTextDecodingError) HttpWalletId . fromText
 
 type API =
-    (Capture "wallet-id" WalletIdDto :> "total-funds" :> Get '[JSON] GetTotalFundsResponse)
+    (Capture "wallet-id" HttpWalletId :> "total-funds" :> Get '[JSON] GetTotalFundsResponse)
     :<|> ("centralized-testnet" :> CentralizedTestnet.API)

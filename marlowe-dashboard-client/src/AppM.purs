@@ -26,7 +26,7 @@ import Halogen.Store.Monad
   , runStoreT
   , updateStore
   )
-import Marlowe (postApiWalletCentralizedtestnetCheckmnemonic)
+import Marlowe (postApiWalletV1CentralizedtestnetCheckmnemonic)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData(..))
 import Store as Store
 
@@ -71,7 +71,7 @@ instance checkMnemonicAppM :: CheckMnemonic AppM where
   checkMnemonic =
     map (either (const false) identity)
       <<< runExceptT
-      <<< postApiWalletCentralizedtestnetCheckmnemonic
+      <<< postApiWalletV1CentralizedtestnetCheckmnemonic
       <<< CheckPostData
       <<< map wordToString
       <<< toWords
