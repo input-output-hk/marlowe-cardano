@@ -22,11 +22,9 @@ import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
 import Marlowe as WBE
-import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics (Assets)
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
-import Unsafe.Coerce (unsafeCoerce)
 
 -- FIXME: Abstract away AjaxResponse (just return an `m ResponseType` and
 -- handle API failures in the concrete Monad instance).

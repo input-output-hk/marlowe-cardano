@@ -50,7 +50,6 @@ You can edit this file as you like.
   , "transformers"
   , "tuples"
   , "unfoldable"
-  , "unsafe-coerce"
   , "uuid"
   , "validation"
   , "web-common"

@@ -19,7 +19,6 @@ import Data.Map as Map
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Validation.Semigroup (V(..))
-import Data.WalletNickname (WalletNicknameError(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Forms (InputSlots)
@@ -155,7 +154,7 @@ component = Hooks.component \{ outputToken } input -> Hooks.do
   let { addressBook, roles, timeouts, values } = input
   form <- Hooks.captures { addressBook } Hooks.useMemo \_ -> mkForm addressBook
   { result, html } <- useForm form (initialFormInput roles timeouts values)
-  let back = Hooks.raise outputToken Back
-  let next = Hooks.raise outputToken <<< Next <$> result
+  let _back = Hooks.raise outputToken Back
+  let _next = Hooks.raise outputToken <<< Next <$> result
   Hooks.pure do
     html []
