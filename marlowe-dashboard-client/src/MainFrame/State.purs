@@ -126,6 +126,7 @@ mkMainFrame =
         mkEval defaultEval
           { handleQuery = handleQuery
           , handleAction = handleAction
+          , receive = Just <<< Receive
           }
     }
 
