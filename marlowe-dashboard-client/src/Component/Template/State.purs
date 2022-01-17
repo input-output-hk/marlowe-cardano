@@ -146,7 +146,7 @@ handleAction _ (ContractNicknameInputAction inputFieldAction) =
 
 handleAction input@{ addressBook } UpdateRoleWalletValidators =
   setInputValidators input _roleWalletInputs RoleWalletInputAction
-    $ roleError addressBook <<< hush <<< WN.fromString mempty
+    $ roleError addressBook <<< hush <<< WN.fromString
 
 handleAction _ (RoleWalletInputAction tokenName inputFieldAction) =
   toRoleWalletInput tokenName $ InputField.handleAction inputFieldAction

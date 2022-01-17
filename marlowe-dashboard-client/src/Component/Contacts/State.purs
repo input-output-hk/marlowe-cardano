@@ -86,7 +86,7 @@ handleAction addressBook (SetCardSection cardSection) = do
         $ InputField.SetValidator
         $ either Just (const Nothing)
             <<< lmap walletNicknameErrorToLegacyError
-            <<< WN.fromString (AddressBook.nicknames addressBook)
+            <<< WN.fromStringExclusive (AddressBook.nicknames addressBook)
       handleAction addressBook $ AddressInputAction InputField.Reset
       handleAction addressBook
         $ AddressInputAction
@@ -102,7 +102,7 @@ handleAction _ (SaveWallet mTokenName) = do
   addressString <- use (_addressInput <<< _value)
   let
     result = Tuple
-      <$> hush (WN.fromString Set.empty walletNicknameString)
+      <$> hush (WN.fromString walletNicknameString)
       <*> hush (A.fromString Set.empty addressString)
   case result of
     Just (Tuple walletNickname address) -> do
@@ -189,6 +189,7 @@ walletNicknameErrorToLegacyError
 walletNicknameErrorToLegacyError = case _ of
   WN.Empty -> EmptyWalletNickname
   WN.Exists -> DuplicateWalletNickname
+  WN.DoesNotExist -> DuplicateWalletNickname
   WN.ContainsNonAlphaNumeric -> BadWalletNickname
 
 addressErrorToLegacyError :: A.AddressError -> AddressError

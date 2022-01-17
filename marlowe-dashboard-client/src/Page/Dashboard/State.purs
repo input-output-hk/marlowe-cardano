@@ -461,7 +461,7 @@ handleAction input@{ currentSlot, addressBook } (TemplateAction templateAction) 
           roleWalletInputs <- use (_templateState <<< _roleWalletInputs)
           let
             roleWallets =
-              filterMap (hush <<< WN.fromString mempty <<< view _value)
+              filterMap (hush <<< WN.fromString <<< view _value)
                 roleWalletInputs
 
             roles = mapMaybe (flip AB.lookupAddress addressBook) roleWallets

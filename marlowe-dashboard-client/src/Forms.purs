@@ -172,10 +172,12 @@ walletNickname
   => Set WalletNickname
   -> Form (InputSlots s) m String WalletNickname
 walletNickname used =
-  input "wallet-nickname" "Wallet nickname" (WN.validator used) case _ of
-    WN.Empty -> "Required."
-    WN.Exists -> "Already exists."
-    WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+  input "wallet-nickname" "Wallet nickname" (WN.validatorExclusive used)
+    case _ of
+      WN.Empty -> "Required."
+      WN.Exists -> "Already exists."
+      WN.DoesNotExist -> "Not found."
+      WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
 
 type MnemonicPhraseInput = AsyncInput String MnemonicPhraseError MnemonicPhrase
 

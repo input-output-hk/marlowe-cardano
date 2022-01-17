@@ -7,6 +7,8 @@ module Halogen.Form
   , hoistForm
   , split
   , subform
+  , multiWithIndex
+  , multi
   ) where
 
 import Prelude
@@ -19,9 +21,11 @@ import Control.Monad.Writer (WriterT(..), mapWriterT)
 import Data.Bifunctor (bimap, lmap)
 import Data.Foldable (for_)
 import Data.Lens (Lens', _1, _2, set, view)
+import Data.Lens.Index (class Index, ix)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, unwrap)
 import Data.Profunctor.Star (Star(..))
+import Data.TraversableWithIndex (class TraversableWithIndex, traverseWithIndex)
 import Data.Tuple (Tuple(..))
 import Effect.AVar (AVar)
 import Effect.Aff.AVar as AVar
@@ -48,6 +52,13 @@ type Form slots m input a =
     input
     a
 
+type FormEvalResult slots m input a =
+  MaybeT
+    ( WriterT (Array (H.ComponentHTML input slots m))
+        (StateT FormState (Free (FormF input m)))
+    )
+    a
+
 form
   :: forall s m i a
    . Functor m
@@ -63,6 +74,52 @@ split
   -> Form s m (Tuple i j) (Tuple a b)
 split f g = Tuple <$> subform _1 f <*> subform _2 g
 
+multiWithIndex
+  :: forall slots m t index i a
+   . TraversableWithIndex index t
+  => Index (t i) index i
+  => Monad m
+  => (index -> Form slots m i a)
+  -> Form slots m (t i) (t a)
+multiWithIndex getItemForm =
+  Reporter $ Star \ti -> traverseWithIndex (runItemForm ti) ti
+  where
+  runItemForm ti index =
+    let
+      Reporter (Star itemForm) = getItemForm index
+    in
+      mapFormResults (\i -> set (ix index) i ti) <<< itemForm
+
+multi
+  :: forall slots m t index i a
+   . TraversableWithIndex index t
+  => Index (t i) index i
+  => Monad m
+  => Form slots m i a
+  -> Form slots m (t i) (t a)
+multi = multiWithIndex <<< const
+
+mapFormResults
+  :: forall slots m i j a
+   . Functor m
+  => (j -> i)
+  -> FormEvalResult slots m j a
+  -> FormEvalResult slots m i a
+mapFormResults f =
+  let
+    adaptFormF :: FormF j m ~> FormF i m
+    adaptFormF (Update j a) = Update (f j) a
+    adaptFormF (Lift m) = Lift m
+  in
+    mapMaybeT
+      ( mapWriterT
+          ( mapStateT
+              ( hoistFree adaptFormF <<< map
+                  (lmap (map (map (bimap (map f) f))))
+              )
+          )
+      )
+
 subform
   :: forall s m i j a
    . Functor m
@@ -70,22 +127,7 @@ subform
   -> Form s m j a
   -> Form s m i a
 subform lens (Reporter (Star f)) = Reporter $ Star \i ->
-  let
-    adaptAction j = set lens j i
-
-    adaptFormF :: FormF j m ~> FormF i m
-    adaptFormF (Update j a) = Update (set lens j i) a
-    adaptFormF (Lift m) = Lift m
-  in
-    mapMaybeT
-      ( mapWriterT
-          ( mapStateT
-              ( hoistFree adaptFormF <<< map
-                  (lmap (map (map (bimap (map adaptAction) adaptAction))))
-              )
-          )
-      )
-      (f (view lens i))
+  mapFormResults (flip (set lens) i) $ f (view lens i)
 
 hoistForm
   :: forall i s m1 m2 a
