@@ -278,13 +278,13 @@ Compilation and other messages will appear. Visit http://localhost:8009.
     3.  The log file will show wallet restoration, transaction creation and submission, and detection of transactions.
 *   Cardano Chain Sync
     1.  Syncing with the private testnet is fast, but it takes ~2 days on the public testnet and ~7 days on mainnet.
-    2.  A Swagger UI is available at http://localhost:49083/swagger/swagger-ui/.
-    4.  Use `curl -H 'accept: application/json;charset=utf-8' http://localhost:49083/tip` to check whether the chain index is synchronized with the node. Its slot value should be close to that reported by the node.
+    2.  A Swagger UI is available at http://localhost:9083/swagger/swagger-ui/.
+    4.  Use `curl -H 'accept: application/json;charset=utf-8' http://localhost:9083/tip` to check whether the chain index is synchronized with the node. Its slot value should be close to that reported by the node.
 *   Marlowe PAB
     1.  How the passphrase should be configured is a mystery.
     2.  The PAB sometimes resets and restarts at the genesis block.
     3.  The PAB sometimes creates wildly invalid transactions.
     4.  It is critically important that the time slot parameters in the PAB configuration file match those in `MarloweParams`.
     5.  The passphrase of the PAB should match the passphrase used by Marlowe Run in its communication with the wallet.
-    6.  A Swagger UI is available at http://localhost:49080/swagger/swagger-ui/.
+    6.  A Swagger UI is available at http://localhost:9080/swagger/swagger-ui/.
     7.  The log file will show all of the contract, transaction, and wallet operations, including ledger, Plutus, and contract errors.
