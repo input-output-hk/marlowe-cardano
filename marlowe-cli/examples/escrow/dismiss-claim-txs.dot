@@ -105,21 +105,6 @@ Tx2_0 -> Tx3
 Tx2_2 -> Tx3
 
 
-subgraph cluster_3 {
-
-peripheries=0
-
-Tx3_0 [label="Thomas\nMiddleton|2694.6 ADA"]
-
-Tx3_2 [label="Thomas\nMiddleton|3 ADA + 1 TM"]
-
-}
-
-Tx3 -> Tx3_0 [label="#0"]
-
-Tx3 -> Tx3_2 [label="#2"]
-
-
 Tx3_1 [label="Marlowe Script|259 ADA|{State|{F.B. has 0 ADA|T.M. has 256 ADA|C.M. has 3 ADA}}"]
 
 Tx3 -> Tx3_1 [label="#1"]
@@ -217,25 +202,6 @@ Tx4_2 -> Tx6
 Tx5_2 -> Tx6
 
 
-subgraph cluster_6 {
-
-peripheries=0
-
-Tx6_0 [label="Francis\nBeaumont|3000.9 ADA"]
-
-Tx6_1 [label="Francis\nBeaumont|256 ADA"]
-
-Tx6_2 [label="Francis\nBeaumont|3 ADA + 1 FB"]
-
-}
-
-Tx6 -> Tx6_0 [label="#0"]
-
-Tx6 -> Tx6_1 [label="#1"]
-
-Tx6 -> Tx6_2 [label="#2"]
-
-
 Tx6_Fee [label="Fee\n0.5 ADA"]
 
 Tx6 -> Tx6_Fee
@@ -250,28 +216,69 @@ Tx5_3 -> Tx7
 Tx5_1 -> Tx7
 
 
-subgraph cluster_7 {
+Tx7_Fee [label="Fee\n0.5 ADA"]
+
+Tx7 -> Tx7_Fee
+
+
+subgraph cluster_x {
 
 peripheries=0
 
-Tx7_0 [label="Christopher\nMarlowe|1959.7 ADA"]
+  subgraph cluster_3 {
 
-Tx7_1 [label="Christopher\nMarlowe|3 ADA"]
+  peripheries=0
 
-Tx7_2 [label="Christopher\nMarlowe|3 ADA + 1 CM"]
+  Tx3_0 [label="Thomas\nMiddleton|2694.6 ADA"]
+
+  Tx3_2 [label="Thomas\nMiddleton|3 ADA + 1 TM"]
+
+  }
+
+  subgraph cluster_6 {
+
+  peripheries=0
+
+  Tx6_0 [label="Francis\nBeaumont|3000.9 ADA"]
+
+  Tx6_1 [label="Francis\nBeaumont|256 ADA"]
+
+  Tx6_2 [label="Francis\nBeaumont|3 ADA + 1 FB"]
+
+  }
+
+  subgraph cluster_7 {
+
+  peripheries=0
+
+  Tx7_0 [label="Christopher\nMarlowe|1959.7 ADA"]
+
+  Tx7_1 [label="Christopher\nMarlowe|3 ADA"]
+
+  Tx7_2 [label="Christopher\nMarlowe|3 ADA + 1 CM"]
+
+  }
 
 }
+
+
+Tx3 -> Tx3_0 [label="#0"]
+
+Tx3 -> Tx3_2 [label="#2"]
+
+
+Tx6 -> Tx6_0 [label="#0"]
+
+Tx6 -> Tx6_1 [label="#1"]
+
+Tx6 -> Tx6_2 [label="#2"]
+
 
 Tx7 -> Tx7_0 [label="#0"]
 
 Tx7 -> Tx7_1 [label="#1"]
 
 Tx7 -> Tx7_2 [label="#2"]
-
-
-Tx7_Fee [label="Fee\n0.5 ADA"]
-
-Tx7 -> Tx7_Fee
 
 
 label="Boxes are UTxOs.\nOvals are transactions.\nADA values are rounded to one decimal place."
