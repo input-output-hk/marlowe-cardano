@@ -6,11 +6,11 @@
 
 ### Marlowe PAB and WBE
 
-Use the SCP-3220 branch of marlowe.
+Use the `marlowe-run-development` branch of marlowe.
 
 ```bash
 # Clone marlowe-cardano on the correct branch.
-git clone git@github.com:input-output-hk/marlowe-cardano.git -b SCP-3220
+git clone git@github.com:input-output-hk/marlowe-cardano.git -b marlowe-run-development
 
 # Build the PAB.
 nix-build marlowe-cardano/default.nix -A marlowe-pab -o build-pab
@@ -66,8 +66,8 @@ nix-build marlowe-cardano/default.nix -A marlowe-dashboard.marlowe-run-backend-i
 # Create the configuration file for the dashboard server.
 cat > marlowe-run.json << EOI
 {
-  "getWbeConfig": { "_wbeHost": "localhost", "_wbePort": 8090 },
-  "getStaticPath": "/var/empty"
+  "wbeConfig": { "host": "localhost", "port": 8090 },
+  "staticPath": "/var/empty"
 }
 EOI
 ```
@@ -77,7 +77,7 @@ EOI
 
 ```bash
 # Clone cardano-node at the correct revision.
-git clone git@github.com:input-output-hk/cardano-node.git -b 814df2c146f5d56f8c35a681fe75e85b905aed5d
+git clone git@github.com:input-output-hk/cardano-node.git -b 1.33.0
 
 # Build the executable.
 nix-build cardano-node/default.nix -A cardano-node -o build-node
@@ -139,7 +139,7 @@ nix-build cardano-node/default.nix -A cardano-cli -o build-cli
 
 ```bash
 # Clone cardano-wallet at the correct revision.
-git clone git@github.com:input-output-hk/cardano-wallet.git -b 760140e238a5fbca61d1b286d7a80ece058dc729
+git clone git@github.com:input-output-hk/cardano-wallet.git -b v2021-12-15
 
 # Build the executable.
 nix-build cardano-wallet/default.nix -A cardano-wallet -o build-wallet
@@ -150,7 +150,7 @@ nix-build cardano-wallet/default.nix -A cardano-wallet -o build-wallet
 
 ```bash
 # Clone plutus-apps at the correct revision.
-git clone git@github.com:input-output-hk/plutus-apps.git -b 41149926c108c71831cfe8d244c83b0ee4bf5c8a
+git clone git@github.com:input-output-hk/plutus-apps.git -b marlowe/SCP-3220
 
 # Build the executable.
 nix-shell plutus-apps/shell.nix --run "cd plutus-apps; cabal install --installdir=../build-chain-index exe:plutus-chain-index"
@@ -260,6 +260,7 @@ nix-shell marlowe-cardano/shell.nix --run "cd marlowe-cardano/marlowe-dashboard-
 ```
 
 Compilation and other messages will appear. Visit http://localhost:8009.
+
 
 ## Deployment Diagram
 
