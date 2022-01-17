@@ -65,19 +65,18 @@
           ];
         buildable = true;
         modules = [
-          "Paths_marlowe_dashboard_server"
-          "Marlowe/Run/Wallet"
-          "Marlowe/Run/Wallet/Server"
-          "Marlowe/Run/Wallet/CentralizedTestnet/API"
-          "Marlowe/Run/Wallet/CentralizedTestnet/Server"
           "Marlowe/Run"
-          "Marlowe/Run/Server"
+          "Marlowe/Run/Wallet/V1"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/Server"
+          "Marlowe/Run/Wallet/V1/Server"
+          "Paths_marlowe_dashboard_server"
           "Marlowe/Run/API"
-          "Marlowe/Run/Wallet/API"
+          "Marlowe/Run/Server"
+          "Marlowe/Run/Wallet/V1/API"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/Types"
+          "Marlowe/Run/Wallet/V1/Client"
           "Marlowe/Run/WebSocket"
-          "Marlowe/Run/Types"
-          "Marlowe/Run/Wallet/CentralizedTestnet/Types"
-          "Marlowe/Run/Wallet/Client"
           ];
         hsSourceDirs = [ "src" ];
         };
