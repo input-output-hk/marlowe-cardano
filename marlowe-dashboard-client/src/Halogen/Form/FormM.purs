@@ -64,6 +64,23 @@ instance MonadReader r m => MonadReader r (FormM i m) where
 instance MonadState s m => MonadState s (FormM i m) where
   state = lift <<< state
 
+mapInput
+  :: forall i j m
+   . Functor m
+  => (i -> j)
+  -> FormM i m ~> FormM j m
+mapInput f = over FormM $ hoistFree case _ of
+  Update j a -> Update (f j) a
+  Lift m -> Lift m
+
+hoistFormM
+  :: forall i m1 m2
+   . Functor m1
+  => Functor m2
+  => (m1 ~> m2)
+  -> FormM i m1 ~> FormM i m2
+hoistFormM a = over FormM $ hoistFree (hoistFormF a)
+
 hoistFormF :: forall i m n. (m ~> n) -> FormF i m ~> FormF i n
 hoistFormF _ (Update i a) = Update i a
 hoistFormF a (Lift m) = Lift $ a m

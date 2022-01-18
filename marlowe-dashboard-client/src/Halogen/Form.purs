@@ -4,17 +4,18 @@ module Halogen.Form
   , FormHTML
   , FormResult
   , form
-  , useForm
   , hoistForm
+  , module FormM
+  , multi
+  , multiWithIndex
   , split
   , subform
-  , multiWithIndex
-  , multi
+  , useForm
   ) where
 
 import Prelude
 
-import Control.Monad.Free (Free, hoistFree, substFree)
+import Control.Monad.Free (Free, substFree)
 import Control.Monad.Maybe.Trans (MaybeT(..), mapMaybeT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT(..), mapWriterT)
@@ -35,7 +36,15 @@ import Effect.Ref as Ref
 import Halogen as H
 import Halogen.Component (hoistSlot)
 import Halogen.Css as HC
-import Halogen.Form.FormM (FormF(..), FormM, hoistFormF)
+import Halogen.Form.FormM
+  ( FormF(..)
+  , FormM(..)
+  , hoistFormF
+  , hoistFormM
+  , mapInput
+  , update
+  ) as FormM
+import Halogen.Form.FormM (FormF(..), FormM, hoistFormM, mapInput)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.Hooks (type (<>), Hook)
@@ -47,19 +56,22 @@ import Web.Event.Event (preventDefault)
 
 type FormHTML input slots m = Array (H.ComponentHTML input slots m)
 
--- | A Form is a specialization of a Reporter.
+-- | A Form is a specialization of a Reporter. It operates in the `FormM`
+-- | monad, which allows the input to be updated imperatively, and it
+-- | accumulates an array of HTML which renders the form. Composing Forms
+-- | composes the rendered HTML sequentially.
 type Form slots m input a =
-  Reporter (Free (FormF input m)) (FormHTML input slots m) input a
+  Reporter (FormM input m) (FormHTML input slots m) input a
 
 type FormEvalResult slots m input a =
-  MaybeT (WriterT (FormHTML input slots m) (Free (FormF input m))) a
+  MaybeT (WriterT (FormHTML input slots m) (FormM input m)) a
 
 form
   :: forall s m i a
    . Functor m
   => (i -> FormM i m (R (FormHTML i s m) a))
   -> Form s m i a
-form = Reporter <<< Star <<< map (MaybeT <<< WriterT <<< unwrap)
+form = Reporter <<< Star <<< map (MaybeT <<< WriterT)
 
 split
   :: forall s m i j a b
@@ -94,24 +106,21 @@ multi
   -> Form slots m (t i) (t a)
 multi = multiWithIndex <<< const
 
-mapFormResults
-  :: forall slots m i j a
+mapFormHTML
+  :: forall slots m i j
    . Functor m
-  => (j -> i)
-  -> FormEvalResult slots m j a
-  -> FormEvalResult slots m i a
+  => (i -> j)
+  -> FormHTML i slots m
+  -> FormHTML j slots m
+mapFormHTML f = map (bimap (map f) f)
+
+mapFormResults
+  :: forall slots m i j
+   . Functor m
+  => (i -> j)
+  -> FormEvalResult slots m i ~> FormEvalResult slots m j
 mapFormResults f =
-  let
-    adaptFormF :: FormF j m ~> FormF i m
-    adaptFormF (Update j a) = Update (f j) a
-    adaptFormF (Lift m) = Lift m
-  in
-    mapMaybeT
-      ( mapWriterT
-          ( hoistFree adaptFormF <<< map
-              (map (map (bimap (map f) f)))
-          )
-      )
+  mapMaybeT $ mapWriterT $ mapInput f <<< map (map (mapFormHTML f))
 
 subform
   :: forall s m i j a
@@ -135,7 +144,7 @@ hoistForm a =
     $ map
     $ mapMaybeT
     $ mapWriterT
-    $ hoistFree (hoistFormF a) <<< map hoistR
+    $ hoistFormM a <<< map hoistR
   where
   hoistR = map $ map $ lmap $ hoistSlot a
 
@@ -145,7 +154,7 @@ runForm
   => Form s m i a
   -> i
   -> Free (FormF i m) (Tuple (Maybe a) (FormHTML i s m))
-runForm f = Reporter.runReporter f
+runForm f = unwrap <<< Reporter.runReporter f
 
 type UseForm slots m input output =
   Hooks.UseState input
