@@ -44,10 +44,11 @@ instance Aeson.FromJSON AppConfig where
 
 run :: FilePath -> Settings -> IO ()
 run configPath settings = do
-  mConfig <- Aeson.decodeFileStrict configPath
+  mConfig <- Aeson.eitherDecodeFileStrict configPath
+
   appConfig <- case mConfig of
-      Just config -> pure config
-      Nothing     -> ioError $ userError "Config file has invalid format"
+      Right config -> pure config
+      Left err     -> ioError $ userError $ "Config file has invalid format: " <> err
   let wbeHost = _wbeHost . _appWbeConfig $ appConfig
   let wbePort = _wbePort . _appWbeConfig $ appConfig
   let staticPath = _appStaticPath appConfig
