@@ -15,7 +15,6 @@ import Prelude
 
 import Control.Monad.Free (Free, hoistFree, substFree)
 import Control.Monad.Maybe.Trans (MaybeT(..), mapMaybeT)
-import Control.Monad.State (StateT, evalStateT, mapStateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT(..), mapWriterT)
 import Data.Bifunctor (bimap, lmap)
@@ -45,24 +44,19 @@ import Polyform.Reporter (R)
 import Polyform.Reporter as Reporter
 import Web.Event.Event (preventDefault)
 
+type FormHTML input slots m = Array (H.ComponentHTML input slots m)
+
+-- | A Form is a specialization of a Reporter.
 type Form slots m input a =
-  Reporter
-    (StateT FormState (Free (FormF input m)))
-    (Array (H.ComponentHTML input slots m))
-    input
-    a
+  Reporter (Free (FormF input m)) (FormHTML input slots m) input a
 
 type FormEvalResult slots m input a =
-  MaybeT
-    ( WriterT (Array (H.ComponentHTML input slots m))
-        (StateT FormState (Free (FormF input m)))
-    )
-    a
+  MaybeT (WriterT (FormHTML input slots m) (Free (FormF input m))) a
 
 form
   :: forall s m i a
    . Functor m
-  => (i -> FormM i m (R (Array (H.ComponentHTML i s m)) a))
+  => (i -> FormM i m (R (FormHTML input slots m) a))
   -> Form s m i a
 form = Reporter <<< Star <<< map (MaybeT <<< WriterT <<< unwrap)
 
@@ -76,7 +70,7 @@ split f g = Tuple <$> subform _1 f <*> subform _2 g
 
 multiWithIndex
   :: forall slots m t index i a
-   . TraversableWithIndex index t
+   . TraversableWithIndexe index t
   => Index (t i) index i
   => Monad m
   => (index -> Form slots m i a)
@@ -152,7 +146,7 @@ runForm
    . Functor m
   => Form s m i a
   -> i
-  -> Free (FormF i m) (Tuple (Maybe a) (Array (H.ComponentHTML i s m)))
+  -> Free (FormF i m) (Tuple (Maybe a) (FormHTML i s m))
 runForm f = flip evalStateT mempty <<< Reporter.runReporter f
 
 type UseForm slots m input output =
