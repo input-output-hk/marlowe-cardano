@@ -140,6 +140,7 @@ let
     marlowe-playground.start-backend
     purs
     purs-tidy
+    pscid
     spago
     psa
     purescript-language-server

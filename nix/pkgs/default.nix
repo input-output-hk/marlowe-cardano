@@ -87,7 +87,7 @@ let
 
   # We pull out some packages from easyPS that are a pain to get otherwise.
   # This does mean we can't as easily control the version we get, though.
-  inherit (easyPS) purs-tidy purs spago spago2nix psa purescript-language-server;
+  inherit (easyPS) purs-tidy purs spago spago2nix psa purescript-language-server pscid;
 
   # sphinx haddock support
   sphinxcontrib-haddock = pkgs.callPackage (sources.sphinxcontrib-haddock) { pythonPackages = pkgs.python3Packages; };
@@ -131,7 +131,7 @@ in
   inherit sphinx-markdown-tables sphinxemoji sphinxcontrib-haddock;
   inherit nix-pre-commit-hooks;
   inherit haskell cabal-install cardano-repo-tool stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-cli cardano-node;
-  inherit purs-tidy purs spago spago2nix psa purescript-language-server;
+  inherit purs-tidy purs spago spago2nix psa purescript-language-server pscid;
   inherit fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps;
   inherit web-ghc;
   inherit easyPS plutus-haddock-combined;
