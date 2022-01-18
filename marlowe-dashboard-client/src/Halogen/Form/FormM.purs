@@ -8,25 +8,18 @@ import Control.Monad.Free (Free, hoistFree, liftF)
 import Control.Monad.Free.Class (class MonadFree, wrapFree)
 import Control.Monad.Reader (class MonadAsk, class MonadReader, ask, local)
 import Control.Monad.Rec.Class (class MonadRec)
-import Control.Monad.State (class MonadState, StateT, gets, mapStateT, state)
+import Control.Monad.State (class MonadState, state)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.Writer (class MonadTell, tell)
-import Data.Lens (appendModifying)
-import Data.Map (SemigroupMap(..))
-import Data.Map as Map
-import Data.Maybe (Maybe(..))
-import Data.Monoid.Additive (Additive(..))
-import Data.Newtype (class Newtype, over, unwrap)
+import Data.Newtype (class Newtype, over)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-
-type FormState = SemigroupMap String (Additive Int)
 
 data FormF input m a
   = Update input a
   | Lift (m a)
 
-newtype FormM input m a = FormM (StateT FormState (Free (FormF input m)) a)
+newtype FormM input m a = FormM (Free (FormF input m) a)
 
 derive instance Functor m => Functor (FormF input m)
 
@@ -48,7 +41,7 @@ derive newtype instance (Apply m, Semigroup a) => Semigroup (FormM i m a)
 derive newtype instance (Applicative m, Monoid a) => Monoid (FormM i m a)
 
 instance MonadTrans (FormM i) where
-  lift = FormM <<< lift <<< liftF <<< Lift
+  lift = FormM <<< liftF <<< Lift
 
 instance MonadEffect m => MonadEffect (FormM i m) where
   liftEffect = lift <<< liftEffect
@@ -66,10 +59,7 @@ instance MonadAsk r m => MonadAsk r (FormM i m) where
   ask = lift ask
 
 instance MonadReader r m => MonadReader r (FormM i m) where
-  local f =
-    over FormM
-      $ mapStateT
-      $ hoistFree (hoistFormF (local f))
+  local f = over FormM $ hoistFree (hoistFormF (local f))
 
 instance MonadState s m => MonadState s (FormM i m) where
   state = lift <<< state
@@ -77,11 +67,3 @@ instance MonadState s m => MonadState s (FormM i m) where
 hoistFormF :: forall i m n. (m ~> n) -> FormF i m ~> FormF i n
 hoistFormF _ (Update i a) = Update i a
 hoistFormF a (Lift m) = Lift $ a m
-
-uniqueId :: forall i m. Monad m => String -> FormM i m String
-uniqueId candidate = FormM do
-  count <- gets $ Map.lookup candidate <<< unwrap
-  appendModifying identity (SemigroupMap (Map.singleton candidate (Additive 1)))
-  pure $ candidate <> case count of
-    Nothing -> ""
-    Just (Additive i) -> "-" <> show i

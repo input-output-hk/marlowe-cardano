@@ -1,6 +1,7 @@
 -- TODO move this to its own library
 module Halogen.Form
   ( Form(..)
+  , FormHTML
   , FormResult
   , form
   , useForm
@@ -34,7 +35,7 @@ import Effect.Ref as Ref
 import Halogen as H
 import Halogen.Component (hoistSlot)
 import Halogen.Css as HC
-import Halogen.Form.FormM (FormF(..), FormM, FormState, hoistFormF)
+import Halogen.Form.FormM (FormF(..), FormM, hoistFormF)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.Hooks (type (<>), Hook)
@@ -56,7 +57,7 @@ type FormEvalResult slots m input a =
 form
   :: forall s m i a
    . Functor m
-  => (i -> FormM i m (R (FormHTML input slots m) a))
+  => (i -> FormM i m (R (FormHTML i s m) a))
   -> Form s m i a
 form = Reporter <<< Star <<< map (MaybeT <<< WriterT <<< unwrap)
 
@@ -70,7 +71,7 @@ split f g = Tuple <$> subform _1 f <*> subform _2 g
 
 multiWithIndex
   :: forall slots m t index i a
-   . TraversableWithIndexe index t
+   . TraversableWithIndex index t
   => Index (t i) index i
   => Monad m
   => (index -> Form slots m i a)
@@ -107,10 +108,8 @@ mapFormResults f =
   in
     mapMaybeT
       ( mapWriterT
-          ( mapStateT
-              ( hoistFree adaptFormF <<< map
-                  (lmap (map (map (bimap (map f) f))))
-              )
+          ( hoistFree adaptFormF <<< map
+              (map (map (bimap (map f) f)))
           )
       )
 
@@ -136,10 +135,9 @@ hoistForm a =
     $ map
     $ mapMaybeT
     $ mapWriterT
-    $ mapStateT
     $ hoistFree (hoistFormF a) <<< map hoistR
   where
-  hoistR = lmap $ map $ map $ lmap $ hoistSlot a
+  hoistR = map $ map $ lmap $ hoistSlot a
 
 runForm
   :: forall s m i a
@@ -147,7 +145,7 @@ runForm
   => Form s m i a
   -> i
   -> Free (FormF i m) (Tuple (Maybe a) (FormHTML i s m))
-runForm f = flip evalStateT mempty <<< Reporter.runReporter f
+runForm f = Reporter.runReporter f
 
 type UseForm slots m input output =
   Hooks.UseState input
