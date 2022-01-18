@@ -24,8 +24,9 @@ import Effect.Aff.Class (class MonadAff)
 import Forms (InputSlots)
 import Forms as Forms
 import Halogen as H
-import Halogen.Form (Form, subform, useForm)
+import Halogen.Form (Form, subform)
 import Halogen.Form as Form
+import Halogen.Form.Hook (useDerivedForm)
 import Halogen.Hooks as Hooks
 import Marlowe.Semantics (TokenName)
 import Polyform.Validator (liftFnV)
@@ -76,8 +77,11 @@ type Component q m =
 contractNicknameForm
   :: forall s m. Monad m => Form (InputSlots s) m String ContractNickname
 contractNicknameForm =
-  Forms.input "contract-nickname" "Contract title" CN.validator case _ of
-    CN.Empty -> "Required."
+  Form.mkForm
+    { validator: CN.validator
+    , render: Forms.input "contract-nickname" "Contract title" case _ of
+        CN.Empty -> "Required."
+    }
 
 roleAssignmentForm
   :: forall s m
@@ -86,11 +90,14 @@ roleAssignmentForm
   -> TokenName
   -> Form (InputSlots s) m String Address
 roleAssignmentForm addressBook roleName =
-  Forms.input ("role-input-" <> roleName) roleName validator case _ of
-    WN.Empty -> "Required."
-    WN.Exists -> "Already exists."
-    WN.DoesNotExist -> "Not found."
-    WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+  Form.mkForm
+    { validator
+    , render: Forms.input ("role-input-" <> roleName) roleName case _ of
+        WN.Empty -> "Required."
+        WN.Exists -> "Already exists."
+        WN.DoesNotExist -> "Not found."
+        WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+    }
   where
   validator =
     liftFnV $
@@ -113,10 +120,13 @@ timeoutForm
   => String
   -> Form (InputSlots s) m String ContractTimeout
 timeoutForm name =
-  Forms.input ("slot-input-" <> name) name CT.validator case _ of
-    CT.Empty -> "Required."
-    CT.Past -> "Must be in the future."
-    CT.Invalid -> "Must be a number of slots from contract start."
+  Form.mkForm
+    { validator: CT.validator
+    , render: Forms.input ("slot-input-" <> name) name case _ of
+        CT.Empty -> "Required."
+        CT.Past -> "Must be in the future."
+        CT.Invalid -> "Must be a number of slots from contract start."
+    }
 
 valueForm
   :: forall s m
@@ -124,25 +134,28 @@ valueForm
   => String
   -> Form (InputSlots s) m String ContractValue
 valueForm name =
-  Forms.input ("value-input-" <> name) name CV.validator case _ of
-    CV.Empty -> "Required."
-    CV.Negative -> "Must by positive."
-    CV.Invalid -> "Must by a number."
+  Form.mkForm
+    { validator: CV.validator
+    , render: Forms.input ("value-input-" <> name) name case _ of
+        CV.Empty -> "Required."
+        CV.Negative -> "Must by positive."
+        CV.Invalid -> "Must by a number."
+    }
 
-mkForm
+form
   :: forall slots m
    . Monad m
   => AddressBook
   -> Form (InputSlots slots) m ContractInput ContractParams
-mkForm addressBook =
+form addressBook =
   ContractParams
     <$> subform _nickname contractNicknameForm
     <*> subform _roles (roleForms addressBook)
     <*> subform _timeouts (Form.multiWithIndex timeoutForm)
     <*> subform _values (Form.multiWithIndex valueForm)
 
-initialFormInput :: Set TokenName -> Set String -> Set String -> ContractInput
-initialFormInput roles timeouts values =
+initialInput :: Set TokenName -> Set String -> Set String -> ContractInput
+initialInput roles timeouts values =
   { nickname: ""
   , roles: Map.fromFoldable $ Set.map (flip Tuple "") roles
   , timeouts: Map.fromFoldable $ Set.map (flip Tuple "") timeouts
@@ -152,8 +165,9 @@ initialFormInput roles timeouts values =
 component :: forall q m. MonadAff m => Component q m
 component = Hooks.component \{ outputToken } input -> Hooks.do
   let { addressBook, roles, timeouts, values } = input
-  form <- Hooks.captures { addressBook } Hooks.useMemo \_ -> mkForm addressBook
-  { result, html } <- useForm form (initialFormInput roles timeouts values)
+  { result, html } <-
+    useDerivedForm { addressBook } (initialInput roles timeouts values)
+      $ form <<< _.addressBook
   let _back = Hooks.raise outputToken Back
   let _next = Hooks.raise outputToken <<< Next <$> result
   Hooks.pure do

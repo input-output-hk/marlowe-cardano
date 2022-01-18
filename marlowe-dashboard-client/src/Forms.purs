@@ -4,10 +4,8 @@ import Prologue hiding (div)
 
 import Component.Input.View as Input
 import Component.Label.View as Label
-import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.Filterable (filter)
-import Data.Generic.Rep (class Generic)
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.MnemonicPhrase
   ( class CheckMnemonic
@@ -16,30 +14,17 @@ import Data.MnemonicPhrase
   )
 import Data.MnemonicPhrase as MP
 import Data.Set (Set)
-import Data.Show.Generic (genericShow)
-import Data.Validation.Semigroup (V(..))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (Form)
+import Halogen.Form (AsyncInput, Form, FormHTML, FormM)
 import Halogen.Form as Form
-import Halogen.Form.FormM (update)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
-import Network.RemoteData (RemoteData(..), fromEither)
-import Polyform (Validator)
-import Polyform.Validator as Validator
+import Network.RemoteData (RemoteData(..))
 import Type.Proxy (Proxy(..))
-
-data AsyncInput i e a = AsyncInput i (RemoteData e a)
-
-derive instance eqAsyncInput :: (Eq i, Eq e, Eq a) => Eq (AsyncInput i e a)
-derive instance genericAsyncInput :: Generic (AsyncInput i e a) _
-derive instance functorAsyncInput :: Functor (AsyncInput i e)
-instance showAsyncInput :: (Show i, Show e, Show a) => Show (AsyncInput i e a) where
-  show = genericShow
 
 type InputSlots slots =
   (input :: forall query. H.Slot query String String | slots)
@@ -93,76 +78,40 @@ inputAsync
    . Monad m
   => String
   -> String
-  -> Validator m e String a
   -> (e -> String)
-  -> Form (InputSlots s) m (AsyncInput String e a) a
-inputAsync id label validator renderError =
-  Form.form \(AsyncInput value remote) -> do
-    remote' <- case remote of
-      NotAsked -> do
-        case value of
-          "" -> pure $ NotAsked
-          _ -> do
-            update (AsyncInput value Loading)
-            V result <- lift $ Validator.runValidator validator value
-            let newRemote = fromEither result
-            update (AsyncInput value newRemote)
-            pure newRemote
-      r -> pure r
-    case remote' of
-      Loading ->
-        mkResult value Nothing $ Just "Checking..."
-      Failure e ->
-        mkResult value Nothing $ Just $ renderError e
-      NotAsked ->
-        mkResult value Nothing Nothing
-      Success a ->
-        mkResult value (Just a) Nothing
-
+  -> String
+  -> RemoteData e a
+  -> FormM String m (FormHTML String (InputSlots s) m)
+inputAsync id label renderError value = case _ of
+  Loading ->
+    render $ Just "Checking..."
+  Failure e ->
+    render $ Just $ renderError e
+  NotAsked ->
+    render Nothing
+  Success _ ->
+    render Nothing
   where
-  mkResult value output error = do
-    let
-      componentInput =
-        { value
-        , id
-        , label
-        , error
-        }
-    pure $ Tuple output
-      [ HH.slot
-          _input
-          id
-          inputComponent
-          componentInput
-          \value' -> AsyncInput value' NotAsked
-      ]
+  render error = pure
+    [ HH.slot _input id inputComponent { value, id, label, error } identity ]
 
 input
   :: forall s m e a
    . Monad m
   => String
   -> String
-  -> Validator m e String a
   -> (e -> String)
-  -> Form (InputSlots s) m String a
-input id label validator renderError = Form.form \value -> do
-  V result <- lift $ Validator.runValidator validator value
-  case result of
-    Left e ->
-      mkResult value Nothing $ Just $ renderError e
-    Right a ->
-      mkResult value (Just a) Nothing
+  -> String
+  -> Either e a
+  -> FormM String m (FormHTML String (InputSlots s) m)
+input id label renderError value = case _ of
+  Left e ->
+    render $ Just $ renderError e
+  Right _ ->
+    render Nothing
   where
-  mkResult value output error = do
-    let
-      componentInput =
-        { value
-        , id
-        , label
-        , error
-        }
-    pure $ Tuple output
-      [ HH.slot _input id inputComponent componentInput identity ]
+  render error = pure
+    [ HH.slot _input id inputComponent { value, id, label, error } identity ]
 
 walletNickname
   :: forall s m
@@ -170,12 +119,14 @@ walletNickname
   => Set WalletNickname
   -> Form (InputSlots s) m String WalletNickname
 walletNickname used =
-  input "wallet-nickname" "Wallet nickname" (WN.validatorExclusive used)
-    case _ of
-      WN.Empty -> "Required."
-      WN.Exists -> "Already exists."
-      WN.DoesNotExist -> "Not found."
-      WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+  Form.mkForm
+    { validator: WN.validatorExclusive used
+    , render: input "wallet-nickname" "Wallet nickname" case _ of
+        WN.Empty -> "Required."
+        WN.Exists -> "Already exists."
+        WN.DoesNotExist -> "Not found."
+        WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+    }
 
 type MnemonicPhraseInput = AsyncInput String MnemonicPhraseError MnemonicPhrase
 
@@ -184,7 +135,10 @@ mnemonicPhrase
    . CheckMnemonic m
   => Form (InputSlots s) m MnemonicPhraseInput MnemonicPhrase
 mnemonicPhrase =
-  inputAsync "wallet-mnemonic" "Mnemonic phrase" MP.validator case _ of
-    MP.Empty -> "Required."
-    MP.WrongWordCount -> "24 words required."
-    MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
+  Form.mkAsyncForm
+    { validator: MP.validator
+    , render: inputAsync "wallet-mnemonic" "Mnemonic phrase" case _ of
+        MP.Empty -> "Required."
+        MP.WrongWordCount -> "24 words required."
+        MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
+    }

@@ -16,12 +16,13 @@ import Data.Set (Set)
 import Data.Tuple (uncurry)
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff.Class (class MonadAff)
-import Forms (AsyncInput(..), MnemonicPhraseInput)
+import Forms (InputSlots, MnemonicPhraseInput)
 import Forms as Forms
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (useForm)
+import Halogen.Form (AsyncInput(..), Form)
 import Halogen.Form as Form
+import Halogen.Form.Hook (useDerivedForm)
 import Halogen.HTML as HH
 import Halogen.Hooks as Hooks
 import Network.RemoteData (RemoteData(..))
@@ -39,16 +40,26 @@ data Msg
 type Component q m =
   H.Component q Input Msg m
 
+initialInput :: RestoreWalletInput
+initialInput = Tuple "" $ AsyncInput "" NotAsked
+
+form
+  :: forall slots m
+   . Monad m
+  => CheckMnemonic m
+  => Set WalletNickname
+  -> Form (InputSlots slots) m RestoreWalletInput RestoreWalletOutput
+form used = Form.split (Forms.walletNickname used) Forms.mnemonicPhrase
+
 component
   :: forall q m
    . MonadAff m
   => CheckMnemonic m
   => ManageMarlowe m
   => Component q m
-component = Hooks.component \{ outputToken } input -> Hooks.do
-  form <- Hooks.captures { input } Hooks.useMemo \_ ->
-    Form.split (Forms.walletNickname input) Forms.mnemonicPhrase
-  { result, html } <- useForm form $ Tuple "" $ AsyncInput "" NotAsked
+component = Hooks.component \{ outputToken } used -> Hooks.do
+  { result, html } <-
+    useDerivedForm { used } initialInput $ form <<< _.used
   Tuple canRestore canRestoreId <- Hooks.useState true
   Tuple serverError serverErrorId <- Hooks.useState ""
   let cancel = Hooks.raise outputToken Closed

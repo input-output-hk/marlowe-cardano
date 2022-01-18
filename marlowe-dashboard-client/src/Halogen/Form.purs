@@ -5,7 +5,6 @@ module Halogen.Form
   , AsyncInput(..)
   , Form(..)
   , FormHTML
-  , FormResult
   , FormSpec
   , mkForm
   , mkAsyncForm
@@ -13,36 +12,31 @@ module Halogen.Form
   , module FormM
   , multi
   , multiWithIndex
+  , runForm
   , split
   , subform
-  , useForm
   ) where
 
 import Prelude
 
-import Control.Monad.Free (Free, substFree)
+import Control.Monad.Free (Free)
 import Control.Monad.Maybe.Trans (MaybeT(..), mapMaybeT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT(..), mapWriterT)
 import Data.Bifunctor (bimap, lmap)
 import Data.Either (Either, hush)
-import Data.Foldable (for_)
+import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens', _1, _2, set, view)
 import Data.Lens.Index (class Index, ix)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe)
 import Data.Newtype (over, unwrap)
 import Data.Profunctor.Star (Star(..))
+import Data.Show.Generic (genericShow)
 import Data.TraversableWithIndex (class TraversableWithIndex, traverseWithIndex)
 import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V(..))
-import Effect.AVar (AVar)
-import Effect.Aff.AVar as AVar
-import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Class (liftEffect)
-import Effect.Ref as Ref
 import Halogen as H
 import Halogen.Component (hoistSlot)
-import Halogen.Css as HC
 import Halogen.Form.FormM
   ( FormF(..)
   , FormM(..)
@@ -51,16 +45,11 @@ import Halogen.Form.FormM
   , mapInput
   , update
   ) as FormM
-import Halogen.Form.FormM (FormF(..), FormM, hoistFormM, mapInput, update)
-import Halogen.HTML as HH
-import Halogen.HTML.Events as HE
-import Halogen.Hooks (type (<>), Hook)
-import Halogen.Hooks as Hooks
+import Halogen.Form.FormM (FormF, FormM, hoistFormM, mapInput, update)
 import Network.RemoteData (RemoteData(..), fromEither, toMaybe)
 import Polyform (Reporter(..), Validator)
 import Polyform.Reporter as Reporter
 import Polyform.Validator (runValidator)
-import Web.Event.Event (preventDefault)
 
 -- | An array of HTML nodes used to render a form. The action type is the input
 -- | type.
@@ -76,6 +65,12 @@ type Form slots m input a =
 -- | Input for a form which does part of its validation in an asynchronous
 -- | call.
 data AsyncInput input error output = AsyncInput input (RemoteData error output)
+
+derive instance eqAsyncInput :: (Eq i, Eq e, Eq a) => Eq (AsyncInput i e a)
+derive instance genericAsyncInput :: Generic (AsyncInput i e a) _
+derive instance functorAsyncInput :: Functor (AsyncInput i e)
+instance showAsyncInput :: (Show i, Show e, Show a) => Show (AsyncInput i e a) where
+  show = genericShow
 
 -- | A form which adds additional information to its input that carries the
 -- | status of an asynchronous call.
@@ -247,81 +242,3 @@ hoistFormEvalResult
   -> FormEvalResult slots m1 input ~> FormEvalResult slots m2 input
 hoistFormEvalResult alpha =
   mapMaybeT $ mapWriterT $ hoistFormM alpha <<< map (map (hoistFormHTML alpha))
-
-type UseForm slots m input output =
-  Hooks.UseState input
-    <> Hooks.UseState (Maybe output)
-    <> Hooks.UseState (Array (H.ComponentHTML input slots m))
-    <> Hooks.UseState (Maybe (AVar Int))
-    <> Hooks.UseEffect
-    <> Hooks.UseEffect
-    <> Hooks.Pure
-
-type FormResult slots m a =
-  { html :: Array String -> H.ComponentHTML (Hooks.HookM m Unit) slots m
-  , result :: Maybe a
-  }
-
-useForm
-  :: forall slots m input output
-   . MonadAff m
-  => Eq input
-  => Eq output
-  => Form slots m input output
-  -> input
-  -> Hook m (UseForm slots m input output) (FormResult slots m output)
-useForm f initialInput = Hooks.do
-  Tuple input inputId <- Hooks.useState initialInput
-  Tuple result resultId <- Hooks.useState Nothing
-  Tuple children childrenId <- Hooks.useState []
-  Tuple versionAVar versionAVarId <- Hooks.useState Nothing
-  Hooks.useLifecycleEffect do
-    versionAVar' <- liftAff $ AVar.new 0
-    Hooks.put versionAVarId $ Just versionAVar'
-    pure Nothing
-  handleInputChange { input, versionAVar, inputId, resultId, childrenId }
-  let handleAction = Hooks.put inputId
-  Hooks.pure
-    { html: \classNames ->
-        HH.form
-          [ HC.classNames classNames
-          , HE.onSubmit $ liftEffect <<< preventDefault
-          ]
-          $ bimap (map handleAction) handleAction <$> children
-    , result
-    }
-  where
-  eqInputDeps { versionAVar: Nothing } { versionAVar: Just _ } = false
-  eqInputDeps { versionAVar: Just _ } { versionAVar: Nothing } = false
-  eqInputDeps deps1 deps2 = deps1.input == deps2.input
-  handleInputChange deps =
-    Hooks.capturesWith eqInputDeps deps Hooks.useTickEffect do
-      for_ deps.versionAVar \versionAVar -> do
-        let { input, inputId, resultId, childrenId } = deps
-        initialVersion <- liftAff $ AVar.read versionAVar
-        nextVersionRef <- liftEffect $ Ref.new initialVersion
-        let
-          interpretFormF :: FormF input m ~> Hooks.HookM m
-          interpretFormF (Update newInput next) = do
-            withVersionCheck initialVersion 0 versionAVar do
-              Hooks.put inputId newInput
-              liftEffect $ Ref.modify_ (add 1) nextVersionRef
-            pure next
-
-          interpretFormF (Lift m) = lift m
-
-        Tuple result children <- Hooks.HookM
-          $ substFree (interpretFormF >>> case _ of Hooks.HookM free -> free)
-          $ runForm f input
-        nextVersion <- liftEffect $ Ref.read nextVersionRef
-        withVersionCheck initialVersion (nextVersion + 1) versionAVar do
-          Hooks.put childrenId children
-          Hooks.put resultId result
-      pure Nothing
-
-  withVersionCheck
-    :: forall n. MonadAff n => Int -> Int -> AVar Int -> n Unit -> n Unit
-  withVersionCheck initialVersion increment versionAVar g = do
-    version <- liftAff $ AVar.take versionAVar
-    when (version == initialVersion) g
-    liftAff $ AVar.put (version + increment) versionAVar
