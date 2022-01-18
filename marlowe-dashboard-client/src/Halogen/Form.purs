@@ -129,7 +129,7 @@ mkAsyncForm { validator, render } =
         pure newRemote
       r -> pure r
     mapInput (flip AsyncInput remote')
-      $ Tuple (toMaybe remote') <<< mapFormHTML (flip AsyncInput remote')
+      $ Tuple (toMaybe remote') <<< mapFormHTML (flip AsyncInput NotAsked)
           <$> render input remote'
 
 -- | Combine two forms that operate on an produce tuples of each form's input
