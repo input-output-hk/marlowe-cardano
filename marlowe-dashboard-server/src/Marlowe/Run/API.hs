@@ -5,12 +5,11 @@ module Marlowe.Run.API where
 
 import Cardano.Prelude
 import qualified Marlowe.Run.Wallet.V1.API as Wallet
-import Servant.API (Get, JSON, PlainText, Raw, (:<|>), (:>))
+import Servant.API (Get, JSON, PlainText, (:<|>), (:>))
 import Servant.API.WebSocket (WebSocketPending)
 
 type API = WebSocketAPI
     :<|> HTTPAPI
-    :<|> Raw
 
 type HTTPAPI = "api" :>
     ("version" :> Get '[PlainText, JSON] Text

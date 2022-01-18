@@ -17,7 +17,7 @@ In order to develop this application is recommended to be inside a `nix-shell` (
 $ cabal build exe:marlowe-dashboard-server
 
 # To build and run
-$ cabal run marlowe-dashboard-server -- webserver -c ./config.json
+$ cabal run marlowe-dashboard-server:marlowe-dashboard-server -- webserver -c ./config.json
 
 # To have a fast compile loop
 $ ghcid --command "cabal new-repl lib:marlowe-dashboard-server"

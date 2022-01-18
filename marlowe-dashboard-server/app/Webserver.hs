@@ -35,7 +35,7 @@ instance Aeson.FromJSON WBEConfig where
     parseJSON = Aeson.genericParseJSON $ Aeson.defaultOptions
         { Aeson.fieldLabelModifier = normalizeFieldLabel "wbe" }
 
-data AppConfig = AppConfig { _appWbeConfig :: WBEConfig, _appStaticPath :: FilePath }
+data AppConfig = AppConfig { _appWbeConfig :: WBEConfig }
     deriving (Eq, Generic, Show)
 
 instance Aeson.FromJSON AppConfig where
@@ -51,9 +51,8 @@ run configPath settings = do
       Left err     -> ioError $ userError $ "Config file has invalid format: " <> err
   let wbeHost = _wbeHost . _appWbeConfig $ appConfig
   let wbePort = _wbePort . _appWbeConfig $ appConfig
-  let staticPath = _appStaticPath appConfig
   let baseUrl = BaseUrl{baseUrlScheme=Http,baseUrlHost=wbeHost,baseUrlPort=wbePort,baseUrlPath=""}
   let server = Server.handlers
   manager <- liftIO $ newManager defaultManagerSettings
   let clientEnv = mkClientEnv manager baseUrl
-  Warp.runSettings settings (serve (Proxy @API) (server staticPath clientEnv))
+  Warp.runSettings settings (serve (Proxy @API) (server clientEnv))
