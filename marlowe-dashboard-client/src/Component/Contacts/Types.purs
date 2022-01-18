@@ -20,11 +20,10 @@ import Data.Address (Address)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Generic.Rep (class Generic)
-import Data.Map (Map)
 import Data.Newtype (class Newtype)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams)
+import Marlowe.Semantics (Assets)
 
 type State =
   { cardSection :: CardSection
@@ -44,12 +43,6 @@ type WalletDetails =
   , marloweAppId :: PlutusAppId
   , walletInfo :: WalletInfo
   , assets :: Assets
-  -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
-  -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
-  -- really has changed anything
-  -- FIXME - push this check up into the WS client (it's a hacky fix for an integration
-  -- problem, not part of the business logic)
-  , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
   }
 
 -- this is the data that the wallet API returns when creating a wallet and when subsequently requesting

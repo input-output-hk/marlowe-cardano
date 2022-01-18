@@ -25,6 +25,11 @@ import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
 import WebSocket.Support (FromSocket) as WS
 
+type Slice =
+  { addressBook :: AddressBook
+  , wallet :: Maybe WalletDetails
+  }
+
 type Input =
   { tzOffset :: Minutes
   }
@@ -39,7 +44,11 @@ type State =
   --       to remove it from here we need to first change the sub-components that use this into proper components
   , currentSlot :: Slot
   , tzOffset :: Minutes
-  , subState :: Either Welcome.State Dashboard.State
+  -- TODO clean this mess up by making Welcome and Dashboard proper components.
+  , subState ::
+      Either
+        (Tuple (Maybe WalletDetails) Welcome.State)
+        (Tuple WalletDetails Dashboard.State)
   }
 
 data WebSocketStatus
@@ -82,7 +91,8 @@ data Action
   | EnterDashboardState WalletDetails
   | WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
-  | Receive (Connected AddressBook Input)
+  | Receive (Connected Slice Input)
+  | Init
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
@@ -90,5 +100,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (EnterWelcomeState _ _) = Just $ defaultEvent "EnterWelcomeState"
   toEvent (EnterDashboardState _) = Just $ defaultEvent "EnterDashboardState"
   toEvent (Receive _) = Just $ defaultEvent "Receive"
+  toEvent Init = Just $ defaultEvent "Init"
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction

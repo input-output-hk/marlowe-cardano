@@ -25,7 +25,6 @@ import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
 import Css as Css
 import Data.Address as A
-import Data.AddressBook (AddressBook)
 import Data.Compactable (compact)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
@@ -77,7 +76,6 @@ import Page.Dashboard.Lenses
   , _selectedContract
   , _selectedContractFollowerAppId
   , _templateState
-  , _walletDetails
   )
 import Page.Dashboard.Types
   ( Action(..)
@@ -91,11 +89,9 @@ import Page.Dashboard.Types
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
   :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
-dashboardScreen { currentSlot, tzOffset } state =
+dashboardScreen { currentSlot, tzOffset, walletDetails } state =
   let
-    walletNickname = state ^. (_walletDetails <<< _walletNickname)
-
-    walletDetails = state ^. _walletDetails
+    walletNickname = walletDetails ^. _walletNickname
 
     menuOpen = state ^. _menuOpen
 
@@ -148,17 +144,15 @@ dashboardScreen { currentSlot, tzOffset } state =
 dashboardCard
   :: forall m
    . MonadAff m
-  => AddressBook
+  => Input
   -> State
   -> ComponentHTML Action ChildSlots m
-dashboardCard addressBook state = case view _card state of
+dashboardCard { addressBook, walletDetails } state = case view _card state of
   Just card ->
     let
       cardOpen = state ^. _cardOpen
 
-      currentWallet = state ^. _walletDetails
-
-      assets = currentWallet ^. _assets
+      assets = walletDetails ^. _assets
     in
       div
         [ classNames $ Css.sidebarCardOverlay cardOpen ]
@@ -172,9 +166,9 @@ dashboardCard addressBook state = case view _card state of
                   [ icon_ Icon.Close ]
               , case card of
                   TutorialsCard -> tutorialsCard
-                  CurrentWalletCard -> currentWalletCard currentWallet
+                  CurrentWalletCard -> currentWalletCard walletDetails
                   ContactsCard -> renderSubmodule _contactsState ContactsAction
-                    (contactsCard addressBook currentWallet)
+                    (contactsCard addressBook walletDetails)
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction

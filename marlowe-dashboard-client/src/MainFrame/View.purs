@@ -57,12 +57,20 @@ render state =
             [ renderSubmodule
                 _dashboardState
                 DashboardAction
-                (dashboardScreen { addressBook, currentSlot, tzOffset })
+                ( \(Tuple walletDetails dashboardState) ->
+                    dashboardScreen
+                      { addressBook, currentSlot, tzOffset, walletDetails }
+                      dashboardState
+                )
                 state
             , renderSubmodule
                 _dashboardState
                 DashboardAction
-                (dashboardCard addressBook)
+                ( \(Tuple walletDetails dashboardState) ->
+                    dashboardCard
+                      { addressBook, currentSlot, tzOffset, walletDetails }
+                      dashboardState
+                )
                 state
             ]
           <> [ H.slot_ _toaster unit Toast.component unit ]

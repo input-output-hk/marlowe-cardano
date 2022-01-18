@@ -5,7 +5,10 @@ module Main
 import Prologue
 
 import AppM (runAppM)
-import Capability.MarloweStorage (addressBookLocalStorageKey)
+import Capability.MarloweStorage
+  ( addressBookLocalStorageKey
+  , walletLocalStorageKey
+  )
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Data.AddressBook as AddressBook
 import Data.Argonaut.Extra (parseDecodeJson)
@@ -40,14 +43,25 @@ main :: Effect Unit
 main = do
   tzOffset <- getTimezoneOffset
   addressBookJson <- getItem addressBookLocalStorageKey
+  -- TODO this is for dev purposes only. The need for this should go away when
+  -- we have proper wallet integration with a full node or light wallet.
+  walletJson <- getItem walletLocalStorageKey
   let
     addressBook =
       fromMaybe AddressBook.empty $ hush <<< parseDecodeJson =<< addressBookJson
+    wallet = hush <<< parseDecodeJson =<< walletJson
 
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
     env <- liftEffect $ mkEnv wsManager
-    let store = { addressBook, currentSlot: zero, toast: Nothing }
+    let
+      store =
+        { addressBook
+        , currentSlot: zero
+        , toast: Nothing
+        , wallet
+        , previousCompanionAppState: Nothing
+        }
     body <- awaitBody
     rootComponent <- runAppM env store mkMainFrame
     driver <- runUI rootComponent { tzOffset } body

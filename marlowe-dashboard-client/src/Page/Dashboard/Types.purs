@@ -27,7 +27,6 @@ import Page.Contract.Types (Action, State) as Contract
 
 type State =
   { contactsState :: Contacts.State
-  , walletDetails :: WalletDetails
   , walletCompanionStatus :: WalletCompanionStatus
   , menuOpen :: Boolean
   , card :: Maybe Card
@@ -61,7 +60,8 @@ data ContractFilter
 derive instance eqContractFilter :: Eq ContractFilter
 
 type Input =
-  { addressBook :: AddressBook
+  { walletDetails :: WalletDetails
+  , addressBook :: AddressBook
   , currentSlot :: Slot
   , tzOffset :: Minutes
   }

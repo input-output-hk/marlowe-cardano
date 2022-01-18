@@ -2,8 +2,10 @@ module MainFrame.Lenses where
 
 import Prologue
 
+import Component.Contacts.Types (WalletDetails)
 import Data.AddressBook (AddressBook)
-import Data.Lens (Lens', Traversal')
+import Data.Lens (Lens', _2)
+import Data.Lens.AffineTraversal (AffineTraversal')
 import Data.Lens.Prism.Either (_Left, _Right)
 import Data.Lens.Record (prop)
 import Data.Time.Duration (Minutes)
@@ -25,11 +27,16 @@ _addressBook = prop (Proxy :: _ "addressBook")
 _tzOffset :: Lens' State Minutes
 _tzOffset = prop (Proxy :: _ "tzOffset")
 
-_subState :: Lens' State (Either Welcome.State Dashboard.State)
+_subState :: Lens'
+  State
+  ( Either
+      (Tuple (Maybe WalletDetails) Welcome.State)
+      (Tuple WalletDetails Dashboard.State)
+  )
 _subState = prop (Proxy :: _ "subState")
 
-_welcomeState :: Traversal' State Welcome.State
-_welcomeState = _subState <<< _Left
+_welcomeState :: AffineTraversal' State Welcome.State
+_welcomeState = _subState <<< _Left <<< _2
 
-_dashboardState :: Traversal' State Dashboard.State
+_dashboardState :: AffineTraversal' State (Tuple WalletDetails Dashboard.State)
 _dashboardState = _subState <<< _Right

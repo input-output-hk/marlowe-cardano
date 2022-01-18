@@ -154,7 +154,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , marloweAppId
             , walletInfo
             , assets: mempty
-            , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
   restoreWallet walletName mnemonicPhrase passphrase = do
@@ -187,7 +186,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
             , marloweAppId
             , walletInfo
             , assets: mempty
-            , previousCompanionAppState: Nothing
             }
         pure $ createWalletDetails <$> ajaxCompanionAppId <*> ajaxMarloweAppId
   -- create a MarloweFollower app, call its "follow" endpoint with the given MarloweParams, and then
@@ -284,7 +282,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
                 , marloweAppId: toFront $ view _cicContract marloweApp
                 , walletInfo
                 , assets: mempty
-                , previousCompanionAppState: Nothing
                 }
             Nothing -> except $ Left Nothing
         _ -> except $ Left Nothing
