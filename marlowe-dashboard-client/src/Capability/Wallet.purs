@@ -10,6 +10,7 @@ module Capability.Wallet
 
 import Prologue
 
+import API.Marlowe.Run.Wallet as WBE
 import API.Marlowe.Run.Wallet.CentralizedTestnet
   ( RestoreError
   , RestoreWalletOptions
@@ -21,7 +22,7 @@ import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Halogen (HalogenM)
-import Marlowe as WBE
+-- import Marlowe as WBE
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
@@ -43,7 +44,10 @@ instance monadWalletAppM :: ManageWallet AppM where
     MockAPI.submitWalletTransaction (toBack wallet) tx
   getWalletInfo wallet = map (map toFront) $ runExceptT $ MockAPI.getWalletInfo
     (toBack wallet)
-  getWalletTotalFunds = runExceptT <<< WBE.getApiWalletV1ByWalletidTotalfunds
+  -- TODO: we use a manual getTotalFunds because a problem with the toUrlPiece from
+  --       PureScript servant.
+  -- getWalletTotalFunds = runExceptT <<< WBE.getApiWalletV1ByWalletidTotalfunds
+  getWalletTotalFunds = runExceptT <<< WBE.getTotalFunds
   signTransaction wallet tx = runExceptT $ MockAPI.signTransaction
     (toBack wallet)
     tx
