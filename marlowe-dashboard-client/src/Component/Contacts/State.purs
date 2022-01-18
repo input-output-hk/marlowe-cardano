@@ -32,7 +32,7 @@ import Component.InputField.Lenses (_pristine, _value)
 import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (Action(..), State) as InputField
 import Control.Monad.Reader (class MonadAsk)
-import Data.Address as A
+import Data.Address as Address
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Bifunctor (lmap)
@@ -43,7 +43,7 @@ import Data.Map (lookup)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
 import Data.Set as Set
-import Data.WalletNickname as WN
+import Data.WalletNickname as Nickname
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -86,14 +86,14 @@ handleAction addressBook (SetCardSection cardSection) = do
         $ InputField.SetValidator
         $ either Just (const Nothing)
             <<< lmap walletNicknameErrorToLegacyError
-            <<< WN.fromStringExclusive (AddressBook.nicknames addressBook)
+            <<< Nickname.fromStringExclusive (AddressBook.nicknames addressBook)
       handleAction addressBook $ AddressInputAction InputField.Reset
       handleAction addressBook
         $ AddressInputAction
         $ InputField.SetValidator
         $ either Just (const Nothing)
             <<< lmap addressErrorToLegacyError
-            <<< A.fromString (AddressBook.addresses addressBook)
+            <<< Address.fromString (AddressBook.addresses addressBook)
     _ -> pure unit
   assign _cardSection cardSection
 
@@ -102,10 +102,16 @@ handleAction _ (SaveWallet mTokenName) = do
   addressString <- use (_addressInput <<< _value)
   let
     result = Tuple
-      <$> hush (WN.fromString walletNicknameString)
-      <*> hush (A.fromString Set.empty addressString)
+      <$> hush (Nickname.fromString walletNicknameString)
+      <*> hush (Address.fromString Set.empty addressString)
   case result of
     Just (Tuple walletNickname address) -> do
+      -- We reset the form after adding the contact
+      modify_
+        $ set (_walletNicknameInput <<< _value) ""
+            <<< set (_walletNicknameInput <<< _pristine) true
+            <<< set (_addressInput <<< _value) ""
+            <<< set (_addressInput <<< _pristine) true
       modifyAddressBook_ (AddressBook.insert walletNickname address)
       addToast $ successToast "Contact added"
       case mTokenName of
@@ -115,12 +121,6 @@ handleAction _ (SaveWallet mTokenName) = do
         -- If we don't have a tokenName, then we added the contact from the contact dialog and we should close the panel
         Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
           Dashboard.CloseCard
-      -- We reset the form after adding the contact
-      modify_
-        $ set (_walletNicknameInput <<< _value) ""
-            <<< set (_walletNicknameInput <<< _pristine) true
-            <<< set (_addressInput <<< _value) ""
-            <<< set (_addressInput <<< _pristine) true
     -- TODO: show error feedback to the user (just to be safe - but this should never happen, because
     -- the button to save a new wallet should be disabled in this case)
     _ -> pure unit
@@ -185,15 +185,15 @@ getAda assets = fromMaybe zero $ lookup adaTokenName =<< lookup
   (unwrap assets)
 
 walletNicknameErrorToLegacyError
-  :: WN.WalletNicknameError -> WalletNicknameError
+  :: Nickname.WalletNicknameError -> WalletNicknameError
 walletNicknameErrorToLegacyError = case _ of
-  WN.Empty -> EmptyWalletNickname
-  WN.Exists -> DuplicateWalletNickname
-  WN.DoesNotExist -> DuplicateWalletNickname
-  WN.ContainsNonAlphaNumeric -> BadWalletNickname
+  Nickname.Empty -> EmptyWalletNickname
+  Nickname.Exists -> DuplicateWalletNickname
+  Nickname.DoesNotExist -> DuplicateWalletNickname
+  Nickname.ContainsNonAlphaNumeric -> BadWalletNickname
 
-addressErrorToLegacyError :: A.AddressError -> AddressError
+addressErrorToLegacyError :: Address.AddressError -> AddressError
 addressErrorToLegacyError = case _ of
-  A.Empty -> EmptyAddress
-  A.Exists -> DuplicateAddress
-  A.Invalid -> InvalidAddress
+  Address.Empty -> EmptyAddress
+  Address.Exists -> DuplicateAddress
+  Address.Invalid -> InvalidAddress
