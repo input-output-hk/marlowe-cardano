@@ -6,7 +6,6 @@ module Page.Welcome.View
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
-import Componenet.RestoreWalletForm (Msg(..))
 import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -284,10 +283,7 @@ restoreTestnetWalletCard addressBook =
         unit
         RestoreWalletForm.component
         nicknames
-        case _ of
-          Closed -> CloseCard
-          Restored nickname walletDetails ->
-            ConnectWallet nickname walletDetails
+        identity
     ]
 
 localWalletMissingCard :: forall p. Array (HTML p Action)

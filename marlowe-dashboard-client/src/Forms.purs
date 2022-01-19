@@ -74,14 +74,14 @@ inputComponent =
         ]
 
 inputAsync
-  :: forall s m e a
+  :: forall parentAction s m e a
    . Monad m
   => String
   -> String
   -> (e -> String)
   -> String
   -> RemoteData e a
-  -> FormM String m (FormHTML String (InputSlots s) m)
+  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
 inputAsync id label renderError value = case _ of
   Loading ->
     render $ Just "Checking..."
@@ -93,17 +93,17 @@ inputAsync id label renderError value = case _ of
     render Nothing
   where
   render error = pure
-    [ HH.slot _input id inputComponent { value, id, label, error } identity ]
+    [ HH.slot _input id inputComponent { value, id, label, error } Form.Update ]
 
 input
-  :: forall s m e a
+  :: forall parentAction s m e a
    . Monad m
   => String
   -> String
   -> (e -> String)
   -> String
   -> Either e a
-  -> FormM String m (FormHTML String (InputSlots s) m)
+  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
 input id label renderError value = case _ of
   Left e ->
     render $ Just $ renderError e
@@ -111,13 +111,13 @@ input id label renderError value = case _ of
     render Nothing
   where
   render error = pure
-    [ HH.slot _input id inputComponent { value, id, label, error } identity ]
+    [ HH.slot _input id inputComponent { value, id, label, error } Form.Update ]
 
 walletNickname
-  :: forall s m
+  :: forall parentAction s m
    . Monad m
   => Set WalletNickname
-  -> Form (InputSlots s) m String WalletNickname
+  -> Form parentAction (InputSlots s) m String WalletNickname
 walletNickname used =
   Form.mkForm
     { validator: WN.validatorExclusive used
@@ -131,9 +131,9 @@ walletNickname used =
 type MnemonicPhraseInput = AsyncInput String MnemonicPhraseError MnemonicPhrase
 
 mnemonicPhrase
-  :: forall s m
+  :: forall parentAction s m
    . CheckMnemonic m
-  => Form (InputSlots s) m MnemonicPhraseInput MnemonicPhrase
+  => Form parentAction (InputSlots s) m MnemonicPhraseInput MnemonicPhrase
 mnemonicPhrase =
   Form.mkAsyncForm
     { validator: MP.validator

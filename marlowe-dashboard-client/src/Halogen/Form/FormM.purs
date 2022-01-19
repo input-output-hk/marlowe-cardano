@@ -3,45 +3,54 @@ module Halogen.Form.FormM where
 
 import Prelude
 
+import Control.Apply (lift2)
 import Control.Monad.Error.Class (class MonadThrow, throwError)
-import Control.Monad.Free (Free, hoistFree, liftF)
-import Control.Monad.Free.Class (class MonadFree, wrapFree)
 import Control.Monad.Reader (class MonadAsk, class MonadReader, ask, local)
-import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (class MonadState, state)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.Writer (class MonadTell, tell)
-import Data.Newtype (class Newtype, over)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 
-data FormF input m a
-  = Update input a
-  | Lift (m a)
-
-newtype FormM input m a = FormM (Free (FormF input m) a)
-
-derive instance Functor m => Functor (FormF input m)
+newtype FormM :: forall k. Type -> (k -> Type) -> Type -> Type
+newtype FormM input m a =
+  FormM (forall r. (a -> m r) -> (input -> m r -> m r) -> m r)
 
 update :: forall i m. Applicative m => i -> FormM i m Unit
-update i = wrapFree $ Update i $ pure unit
+update i = FormM \a up -> up i (a unit)
 
-derive instance Newtype (FormM i m a) _
-derive instance Functor m => Functor (FormM i m)
-derive newtype instance Apply m => Apply (FormM i m)
-derive newtype instance Applicative m => Applicative (FormM i m)
-derive newtype instance Functor m => MonadFree (FormF i m) (FormM i m)
+runFormM
+  :: forall input m a
+   . Applicative m
+  => FormM input m a
+  -> (input -> m Unit)
+  -> m a
+runFormM (FormM k) handleUpdate = k pure \input mr -> handleUpdate input *> mr
 
-derive newtype instance Bind m => Bind (FormM i m)
+instance Functor m => Functor (FormM i m) where
+  map f (FormM k) = FormM \b up -> k (b <<< f) up
+
+instance Apply m => Apply (FormM i m) where
+  apply (FormM kf) (FormM ka) = FormM \b up ->
+    kf (\f -> ka (\a -> b (f a)) up) up
+
+instance Applicative m => Applicative (FormM i m) where
+  pure a = FormM \k _ -> k a
+
+instance Bind m => Bind (FormM i m) where
+  bind (FormM k) f = FormM \b up ->
+    k (\a -> case f a of FormM k' -> k' b up) up
+
 instance Monad m => Monad (FormM i m)
-derive newtype instance MonadRec m => MonadRec (FormM i m)
 
-derive newtype instance (Apply m, Semigroup a) => Semigroup (FormM i m a)
+instance (Apply m, Semigroup a) => Semigroup (FormM i m a) where
+  append = lift2 append
 
-derive newtype instance (Applicative m, Monoid a) => Monoid (FormM i m a)
+instance (Applicative m, Monoid a) => Monoid (FormM i m a) where
+  mempty = pure mempty
 
 instance MonadTrans (FormM i) where
-  lift = FormM <<< liftF <<< Lift
+  lift m = FormM \pure' _ -> pure' =<< m
 
 instance MonadEffect m => MonadEffect (FormM i m) where
   liftEffect = lift <<< liftEffect
@@ -59,28 +68,20 @@ instance MonadAsk r m => MonadAsk r (FormM i m) where
   ask = lift ask
 
 instance MonadReader r m => MonadReader r (FormM i m) where
-  local f = over FormM $ hoistFree (hoistFormF (local f))
+  local f = hoistFormM (local f)
 
 instance MonadState s m => MonadState s (FormM i m) where
   state = lift <<< state
 
-mapInput
-  :: forall i j m
-   . Functor m
-  => (i -> j)
-  -> FormM i m ~> FormM j m
-mapInput f = over FormM $ hoistFree case _ of
-  Update j a -> Update (f j) a
-  Lift m -> Lift m
+mapInput :: forall i j m. Functor m => (i -> j) -> FormM i m ~> FormM j m
+mapInput f (FormM k) = FormM \a up -> k a (up <<< f)
 
 hoistFormM
   :: forall i m1 m2
-   . Functor m1
-  => Functor m2
+   . Monad m1
+  => Monad m2
   => (m1 ~> m2)
   -> FormM i m1 ~> FormM i m2
-hoistFormM a = over FormM $ hoistFree (hoistFormF a)
-
-hoistFormF :: forall i m n. (m ~> n) -> FormF i m ~> FormF i n
-hoistFormF _ (Update i a) = Update i a
-hoistFormF a (Lift m) = Lift $ a m
+hoistFormM phi (FormM m) =
+  FormM \ka up ->
+    join $ phi $ m (pure <<< ka) (\i -> pure <<< up i <<< join <<< phi)

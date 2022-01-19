@@ -2,6 +2,7 @@ module Component.ContractSetupForm where
 
 import Prologue
 
+import Component.Template.Types as Template
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -26,7 +27,8 @@ import Forms as Forms
 import Halogen as H
 import Halogen.Form (Form, subform)
 import Halogen.Form as Form
-import Halogen.Form.Hook (useDerivedForm)
+import Halogen.Form.Component as FC
+import Halogen.HTML as HH
 import Halogen.Hooks as Hooks
 import Marlowe.Semantics (TokenName)
 import Polyform.Validator (liftFnV)
@@ -67,15 +69,13 @@ data ContractParams =
 
 derive instance Eq ContractParams
 
-data Msg
-  = Back
-  | Next ContractParams
-
 type Component q m =
-  H.Component q Input Msg m
+  H.Component q Input Template.Action m
 
 contractNicknameForm
-  :: forall s m. Monad m => Form (InputSlots s) m String ContractNickname
+  :: forall parentAction s m
+   . Monad m
+  => Form parentAction (InputSlots s) m String ContractNickname
 contractNicknameForm =
   Form.mkForm
     { validator: CN.validator
@@ -88,7 +88,7 @@ roleAssignmentForm
    . Monad m
   => AddressBook
   -> TokenName
-  -> Form (InputSlots s) m String Address
+  -> Form Template.Action (InputSlots s) m String Address
 roleAssignmentForm addressBook roleName =
   Form.mkForm
     { validator
@@ -110,15 +110,20 @@ roleForms
   :: forall s m
    . Monad m
   => AddressBook
-  -> Form (InputSlots s) m (Map TokenName String) (Map TokenName Address)
+  -> Form
+       Template.Action
+       (InputSlots s)
+       m
+       (Map TokenName String)
+       (Map TokenName Address)
 roleForms addressBook =
   Form.multiWithIndex $ roleAssignmentForm $ addressBook
 
 timeoutForm
-  :: forall s m
+  :: forall parentAction s m
    . Monad m
   => String
-  -> Form (InputSlots s) m String ContractTimeout
+  -> Form parentAction (InputSlots s) m String ContractTimeout
 timeoutForm name =
   Form.mkForm
     { validator: CT.validator
@@ -129,10 +134,10 @@ timeoutForm name =
     }
 
 valueForm
-  :: forall s m
+  :: forall parentAction s m
    . Monad m
   => String
-  -> Form (InputSlots s) m String ContractValue
+  -> Form parentAction (InputSlots s) m String ContractValue
 valueForm name =
   Form.mkForm
     { validator: CV.validator
@@ -142,33 +147,28 @@ valueForm name =
         CV.Invalid -> "Must by a number."
     }
 
-form
-  :: forall slots m
-   . Monad m
-  => AddressBook
-  -> Form (InputSlots slots) m ContractInput ContractParams
-form addressBook =
-  ContractParams
-    <$> subform _nickname contractNicknameForm
-    <*> subform _roles (roleForms addressBook)
-    <*> subform _timeouts (Form.multiWithIndex timeoutForm)
-    <*> subform _values (Form.multiWithIndex valueForm)
-
-initialInput :: Set TokenName -> Set String -> Set String -> ContractInput
-initialInput roles timeouts values =
-  { nickname: ""
-  , roles: Map.fromFoldable $ Set.map (flip Tuple "") roles
-  , timeouts: Map.fromFoldable $ Set.map (flip Tuple "") timeouts
-  , values: Map.fromFoldable $ Set.map (flip Tuple "") values
-  }
-
 component :: forall q m. MonadAff m => Component q m
 component = Hooks.component \{ outputToken } input -> Hooks.do
   let { addressBook, roles, timeouts, values } = input
-  { result, html } <-
-    useDerivedForm { addressBook } (initialInput roles timeouts values)
-      $ form <<< _.addressBook
-  let _back = Hooks.raise outputToken Back
-  let _next = Hooks.raise outputToken <<< Next <$> result
+  Tuple _result resultId <- Hooks.useState Nothing
+  form <- Hooks.captures { addressBook } Hooks.useMemo \_ ->
+    FC.component
+      { form:
+          ContractParams
+            <$> subform _nickname contractNicknameForm
+            <*> subform _roles (roleForms addressBook)
+            <*> subform _timeouts (Form.multiWithIndex timeoutForm)
+            <*> subform _values (Form.multiWithIndex valueForm)
+      , formClasses: []
+      }
+  let
+    initialInput =
+      { nickname: ""
+      , roles: Map.fromFoldable $ Set.map (flip Tuple "") roles
+      , timeouts: Map.fromFoldable $ Set.map (flip Tuple "") timeouts
+      , values: Map.fromFoldable $ Set.map (flip Tuple "") values
+      }
   Hooks.pure do
-    html []
+    HH.slot (Proxy :: _ "form") unit form initialInput case _ of
+      FC.Updated res -> Hooks.put resultId res
+      FC.Raised welcomeAction -> Hooks.raise outputToken welcomeAction
