@@ -41,33 +41,33 @@ runAppM
 runAppM env store =
   runStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
 
-derive newtype instance functorAppM :: Functor AppM
+derive newtype instance Functor AppM
 
-derive newtype instance applyAppM :: Apply AppM
+derive newtype instance Apply AppM
 
-derive newtype instance applicativeAppM :: Applicative AppM
+derive newtype instance Applicative AppM
 
-derive newtype instance bindAppM :: Bind AppM
+derive newtype instance Bind AppM
 
-derive newtype instance monadAppM :: Monad AppM
+derive newtype instance Monad AppM
 
-derive newtype instance monadEffectAppM :: MonadEffect AppM
+derive newtype instance MonadEffect AppM
 
-derive newtype instance monadAffAppM :: MonadAff AppM
+derive newtype instance MonadAff AppM
 
-instance monadStoreAppM :: MonadStore Store.Action Store.Store AppM where
+instance MonadStore Store.Action Store.Store AppM where
   getStore = AppM (lift getStore)
   updateStore = AppM <<< lift <<< updateStore
   emitSelected = AppM <<< lift <<< emitSelected
 
-derive newtype instance monadAskAppM :: MonadAsk Env AppM
+derive newtype instance MonadAsk Env AppM
 
-derive newtype instance monadReaderAppM :: MonadReader Env AppM
+derive newtype instance MonadReader Env AppM
 
-instance monadClipboardAppM :: MonadClipboard AppM where
+instance MonadClipboard AppM where
   copy = liftEffect <<< copy
 
-instance checkMnemonicAppM :: CheckMnemonic AppM where
+instance CheckMnemonic AppM where
   checkMnemonic =
     map (either (const false) identity)
       <<< runExceptT
