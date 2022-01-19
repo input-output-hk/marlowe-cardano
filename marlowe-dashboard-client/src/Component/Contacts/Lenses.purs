@@ -1,7 +1,5 @@
 module Component.Contacts.Lenses
   ( _cardSection
-  , _walletNicknameInput
-  , _addressInput
   , _walletNickname
   , _companionAppId
   , _marloweAppId
@@ -14,15 +12,12 @@ module Component.Contacts.Lenses
 import Prologue
 
 import Component.Contacts.Types
-  ( AddressError
-  , CardSection
+  ( CardSection
   , State
   , WalletDetails
   , WalletId
   , WalletInfo
-  , WalletNicknameError
   )
-import Component.InputField.Types (State) as InputField
 import Data.Address (Address)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -34,12 +29,6 @@ import Type.Proxy (Proxy(..))
 
 _cardSection :: Lens' State CardSection
 _cardSection = prop (Proxy :: _ "cardSection")
-
-_walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
-_walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
-
-_addressInput :: Lens' State (InputField.State AddressError)
-_addressInput = prop (Proxy :: _ "addressInput")
 
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname

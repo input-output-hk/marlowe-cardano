@@ -199,10 +199,10 @@ handleAction { walletDetails } DisconnectWallet = do
   contracts <- use _contracts
   callMainFrameAction $ MainFrame.EnterWelcomeState walletDetails contracts
 
-handleAction { addressBook } (ContactsAction contactsAction) =
+handleAction _ (ContactsAction contactsAction) =
   case contactsAction of
     Contacts.CancelNewContactForRole -> assign _card $ Just ContractTemplateCard
-    _ -> toContacts $ Contacts.handleAction addressBook contactsAction
+    _ -> toContacts $ Contacts.handleAction contactsAction
 
 handleAction _ ToggleMenu = modifying _menuOpen not
 

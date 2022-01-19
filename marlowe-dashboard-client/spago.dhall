@@ -47,6 +47,7 @@ You can edit this file as you like.
   , "strings"
   , "transformers"
   , "tuples"
+  , "typelevel-prelude"
   , "unfoldable"
   , "uuid"
   , "validation"

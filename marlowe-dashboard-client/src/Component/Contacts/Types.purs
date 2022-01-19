@@ -4,18 +4,14 @@ module Component.Contacts.Types
   , WalletInfo(..)
   , WalletId(..)
   , CardSection(..)
-  , WalletNicknameError(..)
-  , AddressError(..)
   , Action(..)
   ) where
 
 import Prologue
 
 import API.Url (class ToUrlPiece)
-import Analytics (class IsEvent, defaultEvent, toEvent)
+import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
-import Component.InputField.Types (Action, State) as InputField
-import Component.InputField.Types (class InputFieldError)
 import Data.Address (Address)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
@@ -25,11 +21,7 @@ import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets)
 
-type State =
-  { cardSection :: CardSection
-  , walletNicknameInput :: InputField.State WalletNicknameError
-  , addressInput :: InputField.State AddressError
-  }
+type State = { cardSection :: CardSection }
 
 -- TODO: Move this data type away from the Contacts module and possibly rename.
 --       A good location might just be a global Wallet module, and the name
@@ -84,34 +76,6 @@ data CardSection
   | NewWallet (Maybe String)
 
 derive instance eqCardSection :: Eq CardSection
-
-data WalletNicknameError
-  = EmptyWalletNickname
-  | DuplicateWalletNickname
-  | BadWalletNickname
-
-derive instance eqWalletNicknameError :: Eq WalletNicknameError
-
-instance inputFieldErrorWalletNicknameError ::
-  InputFieldError WalletNicknameError where
-  inputErrorToString EmptyWalletNickname = "Nickname cannot be blank"
-  inputErrorToString DuplicateWalletNickname =
-    "Nickname is already in use in your contacts"
-  inputErrorToString BadWalletNickname =
-    "Nicknames can only contain letters and numbers"
-
-data AddressError
-  = EmptyAddress
-  | DuplicateAddress
-  | InvalidAddress
-
-derive instance eqAddressError :: Eq AddressError
-
-instance inputeFieldErrorAddressError :: InputFieldError AddressError where
-  inputErrorToString EmptyAddress = "The address cannot be blank"
-  inputErrorToString DuplicateAddress =
-    "The address is already in your contacts"
-  inputErrorToString InvalidAddress = "The address is invalid"
 
 data Action
   = CloseContactsCard

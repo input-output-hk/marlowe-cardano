@@ -9,25 +9,17 @@ import Clipboard (Action(..)) as Clipboard
 import Component.AddContactForm (component) as AddContactForm
 import Component.Address.View as Address
 import Component.Contacts.Lenses
-  ( _addressInput
-  , _cardSection
+  ( _cardSection
   , _walletNickname
-  , _walletNicknameInput
   )
 import Component.Contacts.Types
   ( Action(..)
-  , AddressError
   , CardSection(..)
   , State
-  , WalletNicknameError
   , WalletDetails
   )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
-import Component.InputField.State (validate)
-import Component.InputField.Types (State) as InputField
-import Component.InputField.View (renderInput)
-import Component.Label.View as Label
 import Css as Css
 import Data.Address (Address)
 import Data.Address as A

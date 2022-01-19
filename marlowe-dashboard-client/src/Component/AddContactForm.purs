@@ -5,26 +5,36 @@ import Prologue
 import Component.Button.Types (Variant(..)) as Button
 import Component.Button.View (button)
 import Component.Contacts.Types (Action(..), CardSection(..))
-import Css (button, primaryButton) as Css
+import Css (button) as Css
+import Data.AddressBook (AddressBook)
 import Data.AddressBook (addresses, nicknames) as AB
-import Data.AddressBook (nicknames)
-import Data.Maybe (isJust, isNothing)
-import Data.Traversable (for)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
+import Effect.Aff.Class (class MonadAff)
 import Forms (address, walletNickname) as Forms
+import Halogen (Component)
 import Halogen.Css (classNames)
 import Halogen.Form (split) as Form
 import Halogen.Form.Component (Msg(..), component) as FC
-import Halogen.HTML (a, button, div, div_, slot, text) as HH
+import Halogen.HTML (a, div, div_, slot, text) as HH
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (disabled) as HP
 import Halogen.Hooks (bind, captures, component, pure, raise, useMemo) as Hooks
 import Halogen.Hooks.Extra.Hooks (usePutState)
 import Type.Prelude (Proxy(..))
 
+initialInput :: Tuple String String
 initialInput = Tuple "" ""
 
+component
+  :: forall m query
+   . MonadAff m
+  => Component
+       query
+       { addressBook :: AddressBook
+       , mTokenName :: Maybe String
+       }
+       Action
+       m
 component = Hooks.component \{ outputToken } { mTokenName, addressBook } ->
   Hooks.do
     result /\ putState <- usePutState Nothing

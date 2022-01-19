@@ -21,31 +21,19 @@ import Component.Contacts.Lenses
   )
 import Component.Contacts.Types
   ( Action(..)
-  , AddressError(..)
   , CardSection(..)
   , State
-  , WalletNicknameError(..)
   )
-import Component.InputField.Lenses (_pristine, _value)
-import Component.InputField.State (handleAction, mkInitialState) as InputField
-import Component.InputField.Types (Action(..), State) as InputField
 import Control.Monad.Reader (class MonadAsk)
-import Data.Address as Address
-import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
-import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
-import Data.Either (either, hush)
-import Data.Lens (assign, set, use)
+import Data.Lens (assign)
 import Data.Map (lookup)
 import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
-import Data.Set as Set
-import Data.WalletNickname as Nickname
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
-import Halogen (HalogenM, modify_)
-import Halogen.Extra (mapSubmodule)
+import Halogen (HalogenM)
 import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
@@ -54,11 +42,7 @@ import Page.Dashboard.Types as Dashboard
 import Toast.Types (successToast)
 
 initialState :: State
-initialState =
-  { cardSection: Home
-  , walletNicknameInput: InputField.mkInitialState Nothing
-  , addressInput: InputField.mkInitialState Nothing
-  }
+initialState = { cardSection: Home }
 
 handleAction
   :: forall m
@@ -68,17 +52,16 @@ handleAction
   => ManageMarloweStorage m
   => Toast m
   => MonadClipboard m
-  => AddressBook
-  -> Action
+  => Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction _ CloseContactsCard = callMainFrameAction
+handleAction CloseContactsCard = callMainFrameAction
   $ MainFrame.DashboardAction
   $ Dashboard.CloseCard
 
-handleAction addressBook (SetCardSection cardSection) = do
+handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
-handleAction _ (SaveWallet mTokenName nickname address) = do
+handleAction (SaveWallet mTokenName nickname address) = do
   modifyAddressBook_ (AddressBook.insert nickname address)
   addToast $ successToast "Contact added"
   case mTokenName of
@@ -89,9 +72,9 @@ handleAction _ (SaveWallet mTokenName nickname address) = do
     Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
       Dashboard.CloseCard
 
-handleAction _ CancelNewContactForRole = pure unit -- handled in Dashboard.State
+handleAction CancelNewContactForRole = pure unit -- handled in Dashboard.State
 
-handleAction _ (ClipboardAction clipboardAction) = do
+handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
   addToast $ successToast "Copied to clipboard"
 
@@ -117,16 +100,3 @@ getAda assets = fromMaybe zero $ lookup adaTokenName =<< lookup
   adaCurrencySymbol
   (unwrap assets)
 
-walletNicknameErrorToLegacyError
-  :: Nickname.WalletNicknameError -> WalletNicknameError
-walletNicknameErrorToLegacyError = case _ of
-  Nickname.Empty -> EmptyWalletNickname
-  Nickname.Exists -> DuplicateWalletNickname
-  Nickname.DoesNotExist -> DuplicateWalletNickname
-  Nickname.ContainsNonAlphaNumeric -> BadWalletNickname
-
-addressErrorToLegacyError :: Address.AddressError -> AddressError
-addressErrorToLegacyError = case _ of
-  Address.Empty -> EmptyAddress
-  Address.Exists -> DuplicateAddress
-  Address.Invalid -> InvalidAddress
