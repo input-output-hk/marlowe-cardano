@@ -569,6 +569,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "halogen-hooks-extra" = pkgs.stdenv.mkDerivation {
+        name = "halogen-hooks-extra";
+        version = "v0.8.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/jordanmartinez/purescript-halogen-hooks-extra.git";
+          rev = "c400f9983123f5ce137cce8cda23285ec8062e5e";
+          sha256 = "0clwakcz76636y2z8cc3n6y5x1iqjpj9rv8c9d3731y2fg5n1g4a";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "halogen-store" = pkgs.stdenv.mkDerivation {
         name = "halogen-store";
         version = "v0.2.0";
