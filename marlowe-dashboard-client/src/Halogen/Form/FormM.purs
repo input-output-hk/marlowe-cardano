@@ -9,21 +9,22 @@ import Control.Monad.Reader (class MonadAsk, class MonadReader, ask, local)
 import Control.Monad.State (class MonadState, state)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.Writer (class MonadTell, tell)
+import Data.Lens (Lens', over)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 
 newtype FormM :: forall k. Type -> (k -> Type) -> Type -> Type
 newtype FormM input m a =
-  FormM (forall r. (a -> m r) -> (input -> m r -> m r) -> m r)
+  FormM (forall r. (a -> m r) -> ((input -> input) -> m r -> m r) -> m r)
 
-update :: forall i m. Applicative m => i -> FormM i m Unit
-update i = FormM \a up -> up i (a unit)
+update :: forall i m. i -> FormM i m Unit
+update i = FormM \a up -> up (const i) (a unit)
 
 runFormM
   :: forall input m a
    . Applicative m
   => FormM input m a
-  -> (input -> m Unit)
+  -> ((input -> input) -> m Unit)
   -> m a
 runFormM (FormM k) handleUpdate = k pure \input mr -> handleUpdate input *> mr
 
@@ -73,8 +74,8 @@ instance MonadReader r m => MonadReader r (FormM i m) where
 instance MonadState s m => MonadState s (FormM i m) where
   state = lift <<< state
 
-mapInput :: forall i j m. Functor m => (i -> j) -> FormM i m ~> FormM j m
-mapInput f (FormM k) = FormM \a up -> k a (up <<< f)
+zoom :: forall i j m. Functor m => Lens' i j -> FormM j m ~> FormM i m
+zoom l (FormM k) = FormM \a up -> k a $ up <<< over l
 
 hoistFormM
   :: forall i m1 m2

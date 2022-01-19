@@ -18,8 +18,9 @@ import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (AsyncInput, Form, FormHTML, FormM)
+import Halogen.Form (AsyncInput, Form, FormHTML)
 import Halogen.Form as Form
+import Halogen.Form.FormM (FormM)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
@@ -93,7 +94,7 @@ inputAsync id label renderError value = case _ of
     render Nothing
   where
   render error = pure
-    [ HH.slot _input id inputComponent { value, id, label, error } Form.Update ]
+    [ HH.slot _input id inputComponent { value, id, label, error } Form.update ]
 
 input
   :: forall parentAction s m e a
@@ -111,7 +112,7 @@ input id label renderError value = case _ of
     render Nothing
   where
   render error = pure
-    [ HH.slot _input id inputComponent { value, id, label, error } Form.Update ]
+    [ HH.slot _input id inputComponent { value, id, label, error } Form.update ]
 
 walletNickname
   :: forall parentAction s m

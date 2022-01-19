@@ -35,13 +35,13 @@ data Action parentAction slots m input output
   | UpdateResult (Maybe output) (FormHTML parentAction input slots m)
   | UpdateFromFormM
       (HS.Listener (Action parentAction slots m input output))
-      input
+      (input -> input)
 
 update
   :: forall parentAction slots m input output
    . input
   -> Action parentAction slots m input output
-update = PublicAction <<< Form.Update
+update = PublicAction <<< Form.update
 
 raise
   :: forall parentAction slots m input output
@@ -82,14 +82,14 @@ component spec = H.mkComponent
     , subscription: Nothing
     }
   handleAction = case _ of
-    PublicAction (Form.Update input) -> do
-      H.modify_ _ { input = input }
+    PublicAction (Form.Update updater) -> do
+      H.modify_ \s -> s { input = updater s.input }
       handleUpdateWithNewSubscription
     PublicAction (Form.Raise parentAction) -> H.raise $ Raised parentAction
     Init -> handleUpdateWithNewSubscription
     OnSubmit event -> liftEffect $ preventDefault event
-    UpdateFromFormM listener input -> do
-      H.modify_ _ { input = input }
+    UpdateFromFormM listener updater -> do
+      H.modify_ \s -> s { input = updater s.input }
       handleUpdate listener
     UpdateResult result children -> do
       H.modify_ _

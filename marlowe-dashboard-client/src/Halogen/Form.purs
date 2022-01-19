@@ -10,8 +10,8 @@ module Halogen.Form
   , mkForm
   , mkAsyncForm
   , hoistForm
-  , module FormM
   , multi
+  , update
   , multiWithIndex
   , runForm
   , split
@@ -26,8 +26,10 @@ import Control.Monad.Writer (WriterT(..), mapWriterT)
 import Data.Bifunctor (bimap, lmap)
 import Data.Either (Either, hush)
 import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens', _1, _2, set, view)
+import Data.Lens (Lens, Lens', _1, _2, iso, lens, preview, set, view)
+import Data.Lens as Lens
 import Data.Lens.Index (class Index, ix)
+import Data.Maybe (fromMaybe)
 import Data.Newtype (over)
 import Data.Profunctor.Star (Star(..))
 import Data.Show.Generic (genericShow)
@@ -36,8 +38,8 @@ import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V(..))
 import Halogen as H
 import Halogen.Component (hoistSlot)
-import Halogen.Form.FormM (FormM(..), hoistFormM, mapInput, update) as FormM
-import Halogen.Form.FormM (FormM, hoistFormM, mapInput, runFormM, update)
+import Halogen.Form.FormM (FormM, hoistFormM, runFormM, zoom)
+import Halogen.Form.FormM (update) as FormM
 import Network.RemoteData (RemoteData(..), fromEither, toMaybe)
 import Polyform (Reporter(..), Validator)
 import Polyform.Reporter (R)
@@ -45,8 +47,14 @@ import Polyform.Reporter as Reporter
 import Polyform.Validator (runValidator)
 
 data Action parentAction input
-  = Update input
+  = Update (input -> input)
   | Raise parentAction
+
+update
+  :: forall parentAction input
+   . input
+  -> Action parentAction input
+update = Update <<< const
 
 -- | An array of HTML nodes used to render a form. The action type is the input
 -- | type.
@@ -109,6 +117,18 @@ type AsyncFormSpec parentAction slots m error input output =
       -> FormM input m (FormHTML parentAction input slots m)
   }
 
+_value
+  :: forall input1 input2 error output
+   . Lens
+       (AsyncInput input1 error output)
+       (AsyncInput input2 error output)
+       input1
+       input2
+_value =
+  lens
+    (\(AsyncInput value _) -> value)
+    \(AsyncInput _ remote) value -> AsyncInput value remote
+
 -- | Create a form from a specification. Input will be validated with the
 -- | provided `Validator` and rendered with the `render` callback. The results
 -- | of validation an status of any asynchronous processing will be passed to
@@ -122,15 +142,19 @@ mkAsyncForm { validator, render } =
   Reporter $ Star \(AsyncInput input remote) -> MaybeT $ WriterT $ do
     remote' <- case remote of
       NotAsked -> do
-        update (AsyncInput input Loading)
+        FormM.update (AsyncInput input Loading)
         V result <- lift $ runValidator validator input
         let newRemote = fromEither result
-        update (AsyncInput input newRemote)
+        FormM.update (AsyncInput input newRemote)
         pure newRemote
       r -> pure r
-    mapInput (flip AsyncInput remote')
-      $ Tuple (toMaybe remote') <<< mapFormHTML (flip AsyncInput NotAsked)
-          <$> render input remote'
+    zoom _value
+      $ Tuple (toMaybe remote') <<< subformHTML unlawfulResetValue <$> render
+          input
+          remote'
+  where
+  unlawfulResetValue =
+    iso (\(AsyncInput value _) -> value) \value -> AsyncInput value NotAsked
 
 -- | Combine two forms that operate on an produce tuples of each form's input
 -- | and output, respectively. This is a monomorphisation of
@@ -155,14 +179,16 @@ multiWithIndex
   => Monad m
   => (index -> Form parentAction slots m input output)
   -> Form parentAction slots m (t input) (t output)
-multiWithIndex getItemForm =
-  Reporter $ Star \ti -> traverseWithIndex (runItemForm ti) ti
-  where
-  runItemForm ti index =
-    let
-      Reporter (Star itemForm) = getItemForm index
-    in
-      mapFormEvalResult (\i -> set (ix index) i ti) <<< itemForm
+
+multiWithIndex getItemForm = Reporter $ Star $ traverseWithIndex \index i ->
+  let
+    Reporter (Star itemForm) = getItemForm index
+    traversal = ix index
+    l = lens
+      (fromMaybe i <<< preview traversal)
+      \ti i' -> set traversal i' ti
+  in
+    subformEvalResult l $ itemForm i
 
 -- | Adapt a form that operates on a value to operate on a traversable
 -- | collection of values.
@@ -182,8 +208,9 @@ subform
   => Lens' input1 input2
   -> Form parentAction slots m input2 output
   -> Form parentAction slots m input1 output
-subform lens (Reporter (Star f)) = Reporter $ Star \input ->
-  mapFormEvalResult (flip (set lens) input) $ f (view lens input)
+subform l (Reporter (Star f)) = Reporter
+  $ Star
+  $ subformEvalResult l <<< f <<< view l
 
 -- | lift a natural transformation on the base monad to a natural
 -- | transformation over a form.
@@ -201,37 +228,37 @@ runForm
    . Applicative m
   => Form parentAction slots m input output
   -> input
-  -> (input -> m Unit)
+  -> ((input -> input) -> m Unit)
   -> m (R (FormHTML parentAction input slots m) output)
 runForm f = runFormM <<< Reporter.runReporter f
 
-mapAction
+subAction
   :: forall parentAction input1 input2
-   . (input1 -> input2)
-  -> Action parentAction input1
+   . Lens' input1 input2
   -> Action parentAction input2
-mapAction f = case _ of
-  Update input -> Update $ f input
+  -> Action parentAction input1
+subAction l = case _ of
+  Update updater -> Update $ Lens.over l updater
   Raise parentAction -> Raise parentAction
 
 -- | Internal
-mapFormHTML
+subformHTML
   :: forall parentAction slots m input1 input2
    . Functor m
-  => (input1 -> input2)
-  -> FormHTML parentAction input1 slots m
+  => Lens' input1 input2
   -> FormHTML parentAction input2 slots m
-mapFormHTML f = map (bimap (map (mapAction f)) (mapAction f))
+  -> FormHTML parentAction input1 slots m
+subformHTML l = map (bimap (map (subAction l)) (subAction l))
 
 -- | Internal
-mapFormEvalResult
+subformEvalResult
   :: forall parentAction slots m input1 input2
    . Functor m
-  => (input1 -> input2)
-  -> FormEvalResult parentAction slots m input1
-       ~> FormEvalResult parentAction slots m input2
-mapFormEvalResult f =
-  mapMaybeT $ mapWriterT $ mapInput f <<< map (map (mapFormHTML f))
+  => Lens' input1 input2
+  -> FormEvalResult parentAction slots m input2
+       ~> FormEvalResult parentAction slots m input1
+subformEvalResult l =
+  mapMaybeT $ mapWriterT $ zoom l <<< map (map (subformHTML l))
 
 -- | Internal
 hoistFormHTML
