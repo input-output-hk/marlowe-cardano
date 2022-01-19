@@ -146,6 +146,8 @@ genStates scs stn =
                        in b1 && b2
                     SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
                     _ -> True
+                    CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                    _ -> True
 
 -- |Generate payoffs
 genPayoffs :: (RoleSignOps a, YearFractionOps a) =>

@@ -114,9 +114,14 @@ schedule PRD  ct@ContractTermsPoly{ contractType = CEC }   = _SCHED_PRD_PAM ct
 schedule MD   ct@ContractTermsPoly{ contractType = CEC }   = _SCHED_MD_PAM ct
 schedule PRD  ct@ContractTermsPoly{ contractType = COM }   = _SCHED_PRD_PAM ct
 schedule TD   ct@ContractTermsPoly{ contractType = COM }   = _SCHED_TD_PAM ct
-schedule MD   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_MD_PAM ct
+
+schedule IED  ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IED_PAM ct
+schedule FP   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_FP_PAM ct
+schedule PR   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_PR_LAM ct
 schedule IP   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IP_CLM ct
 schedule IPCI ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IPCI_CLM ct
+schedule RR   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_RRF_PAM ct
 schedule _ _                                               = []
 
 -- |Determine the maturity of a contract
@@ -800,10 +805,27 @@ _SCHED_XD_CEG _ = []
 _SCHED_IP_CLM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IP_CLM
   ContractTermsPoly
-    { scheduleConfig,
-      maturityDate = Just md
+    { nominalInterestRate = Nothing,
+      maturityDate = Just md,
+      scheduleConfig
     } = [applyBDCWithCfg scheduleConfig md]
+_SCHED_IP_CLM
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Just ipanx,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      scheduleConfig
+    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} md scheduleConfig
+_SCHED_IP_CLM
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Nothing,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      scheduleConfig
+    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IP_CLM _ = []
+
 
 _SCHED_IPCI_CLM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IPCI_CLM

@@ -547,13 +547,14 @@ payoff ev t st = reader payoff'
         -- Rate Reset (RR) --
         -------------------------------
         -- POF_RR_SWPPV
+        -- POF_RR_CLM
         pof
           RR
           _
           ContractTermsPoly
-            { contractType = SWPPV
-            }
-          _ = _zero
+          { contractType
+          }
+          _ | contractType `elem` [SWPPV, CLM] = _zero
         -------------
         -- Default --
         -------------
