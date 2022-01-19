@@ -6,10 +6,9 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import Capability.Marlowe (class ManageMarlowe, restoreWallet)
 import Component.Button.Types as Button
 import Component.Button.View (button)
+import Component.Progress.Circular as Progress
 import Control.Monad.Trans.Class (lift)
 import Css as Css
-import Data.Either (isLeft)
-import Data.Filterable (filter)
 import Data.MnemonicPhrase (class CheckMnemonic, MnemonicPhrase)
 import Data.Set (Set)
 import Data.Tuple (uncurry)
@@ -48,9 +47,9 @@ component
   => Component q m
 component = Hooks.component \{ outputToken } used -> Hooks.do
   Tuple result resultId <- Hooks.useState Nothing
-  Tuple canRestore canRestoreId <- Hooks.useState true
+  Tuple restoring restoringId <- Hooks.useState false
   Tuple serverError serverErrorId <- Hooks.useState ""
-  form <- Hooks.captures { canRestore, serverError, used } Hooks.useMemo \_ ->
+  form <- Hooks.captures { restoring, serverError, used } Hooks.useMemo \_ ->
     FC.component
       { form: Form.split (Forms.walletNickname used) Forms.mnemonicPhrase
       , formClasses: [ "relative", "space-y-4" ]
@@ -58,9 +57,9 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
   let
     submit nickname mnemonic = do
       Hooks.put serverErrorId ""
-      Hooks.put canRestoreId false
+      Hooks.put restoringId true
       response <- lift $ restoreWallet nickname mnemonic ""
-      Hooks.put canRestoreId $ isLeft response
+      Hooks.put restoringId false
       case response of
         Left InvalidMnemonic ->
           Hooks.put serverErrorId "Invalid mnemonic phrase."
@@ -84,20 +83,24 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
       -- TODO replace with progress buttons when refactored.
       , HH.p [ classNames Css.inputError ] [ HH.text serverError ]
       , HH.div
-          [ classNames [ "flex", "gap-4" ] ]
-          [ button
-              Button.Secondary
-              ( Just $ Hooks.raise outputToken Welcome.CloseCard
-              )
-              []
-              [ HH.text "Cancel" ]
-          , button
-              Button.Primary
-              ( result
-                  # filter (\_ -> canRestore)
-                  # map (uncurry submit)
-              )
-              []
-              [ HH.text "Restore Wallet" ]
-          ]
+          [ classNames [ "flex", "justify-center", "gap-4" ] ]
+          if restoring then
+            [ Progress.view Progress.defaultSpec
+                { color = "text-purple"
+                , width = "w-14"
+                , height = "h-14"
+                }
+            ]
+          else
+            [ button
+                Button.Secondary
+                (Just $ Hooks.raise outputToken Welcome.CloseCard)
+                [ "flex-1" ]
+                [ HH.text "Cancel" ]
+            , button
+                Button.Primary
+                (uncurry submit <$> result)
+                [ "flex-1" ]
+                [ HH.text "Restore Wallet" ]
+            ]
       ]

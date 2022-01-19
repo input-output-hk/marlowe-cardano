@@ -153,6 +153,8 @@ mkAsyncForm { validator, render } =
           input
           remote'
   where
+  -- We use an unlawful ISO here because a side-effect of updating the input
+  -- from the UI is that any previous remote results or progress is discarded.
   unlawfulResetValue =
     iso (\(AsyncInput value _) -> value) \value -> AsyncInput value NotAsked
 
