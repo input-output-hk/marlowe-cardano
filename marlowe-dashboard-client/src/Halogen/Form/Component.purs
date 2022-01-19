@@ -33,6 +33,9 @@ data Action parentAction slots m input output
   | Init
   | OnSubmit Event
   | UpdateResult (Maybe output) (FormHTML parentAction input slots m)
+  | UpdateFromFormM
+      (HS.Listener (Action parentAction slots m input output))
+      input
 
 update
   :: forall parentAction slots m input output
@@ -60,6 +63,7 @@ component
   => Show input
   => Spec parentAction slots m input output
   -> Component query parentAction m input output
+
 component spec = H.mkComponent
   { render
   , initialState
@@ -82,23 +86,30 @@ component spec = H.mkComponent
   handleAction = case _ of
     PublicAction (Form.Update input) -> do
       H.modify_ _ { input = input }
-      handleUpdate
+      handleUpdateWithNewSubscription
     PublicAction (Form.Raise parentAction) -> H.raise $ Raised parentAction
-    Init -> handleUpdate
+    Init -> handleUpdateWithNewSubscription
     OnSubmit event -> liftEffect $ preventDefault event
+    UpdateFromFormM listener input -> do
+      H.modify_ _ { input = input }
+      handleUpdate listener
     UpdateResult result children -> do
       H.modify_ _
         { formHtml =
             mkFormHtml $ map (bimap (map PublicAction) PublicAction) children
         }
       H.raise $ Updated result
-  handleUpdate = do
-    { subscription, input } <- H.get
+  handleUpdateWithNewSubscription = do
+    subscription <- H.gets _.subscription
     traverse_ H.unsubscribe subscription
     { listener, emitter } <- liftEffect HS.create
     subscription' <- H.subscribe emitter
     H.modify_ _ { subscription = Just subscription' }
+    handleUpdate listener
+  handleUpdate listener = do
+    input <- H.gets _.input
     Tuple result children <-
-      lift $ runForm spec.form input
-        (liftEffect <<< HS.notify listener <<< PublicAction <<< Form.Update)
+      lift
+        $ runForm spec.form input
+        $ liftEffect <<< HS.notify listener <<< UpdateFromFormM listener
     liftEffect $ HS.notify listener $ UpdateResult result children
