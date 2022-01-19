@@ -132,6 +132,7 @@ mkMainFrame =
             { handleQuery = handleQuery
             , handleAction = handleAction
             , receive = Just <<< Receive
+            , initialize = Just Init
             }
       }
 
