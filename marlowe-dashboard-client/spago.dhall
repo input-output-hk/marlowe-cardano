@@ -25,6 +25,7 @@ You can edit this file as you like.
   , "formatters"
   , "halogen"
   , "halogen-hooks"
+  , "halogen-hooks-extra"
   , "halogen-store"
   , "halogen-subscriptions"
   , "http-methods"

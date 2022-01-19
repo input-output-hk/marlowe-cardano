@@ -14,8 +14,8 @@ import Prologue
 import API.Url (class ToUrlPiece)
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
-import Component.InputField.Types (class InputFieldError)
 import Component.InputField.Types (Action, State) as InputField
+import Component.InputField.Types (class InputFieldError)
 import Data.Address (Address)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
@@ -116,18 +116,13 @@ instance inputeFieldErrorAddressError :: InputFieldError AddressError where
 data Action
   = CloseContactsCard
   | SetCardSection CardSection
-  | SaveWallet (Maybe String)
+  | SaveWallet (Maybe String) WalletNickname Address
   | CancelNewContactForRole
-  | WalletNicknameInputAction (InputField.Action WalletNicknameError)
-  | AddressInputAction (InputField.Action AddressError)
   | ClipboardAction Clipboard.Action
 
 instance actionIsEvent :: IsEvent Action where
   toEvent CloseContactsCard = Just $ defaultEvent "CloseContactsCard"
   toEvent (SetCardSection _) = Just $ defaultEvent "SetCardSection"
-  toEvent (SaveWallet _) = Just $ defaultEvent "SaveWallet"
+  toEvent (SaveWallet _ _ _) = Just $ defaultEvent "SaveWallet"
   toEvent CancelNewContactForRole = Nothing
-  toEvent (WalletNicknameInputAction inputFieldAction) =
-    toEvent inputFieldAction
-  toEvent (AddressInputAction inputFieldAction) = toEvent inputFieldAction
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

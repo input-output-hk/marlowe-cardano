@@ -17,9 +17,7 @@ import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses
-  ( _addressInput
-  , _cardSection
-  , _walletNicknameInput
+  ( _cardSection
   )
 import Component.Contacts.Types
   ( Action(..)
@@ -78,89 +76,24 @@ handleAction _ CloseContactsCard = callMainFrameAction
   $ Dashboard.CloseCard
 
 handleAction addressBook (SetCardSection cardSection) = do
-  case cardSection of
-    NewWallet _ -> do
-      handleAction addressBook $ WalletNicknameInputAction InputField.Reset
-      handleAction addressBook
-        $ WalletNicknameInputAction
-        $ InputField.SetValidator
-        $ either Just (const Nothing)
-            <<< lmap walletNicknameErrorToLegacyError
-            <<< Nickname.fromStringExclusive (AddressBook.nicknames addressBook)
-      handleAction addressBook $ AddressInputAction InputField.Reset
-      handleAction addressBook
-        $ AddressInputAction
-        $ InputField.SetValidator
-        $ either Just (const Nothing)
-            <<< lmap addressErrorToLegacyError
-            <<< Address.fromString (AddressBook.addresses addressBook)
-    _ -> pure unit
   assign _cardSection cardSection
 
-handleAction _ (SaveWallet mTokenName) = do
-  walletNicknameString <- use (_walletNicknameInput <<< _value)
-  addressString <- use (_addressInput <<< _value)
-  let
-    result = Tuple
-      <$> hush (Nickname.fromString walletNicknameString)
-      <*> hush (Address.fromString Set.empty addressString)
-  case result of
-    Just (Tuple walletNickname address) -> do
-      -- We reset the form after adding the contact
-      modify_
-        $ set (_walletNicknameInput <<< _value) ""
-            <<< set (_walletNicknameInput <<< _pristine) true
-            <<< set (_addressInput <<< _value) ""
-            <<< set (_addressInput <<< _pristine) true
-      modifyAddressBook_ (AddressBook.insert walletNickname address)
-      addToast $ successToast "Contact added"
-      case mTokenName of
-        -- if a tokenName was also passed, we are inside a template contract and we need to update role
-        Just tokenName -> callMainFrameAction $ MainFrame.DashboardAction $
-          Dashboard.SetContactForRole tokenName walletNickname
-        -- If we don't have a tokenName, then we added the contact from the contact dialog and we should close the panel
-        Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
-          Dashboard.CloseCard
-    -- TODO: show error feedback to the user (just to be safe - but this should never happen, because
-    -- the button to save a new wallet should be disabled in this case)
-    _ -> pure unit
+handleAction _ (SaveWallet mTokenName nickname address) = do
+  modifyAddressBook_ (AddressBook.insert nickname address)
+  addToast $ successToast "Contact added"
+  case mTokenName of
+    -- if a tokenName was also passed, we are inside a template contract and we need to update role
+    Just tokenName -> callMainFrameAction $ MainFrame.DashboardAction $
+      Dashboard.SetContactForRole tokenName nickname
+    -- If we don't have a tokenName, then we added the contact from the contact dialog and we should close the panel
+    Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
+      Dashboard.CloseCard
 
 handleAction _ CancelNewContactForRole = pure unit -- handled in Dashboard.State
-
-handleAction _ (WalletNicknameInputAction inputFieldAction) =
-  toWalletNicknameInput $ InputField.handleAction inputFieldAction
-
-handleAction _ (AddressInputAction inputFieldAction) = toAddressInput $
-  InputField.handleAction inputFieldAction
 
 handleAction _ (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
   addToast $ successToast "Copied to clipboard"
-
-------------------------------------------------------------
-toWalletNicknameInput
-  :: forall m msg slots
-   . Functor m
-  => HalogenM (InputField.State WalletNicknameError)
-       (InputField.Action WalletNicknameError)
-       slots
-       msg
-       m
-       Unit
-  -> HalogenM State Action slots msg m Unit
-toWalletNicknameInput = mapSubmodule _walletNicknameInput
-  WalletNicknameInputAction
-
-toAddressInput
-  :: forall m msg slots
-   . Functor m
-  => HalogenM (InputField.State AddressError) (InputField.Action AddressError)
-       slots
-       msg
-       m
-       Unit
-  -> HalogenM State Action slots msg m Unit
-toAddressInput = mapSubmodule _addressInput AddressInputAction
 
 ------------------------------------------------------------
 -- The cardano Blockchain has Multi-Asset support, each monetary policy is identified

@@ -5,6 +5,8 @@ import Prologue hiding (div)
 import Component.Input.View as Input
 import Component.Label.View as Label
 import Css as Css
+import Data.Address (Address)
+import Data.Address (AddressError(..), validator) as A
 import Data.Filterable (filter)
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.MnemonicPhrase
@@ -142,4 +144,18 @@ mnemonicPhrase =
         MP.Empty -> "Required."
         MP.WrongWordCount -> "24 words required."
         MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
+    }
+
+address
+  :: forall parentAction s m
+   . Monad m
+  => Set Address
+  -> Form parentAction (InputSlots s) m String Address
+address used =
+  Form.mkForm
+    { validator: A.validator used
+    , render: input "address" "Address" case _ of
+        A.Empty -> "Required."
+        A.Invalid -> "Provided address is not a valid pubkeyhash."
+        A.Exists -> "Already exists."
     }
