@@ -60,7 +60,9 @@ import Data.Lens
   , assign
   , elemOf
   , filtered
+  , lens
   , modifying
+  , preview
   , set
   , use
   , view
@@ -90,7 +92,8 @@ import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
-import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
+import Halogen.Extra (imapState, mapSubmodule)
+import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
@@ -112,8 +115,7 @@ import Marlowe.Semantics
 import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
 import Page.Contract.State (applyTimeout)
 import Page.Contract.State
-  ( dummyState
-  , handleAction
+  ( handleAction
   , mkInitialState
   , mkPlaceholderState
   , updateState
@@ -519,10 +521,11 @@ handleAction input (SetContactForRole tokenName walletNickname) = do
 handleAction
   input@{ walletDetails, currentSlot, tzOffset }
   (ContractAction followerAppId contractAction) = do
-  startedState <- peruse $ _contracts <<< at followerAppId <<< _Just <<<
-    _Started
+  startedState <- peruse
+    $ _contracts <<< at followerAppId <<< _Just <<< _Started
   let
     contractInput = { currentSlot, walletDetails, followerAppId, tzOffset }
+  mContractState <- peruse $ _contract followerAppId
   case contractAction of
     Contract.AskConfirmation action ->
       for_ startedState \contractState ->
@@ -536,13 +539,11 @@ handleAction
               , userNickname: walletDetails ^. _walletNickname
               , walletBalance: getAda $ walletDetails ^. _assets
               }
-    Contract.ConfirmAction _ -> do
-      void $ toContract followerAppId $ Contract.handleAction contractInput
-        contractAction
-      handleAction input CloseCard
     Contract.CancelConfirmation -> handleAction input CloseCard
-    _ -> toContract followerAppId $ Contract.handleAction contractInput
-      contractAction
+    _ -> for_ mContractState \s -> toContract
+      followerAppId
+      s
+      (Contract.handleAction contractInput contractAction)
 
 ------------------------------------------------------------
 -- Note [polling updateTotalFunds]
@@ -588,8 +589,11 @@ toContract
   :: forall m msg slots
    . Functor m
   => PlutusAppId
+  -> Contract.State
   -> HalogenM Contract.State Contract.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-toContract followerAppId = mapMaybeSubmodule (_contract followerAppId)
-  (ContractAction followerAppId)
-  Contract.dummyState
+toContract followerAppId s =
+  mapAction (ContractAction followerAppId)
+    <<< imapState (lens (fromMaybe s <<< preview trav) (flip (set trav)))
+  where
+  trav = _contract followerAppId

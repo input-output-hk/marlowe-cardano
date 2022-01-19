@@ -9,8 +9,8 @@ module Component.Template.State
 import Prologue
 
 import Component.InputField.Lenses (_value)
-import Component.InputField.State (dummyState, handleAction, mkInitialState) as InputField
 import Component.InputField.State (formatBigIntValue, getBigIntValue, validate)
+import Component.InputField.State (handleAction, mkInitialState) as InputField
 import Component.InputField.Types (class InputFieldError)
 import Component.InputField.Types (Action(..), State) as InputField
 import Component.Template.Lenses
@@ -39,11 +39,13 @@ import Data.AddressBook as AB
 import Data.Array (mapMaybe) as Array
 import Data.BigInt.Argonaut (BigInt)
 import Data.Either (hush)
-import Data.Lens (Lens', assign, set, use, view)
+import Data.Foldable (for_)
+import Data.Lens (Lens', assign, lens, preview, set, use, view)
+import Data.Lens.Extra (peruse)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
-import Data.Maybe (isNothing)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Set (toUnfoldable) as Set
 import Data.Traversable (for, traverse)
 import Data.WalletNickname (WalletNickname)
@@ -56,7 +58,8 @@ import Examples.PureScript.EscrowWithCollateral (defaultSlotContent) as EscrowWi
 import Examples.PureScript.Swap (defaultSlotContent) as Swap
 import Examples.PureScript.ZeroCouponBond (defaultSlotContent) as ZeroCouponBond
 import Halogen (HalogenM, RefLabel(..), getHTMLElementRef, modify_)
-import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
+import Halogen.Extra (imapState, mapSubmodule)
+import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (Contract) as Extended
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
@@ -148,14 +151,20 @@ handleAction input@{ addressBook } UpdateRoleWalletValidators =
   setInputValidators input _roleWalletInputs RoleWalletInputAction
     $ roleError addressBook <<< hush <<< WN.fromString
 
-handleAction _ (RoleWalletInputAction tokenName inputFieldAction) =
-  toRoleWalletInput tokenName $ InputField.handleAction inputFieldAction
+handleAction _ (RoleWalletInputAction tokenName inputFieldAction) = do
+  mInput <- peruse $ _roleWalletInput tokenName
+  for_ mInput \s ->
+    toRoleWalletInput tokenName s $ InputField.handleAction inputFieldAction
 
-handleAction _ (SlotContentInputAction key inputFieldAction) =
-  toSlotContentInput key $ InputField.handleAction inputFieldAction
+handleAction _ (SlotContentInputAction key inputFieldAction) = do
+  mInput <- peruse $ _slotContentInput key
+  for_ mInput \s ->
+    toSlotContentInput key s $ InputField.handleAction inputFieldAction
 
-handleAction _ (ValueContentInputAction key inputFieldAction) =
-  toValueContentInput key $ InputField.handleAction inputFieldAction
+handleAction _ (ValueContentInputAction key inputFieldAction) = do
+  mInput <- peruse $ _valueContentInput key
+  for_ mInput \s ->
+    toValueContentInput key s $ InputField.handleAction inputFieldAction
 
 handleAction _ StartContract = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
@@ -274,40 +283,53 @@ toRoleWalletInput
   :: forall m msg slots
    . Functor m
   => TokenName
+  -> InputField.State RoleError
   -> HalogenM (InputField.State RoleError) (InputField.Action RoleError) slots
        msg
        m
        Unit
   -> HalogenM State Action slots msg m Unit
-toRoleWalletInput tokenName = mapMaybeSubmodule (_roleWalletInput tokenName)
-  (RoleWalletInputAction tokenName)
-  InputField.dummyState
+toRoleWalletInput tokenName s =
+  mapAction (RoleWalletInputAction tokenName) <<< imapState (lens getter setter)
+  where
+  trav = _roleWalletInput tokenName
+  getter = fromMaybe s <<< preview trav
+  setter = flip $ set trav
 
 toSlotContentInput
   :: forall m msg slots
    . Functor m
   => String
+  -> InputField.State SlotError
   -> HalogenM (InputField.State SlotError) (InputField.Action SlotError) slots
        msg
        m
        Unit
   -> HalogenM State Action slots msg m Unit
-toSlotContentInput key = mapMaybeSubmodule (_slotContentInput key)
-  (SlotContentInputAction key)
-  InputField.dummyState
+toSlotContentInput key s =
+  mapAction (SlotContentInputAction key) <<< imapState (lens getter setter)
+  where
+  trav = _slotContentInput key
+  getter = fromMaybe s <<< preview trav
+  setter = flip $ set trav
 
 toValueContentInput
   :: forall m msg slots
    . Functor m
   => String
-  -> HalogenM (InputField.State ValueError) (InputField.Action ValueError) slots
+  -> InputField.State ValueError
+  -> HalogenM (InputField.State ValueError) (InputField.Action ValueError)
+       slots
        msg
        m
        Unit
   -> HalogenM State Action slots msg m Unit
-toValueContentInput key = mapMaybeSubmodule (_valueContentInput key)
-  (ValueContentInputAction key)
-  InputField.dummyState
+toValueContentInput key s =
+  mapAction (ValueContentInputAction key) <<< imapState (lens getter setter)
+  where
+  trav = _valueContentInput key
+  getter = fromMaybe s <<< preview trav
+  setter = flip $ set trav
 
 ------------------------------------------------------------
 contractNicknameError :: String -> Maybe ContractNicknameError

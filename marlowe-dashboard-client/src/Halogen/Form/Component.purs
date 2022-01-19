@@ -63,14 +63,12 @@ component
   => Show input
   => Spec parentAction slots m input output
   -> Component query parentAction m input output
-
 component spec = H.mkComponent
   { render
   , initialState
   , eval: H.mkEval H.defaultEval
       { handleAction = handleAction
       , initialize = Just Init
-      , receive = Just <<< PublicAction <<< Form.Update
       }
   }
   where

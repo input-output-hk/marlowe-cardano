@@ -32,9 +32,10 @@ import Control.Monad.State (modify_)
 import Data.AddressBook as AB
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (_1, _2, _Just, _Left, assign, use, view)
+import Data.Lens (_1, _2, _Just, _Left, assign, lens, preview, set, use, view)
 import Data.Lens.Extra (peruse)
 import Data.Map (keys)
+import Data.Maybe (fromMaybe)
 import Data.MnemonicPhrase (class CheckMnemonic)
 import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
@@ -44,7 +45,8 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
-import Halogen.Extra (mapMaybeSubmodule)
+import Halogen.Extra (imapState)
+import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
@@ -411,7 +413,10 @@ toWelcome
   => Welcome.State
   -> HalogenM Welcome.State Welcome.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-toWelcome = mapMaybeSubmodule _welcomeState WelcomeAction
+toWelcome s = mapAction WelcomeAction <<< imapState (lens getter setter)
+  where
+  getter = fromMaybe s <<< preview _welcomeState
+  setter = flip $ set _welcomeState
 
 toDashboard
   :: forall m msg slots
@@ -419,4 +424,7 @@ toDashboard
   => Dashboard.State
   -> HalogenM Dashboard.State Dashboard.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-toDashboard = mapMaybeSubmodule (_dashboardState <<< _2) DashboardAction
+toDashboard s = mapAction DashboardAction <<< imapState (lens getter setter)
+  where
+  getter = fromMaybe s <<< preview (_dashboardState <<< _2)
+  setter = flip $ set (_dashboardState <<< _2)
