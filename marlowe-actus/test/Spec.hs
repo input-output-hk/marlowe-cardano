@@ -25,7 +25,9 @@ main = do
   futurTests <- testCasesFromFile [] $ p ++ "actus-tests-futur.json"
   comTests <- testCasesFromFile [] $ p ++ "actus-tests-com.json"
   cshTests <- testCasesFromFile [] $ p ++ "actus-tests-csh.json"
-  clmTests <- testCasesFromFile [] $ p ++ "actus-tests-clm.json"
+  clmTests <- testCasesFromFile
+    [ "clm07", "clm08", "clm09", "clm13", "clm14" -- same as in CallMoneyTest.java
+    ] $ p ++ "actus-tests-clm.json"
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
   cegTests <- testCasesFromFile
     [ "guarantee09", "guarantee10" , "guarantee11" , "guarantee12" , "guarantee13" , "guarantee14"

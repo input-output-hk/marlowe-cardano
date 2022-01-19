@@ -116,6 +116,7 @@ schedule PRD  ct@ContractTermsPoly{ contractType = COM }   = _SCHED_PRD_PAM ct
 schedule TD   ct@ContractTermsPoly{ contractType = COM }   = _SCHED_TD_PAM ct
 
 schedule IED  ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IED_PAM ct
+schedule MD   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_MD_PAM ct
 schedule FP   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_FP_PAM ct
 schedule PR   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_PR_LAM ct
 schedule IP   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IP_CLM ct
@@ -805,49 +806,30 @@ _SCHED_XD_CEG _ = []
 _SCHED_IP_CLM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IP_CLM
   ContractTermsPoly
-    { nominalInterestRate = Nothing,
-      maturityDate = Just md,
+    { maturityDate = Just md,
       scheduleConfig
     } = [applyBDCWithCfg scheduleConfig md]
-_SCHED_IP_CLM
-  ContractTermsPoly
-    { cycleAnchorDateOfInterestPayment = Just ipanx,
-      cycleOfInterestPayment = Just ipcl,
-      maturityDate = Just md,
-      scheduleConfig
-    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} md scheduleConfig
-_SCHED_IP_CLM
-  ContractTermsPoly
-    { cycleAnchorDateOfInterestPayment = Nothing,
-      cycleOfInterestPayment = Just ipcl,
-      maturityDate = Just md,
-      initialExchangeDate = Just ied,
-      scheduleConfig
-    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IP_CLM _ = []
-
 
 _SCHED_IPCI_CLM :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_IPCI_CLM
   ContractTermsPoly
+    { nominalInterestRate = Nothing
+    } = []
+_SCHED_IPCI_CLM
+  ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Just ipanx,
       cycleOfInterestPayment = Just ipcl,
       maturityDate = Just md,
-      capitalizationEndDate = Just ipced,
       scheduleConfig
-    } =
-    let s = generateRecurrentSchedule ipanx ipcl {includeEndDay = True} md scheduleConfig
-     in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
+    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = False} md scheduleConfig
 _SCHED_IPCI_CLM
   ContractTermsPoly
     { cycleAnchorDateOfInterestPayment = Nothing,
       cycleOfInterestPayment = Just ipcl,
       maturityDate = Just md,
       initialExchangeDate = Just ied,
-      capitalizationEndDate = Just ipced,
       scheduleConfig
-    } =
-    let s = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
-     in filter (\d -> calculationDay d < ipced) s ++ [applyBDCWithCfg scheduleConfig ipced]
+    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = False} md scheduleConfig
 _SCHED_IPCI_CLM _ = []
 
