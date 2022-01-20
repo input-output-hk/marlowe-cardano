@@ -16,7 +16,7 @@ import Halogen (Component)
 import Halogen.Css (classNames)
 import Halogen.Form (split) as Form
 import Halogen.Form.Component (Msg(..), component) as FC
-import Halogen.HTML (a, div, div_, slot, text) as HH
+import Halogen.HTML (a, div, slot, text) as HH
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.Hooks (bind, captures, component, pure, raise, useMemo) as Hooks
 import Halogen.Hooks.Extra.Hooks (usePutState)
