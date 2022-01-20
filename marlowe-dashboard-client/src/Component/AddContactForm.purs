@@ -52,7 +52,15 @@ component = Hooks.component \{ outputToken } { mTokenName, addressBook } ->
       submit nickname address =
         raise $ SaveWallet mTokenName nickname address
 
-    Hooks.pure $ HH.div_
+    Hooks.pure $ HH.div
+      [ classNames
+          [ "h-full"
+          , "grid"
+          , "grid-rows-1fr-auto"
+          , "divide-y"
+          , "divide-gray"
+          ]
+      ]
       [ HH.slot (Proxy :: Proxy "form") unit form initialInput case _ of
           FC.Updated res -> putState res
           FC.Raised saveAction -> raise saveAction
