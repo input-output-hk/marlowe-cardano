@@ -359,6 +359,7 @@ handleAction (EnterWelcomeState walletDetails followerApps) = do
   unsubscribeFromPlutusApp $ view _marloweAppId walletDetails
   for_ followerAppIds unsubscribeFromPlutusApp
   assign _subState $ Left $ Tuple Nothing Welcome.initialState
+  updateStore Store.DeactivateWallet
 
 {- [Workflow 2][3] Connect a wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
