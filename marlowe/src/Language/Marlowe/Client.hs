@@ -456,7 +456,6 @@ setupMarloweParams
     -> Contract MarloweContractState s e
         (MarloweParams, TxConstraints i o, ScriptLookups a)
 setupMarloweParams owners contract = mapError (review _MarloweError) $ do
-    ownAddress <- (`pubKeyHashAddress` Nothing) <$> Contract.ownPaymentPubKeyHash
     let roles = extractNonMerkleizedContractRoles contract
     if Set.null roles
     then do
