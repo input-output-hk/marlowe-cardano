@@ -33,7 +33,7 @@ import Data.Either (rights)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isNothing, listToMaybe, mapMaybe, maybeToList)
+import Data.Maybe (fromJust, isNothing, listToMaybe, mapMaybe, maybeToList)
 import Data.Monoid (First (..))
 import Data.Semigroup.Generic (GenericSemigroupMonoid (..))
 import qualified Data.Set as Set
@@ -466,7 +466,8 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
     then do
         let tokens = (, 1) <$> Set.toList roles
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
-        utxo <- utxosAt ownAddress
+        txOut <- fromJust <$> txOutFromRef txOutRef  -- TODO: Review for safety.
+        let utxo = Map.singleton txOutRef txOut
         let theCurrency = Currency.OneShotCurrency
                 { curRefTransactionOutput = (h, i)
                 , curAmounts              = AssocMap.fromList tokens
@@ -593,7 +594,7 @@ marloweCompanionContract = checkExistingRoleTokens
         -- Filter those outputs for role tokens and notify the WebSocket subscribers
         -- NOTE: CombinedWSStreamToServer has an API to subscribe to WS notifications
         utxo <- utxosAt ownAddress
-        let txOuts = fmap Ledger.toTxOut $ Map.elems utxo
+        let txOuts = Ledger.toTxOut <$> Map.elems utxo
         forM_ txOuts notifyOnNewContractRoles
         -- This contract will run in a loop forever (because we always return Right)
         -- checking for updates to the UTXO's for a given address.
@@ -678,7 +679,7 @@ getStates si refMap =
             ocsTxOutRef <- Typed.typeScriptTxOutRef (\r -> fst <$> Map.lookup r refMap) si ref
             ocsTxOut <- Typed.typeScriptTxOut si ref out
             pure OnChainState{ocsTxOut, ocsTxOutRef, ocsTx = tx}
-    in rights $ fmap lkp $ Map.toList refMap
+    in rights $ lkp <$> Map.toList refMap
 
 
 mkStep ::
