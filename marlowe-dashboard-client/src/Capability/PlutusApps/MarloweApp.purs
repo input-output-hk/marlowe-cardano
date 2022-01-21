@@ -29,7 +29,7 @@ import Capability.PlutusApps.MarloweApp.Lenses
 import Capability.PlutusApps.MarloweApp.Types
   ( class HasMarloweAppEndpointMutex
   , EndpointMutex
-  , LastResult(..)
+  , MarloweEndpointResponse
   )
 import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Address (Address)
@@ -49,6 +49,7 @@ import Effect.AVar as EAVar
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
+import Language.Marlowe.Client (EndpointResponse(..))
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
@@ -183,12 +184,11 @@ onNewObservableState
    . MonadAff m
   => MonadAsk env m
   => HasMarloweAppEndpointMutex env
-  => LastResult
-  -> m (Maybe LastResult)
+  => MarloweEndpointResponse
+  -> m (Maybe MarloweEndpointResponse)
 onNewObservableState lastResult = case lastResult of
-  OK reqId _ -> onNewObservableState' reqId
-  SomeError reqId _ _ -> onNewObservableState' reqId
-  _ -> pure Nothing
+  EndpointSuccess reqId _ -> onNewObservableState' reqId
+  EndpointException reqId _ _ -> onNewObservableState' reqId
   where
   onNewObservableState' reqId = do
     requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
@@ -198,7 +198,10 @@ onNewObservableState lastResult = case lastResult of
       liftAff $ AVar.put lastResult reqMutex
       pure lastResult
 
-findReqId :: UUID -> Array (UUID /\ AVar LastResult) -> Maybe (AVar LastResult)
+findReqId
+  :: UUID
+  -> Array (UUID /\ AVar MarloweEndpointResponse)
+  -> Maybe (AVar MarloweEndpointResponse)
 findReqId reqId = findMap
   (\(reqId' /\ reqMutex) -> if reqId == reqId' then Just reqMutex else Nothing)
 
@@ -210,7 +213,7 @@ waitForResponse
   => MonadAsk env m
   => HasMarloweAppEndpointMutex env
   => UUID
-  -> m (Maybe LastResult)
+  -> m (Maybe MarloweEndpointResponse)
 waitForResponse reqId = do
   requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
   -- This read is blocking but does not take the mutex.

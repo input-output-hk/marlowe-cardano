@@ -84,6 +84,14 @@ type MarloweSchema =
         .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, PubKeyHash)
         .\/ Endpoint "close" UUID
 
+data MarloweEndpointResult =
+    CreateResponse MarloweParams
+    | ApplyInputsResponse
+    | AutoResponse
+    | RedeemResponse
+    | CloseResponse
+  deriving (Show,Eq,Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 type MarloweCompanionSchema = EmptySchema
 type MarloweFollowSchema = Endpoint "follow" MarloweParams
@@ -171,18 +179,24 @@ instance Monoid ContractProgress where
 
 type EndpointName = String
 
-data LastResult = OK UUID EndpointName | SomeError UUID EndpointName MarloweError | Unknown
+data EndpointResponse a err =
+    EndpointSuccess UUID a
+    -- TODO: The EndpointName should be a part of `err` if
+    --       the user decides to, but we need to refactor MarloweError and
+    --       the Marlowe Plutus App, so I leave this for a separate PR.
+    | EndpointException UUID EndpointName err
   deriving (Show,Eq,Generic)
   deriving anyclass (ToJSON, FromJSON)
 
-instance Semigroup LastResult where
-    any <> Unknown = any
+-- The Semigroup instance is thought so that when we call `tell`, we inform
+-- the FrontEnd of the last response. It is the responsability of the FE to
+-- tie together a request and a response with the UUID.
+instance Semigroup (EndpointResponse a err) where
     _ <> last      = last
 
-instance Monoid LastResult where
-    mempty = Unknown
+type MarloweEndpointResponse = EndpointResponse MarloweEndpointResult MarloweError
 
-type MarloweContractState = LastResult
+type MarloweContractState = Maybe MarloweEndpointResponse
 
 
 mkMarloweTypedValidator :: MarloweParams -> SmallTypedValidator
@@ -288,9 +302,9 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
   where
     catchError reqId endpointName handler = catching _MarloweError
         (void $ mapError (review _MarloweError) handler)
-        (\er -> do
-            logWarn @String (show er)
-            tell $ SomeError reqId endpointName er
+        (\err -> do
+            logWarn @String (show err)
+            tell $ Just $ EndpointException reqId endpointName err
             marlowePlutusContract)
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         -- Create a transaction with the role tokens and pay them to the contract creator
@@ -313,12 +327,12 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         -- Create the Marlowe contract and pay the role tokens to the owners
         utx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx lookups tx)
         submitTxConfirmed utx
-        tell $ OK reqId "create"
+        tell $ Just $ EndpointSuccess reqId $ CreateResponse params
         marlowePlutusContract
     apply = endpoint @"apply-inputs" $ \(reqId, params, slotInterval, inputs) -> catchError reqId "apply-inputs" $ do
         let typedValidator = mkMarloweTypedValidator params
         _ <- applyInputs params typedValidator slotInterval inputs
-        tell $ OK reqId "apply-inputs"
+        tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
         marlowePlutusContract
     redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, pkh) -> catchError reqId "redeem" $ do
         let address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
@@ -339,7 +353,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
         let spendPayouts = Map.foldlWithKey spendPayoutConstraints mempty utxos
         if spendPayouts == mempty
         then do
-            tell $ OK reqId "redeem"
+            tell $ Just $ EndpointSuccess reqId RedeemResponse
         else do
             let
               constraints = spendPayouts
@@ -352,7 +366,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                   <> Constraints.ownPaymentPubKeyHash ppkh
             tx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx @Void lookups constraints)
             _ <- submitUnbalancedTx $ Constraints.adjustUnbalancedTx tx
-            tell $ OK reqId "redeem"
+            tell $ Just $ EndpointSuccess reqId RedeemResponse
 
         marlowePlutusContract
     auto = endpoint @"auto" $ \(reqId, params, party, untilSlot) -> catchError reqId "auto" $ do
@@ -362,7 +376,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 if canAutoExecuteContractForParty party marloweContract
                 then autoExecuteContract reqId params typedValidator party md
                 else do
-                    tell $ OK reqId "auto"
+                    tell $ Just $ EndpointSuccess reqId AutoResponse
                     marlowePlutusContract
 
         maybeState <- getOnChainState typedValidator
@@ -372,11 +386,11 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 case wr of
                     ContractEnded{} -> do
                         logInfo @String $ "Contract Ended for party " <> show party
-                        tell $ OK reqId "auto"
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Timeout{} -> do
                         logInfo @String $ "Contract Timeout for party " <> show party
-                        tell $ OK reqId "auto"
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Transition _ _ marloweData -> continueWith marloweData
                     InitialState _ marloweData -> continueWith marloweData
@@ -385,7 +399,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 continueWith marloweData
     -- The MarloweApp contract is closed implicitly by not returning
     -- itself (marlowePlutusContract) as a continuation
-    close = endpoint @"close" $ \reqId -> tell $ OK reqId "close"
+    close = endpoint @"close" $ \reqId -> tell $ Just $ EndpointSuccess reqId CloseResponse
 
 
     autoExecuteContract :: UUID
@@ -419,7 +433,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 case wr of
                     ContractEnded{} -> do
                         logInfo @String $ "Contract Ended"
-                        tell $ OK reqId "auto"
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
                     Timeout{} -> do
                         logInfo @String $ "Contract Timeout"
@@ -431,7 +445,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                 logInfo @String $ "CloseContract"
                 let closeContract = do
                         _ <- mkStep params typedValidator slotRange []
-                        tell $ OK reqId "auto"
+                        tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
 
                 catching _MarloweError closeContract $ \err -> do
@@ -441,7 +455,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
                     continueWith marloweData
             NotSure -> do
                 logInfo @String $ "NotSure"
-                tell $ OK reqId "auto"
+                tell $ Just $ EndpointSuccess reqId AutoResponse
                 marlowePlutusContract
 
           where

@@ -18,7 +18,6 @@ import Capability.MarloweStorage
   , walletLocalStorageKey
   )
 import Capability.PlutusApps.MarloweApp as MarloweApp
-import Capability.PlutusApps.MarloweApp.Types (LastResult(..))
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Component.Contacts.Lenses
@@ -50,6 +49,7 @@ import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
+import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import LocalStorage (removeItem, setItem)
 import MainFrame.Lenses
   ( _addressBook
@@ -191,6 +191,10 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       multipleErrors
     (WS.ReceiveMessage (Right streamToClient)) -> case streamToClient of
       -- update the current slot
+      -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
+      --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
+      --       so that it only triggers this call once synced or ignore the message altogether and find
+      --       a different approach.
       SlotChange slot -> do
         updateStore $ Store.AdvanceToSlot $ toFront slot
         -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
@@ -249,7 +253,8 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       Left decodingError -> addToast $ decodingErrorToast
                         "Failed to parse an update from the marlowe controller."
                         decodingError
-                      Right lastResult -> do
+                      Right Nothing -> pure unit
+                      Right (Just endpointResponse) -> do
                         -- The MarloweApp capability keeps track of the requests it makes to see if this
                         -- new observable state is a WS response for an action that we made. If we refresh
                         -- we get the last observable state, and if we have two tabs open we can get
@@ -257,18 +262,24 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                         -- TODO: With a "significant refactor" (and the use of `MarloweApp.waitForResponse`)
                         --       we could rework the different workflows for creating a contract and apply
                         --       inputs so these toast are closer to the code that initiates the actions.
-                        mLastResult <- MarloweApp.onNewObservableState
-                          lastResult
-                        case mLastResult of
-                          Just (OK _ "create") -> addToast $ successToast
-                            "Contract initialised."
-                          Just (OK _ "apply-inputs") -> addToast $ successToast
-                            "Contract update applied."
-                          Just (SomeError _ "create" _) -> addToast $ errorToast
-                            "Failed to initialise contract."
-                            Nothing
-                          Just (SomeError _ "apply-inputs" _) -> addToast $
-                            errorToast "Failed to update contract." Nothing
+                        mEndpointResponse <- MarloweApp.onNewObservableState
+                          endpointResponse
+                        case mEndpointResponse of
+                          Just
+                            (EndpointSuccess _ (CreateResponse marloweParams)) ->
+                            addToast $ successToast
+                              "Contract initialised."
+                          Just (EndpointSuccess _ ApplyInputsResponse) ->
+                            addToast $ successToast
+                              "Contract update applied."
+                          Just (EndpointException _ "create" err) ->
+                            addToast $
+                              errorToast
+                                "Failed to initialise contract."
+                                Nothing
+                          Just (EndpointException _ "apply-inputs" _) ->
+                            addToast $
+                              errorToast "Failed to update contract." Nothing
                           _ -> pure unit
                   -- otherwise this should be one of the wallet's `MarloweFollower` apps
                   else case parseDecodeJson $ unwrap rawJson of

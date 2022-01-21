@@ -81,6 +81,7 @@ executable marlowe-dashboard-server
         http-client -any,
         http-types -any,
         lens -any,
+        marlowe -any,
         marlowe-dashboard-server -any,
         monad-logger -any,
         playground-common -any,

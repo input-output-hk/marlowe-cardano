@@ -1460,6 +1460,8 @@ derive newtype instance encodeJsonMarloweParams :: EncodeJson MarloweParams
 
 derive newtype instance decodeMarloweParams :: DecodeJson MarloweParams
 
+derive newtype instance showMarloweParams :: Show MarloweParams
+
 _rolePayoutValidatorHash :: Lens' MarloweParams ValidatorHash
 _rolePayoutValidatorHash = _Newtype <<< prop
   (Proxy :: _ "rolePayoutValidatorHash")

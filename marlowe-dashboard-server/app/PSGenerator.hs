@@ -19,10 +19,12 @@ import Data.Monoid ()
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
+import Language.Marlowe.Client (EndpointResponse, MarloweEndpointResult, MarloweError)
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), SumType, TypeInfo (..), argonaut,
                                    buildBridge, typeName, writePSTypes, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
+import Language.PureScript.Bridge.TypeParameters (A, E)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
@@ -42,6 +44,19 @@ psWalletId = TypeInfo "marlowe-dashboard-client" "Component.Contacts.Types" "Wal
 walletIdBridge :: BridgePart
 walletIdBridge = typeName ^== "HttpWalletId" >> return psWalletId
 
+psTransactionError :: TypeInfo 'PureScript
+psTransactionError =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "TransactionError" []
+
+transactionErrorBridge :: BridgePart
+transactionErrorBridge = typeName ^== "TransactionError" >> return psTransactionError
+
+psMarloweParams :: TypeInfo 'PureScript
+psMarloweParams =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "MarloweParams" []
+
+marloweParamsBridge :: BridgePart
+marloweParamsBridge = typeName ^== "MarloweParams" >> return psMarloweParams
+
+
 myBridge :: BridgePart
 myBridge =
   PSGenerator.Common.aesonBridge <|> PSGenerator.Common.containersBridge
@@ -53,6 +68,8 @@ myBridge =
     <|> dayBridge
     <|> defaultBridge
     <|> walletIdBridge
+    <|> transactionErrorBridge
+    <|> marloweParamsBridge
 
 data MyBridge
 
@@ -76,7 +93,12 @@ myTypes =
         mkSumType @RestorePostData,
         mkSumType @CheckPostData,
         mkSumType @GetTotalFundsResponse,
-        order $ mkSumType @RestoreError
+        order $ mkSumType @RestoreError,
+        -- We put the Client.hs types here as there is no
+        -- PSGenerator for the MarlowePAB
+        mkSumType @(EndpointResponse A E),
+        mkSumType @MarloweError,
+        mkSumType @MarloweEndpointResult
       ]
     )
 
