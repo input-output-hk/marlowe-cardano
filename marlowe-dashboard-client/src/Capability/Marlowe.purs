@@ -29,8 +29,8 @@ import API.Lenses
 import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
 import AppM (AppM)
 import Bridge (toBack, toFront)
-import Capability.Contract (class ManageContract)
-import Capability.Contract
+import Capability.PAB (class ManagePAB)
+import Capability.PAB
   ( activateContract
   , getContractInstanceClientState
   , getContractInstanceObservableState
@@ -87,10 +87,10 @@ import Types (AjaxResponse, DecodedAjaxResponse, NotFoundAjaxResponse)
 import Wallet.Emulator.Wallet (Wallet(..)) as Back
 import WebSocket.Support as WS
 
--- The `ManageMarlowe` class provides a window on the `ManageContract` and `ManageWallet`
+-- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
 -- capabilities with functions specific to Marlowe.
 class
-  ( ManageContract m
+  ( ManagePAB m
   , ManageMarloweStorage m
   , ManageWallet m
   ) <=

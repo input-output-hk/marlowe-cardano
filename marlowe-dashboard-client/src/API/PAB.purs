@@ -1,4 +1,4 @@
-module API.Contract
+module API.PAB
   ( activateContract
   , deactivateContract
   , getContractInstanceClientState

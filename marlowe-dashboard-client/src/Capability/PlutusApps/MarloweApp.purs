@@ -17,8 +17,8 @@ import Prologue
 
 import AppM (AppM)
 import Bridge (toBack)
-import Capability.Contract (class ManageContract)
-import Capability.Contract (invokeEndpoint) as Contract
+import Capability.PAB (class ManagePAB)
+import Capability.PAB (invokeEndpoint) as PAB
 import Capability.PlutusApps.MarloweApp.Lenses
   ( _applyInputs
   , _create
@@ -136,7 +136,7 @@ invokeMutexedEndpoint
   :: forall payload m env
    . EncodeJson payload
   => MonadAff m
-  => ManageContract m
+  => ManagePAB m
   => MonadAsk env m
   => HasMarloweAppEndpointMutex env
   => PlutusAppId
@@ -159,7 +159,7 @@ invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
   -- TODO: We could change this take for a read and listen for a 500 error with EndpointUnavailabe
   --       to retry and take it (instead of preemptively taking it).
   liftAff $ AVar.take endpointMutex
-  result <- Contract.invokeEndpoint plutusAppId endpointName payload
+  result <- PAB.invokeEndpoint plutusAppId endpointName payload
   -- After making the request, we lock on the global request array so we can add
   -- a new request id with its corresponding mutex.
   -- TODO: It would be nice if the invokeEndpoint returns a requestId instead of having to generate

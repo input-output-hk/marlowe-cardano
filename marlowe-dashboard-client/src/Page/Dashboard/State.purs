@@ -6,7 +6,6 @@ module Page.Dashboard.State
 import Prologue
 
 import Bridge (toFront)
-import Capability.Contract (class ManageContract)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe
   ( class ManageMarlowe
@@ -185,7 +184,6 @@ handleAction
    . MonadAff m
   => MonadAsk Env m
   => MainFrameLoop m
-  => ManageContract m
   => ManageMarloweStorage m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m

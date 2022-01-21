@@ -1,5 +1,5 @@
-module Capability.Contract
-  ( class ManageContract
+module Capability.PAB
+  ( class ManagePAB
   , activateContract
   , deactivateContract
   , getContractInstanceClientState
@@ -13,7 +13,7 @@ module Capability.Contract
   ) where
 
 import Prologue
-import API.Contract as API
+import API.PAB as API
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
 import Bridge (toBack, toFront)
@@ -38,7 +38,7 @@ import Types (AjaxResponse)
 -- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
   Monad m <=
-  ManageContract m where
+  ManagePAB m where
   activateContract
     :: MarloweContract -> WalletId -> m (AjaxResponse PlutusAppId)
   deactivateContract :: PlutusAppId -> m (AjaxResponse Unit)
@@ -65,7 +65,7 @@ class
   getContractDefinitions :: m
     (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
 
-instance monadContractAppM :: ManageContract AppM where
+instance monadContractAppM :: ManagePAB AppM where
   activateContract contractActivationId wallet = map (map toFront) $ runExceptT
     $ API.activateContract
     $ ContractActivationArgs
@@ -95,8 +95,8 @@ instance monadContractAppM :: ManageContract AppM where
   getContractDefinitions = runExceptT API.getContractDefinitions
 
 instance monadContractHalogenM ::
-  ManageContract m =>
-  ManageContract (HalogenM state action slots msg m) where
+  ManagePAB m =>
+  ManagePAB (HalogenM state action slots msg m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
