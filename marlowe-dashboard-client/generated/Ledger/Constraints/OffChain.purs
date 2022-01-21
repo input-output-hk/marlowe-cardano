@@ -23,6 +23,7 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Ledger.Address (PaymentPubKey, PaymentPubKeyHash)
 import Ledger.Typed.Tx (ConnectionError)
+import Plutus.V1.Ledger.Address (Address)
 import Plutus.V1.Ledger.Interval (Interval)
 import Plutus.V1.Ledger.Scripts (DatumHash)
 import Plutus.V1.Ledger.Time (POSIXTime)
@@ -195,11 +196,16 @@ _UnbalancedTx = _Newtype
 
 --------------------------------------------------------------------------------
 
-newtype ScriptOutput = ScriptOutput
-  { scriptOutputValidatorHash :: String
-  , scriptOutputValue :: Value
-  , scriptOutputDatumHash :: DatumHash
-  }
+data ScriptOutput
+  = ScriptOutput
+      { scriptOutputValidatorHash :: String
+      , scriptOutputValue :: Value
+      , scriptOutputDatumHash :: DatumHash
+      }
+  | PublicKeyOutput
+      { publicKeyOutputAddress :: Address
+      , publicKeyOutputValue :: Value
+      }
 
 derive instance eqScriptOutput :: Eq ScriptOutput
 
@@ -207,32 +213,57 @@ instance showScriptOutput :: Show ScriptOutput where
   show a = genericShow a
 
 instance encodeJsonScriptOutput :: EncodeJson ScriptOutput where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { scriptOutputValidatorHash: E.value :: _ String
-        , scriptOutputValue: E.value :: _ Value
-        , scriptOutputDatumHash: E.value :: _ DatumHash
+  encodeJson = defer \_ -> case _ of
+    ScriptOutput
+      { scriptOutputValidatorHash, scriptOutputValue, scriptOutputDatumHash } ->
+      encodeJson
+        { tag: "ScriptOutput"
+        , scriptOutputValidatorHash: flip E.encode scriptOutputValidatorHash
+            E.value
+        , scriptOutputValue: flip E.encode scriptOutputValue E.value
+        , scriptOutputDatumHash: flip E.encode scriptOutputDatumHash E.value
         }
-    )
+    PublicKeyOutput { publicKeyOutputAddress, publicKeyOutputValue } ->
+      encodeJson
+        { tag: "PublicKeyOutput"
+        , publicKeyOutputAddress: flip E.encode publicKeyOutputAddress E.value
+        , publicKeyOutputValue: flip E.encode publicKeyOutputValue E.value
+        }
 
 instance decodeJsonScriptOutput :: DecodeJson ScriptOutput where
-  decodeJson = defer \_ -> D.decode $
-    ( ScriptOutput <$> D.record "ScriptOutput"
-        { scriptOutputValidatorHash: D.value :: _ String
-        , scriptOutputValue: D.value :: _ Value
-        , scriptOutputDatumHash: D.value :: _ DatumHash
-        }
-    )
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "ScriptOutput"
+    $ Map.fromFoldable
+        [ "ScriptOutput" /\
+            ( ScriptOutput <$> D.object "ScriptOutput"
+                { scriptOutputValidatorHash: D.value :: _ String
+                , scriptOutputValue: D.value :: _ Value
+                , scriptOutputDatumHash: D.value :: _ DatumHash
+                }
+            )
+        , "PublicKeyOutput" /\
+            ( PublicKeyOutput <$> D.object "PublicKeyOutput"
+                { publicKeyOutputAddress: D.value :: _ Address
+                , publicKeyOutputValue: D.value :: _ Value
+                }
+            )
+        ]
 
 derive instance genericScriptOutput :: Generic ScriptOutput _
 
-derive instance newtypeScriptOutput :: Newtype ScriptOutput _
-
 --------------------------------------------------------------------------------
 
-_ScriptOutput :: Iso' ScriptOutput
+_ScriptOutput :: Prism' ScriptOutput
   { scriptOutputValidatorHash :: String
   , scriptOutputValue :: Value
   , scriptOutputDatumHash :: DatumHash
   }
-_ScriptOutput = _Newtype
+_ScriptOutput = prism' ScriptOutput case _ of
+  (ScriptOutput a) -> Just a
+  _ -> Nothing
+
+_PublicKeyOutput :: Prism' ScriptOutput
+  { publicKeyOutputAddress :: Address, publicKeyOutputValue :: Value }
+_PublicKeyOutput = prism' PublicKeyOutput case _ of
+  (PublicKeyOutput a) -> Just a
+  _ -> Nothing
