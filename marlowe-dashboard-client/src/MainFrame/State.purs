@@ -266,13 +266,13 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                           endpointResponse
                         case mEndpointResponse of
                           Just
-                            (EndpointSuccess _ (CreateResponse marloweParams)) ->
+                            (EndpointSuccess _ (CreateResponse _)) ->
                             addToast $ successToast
                               "Contract initialised."
                           Just (EndpointSuccess _ ApplyInputsResponse) ->
                             addToast $ successToast
                               "Contract update applied."
-                          Just (EndpointException _ "create" err) ->
+                          Just (EndpointException _ "create" _) ->
                             addToast $
                               errorToast
                                 "Failed to initialise contract."
