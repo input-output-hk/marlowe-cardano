@@ -8,7 +8,6 @@ module Capability.Marlowe
   , createContract
   , applyTransactionInput
   , redeem
-  , lookupWalletDetails
   , getRoleContracts
   , getFollowerApps
   , subscribeToWallet
@@ -122,7 +121,6 @@ class
     -> TransactionInput
     -> m (AjaxResponse Unit)
   redeem :: WalletDetails -> MarloweParams -> TokenName -> m (AjaxResponse Unit)
-  lookupWalletDetails :: PlutusAppId -> m (NotFoundAjaxResponse WalletDetails)
   getRoleContracts
     :: WalletDetails -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
   getFollowerApps
@@ -258,33 +256,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       address = view (_walletInfo <<< _pubKeyHash) walletDetails
     in
       MarloweApp.redeem marloweAppId marloweParams tokenName address
-  -- get the WalletDetails of a wallet given the PlutusAppId of its WalletCompanion
-  -- note: this returns an empty walletNickname (because these are only saved locally)
-  lookupWalletDetails companionAppId =
-    runExceptT do
-      clientState <- withExceptT Just $ ExceptT $
-        PAB.getContractInstanceClientState companionAppId
-      case view _cicDefinition clientState of
-        WalletCompanion -> do
-          let
-            wallet = toFront $ view _cicWallet clientState
-          walletContracts <- withExceptT Just $ ExceptT $
-            PAB.getWalletContractInstances wallet
-          walletInfo <- withExceptT Just $ ExceptT $ Wallet.getWalletInfo wallet
-          case
-            find (\state -> view _cicDefinition state == MarloweApp)
-              walletContracts
-            of
-            Just marloweApp ->
-              pure
-                { walletNickname: WN.new
-                , companionAppId
-                , marloweAppId: toFront $ view _cicContract marloweApp
-                , walletInfo
-                , assets: mempty
-                }
-            Nothing -> except $ Left Nothing
-        _ -> except $ Left Nothing
+
   -- get the observable state of a wallet's WalletCompanion
   getRoleContracts walletDetails =
     runExceptT do
@@ -369,7 +341,6 @@ instance monadMarloweHalogenM ::
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
   redeem walletDetails marloweParams tokenName =
     lift $ redeem walletDetails marloweParams tokenName
-  lookupWalletDetails = lift <<< lookupWalletDetails
   getRoleContracts = lift <<< getRoleContracts
   getFollowerApps = lift <<< getFollowerApps
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
