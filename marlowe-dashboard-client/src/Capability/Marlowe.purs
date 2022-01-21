@@ -36,7 +36,7 @@ import Capability.PAB
   , getContractInstanceObservableState
   , getWalletContractInstances
   , invokeEndpoint
-  ) as Contract
+  ) as PAB
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
@@ -145,8 +145,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         let
           walletId = view _walletId walletInfo
         -- create the WalletCompanion and MarloweApp for this wallet
-        ajaxCompanionAppId <- Contract.activateContract WalletCompanion walletId
-        ajaxMarloweAppId <- Contract.activateContract MarloweApp walletId
+        ajaxCompanionAppId <- PAB.activateContract WalletCompanion walletId
+        ajaxMarloweAppId <- PAB.activateContract MarloweApp walletId
         let
           createWalletDetails companionAppId marloweAppId =
             { walletNickname: WN.new
@@ -175,8 +175,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         -- to diagnose problems using a tool like sentry SCP-3171.
         -- https://github.com/natefaubion/purescript-checked-exceptions
         ajaxCompanionAppId <- lmap ClientServerError <$>
-          Contract.activateContract WalletCompanion walletId
-        ajaxMarloweAppId <- lmap ClientServerError <$> Contract.activateContract
+          PAB.activateContract WalletCompanion walletId
+        ajaxMarloweAppId <- lmap ClientServerError <$> PAB.activateContract
           MarloweApp
           walletId
         let
@@ -194,14 +194,14 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     runExceptT do
       let
         walletId = view (_walletInfo <<< _walletId) walletDetails
-      followAppId <- withExceptT Left $ ExceptT $ Contract.activateContract
+      followAppId <- withExceptT Left $ ExceptT $ PAB.activateContract
         MarloweFollower
         walletId
-      void $ withExceptT Left $ ExceptT $ Contract.invokeEndpoint followAppId
+      void $ withExceptT Left $ ExceptT $ PAB.invokeEndpoint followAppId
         "follow"
         marloweParams
       observableStateJson <- withExceptT Left $ ExceptT $
-        Contract.getContractInstanceObservableState followAppId
+        PAB.getContractInstanceObservableState followAppId
       observableState <-
         except
           $ lmap Right
@@ -214,18 +214,18 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     let
       walletId = view (_walletInfo <<< _walletId) walletDetails
     in
-      Contract.activateContract MarloweFollower walletId
+      PAB.activateContract MarloweFollower walletId
   -- call the "follow" endpoint of a pending MarloweFollower app, and return its PlutusAppId and
   -- observable state (to call this function, we must already know its PlutusAppId, but we return
   -- it anyway because it is convenient to have this function return the same type as
   -- `followContract`)
   followContractWithPendingFollowerApp _ marloweParams followerAppId =
     runExceptT do
-      void $ withExceptT Left $ ExceptT $ Contract.invokeEndpoint followerAppId
+      void $ withExceptT Left $ ExceptT $ PAB.invokeEndpoint followerAppId
         "follow"
         marloweParams
       observableStateJson <-
-        withExceptT Left $ ExceptT $ Contract.getContractInstanceObservableState
+        withExceptT Left $ ExceptT $ PAB.getContractInstanceObservableState
           followerAppId
       observableState <-
         except
@@ -263,13 +263,13 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   lookupWalletDetails companionAppId =
     runExceptT do
       clientState <- withExceptT Just $ ExceptT $
-        Contract.getContractInstanceClientState companionAppId
+        PAB.getContractInstanceClientState companionAppId
       case view _cicDefinition clientState of
         WalletCompanion -> do
           let
             wallet = toFront $ view _cicWallet clientState
           walletContracts <- withExceptT Just $ ExceptT $
-            Contract.getWalletContractInstances wallet
+            PAB.getWalletContractInstances wallet
           walletInfo <- withExceptT Just $ ExceptT $ Wallet.getWalletInfo wallet
           case
             find (\state -> view _cicDefinition state == MarloweApp)
@@ -291,7 +291,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       let
         companionAppId = view _companionAppId walletDetails
       observableStateJson <- withExceptT Left $ ExceptT $
-        Contract.getContractInstanceObservableState companionAppId
+        PAB.getContractInstanceObservableState companionAppId
       except $ lmap Right $ parseDecodeJson $ unwrap observableStateJson
   -- get all MarloweFollower apps for a given wallet
   getFollowerApps walletDetails =
@@ -299,7 +299,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       let
         walletId = view (_walletInfo <<< _walletId) walletDetails
       runningApps <- withExceptT Left $ ExceptT $
-        Contract.getWalletContractInstances walletId
+        PAB.getWalletContractInstances walletId
       let
         followerApps = Array.filter
           (\cic -> view _cicDefinition cic == MarloweFollower)
