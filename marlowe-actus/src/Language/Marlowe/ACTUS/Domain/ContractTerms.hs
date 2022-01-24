@@ -616,7 +616,10 @@ setDefaultContractTermValues ct@ContractTermsPoly {..} =
       periodCap                      = applyDefault infinity periodCap,
       lifeCap                        = applyDefault infinity lifeCap,
       lifeFloor                      = applyDefault (- infinity) lifeFloor,
-      interestCalculationBaseA       = applyDefault 0.0 interestCalculationBaseA
+      interestCalculationBaseA       = applyDefault 0.0 interestCalculationBaseA,
+
+      -- see ContractModel.java
+      cycleAnchorDateOfInterestPayment = cycleAnchorDateOfInterestPayment <|> ((guard $ contractType == CLM) >> initialExchangeDate)
     }
   where
     infinity :: Double
