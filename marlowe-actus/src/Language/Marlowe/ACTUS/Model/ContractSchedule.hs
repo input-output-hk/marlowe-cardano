@@ -427,15 +427,11 @@ _SCHED_RR_PAM
     Just m  -> generateRecurrentSchedule (ied <+> rrcl) rrcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
 _SCHED_RR_PAM
-  ct@ContractTermsPoly
+  ContractTermsPoly
     { cycleAnchorDateOfRateReset = Just rranx,
       cycleOfRateReset = Nothing,
-      maturityDate,
       scheduleConfig
-    } = case maturity ct <|> maturityDate of
-    -- if no cycle then only start (if specified) and end dates (see ScheduleFactory.java)
-    Just m  -> [applyBDCWithCfg scheduleConfig rranx, applyBDCWithCfg scheduleConfig m]
-    Nothing -> []
+    } = [applyBDCWithCfg scheduleConfig rranx] -- if no cycle then only start (if specified) and end dates (see ScheduleFactory.java)
 _SCHED_RR_PAM _ = []
 
 _SCHED_RRF_PAM :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) =>

@@ -82,11 +82,12 @@ stateTransition ev t sn = reader stateTransition'
         -- Initial Exchange (IED) --
         ----------------------------
         -- STF_IED_PAM
+        -- STF_IED_CLM
         stf
           IED
           _
           ContractTermsPoly
-            { contractType = PAM,
+            { contractType,
               nominalInterestRate,
               notionalPrincipal = Just nt,
               accruedInterest = Just ipac,
@@ -94,7 +95,7 @@ stateTransition ev t sn = reader stateTransition'
             }
           st@ContractStatePoly
             {
-            } =
+            } | contractType `elem` [PAM, CLM] =
             st
               { nt = _r contractRole * nt,
                 ipnr = fromMaybe _zero nominalInterestRate,
