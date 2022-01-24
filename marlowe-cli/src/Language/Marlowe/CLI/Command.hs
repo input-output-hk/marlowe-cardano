@@ -116,7 +116,7 @@ parseCommand version =
     (
          O.fullDesc
       <> O.progDesc "Utilities for Marlowe."
-      <> O.header "marlow-cli : a command-line tool for Marlowe contracts"
+      <> O.header "marlowe-cli : a command-line tool for Marlowe contracts"
     )
 
 

@@ -617,7 +617,7 @@ c2c9dfde3f8db56e87cb53604c2232685e290a39964070b435dceeec09cae109     1        30
 c2c9dfde3f8db56e87cb53604c2232685e290a39964070b435dceeec09cae109     2        3000000 lovelace + 1 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.CM + TxOutDatumNone
 ```
 
-# Clean Up
+## Clean Up
 Send the funds back to the buyer, so that the test can be run again.
 
 ```
