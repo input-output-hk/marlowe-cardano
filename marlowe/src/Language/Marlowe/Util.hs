@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Language.Marlowe.Util where
+module Language.Marlowe.Util (ada, addAccountsDiff, both, emptyAccountsDiff, extractNonMerkleizedContractRoles,
+                              foldMapNonMerkleizedContract, foldMapContract, getAccountsDiff, isEmptyAccountsDiff) where
 import Data.List (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -9,6 +10,7 @@ import qualified Data.Set as Set
 import Data.String
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
+import Ledger (Slot (..))
 import Ledger.Ada (adaSymbol, adaToken)
 import Ledger.Scripts (dataHash)
 import qualified Ledger.Value as Val
