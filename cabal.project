@@ -281,7 +281,7 @@ source-repository-package
 -- of plutus-apps are also updated
 source-repository-package
   type: git
-  location: https://github.com/bwbush/plutus-apps
+  location: https://github.com/input-output-hk/plutus-apps
   tag: 65463b72ffc110bd0762403339c4c72543a99b16
   --sha256: 1l5pflzk5y91hzrgdm4mcg3dycgck36pbps6fcr8ahnj8855ghn7
   subdir:
