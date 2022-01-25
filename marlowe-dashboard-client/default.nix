@@ -14,12 +14,11 @@ let
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
 
   marlowe-run-backend-invoker = haskell.packages.marlowe-dashboard-server.components.exes.marlowe-dashboard-server;
+  psgenerator = haskell.packages.marlowe-dashboard-server.components.exes.psgenerator;
+  build-psgenerator = "$(nix-build ../default.nix -A marlowe-dashboard.psgenerator)";
 
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
-    mkdir $out
-    ${marlowe-setup-invoker}/bin/marlowe-pab-setup psgenerator $out
-    ${marlowe-setup-invoker}/bin/marlowe-pab-setup psapigenerator $out
-    ${marlowe-run-backend-invoker}/bin/marlowe-dashboard-server psgenerator $out
+    ${psgenerator}/bin/psgenerator $out
     cp ${builtins.path { name = "tidyrc.json"; path = ../.tidyrc.json; } } $out/.tidyrc.json
     cp ${builtins.path { name = "tidyoperators"; path = ../.tidyoperators; } } $out/.tidyoperators
     cd $out
@@ -30,11 +29,7 @@ let
   '';
 
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
-    generatedDir=./generated
-    rm -rf $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-setup-invoker)/bin/marlowe-pab-setup psgenerator $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-setup-invoker)/bin/marlowe-pab-setup psapigenerator $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server psgenerator $generatedDir
+    ${build-psgenerator}/bin/psgenerator ./generated
     cd ..
     ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-dashboard-client/generated
     ${prettier}/bin/prettier -w ./marlowe-dashboard-client/generated
@@ -83,5 +78,5 @@ let
     });
 in
 {
-  inherit client marlowe-invoker marlowe-run-backend-invoker marlowe-setup-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker marlowe-run-backend-invoker marlowe-setup-invoker generate-purescript generated-purescript start-backend psgenerator;
 }
