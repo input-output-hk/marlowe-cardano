@@ -25,8 +25,10 @@
 
 module Language.Marlowe.Scripts where
 import Data.Default (Default (def))
+import GHC.Generics
+import Language.Marlowe.Pretty (Pretty (..))
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsTypes hiding (Contract)
+import Language.Marlowe.SemanticsTypes
 import Ledger
 import Ledger.Ada (adaSymbol)
 import Ledger.Constraints
@@ -38,9 +40,11 @@ import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
 import Plutus.Contract.StateMachine (StateMachine (..), Void)
 import qualified Plutus.Contract.StateMachine as SM
+import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Prelude
+import qualified Prelude as Haskell
 import Unsafe.Coerce
 
 type MarloweSlotRange = (Slot, Slot)
@@ -54,8 +58,14 @@ data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
 instance Scripts.ValidatorTypes TypedMarloweValidator where
-    type instance RedeemerType TypedMarloweValidator = [Input]
+    type instance RedeemerType TypedMarloweValidator = [MarloweTxInput]
     type instance DatumType TypedMarloweValidator = MarloweData
+
+
+data MarloweTxInput = Input InputContent
+                    | MerkleizedTxInput InputContent BuiltinByteString
+  deriving stock (Haskell.Show,Haskell.Eq,Generic)
+  deriving anyclass (Pretty)
 
 
 rolePayoutScript :: CurrencySymbol -> Validator
@@ -188,10 +198,15 @@ mkValidator p = SM.mkValidator $ SM.mkStateMachine Nothing (mkMarloweStateMachin
 smallMarloweValidator
     :: MarloweParams
     -> MarloweData
-    -> [Input]
+    -> [MarloweTxInput]
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig = (scSlotLength, scSlotZeroTime)} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig =
+    (scSlotLength, scSlotZeroTime)}
+    MarloweData{..}
+    marloweTxInputs
+    ctx@ScriptContext{scriptContextTxInfo} = do
+
     let ownInput = case findOwnInput ctx of
             Just i -> i
             _      -> traceError "I0" {-"Can't find validation input"-}
@@ -204,6 +219,8 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slot
                 _ -> traceError "R0"
     let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
 
+    {- Find Contract continuation in TxInfo datums by hash or fail with error -}
+    let inputs = fmap marloweTxInputToInput marloweTxInputs
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
         or a spend of a 'party role' token.
@@ -262,6 +279,15 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slot
 
     allOutputs :: [TxOut]
     allOutputs = txInfoOutputs scriptContextTxInfo
+
+    marloweTxInputToInput :: MarloweTxInput -> Input
+    marloweTxInputToInput (MerkleizedTxInput input hash) =
+        case findDatum (DatumHash hash) scriptContextTxInfo of
+            Just (Datum d) -> let
+                continuation = PlutusTx.unsafeFromBuiltinData d
+                in MerkleizedInput input hash continuation
+            Nothing -> traceError "H"
+    marloweTxInputToInput (Input input) = NormalInput input
 
     validateInputs :: [Input] -> Bool
     validateInputs inputs = all (validateInputWitness . getInputContent) inputs
@@ -345,3 +371,6 @@ mkMarloweClient params = SM.mkStateMachineClient (mkMachineInstance params)
 
 defaultTxValidationRange :: Slot
 defaultTxValidationRange = 10
+
+makeLift ''MarloweTxInput
+makeIsDataIndexed ''MarloweTxInput [('Input,0),('MerkleizedTxInput,1)]

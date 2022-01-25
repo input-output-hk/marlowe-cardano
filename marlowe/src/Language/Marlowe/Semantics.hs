@@ -455,8 +455,8 @@ applyAction _ _ _ _ = NotAppliedAction
 getContinuation :: Input -> Case Contract -> Maybe Contract
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
 #ifndef DisableMerkleization
-getContinuation (MerkleizedInput _ continuation) (MerkleizedCase _ continuationHash) =
-    if Builtins.sha2_256 (contractToByteString continuation) == continuationHash
+getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
+    if inputContinuationHash == continuationHash
     then Just continuation
     else Nothing
 #endif

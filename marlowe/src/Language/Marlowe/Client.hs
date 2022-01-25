@@ -704,7 +704,8 @@ mkStep params typedValidator range input = do
                     { SM.stateData = currentState
                     , SM.stateValue = Ledger.txOutValue tyTxOutTxOut
                     }
-                inputConstraints = [InputConstraint{icRedeemer=input, icTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef }]
+                -- inputConstraints :: [InputConstraint [Input]]
+                inputConstraints = [InputConstraint{icRedeemer=[], icTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef }]
 
             case mkMarloweStateMachineTransition params oldState (range, input) of
                 Just (newConstraints, newState)  -> do
