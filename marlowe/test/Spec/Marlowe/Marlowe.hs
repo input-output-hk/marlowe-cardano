@@ -185,12 +185,12 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
 
     let params = defaultMarloweParams
 
-    let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
-                                                     (sha2_256 (contractToByteString zeroCouponBondStage2))
+    let zeroCouponBondStage1 = When [ merkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
+                                                     zeroCouponBondStage2
                                     ] (Slot 100) Close
         zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 75_000_000)
-                                  (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
-                                                         (sha2_256 (contractToByteString zeroCouponBondStage3))
+                                  (When [ merkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
+                                                         zeroCouponBondStage3
                                         ] (Slot 200) Close)
         zeroCouponBondStage3 = Close
 
@@ -201,11 +201,11 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
-                                                 [MerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
+                                                 [merkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
-                                               [MerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
+                                               [merkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
