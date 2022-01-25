@@ -12,7 +12,9 @@ import Prologue
 
 import API.Marlowe.Run.Wallet as WBE
 import API.Marlowe.Run.Wallet.CentralizedTestnet
-  ( RestoreError
+  ( CreateWalletResponse
+  , CreateWalletError
+  , RestoreWalletError
   , RestoreWalletOptions
   )
 import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
@@ -21,8 +23,9 @@ import AppM (AppM)
 import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
+import Data.Passpharse (Passphrase)
+import Data.WalletNickname (WalletNickname)
 import Halogen (HalogenM)
--- import Marlowe as WBE
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
@@ -30,16 +33,20 @@ import Types (AjaxResponse)
 -- FIXME: Abstract away AjaxResponse (just return an `m ResponseType` and
 -- handle API failures in the concrete Monad instance).
 class Monad m <= ManageWallet m where
-  createWallet :: m (AjaxResponse WalletInfo)
-  restoreWallet :: RestoreWalletOptions -> m (Either RestoreError WalletInfo)
+  createWallet
+    :: WalletNickname
+    -> Passphrase
+    -> m (Either CreateWalletError CreateWalletResponse)
+  restoreWallet
+    :: RestoreWalletOptions -> m (Either RestoreWalletError WalletInfo)
   submitWalletTransaction :: WalletId -> Tx -> m (AjaxResponse Unit)
   getWalletInfo :: WalletId -> m (AjaxResponse WalletInfo)
   getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFundsResponse)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
 instance monadWalletAppM :: ManageWallet AppM where
-  createWallet = map (map toFront) $ runExceptT $ MockAPI.createWallet
-  restoreWallet options = map (map toFront) $ TestnetAPI.restoreWallet options
+  createWallet wn p = TestnetAPI.createWallet wn p
+  restoreWallet options = TestnetAPI.restoreWallet options
   submitWalletTransaction wallet tx = runExceptT $
     MockAPI.submitWalletTransaction (toBack wallet) tx
   getWalletInfo wallet = map (map toFront) $ runExceptT $ MockAPI.getWalletInfo
@@ -55,7 +62,7 @@ instance monadWalletAppM :: ManageWallet AppM where
 instance monadWalletHalogenM ::
   ManageWallet m =>
   ManageWallet (HalogenM state action slots msg m) where
-  createWallet = lift createWallet
+  createWallet wn p = lift $ createWallet wn p
   restoreWallet options = lift $ restoreWallet options
   submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet
   getWalletInfo = lift <<< getWalletInfo

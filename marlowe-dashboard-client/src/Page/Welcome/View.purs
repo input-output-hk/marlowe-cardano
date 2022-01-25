@@ -14,7 +14,6 @@ import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Lens ((^.))
 import Data.List (foldMap)
-import Data.MnemonicPhrase (class CheckMnemonic)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -69,7 +68,6 @@ welcomeScreen _ =
 welcomeCard
   :: forall m
    . MonadAff m
-  => CheckMnemonic m
   => ManageMarlowe m
   => AddressBook
   -> State
@@ -265,7 +263,6 @@ generateWalletHelpCard =
 restoreTestnetWalletCard
   :: forall m
    . MonadAff m
-  => CheckMnemonic m
   => ManageMarlowe m
   => AddressBook
   -> Array (ComponentHTML Action ChildSlots m)

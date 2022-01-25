@@ -6,20 +6,34 @@
 module Marlowe.Run.Wallet.V1.CentralizedTestnet.Types where
 
 import Cardano.Prelude
+import Cardano.Wallet.Mock.Types (WalletInfo (..))
 import Data.Aeson.Types (FromJSON, ToJSON)
 
-newtype CheckPostData = CheckPostData [Text]
-    deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
+newtype WalletName = WalletName Text
 
 data RestorePostData =
     RestorePostData
-        { getMnemonicPhrase :: [Text]
-        , getPassphrase     :: Text
-        , getWalletName     :: Text
+        { getRestoreMnemonicPhrase :: [Text]
+        , getRestorePassphrase     :: Text
+        , getRestoreWalletName     :: Text
         }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
+
+data CreatePostData =
+    CreatePostData
+        { getCreatePassphrase :: Text
+        , getCreateWalletName :: Text
+        }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromJSON, ToJSON)
+
+data CreateResponse = CreateResponse
+  { mnemonic   :: [Text]
+  , walletInfo :: WalletInfo
+  }
+  deriving stock (Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
 
 data RestoreError =
     InvalidMnemonic

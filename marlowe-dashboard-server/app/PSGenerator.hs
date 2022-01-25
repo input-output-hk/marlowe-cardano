@@ -27,7 +27,7 @@ import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import Language.PureScript.Bridge.TypeParameters (A, E)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
 import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
@@ -87,19 +87,22 @@ myTypes =
     PSGenerator.Common.ledgerTypes <>
     PSGenerator.Common.walletTypes <>
     PSGenerator.Common.playgroundTypes <>
+    -- | `WalletInfo` has no `Eq` instance hence
+    -- | `CreateResponse` should not have one.
+    [ genericShow . argonaut $ mkSumType @CreateResponse ] <>
     ( dto <$>
-      [ mkSumType @StreamToServer,
-        mkSumType @StreamToClient,
-        mkSumType @RestorePostData,
-        mkSumType @CheckPostData,
-        mkSumType @GetTotalFundsResponse,
-        order $ mkSumType @RestoreError,
-        -- We put the Client.hs types here as there is no
-        -- PSGenerator for the MarlowePAB
-        mkSumType @(EndpointResponse A E),
-        mkSumType @MarloweError,
-        mkSumType @MarloweEndpointResult
-      ]
+        [ mkSumType @StreamToServer,
+          mkSumType @StreamToClient,
+          mkSumType @RestorePostData,
+          mkSumType @CreatePostData,
+          mkSumType @GetTotalFundsResponse,
+          order $ mkSumType @RestoreError,
+          -- We put the Client.hs types here as there is no
+          -- PSGenerator for the MarlowePAB
+          mkSumType @(EndpointResponse A E),
+          mkSumType @MarloweError,
+          mkSumType @MarloweEndpointResult
+        ]
     )
 
 mySettings :: Settings

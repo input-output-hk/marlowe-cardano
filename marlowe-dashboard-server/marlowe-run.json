@@ -1,0 +1,4 @@
+{
+  "wbeConfig": { "host": "localhost", "port": 8090 },
+  "staticPath": "/var/empty"
+}

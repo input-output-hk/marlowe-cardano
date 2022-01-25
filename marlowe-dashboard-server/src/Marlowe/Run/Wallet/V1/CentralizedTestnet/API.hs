@@ -5,12 +5,12 @@
 module Marlowe.Run.Wallet.V1.CentralizedTestnet.API where
 
 import Cardano.Prelude
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestoreError, RestorePostData)
 import Servant.API (JSON, Post, ReqBody, (:<|>), (:>))
 -- FIXME: I don't like to use a Mock type here, but we'd need to publish some changes upstream to the PAB to fix this
 import Cardano.Wallet.Mock.Types (WalletInfo)
 
 type API =
         ("restore" :> ReqBody '[ JSON] RestorePostData :> Post '[JSON] (Either RestoreError WalletInfo)
-        :<|> "check-mnemonic" :> ReqBody '[ JSON] CheckPostData  :> Post '[JSON] Bool
+        :<|> "create" :> ReqBody '[ JSON] CreatePostData :> Post '[JSON] (Maybe CreateResponse)
         )

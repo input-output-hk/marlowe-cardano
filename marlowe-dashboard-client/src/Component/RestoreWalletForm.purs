@@ -2,34 +2,32 @@ module Componenet.RestoreWalletForm where
 
 import Prologue
 
-import API.Marlowe.Run.Wallet.CentralizedTestnet (RestoreError(..))
+import AppM (passphrase) as AppM
 import Capability.Marlowe (class ManageMarlowe, restoreWallet)
 import Component.Button.Types as Button
 import Component.Button.View (button)
 import Component.Progress.Circular as Progress
 import Control.Monad.Trans.Class (lift)
 import Css as Css
-import Data.MnemonicPhrase (class CheckMnemonic, MnemonicPhrase)
+import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Set (Set)
 import Data.Tuple (uncurry)
+import Data.Variant (on) as Variant
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff.Class (class MonadAff)
-import Forms (MnemonicPhraseInput)
 import Forms as Forms
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (AsyncInput(..))
 import Halogen.Form as Form
 import Halogen.Form.Component as FC
 import Halogen.HTML as HH
 import Halogen.Hooks as Hooks
-import Network.RemoteData (RemoteData(..))
 import Page.Welcome.Types as Welcome
 import Type.Proxy (Proxy(..))
 
 type Input = Set WalletNickname
 
-type RestoreWalletInput = Tuple String MnemonicPhraseInput
+type RestoreWalletInput = Tuple String String
 
 type RestoreWalletOutput = Tuple WalletNickname MnemonicPhrase
 
@@ -37,12 +35,11 @@ type Component q m =
   H.Component q Input Welcome.Action m
 
 initialInput :: RestoreWalletInput
-initialInput = Tuple "" $ AsyncInput "" NotAsked
+initialInput = Tuple "" ""
 
 component
   :: forall q m
    . MonadAff m
-  => CheckMnemonic m
   => ManageMarlowe m
   => Component q m
 component = Hooks.component \{ outputToken } used -> Hooks.do
@@ -58,13 +55,13 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
     submit nickname mnemonic = do
       Hooks.put serverErrorId ""
       Hooks.put restoringId true
-      response <- lift $ restoreWallet nickname mnemonic ""
+      response <- lift $ restoreWallet nickname mnemonic AppM.passphrase
       Hooks.put restoringId false
       case response of
-        Left InvalidMnemonic ->
-          Hooks.put serverErrorId "Invalid mnemonic phrase."
-        Left _ ->
-          Hooks.put serverErrorId "Error from server."
+        Left err -> Variant.on (Proxy :: Proxy "invalidMnemonic")
+          (const $ Hooks.put serverErrorId "Invalid mnemonic phrase.")
+          (const $ Hooks.put serverErrorId "Error from server.")
+          err
         Right walletDetails ->
           Hooks.raise outputToken $ Welcome.ConnectWallet nickname walletDetails
   Hooks.pure do

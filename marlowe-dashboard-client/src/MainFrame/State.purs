@@ -35,7 +35,6 @@ import Data.Lens (_1, _2, _Just, _Left, assign, lens, preview, set, use, view)
 import Data.Lens.Extra (peruse)
 import Data.Map (keys)
 import Data.Maybe (fromMaybe)
-import Data.MnemonicPhrase (class CheckMnemonic)
 import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
@@ -120,7 +119,6 @@ mkMainFrame
   => Toast m
   => MonadClipboard m
   => MainFrameLoop m
-  => CheckMnemonic m
   => Component Query Input Msg m
 mkMainFrame =
   connect (selectEq \{ addressBook, wallet } -> { addressBook, wallet }) $

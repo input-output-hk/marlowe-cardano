@@ -10,8 +10,7 @@ import Data.Address (AddressError(..), validator) as A
 import Data.Filterable (filter)
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.MnemonicPhrase
-  ( class CheckMnemonic
-  , MnemonicPhrase
+  ( MnemonicPhrase
   , MnemonicPhraseError
   )
 import Data.MnemonicPhrase as MP
@@ -131,16 +130,16 @@ walletNickname used =
         WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
     }
 
-type MnemonicPhraseInput = AsyncInput String MnemonicPhraseError MnemonicPhrase
+-- type MnemonicPhraseInput = Input String MnemonicPhraseError MnemonicPhrase
 
 mnemonicPhrase
   :: forall parentAction s m
-   . CheckMnemonic m
-  => Form parentAction (InputSlots s) m MnemonicPhraseInput MnemonicPhrase
+   . Monad m
+  => Form parentAction (InputSlots s) m String MnemonicPhrase
 mnemonicPhrase =
-  Form.mkAsyncForm
+  Form.mkForm
     { validator: MP.validator
-    , render: inputAsync "wallet-mnemonic" "Mnemonic phrase" case _ of
+    , render: input "wallet-mnemonic" "Mnemonic phrase" case _ of
         MP.Empty -> "Required."
         MP.WrongWordCount -> "24 words required."
         MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."

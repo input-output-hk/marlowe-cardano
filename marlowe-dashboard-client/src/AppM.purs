@@ -1,17 +1,18 @@
 module AppM
   ( AppM
+  , passphrase
   , runAppM
   ) where
 
 import Prologue
 
 import Clipboard (class MonadClipboard, copy)
-import Control.Monad.Except (runExceptT)
 import Control.Monad.Reader (class MonadReader, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Trans.Class (lift)
-import Data.Either (either)
-import Data.MnemonicPhrase (class CheckMnemonic, toWords, wordToString)
+import Data.Maybe (fromJust)
+import Data.Passpharse (Passphrase)
+import Data.Passpharse (fromString) as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -26,9 +27,14 @@ import Halogen.Store.Monad
   , runStoreT
   , updateStore
   )
-import Marlowe (postApiWalletV1CentralizedtestnetCheckmnemonic)
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CheckPostData(..))
+import Partial.Unsafe (unsafePartial)
 import Store as Store
+
+-- | We want to have this constant on the module level so
+-- | it just blows up if we change passphrase validation.
+passphrase :: Passphrase
+passphrase = unsafePartial $ fromJust $ Passphrase.fromString
+  "fixme-allow-pass-per-wallet"
 
 newtype AppM a = AppM (ReaderT Env (StoreT Store.Action Store.Store Aff) a)
 
@@ -67,11 +73,3 @@ derive newtype instance MonadReader Env AppM
 instance MonadClipboard AppM where
   copy = liftEffect <<< copy
 
-instance CheckMnemonic AppM where
-  checkMnemonic =
-    map (either (const false) identity)
-      <<< runExceptT
-      <<< postApiWalletV1CentralizedtestnetCheckmnemonic
-      <<< CheckPostData
-      <<< map wordToString
-      <<< toWords
