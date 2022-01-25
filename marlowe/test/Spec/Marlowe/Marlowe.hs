@@ -158,10 +158,10 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 75_000_000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 75_000_000])
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 90_000_000])
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk bobPk ada 90_000_000])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -201,11 +201,11 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
-                                                 [merkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
+                                                 [ClientMerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
-                                               [merkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
+                                               [ClientMerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -239,7 +239,7 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 90_000_000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 90_000_000])
     Trace.waitNSlots 2
     pure ()
 
@@ -286,8 +286,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         (pms, _) : _ -> do
 
             Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, pms, Nothing,
-                [ NormalInput $ IChoice chId 25_600_000
-                , NormalInput $ IDeposit "alice" "alice" ada 25_600_000
+                [ ClientInput $ IChoice chId 25_600_000
+                , ClientInput $ IDeposit "alice" "alice" ada 25_600_000
                 ])
             Trace.waitNSlots 17
 
@@ -295,7 +295,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Trace.callEndpoint @"follow" bobFollowHdl pms
             Trace.waitNSlots 2
 
-            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [NormalInput INotify])
+            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [ClientInput INotify])
 
             Trace.waitNSlots 2
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)

@@ -46,7 +46,7 @@ import Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics as Marlowe
 import Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
-import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
+import Language.Marlowe.Util (extractNonMerkleizedContractRoles, merkleizedInput)
 import Ledger (CurrencySymbol, Datum (..), PaymentPubKeyHash (..), PubKeyHash, Slot (..), TokenName, TxOut (..),
                TxOutRef, inScripts, txOutValue)
 import qualified Ledger
@@ -75,10 +75,14 @@ import qualified Plutus.Contracts.Currency as Currency
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 
+data MarloweClientInput = ClientInput InputContent
+                        | ClientMerkleizedInput InputContent Marlowe.Contract
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 type MarloweSchema =
         Endpoint "create" (UUID, AssocMap.Map Val.TokenName PubKeyHash, Marlowe.Contract)
-        .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe SlotInterval, [Input])
+        .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe SlotInterval, [MarloweClientInput])
         .\/ Endpoint "auto" (UUID, MarloweParams, Party, Slot)
         .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, PubKeyHash)
         .\/ Endpoint "close" UUID
@@ -400,7 +404,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
             PayDeposit acc p token amount -> do
                 logInfo @String $ "PayDeposit " <> show amount <> " at within slots " <> show slotRange
                 let payDeposit = do
-                        marloweData <- mkStep params typedValidator slotRange [NormalInput $ IDeposit acc p token amount]
+                        marloweData <- mkStep params typedValidator slotRange [ClientInput $ IDeposit acc p token amount]
                         continueWith marloweData
                 catching _MarloweError payDeposit $ \err -> do
                     logWarn @String $ "Error " <> show err
@@ -545,7 +549,7 @@ applyInputs :: AsMarloweError e
     => MarloweParams
     -> SmallTypedValidator
     -> Maybe SlotInterval
-    -> [Input]
+    -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator slotInterval inputs = mapError (review _MarloweError) $ do
     slotRange <- case slotInterval of
@@ -683,7 +687,7 @@ mkStep ::
     MarloweParams
     -> SmallTypedValidator
     -> SlotInterval
-    -> [Input]
+    -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep params typedValidator range input = do
     let
@@ -707,7 +711,17 @@ mkStep params typedValidator range input = do
                 -- inputConstraints :: [InputConstraint [Input]]
                 inputConstraints = [InputConstraint{icRedeemer=[], icTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef }]
 
-            case mkMarloweStateMachineTransition params oldState (range, input) of
+            let MarloweData{..} = currentState
+            let asdf (ClientInput i)             = NormalInput i
+                asdf (ClientMerkleizedInput i c) = merkleizedInput i c
+            let inputs = fmap asdf input
+            let txInput = TransactionInput {
+                    txInterval = range,
+                    txInputs = inputs }
+
+            let computedResult = computeTransaction txInput marloweState marloweContract
+            throwError TransitionError
+            {- case computedResult of
                 Just (newConstraints, newState)  -> do
                     let isFinal = isClose (marloweContract $ SM.stateData newState)
                         lookups1 =
@@ -736,7 +750,7 @@ mkStep params typedValidator range input = do
                                }
                     submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
                     pure (SM.stateData newState)
-                Nothing -> throwError TransitionError
+                Nothing -> throwError TransitionError -}
 
 
 waitForUpdateTimeout ::

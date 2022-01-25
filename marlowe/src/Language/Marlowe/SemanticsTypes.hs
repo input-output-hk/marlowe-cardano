@@ -231,6 +231,7 @@ data InputContent = IDeposit AccountId Party Token Integer
                   | INotify
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
+  deriving anyclass (ToJSON, FromJSON)
 
 data Input = NormalInput InputContent
            | MerkleizedInput InputContent BuiltinByteString Contract
