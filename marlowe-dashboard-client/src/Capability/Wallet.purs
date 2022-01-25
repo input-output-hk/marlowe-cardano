@@ -10,17 +10,15 @@ module Capability.Wallet
 
 import Prologue
 
-import API.Marlowe.Run.Wallet as WBE
 import API.Marlowe.Run.Wallet.CentralizedTestnet
-  ( CreateWalletResponse
-  , CreateWalletError
+  ( CreateWalletError
+  , CreateWalletResponse
   , RestoreWalletError
   , RestoreWalletOptions
   )
 import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
-import API.MockWallet as MockAPI
 import AppM (AppM)
-import Bridge (toBack, toFront)
+import Bridge (toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift, runExceptT)
 import Data.Passpharse (Passphrase)
@@ -46,18 +44,11 @@ class Monad m <= ManageWallet m where
 
 instance monadWalletAppM :: ManageWallet AppM where
   createWallet wn p = TestnetAPI.createWallet wn p
-  restoreWallet options = TestnetAPI.restoreWallet options
-  submitWalletTransaction wallet tx = runExceptT $
-    MockAPI.submitWalletTransaction (toBack wallet) tx
-  getWalletInfo wallet = map (map toFront) $ runExceptT $ MockAPI.getWalletInfo
-    (toBack wallet)
-  -- TODO: we use a manual getTotalFunds because a problem with the toUrlPiece from
-  --       PureScript servant.
-  -- getWalletTotalFunds = runExceptT <<< WBE.getApiWalletV1ByWalletidTotalfunds
-  getWalletTotalFunds = runExceptT <<< WBE.getTotalFunds
-  signTransaction wallet tx = runExceptT $ MockAPI.signTransaction
-    (toBack wallet)
-    tx
+  restoreWallet = map (map toFront) <<< runExceptT <<< TestnetAPI.restoreWallet
+  submitWalletTransaction _wallet _tx = unsafeThrow "Not implemented"
+  getWalletInfo _wallet = unsafeThrow "Not implemented"
+  getWalletTotalFunds = runExceptT <<< getApiWalletV1ByWalletidTotalfunds
+  signTransaction _wallet _tx = unsafeThrow "Not implemented"
 
 instance monadWalletHalogenM ::
   ManageWallet m =>

@@ -1,27 +1,22 @@
-module Types
-  ( AjaxResponse
-  , DecodedAjaxError
-  , DecodedAjaxResponse
-  , DecodedWebData
-  , NotFoundAjaxError
-  , NotFoundAjaxResponse
-  , NotFoundWebData
-  , WebData
-  ) where
+module Types where
 
 import Prologue
+
+import Data.Argonaut (Json)
 import Data.Argonaut.Decode (JsonDecodeError)
 import Network.RemoteData (RemoteData)
 import Servant.PureScript (AjaxError)
 
+type JsonAjaxError = AjaxError JsonDecodeError Json
+
 type AjaxResponse
-  = Either AjaxError
+  = Either JsonAjaxError
 
 type WebData
-  = RemoteData AjaxError
+  = RemoteData JsonAjaxError
 
 type DecodedAjaxError
-  = Either AjaxError JsonDecodeError
+  = Either JsonAjaxError JsonDecodeError
 
 type DecodedAjaxResponse
   = Either DecodedAjaxError
@@ -30,7 +25,7 @@ type DecodedWebData
   = RemoteData DecodedAjaxError
 
 type NotFoundAjaxError
-  = Maybe AjaxError
+  = Maybe JsonAjaxError
 
 type NotFoundAjaxResponse
   = Either NotFoundAjaxError

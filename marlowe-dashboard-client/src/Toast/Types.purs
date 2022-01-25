@@ -17,8 +17,7 @@ import Analytics as A
 import Component.Icons (Icon(..))
 import Data.Argonaut.Decode (JsonDecodeError)
 import Halogen (SubscriptionId)
-import Servant.PureScript (AjaxError)
-import Types (DecodedAjaxError)
+import Types (DecodedAjaxError, JsonAjaxError)
 
 type ToastMessage =
   { shortDescription :: String
@@ -80,7 +79,7 @@ errorToast shortDescription longDescription =
   , timeout: 5000.0
   }
 
-ajaxErrorToast :: String -> AjaxError -> ToastMessage
+ajaxErrorToast :: String -> JsonAjaxError -> ToastMessage
 ajaxErrorToast shortDescription _ = errorToast shortDescription $ Just
   "A request was made to the server, but the expected response was not returned."
 

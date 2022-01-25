@@ -33,13 +33,14 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.PAB (class ManagePAB)
 import Capability.PAB
   ( activateContract
   , getContractInstanceObservableState
   , getWalletContractInstances
   , invokeEndpoint
   ) as PAB
-import Capability.PAB (class ManagePAB)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Capability.Wallet as Wallet
@@ -88,7 +89,7 @@ import Plutus.PAB.Webserver.Types
   , ContractInstanceClientState
   )
 import Plutus.V1.Ledger.Crypto (PubKeyHash(..)) as Back
-import Types (DecodedAjaxResponse, AjaxResponse)
+import Types (AjaxResponse, DecodedAjaxResponse)
 import Wallet.Emulator.Wallet (Wallet(..)) as Back
 import WebSocket.Support as WS
 

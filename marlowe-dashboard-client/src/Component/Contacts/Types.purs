@@ -20,6 +20,7 @@ import Data.Newtype (class Newtype)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets)
+import Servant.PureScript (class ToPathSegment)
 
 type State = { cardSection :: CardSection }
 
@@ -56,6 +57,8 @@ derive newtype instance decodeJsonWalletInfo :: DecodeJson WalletInfo
 
 -- TODO fix primitive obsession
 newtype WalletId = WalletId String
+
+derive newtype instance ToPathSegment WalletId
 
 derive instance newtypeWalletId :: Newtype WalletId _
 

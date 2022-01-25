@@ -33,8 +33,7 @@ mkEnv wsManager = do
   contractStepCarouselSubscription <- AVar.empty
   marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
   pure $ Env
-    { ajaxSettings: { baseURL: "/" }
-    , contractStepCarouselSubscription
+    { contractStepCarouselSubscription
     , marloweAppEndpointMutex
     , wsManager
     }

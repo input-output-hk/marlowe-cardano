@@ -13,7 +13,6 @@ module API.Marlowe.Run.Wallet.CentralizedTestnet
 
 import Prologue
 
-import API.Request (doPostRequestWith)
 import Bridge (toFront)
 import Cardano.Wallet.Mock.Types (WalletInfo) as Mock.Types
 import Component.Contacts.Types (WalletInfo)
@@ -29,32 +28,24 @@ import Data.Passpharse (Passphrase)
 import Data.Passpharse (toString) as Passphrase
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
-import Data.Variant.Generic
-  ( class Constructors
-  , mkConstructors
-  , mkConstructors'
-  )
+import Data.Variant.Generic (class Constructors, mkConstructors, mkConstructors')
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname (toString) as WalletNickname
 import Effect.Aff.Class (class MonadAff)
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
-  ( CreatePostData(..)
-  , RestoreError(..)
-  , RestorePostData(..)
-  ) as BE
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData(..), RestoreError(..), RestorePostData(..)) as BE
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreateResponse(..))
-import Servant.PureScript (AjaxError)
+import Servant.PureScript (class MonadAjax)
 import Type.Prelude (Proxy(..))
 import Type.Row (type (+))
+import Types (JsonAjaxError)
 
-type RestoreWalletOptions
-  =
+type RestoreWalletOptions =
   { walletName :: String
   , mnemonicPhrase :: Array String
   , passphrase :: Passphrase
   }
 
-type ClientServerErrorRow r = (clientServerError :: AjaxError | r)
+type ClientServerErrorRow r = (clientServerError :: JsonAjaxError | r)
 
 clientServerError :: forall r. AjaxError -> Variant (ClientServerErrorRow r)
 clientServerError = Variant.inj (Proxy :: Proxy "clientServerError")
@@ -71,8 +62,8 @@ mkRestoreWalletError :: forall c. Constructors RestoreWalletError c => c
 mkRestoreWalletError = mkConstructors' (Proxy :: Proxy RestoreWalletError)
 
 restoreWallet
-  :: forall m
-   . MonadAff m
+  :: forall e m
+   . MonadAjax MarloweRun.Api JsonDecodeError Json e m
   => RestoreWalletOptions
   -> m (Either RestoreWalletError WalletInfo)
 restoreWallet { passphrase, walletName, mnemonicPhrase } = runExceptT do
@@ -87,7 +78,7 @@ restoreWallet { passphrase, walletName, mnemonicPhrase } = runExceptT do
     fromServerErr err = mkRestoreWalletError.serverError err
 
   (res :: Either _ Mock.Types.WalletInfo) <-
-    withExceptT mkRestoreWalletError.clientServerError $ doPostRequestWith
+    withExceptT mkRestoreWalletError.clientServerError $ 
       { encode: encodeJson, decode: D.decode (D.either D.value D.value) }
       "/api/wallet/v1/centralized-testnet/restore"
       body
@@ -127,4 +118,3 @@ createWallet walletName passphrase = runExceptT do
     { mnemonic: mnemonic'
     , walletInfo: toFront walletInfo
     }
-

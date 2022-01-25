@@ -49,14 +49,15 @@ in  upstream
       "https://github.com/input-output-hk/purescript-datetime-iso"
       "c5b3b5421ae36631b0e2823e1199febd5b209791"
   with
-    servant-support =
+    servant-support = mkPackage
       [ "aff", "affjax", "argonaut", "arrays", "bifunctors", "either"
-      , "newtype", "prelude", "psci-support", "strings", "transformers", "uri"
+      , "http-methods", "maybe", "newtype", "nonempty", "prelude"
+      , "psci-support", "strings", "transformers", "tuples", "uri"
       ]
       "https://github.com/input-output-hk/purescript-servant-support"
-      "1fcf4e93723f7f5d36476735b76888938ced871e"
+      "bd01799acc9756e4b72a290cc0df83ff1e6d0937"
   with
-    json-helpers =
+    json-helpers = mkPackage
       [ "aff", "argonaut-codecs", "argonaut-core", "arrays", "bifunctors"
       , "contravariant", "control", "effect", "either", "enums"
       , "foldable-traversable", "foreign-object", "maybe", "newtype"
@@ -67,7 +68,7 @@ in  upstream
       "https://github.com/input-output-hk/purescript-bridge-json-helpers.git"
       "60615c36abaee16d8dbe09cdd0e772e6d523d024"
   with
-    web-common =
+    web-common = mkPackage
       [ "aff", "aff-promise", "affjax", "argonaut", "argonaut-codecs"
       , "argonaut-core", "arrays", "avar", "bifunctors", "bigints"
       , "concurrent-queues", "console", "control", "coroutines"
