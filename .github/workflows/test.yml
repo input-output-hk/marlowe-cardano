@@ -27,7 +27,7 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix-instantiate release.nix --arg checkMaterialization true --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
+      - run: nix-instantiate release.nix --arg checkMaterialization true --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I $(pwd) --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   nix-code-formatting:
     strategy:
       matrix:
@@ -42,7 +42,7 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix-build -A tests.nixpkgsFmt -A tests.pursTidy -A tests.prettier -A tests.shellcheck -A tests.stylishHaskell --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
+      - run: nix-build -A tests.nixpkgsFmt -A tests.pursTidy -A tests.prettier -A tests.shellcheck -A tests.stylishHaskell --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I $(pwd) --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   nix-code-generation:
     strategy:
       matrix:
@@ -57,7 +57,7 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix-build -A tests.generated --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I . --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
+      - run: nix-build -A tests.generated --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I $(pwd) --allowed-uris '${{ env.ALLOWED_URIS }}' --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
   check-for-updates:
     strategy:
       matrix:
