@@ -55,7 +55,7 @@ in  upstream
       , "psci-support", "strings", "transformers", "tuples", "uri"
       ]
       "https://github.com/input-output-hk/purescript-servant-support"
-      "bd01799acc9756e4b72a290cc0df83ff1e6d0937"
+      "010bc7b3ea8e2707a00c23fd510201aabd4eb13f"
   with
     json-helpers = mkPackage
       [ "aff", "argonaut-codecs", "argonaut-core", "arrays", "bifunctors"
