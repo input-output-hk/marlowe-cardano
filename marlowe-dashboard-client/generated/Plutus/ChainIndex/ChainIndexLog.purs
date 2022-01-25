@@ -8,8 +8,10 @@ import Control.Monad.Freer.Extras.Beam (BeamLog)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
@@ -17,6 +19,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
@@ -27,9 +30,6 @@ import Plutus.ChainIndex.Types (Tip)
 import Plutus.V1.Ledger.Tx (TxOut, TxOutRef)
 import Plutus.V1.Ledger.TxId (TxId)
 import Type.Proxy (Proxy(Proxy))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.Map as Map
 
 data ChainIndexLog
   = InsertionSuccess Tip InsertUtxoPosition

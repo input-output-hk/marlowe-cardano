@@ -53,7 +53,7 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
   tag: cd6a94fef38be13e976b25d1ca46a0b9b8b4ef1b
-  --sha256: 07k5ld5vp9ki3gsr1qdcj2q7s8s0c2jihnjvldadlg62sss6136p
+  --sha256: 1p5z28ipd2s6z9x0039lns33j92xxy89khiq1y6h8wv5m3mpg2lr
   subdir:
     freer-extras
     playground-common
@@ -124,8 +124,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/servant-purescript
-  tag: dfd6cfc8d305e93f9bf9f2b073578fb612314b94
-  --sha256: 1h8mckfn8b2b3q0w7sip8x8981d331vfiim88klny3hbjj23kmh0
+  tag: 002e172173ad2f2f69f98a3b56b7312364f23afe
+  --sha256: 178vp5xbr6bn534qlnrwjlp4klj8mrswx506lk50j240205d5d5n
 
 -- Copied from plutus-apps.
 source-repository-package

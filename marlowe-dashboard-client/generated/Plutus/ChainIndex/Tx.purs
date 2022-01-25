@@ -7,13 +7,16 @@ import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.RawJson (RawJson)
@@ -26,9 +29,6 @@ import Plutus.V1.Ledger.Slot (Slot)
 import Plutus.V1.Ledger.Tx (TxIn, TxOut)
 import Plutus.V1.Ledger.TxId (TxId)
 import Type.Proxy (Proxy(Proxy))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.Map as Map
 
 newtype ChainIndexTx = ChainIndexTx
   { _citxTxId :: TxId

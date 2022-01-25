@@ -6,16 +6,17 @@ import Prelude
 import Affjax.RequestHeader (RequestHeader(..))
 import Cardano.Wallet.Mock.Types (WalletInfo)
 import Component.Contacts.Types (WalletId)
-import Control.Monad.Except (ExceptT)
 import Data.Argonaut (Json, JsonDecodeError)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Array (catMaybes)
 import Data.Either (Either(..))
 import Data.Foldable (fold)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CheckPostData
@@ -24,6 +25,7 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   )
 import Servant.PureScript
   ( class MonadAjax
+  , AjaxError
   , flagQueryPairs
   , paramListQueryPairs
   , paramQueryPairs
@@ -31,19 +33,14 @@ import Servant.PureScript
   , toHeader
   , toPathSegment
   )
-import URI (PathAbsolute(..), RelativePart(..), RelativeRef(..))
-import URI.Path.Segment (segmentNZFromString)
-import Affjax.RequestBody (json) as Request
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.String.NonEmpty as NES
+import URI (RelativePart(..), RelativeRef(..))
 
 data Api = Api
 
 getApiVersion
-  :: forall e m
-   . MonadAjax Api JsonDecodeError Json e m
-  => ExceptT e m String
+  :: forall m
+   . MonadAjax Api m
+  => m (Either (AjaxError JsonDecodeError Json) String)
 getApiVersion =
   request Api req
   where
@@ -65,10 +62,10 @@ getApiVersion =
   query = Nothing
 
 getApiWalletV1ByWalletidTotalfunds
-  :: forall e m
-   . MonadAjax Api JsonDecodeError Json e m
+  :: forall m
+   . MonadAjax Api m
   => WalletId
-  -> ExceptT e m GetTotalFundsResponse
+  -> m (Either (AjaxError JsonDecodeError Json) GetTotalFundsResponse)
 getApiWalletV1ByWalletidTotalfunds wallet_id =
   request Api req
   where
@@ -93,10 +90,13 @@ getApiWalletV1ByWalletidTotalfunds wallet_id =
   query = Nothing
 
 postApiWalletV1CentralizedtestnetRestore
-  :: forall e m
-   . MonadAjax Api JsonDecodeError Json e m
+  :: forall m
+   . MonadAjax Api m
   => RestorePostData
-  -> ExceptT e m (Either RestoreError WalletInfo)
+  -> m
+       ( Either (AjaxError JsonDecodeError Json)
+           (Either RestoreError WalletInfo)
+       )
 postApiWalletV1CentralizedtestnetRestore reqBody =
   request Api req
   where
@@ -121,10 +121,10 @@ postApiWalletV1CentralizedtestnetRestore reqBody =
   query = Nothing
 
 postApiWalletV1CentralizedtestnetCheckmnemonic
-  :: forall e m
-   . MonadAjax Api JsonDecodeError Json e m
+  :: forall m
+   . MonadAjax Api m
   => CheckPostData
-  -> ExceptT e m Boolean
+  -> m (Either (AjaxError JsonDecodeError Json) Boolean)
 postApiWalletV1CentralizedtestnetCheckmnemonic reqBody =
   request Api req
   where

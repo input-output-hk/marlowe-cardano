@@ -804,7 +804,6 @@
         ouroboros-consensus = ./.plan.nix/ouroboros-consensus.nix;
         cardano-binary = ./.plan.nix/cardano-binary.nix;
         cardano-prelude = ./.plan.nix/cardano-prelude.nix;
-        plutus-doc = ./.plan.nix/plutus-doc.nix;
         optparse-applicative-fork = ./.plan.nix/optparse-applicative-fork.nix;
         ntp-client = ./.plan.nix/ntp-client.nix;
         text-class = ./.plan.nix/text-class.nix;
@@ -1012,9 +1011,6 @@
           "cardano-prelude" = {
             flags = { "development" = lib.mkOverride 900 false; };
             };
-          "plutus-doc" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
-            };
           "optparse-applicative-fork" = {
             flags = { "process" = lib.mkOverride 900 true; };
             };
@@ -1103,6 +1099,7 @@
           "byteorder".components.library.planned = lib.mkOverride 900 true;
           "ntp-client".components.exes."demo-ntp-client".planned = lib.mkOverride 900 true;
           "ekg-json".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-dashboard-server".components.exes."psgenerator".planned = lib.mkOverride 900 true;
           "tracer-transformers".components.exes."tracer-transfomers-example1".planned = lib.mkOverride 900 true;
           "semigroupoids".components.setup.planned = lib.mkOverride 900 true;
           "row-types".components.library.planned = lib.mkOverride 900 true;

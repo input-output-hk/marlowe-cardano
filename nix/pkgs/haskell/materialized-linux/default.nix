@@ -168,7 +168,6 @@
         "direct-sqlite".flags.json1 = true;
         "direct-sqlite".flags.fulltextsearch = true;
         "direct-sqlite".flags.systemlib = false;
-        "doctest".revision = (((hackage."doctest")."0.18.1").revisions).default;
         "dlist".revision = (((hackage."dlist")."0.8.0.8").revisions).default;
         "lifted-base".revision = (((hackage."lifted-base")."0.2.3.12").revisions).default;
         "pretty".revision = (((hackage."pretty")."1.1.3.6").revisions).default;
@@ -822,7 +821,6 @@
         ouroboros-consensus = ./.plan.nix/ouroboros-consensus.nix;
         cardano-binary = ./.plan.nix/cardano-binary.nix;
         cardano-prelude = ./.plan.nix/cardano-prelude.nix;
-        plutus-doc = ./.plan.nix/plutus-doc.nix;
         optparse-applicative-fork = ./.plan.nix/optparse-applicative-fork.nix;
         ntp-client = ./.plan.nix/ntp-client.nix;
         text-class = ./.plan.nix/text-class.nix;
@@ -1030,9 +1028,6 @@
           "cardano-prelude" = {
             flags = { "development" = lib.mkOverride 900 false; };
             };
-          "plutus-doc" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
-            };
           "optparse-applicative-fork" = {
             flags = { "process" = lib.mkOverride 900 true; };
             };
@@ -1105,7 +1100,6 @@
     ({ lib, ... }:
       {
         packages = {
-          "plutus-doc".components.exes."doc-doctests".planned = lib.mkOverride 900 true;
           "quickcheck-instances".components.library.planned = lib.mkOverride 900 true;
           "barbies".components.library.planned = lib.mkOverride 900 true;
           "quiet".components.library.planned = lib.mkOverride 900 true;
@@ -1123,6 +1117,7 @@
           "byteorder".components.library.planned = lib.mkOverride 900 true;
           "ntp-client".components.exes."demo-ntp-client".planned = lib.mkOverride 900 true;
           "ekg-json".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-dashboard-server".components.exes."psgenerator".planned = lib.mkOverride 900 true;
           "tracer-transformers".components.exes."tracer-transfomers-example1".planned = lib.mkOverride 900 true;
           "semigroupoids".components.setup.planned = lib.mkOverride 900 true;
           "row-types".components.library.planned = lib.mkOverride 900 true;
@@ -1214,7 +1209,6 @@
           "extra".components.library.planned = lib.mkOverride 900 true;
           "base-compat-batteries".components.library.planned = lib.mkOverride 900 true;
           "marlowe-cli".components.exes."marlowe-cli".planned = lib.mkOverride 900 true;
-          "doctest".components.exes."doctest".planned = lib.mkOverride 900 true;
           "sort".components.library.planned = lib.mkOverride 900 true;
           "lobemo-backend-trace-forwarder".components.library.planned = lib.mkOverride 900 true;
           "hsc2hs".components.exes."hsc2hs".planned = lib.mkOverride 900 true;
@@ -1378,7 +1372,6 @@
           "protolude".components.library.planned = lib.mkOverride 900 true;
           "lobemo-backend-monitoring".components.library.planned = lib.mkOverride 900 true;
           "http-types".components.library.planned = lib.mkOverride 900 true;
-          "doctest".components.library.planned = lib.mkOverride 900 true;
           "conduit".components.library.planned = lib.mkOverride 900 true;
           "data-default-instances-old-locale".components.library.planned = lib.mkOverride 900 true;
           "algebraic-graphs".components.library.planned = lib.mkOverride 900 true;

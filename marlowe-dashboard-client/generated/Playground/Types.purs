@@ -7,14 +7,17 @@ import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.List.Types (NonEmptyList)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
@@ -24,9 +27,6 @@ import Plutus.V1.Ledger.Slot (Slot)
 import Plutus.V1.Ledger.Value (TokenName, Value)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (EndpointDescription)
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.Map as Map
 
 data ContractCall a
   = CallEndpoint

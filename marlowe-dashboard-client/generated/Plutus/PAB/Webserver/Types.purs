@@ -7,14 +7,17 @@ import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Either (Either)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.RawJson (RawJson)
@@ -34,9 +37,6 @@ import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Wallet (Wallet)
 import Wallet.Rollup.Types (AnnotatedTx)
 import Wallet.Types (ContractActivityStatus, ContractInstanceId)
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.Map as Map
 
 newtype ChainReport = ChainReport
   { transactionMap :: Map TxId Tx

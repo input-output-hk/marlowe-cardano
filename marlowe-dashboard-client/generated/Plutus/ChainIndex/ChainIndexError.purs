@@ -8,21 +8,21 @@ import Control.Monad.Freer.Extras.Beam (BeamError)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Plutus.ChainIndex.Types (Point, Tip)
 import Type.Proxy (Proxy(Proxy))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.Map as Map
 
 data ChainIndexError
   = InsertionFailed InsertUtxoFailed

@@ -7,8 +7,10 @@ import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
@@ -16,6 +18,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.RawJson (RawJson)
@@ -27,9 +30,6 @@ import Plutus.Contract.Checkpoint (CheckpointError)
 import Servant.PureScript (class ToPathSegment, toPathSegment)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Error (WalletAPIError)
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
-import Data.Map as Map
 
 newtype AssertionError = GenericAssertion { unAssertionError :: String }
 

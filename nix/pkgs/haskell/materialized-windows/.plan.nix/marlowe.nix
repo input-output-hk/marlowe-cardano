@@ -126,7 +126,7 @@
             (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
             ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"));
           buildable = true;
-          modules = [ "SetupParser" "MarloweContract" ];
+          modules = [ "SetupParser" ];
           hsSourceDirs = [ "pab" ];
           mainPath = ([
             "Setup.hs"
