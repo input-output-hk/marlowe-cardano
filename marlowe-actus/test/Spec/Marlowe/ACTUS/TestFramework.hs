@@ -26,7 +26,7 @@ import Data.ByteString.Lazy as B (readFile)
 import Data.Char (toUpper)
 import Data.List as L (find, unzip4)
 import Data.Map as Map (Map, elems, lookup)
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Sort (sortOn)
 import Data.Time (LocalTime (..))
 import GHC.Generics (Generic)
@@ -40,7 +40,7 @@ import Language.Marlowe.ACTUS.Model.ContractSchedule as S (maturity, schedule)
 import Language.Marlowe.ACTUS.Model.Payoff (CtxPOF (CtxPOF))
 import Language.Marlowe.ACTUS.Model.StateInitialization (initializeState)
 import Language.Marlowe.ACTUS.Model.StateTransition (CtxSTF (..))
-import Language.Marlowe.ACTUS.Utility.DateShift (getFollowingBusinessDay)
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDCWithCfg)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
 import Text.Printf (printf)
@@ -78,7 +78,7 @@ tests n t =
                   ValueObserved {value} <-
                     L.find
                       ( \ValueObserved {timestamp} ->
-                          getFollowingBusinessDay timestamp (fromJust . calendar $ scheduleConfig terms) == date
+                          let d = applyBDCWithCfg (scheduleConfig terms) timestamp in calculationDay d == date
                       )
                       values
                   return value

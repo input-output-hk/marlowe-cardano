@@ -237,7 +237,7 @@ _SCHED_MD_PAM
     { maturityDate,
       scheduleConfig
     } = case maturityDate <|> maturity ct of
-    Just m  -> [applyBDCWithCfg scheduleConfig m]
+    Just m  -> [let d = applyBDCWithCfg scheduleConfig m in d { paymentDay = m }]
     Nothing -> []
 
 _SCHED_PP_PAM :: ContractTermsPoly a -> [ShiftedDay]
@@ -814,7 +814,7 @@ _SCHED_IP_CLM
   ContractTermsPoly
     { maturityDate = Just md,
       scheduleConfig
-    } = [applyBDCWithCfg scheduleConfig md]
+    } = [let d = applyBDCWithCfg scheduleConfig md in d { paymentDay = md }]
 _SCHED_IP_CLM _ = []
 
 _SCHED_IPCI_CLM :: ContractTermsPoly a -> [ShiftedDay]
