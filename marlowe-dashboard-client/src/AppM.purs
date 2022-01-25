@@ -1,22 +1,17 @@
-module AppM
-  ( AppM
-  , passphrase
-  , runAppM
-  ) where
+module AppM (AppM, passphrase, runAppM) where
 
 import Prologue
 
 import Clipboard (class MonadClipboard, copy)
-import Control.Monad.Except (ExceptT, mapExceptT, runExceptT)
 import Control.Monad.Reader (class MonadReader, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Trans.Class (lift)
-import Data.Argonaut (Json, JsonDecodeError)
 import Data.Array as A
-import Data.Either (either)
 import Data.Lens (Lens', over)
 import Data.Lens.Record (prop)
-import Data.MnemonicPhrase (toWords, wordToString)
+import Data.Maybe (fromJust)
+import Data.Passpharse (Passphrase)
+import Data.Passpharse as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -32,13 +27,11 @@ import Halogen.Store.Monad
   , updateStore
   )
 import Marlowe.Run.Server as MarloweRun
+import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
 import Servant.PureScript (class MonadAjax, Request, request)
-import Store (Action(..))
 import Store as Store
-import Toast.Types (ajaxErrorToast)
 import Type.Proxy (Proxy(..))
-import Types (JsonAjaxError)
 import URI (Fragment, Host, Path, RelativeRef, UserInfo)
 import URI.Extra.QueryPairs (Key, QueryPairs, Value)
 import URI.RelativePart (_relPath)
@@ -83,6 +76,41 @@ instance MonadStore Store.Action Store.Store AppM where
 derive newtype instance MonadAsk Env AppM
 
 derive newtype instance MonadReader Env AppM
+
+-- TODO move to servant-support and add more lenses
+_uri
+  :: forall reqContent resContent decodeError req res
+   . Lens'
+       (Request reqContent resContent decodeError req res)
+       ( RelativeRef
+           UserInfo
+           Host
+           Path
+           (Array String)
+           (QueryPairs Key Value)
+           Fragment
+       )
+_uri = prop (Proxy :: _ "uri")
+
+prependPath
+  :: forall reqContent resContent decodeError req res
+   . Array String
+  -> Request reqContent resContent decodeError req res
+  -> Request reqContent resContent decodeError req res
+prependPath prefix =
+  over
+    (_uri <<< _relPart <<< _relPath)
+    (Just <<< append prefix <<< join <<< A.fromFoldable)
+
+instance MonadAjax PAB.Api AppM where
+  request api = liftAff <<< request api <<< handleRequest
+    where
+    handleRequest = prependPath [ "pab", "api" ]
+
+instance MonadAjax MarloweRun.Api AppM where
+  request api = liftAff <<< request api <<< handleRequest
+    where
+    handleRequest = prependPath [ "api" ]
 
 instance MonadClipboard AppM where
   copy = liftEffect <<< copy

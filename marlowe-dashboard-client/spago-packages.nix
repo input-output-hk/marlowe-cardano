@@ -749,18 +749,6 @@ let
         installPhase = "ln -s $src $out";
       };
 
-    "leibniz" = pkgs.stdenv.mkDerivation {
-        name = "leibniz";
-        version = "v5.0.0";
-        src = pkgs.fetchgit {
-          url = "https://github.com/paf31/purescript-leibniz.git";
-          rev = "ed1fa97012a01126c499f2d0e28dfea2919296b3";
-          sha256 = "1xxc84jx9qd4z89mlhjw602l6350cilvw8kd67ixsmsnd0krnl3f";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
     "lists" = pkgs.stdenv.mkDerivation {
         name = "lists";
         version = "v6.0.1";
@@ -1135,11 +1123,11 @@ let
 
     "servant-support" = pkgs.stdenv.mkDerivation {
         name = "servant-support";
-        version = "1fcf4e93723f7f5d36476735b76888938ced871e";
+        version = "010bc7b3ea8e2707a00c23fd510201aabd4eb13f";
         src = pkgs.fetchgit {
           url = "https://github.com/input-output-hk/purescript-servant-support";
-          rev = "1fcf4e93723f7f5d36476735b76888938ced871e";
-          sha256 = "1p16vp5yfc9xffbmcv7rdg9s1q1nn5mxp6pgyxkz67v527gdj625";
+          rev = "010bc7b3ea8e2707a00c23fd510201aabd4eb13f";
+          sha256 = "16dnwh0f9wr03dydypl6lslifha1f8h538rl2f60j9lw4hcsigbh";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -1248,18 +1236,6 @@ let
           url = "https://github.com/purescript/purescript-type-equality.git";
           rev = "f7644468f22ed267a15d398173d234fa6f45e2e0";
           sha256 = "126pg4zg3bsrn8dzvv75xp586nznxyswzgjlr7cag3ij3j1z0kl0";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
-    "typelevel-eval" = pkgs.stdenv.mkDerivation {
-        name = "typelevel-eval";
-        version = "v0.5.0";
-        src = pkgs.fetchgit {
-          url = "https://github.com/natefaubion/purescript-typelevel-eval";
-          rev = "91d286c195b1e68aa06f2f0453fcd214f7b70102";
-          sha256 = "0jxw0y5d1vni8kdhrvgnrdi0iwm694gfh3d0nwjsaqmdhrcpyk08";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

@@ -19,7 +19,8 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
-  ( CheckPostData
+  ( CreatePostData
+  , CreateResponse
   , RestoreError
   , RestorePostData
   )
@@ -120,12 +121,12 @@ postApiWalletV1CentralizedtestnetRestore reqBody =
     ]
   query = Nothing
 
-postApiWalletV1CentralizedtestnetCheckmnemonic
+postApiWalletV1CentralizedtestnetCreate
   :: forall m
    . MonadAjax Api m
-  => CheckPostData
-  -> m (Either (AjaxError JsonDecodeError Json) Boolean)
-postApiWalletV1CentralizedtestnetCheckmnemonic reqBody =
+  => CreatePostData
+  -> m (Either (AjaxError JsonDecodeError Json) (Maybe CreateResponse))
+postApiWalletV1CentralizedtestnetCreate reqBody =
   request Api req
   where
   req = { method, uri, headers, content, encode, decode }
@@ -138,12 +139,12 @@ postApiWalletV1CentralizedtestnetCheckmnemonic reqBody =
   encode = E.encode encoder
   decode = D.decode decoder
   encoder = E.value
-  decoder = D.value
+  decoder = (D.maybe D.value)
   relativePart = RelativePartNoAuth $ Just
     [ "api"
     , "wallet"
     , "v1"
     , "centralized-testnet"
-    , "check-mnemonic"
+    , "create"
     ]
   query = Nothing

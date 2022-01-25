@@ -18,7 +18,7 @@ import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Component.Contacts.Types (WalletId)
-import Control.Monad.Except (lift, runExceptT)
+import Control.Monad.Except (lift)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Lens (view)
@@ -68,20 +68,16 @@ class
   getContractDefinitions :: m
     (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
 
-instance monadContractAppM :: ManagePAB AppM where
+instance ManagePAB AppM where
   activateContract contractActivationId wallet =
     map (map toFront)
-      $ runExceptT
       $ PAB.postApiContractActivate
       $ ContractActivationArgs
           { caID: contractActivationId, caWallet: Just (toBack wallet) }
-  deactivateContract plutusAppId =
-    runExceptT
-      $ PAB.putApiContractInstanceByContractinstanceidStop
-      $ toBack plutusAppId
-  getContractInstanceClientState plutusAppId = runExceptT
-    $ PAB.getApiContractInstanceByContractinstanceidStatus
-    $ toBack plutusAppId
+  deactivateContract =
+    PAB.putApiContractInstanceByContractinstanceidStop <<< toBack
+  getContractInstanceClientState =
+    PAB.getApiContractInstanceByContractinstanceidStatus <<< toBack
   getContractInstanceCurrentState plutusAppId = do
     clientState <- getContractInstanceClientState plutusAppId
     pure $ map (view _cicCurrentState) clientState
@@ -92,19 +88,16 @@ instance monadContractAppM :: ManagePAB AppM where
     currentState <- getContractInstanceCurrentState plutusAppId
     pure $ map (view _hooks) currentState
   invokeEndpoint plutusAppId endpoint payload =
-    runExceptT $
-      PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
-        (RawJson $ encodeStringifyJson payload)
-        (toBack plutusAppId)
-        endpoint
-  getWalletContractInstances wallet = runExceptT
-    $ PAB.getApiContractInstancesWalletByWalletid (unwrap wallet) Nothing
-  getAllContractInstances = runExceptT $ PAB.getApiContractInstances Nothing
-  getContractDefinitions = runExceptT PAB.getApiContractDefinitions
+    PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
+      (RawJson $ encodeStringifyJson payload)
+      (toBack plutusAppId)
+      endpoint
+  getWalletContractInstances wallet =
+    PAB.getApiContractInstancesWalletByWalletid (unwrap wallet) Nothing
+  getAllContractInstances = PAB.getApiContractInstances Nothing
+  getContractDefinitions = PAB.getApiContractDefinitions
 
-instance monadContractHalogenM ::
-  ManagePAB m =>
-  ManagePAB (HalogenM state action slots msg m) where
+instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet

@@ -18,12 +18,13 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
   )
 import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
 import AppM (AppM)
-import Bridge (toFront)
 import Component.Contacts.Types (WalletId, WalletInfo)
-import Control.Monad.Except (lift, runExceptT)
+import Control.Monad.Except (lift)
 import Data.Passpharse (Passphrase)
 import Data.WalletNickname (WalletNickname)
+import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen (HalogenM)
+import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
@@ -44,10 +45,10 @@ class Monad m <= ManageWallet m where
 
 instance monadWalletAppM :: ManageWallet AppM where
   createWallet wn p = TestnetAPI.createWallet wn p
-  restoreWallet = map (map toFront) <<< runExceptT <<< TestnetAPI.restoreWallet
+  restoreWallet = TestnetAPI.restoreWallet
   submitWalletTransaction _wallet _tx = unsafeThrow "Not implemented"
   getWalletInfo _wallet = unsafeThrow "Not implemented"
-  getWalletTotalFunds = runExceptT <<< getApiWalletV1ByWalletidTotalfunds
+  getWalletTotalFunds = MarloweRun.getApiWalletV1ByWalletidTotalfunds
   signTransaction _wallet _tx = unsafeThrow "Not implemented"
 
 instance monadWalletHalogenM ::
