@@ -1,10 +1,10 @@
 module Component.Projects.State where
 
 import Prologue hiding (div)
+
 import Component.Projects.Types (Action(..), State, _projects)
-import Control.Monad.Except (runExceptT)
-import Control.Monad.Reader (class MonadAsk)
-import Data.Argonaut (decodeJson, fromString)
+import Control.Monad.Trans.Class (lift)
+import Data.Argonaut (decodeJson, fromString, printJsonDecodeError, stringify)
 import Data.Array (sortBy)
 import Data.Bifunctor (lmap, rmap)
 import Data.DateTime (DateTime)
@@ -15,26 +15,27 @@ import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
 import Data.Ordering (invert)
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Gist (Gist(..))
 import Halogen (HalogenM)
 import MainFrame.Types (ChildSlots)
-import Marlowe (getApiGists)
+import Marlowe (Api, getApiGists)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
-import Servant.PureScript (printAjaxError)
+import Servant.PureScript (class MonadAjax, printAjaxError)
 
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction LoadProjects = do
   assign _projects Loading
-  resp <- runExceptT getApiGists
-  assign _projects $ rmap sortGists $ lmap printAjaxError $
-    RemoteData.fromEither resp
+  resp <- lift $ RemoteData.fromEither <$> getApiGists
+  assign _projects
+    $ rmap sortGists
+    $ lmap (printAjaxError stringify printJsonDecodeError)
+    $ resp
 
 handleAction (LoadProject _ _) = pure unit
 

@@ -41,15 +41,12 @@ rec {
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
 
-  # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
-  # we switch to flakes.
-  webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (marlowe.lib) gitignore-nix; };
 
   marlowe-playground = pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
-      inherit haskell webCommon webCommonMarlowe webCommonPlayground;
+      inherit haskell webCommon webCommonMarlowe;
       inherit (marlowe) purs-tidy;
       inherit (pkgs.nodePackages) prettier;
     }) client server generated-purescript generate-purescript start-backend;

@@ -9,9 +9,9 @@ module StaticAnalysis.StaticTools
   ) where
 
 import Prologue hiding (div)
+
 import Analytics (class IsEvent, analyticsTracking)
-import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.Reader (class MonadAsk)
+import Control.Monad.Trans.Class (lift)
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, toNumber)
 import Data.Lens (assign, use)
@@ -21,19 +21,18 @@ import Data.NonEmpty ((:|))
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Halogen (HalogenM, liftEffect)
+import Marlowe (Api)
 import Marlowe as Server
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Template (fillTemplate)
 import Marlowe.Semantics (Case(..), Contract(..), Observation(..), emptyState)
 import Marlowe.Semantics as S
 import Marlowe.Symbolic.Types.Request as MSReq
 import Marlowe.Symbolic.Types.Response (Response(..), Result(..))
-import Network.RemoteData (RemoteData(..))
-import Network.RemoteData as RemoteData
-import Servant.PureScript (AjaxError)
+import Marlowe.Template (fillTemplate)
+import Network.RemoteData (RemoteData(..), fromEither)
+import Servant.PureScript (class MonadAjax)
 import StaticAnalysis.Types
   ( AnalysisExecutionState(..)
   , AnalysisInProgressRecord
@@ -48,15 +47,12 @@ import StaticAnalysis.Types
   , _analysisState
   , _templateContent
   )
-import Types (WarningAnalysisError(..), WebData)
-
-runAjax :: forall m a. Functor m => ExceptT AjaxError m a -> m (WebData a)
-runAjax action = RemoteData.fromEither <$> runExceptT action
+import Types (JsonAjaxError, WarningAnalysisError(..))
 
 analyseContract
   :: forall m state action slots
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => EM.Contract
   -> HalogenM { analysisState :: AnalysisState | state } action slots Void m
        Unit
@@ -72,6 +68,7 @@ analyseContract extendedContract = do
       response <- checkContractForWarnings emptySemanticState contract
       assign (_analysisState <<< _analysisExecutionState) $ WarningAnalysis
         $ lmap WarningAnalysisAjaxError
+        $ fromEither
         $ response
     Nothing -> assign (_analysisState <<< _analysisExecutionState)
       $ WarningAnalysis
@@ -80,11 +77,10 @@ analyseContract extendedContract = do
   emptySemanticState = emptyState zero
 
   checkContractForWarnings state contract =
-    traverse logAndStripDuration
-      =<< runAjax
-        ( Server.postApiMarloweanalysis
-            $ MSReq.Request { onlyAssertions: false, contract, state }
-        )
+    traverse logAndStripDuration =<< lift
+      ( Server.postApiMarloweanalysis
+          $ MSReq.Request { onlyAssertions: false, contract, state }
+      )
 
 splitArray :: forall a. List a -> List (List a /\ a /\ List a)
 splitArray x = splitArrayAux Nil x
@@ -278,23 +274,22 @@ logAndStripDuration (Response { result, durationMs }) = do
 checkContractForFailedAssertions
   :: forall m state action slots
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Contract
   -> S.State
-  -> HalogenM state action slots Void m (WebData Result)
+  -> HalogenM state action slots Void m (Either JsonAjaxError Result)
 checkContractForFailedAssertions contract state =
-  traverse logAndStripDuration
-    =<< runAjax
-      ( Server.postApiMarloweanalysis
-          $ MSReq.Request
-              { onlyAssertions: true, contract: contract, state: state }
-      )
+  traverse logAndStripDuration =<< lift
+    ( Server.postApiMarloweanalysis
+        $ MSReq.Request
+            { onlyAssertions: true, contract: contract, state: state }
+    )
 
 startMultiStageAnalysis
   :: forall m state action slots
    . MonadAff m
   => MultiStageAnalysisProblemDef
-  -> MonadAsk Env m
+  -> MonadAjax Api m
   => Contract
   -> S.State
   -> HalogenM { analysisState :: AnalysisState | state } action slots Void m
@@ -401,25 +396,30 @@ stepSubproblem
 updateWithResponse
   :: forall m state action slots
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => MultiStageAnalysisProblemDef
   -> MultiStageAnalysisData
-  -> WebData Result
-  -> HalogenM { analysisState :: AnalysisState | state } action slots Void m
+  -> Either JsonAjaxError Result
+  -> HalogenM
+       { analysisState :: AnalysisState | state }
+       action
+       slots
+       Void
+       m
        MultiStageAnalysisData
-updateWithResponse _ (AnalysisInProgress _) (Failure _) = pure
+updateWithResponse _ (AnalysisInProgress _) (Left _) = pure
   (AnalysisFailure "connection error")
 
-updateWithResponse _ (AnalysisInProgress _) (Success (Error err)) = pure
+updateWithResponse _ (AnalysisInProgress _) (Right (Error err)) = pure
   (AnalysisFailure err)
 
-updateWithResponse problemDef (AnalysisInProgress rad) (Success Valid) =
+updateWithResponse problemDef (AnalysisInProgress rad) (Right Valid) =
   stepAnalysis problemDef false rad
 
 updateWithResponse
   problemDef
   (AnalysisInProgress rad)
-  (Success (CounterExample _)) = stepAnalysis problemDef true rad
+  (Right (CounterExample _)) = stepAnalysis problemDef true rad
 
 updateWithResponse _ rad _ = pure rad
 
@@ -438,7 +438,7 @@ stepAnalysis
   :: forall m state action slots
    . MonadAff m
   => MultiStageAnalysisProblemDef
-  -> MonadAsk Env m
+  -> MonadAjax Api m
   => Boolean
   -> AnalysisInProgressRecord
   -> HalogenM { analysisState :: AnalysisState | state } action slots Void m

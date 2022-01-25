@@ -6,7 +6,6 @@ import AppM (runAppM)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
-import Env (Env(..))
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
@@ -20,11 +19,10 @@ main :: Effect Unit
 main =
   HA.runHalogenAff do
     body <- HA.awaitBody
-    let
-      mainFrame = H.hoist (runAppM $ Env { ajaxSettings: { baseURL: "/" } })
-        MainFrame.component
+    let mainFrame = H.hoist runAppM MainFrame.component
     driver <- runUI mainFrame unit body
-    void $ liftEffect
+    void
+      $ liftEffect
       $ matchesWith (Routing.parse Router.route) \old new -> do
           when (old /= Just new) $ launchAff_ $ driver.query
             (MainFrame.ChangeRoute new unit)

@@ -35,7 +35,7 @@ in  upstream
       "https://github.com/input-output-hk/purescript-markdown"
       "022d8afd0d9e0ef8114da9e9ef5a67d9ffc86a29"
   with
-    datetime-isoA = mkPackage
+    datetime-iso = mkPackage
       [ "aff", "argonaut", "argonaut-codecs", "argonaut-core", "arrays"
       , "bifunctors", "datetime", "effect", "either", "enums"
       , "foldable-traversable", "maybe", "newtype", "parsing", "partial"

@@ -1,6 +1,7 @@
 module Page.BlocklyEditor.State where
 
 import Prologue
+
 import CloseAnalysis (analyseClose)
 import Component.Blockly.Types as Blockly
 import Component.BottomPanel.State (handleAction) as BottomPanel
@@ -8,7 +9,6 @@ import Component.BottomPanel.Types (Action(..), State) as BottomPanel
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk)
 import Data.Array as Array
 import Data.Either (hush, note)
 import Data.Lens (assign, modifying, over, set, use, view)
@@ -16,12 +16,12 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Env (Env)
 import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, modify_)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import MainFrame.Types (ChildSlots, _blocklySlot)
+import Marlowe (Api)
 import Marlowe.Blockly as MB
 import Marlowe.Extended as Extended
 import Marlowe.Holes as Holes
@@ -39,6 +39,7 @@ import Page.BlocklyEditor.Types
   , _metadataHintInfo
   , _warnings
   )
+import Servant.PureScript (class MonadAjax)
 import SessionStorage as SessionStorage
 import Simulator.Lenses (_templateContent)
 import StaticAnalysis.Reachability
@@ -69,7 +70,7 @@ toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction (HandleBlocklyMessage Blockly.BlocklyReady) = do

@@ -3,7 +3,6 @@
 , haskell
 , webCommon
 , webCommonMarlowe
-, webCommonPlayground
 , buildPursPackage
 , buildNodeModules
 , filterNpm
@@ -74,13 +73,11 @@ let
       name = "marlowe-playground-client";
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
-        web-common-playground = webCommonPlayground;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
       WEB_COMMON_SRC = webCommon.cleanSrc;
-      WEB_COMMON_PLAYGROUND_SRC = webCommonPlayground;
       WEB_COMMON_MARLOWE_SRC = webCommonMarlowe;
     });
 in

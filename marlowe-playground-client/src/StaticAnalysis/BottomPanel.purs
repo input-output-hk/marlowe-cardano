@@ -5,6 +5,8 @@ module StaticAnalysis.BottomPanel
   ) where
 
 import Prologue hiding (div)
+
+import Data.Argonaut (printJsonDecodeError, stringify)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Lens ((^.))
@@ -161,7 +163,11 @@ analysisResultPane metadata actionGen state =
             , text "Analysis failed for the following reason:"
             , ul [ classes [ ClassName "indented-enum-initial" ] ]
                 [ li_
-                    [ b_ [ spanText $ printAjaxError error ]
+                    [ b_
+                        [ spanText $ printAjaxError stringify
+                            printJsonDecodeError
+                            error
+                        ]
                     ]
                 ]
             ]

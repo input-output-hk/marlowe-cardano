@@ -64,8 +64,8 @@ You can edit this file as you like.
   , "tailrec"
   , "transformers"
   , "tuples"
-  , "type-equality"
   , "unfoldable"
+  , "uri"
   , "web-common"
   , "web-dom"
   , "web-events"
@@ -79,6 +79,5 @@ You can edit this file as you like.
   , "test/**/*.purs"
   , "generated/**/*.purs"
   , "../web-common-marlowe/src/**/*.purs"
-  , "${env:WEB_COMMON_PLAYGROUND_SRC as Text}/src/**/*.purs"
   ]
 }
