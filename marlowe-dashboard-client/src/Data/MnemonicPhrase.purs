@@ -103,14 +103,6 @@ derive instance ordMnemonicPhrase :: Ord MnemonicPhrase
 instance showMnemonicPhrase :: Show MnemonicPhrase where
   show = show <<< toWords
 
--- instance Moldable Word MnemonicPhrase where
---   moldl f z = do
---     let
---       m10 = f (f (f (f (f (f (f (f (f (f (f z w1) w2) w3) w3) w4) w5) w6) w7) w8) w9) w10
---       m20 = f (f (f (f (f (f (f (f (f m10 w11) w12) w13) w14) w15) w16) w17) w18 w19) w20
---     f (f (f (f (m20 w w21)) w22) w23) w24
---   modlr 
-
 fromString
   :: String
   -> Either MnemonicPhraseError MnemonicPhrase
