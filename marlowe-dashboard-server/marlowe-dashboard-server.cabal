@@ -90,7 +90,7 @@ executable marlowe-dashboard-server
         wai,
         warp
 
-executable marlowe-run-psgenerator
+executable psgenerator
     main-is: PSGenerator.hs
     hs-source-dirs:
         tools,
