@@ -16,7 +16,6 @@ import Ledger (PubKeyHash (..), Slot (..))
 import Ledger.Ada (Ada, getLovelace)
 import Ledger.Value
 import qualified PlutusTx.Prelude as P
-import qualified PlutusTx.Ratio as P
 import Text.PrettyPrint.Leijen (Doc, comma, encloseSep, hang, lbracket, line, lparen, parens, rbracket, rparen, space,
                                 text)
 
@@ -107,7 +106,7 @@ instance (Pretty a) => Pretty [a] where
     Thus, we require @PureScript.parse . Haskell.pretty == id
  -}
 
-instance (Show a) => Pretty (P.Ratio a) where
+instance Pretty P.Rational where
     prettyFragment = text . show
 
 instance Pretty Slot where

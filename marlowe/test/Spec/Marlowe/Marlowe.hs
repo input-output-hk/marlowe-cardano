@@ -30,7 +30,6 @@ import Data.Either (fromRight, isRight)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust, isNothing)
 import Data.Monoid (First (..))
-import Data.Ratio ((%))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String
@@ -41,6 +40,7 @@ import Data.UUID (UUID)
 import qualified Data.UUID as UUID
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
+import qualified Language.Marlowe as M ((%))
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
 import Language.Marlowe.Deserialisation (byteStringToInt, byteStringToList)
@@ -422,7 +422,7 @@ divisionRoundingTest = property $ do
             n <- amount
             d <- suchThat amount (/= 0)
             return (n, d)
-    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n P.% d)
+    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n M.% d)
     where
       halfEvenRound = P.round
 
