@@ -29,8 +29,10 @@ import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
+import MarloweContract (MarloweContract)
 import Options.Applicative (Parser, argument, execParser, help, helper, idm, info, metavar, str)
 import qualified PSGenerator.Common
+import Plutus.PAB.Run.PSGenerator (generateAPIModule)
 import Servant.PureScript (HasBridge, Settings, addTypes, apiModuleName, defaultBridge, defaultSettings,
                            generateWithSettings, languageBridge)
 
@@ -119,3 +121,4 @@ main :: IO ()
 main = do
   outputDir <- execParser (info (helper <*> argParser) idm)
   generateWithSettings mySettings outputDir myBridgeProxy (Proxy @HTTPAPI)
+  generateAPIModule (Proxy @MarloweContract) outputDir

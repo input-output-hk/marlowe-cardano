@@ -222,7 +222,6 @@ executable marlowe-pab-setup
     -threaded
   other-modules:
     SetupParser
-    MarloweContract
   build-depends:
     base >= 4.9 && < 5,
     aeson -any,

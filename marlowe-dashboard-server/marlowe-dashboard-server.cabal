@@ -92,18 +92,29 @@ executable marlowe-dashboard-server
 
 executable marlowe-run-psgenerator
     main-is: PSGenerator.hs
-    hs-source-dirs: tools
+    hs-source-dirs:
+        tools,
+        ../marlowe/pab
+    other-modules:
+        MarloweContract
     default-language: Haskell2010
     ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
                  -Wincomplete-uni-patterns -Wincomplete-record-updates
     build-depends:
+        aeson,
         base,
+        data-default,
+        freer-simple,
         lens,
         marlowe,
         marlowe-dashboard-server,
-        playground-common,
-        purescript-bridge,
         optparse-applicative,
+        openapi3,
+        playground-common,
+        plutus-pab,
+        plutus-pab-executables,
+        prettyprinter,
+        purescript-bridge,
         servant-purescript,
         text
 
