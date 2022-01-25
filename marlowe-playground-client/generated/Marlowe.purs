@@ -3,27 +3,20 @@ module Marlowe where
 
 import Prelude
 
-import Affjax (defaultRequest, request)
-import Affjax.RequestBody (json) as Request
 import Affjax.RequestHeader (RequestHeader(..))
-import Affjax.ResponseFormat (json) as Response
 import Auth (AuthStatus)
-import Control.Monad.Error.Class (class MonadError, throwError)
-import Control.Monad.Reader.Class (class MonadAsk, asks)
-import Data.Argonaut.Decode (decodeJson)
+import Data.Argonaut (Json, JsonDecodeError)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (encodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
-import Data.Array (fromFoldable, null)
+import Data.Array (catMaybes)
 import Data.Either (Either(..))
+import Data.Foldable (fold)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap)
 import Data.RawJson (RawJson)
-import Data.String (joinWith)
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Data.Tuple (Tuple)
 import Gist (Gist, GistId, NewGist)
 import Language.Haskell.Interpreter (InterpreterError, InterpreterResult)
 import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTermsPoly)
@@ -31,781 +24,354 @@ import Language.Marlowe.ACTUS.Domain.Schedule (CashFlowPoly)
 import Marlowe.Symbolic.Types.Request (Request)
 import Marlowe.Symbolic.Types.Response (Response)
 import Servant.PureScript
-  ( class ToURLPiece
+  ( class MonadAjax
   , AjaxError
-  , ErrorDescription(..)
-  , toURLPiece
+  , flagQueryPairs
+  , paramListQueryPairs
+  , paramQueryPairs
+  , request
+  , toHeader
+  , toPathSegment
   )
+import URI (RelativePart(..), RelativeRef(..))
 import Webghc.Server (CompileRequest)
 
-foreign import encodeURIComponent :: String -> String
-
-type SPSettings_
-  =
-  { baseURL :: String
-  }
-
-class HasSPSettings a where
-  spSettings :: a -> SPSettings_
+data Api = Api
 
 getApiOracleByExchangeByPair
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => String
   -> String
-  -> m RawJson
-getApiOracleByExchangeByPair exchange pair = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left GET
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "oracle"
-        <> "/"
-        <> encodeURIComponent (toURLPiece exchange)
-        <> "/"
-        <> encodeURIComponent (toURLPiece pair)
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) RawJson)
+getApiOracleByExchangeByPair exchange pair =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "oracle"
+    , toPathSegment exchange
+    , toPathSegment pair
+    ]
+  query = Nothing
 
 postApiActusGenerate
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => ContractTermsPoly Number
-  -> m String
-postApiActusGenerate reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "actus"
-        <> "/"
-        <> "generate"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) String)
+postApiActusGenerate reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "actus"
+    , "generate"
+    ]
+  query = Nothing
 
 postApiActusGeneratestatic
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => ContractTermsPoly Number
-  -> m String
-postApiActusGeneratestatic reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "actus"
-        <> "/"
-        <> "generate-static"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) String)
+postApiActusGeneratestatic reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "actus"
+    , "generate-static"
+    ]
+  query = Nothing
 
 postApiActusCashflows
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => ContractTermsPoly Number
-  -> m (Array (CashFlowPoly Number))
-postApiActusCashflows reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "actus"
-        <> "/"
-        <> "cashflows"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) (Array (CashFlowPoly Number)))
+postApiActusCashflows reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "actus"
+    , "cashflows"
+    ]
+  query = Nothing
 
 postApiCompile
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => CompileRequest
-  -> m (Either InterpreterError (InterpreterResult String))
-postApiCompile reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "compile"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      (D.either D.value D.value)
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m
+       ( Either (AjaxError JsonDecodeError Json)
+           (Either InterpreterError (InterpreterResult String))
+       )
+postApiCompile reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = (D.either D.value D.value)
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "compile"
+    ]
+  query = Nothing
 
 getApiOauthStatus
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
-  => m AuthStatus
-getApiOauthStatus = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left GET
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "oauth"
-        <> "/"
-        <> "status"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  :: forall m
+   . MonadAjax Api m
+  => m (Either (AjaxError JsonDecodeError Json) AuthStatus)
+getApiOauthStatus =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "oauth"
+    , "status"
+    ]
+  query = Nothing
 
 getApiOauthGithub
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
-  => m Unit
-getApiOauthGithub = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left GET
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "oauth"
-        <> "/"
-        <> "github"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        }
-  let
-    decoder =
-      D.unit
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  :: forall m
+   . MonadAjax Api m
+  => m (Either (AjaxError JsonDecodeError Json) Unit)
+getApiOauthGithub =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.unit
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "oauth"
+    , "github"
+    ]
+  query = Nothing
 
 getApiGists
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
-  => m (Array Gist)
-getApiGists = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left GET
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "gists"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  :: forall m
+   . MonadAjax Api m
+  => m (Either (AjaxError JsonDecodeError Json) (Array Gist))
+getApiGists =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "gists"
+    ]
+  query = Nothing
 
 postApiGists
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => NewGist
-  -> m Gist
-postApiGists reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "gists"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) Gist)
+postApiGists reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "gists"
+    ]
+  query = Nothing
 
 getApiGistsByGistId
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => GistId
-  -> m Gist
-getApiGistsByGistId gistId = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left GET
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "gists"
-        <> "/"
-        <> encodeURIComponent (toURLPiece gistId)
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) Gist)
+getApiGistsByGistId gistId =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "gists"
+    , toPathSegment gistId
+    ]
+  query = Nothing
 
 postApiGistsByGistId
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => NewGist
   -> GistId
-  -> m Gist
-postApiGistsByGistId reqBody gistId = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "gists"
-        <> "/"
-        <> encodeURIComponent (toURLPiece gistId)
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) Gist)
+postApiGistsByGistId reqBody gistId =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "gists"
+    , toPathSegment gistId
+    ]
+  query = Nothing
 
 postApiMarloweanalysis
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => Request
-  -> m Response
-postApiMarloweanalysis reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "api"
-        <> "/"
-        <> "marlowe-analysis"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      D.value
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m (Either (AjaxError JsonDecodeError Json) Response)
+postApiMarloweanalysis reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "marlowe-analysis"
+    ]
+  query = Nothing
 
 postRunghc
-  :: forall env m
-   . HasSPSettings env
-  => MonadAsk env m
-  => MonadError AjaxError m
-  => MonadAff m
+  :: forall m
+   . MonadAjax Api m
   => CompileRequest
-  -> m (Either InterpreterError (InterpreterResult String))
-postRunghc reqBody = do
-  spSettings <- asks spSettings
-  let baseURL = spSettings.baseURL
-  let httpMethod = Left POST
-  let
-    encodeQueryItem :: forall a. ToURLPiece a => String -> a -> String
-    encodeQueryItem name val = name <> "=" <> toURLPiece val
-  let
-    queryArgs :: Array String
-    queryArgs =
-      []
-  let
-    queryString = if null queryArgs then "" else "?" <> (joinWith "&" queryArgs)
-  let
-    reqURL =
-      baseURL
-        <> "runghc"
-        <> queryString
-  let
-    reqHeaders =
-      [
-      ]
-  let
-    affReq =
-      defaultRequest
-        { method = httpMethod
-        , url = reqURL
-        , headers = defaultRequest.headers <> reqHeaders
-        , responseFormat = Response.json
-        , content = Just
-            $ Request.json
-            $ flip E.encode reqBody
-            $ E.value
-        }
-  let
-    decoder =
-      (D.either D.value D.value)
-  result <- liftAff $ request affReq
-  response <- case result of
-    Left err -> throwError $
-      { request: affReq, description: ConnectingError err }
-    Right r -> pure r
-  when (unwrap response.status < 200 || unwrap response.status >= 299)
-    $ throwError
-    $ { request: affReq, description: UnexpectedHTTPStatus response }
-  case D.decode decoder response.body of
-    Left err -> throwError $ { request: affReq, description: DecodingError err }
-    Right body -> pure body
+  -> m
+       ( Either (AjaxError JsonDecodeError Json)
+           (Either InterpreterError (InterpreterResult String))
+       )
+postRunghc reqBody =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left POST
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Just reqBody
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.value
+  decoder = (D.either D.value D.value)
+  relativePart = RelativePartNoAuth $ Just
+    [ "runghc"
+    ]
+  query = Nothing

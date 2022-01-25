@@ -13,7 +13,7 @@
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
-  build-playground-exe = "$(nix-build --quiet --no-build-output ../default.nix -A marlowe.haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server)";
+  build-playground-exe = "$(nix-build ../default.nix -A marlowe.haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server)";
 
   build-ghc-with-marlowe = "$(nix-build --quiet --no-build-output -E '(import ./.. {}).marlowe.haskell.project.ghcWithPackages(ps: [ ps.marlowe ])')";
 

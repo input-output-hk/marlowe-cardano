@@ -5,11 +5,11 @@ import Prelude
 
 import Control.Lazy (defer)
 import Control.Monad.Freer.Extras.Beam (BeamError)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -31,12 +31,12 @@ data ChainIndexError
   | QueryFailedNoTip
   | BeamEffectError BeamError
 
-derive instance eqChainIndexError :: Eq ChainIndexError
+derive instance Eq ChainIndexError
 
-instance showChainIndexError :: Show ChainIndexError where
+instance Show ChainIndexError where
   show a = genericShow a
 
-instance encodeJsonChainIndexError :: EncodeJson ChainIndexError where
+instance EncodeJson ChainIndexError where
   encodeJson = defer \_ -> case _ of
     InsertionFailed a -> E.encodeTagged "InsertionFailed" a E.value
     RollbackFailed a -> E.encodeTagged "RollbackFailed" a E.value
@@ -46,7 +46,7 @@ instance encodeJsonChainIndexError :: EncodeJson ChainIndexError where
       { tag: "QueryFailedNoTip", contents: jsonNull }
     BeamEffectError a -> E.encodeTagged "BeamEffectError" a E.value
 
-instance decodeJsonChainIndexError :: DecodeJson ChainIndexError where
+instance DecodeJson ChainIndexError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ChainIndexError"
     $ Map.fromFoldable
@@ -57,7 +57,7 @@ instance decodeJsonChainIndexError :: DecodeJson ChainIndexError where
         , "BeamEffectError" /\ D.content (BeamEffectError <$> D.value)
         ]
 
-derive instance genericChainIndexError :: Generic ChainIndexError _
+derive instance Generic ChainIndexError _
 
 --------------------------------------------------------------------------------
 
@@ -92,17 +92,17 @@ data InsertUtxoFailed
   = DuplicateBlock Tip
   | InsertUtxoNoTip
 
-derive instance eqInsertUtxoFailed :: Eq InsertUtxoFailed
+derive instance Eq InsertUtxoFailed
 
-instance showInsertUtxoFailed :: Show InsertUtxoFailed where
+instance Show InsertUtxoFailed where
   show a = genericShow a
 
-instance encodeJsonInsertUtxoFailed :: EncodeJson InsertUtxoFailed where
+instance EncodeJson InsertUtxoFailed where
   encodeJson = defer \_ -> case _ of
     DuplicateBlock a -> E.encodeTagged "DuplicateBlock" a E.value
     InsertUtxoNoTip -> encodeJson { tag: "InsertUtxoNoTip", contents: jsonNull }
 
-instance decodeJsonInsertUtxoFailed :: DecodeJson InsertUtxoFailed where
+instance DecodeJson InsertUtxoFailed where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "InsertUtxoFailed"
     $ Map.fromFoldable
@@ -110,7 +110,7 @@ instance decodeJsonInsertUtxoFailed :: DecodeJson InsertUtxoFailed where
         , "InsertUtxoNoTip" /\ pure InsertUtxoNoTip
         ]
 
-derive instance genericInsertUtxoFailed :: Generic InsertUtxoFailed _
+derive instance Generic InsertUtxoFailed _
 
 --------------------------------------------------------------------------------
 
@@ -134,12 +134,12 @@ data RollbackFailed
       }
   | OldPointNotFound Point
 
-derive instance eqRollbackFailed :: Eq RollbackFailed
+derive instance Eq RollbackFailed
 
-instance showRollbackFailed :: Show RollbackFailed where
+instance Show RollbackFailed where
   show a = genericShow a
 
-instance encodeJsonRollbackFailed :: EncodeJson RollbackFailed where
+instance EncodeJson RollbackFailed where
   encodeJson = defer \_ -> case _ of
     RollbackNoTip -> encodeJson { tag: "RollbackNoTip", contents: jsonNull }
     TipMismatch { foundTip, targetPoint } -> encodeJson
@@ -149,7 +149,7 @@ instance encodeJsonRollbackFailed :: EncodeJson RollbackFailed where
       }
     OldPointNotFound a -> E.encodeTagged "OldPointNotFound" a E.value
 
-instance decodeJsonRollbackFailed :: DecodeJson RollbackFailed where
+instance DecodeJson RollbackFailed where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "RollbackFailed"
     $ Map.fromFoldable
@@ -163,7 +163,7 @@ instance decodeJsonRollbackFailed :: DecodeJson RollbackFailed where
         , "OldPointNotFound" /\ D.content (OldPointNotFound <$> D.value)
         ]
 
-derive instance genericRollbackFailed :: Generic RollbackFailed _
+derive instance Generic RollbackFailed _
 
 --------------------------------------------------------------------------------
 

@@ -4,11 +4,11 @@ module Plutus.V1.Ledger.Tx where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -35,259 +35,24 @@ import Plutus.V1.Ledger.TxId (TxId)
 import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
 
-newtype Tx = Tx
-  { txInputs :: Set TxIn
-  , txCollateral :: Set TxIn
-  , txOutputs :: Array TxOut
-  , txMint :: Value
-  , txFee :: Value
-  , txValidRange :: Interval Slot
-  , txMintScripts :: Set MintingPolicy
-  , txSignatures :: Map PubKey Signature
-  , txRedeemers :: Map RedeemerPtr String
-  , txData :: Map DatumHash String
-  }
-
-derive instance eqTx :: Eq Tx
-
-instance showTx :: Show Tx where
-  show a = genericShow a
-
-instance encodeJsonTx :: EncodeJson Tx where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { txInputs: E.value :: _ (Set TxIn)
-        , txCollateral: E.value :: _ (Set TxIn)
-        , txOutputs: E.value :: _ (Array TxOut)
-        , txMint: E.value :: _ Value
-        , txFee: E.value :: _ Value
-        , txValidRange: E.value :: _ (Interval Slot)
-        , txMintScripts: E.value :: _ (Set MintingPolicy)
-        , txSignatures:
-            (E.dictionary E.value E.value) :: _ (Map PubKey Signature)
-        , txRedeemers:
-            (E.dictionary E.value E.value) :: _ (Map RedeemerPtr String)
-        , txData: (E.dictionary E.value E.value) :: _ (Map DatumHash String)
-        }
-    )
-
-instance decodeJsonTx :: DecodeJson Tx where
-  decodeJson = defer \_ -> D.decode $
-    ( Tx <$> D.record "Tx"
-        { txInputs: D.value :: _ (Set TxIn)
-        , txCollateral: D.value :: _ (Set TxIn)
-        , txOutputs: D.value :: _ (Array TxOut)
-        , txMint: D.value :: _ Value
-        , txFee: D.value :: _ Value
-        , txValidRange: D.value :: _ (Interval Slot)
-        , txMintScripts: D.value :: _ (Set MintingPolicy)
-        , txSignatures:
-            (D.dictionary D.value D.value) :: _ (Map PubKey Signature)
-        , txRedeemers:
-            (D.dictionary D.value D.value) :: _ (Map RedeemerPtr String)
-        , txData: (D.dictionary D.value D.value) :: _ (Map DatumHash String)
-        }
-    )
-
-derive instance genericTx :: Generic Tx _
-
-derive instance newtypeTx :: Newtype Tx _
-
---------------------------------------------------------------------------------
-
-_Tx :: Iso' Tx
-  { txInputs :: Set TxIn
-  , txCollateral :: Set TxIn
-  , txOutputs :: Array TxOut
-  , txMint :: Value
-  , txFee :: Value
-  , txValidRange :: Interval Slot
-  , txMintScripts :: Set MintingPolicy
-  , txSignatures :: Map PubKey Signature
-  , txRedeemers :: Map RedeemerPtr String
-  , txData :: Map DatumHash String
-  }
-_Tx = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype TxIn = TxIn
-  { txInRef :: TxOutRef
-  , txInType :: Maybe TxInType
-  }
-
-derive instance eqTxIn :: Eq TxIn
-
-derive instance ordTxIn :: Ord TxIn
-
-instance showTxIn :: Show TxIn where
-  show a = genericShow a
-
-instance encodeJsonTxIn :: EncodeJson TxIn where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { txInRef: E.value :: _ TxOutRef
-        , txInType: (E.maybe E.value) :: _ (Maybe TxInType)
-        }
-    )
-
-instance decodeJsonTxIn :: DecodeJson TxIn where
-  decodeJson = defer \_ -> D.decode $
-    ( TxIn <$> D.record "TxIn"
-        { txInRef: D.value :: _ TxOutRef
-        , txInType: (D.maybe D.value) :: _ (Maybe TxInType)
-        }
-    )
-
-derive instance genericTxIn :: Generic TxIn _
-
-derive instance newtypeTxIn :: Newtype TxIn _
-
---------------------------------------------------------------------------------
-
-_TxIn :: Iso' TxIn { txInRef :: TxOutRef, txInType :: Maybe TxInType }
-_TxIn = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype TxOut = TxOut
-  { txOutAddress :: Address
-  , txOutValue :: Value
-  , txOutDatumHash :: Maybe DatumHash
-  }
-
-derive instance eqTxOut :: Eq TxOut
-
-instance showTxOut :: Show TxOut where
-  show a = genericShow a
-
-instance encodeJsonTxOut :: EncodeJson TxOut where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { txOutAddress: E.value :: _ Address
-        , txOutValue: E.value :: _ Value
-        , txOutDatumHash: (E.maybe E.value) :: _ (Maybe DatumHash)
-        }
-    )
-
-instance decodeJsonTxOut :: DecodeJson TxOut where
-  decodeJson = defer \_ -> D.decode $
-    ( TxOut <$> D.record "TxOut"
-        { txOutAddress: D.value :: _ Address
-        , txOutValue: D.value :: _ Value
-        , txOutDatumHash: (D.maybe D.value) :: _ (Maybe DatumHash)
-        }
-    )
-
-derive instance genericTxOut :: Generic TxOut _
-
-derive instance newtypeTxOut :: Newtype TxOut _
-
---------------------------------------------------------------------------------
-
-_TxOut :: Iso' TxOut
-  { txOutAddress :: Address
-  , txOutValue :: Value
-  , txOutDatumHash :: Maybe DatumHash
-  }
-_TxOut = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype TxOutTx = TxOutTx
-  { txOutTxTx :: Tx
-  , txOutTxOut :: TxOut
-  }
-
-derive instance eqTxOutTx :: Eq TxOutTx
-
-instance showTxOutTx :: Show TxOutTx where
-  show a = genericShow a
-
-instance encodeJsonTxOutTx :: EncodeJson TxOutTx where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { txOutTxTx: E.value :: _ Tx
-        , txOutTxOut: E.value :: _ TxOut
-        }
-    )
-
-instance decodeJsonTxOutTx :: DecodeJson TxOutTx where
-  decodeJson = defer \_ -> D.decode $
-    ( TxOutTx <$> D.record "TxOutTx"
-        { txOutTxTx: D.value :: _ Tx
-        , txOutTxOut: D.value :: _ TxOut
-        }
-    )
-
-derive instance genericTxOutTx :: Generic TxOutTx _
-
-derive instance newtypeTxOutTx :: Newtype TxOutTx _
-
---------------------------------------------------------------------------------
-
-_TxOutTx :: Iso' TxOutTx { txOutTxTx :: Tx, txOutTxOut :: TxOut }
-_TxOutTx = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype TxOutRef = TxOutRef
-  { txOutRefId :: TxId
-  , txOutRefIdx :: BigInt
-  }
-
-derive instance eqTxOutRef :: Eq TxOutRef
-
-derive instance ordTxOutRef :: Ord TxOutRef
-
-instance showTxOutRef :: Show TxOutRef where
-  show a = genericShow a
-
-instance encodeJsonTxOutRef :: EncodeJson TxOutRef where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { txOutRefId: E.value :: _ TxId
-        , txOutRefIdx: E.value :: _ BigInt
-        }
-    )
-
-instance decodeJsonTxOutRef :: DecodeJson TxOutRef where
-  decodeJson = defer \_ -> D.decode $
-    ( TxOutRef <$> D.record "TxOutRef"
-        { txOutRefId: D.value :: _ TxId
-        , txOutRefIdx: D.value :: _ BigInt
-        }
-    )
-
-derive instance genericTxOutRef :: Generic TxOutRef _
-
-derive instance newtypeTxOutRef :: Newtype TxOutRef _
-
---------------------------------------------------------------------------------
-
-_TxOutRef :: Iso' TxOutRef { txOutRefId :: TxId, txOutRefIdx :: BigInt }
-_TxOutRef = _Newtype
-
---------------------------------------------------------------------------------
-
 data RedeemerPtr = RedeemerPtr ScriptTag BigInt
 
-instance showRedeemerPtr :: Show RedeemerPtr where
+instance Show RedeemerPtr where
   show a = genericShow a
 
-derive instance eqRedeemerPtr :: Eq RedeemerPtr
+derive instance Eq RedeemerPtr
 
-derive instance ordRedeemerPtr :: Ord RedeemerPtr
+derive instance Ord RedeemerPtr
 
-instance encodeJsonRedeemerPtr :: EncodeJson RedeemerPtr where
+instance EncodeJson RedeemerPtr where
   encodeJson = defer \_ -> E.encode $ (case _ of RedeemerPtr a b -> (a /\ b))
     >$< (E.tuple (E.value >/\< E.value))
 
-instance decodeJsonRedeemerPtr :: DecodeJson RedeemerPtr where
+instance DecodeJson RedeemerPtr where
   decodeJson = defer \_ -> D.decode $
     (D.tuple $ RedeemerPtr </$\> D.value </*\> D.value)
 
-derive instance genericRedeemerPtr :: Generic RedeemerPtr _
+derive instance Generic RedeemerPtr _
 
 --------------------------------------------------------------------------------
 
@@ -303,26 +68,26 @@ data ScriptTag
   | Cert
   | Reward
 
-instance showScriptTag :: Show ScriptTag where
+instance Show ScriptTag where
   show a = genericShow a
 
-derive instance eqScriptTag :: Eq ScriptTag
+derive instance Eq ScriptTag
 
-derive instance ordScriptTag :: Ord ScriptTag
+derive instance Ord ScriptTag
 
-instance encodeJsonScriptTag :: EncodeJson ScriptTag where
+instance EncodeJson ScriptTag where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonScriptTag :: DecodeJson ScriptTag where
+instance DecodeJson ScriptTag where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericScriptTag :: Generic ScriptTag _
+derive instance Generic ScriptTag _
 
-instance enumScriptTag :: Enum ScriptTag where
+instance Enum ScriptTag where
   succ = genericSucc
   pred = genericPred
 
-instance boundedScriptTag :: Bounded ScriptTag where
+instance Bounded ScriptTag where
   bottom = genericBottom
   top = genericTop
 
@@ -350,19 +115,134 @@ _Reward = prism' (const Reward) case _ of
 
 --------------------------------------------------------------------------------
 
+newtype Tx = Tx
+  { txInputs :: Set TxIn
+  , txCollateral :: Set TxIn
+  , txOutputs :: Array TxOut
+  , txMint :: Value
+  , txFee :: Value
+  , txValidRange :: Interval Slot
+  , txMintScripts :: Set MintingPolicy
+  , txSignatures :: Map PubKey Signature
+  , txRedeemers :: Map RedeemerPtr String
+  , txData :: Map DatumHash String
+  }
+
+derive instance Eq Tx
+
+instance Show Tx where
+  show a = genericShow a
+
+instance EncodeJson Tx where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { txInputs: E.value :: _ (Set TxIn)
+        , txCollateral: E.value :: _ (Set TxIn)
+        , txOutputs: E.value :: _ (Array TxOut)
+        , txMint: E.value :: _ Value
+        , txFee: E.value :: _ Value
+        , txValidRange: E.value :: _ (Interval Slot)
+        , txMintScripts: E.value :: _ (Set MintingPolicy)
+        , txSignatures:
+            (E.dictionary E.value E.value) :: _ (Map PubKey Signature)
+        , txRedeemers:
+            (E.dictionary E.value E.value) :: _ (Map RedeemerPtr String)
+        , txData: (E.dictionary E.value E.value) :: _ (Map DatumHash String)
+        }
+    )
+
+instance DecodeJson Tx where
+  decodeJson = defer \_ -> D.decode $
+    ( Tx <$> D.record "Tx"
+        { txInputs: D.value :: _ (Set TxIn)
+        , txCollateral: D.value :: _ (Set TxIn)
+        , txOutputs: D.value :: _ (Array TxOut)
+        , txMint: D.value :: _ Value
+        , txFee: D.value :: _ Value
+        , txValidRange: D.value :: _ (Interval Slot)
+        , txMintScripts: D.value :: _ (Set MintingPolicy)
+        , txSignatures:
+            (D.dictionary D.value D.value) :: _ (Map PubKey Signature)
+        , txRedeemers:
+            (D.dictionary D.value D.value) :: _ (Map RedeemerPtr String)
+        , txData: (D.dictionary D.value D.value) :: _ (Map DatumHash String)
+        }
+    )
+
+derive instance Generic Tx _
+
+derive instance Newtype Tx _
+
+--------------------------------------------------------------------------------
+
+_Tx :: Iso' Tx
+  { txInputs :: Set TxIn
+  , txCollateral :: Set TxIn
+  , txOutputs :: Array TxOut
+  , txMint :: Value
+  , txFee :: Value
+  , txValidRange :: Interval Slot
+  , txMintScripts :: Set MintingPolicy
+  , txSignatures :: Map PubKey Signature
+  , txRedeemers :: Map RedeemerPtr String
+  , txData :: Map DatumHash String
+  }
+_Tx = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype TxIn = TxIn
+  { txInRef :: TxOutRef
+  , txInType :: Maybe TxInType
+  }
+
+derive instance Eq TxIn
+
+derive instance Ord TxIn
+
+instance Show TxIn where
+  show a = genericShow a
+
+instance EncodeJson TxIn where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { txInRef: E.value :: _ TxOutRef
+        , txInType: (E.maybe E.value) :: _ (Maybe TxInType)
+        }
+    )
+
+instance DecodeJson TxIn where
+  decodeJson = defer \_ -> D.decode $
+    ( TxIn <$> D.record "TxIn"
+        { txInRef: D.value :: _ TxOutRef
+        , txInType: (D.maybe D.value) :: _ (Maybe TxInType)
+        }
+    )
+
+derive instance Generic TxIn _
+
+derive instance Newtype TxIn _
+
+--------------------------------------------------------------------------------
+
+_TxIn :: Iso' TxIn { txInRef :: TxOutRef, txInType :: Maybe TxInType }
+_TxIn = _Newtype
+
+--------------------------------------------------------------------------------
+
 data TxInType
   = ConsumeScriptAddress Validator String String
   | ConsumePublicKeyAddress
   | ConsumeSimpleScriptAddress
 
-instance showTxInType :: Show TxInType where
+instance Show TxInType where
   show a = genericShow a
 
-derive instance eqTxInType :: Eq TxInType
+derive instance Eq TxInType
 
-derive instance ordTxInType :: Ord TxInType
+derive instance Ord TxInType
 
-instance encodeJsonTxInType :: EncodeJson TxInType where
+instance EncodeJson TxInType where
   encodeJson = defer \_ -> case _ of
     ConsumeScriptAddress a b c -> E.encodeTagged "ConsumeScriptAddress"
       (a /\ b /\ c)
@@ -372,7 +252,7 @@ instance encodeJsonTxInType :: EncodeJson TxInType where
     ConsumeSimpleScriptAddress -> encodeJson
       { tag: "ConsumeSimpleScriptAddress", contents: jsonNull }
 
-instance decodeJsonTxInType :: DecodeJson TxInType where
+instance DecodeJson TxInType where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "TxInType"
     $ Map.fromFoldable
@@ -384,7 +264,7 @@ instance decodeJsonTxInType :: DecodeJson TxInType where
         , "ConsumeSimpleScriptAddress" /\ pure ConsumeSimpleScriptAddress
         ]
 
-derive instance genericTxInType :: Generic TxInType _
+derive instance Generic TxInType _
 
 --------------------------------------------------------------------------------
 
@@ -405,3 +285,123 @@ _ConsumeSimpleScriptAddress = prism' (const ConsumeSimpleScriptAddress)
   case _ of
     ConsumeSimpleScriptAddress -> Just unit
     _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype TxOut = TxOut
+  { txOutAddress :: Address
+  , txOutValue :: Value
+  , txOutDatumHash :: Maybe DatumHash
+  }
+
+derive instance Eq TxOut
+
+instance Show TxOut where
+  show a = genericShow a
+
+instance EncodeJson TxOut where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { txOutAddress: E.value :: _ Address
+        , txOutValue: E.value :: _ Value
+        , txOutDatumHash: (E.maybe E.value) :: _ (Maybe DatumHash)
+        }
+    )
+
+instance DecodeJson TxOut where
+  decodeJson = defer \_ -> D.decode $
+    ( TxOut <$> D.record "TxOut"
+        { txOutAddress: D.value :: _ Address
+        , txOutValue: D.value :: _ Value
+        , txOutDatumHash: (D.maybe D.value) :: _ (Maybe DatumHash)
+        }
+    )
+
+derive instance Generic TxOut _
+
+derive instance Newtype TxOut _
+
+--------------------------------------------------------------------------------
+
+_TxOut :: Iso' TxOut
+  { txOutAddress :: Address
+  , txOutValue :: Value
+  , txOutDatumHash :: Maybe DatumHash
+  }
+_TxOut = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype TxOutRef = TxOutRef
+  { txOutRefId :: TxId
+  , txOutRefIdx :: BigInt
+  }
+
+derive instance Eq TxOutRef
+
+derive instance Ord TxOutRef
+
+instance Show TxOutRef where
+  show a = genericShow a
+
+instance EncodeJson TxOutRef where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { txOutRefId: E.value :: _ TxId
+        , txOutRefIdx: E.value :: _ BigInt
+        }
+    )
+
+instance DecodeJson TxOutRef where
+  decodeJson = defer \_ -> D.decode $
+    ( TxOutRef <$> D.record "TxOutRef"
+        { txOutRefId: D.value :: _ TxId
+        , txOutRefIdx: D.value :: _ BigInt
+        }
+    )
+
+derive instance Generic TxOutRef _
+
+derive instance Newtype TxOutRef _
+
+--------------------------------------------------------------------------------
+
+_TxOutRef :: Iso' TxOutRef { txOutRefId :: TxId, txOutRefIdx :: BigInt }
+_TxOutRef = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype TxOutTx = TxOutTx
+  { txOutTxTx :: Tx
+  , txOutTxOut :: TxOut
+  }
+
+derive instance Eq TxOutTx
+
+instance Show TxOutTx where
+  show a = genericShow a
+
+instance EncodeJson TxOutTx where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { txOutTxTx: E.value :: _ Tx
+        , txOutTxOut: E.value :: _ TxOut
+        }
+    )
+
+instance DecodeJson TxOutTx where
+  decodeJson = defer \_ -> D.decode $
+    ( TxOutTx <$> D.record "TxOutTx"
+        { txOutTxTx: D.value :: _ Tx
+        , txOutTxOut: D.value :: _ TxOut
+        }
+    )
+
+derive instance Generic TxOutTx _
+
+derive instance Newtype TxOutTx _
+
+--------------------------------------------------------------------------------
+
+_TxOutTx :: Iso' TxOutTx { txOutTxTx :: Tx, txOutTxOut :: TxOut }
+_TxOutTx = _Newtype

@@ -4,11 +4,11 @@ module Ledger.Constraints.OffChain where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -43,12 +43,12 @@ data MkTxError
   | DatumWrongHash DatumHash String
   | CannotSatisfyAny
 
-derive instance eqMkTxError :: Eq MkTxError
+derive instance Eq MkTxError
 
-instance showMkTxError :: Show MkTxError where
+instance Show MkTxError where
   show a = genericShow a
 
-instance encodeJsonMkTxError :: EncodeJson MkTxError where
+instance EncodeJson MkTxError where
   encodeJson = defer \_ -> case _ of
     TypeCheckFailed a -> E.encodeTagged "TypeCheckFailed" a E.value
     TxOutRefNotFound a -> E.encodeTagged "TxOutRefNotFound" a E.value
@@ -65,7 +65,7 @@ instance encodeJsonMkTxError :: EncodeJson MkTxError where
     CannotSatisfyAny -> encodeJson
       { tag: "CannotSatisfyAny", contents: jsonNull }
 
-instance decodeJsonMkTxError :: DecodeJson MkTxError where
+instance DecodeJson MkTxError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "MkTxError"
     $ Map.fromFoldable
@@ -84,7 +84,7 @@ instance decodeJsonMkTxError :: DecodeJson MkTxError where
         , "CannotSatisfyAny" /\ pure CannotSatisfyAny
         ]
 
-derive instance genericMkTxError :: Generic MkTxError _
+derive instance Generic MkTxError _
 
 --------------------------------------------------------------------------------
 
@@ -140,62 +140,6 @@ _CannotSatisfyAny = prism' (const CannotSatisfyAny) case _ of
 
 --------------------------------------------------------------------------------
 
-newtype UnbalancedTx = UnbalancedTx
-  { unBalancedTxTx :: Tx
-  , unBalancedTxRequiredSignatories ::
-      Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
-  , unBalancedTxValidityTimeRange :: Interval POSIXTime
-  }
-
-derive instance eqUnbalancedTx :: Eq UnbalancedTx
-
-instance showUnbalancedTx :: Show UnbalancedTx where
-  show a = genericShow a
-
-instance encodeJsonUnbalancedTx :: EncodeJson UnbalancedTx where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { unBalancedTxTx: E.value :: _ Tx
-        , unBalancedTxRequiredSignatories:
-            (E.dictionary E.value (E.maybe E.value)) :: _
-              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
-        , unBalancedTxUtxoIndex:
-            (E.dictionary E.value E.value) :: _ (Map TxOutRef ScriptOutput)
-        , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
-        }
-    )
-
-instance decodeJsonUnbalancedTx :: DecodeJson UnbalancedTx where
-  decodeJson = defer \_ -> D.decode $
-    ( UnbalancedTx <$> D.record "UnbalancedTx"
-        { unBalancedTxTx: D.value :: _ Tx
-        , unBalancedTxRequiredSignatories:
-            (D.dictionary D.value (D.maybe D.value)) :: _
-              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
-        , unBalancedTxUtxoIndex:
-            (D.dictionary D.value D.value) :: _ (Map TxOutRef ScriptOutput)
-        , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)
-        }
-    )
-
-derive instance genericUnbalancedTx :: Generic UnbalancedTx _
-
-derive instance newtypeUnbalancedTx :: Newtype UnbalancedTx _
-
---------------------------------------------------------------------------------
-
-_UnbalancedTx :: Iso' UnbalancedTx
-  { unBalancedTxTx :: Tx
-  , unBalancedTxRequiredSignatories ::
-      Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
-  , unBalancedTxValidityTimeRange :: Interval POSIXTime
-  }
-_UnbalancedTx = _Newtype
-
---------------------------------------------------------------------------------
-
 data ScriptOutput
   = ScriptOutput
       { scriptOutputValidatorHash :: String
@@ -207,12 +151,12 @@ data ScriptOutput
       , publicKeyOutputValue :: Value
       }
 
-derive instance eqScriptOutput :: Eq ScriptOutput
+derive instance Eq ScriptOutput
 
-instance showScriptOutput :: Show ScriptOutput where
+instance Show ScriptOutput where
   show a = genericShow a
 
-instance encodeJsonScriptOutput :: EncodeJson ScriptOutput where
+instance EncodeJson ScriptOutput where
   encodeJson = defer \_ -> case _ of
     ScriptOutput
       { scriptOutputValidatorHash, scriptOutputValue, scriptOutputDatumHash } ->
@@ -230,7 +174,7 @@ instance encodeJsonScriptOutput :: EncodeJson ScriptOutput where
         , publicKeyOutputValue: flip E.encode publicKeyOutputValue E.value
         }
 
-instance decodeJsonScriptOutput :: DecodeJson ScriptOutput where
+instance DecodeJson ScriptOutput where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ScriptOutput"
     $ Map.fromFoldable
@@ -249,7 +193,7 @@ instance decodeJsonScriptOutput :: DecodeJson ScriptOutput where
             )
         ]
 
-derive instance genericScriptOutput :: Generic ScriptOutput _
+derive instance Generic ScriptOutput _
 
 --------------------------------------------------------------------------------
 
@@ -267,3 +211,59 @@ _PublicKeyOutput :: Prism' ScriptOutput
 _PublicKeyOutput = prism' PublicKeyOutput case _ of
   (PublicKeyOutput a) -> Just a
   _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype UnbalancedTx = UnbalancedTx
+  { unBalancedTxTx :: Tx
+  , unBalancedTxRequiredSignatories ::
+      Map PaymentPubKeyHash (Maybe PaymentPubKey)
+  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
+  , unBalancedTxValidityTimeRange :: Interval POSIXTime
+  }
+
+derive instance Eq UnbalancedTx
+
+instance Show UnbalancedTx where
+  show a = genericShow a
+
+instance EncodeJson UnbalancedTx where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { unBalancedTxTx: E.value :: _ Tx
+        , unBalancedTxRequiredSignatories:
+            (E.dictionary E.value (E.maybe E.value)) :: _
+              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
+        , unBalancedTxUtxoIndex:
+            (E.dictionary E.value E.value) :: _ (Map TxOutRef ScriptOutput)
+        , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
+        }
+    )
+
+instance DecodeJson UnbalancedTx where
+  decodeJson = defer \_ -> D.decode $
+    ( UnbalancedTx <$> D.record "UnbalancedTx"
+        { unBalancedTxTx: D.value :: _ Tx
+        , unBalancedTxRequiredSignatories:
+            (D.dictionary D.value (D.maybe D.value)) :: _
+              (Map PaymentPubKeyHash (Maybe PaymentPubKey))
+        , unBalancedTxUtxoIndex:
+            (D.dictionary D.value D.value) :: _ (Map TxOutRef ScriptOutput)
+        , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)
+        }
+    )
+
+derive instance Generic UnbalancedTx _
+
+derive instance Newtype UnbalancedTx _
+
+--------------------------------------------------------------------------------
+
+_UnbalancedTx :: Iso' UnbalancedTx
+  { unBalancedTxTx :: Tx
+  , unBalancedTxRequiredSignatories ::
+      Map PaymentPubKeyHash (Maybe PaymentPubKey)
+  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
+  , unBalancedTxValidityTimeRange :: Interval POSIXTime
+  }
+_UnbalancedTx = _Newtype

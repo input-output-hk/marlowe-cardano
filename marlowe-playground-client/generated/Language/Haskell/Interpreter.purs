@@ -4,11 +4,11 @@ module Language.Haskell.Interpreter where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -21,25 +21,6 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
 
-newtype SourceCode = SourceCode String
-
-instance encodeJsonSourceCode :: EncodeJson SourceCode where
-  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
-
-instance decodeJsonSourceCode :: DecodeJson SourceCode where
-  decodeJson = defer \_ -> D.decode $ (SourceCode <$> D.value)
-
-derive instance genericSourceCode :: Generic SourceCode _
-
-derive instance newtypeSourceCode :: Newtype SourceCode _
-
---------------------------------------------------------------------------------
-
-_SourceCode :: Iso' SourceCode String
-_SourceCode = _Newtype
-
---------------------------------------------------------------------------------
-
 data CompilationError
   = RawError String
   | CompilationError
@@ -49,7 +30,7 @@ data CompilationError
       , text :: Array String
       }
 
-instance encodeJsonCompilationError :: EncodeJson CompilationError where
+instance EncodeJson CompilationError where
   encodeJson = defer \_ -> case _ of
     RawError a -> E.encodeTagged "RawError" a E.value
     CompilationError { filename, row, column, text } -> encodeJson
@@ -60,7 +41,7 @@ instance encodeJsonCompilationError :: EncodeJson CompilationError where
       , text: flip E.encode text E.value
       }
 
-instance decodeJsonCompilationError :: DecodeJson CompilationError where
+instance DecodeJson CompilationError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "CompilationError"
     $ Map.fromFoldable
@@ -75,7 +56,7 @@ instance decodeJsonCompilationError :: DecodeJson CompilationError where
             )
         ]
 
-derive instance genericCompilationError :: Generic CompilationError _
+derive instance Generic CompilationError _
 
 --------------------------------------------------------------------------------
 
@@ -96,12 +77,12 @@ data InterpreterError
   = CompilationErrors (Array CompilationError)
   | TimeoutError String
 
-instance encodeJsonInterpreterError :: EncodeJson InterpreterError where
+instance EncodeJson InterpreterError where
   encodeJson = defer \_ -> case _ of
     CompilationErrors a -> E.encodeTagged "CompilationErrors" a E.value
     TimeoutError a -> E.encodeTagged "TimeoutError" a E.value
 
-instance decodeJsonInterpreterError :: DecodeJson InterpreterError where
+instance DecodeJson InterpreterError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "InterpreterError"
     $ Map.fromFoldable
@@ -109,7 +90,7 @@ instance decodeJsonInterpreterError :: DecodeJson InterpreterError where
         , "TimeoutError" /\ D.content (TimeoutError <$> D.value)
         ]
 
-derive instance genericInterpreterError :: Generic InterpreterError _
+derive instance Generic InterpreterError _
 
 --------------------------------------------------------------------------------
 
@@ -125,34 +106,12 @@ _TimeoutError = prism' TimeoutError case _ of
 
 --------------------------------------------------------------------------------
 
-newtype Warning = Warning String
-
-instance encodeJsonWarning :: EncodeJson Warning where
-  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
-
-instance decodeJsonWarning :: DecodeJson Warning where
-  decodeJson = defer \_ -> D.decode $ (Warning <$> D.value)
-
-derive instance genericWarning :: Generic Warning _
-
-derive instance newtypeWarning :: Newtype Warning _
-
---------------------------------------------------------------------------------
-
-_Warning :: Iso' Warning String
-_Warning = _Newtype
-
---------------------------------------------------------------------------------
-
 newtype InterpreterResult a = InterpreterResult
   { warnings :: Array Warning
   , result :: a
   }
 
-instance encodeJsonInterpreterResult ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (InterpreterResult a) where
+instance (EncodeJson a) => EncodeJson (InterpreterResult a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { warnings: E.value :: _ (Array Warning)
@@ -160,10 +119,7 @@ instance encodeJsonInterpreterResult ::
         }
     )
 
-instance decodeJsonInterpreterResult ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (InterpreterResult a) where
+instance (DecodeJson a) => DecodeJson (InterpreterResult a) where
   decodeJson = defer \_ -> D.decode $
     ( InterpreterResult <$> D.record "InterpreterResult"
         { warnings: D.value :: _ (Array Warning)
@@ -171,9 +127,9 @@ instance decodeJsonInterpreterResult ::
         }
     )
 
-derive instance genericInterpreterResult :: Generic (InterpreterResult a) _
+derive instance Generic (InterpreterResult a) _
 
-derive instance newtypeInterpreterResult :: Newtype (InterpreterResult a) _
+derive instance Newtype (InterpreterResult a) _
 
 --------------------------------------------------------------------------------
 
@@ -181,3 +137,41 @@ _InterpreterResult
   :: forall a
    . Iso' (InterpreterResult a) { warnings :: Array Warning, result :: a }
 _InterpreterResult = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype SourceCode = SourceCode String
+
+instance EncodeJson SourceCode where
+  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
+
+instance DecodeJson SourceCode where
+  decodeJson = defer \_ -> D.decode $ (SourceCode <$> D.value)
+
+derive instance Generic SourceCode _
+
+derive instance Newtype SourceCode _
+
+--------------------------------------------------------------------------------
+
+_SourceCode :: Iso' SourceCode String
+_SourceCode = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype Warning = Warning String
+
+instance EncodeJson Warning where
+  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
+
+instance DecodeJson Warning where
+  decodeJson = defer \_ -> D.decode $ (Warning <$> D.value)
+
+derive instance Generic Warning _
+
+derive instance Newtype Warning _
+
+--------------------------------------------------------------------------------
+
+_Warning :: Iso' Warning String
+_Warning = _Newtype

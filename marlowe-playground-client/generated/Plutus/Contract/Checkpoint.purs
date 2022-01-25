@@ -4,11 +4,11 @@ module Plutus.Contract.Checkpoint where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -24,20 +24,20 @@ import Type.Proxy (Proxy(Proxy))
 
 newtype CheckpointError = JSONDecodeError String
 
-derive instance eqCheckpointError :: Eq CheckpointError
+derive instance Eq CheckpointError
 
-instance showCheckpointError :: Show CheckpointError where
+instance Show CheckpointError where
   show a = genericShow a
 
-instance encodeJsonCheckpointError :: EncodeJson CheckpointError where
+instance EncodeJson CheckpointError where
   encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
 
-instance decodeJsonCheckpointError :: DecodeJson CheckpointError where
+instance DecodeJson CheckpointError where
   decodeJson = defer \_ -> D.decode $ (JSONDecodeError <$> D.value)
 
-derive instance genericCheckpointError :: Generic CheckpointError _
+derive instance Generic CheckpointError _
 
-derive instance newtypeCheckpointError :: Newtype CheckpointError _
+derive instance Newtype CheckpointError _
 
 --------------------------------------------------------------------------------
 

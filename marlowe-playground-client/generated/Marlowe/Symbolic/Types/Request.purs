@@ -4,11 +4,11 @@ module Marlowe.Symbolic.Types.Request where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -28,7 +28,7 @@ newtype Request = Request
   , state :: State
   }
 
-instance encodeJsonRequest :: EncodeJson Request where
+instance EncodeJson Request where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { onlyAssertions: E.value :: _ Boolean
@@ -37,7 +37,7 @@ instance encodeJsonRequest :: EncodeJson Request where
         }
     )
 
-instance decodeJsonRequest :: DecodeJson Request where
+instance DecodeJson Request where
   decodeJson = defer \_ -> D.decode $
     ( Request <$> D.record "Request"
         { onlyAssertions: D.value :: _ Boolean
@@ -46,9 +46,9 @@ instance decodeJsonRequest :: DecodeJson Request where
         }
     )
 
-derive instance genericRequest :: Generic Request _
+derive instance Generic Request _
 
-derive instance newtypeRequest :: Newtype Request _
+derive instance Newtype Request _
 
 --------------------------------------------------------------------------------
 

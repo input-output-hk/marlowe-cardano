@@ -4,11 +4,11 @@ module Plutus.V1.Ledger.DCert where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -34,14 +34,14 @@ data DCert
   | DCertGenesis
   | DCertMir
 
-derive instance eqDCert :: Eq DCert
+derive instance Eq DCert
 
-derive instance ordDCert :: Ord DCert
+derive instance Ord DCert
 
-instance showDCert :: Show DCert where
+instance Show DCert where
   show a = genericShow a
 
-instance encodeJsonDCert :: EncodeJson DCert where
+instance EncodeJson DCert where
   encodeJson = defer \_ -> case _ of
     DCertDelegRegKey a -> E.encodeTagged "DCertDelegRegKey" a E.value
     DCertDelegDeRegKey a -> E.encodeTagged "DCertDelegDeRegKey" a E.value
@@ -54,7 +54,7 @@ instance encodeJsonDCert :: EncodeJson DCert where
     DCertGenesis -> encodeJson { tag: "DCertGenesis", contents: jsonNull }
     DCertMir -> encodeJson { tag: "DCertMir", contents: jsonNull }
 
-instance decodeJsonDCert :: DecodeJson DCert where
+instance DecodeJson DCert where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "DCert"
     $ Map.fromFoldable
@@ -70,7 +70,7 @@ instance decodeJsonDCert :: DecodeJson DCert where
         , "DCertMir" /\ pure DCertMir
         ]
 
-derive instance genericDCert :: Generic DCert _
+derive instance Generic DCert _
 
 --------------------------------------------------------------------------------
 

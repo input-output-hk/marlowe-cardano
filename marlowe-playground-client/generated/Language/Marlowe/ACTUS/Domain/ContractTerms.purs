@@ -4,11 +4,11 @@ module Language.Marlowe.ACTUS.Domain.ContractTerms where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -25,6 +25,555 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
+
+newtype Assertion = NpvAssertionAgainstZeroRiskBond
+  { zeroRiskInterest :: Number
+  , expectedNpv :: Number
+  }
+
+instance EncodeJson Assertion where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { zeroRiskInterest: E.value :: _ Number
+        , expectedNpv: E.value :: _ Number
+        }
+    )
+
+instance DecodeJson Assertion where
+  decodeJson = defer \_ -> D.decode $
+    ( NpvAssertionAgainstZeroRiskBond <$> D.record
+        "NpvAssertionAgainstZeroRiskBond"
+        { zeroRiskInterest: D.value :: _ Number
+        , expectedNpv: D.value :: _ Number
+        }
+    )
+
+derive instance Generic Assertion _
+
+derive instance Newtype Assertion _
+
+--------------------------------------------------------------------------------
+
+_NpvAssertionAgainstZeroRiskBond :: Iso' Assertion
+  { zeroRiskInterest :: Number, expectedNpv :: Number }
+_NpvAssertionAgainstZeroRiskBond = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype AssertionContext = AssertionContext
+  { rrmoMin :: Number
+  , rrmoMax :: Number
+  }
+
+instance EncodeJson AssertionContext where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { rrmoMin: E.value :: _ Number
+        , rrmoMax: E.value :: _ Number
+        }
+    )
+
+instance DecodeJson AssertionContext where
+  decodeJson = defer \_ -> D.decode $
+    ( AssertionContext <$> D.record "AssertionContext"
+        { rrmoMin: D.value :: _ Number
+        , rrmoMax: D.value :: _ Number
+        }
+    )
+
+derive instance Generic AssertionContext _
+
+derive instance Newtype AssertionContext _
+
+--------------------------------------------------------------------------------
+
+_AssertionContext :: Iso' AssertionContext
+  { rrmoMin :: Number, rrmoMax :: Number }
+_AssertionContext = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype Assertions = Assertions
+  { context :: AssertionContext
+  , assertions :: Array Assertion
+  }
+
+instance EncodeJson Assertions where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { context: E.value :: _ AssertionContext
+        , assertions: E.value :: _ (Array Assertion)
+        }
+    )
+
+instance DecodeJson Assertions where
+  decodeJson = defer \_ -> D.decode $
+    ( Assertions <$> D.record "Assertions"
+        { context: D.value :: _ AssertionContext
+        , assertions: D.value :: _ (Array Assertion)
+        }
+    )
+
+derive instance Generic Assertions _
+
+derive instance Newtype Assertions _
+
+--------------------------------------------------------------------------------
+
+_Assertions :: Iso' Assertions
+  { context :: AssertionContext, assertions :: Array Assertion }
+_Assertions = _Newtype
+
+--------------------------------------------------------------------------------
+
+data BDC
+  = BDC_NULL
+  | BDC_SCF
+  | BDC_SCMF
+  | BDC_CSF
+  | BDC_CSMF
+  | BDC_SCP
+  | BDC_SCMP
+  | BDC_CSP
+  | BDC_CSMP
+
+derive instance Eq BDC
+
+derive instance Ord BDC
+
+instance Show BDC where
+  show a = genericShow a
+
+instance EncodeJson BDC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson BDC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic BDC _
+
+instance Enum BDC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded BDC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_BDC_NULL :: Prism' BDC Unit
+_BDC_NULL = prism' (const BDC_NULL) case _ of
+  BDC_NULL -> Just unit
+  _ -> Nothing
+
+_BDC_SCF :: Prism' BDC Unit
+_BDC_SCF = prism' (const BDC_SCF) case _ of
+  BDC_SCF -> Just unit
+  _ -> Nothing
+
+_BDC_SCMF :: Prism' BDC Unit
+_BDC_SCMF = prism' (const BDC_SCMF) case _ of
+  BDC_SCMF -> Just unit
+  _ -> Nothing
+
+_BDC_CSF :: Prism' BDC Unit
+_BDC_CSF = prism' (const BDC_CSF) case _ of
+  BDC_CSF -> Just unit
+  _ -> Nothing
+
+_BDC_CSMF :: Prism' BDC Unit
+_BDC_CSMF = prism' (const BDC_CSMF) case _ of
+  BDC_CSMF -> Just unit
+  _ -> Nothing
+
+_BDC_SCP :: Prism' BDC Unit
+_BDC_SCP = prism' (const BDC_SCP) case _ of
+  BDC_SCP -> Just unit
+  _ -> Nothing
+
+_BDC_SCMP :: Prism' BDC Unit
+_BDC_SCMP = prism' (const BDC_SCMP) case _ of
+  BDC_SCMP -> Just unit
+  _ -> Nothing
+
+_BDC_CSP :: Prism' BDC Unit
+_BDC_CSP = prism' (const BDC_CSP) case _ of
+  BDC_CSP -> Just unit
+  _ -> Nothing
+
+_BDC_CSMP :: Prism' BDC Unit
+_BDC_CSMP = prism' (const BDC_CSMP) case _ of
+  BDC_CSMP -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data CEGE
+  = CEGE_NO
+  | CEGE_NI
+
+derive instance Eq CEGE
+
+derive instance Ord CEGE
+
+instance Show CEGE where
+  show a = genericShow a
+
+instance EncodeJson CEGE where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson CEGE where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic CEGE _
+
+instance Enum CEGE where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CEGE where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CEGE_NO :: Prism' CEGE Unit
+_CEGE_NO = prism' (const CEGE_NO) case _ of
+  CEGE_NO -> Just unit
+  _ -> Nothing
+
+_CEGE_NI :: Prism' CEGE Unit
+_CEGE_NI = prism' (const CEGE_NI) case _ of
+  CEGE_NI -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data CETC
+  = CETC_DL
+  | CETC_DQ
+  | CETC_DF
+
+derive instance Eq CETC
+
+derive instance Ord CETC
+
+instance Show CETC where
+  show a = genericShow a
+
+instance EncodeJson CETC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson CETC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic CETC _
+
+instance Enum CETC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CETC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CETC_DL :: Prism' CETC Unit
+_CETC_DL = prism' (const CETC_DL) case _ of
+  CETC_DL -> Just unit
+  _ -> Nothing
+
+_CETC_DQ :: Prism' CETC Unit
+_CETC_DQ = prism' (const CETC_DQ) case _ of
+  CETC_DQ -> Just unit
+  _ -> Nothing
+
+_CETC_DF :: Prism' CETC Unit
+_CETC_DF = prism' (const CETC_DF) case _ of
+  CETC_DF -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data CR
+  = CR_RPA
+  | CR_RPL
+  | CR_CLO
+  | CR_CNO
+  | CR_COL
+  | CR_LG
+  | CR_ST
+  | CR_BUY
+  | CR_SEL
+  | CR_RFL
+  | CR_PFL
+  | CR_RF
+  | CR_PF
+
+derive instance Eq CR
+
+derive instance Ord CR
+
+instance Show CR where
+  show a = genericShow a
+
+instance EncodeJson CR where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson CR where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic CR _
+
+instance Enum CR where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CR where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CR_RPA :: Prism' CR Unit
+_CR_RPA = prism' (const CR_RPA) case _ of
+  CR_RPA -> Just unit
+  _ -> Nothing
+
+_CR_RPL :: Prism' CR Unit
+_CR_RPL = prism' (const CR_RPL) case _ of
+  CR_RPL -> Just unit
+  _ -> Nothing
+
+_CR_CLO :: Prism' CR Unit
+_CR_CLO = prism' (const CR_CLO) case _ of
+  CR_CLO -> Just unit
+  _ -> Nothing
+
+_CR_CNO :: Prism' CR Unit
+_CR_CNO = prism' (const CR_CNO) case _ of
+  CR_CNO -> Just unit
+  _ -> Nothing
+
+_CR_COL :: Prism' CR Unit
+_CR_COL = prism' (const CR_COL) case _ of
+  CR_COL -> Just unit
+  _ -> Nothing
+
+_CR_LG :: Prism' CR Unit
+_CR_LG = prism' (const CR_LG) case _ of
+  CR_LG -> Just unit
+  _ -> Nothing
+
+_CR_ST :: Prism' CR Unit
+_CR_ST = prism' (const CR_ST) case _ of
+  CR_ST -> Just unit
+  _ -> Nothing
+
+_CR_BUY :: Prism' CR Unit
+_CR_BUY = prism' (const CR_BUY) case _ of
+  CR_BUY -> Just unit
+  _ -> Nothing
+
+_CR_SEL :: Prism' CR Unit
+_CR_SEL = prism' (const CR_SEL) case _ of
+  CR_SEL -> Just unit
+  _ -> Nothing
+
+_CR_RFL :: Prism' CR Unit
+_CR_RFL = prism' (const CR_RFL) case _ of
+  CR_RFL -> Just unit
+  _ -> Nothing
+
+_CR_PFL :: Prism' CR Unit
+_CR_PFL = prism' (const CR_PFL) case _ of
+  CR_PFL -> Just unit
+  _ -> Nothing
+
+_CR_RF :: Prism' CR Unit
+_CR_RF = prism' (const CR_RF) case _ of
+  CR_RF -> Just unit
+  _ -> Nothing
+
+_CR_PF :: Prism' CR Unit
+_CR_PF = prism' (const CR_PF) case _ of
+  CR_PF -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data CT
+  = PAM
+  | LAM
+  | NAM
+  | ANN
+  | STK
+  | OPTNS
+  | FUTUR
+  | SWPPV
+  | CEG
+  | CEC
+
+derive instance Eq CT
+
+derive instance Ord CT
+
+instance Show CT where
+  show a = genericShow a
+
+instance EncodeJson CT where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson CT where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic CT _
+
+instance Enum CT where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CT where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_PAM :: Prism' CT Unit
+_PAM = prism' (const PAM) case _ of
+  PAM -> Just unit
+  _ -> Nothing
+
+_LAM :: Prism' CT Unit
+_LAM = prism' (const LAM) case _ of
+  LAM -> Just unit
+  _ -> Nothing
+
+_NAM :: Prism' CT Unit
+_NAM = prism' (const NAM) case _ of
+  NAM -> Just unit
+  _ -> Nothing
+
+_ANN :: Prism' CT Unit
+_ANN = prism' (const ANN) case _ of
+  ANN -> Just unit
+  _ -> Nothing
+
+_STK :: Prism' CT Unit
+_STK = prism' (const STK) case _ of
+  STK -> Just unit
+  _ -> Nothing
+
+_OPTNS :: Prism' CT Unit
+_OPTNS = prism' (const OPTNS) case _ of
+  OPTNS -> Just unit
+  _ -> Nothing
+
+_FUTUR :: Prism' CT Unit
+_FUTUR = prism' (const FUTUR) case _ of
+  FUTUR -> Just unit
+  _ -> Nothing
+
+_SWPPV :: Prism' CT Unit
+_SWPPV = prism' (const SWPPV) case _ of
+  SWPPV -> Just unit
+  _ -> Nothing
+
+_CEG :: Prism' CT Unit
+_CEG = prism' (const CEG) case _ of
+  CEG -> Just unit
+  _ -> Nothing
+
+_CEC :: Prism' CT Unit
+_CEC = prism' (const CEC) case _ of
+  CEC -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data Calendar
+  = CLDR_MF
+  | CLDR_NC
+
+derive instance Eq Calendar
+
+derive instance Ord Calendar
+
+instance Show Calendar where
+  show a = genericShow a
+
+instance EncodeJson Calendar where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson Calendar where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic Calendar _
+
+instance Enum Calendar where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Calendar where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CLDR_MF :: Prism' Calendar Unit
+_CLDR_MF = prism' (const CLDR_MF) case _ of
+  CLDR_MF -> Just unit
+  _ -> Nothing
+
+_CLDR_NC :: Prism' Calendar Unit
+_CLDR_NC = prism' (const CLDR_NC) case _ of
+  CLDR_NC -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype ContractStructure a = ContractStructure
+  { reference :: Reference a
+  , referenceType :: ReferenceType
+  , referenceRole :: ReferenceRole
+  }
+
+instance (EncodeJson a) => EncodeJson (ContractStructure a) where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { reference: E.value :: _ (Reference a)
+        , referenceType: E.value :: _ ReferenceType
+        , referenceRole: E.value :: _ ReferenceRole
+        }
+    )
+
+instance (DecodeJson a) => DecodeJson (ContractStructure a) where
+  decodeJson = defer \_ -> D.decode $
+    ( ContractStructure <$> D.record "ContractStructure"
+        { reference: D.value :: _ (Reference a)
+        , referenceType: D.value :: _ ReferenceType
+        , referenceRole: D.value :: _ ReferenceRole
+        }
+    )
+
+derive instance Generic (ContractStructure a) _
+
+derive instance Newtype (ContractStructure a) _
+
+--------------------------------------------------------------------------------
+
+_ContractStructure
+  :: forall a
+   . Iso' (ContractStructure a)
+       { reference :: Reference a
+       , referenceType :: ReferenceType
+       , referenceRole :: ReferenceRole
+       }
+_ContractStructure = _Newtype
+
+--------------------------------------------------------------------------------
 
 newtype ContractTermsPoly a = ContractTermsPoly
   { contractId :: String
@@ -104,10 +653,7 @@ newtype ContractTermsPoly a = ContractTermsPoly
   , constraints :: Maybe Assertions
   }
 
-instance encodeJsonContractTermsPoly ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (ContractTermsPoly a) where
+instance (EncodeJson a) => EncodeJson (ContractTermsPoly a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { contractId: E.value :: _ String
@@ -191,10 +737,7 @@ instance encodeJsonContractTermsPoly ::
         }
     )
 
-instance decodeJsonContractTermsPoly ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (ContractTermsPoly a) where
+instance (DecodeJson a) => DecodeJson (ContractTermsPoly a) where
   decodeJson = defer \_ -> D.decode $
     ( ContractTermsPoly <$> D.record "ContractTermsPoly"
         { contractId: D.value :: _ String
@@ -278,9 +821,9 @@ instance decodeJsonContractTermsPoly ::
         }
     )
 
-derive instance genericContractTermsPoly :: Generic (ContractTermsPoly a) _
+derive instance Generic (ContractTermsPoly a) _
 
-derive instance newtypeContractTermsPoly :: Newtype (ContractTermsPoly a) _
+derive instance Newtype (ContractTermsPoly a) _
 
 --------------------------------------------------------------------------------
 
@@ -367,32 +910,540 @@ _ContractTermsPoly = _Newtype
 
 --------------------------------------------------------------------------------
 
+newtype Cycle = Cycle
+  { n :: BigInt
+  , p :: Period
+  , stub :: Stub
+  , includeEndDay :: Boolean
+  }
+
+instance EncodeJson Cycle where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { n: E.value :: _ BigInt
+        , p: E.value :: _ Period
+        , stub: E.value :: _ Stub
+        , includeEndDay: E.value :: _ Boolean
+        }
+    )
+
+instance DecodeJson Cycle where
+  decodeJson = defer \_ -> D.decode $
+    ( Cycle <$> D.record "Cycle"
+        { n: D.value :: _ BigInt
+        , p: D.value :: _ Period
+        , stub: D.value :: _ Stub
+        , includeEndDay: D.value :: _ Boolean
+        }
+    )
+
+derive instance Generic Cycle _
+
+derive instance Newtype Cycle _
+
+--------------------------------------------------------------------------------
+
+_Cycle :: Iso' Cycle
+  { n :: BigInt, p :: Period, stub :: Stub, includeEndDay :: Boolean }
+_Cycle = _Newtype
+
+--------------------------------------------------------------------------------
+
+data DCC
+  = DCC_A_AISDA
+  | DCC_A_360
+  | DCC_A_365
+  | DCC_E30_360ISDA
+  | DCC_E30_360
+  | DCC_B_252
+
+derive instance Eq DCC
+
+derive instance Ord DCC
+
+instance Show DCC where
+  show a = genericShow a
+
+instance EncodeJson DCC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson DCC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic DCC _
+
+instance Enum DCC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded DCC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_DCC_A_AISDA :: Prism' DCC Unit
+_DCC_A_AISDA = prism' (const DCC_A_AISDA) case _ of
+  DCC_A_AISDA -> Just unit
+  _ -> Nothing
+
+_DCC_A_360 :: Prism' DCC Unit
+_DCC_A_360 = prism' (const DCC_A_360) case _ of
+  DCC_A_360 -> Just unit
+  _ -> Nothing
+
+_DCC_A_365 :: Prism' DCC Unit
+_DCC_A_365 = prism' (const DCC_A_365) case _ of
+  DCC_A_365 -> Just unit
+  _ -> Nothing
+
+_DCC_E30_360ISDA :: Prism' DCC Unit
+_DCC_E30_360ISDA = prism' (const DCC_E30_360ISDA) case _ of
+  DCC_E30_360ISDA -> Just unit
+  _ -> Nothing
+
+_DCC_E30_360 :: Prism' DCC Unit
+_DCC_E30_360 = prism' (const DCC_E30_360) case _ of
+  DCC_E30_360 -> Just unit
+  _ -> Nothing
+
+_DCC_B_252 :: Prism' DCC Unit
+_DCC_B_252 = prism' (const DCC_B_252) case _ of
+  DCC_B_252 -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data DS
+  = DS_S
+  | DS_D
+
+derive instance Eq DS
+
+derive instance Ord DS
+
+instance Show DS where
+  show a = genericShow a
+
+instance EncodeJson DS where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson DS where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic DS _
+
+instance Enum DS where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded DS where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_DS_S :: Prism' DS Unit
+_DS_S = prism' (const DS_S) case _ of
+  DS_S -> Just unit
+  _ -> Nothing
+
+_DS_D :: Prism' DS Unit
+_DS_D = prism' (const DS_D) case _ of
+  DS_D -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data EOMC
+  = EOMC_EOM
+  | EOMC_SD
+
+derive instance Eq EOMC
+
+derive instance Ord EOMC
+
+instance Show EOMC where
+  show a = genericShow a
+
+instance EncodeJson EOMC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson EOMC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic EOMC _
+
+instance Enum EOMC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded EOMC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_EOMC_EOM :: Prism' EOMC Unit
+_EOMC_EOM = prism' (const EOMC_EOM) case _ of
+  EOMC_EOM -> Just unit
+  _ -> Nothing
+
+_EOMC_SD :: Prism' EOMC Unit
+_EOMC_SD = prism' (const EOMC_SD) case _ of
+  EOMC_SD -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data FEB
+  = FEB_A
+  | FEB_N
+
+derive instance Eq FEB
+
+derive instance Ord FEB
+
+instance Show FEB where
+  show a = genericShow a
+
+instance EncodeJson FEB where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson FEB where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic FEB _
+
+instance Enum FEB where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded FEB where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_FEB_A :: Prism' FEB Unit
+_FEB_A = prism' (const FEB_A) case _ of
+  FEB_A -> Just unit
+  _ -> Nothing
+
+_FEB_N :: Prism' FEB Unit
+_FEB_N = prism' (const FEB_N) case _ of
+  FEB_N -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data IPCB
+  = IPCB_NT
+  | IPCB_NTIED
+  | IPCB_NTL
+
+derive instance Eq IPCB
+
+derive instance Ord IPCB
+
+instance Show IPCB where
+  show a = genericShow a
+
+instance EncodeJson IPCB where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson IPCB where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic IPCB _
+
+instance Enum IPCB where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded IPCB where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_IPCB_NT :: Prism' IPCB Unit
+_IPCB_NT = prism' (const IPCB_NT) case _ of
+  IPCB_NT -> Just unit
+  _ -> Nothing
+
+_IPCB_NTIED :: Prism' IPCB Unit
+_IPCB_NTIED = prism' (const IPCB_NTIED) case _ of
+  IPCB_NTIED -> Just unit
+  _ -> Nothing
+
+_IPCB_NTL :: Prism' IPCB Unit
+_IPCB_NTL = prism' (const IPCB_NTL) case _ of
+  IPCB_NTL -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype Identifier = Identifier
+  { marketObjectCode :: Maybe String
+  , contractIdentifier :: Maybe String
+  }
+
+derive instance Eq Identifier
+
+derive instance Ord Identifier
+
+instance Show Identifier where
+  show a = genericShow a
+
+instance EncodeJson Identifier where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { marketObjectCode: (E.maybe E.value) :: _ (Maybe String)
+        , contractIdentifier: (E.maybe E.value) :: _ (Maybe String)
+        }
+    )
+
+instance DecodeJson Identifier where
+  decodeJson = defer \_ -> D.decode $
+    ( Identifier <$> D.record "Identifier"
+        { marketObjectCode: (D.maybe D.value) :: _ (Maybe String)
+        , contractIdentifier: (D.maybe D.value) :: _ (Maybe String)
+        }
+    )
+
+derive instance Generic Identifier _
+
+derive instance Newtype Identifier _
+
+--------------------------------------------------------------------------------
+
+_Identifier :: Iso' Identifier
+  { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
+_Identifier = _Newtype
+
+--------------------------------------------------------------------------------
+
+data OPTP
+  = OPTP_C
+  | OPTP_P
+  | OPTP_CP
+
+derive instance Eq OPTP
+
+derive instance Ord OPTP
+
+instance Show OPTP where
+  show a = genericShow a
+
+instance EncodeJson OPTP where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson OPTP where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic OPTP _
+
+instance Enum OPTP where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded OPTP where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_OPTP_C :: Prism' OPTP Unit
+_OPTP_C = prism' (const OPTP_C) case _ of
+  OPTP_C -> Just unit
+  _ -> Nothing
+
+_OPTP_P :: Prism' OPTP Unit
+_OPTP_P = prism' (const OPTP_P) case _ of
+  OPTP_P -> Just unit
+  _ -> Nothing
+
+_OPTP_CP :: Prism' OPTP Unit
+_OPTP_CP = prism' (const OPTP_CP) case _ of
+  OPTP_CP -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data OPXT
+  = OPXT_E
+  | OPXT_B
+  | OPXT_A
+
+derive instance Eq OPXT
+
+derive instance Ord OPXT
+
+instance Show OPXT where
+  show a = genericShow a
+
+instance EncodeJson OPXT where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson OPXT where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic OPXT _
+
+instance Enum OPXT where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded OPXT where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_OPXT_E :: Prism' OPXT Unit
+_OPXT_E = prism' (const OPXT_E) case _ of
+  OPXT_E -> Just unit
+  _ -> Nothing
+
+_OPXT_B :: Prism' OPXT Unit
+_OPXT_B = prism' (const OPXT_B) case _ of
+  OPXT_B -> Just unit
+  _ -> Nothing
+
+_OPXT_A :: Prism' OPXT Unit
+_OPXT_A = prism' (const OPXT_A) case _ of
+  OPXT_A -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data PPEF
+  = PPEF_N
+  | PPEF_A
+  | PPEF_M
+
+derive instance Eq PPEF
+
+derive instance Ord PPEF
+
+instance Show PPEF where
+  show a = genericShow a
+
+instance EncodeJson PPEF where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson PPEF where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic PPEF _
+
+instance Enum PPEF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PPEF where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_PPEF_N :: Prism' PPEF Unit
+_PPEF_N = prism' (const PPEF_N) case _ of
+  PPEF_N -> Just unit
+  _ -> Nothing
+
+_PPEF_A :: Prism' PPEF Unit
+_PPEF_A = prism' (const PPEF_A) case _ of
+  PPEF_A -> Just unit
+  _ -> Nothing
+
+_PPEF_M :: Prism' PPEF Unit
+_PPEF_M = prism' (const PPEF_M) case _ of
+  PPEF_M -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data PRF
+  = PRF_PF
+  | PRF_DL
+  | PRF_DQ
+  | PRF_DF
+
+derive instance Eq PRF
+
+derive instance Ord PRF
+
+instance Show PRF where
+  show a = genericShow a
+
+instance EncodeJson PRF where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson PRF where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic PRF _
+
+instance Enum PRF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PRF where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_PRF_PF :: Prism' PRF Unit
+_PRF_PF = prism' (const PRF_PF) case _ of
+  PRF_PF -> Just unit
+  _ -> Nothing
+
+_PRF_DL :: Prism' PRF Unit
+_PRF_DL = prism' (const PRF_DL) case _ of
+  PRF_DL -> Just unit
+  _ -> Nothing
+
+_PRF_DQ :: Prism' PRF Unit
+_PRF_DQ = prism' (const PRF_DQ) case _ of
+  PRF_DQ -> Just unit
+  _ -> Nothing
+
+_PRF_DF :: Prism' PRF Unit
+_PRF_DF = prism' (const PRF_DF) case _ of
+  PRF_DF -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
 data PYTP
   = PYTP_A
   | PYTP_N
   | PYTP_I
   | PYTP_O
 
-derive instance eqPYTP :: Eq PYTP
+derive instance Eq PYTP
 
-derive instance ordPYTP :: Ord PYTP
+derive instance Ord PYTP
 
-instance showPYTP :: Show PYTP where
+instance Show PYTP where
   show a = genericShow a
 
-instance encodeJsonPYTP :: EncodeJson PYTP where
+instance EncodeJson PYTP where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonPYTP :: DecodeJson PYTP where
+instance DecodeJson PYTP where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericPYTP :: Generic PYTP _
+derive instance Generic PYTP _
 
-instance enumPYTP :: Enum PYTP where
+instance Enum PYTP where
   succ = genericSucc
   pred = genericPred
 
-instance boundedPYTP :: Bounded PYTP where
+instance Bounded PYTP where
   bottom = genericBottom
   top = genericTop
 
@@ -420,49 +1471,218 @@ _PYTP_O = prism' (const PYTP_O) case _ of
 
 --------------------------------------------------------------------------------
 
-data PPEF
-  = PPEF_N
-  | PPEF_A
-  | PPEF_M
+data Period
+  = P_D
+  | P_W
+  | P_M
+  | P_Q
+  | P_H
+  | P_Y
 
-derive instance eqPPEF :: Eq PPEF
+derive instance Eq Period
 
-derive instance ordPPEF :: Ord PPEF
+derive instance Ord Period
 
-instance showPPEF :: Show PPEF where
+instance Show Period where
   show a = genericShow a
 
-instance encodeJsonPPEF :: EncodeJson PPEF where
+instance EncodeJson Period where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonPPEF :: DecodeJson PPEF where
+instance DecodeJson Period where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericPPEF :: Generic PPEF _
+derive instance Generic Period _
 
-instance enumPPEF :: Enum PPEF where
+instance Enum Period where
   succ = genericSucc
   pred = genericPred
 
-instance boundedPPEF :: Bounded PPEF where
+instance Bounded Period where
   bottom = genericBottom
   top = genericTop
 
 --------------------------------------------------------------------------------
 
-_PPEF_N :: Prism' PPEF Unit
-_PPEF_N = prism' (const PPEF_N) case _ of
-  PPEF_N -> Just unit
+_P_D :: Prism' Period Unit
+_P_D = prism' (const P_D) case _ of
+  P_D -> Just unit
   _ -> Nothing
 
-_PPEF_A :: Prism' PPEF Unit
-_PPEF_A = prism' (const PPEF_A) case _ of
-  PPEF_A -> Just unit
+_P_W :: Prism' Period Unit
+_P_W = prism' (const P_W) case _ of
+  P_W -> Just unit
   _ -> Nothing
 
-_PPEF_M :: Prism' PPEF Unit
-_PPEF_M = prism' (const PPEF_M) case _ of
-  PPEF_M -> Just unit
+_P_M :: Prism' Period Unit
+_P_M = prism' (const P_M) case _ of
+  P_M -> Just unit
+  _ -> Nothing
+
+_P_Q :: Prism' Period Unit
+_P_Q = prism' (const P_Q) case _ of
+  P_Q -> Just unit
+  _ -> Nothing
+
+_P_H :: Prism' Period Unit
+_P_H = prism' (const P_H) case _ of
+  P_H -> Just unit
+  _ -> Nothing
+
+_P_Y :: Prism' Period Unit
+_P_Y = prism' (const P_Y) case _ of
+  P_Y -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data Reference a
+  = ReferenceTerms (ContractTermsPoly a)
+  | ReferenceId Identifier
+
+instance (EncodeJson a) => EncodeJson (Reference a) where
+  encodeJson = defer \_ -> case _ of
+    ReferenceTerms a -> E.encodeTagged "ReferenceTerms" a E.value
+    ReferenceId a -> E.encodeTagged "ReferenceId" a E.value
+
+instance (DecodeJson a) => DecodeJson (Reference a) where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "Reference"
+    $ Map.fromFoldable
+        [ "ReferenceTerms" /\ D.content (ReferenceTerms <$> D.value)
+        , "ReferenceId" /\ D.content (ReferenceId <$> D.value)
+        ]
+
+derive instance Generic (Reference a) _
+
+--------------------------------------------------------------------------------
+
+_ReferenceTerms :: forall a. Prism' (Reference a) (ContractTermsPoly a)
+_ReferenceTerms = prism' ReferenceTerms case _ of
+  (ReferenceTerms a) -> Just a
+  _ -> Nothing
+
+_ReferenceId :: forall a. Prism' (Reference a) Identifier
+_ReferenceId = prism' ReferenceId case _ of
+  (ReferenceId a) -> Just a
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data ReferenceRole
+  = UDL
+  | FIL
+  | SEL
+  | COVE
+  | COVI
+
+derive instance Eq ReferenceRole
+
+derive instance Ord ReferenceRole
+
+instance Show ReferenceRole where
+  show a = genericShow a
+
+instance EncodeJson ReferenceRole where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson ReferenceRole where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic ReferenceRole _
+
+instance Enum ReferenceRole where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded ReferenceRole where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_UDL :: Prism' ReferenceRole Unit
+_UDL = prism' (const UDL) case _ of
+  UDL -> Just unit
+  _ -> Nothing
+
+_FIL :: Prism' ReferenceRole Unit
+_FIL = prism' (const FIL) case _ of
+  FIL -> Just unit
+  _ -> Nothing
+
+_SEL :: Prism' ReferenceRole Unit
+_SEL = prism' (const SEL) case _ of
+  SEL -> Just unit
+  _ -> Nothing
+
+_COVE :: Prism' ReferenceRole Unit
+_COVE = prism' (const COVE) case _ of
+  COVE -> Just unit
+  _ -> Nothing
+
+_COVI :: Prism' ReferenceRole Unit
+_COVI = prism' (const COVI) case _ of
+  COVI -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data ReferenceType
+  = CNT
+  | CID
+  | MOC
+  | EID
+  | CST
+
+derive instance Eq ReferenceType
+
+derive instance Ord ReferenceType
+
+instance Show ReferenceType where
+  show a = genericShow a
+
+instance EncodeJson ReferenceType where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson ReferenceType where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic ReferenceType _
+
+instance Enum ReferenceType where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded ReferenceType where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CNT :: Prism' ReferenceType Unit
+_CNT = prism' (const CNT) case _ of
+  CNT -> Just unit
+  _ -> Nothing
+
+_CID :: Prism' ReferenceType Unit
+_CID = prism' (const CID) case _ of
+  CID -> Just unit
+  _ -> Nothing
+
+_MOC :: Prism' ReferenceType Unit
+_MOC = prism' (const MOC) case _ of
+  MOC -> Just unit
+  _ -> Nothing
+
+_EID :: Prism' ReferenceType Unit
+_EID = prism' (const EID) case _ of
+  EID -> Just unit
+  _ -> Nothing
+
+_CST :: Prism' ReferenceType Unit
+_CST = prism' (const CST) case _ of
+  CST -> Just unit
   _ -> Nothing
 
 --------------------------------------------------------------------------------
@@ -477,26 +1697,26 @@ data SCEF
   | SE_IOM
   | SE_INM
 
-derive instance eqSCEF :: Eq SCEF
+derive instance Eq SCEF
 
-derive instance ordSCEF :: Ord SCEF
+derive instance Ord SCEF
 
-instance showSCEF :: Show SCEF where
+instance Show SCEF where
   show a = genericShow a
 
-instance encodeJsonSCEF :: EncodeJson SCEF where
+instance EncodeJson SCEF where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonSCEF :: DecodeJson SCEF where
+instance DecodeJson SCEF where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericSCEF :: Generic SCEF _
+derive instance Generic SCEF _
 
-instance enumSCEF :: Enum SCEF where
+instance Enum SCEF where
   succ = genericSucc
   pred = genericPred
 
-instance boundedSCEF :: Bounded SCEF where
+instance Bounded SCEF where
   bottom = genericBottom
   top = genericTop
 
@@ -544,242 +1764,42 @@ _SE_INM = prism' (const SE_INM) case _ of
 
 --------------------------------------------------------------------------------
 
-data OPTP
-  = OPTP_C
-  | OPTP_P
-  | OPTP_CP
-
-derive instance eqOPTP :: Eq OPTP
-
-derive instance ordOPTP :: Ord OPTP
-
-instance showOPTP :: Show OPTP where
-  show a = genericShow a
-
-instance encodeJsonOPTP :: EncodeJson OPTP where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonOPTP :: DecodeJson OPTP where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericOPTP :: Generic OPTP _
-
-instance enumOPTP :: Enum OPTP where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedOPTP :: Bounded OPTP where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_OPTP_C :: Prism' OPTP Unit
-_OPTP_C = prism' (const OPTP_C) case _ of
-  OPTP_C -> Just unit
-  _ -> Nothing
-
-_OPTP_P :: Prism' OPTP Unit
-_OPTP_P = prism' (const OPTP_P) case _ of
-  OPTP_P -> Just unit
-  _ -> Nothing
-
-_OPTP_CP :: Prism' OPTP Unit
-_OPTP_CP = prism' (const OPTP_CP) case _ of
-  OPTP_CP -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data OPXT
-  = OPXT_E
-  | OPXT_B
-  | OPXT_A
-
-derive instance eqOPXT :: Eq OPXT
-
-derive instance ordOPXT :: Ord OPXT
-
-instance showOPXT :: Show OPXT where
-  show a = genericShow a
-
-instance encodeJsonOPXT :: EncodeJson OPXT where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonOPXT :: DecodeJson OPXT where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericOPXT :: Generic OPXT _
-
-instance enumOPXT :: Enum OPXT where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedOPXT :: Bounded OPXT where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_OPXT_E :: Prism' OPXT Unit
-_OPXT_E = prism' (const OPXT_E) case _ of
-  OPXT_E -> Just unit
-  _ -> Nothing
-
-_OPXT_B :: Prism' OPXT Unit
-_OPXT_B = prism' (const OPXT_B) case _ of
-  OPXT_B -> Just unit
-  _ -> Nothing
-
-_OPXT_A :: Prism' OPXT Unit
-_OPXT_A = prism' (const OPXT_A) case _ of
-  OPXT_A -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data DS
-  = DS_S
-  | DS_D
-
-derive instance eqDS :: Eq DS
-
-derive instance ordDS :: Ord DS
-
-instance showDS :: Show DS where
-  show a = genericShow a
-
-instance encodeJsonDS :: EncodeJson DS where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonDS :: DecodeJson DS where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericDS :: Generic DS _
-
-instance enumDS :: Enum DS where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedDS :: Bounded DS where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_DS_S :: Prism' DS Unit
-_DS_S = prism' (const DS_S) case _ of
-  DS_S -> Just unit
-  _ -> Nothing
-
-_DS_D :: Prism' DS Unit
-_DS_D = prism' (const DS_D) case _ of
-  DS_D -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype Cycle = Cycle
-  { n :: BigInt
-  , p :: Period
-  , stub :: Stub
-  , includeEndDay :: Boolean
+newtype ScheduleConfig = ScheduleConfig
+  { calendar :: Maybe Calendar
+  , endOfMonthConvention :: Maybe EOMC
+  , businessDayConvention :: Maybe BDC
   }
 
-instance encodeJsonCycle :: EncodeJson Cycle where
+instance EncodeJson ScheduleConfig where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { n: E.value :: _ BigInt
-        , p: E.value :: _ Period
-        , stub: E.value :: _ Stub
-        , includeEndDay: E.value :: _ Boolean
+        { calendar: (E.maybe E.value) :: _ (Maybe Calendar)
+        , endOfMonthConvention: (E.maybe E.value) :: _ (Maybe EOMC)
+        , businessDayConvention: (E.maybe E.value) :: _ (Maybe BDC)
         }
     )
 
-instance decodeJsonCycle :: DecodeJson Cycle where
+instance DecodeJson ScheduleConfig where
   decodeJson = defer \_ -> D.decode $
-    ( Cycle <$> D.record "Cycle"
-        { n: D.value :: _ BigInt
-        , p: D.value :: _ Period
-        , stub: D.value :: _ Stub
-        , includeEndDay: D.value :: _ Boolean
+    ( ScheduleConfig <$> D.record "ScheduleConfig"
+        { calendar: (D.maybe D.value) :: _ (Maybe Calendar)
+        , endOfMonthConvention: (D.maybe D.value) :: _ (Maybe EOMC)
+        , businessDayConvention: (D.maybe D.value) :: _ (Maybe BDC)
         }
     )
 
-derive instance genericCycle :: Generic Cycle _
+derive instance Generic ScheduleConfig _
 
-derive instance newtypeCycle :: Newtype Cycle _
-
---------------------------------------------------------------------------------
-
-_Cycle :: Iso' Cycle
-  { n :: BigInt, p :: Period, stub :: Stub, includeEndDay :: Boolean }
-_Cycle = _Newtype
+derive instance Newtype ScheduleConfig _
 
 --------------------------------------------------------------------------------
 
-data Period
-  = P_D
-  | P_W
-  | P_M
-  | P_Q
-  | P_H
-  | P_Y
-
-derive instance eqPeriod :: Eq Period
-
-derive instance ordPeriod :: Ord Period
-
-instance showPeriod :: Show Period where
-  show a = genericShow a
-
-instance encodeJsonPeriod :: EncodeJson Period where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPeriod :: DecodeJson Period where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPeriod :: Generic Period _
-
-instance enumPeriod :: Enum Period where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPeriod :: Bounded Period where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_P_D :: Prism' Period Unit
-_P_D = prism' (const P_D) case _ of
-  P_D -> Just unit
-  _ -> Nothing
-
-_P_W :: Prism' Period Unit
-_P_W = prism' (const P_W) case _ of
-  P_W -> Just unit
-  _ -> Nothing
-
-_P_M :: Prism' Period Unit
-_P_M = prism' (const P_M) case _ of
-  P_M -> Just unit
-  _ -> Nothing
-
-_P_Q :: Prism' Period Unit
-_P_Q = prism' (const P_Q) case _ of
-  P_Q -> Just unit
-  _ -> Nothing
-
-_P_H :: Prism' Period Unit
-_P_H = prism' (const P_H) case _ of
-  P_H -> Just unit
-  _ -> Nothing
-
-_P_Y :: Prism' Period Unit
-_P_Y = prism' (const P_Y) case _ of
-  P_Y -> Just unit
-  _ -> Nothing
+_ScheduleConfig :: Iso' ScheduleConfig
+  { calendar :: Maybe Calendar
+  , endOfMonthConvention :: Maybe EOMC
+  , businessDayConvention :: Maybe BDC
+  }
+_ScheduleConfig = _Newtype
 
 --------------------------------------------------------------------------------
 
@@ -787,26 +1807,26 @@ data Stub
   = ShortStub
   | LongStub
 
-derive instance eqStub :: Eq Stub
+derive instance Eq Stub
 
-derive instance ordStub :: Ord Stub
+derive instance Ord Stub
 
-instance showStub :: Show Stub where
+instance Show Stub where
   show a = genericShow a
 
-instance encodeJsonStub :: EncodeJson Stub where
+instance EncodeJson Stub where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonStub :: DecodeJson Stub where
+instance DecodeJson Stub where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericStub :: Generic Stub _
+derive instance Generic Stub _
 
-instance enumStub :: Enum Stub where
+instance Enum Stub where
   succ = genericSucc
   pred = genericPred
 
-instance boundedStub :: Bounded Stub where
+instance Bounded Stub where
   bottom = genericBottom
   top = genericTop
 
@@ -821,1035 +1841,3 @@ _LongStub :: Prism' Stub Unit
 _LongStub = prism' (const LongStub) case _ of
   LongStub -> Just unit
   _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype ScheduleConfig = ScheduleConfig
-  { calendar :: Maybe Calendar
-  , endOfMonthConvention :: Maybe EOMC
-  , businessDayConvention :: Maybe BDC
-  }
-
-instance encodeJsonScheduleConfig :: EncodeJson ScheduleConfig where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { calendar: (E.maybe E.value) :: _ (Maybe Calendar)
-        , endOfMonthConvention: (E.maybe E.value) :: _ (Maybe EOMC)
-        , businessDayConvention: (E.maybe E.value) :: _ (Maybe BDC)
-        }
-    )
-
-instance decodeJsonScheduleConfig :: DecodeJson ScheduleConfig where
-  decodeJson = defer \_ -> D.decode $
-    ( ScheduleConfig <$> D.record "ScheduleConfig"
-        { calendar: (D.maybe D.value) :: _ (Maybe Calendar)
-        , endOfMonthConvention: (D.maybe D.value) :: _ (Maybe EOMC)
-        , businessDayConvention: (D.maybe D.value) :: _ (Maybe BDC)
-        }
-    )
-
-derive instance genericScheduleConfig :: Generic ScheduleConfig _
-
-derive instance newtypeScheduleConfig :: Newtype ScheduleConfig _
-
---------------------------------------------------------------------------------
-
-_ScheduleConfig :: Iso' ScheduleConfig
-  { calendar :: Maybe Calendar
-  , endOfMonthConvention :: Maybe EOMC
-  , businessDayConvention :: Maybe BDC
-  }
-_ScheduleConfig = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype ContractStructure a = ContractStructure
-  { reference :: Reference a
-  , referenceType :: ReferenceType
-  , referenceRole :: ReferenceRole
-  }
-
-instance encodeJsonContractStructure ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (ContractStructure a) where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { reference: E.value :: _ (Reference a)
-        , referenceType: E.value :: _ ReferenceType
-        , referenceRole: E.value :: _ ReferenceRole
-        }
-    )
-
-instance decodeJsonContractStructure ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (ContractStructure a) where
-  decodeJson = defer \_ -> D.decode $
-    ( ContractStructure <$> D.record "ContractStructure"
-        { reference: D.value :: _ (Reference a)
-        , referenceType: D.value :: _ ReferenceType
-        , referenceRole: D.value :: _ ReferenceRole
-        }
-    )
-
-derive instance genericContractStructure :: Generic (ContractStructure a) _
-
-derive instance newtypeContractStructure :: Newtype (ContractStructure a) _
-
---------------------------------------------------------------------------------
-
-_ContractStructure
-  :: forall a
-   . Iso' (ContractStructure a)
-       { reference :: Reference a
-       , referenceType :: ReferenceType
-       , referenceRole :: ReferenceRole
-       }
-_ContractStructure = _Newtype
-
---------------------------------------------------------------------------------
-
-data ReferenceType
-  = CNT
-  | CID
-  | MOC
-  | EID
-  | CST
-
-derive instance eqReferenceType :: Eq ReferenceType
-
-derive instance ordReferenceType :: Ord ReferenceType
-
-instance showReferenceType :: Show ReferenceType where
-  show a = genericShow a
-
-instance encodeJsonReferenceType :: EncodeJson ReferenceType where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonReferenceType :: DecodeJson ReferenceType where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericReferenceType :: Generic ReferenceType _
-
-instance enumReferenceType :: Enum ReferenceType where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedReferenceType :: Bounded ReferenceType where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CNT :: Prism' ReferenceType Unit
-_CNT = prism' (const CNT) case _ of
-  CNT -> Just unit
-  _ -> Nothing
-
-_CID :: Prism' ReferenceType Unit
-_CID = prism' (const CID) case _ of
-  CID -> Just unit
-  _ -> Nothing
-
-_MOC :: Prism' ReferenceType Unit
-_MOC = prism' (const MOC) case _ of
-  MOC -> Just unit
-  _ -> Nothing
-
-_EID :: Prism' ReferenceType Unit
-_EID = prism' (const EID) case _ of
-  EID -> Just unit
-  _ -> Nothing
-
-_CST :: Prism' ReferenceType Unit
-_CST = prism' (const CST) case _ of
-  CST -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data ReferenceRole
-  = UDL
-  | FIL
-  | SEL
-  | COVE
-  | COVI
-
-derive instance eqReferenceRole :: Eq ReferenceRole
-
-derive instance ordReferenceRole :: Ord ReferenceRole
-
-instance showReferenceRole :: Show ReferenceRole where
-  show a = genericShow a
-
-instance encodeJsonReferenceRole :: EncodeJson ReferenceRole where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonReferenceRole :: DecodeJson ReferenceRole where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericReferenceRole :: Generic ReferenceRole _
-
-instance enumReferenceRole :: Enum ReferenceRole where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedReferenceRole :: Bounded ReferenceRole where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_UDL :: Prism' ReferenceRole Unit
-_UDL = prism' (const UDL) case _ of
-  UDL -> Just unit
-  _ -> Nothing
-
-_FIL :: Prism' ReferenceRole Unit
-_FIL = prism' (const FIL) case _ of
-  FIL -> Just unit
-  _ -> Nothing
-
-_SEL :: Prism' ReferenceRole Unit
-_SEL = prism' (const SEL) case _ of
-  SEL -> Just unit
-  _ -> Nothing
-
-_COVE :: Prism' ReferenceRole Unit
-_COVE = prism' (const COVE) case _ of
-  COVE -> Just unit
-  _ -> Nothing
-
-_COVI :: Prism' ReferenceRole Unit
-_COVI = prism' (const COVI) case _ of
-  COVI -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype Identifier = Identifier
-  { marketObjectCode :: Maybe String
-  , contractIdentifier :: Maybe String
-  }
-
-derive instance eqIdentifier :: Eq Identifier
-
-derive instance ordIdentifier :: Ord Identifier
-
-instance showIdentifier :: Show Identifier where
-  show a = genericShow a
-
-instance encodeJsonIdentifier :: EncodeJson Identifier where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { marketObjectCode: (E.maybe E.value) :: _ (Maybe String)
-        , contractIdentifier: (E.maybe E.value) :: _ (Maybe String)
-        }
-    )
-
-instance decodeJsonIdentifier :: DecodeJson Identifier where
-  decodeJson = defer \_ -> D.decode $
-    ( Identifier <$> D.record "Identifier"
-        { marketObjectCode: (D.maybe D.value) :: _ (Maybe String)
-        , contractIdentifier: (D.maybe D.value) :: _ (Maybe String)
-        }
-    )
-
-derive instance genericIdentifier :: Generic Identifier _
-
-derive instance newtypeIdentifier :: Newtype Identifier _
-
---------------------------------------------------------------------------------
-
-_Identifier :: Iso' Identifier
-  { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
-_Identifier = _Newtype
-
---------------------------------------------------------------------------------
-
-data Reference a
-  = ReferenceTerms (ContractTermsPoly a)
-  | ReferenceId Identifier
-
-instance encodeJsonReference :: (EncodeJson a) => EncodeJson (Reference a) where
-  encodeJson = defer \_ -> case _ of
-    ReferenceTerms a -> E.encodeTagged "ReferenceTerms" a E.value
-    ReferenceId a -> E.encodeTagged "ReferenceId" a E.value
-
-instance decodeJsonReference :: (DecodeJson a) => DecodeJson (Reference a) where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "Reference"
-    $ Map.fromFoldable
-        [ "ReferenceTerms" /\ D.content (ReferenceTerms <$> D.value)
-        , "ReferenceId" /\ D.content (ReferenceId <$> D.value)
-        ]
-
-derive instance genericReference :: Generic (Reference a) _
-
---------------------------------------------------------------------------------
-
-_ReferenceTerms :: forall a. Prism' (Reference a) (ContractTermsPoly a)
-_ReferenceTerms = prism' ReferenceTerms case _ of
-  (ReferenceTerms a) -> Just a
-  _ -> Nothing
-
-_ReferenceId :: forall a. Prism' (Reference a) Identifier
-_ReferenceId = prism' ReferenceId case _ of
-  (ReferenceId a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data DCC
-  = DCC_A_AISDA
-  | DCC_A_360
-  | DCC_A_365
-  | DCC_E30_360ISDA
-  | DCC_E30_360
-  | DCC_B_252
-
-derive instance eqDCC :: Eq DCC
-
-derive instance ordDCC :: Ord DCC
-
-instance showDCC :: Show DCC where
-  show a = genericShow a
-
-instance encodeJsonDCC :: EncodeJson DCC where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonDCC :: DecodeJson DCC where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericDCC :: Generic DCC _
-
-instance enumDCC :: Enum DCC where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedDCC :: Bounded DCC where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_DCC_A_AISDA :: Prism' DCC Unit
-_DCC_A_AISDA = prism' (const DCC_A_AISDA) case _ of
-  DCC_A_AISDA -> Just unit
-  _ -> Nothing
-
-_DCC_A_360 :: Prism' DCC Unit
-_DCC_A_360 = prism' (const DCC_A_360) case _ of
-  DCC_A_360 -> Just unit
-  _ -> Nothing
-
-_DCC_A_365 :: Prism' DCC Unit
-_DCC_A_365 = prism' (const DCC_A_365) case _ of
-  DCC_A_365 -> Just unit
-  _ -> Nothing
-
-_DCC_E30_360ISDA :: Prism' DCC Unit
-_DCC_E30_360ISDA = prism' (const DCC_E30_360ISDA) case _ of
-  DCC_E30_360ISDA -> Just unit
-  _ -> Nothing
-
-_DCC_E30_360 :: Prism' DCC Unit
-_DCC_E30_360 = prism' (const DCC_E30_360) case _ of
-  DCC_E30_360 -> Just unit
-  _ -> Nothing
-
-_DCC_B_252 :: Prism' DCC Unit
-_DCC_B_252 = prism' (const DCC_B_252) case _ of
-  DCC_B_252 -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data BDC
-  = BDC_NULL
-  | BDC_SCF
-  | BDC_SCMF
-  | BDC_CSF
-  | BDC_CSMF
-  | BDC_SCP
-  | BDC_SCMP
-  | BDC_CSP
-  | BDC_CSMP
-
-derive instance eqBDC :: Eq BDC
-
-derive instance ordBDC :: Ord BDC
-
-instance showBDC :: Show BDC where
-  show a = genericShow a
-
-instance encodeJsonBDC :: EncodeJson BDC where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonBDC :: DecodeJson BDC where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericBDC :: Generic BDC _
-
-instance enumBDC :: Enum BDC where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedBDC :: Bounded BDC where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_BDC_NULL :: Prism' BDC Unit
-_BDC_NULL = prism' (const BDC_NULL) case _ of
-  BDC_NULL -> Just unit
-  _ -> Nothing
-
-_BDC_SCF :: Prism' BDC Unit
-_BDC_SCF = prism' (const BDC_SCF) case _ of
-  BDC_SCF -> Just unit
-  _ -> Nothing
-
-_BDC_SCMF :: Prism' BDC Unit
-_BDC_SCMF = prism' (const BDC_SCMF) case _ of
-  BDC_SCMF -> Just unit
-  _ -> Nothing
-
-_BDC_CSF :: Prism' BDC Unit
-_BDC_CSF = prism' (const BDC_CSF) case _ of
-  BDC_CSF -> Just unit
-  _ -> Nothing
-
-_BDC_CSMF :: Prism' BDC Unit
-_BDC_CSMF = prism' (const BDC_CSMF) case _ of
-  BDC_CSMF -> Just unit
-  _ -> Nothing
-
-_BDC_SCP :: Prism' BDC Unit
-_BDC_SCP = prism' (const BDC_SCP) case _ of
-  BDC_SCP -> Just unit
-  _ -> Nothing
-
-_BDC_SCMP :: Prism' BDC Unit
-_BDC_SCMP = prism' (const BDC_SCMP) case _ of
-  BDC_SCMP -> Just unit
-  _ -> Nothing
-
-_BDC_CSP :: Prism' BDC Unit
-_BDC_CSP = prism' (const BDC_CSP) case _ of
-  BDC_CSP -> Just unit
-  _ -> Nothing
-
-_BDC_CSMP :: Prism' BDC Unit
-_BDC_CSMP = prism' (const BDC_CSMP) case _ of
-  BDC_CSMP -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data EOMC
-  = EOMC_EOM
-  | EOMC_SD
-
-derive instance eqEOMC :: Eq EOMC
-
-derive instance ordEOMC :: Ord EOMC
-
-instance showEOMC :: Show EOMC where
-  show a = genericShow a
-
-instance encodeJsonEOMC :: EncodeJson EOMC where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonEOMC :: DecodeJson EOMC where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericEOMC :: Generic EOMC _
-
-instance enumEOMC :: Enum EOMC where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedEOMC :: Bounded EOMC where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_EOMC_EOM :: Prism' EOMC Unit
-_EOMC_EOM = prism' (const EOMC_EOM) case _ of
-  EOMC_EOM -> Just unit
-  _ -> Nothing
-
-_EOMC_SD :: Prism' EOMC Unit
-_EOMC_SD = prism' (const EOMC_SD) case _ of
-  EOMC_SD -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data PRF
-  = PRF_PF
-  | PRF_DL
-  | PRF_DQ
-  | PRF_DF
-
-derive instance eqPRF :: Eq PRF
-
-derive instance ordPRF :: Ord PRF
-
-instance showPRF :: Show PRF where
-  show a = genericShow a
-
-instance encodeJsonPRF :: EncodeJson PRF where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPRF :: DecodeJson PRF where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPRF :: Generic PRF _
-
-instance enumPRF :: Enum PRF where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPRF :: Bounded PRF where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_PRF_PF :: Prism' PRF Unit
-_PRF_PF = prism' (const PRF_PF) case _ of
-  PRF_PF -> Just unit
-  _ -> Nothing
-
-_PRF_DL :: Prism' PRF Unit
-_PRF_DL = prism' (const PRF_DL) case _ of
-  PRF_DL -> Just unit
-  _ -> Nothing
-
-_PRF_DQ :: Prism' PRF Unit
-_PRF_DQ = prism' (const PRF_DQ) case _ of
-  PRF_DQ -> Just unit
-  _ -> Nothing
-
-_PRF_DF :: Prism' PRF Unit
-_PRF_DF = prism' (const PRF_DF) case _ of
-  PRF_DF -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data CETC
-  = CETC_DL
-  | CETC_DQ
-  | CETC_DF
-
-derive instance eqCETC :: Eq CETC
-
-derive instance ordCETC :: Ord CETC
-
-instance showCETC :: Show CETC where
-  show a = genericShow a
-
-instance encodeJsonCETC :: EncodeJson CETC where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonCETC :: DecodeJson CETC where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericCETC :: Generic CETC _
-
-instance enumCETC :: Enum CETC where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedCETC :: Bounded CETC where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CETC_DL :: Prism' CETC Unit
-_CETC_DL = prism' (const CETC_DL) case _ of
-  CETC_DL -> Just unit
-  _ -> Nothing
-
-_CETC_DQ :: Prism' CETC Unit
-_CETC_DQ = prism' (const CETC_DQ) case _ of
-  CETC_DQ -> Just unit
-  _ -> Nothing
-
-_CETC_DF :: Prism' CETC Unit
-_CETC_DF = prism' (const CETC_DF) case _ of
-  CETC_DF -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data CEGE
-  = CEGE_NO
-  | CEGE_NI
-
-derive instance eqCEGE :: Eq CEGE
-
-derive instance ordCEGE :: Ord CEGE
-
-instance showCEGE :: Show CEGE where
-  show a = genericShow a
-
-instance encodeJsonCEGE :: EncodeJson CEGE where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonCEGE :: DecodeJson CEGE where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericCEGE :: Generic CEGE _
-
-instance enumCEGE :: Enum CEGE where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedCEGE :: Bounded CEGE where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CEGE_NO :: Prism' CEGE Unit
-_CEGE_NO = prism' (const CEGE_NO) case _ of
-  CEGE_NO -> Just unit
-  _ -> Nothing
-
-_CEGE_NI :: Prism' CEGE Unit
-_CEGE_NI = prism' (const CEGE_NI) case _ of
-  CEGE_NI -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data FEB
-  = FEB_A
-  | FEB_N
-
-derive instance eqFEB :: Eq FEB
-
-derive instance ordFEB :: Ord FEB
-
-instance showFEB :: Show FEB where
-  show a = genericShow a
-
-instance encodeJsonFEB :: EncodeJson FEB where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonFEB :: DecodeJson FEB where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericFEB :: Generic FEB _
-
-instance enumFEB :: Enum FEB where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedFEB :: Bounded FEB where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_FEB_A :: Prism' FEB Unit
-_FEB_A = prism' (const FEB_A) case _ of
-  FEB_A -> Just unit
-  _ -> Nothing
-
-_FEB_N :: Prism' FEB Unit
-_FEB_N = prism' (const FEB_N) case _ of
-  FEB_N -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data IPCB
-  = IPCB_NT
-  | IPCB_NTIED
-  | IPCB_NTL
-
-derive instance eqIPCB :: Eq IPCB
-
-derive instance ordIPCB :: Ord IPCB
-
-instance showIPCB :: Show IPCB where
-  show a = genericShow a
-
-instance encodeJsonIPCB :: EncodeJson IPCB where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonIPCB :: DecodeJson IPCB where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericIPCB :: Generic IPCB _
-
-instance enumIPCB :: Enum IPCB where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedIPCB :: Bounded IPCB where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_IPCB_NT :: Prism' IPCB Unit
-_IPCB_NT = prism' (const IPCB_NT) case _ of
-  IPCB_NT -> Just unit
-  _ -> Nothing
-
-_IPCB_NTIED :: Prism' IPCB Unit
-_IPCB_NTIED = prism' (const IPCB_NTIED) case _ of
-  IPCB_NTIED -> Just unit
-  _ -> Nothing
-
-_IPCB_NTL :: Prism' IPCB Unit
-_IPCB_NTL = prism' (const IPCB_NTL) case _ of
-  IPCB_NTL -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data CR
-  = CR_RPA
-  | CR_RPL
-  | CR_CLO
-  | CR_CNO
-  | CR_COL
-  | CR_LG
-  | CR_ST
-  | CR_BUY
-  | CR_SEL
-  | CR_RFL
-  | CR_PFL
-  | CR_RF
-  | CR_PF
-
-derive instance eqCR :: Eq CR
-
-derive instance ordCR :: Ord CR
-
-instance showCR :: Show CR where
-  show a = genericShow a
-
-instance encodeJsonCR :: EncodeJson CR where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonCR :: DecodeJson CR where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericCR :: Generic CR _
-
-instance enumCR :: Enum CR where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedCR :: Bounded CR where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CR_RPA :: Prism' CR Unit
-_CR_RPA = prism' (const CR_RPA) case _ of
-  CR_RPA -> Just unit
-  _ -> Nothing
-
-_CR_RPL :: Prism' CR Unit
-_CR_RPL = prism' (const CR_RPL) case _ of
-  CR_RPL -> Just unit
-  _ -> Nothing
-
-_CR_CLO :: Prism' CR Unit
-_CR_CLO = prism' (const CR_CLO) case _ of
-  CR_CLO -> Just unit
-  _ -> Nothing
-
-_CR_CNO :: Prism' CR Unit
-_CR_CNO = prism' (const CR_CNO) case _ of
-  CR_CNO -> Just unit
-  _ -> Nothing
-
-_CR_COL :: Prism' CR Unit
-_CR_COL = prism' (const CR_COL) case _ of
-  CR_COL -> Just unit
-  _ -> Nothing
-
-_CR_LG :: Prism' CR Unit
-_CR_LG = prism' (const CR_LG) case _ of
-  CR_LG -> Just unit
-  _ -> Nothing
-
-_CR_ST :: Prism' CR Unit
-_CR_ST = prism' (const CR_ST) case _ of
-  CR_ST -> Just unit
-  _ -> Nothing
-
-_CR_BUY :: Prism' CR Unit
-_CR_BUY = prism' (const CR_BUY) case _ of
-  CR_BUY -> Just unit
-  _ -> Nothing
-
-_CR_SEL :: Prism' CR Unit
-_CR_SEL = prism' (const CR_SEL) case _ of
-  CR_SEL -> Just unit
-  _ -> Nothing
-
-_CR_RFL :: Prism' CR Unit
-_CR_RFL = prism' (const CR_RFL) case _ of
-  CR_RFL -> Just unit
-  _ -> Nothing
-
-_CR_PFL :: Prism' CR Unit
-_CR_PFL = prism' (const CR_PFL) case _ of
-  CR_PFL -> Just unit
-  _ -> Nothing
-
-_CR_RF :: Prism' CR Unit
-_CR_RF = prism' (const CR_RF) case _ of
-  CR_RF -> Just unit
-  _ -> Nothing
-
-_CR_PF :: Prism' CR Unit
-_CR_PF = prism' (const CR_PF) case _ of
-  CR_PF -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data CT
-  = PAM
-  | LAM
-  | NAM
-  | ANN
-  | STK
-  | OPTNS
-  | FUTUR
-  | SWPPV
-  | CEG
-  | CEC
-
-derive instance eqCT :: Eq CT
-
-derive instance ordCT :: Ord CT
-
-instance showCT :: Show CT where
-  show a = genericShow a
-
-instance encodeJsonCT :: EncodeJson CT where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonCT :: DecodeJson CT where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericCT :: Generic CT _
-
-instance enumCT :: Enum CT where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedCT :: Bounded CT where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_PAM :: Prism' CT Unit
-_PAM = prism' (const PAM) case _ of
-  PAM -> Just unit
-  _ -> Nothing
-
-_LAM :: Prism' CT Unit
-_LAM = prism' (const LAM) case _ of
-  LAM -> Just unit
-  _ -> Nothing
-
-_NAM :: Prism' CT Unit
-_NAM = prism' (const NAM) case _ of
-  NAM -> Just unit
-  _ -> Nothing
-
-_ANN :: Prism' CT Unit
-_ANN = prism' (const ANN) case _ of
-  ANN -> Just unit
-  _ -> Nothing
-
-_STK :: Prism' CT Unit
-_STK = prism' (const STK) case _ of
-  STK -> Just unit
-  _ -> Nothing
-
-_OPTNS :: Prism' CT Unit
-_OPTNS = prism' (const OPTNS) case _ of
-  OPTNS -> Just unit
-  _ -> Nothing
-
-_FUTUR :: Prism' CT Unit
-_FUTUR = prism' (const FUTUR) case _ of
-  FUTUR -> Just unit
-  _ -> Nothing
-
-_SWPPV :: Prism' CT Unit
-_SWPPV = prism' (const SWPPV) case _ of
-  SWPPV -> Just unit
-  _ -> Nothing
-
-_CEG :: Prism' CT Unit
-_CEG = prism' (const CEG) case _ of
-  CEG -> Just unit
-  _ -> Nothing
-
-_CEC :: Prism' CT Unit
-_CEC = prism' (const CEC) case _ of
-  CEC -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data Calendar
-  = CLDR_MF
-  | CLDR_NC
-
-derive instance eqCalendar :: Eq Calendar
-
-derive instance ordCalendar :: Ord Calendar
-
-instance showCalendar :: Show Calendar where
-  show a = genericShow a
-
-instance encodeJsonCalendar :: EncodeJson Calendar where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonCalendar :: DecodeJson Calendar where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericCalendar :: Generic Calendar _
-
-instance enumCalendar :: Enum Calendar where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedCalendar :: Bounded Calendar where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CLDR_MF :: Prism' Calendar Unit
-_CLDR_MF = prism' (const CLDR_MF) case _ of
-  CLDR_MF -> Just unit
-  _ -> Nothing
-
-_CLDR_NC :: Prism' Calendar Unit
-_CLDR_NC = prism' (const CLDR_NC) case _ of
-  CLDR_NC -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype Assertion = NpvAssertionAgainstZeroRiskBond
-  { zeroRiskInterest :: Number
-  , expectedNpv :: Number
-  }
-
-instance encodeJsonAssertion :: EncodeJson Assertion where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { zeroRiskInterest: E.value :: _ Number
-        , expectedNpv: E.value :: _ Number
-        }
-    )
-
-instance decodeJsonAssertion :: DecodeJson Assertion where
-  decodeJson = defer \_ -> D.decode $
-    ( NpvAssertionAgainstZeroRiskBond <$> D.record
-        "NpvAssertionAgainstZeroRiskBond"
-        { zeroRiskInterest: D.value :: _ Number
-        , expectedNpv: D.value :: _ Number
-        }
-    )
-
-derive instance genericAssertion :: Generic Assertion _
-
-derive instance newtypeAssertion :: Newtype Assertion _
-
---------------------------------------------------------------------------------
-
-_NpvAssertionAgainstZeroRiskBond :: Iso' Assertion
-  { zeroRiskInterest :: Number, expectedNpv :: Number }
-_NpvAssertionAgainstZeroRiskBond = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype Assertions = Assertions
-  { context :: AssertionContext
-  , assertions :: Array Assertion
-  }
-
-instance encodeJsonAssertions :: EncodeJson Assertions where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { context: E.value :: _ AssertionContext
-        , assertions: E.value :: _ (Array Assertion)
-        }
-    )
-
-instance decodeJsonAssertions :: DecodeJson Assertions where
-  decodeJson = defer \_ -> D.decode $
-    ( Assertions <$> D.record "Assertions"
-        { context: D.value :: _ AssertionContext
-        , assertions: D.value :: _ (Array Assertion)
-        }
-    )
-
-derive instance genericAssertions :: Generic Assertions _
-
-derive instance newtypeAssertions :: Newtype Assertions _
-
---------------------------------------------------------------------------------
-
-_Assertions :: Iso' Assertions
-  { context :: AssertionContext, assertions :: Array Assertion }
-_Assertions = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype AssertionContext = AssertionContext
-  { rrmoMin :: Number
-  , rrmoMax :: Number
-  }
-
-instance encodeJsonAssertionContext :: EncodeJson AssertionContext where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { rrmoMin: E.value :: _ Number
-        , rrmoMax: E.value :: _ Number
-        }
-    )
-
-instance decodeJsonAssertionContext :: DecodeJson AssertionContext where
-  decodeJson = defer \_ -> D.decode $
-    ( AssertionContext <$> D.record "AssertionContext"
-        { rrmoMin: D.value :: _ Number
-        , rrmoMax: D.value :: _ Number
-        }
-    )
-
-derive instance genericAssertionContext :: Generic AssertionContext _
-
-derive instance newtypeAssertionContext :: Newtype AssertionContext _
-
---------------------------------------------------------------------------------
-
-_AssertionContext :: Iso' AssertionContext
-  { rrmoMin :: Number, rrmoMax :: Number }
-_AssertionContext = _Newtype
