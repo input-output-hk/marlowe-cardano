@@ -341,6 +341,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "errors" = pkgs.stdenv.mkDerivation {
+        name = "errors";
+        version = "v4.1.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/passy/purescript-errors.git";
+          rev = "30abf43a6e6b62552e18769c0b624c1d7ef10f7d";
+          sha256 = "09xph8rhd25l24az1bfyjkbrp0h7ymxm4b8kw180f8kn2qx6q99a";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "exceptions" = pkgs.stdenv.mkDerivation {
         name = "exceptions";
         version = "v5.0.0";
@@ -617,6 +629,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "heterogeneous" = pkgs.stdenv.mkDerivation {
+        name = "heterogeneous";
+        version = "v0.5.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-heterogeneous.git";
+          rev = "550445cf7932e158395423fc087cdc05bab41c40";
+          sha256 = "08bpgm9p8ib1jzrmssqpa1bqqzfmba43lsih1xvr3pf1jfizayxg";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "http-methods" = pkgs.stdenv.mkDerivation {
         name = "http-methods";
         version = "v5.0.0";
@@ -720,6 +744,18 @@ let
           url = "https://github.com/purescript/purescript-lcg.git";
           rev = "8fb2eb16bbba2cee1d115a6729659ac649da811b";
           sha256 = "04r9bmx9kc3jqx59hh9yqqkl95mf869la9as5h36jv85ynn464dx";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "leibniz" = pkgs.stdenv.mkDerivation {
+        name = "leibniz";
+        version = "v5.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/paf31/purescript-leibniz.git";
+          rev = "ed1fa97012a01126c499f2d0e28dfea2919296b3";
+          sha256 = "1xxc84jx9qd4z89mlhjw602l6350cilvw8kd67ixsmsnd0krnl3f";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -1200,6 +1236,18 @@ let
           url = "https://github.com/purescript/purescript-type-equality.git";
           rev = "f7644468f22ed267a15d398173d234fa6f45e2e0";
           sha256 = "126pg4zg3bsrn8dzvv75xp586nznxyswzgjlr7cag3ij3j1z0kl0";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "typelevel-eval" = pkgs.stdenv.mkDerivation {
+        name = "typelevel-eval";
+        version = "v0.5.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-typelevel-eval";
+          rev = "91d286c195b1e68aa06f2f0453fcd214f7b70102";
+          sha256 = "0jxw0y5d1vni8kdhrvgnrdi0iwm694gfh3d0nwjsaqmdhrcpyk08";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

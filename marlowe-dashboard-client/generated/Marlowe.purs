@@ -26,7 +26,8 @@ import Data.String (joinWith)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
-  ( CheckPostData
+  ( CreatePostData
+  , CreateResponse
   , RestoreError
   , RestorePostData
   )
@@ -227,15 +228,15 @@ postApiWalletV1CentralizedtestnetRestore reqBody = do
     Left err -> throwError $ { request: affReq, description: DecodingError err }
     Right body -> pure body
 
-postApiWalletV1CentralizedtestnetCheckmnemonic
+postApiWalletV1CentralizedtestnetCreate
   :: forall env m
    . HasSPSettings env
   => MonadAsk env m
   => MonadError AjaxError m
   => MonadAff m
-  => CheckPostData
-  -> m Boolean
-postApiWalletV1CentralizedtestnetCheckmnemonic reqBody = do
+  => CreatePostData
+  -> m (Maybe CreateResponse)
+postApiWalletV1CentralizedtestnetCreate reqBody = do
   spSettings <- asks spSettings
   let baseURL = spSettings.baseURL
   let httpMethod = Left POST
@@ -259,7 +260,7 @@ postApiWalletV1CentralizedtestnetCheckmnemonic reqBody = do
         <> "/"
         <> "centralized-testnet"
         <> "/"
-        <> "check-mnemonic"
+        <> "create"
         <> queryString
   let
     reqHeaders =
@@ -279,7 +280,7 @@ postApiWalletV1CentralizedtestnetCheckmnemonic reqBody = do
         }
   let
     decoder =
-      D.value
+      (D.maybe D.value)
   result <- liftAff $ request affReq
   response <- case result of
     Left err -> throwError $

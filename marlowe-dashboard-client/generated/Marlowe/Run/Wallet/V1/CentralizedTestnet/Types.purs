@@ -3,6 +3,7 @@ module Marlowe.Run.Wallet.V1.CentralizedTestnet.Types where
 
 import Prelude
 
+import Cardano.Wallet.Mock.Types (WalletInfo)
 import Control.Lazy (defer)
 import Data.Argonaut.Core (jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
@@ -25,10 +26,46 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
 
+newtype CreateResponse = CreateResponse
+  { mnemonic :: Array String
+  , walletInfo :: WalletInfo
+  }
+
+instance showCreateResponse :: Show CreateResponse where
+  show a = genericShow a
+
+instance encodeJsonCreateResponse :: EncodeJson CreateResponse where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { mnemonic: E.value :: _ (Array String)
+        , walletInfo: E.value :: _ WalletInfo
+        }
+    )
+
+instance decodeJsonCreateResponse :: DecodeJson CreateResponse where
+  decodeJson = defer \_ -> D.decode $
+    ( CreateResponse <$> D.record "CreateResponse"
+        { mnemonic: D.value :: _ (Array String)
+        , walletInfo: D.value :: _ WalletInfo
+        }
+    )
+
+derive instance genericCreateResponse :: Generic CreateResponse _
+
+derive instance newtypeCreateResponse :: Newtype CreateResponse _
+
+--------------------------------------------------------------------------------
+
+_CreateResponse :: Iso' CreateResponse
+  { mnemonic :: Array String, walletInfo :: WalletInfo }
+_CreateResponse = _Newtype
+
+--------------------------------------------------------------------------------
+
 newtype RestorePostData = RestorePostData
-  { getMnemonicPhrase :: Array String
-  , getPassphrase :: String
-  , getWalletName :: String
+  { getRestoreMnemonicPhrase :: Array String
+  , getRestorePassphrase :: String
+  , getRestoreWalletName :: String
   }
 
 derive instance eqRestorePostData :: Eq RestorePostData
@@ -39,18 +76,18 @@ instance showRestorePostData :: Show RestorePostData where
 instance encodeJsonRestorePostData :: EncodeJson RestorePostData where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { getMnemonicPhrase: E.value :: _ (Array String)
-        , getPassphrase: E.value :: _ String
-        , getWalletName: E.value :: _ String
+        { getRestoreMnemonicPhrase: E.value :: _ (Array String)
+        , getRestorePassphrase: E.value :: _ String
+        , getRestoreWalletName: E.value :: _ String
         }
     )
 
 instance decodeJsonRestorePostData :: DecodeJson RestorePostData where
   decodeJson = defer \_ -> D.decode $
     ( RestorePostData <$> D.record "RestorePostData"
-        { getMnemonicPhrase: D.value :: _ (Array String)
-        , getPassphrase: D.value :: _ String
-        , getWalletName: D.value :: _ String
+        { getRestoreMnemonicPhrase: D.value :: _ (Array String)
+        , getRestorePassphrase: D.value :: _ String
+        , getRestoreWalletName: D.value :: _ String
         }
     )
 
@@ -61,35 +98,49 @@ derive instance newtypeRestorePostData :: Newtype RestorePostData _
 --------------------------------------------------------------------------------
 
 _RestorePostData :: Iso' RestorePostData
-  { getMnemonicPhrase :: Array String
-  , getPassphrase :: String
-  , getWalletName :: String
+  { getRestoreMnemonicPhrase :: Array String
+  , getRestorePassphrase :: String
+  , getRestoreWalletName :: String
   }
 _RestorePostData = _Newtype
 
 --------------------------------------------------------------------------------
 
-newtype CheckPostData = CheckPostData (Array String)
+newtype CreatePostData = CreatePostData
+  { getCreatePassphrase :: String
+  , getCreateWalletName :: String
+  }
 
-derive instance eqCheckPostData :: Eq CheckPostData
+derive instance eqCreatePostData :: Eq CreatePostData
 
-instance showCheckPostData :: Show CheckPostData where
+instance showCreatePostData :: Show CreatePostData where
   show a = genericShow a
 
-instance encodeJsonCheckPostData :: EncodeJson CheckPostData where
-  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
+instance encodeJsonCreatePostData :: EncodeJson CreatePostData where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { getCreatePassphrase: E.value :: _ String
+        , getCreateWalletName: E.value :: _ String
+        }
+    )
 
-instance decodeJsonCheckPostData :: DecodeJson CheckPostData where
-  decodeJson = defer \_ -> D.decode $ (CheckPostData <$> D.value)
+instance decodeJsonCreatePostData :: DecodeJson CreatePostData where
+  decodeJson = defer \_ -> D.decode $
+    ( CreatePostData <$> D.record "CreatePostData"
+        { getCreatePassphrase: D.value :: _ String
+        , getCreateWalletName: D.value :: _ String
+        }
+    )
 
-derive instance genericCheckPostData :: Generic CheckPostData _
+derive instance genericCreatePostData :: Generic CreatePostData _
 
-derive instance newtypeCheckPostData :: Newtype CheckPostData _
+derive instance newtypeCreatePostData :: Newtype CreatePostData _
 
 --------------------------------------------------------------------------------
 
-_CheckPostData :: Iso' CheckPostData (Array String)
-_CheckPostData = _Newtype
+_CreatePostData :: Iso' CreatePostData
+  { getCreatePassphrase :: String, getCreateWalletName :: String }
+_CreatePostData = _Newtype
 
 --------------------------------------------------------------------------------
 

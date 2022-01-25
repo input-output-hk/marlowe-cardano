@@ -9,17 +9,14 @@ import Data.Address (Address)
 import Data.Address (AddressError(..), validator) as A
 import Data.Filterable (filter)
 import Data.Maybe (fromMaybe, isJust, maybe)
-import Data.MnemonicPhrase
-  ( MnemonicPhrase
-  , MnemonicPhraseError
-  )
+import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.Set (Set)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (AsyncInput, Form, FormHTML)
+import Halogen.Form (Form, FormHTML)
 import Halogen.Form as Form
 import Halogen.Form.FormM (FormM)
 import Halogen.HTML as HH
