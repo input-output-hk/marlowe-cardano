@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -43,13 +42,9 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
                                      languageExtensions, runInterpreter, set, setImports)
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
-import Language.Marlowe.Deserialisation (byteStringToInt, byteStringToList)
 import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
-import Language.Marlowe.SemanticsSerialisation (contractToByteString)
 import Language.Marlowe.SemanticsTypes
-import Language.Marlowe.Serialisation (intToByteString, listToByteString)
 import Language.Marlowe.Util
 import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
@@ -100,15 +95,8 @@ tests = testGroup "Marlowe"
     , testProperty "Multiply by zero" mulTest
     , testProperty "Divide zero and by zero" divZeroTest
     , testProperty "DivValue rounding" divisionRoundingTest
-    , testGroup "ByteString ad-hoc (de)serialisation"
-        [ testProperty "Integer (de)serialisation roundtrip" integerBSRoundtripTest
-        , testProperty "Integer list (de)serialisation roundtrip" integerListBSRoundtripTest
-        , testProperty "Contract (de)serialisation roundtrip" contractBSRoundtripTest
-        ]
     , zeroCouponBondTest
-#ifndef DisableMerkleization
     , merkleizedZeroCouponBondTest
-#endif
     , errorHandlingTest
     , trustFundTest
     ]
@@ -589,12 +577,3 @@ jsonLoops cont = decode (encode cont) === Just cont
 
 prop_jsonLoops :: Property
 prop_jsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract jsonLoops
-
-integerBSRoundtripTest :: Property
-integerBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen Integer) (\num -> byteStringToInt (intToByteString num) === Just (num, emptyByteString))
-
-integerListBSRoundtripTest :: Property
-integerListBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen [Integer]) (\numList -> byteStringToList byteStringToInt (listToByteString intToByteString numList) === Just (numList, emptyByteString))
-
-contractBSRoundtripTest :: Property
-contractBSRoundtripTest = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract (\contract -> byteStringToContract (contractToByteString contract) === Just (contract, emptyByteString))
