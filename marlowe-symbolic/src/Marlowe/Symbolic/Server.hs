@@ -18,7 +18,7 @@ import Data.Bifunctor (first)
 import Data.ByteString.Lazy.UTF8 as BSU
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (Proxy))
-import Formatting (fprintLn, (%))
+import Formatting (fprint, (%))
 import Formatting.Clock (timeSpecs)
 import Language.Marlowe (Contract, Slot (Slot), State, TransactionInput, TransactionWarning)
 import Language.Marlowe.Analysis.FSSemantics (warningsTraceCustom)
@@ -57,7 +57,7 @@ handlers Request {..} =
                        , durationMs = (toNanoSecs $ diffTimeSpec start end) `div` 1000000
                        }
     putStrLn $ BSU.toString $ JSON.encode res
-    fprintLn ("Static analysis took " % timeSpecs) start end
+    fprint ("Static analysis took " % timeSpecs % "\n") start end
     pure res
 
 app :: Application
