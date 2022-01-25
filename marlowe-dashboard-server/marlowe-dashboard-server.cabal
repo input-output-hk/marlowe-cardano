@@ -71,30 +71,41 @@ executable marlowe-dashboard-server
     main-is: Main.hs
     other-modules:
         Webserver
-        PSGenerator
     hs-source-dirs: app
     default-language: Haskell2010
     ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
                  -Wincomplete-uni-patterns -Wincomplete-record-updates
     build-depends:
-        aeson -any,
-        base -any,
-        http-client -any,
-        http-types -any,
-        lens -any,
-        marlowe -any,
-        marlowe-dashboard-server -any,
-        monad-logger -any,
-        playground-common -any,
-        plutus-ledger-api -any,
-        purescript-bridge -any,
-        optparse-applicative -any,
-        servant-client -any,
-        servant-purescript -any,
-        servant-server -any,
-        text -any,
-        wai -any,
-        warp -any
+        aeson,
+        base,
+        http-client,
+        http-types,
+        marlowe,
+        marlowe-dashboard-server,
+        monad-logger,
+        optparse-applicative,
+        servant-client,
+        servant-server,
+        text,
+        wai,
+        warp
+
+executable marlowe-run-psgenerator
+    main-is: PSGenerator.hs
+    hs-source-dirs: tools
+    default-language: Haskell2010
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+                 -Wincomplete-uni-patterns -Wincomplete-record-updates
+    build-depends:
+        base,
+        lens,
+        marlowe,
+        marlowe-dashboard-server,
+        playground-common,
+        purescript-bridge,
+        optparse-applicative,
+        servant-purescript,
+        text
 
 test-suite marlowe-dashboard-server-test
     type: exitcode-stdio-1.0

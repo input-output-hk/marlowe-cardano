@@ -35,7 +35,7 @@ instance Aeson.FromJSON WBEConfig where
     parseJSON = Aeson.genericParseJSON $ Aeson.defaultOptions
         { Aeson.fieldLabelModifier = normalizeFieldLabel "wbe" }
 
-data AppConfig = AppConfig { _appWbeConfig :: WBEConfig }
+newtype AppConfig = AppConfig { _appWbeConfig :: WBEConfig }
     deriving (Eq, Generic, Show)
 
 instance Aeson.FromJSON AppConfig where

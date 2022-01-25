@@ -8,8 +8,8 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module PSGenerator
-  ( generate,
+module Main
+  ( main,
   )
 where
 
@@ -29,9 +29,11 @@ import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
+import Options.Applicative (Parser, argument, execParser, help, helper, idm, info, metavar, str)
 import qualified PSGenerator.Common
 import Servant.PureScript (HasBridge, Settings, addTypes, apiModuleName, defaultBridge, defaultSettings,
                            generateWithSettings, languageBridge)
+
 doubleBridge :: BridgePart
 doubleBridge = typeName ^== "Double" >> return psNumber
 
@@ -110,6 +112,10 @@ mySettings = defaultSettings
   & set apiModuleName "Marlowe.Run.Server"
   & addTypes myTypes
 
-generate :: FilePath -> IO ()
-generate outputDir =
+argParser :: Parser FilePath
+argParser = argument str $ metavar "OUTPUT_DIR" <> help "Output directory to write PureScript files to."
+
+main :: IO ()
+main = do
+  outputDir <- execParser (info (helper <*> argParser) idm)
   generateWithSettings mySettings outputDir myBridgeProxy (Proxy @HTTPAPI)
