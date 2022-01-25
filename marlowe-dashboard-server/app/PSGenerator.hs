@@ -21,7 +21,7 @@ import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
 import Language.Marlowe.Client (EndpointResponse, MarloweEndpointResult, MarloweError)
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), SumType, TypeInfo (..), argonaut,
-                                   buildBridge, typeName, writePSTypes, (^==))
+                                   buildBridge, typeName, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import Language.PureScript.Bridge.TypeParameters (A, E)
@@ -30,8 +30,8 @@ import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestoreError, RestorePostData)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
-import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
-                           writeAPIModuleWithSettings)
+import Servant.PureScript (HasBridge, Settings, addTypes, apiModuleName, defaultBridge, defaultSettings,
+                           generateWithSettings, languageBridge)
 doubleBridge :: BridgePart
 doubleBridge = typeName ^== "Double" >> return psNumber
 
@@ -106,13 +106,10 @@ myTypes =
     )
 
 mySettings :: Settings
-mySettings = defaultSettings & set apiModuleName "Marlowe"
+mySettings = defaultSettings
+  & set apiModuleName "Marlowe.Run.Server"
+  & addTypes myTypes
 
 generate :: FilePath -> IO ()
-generate outputDir = do
-  writeAPIModuleWithSettings
-    mySettings
-    outputDir
-    myBridgeProxy
-    (Proxy @HTTPAPI)
-  writePSTypes outputDir (buildBridge myBridge) myTypes
+generate outputDir =
+  generateWithSettings mySettings outputDir myBridgeProxy (Proxy @HTTPAPI)
