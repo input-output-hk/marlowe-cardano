@@ -4,20 +4,17 @@ module Wallet.Rollup.Types where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
@@ -27,6 +24,9 @@ import Plutus.V1.Ledger.Tx (Tx, TxIn, TxOut)
 import Plutus.V1.Ledger.TxId (TxId)
 import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype AnnotatedTx = AnnotatedTx
   { sequenceId :: SequenceId
@@ -37,12 +37,12 @@ newtype AnnotatedTx = AnnotatedTx
   , valid :: Boolean
   }
 
-derive instance eqAnnotatedTx :: Eq AnnotatedTx
+derive instance Eq AnnotatedTx
 
-instance showAnnotatedTx :: Show AnnotatedTx where
+instance Show AnnotatedTx where
   show a = genericShow a
 
-instance encodeJsonAnnotatedTx :: EncodeJson AnnotatedTx where
+instance EncodeJson AnnotatedTx where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { sequenceId: E.value :: _ SequenceId
@@ -55,7 +55,7 @@ instance encodeJsonAnnotatedTx :: EncodeJson AnnotatedTx where
         }
     )
 
-instance decodeJsonAnnotatedTx :: DecodeJson AnnotatedTx where
+instance DecodeJson AnnotatedTx where
   decodeJson = defer \_ -> D.decode $
     ( AnnotatedTx <$> D.record "AnnotatedTx"
         { sequenceId: D.value :: _ SequenceId
@@ -68,9 +68,9 @@ instance decodeJsonAnnotatedTx :: DecodeJson AnnotatedTx where
         }
     )
 
-derive instance genericAnnotatedTx :: Generic AnnotatedTx _
+derive instance Generic AnnotatedTx _
 
-derive instance newtypeAnnotatedTx :: Newtype AnnotatedTx _
+derive instance Newtype AnnotatedTx _
 
 --------------------------------------------------------------------------------
 
@@ -86,6 +86,46 @@ _AnnotatedTx = _Newtype
 
 --------------------------------------------------------------------------------
 
+data BeneficialOwner
+  = OwnedByPaymentPubKey PaymentPubKeyHash
+  | OwnedByScript String
+
+derive instance Eq BeneficialOwner
+
+derive instance Ord BeneficialOwner
+
+instance Show BeneficialOwner where
+  show a = genericShow a
+
+instance EncodeJson BeneficialOwner where
+  encodeJson = defer \_ -> case _ of
+    OwnedByPaymentPubKey a -> E.encodeTagged "OwnedByPaymentPubKey" a E.value
+    OwnedByScript a -> E.encodeTagged "OwnedByScript" a E.value
+
+instance DecodeJson BeneficialOwner where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "BeneficialOwner"
+    $ Map.fromFoldable
+        [ "OwnedByPaymentPubKey" /\ D.content (OwnedByPaymentPubKey <$> D.value)
+        , "OwnedByScript" /\ D.content (OwnedByScript <$> D.value)
+        ]
+
+derive instance Generic BeneficialOwner _
+
+--------------------------------------------------------------------------------
+
+_OwnedByPaymentPubKey :: Prism' BeneficialOwner PaymentPubKeyHash
+_OwnedByPaymentPubKey = prism' OwnedByPaymentPubKey case _ of
+  (OwnedByPaymentPubKey a) -> Just a
+  _ -> Nothing
+
+_OwnedByScript :: Prism' BeneficialOwner String
+_OwnedByScript = prism' OwnedByScript case _ of
+  (OwnedByScript a) -> Just a
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
 data DereferencedInput
   = DereferencedInput
       { originalInput :: TxIn
@@ -93,12 +133,12 @@ data DereferencedInput
       }
   | InputNotFound TxKey
 
-derive instance eqDereferencedInput :: Eq DereferencedInput
+derive instance Eq DereferencedInput
 
-instance showDereferencedInput :: Show DereferencedInput where
+instance Show DereferencedInput where
   show a = genericShow a
 
-instance encodeJsonDereferencedInput :: EncodeJson DereferencedInput where
+instance EncodeJson DereferencedInput where
   encodeJson = defer \_ -> case _ of
     DereferencedInput { originalInput, refersTo } -> encodeJson
       { tag: "DereferencedInput"
@@ -107,7 +147,7 @@ instance encodeJsonDereferencedInput :: EncodeJson DereferencedInput where
       }
     InputNotFound a -> E.encodeTagged "InputNotFound" a E.value
 
-instance decodeJsonDereferencedInput :: DecodeJson DereferencedInput where
+instance DecodeJson DereferencedInput where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "DereferencedInput"
     $ Map.fromFoldable
@@ -120,7 +160,7 @@ instance decodeJsonDereferencedInput :: DecodeJson DereferencedInput where
         , "InputNotFound" /\ D.content (InputNotFound <$> D.value)
         ]
 
-derive instance genericDereferencedInput :: Generic DereferencedInput _
+derive instance Generic DereferencedInput _
 
 --------------------------------------------------------------------------------
 
@@ -137,59 +177,19 @@ _InputNotFound = prism' InputNotFound case _ of
 
 --------------------------------------------------------------------------------
 
-data BeneficialOwner
-  = OwnedByPaymentPubKey PaymentPubKeyHash
-  | OwnedByScript String
-
-derive instance eqBeneficialOwner :: Eq BeneficialOwner
-
-derive instance ordBeneficialOwner :: Ord BeneficialOwner
-
-instance showBeneficialOwner :: Show BeneficialOwner where
-  show a = genericShow a
-
-instance encodeJsonBeneficialOwner :: EncodeJson BeneficialOwner where
-  encodeJson = defer \_ -> case _ of
-    OwnedByPaymentPubKey a -> E.encodeTagged "OwnedByPaymentPubKey" a E.value
-    OwnedByScript a -> E.encodeTagged "OwnedByScript" a E.value
-
-instance decodeJsonBeneficialOwner :: DecodeJson BeneficialOwner where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "BeneficialOwner"
-    $ Map.fromFoldable
-        [ "OwnedByPaymentPubKey" /\ D.content (OwnedByPaymentPubKey <$> D.value)
-        , "OwnedByScript" /\ D.content (OwnedByScript <$> D.value)
-        ]
-
-derive instance genericBeneficialOwner :: Generic BeneficialOwner _
-
---------------------------------------------------------------------------------
-
-_OwnedByPaymentPubKey :: Prism' BeneficialOwner PaymentPubKeyHash
-_OwnedByPaymentPubKey = prism' OwnedByPaymentPubKey case _ of
-  (OwnedByPaymentPubKey a) -> Just a
-  _ -> Nothing
-
-_OwnedByScript :: Prism' BeneficialOwner String
-_OwnedByScript = prism' OwnedByScript case _ of
-  (OwnedByScript a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 newtype SequenceId = SequenceId
   { slotIndex :: Int
   , txIndex :: Int
   }
 
-derive instance eqSequenceId :: Eq SequenceId
+derive instance Eq SequenceId
 
-derive instance ordSequenceId :: Ord SequenceId
+derive instance Ord SequenceId
 
-instance showSequenceId :: Show SequenceId where
+instance Show SequenceId where
   show a = genericShow a
 
-instance encodeJsonSequenceId :: EncodeJson SequenceId where
+instance EncodeJson SequenceId where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { slotIndex: E.value :: _ Int
@@ -197,7 +197,7 @@ instance encodeJsonSequenceId :: EncodeJson SequenceId where
         }
     )
 
-instance decodeJsonSequenceId :: DecodeJson SequenceId where
+instance DecodeJson SequenceId where
   decodeJson = defer \_ -> D.decode $
     ( SequenceId <$> D.record "SequenceId"
         { slotIndex: D.value :: _ Int
@@ -205,9 +205,9 @@ instance decodeJsonSequenceId :: DecodeJson SequenceId where
         }
     )
 
-derive instance genericSequenceId :: Generic SequenceId _
+derive instance Generic SequenceId _
 
-derive instance newtypeSequenceId :: Newtype SequenceId _
+derive instance Newtype SequenceId _
 
 --------------------------------------------------------------------------------
 
@@ -221,14 +221,14 @@ newtype TxKey = TxKey
   , _txKeyTxOutRefIdx :: BigInt
   }
 
-derive instance eqTxKey :: Eq TxKey
+derive instance Eq TxKey
 
-derive instance ordTxKey :: Ord TxKey
+derive instance Ord TxKey
 
-instance showTxKey :: Show TxKey where
+instance Show TxKey where
   show a = genericShow a
 
-instance encodeJsonTxKey :: EncodeJson TxKey where
+instance EncodeJson TxKey where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { _txKeyTxId: E.value :: _ TxId
@@ -236,7 +236,7 @@ instance encodeJsonTxKey :: EncodeJson TxKey where
         }
     )
 
-instance decodeJsonTxKey :: DecodeJson TxKey where
+instance DecodeJson TxKey where
   decodeJson = defer \_ -> D.decode $
     ( TxKey <$> D.record "TxKey"
         { _txKeyTxId: D.value :: _ TxId
@@ -244,9 +244,9 @@ instance decodeJsonTxKey :: DecodeJson TxKey where
         }
     )
 
-derive instance genericTxKey :: Generic TxKey _
+derive instance Generic TxKey _
 
-derive instance newtypeTxKey :: Newtype TxKey _
+derive instance Newtype TxKey _
 
 --------------------------------------------------------------------------------
 

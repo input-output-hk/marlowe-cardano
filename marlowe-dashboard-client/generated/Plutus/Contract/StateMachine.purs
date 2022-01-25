@@ -4,18 +4,15 @@ module Plutus.Contract.StateMachine where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
@@ -23,30 +20,21 @@ import Data.Tuple.Nested ((/\))
 import Plutus.Contract.StateMachine.OnChain (State)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (ContractError)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype InvalidTransition a b = InvalidTransition
   { tfState :: Maybe (State a)
   , tfInput :: b
   }
 
-derive instance eqInvalidTransition ::
-  ( Eq a
-  , Eq b
-  ) =>
-  Eq (InvalidTransition a b)
+derive instance (Eq a, Eq b) => Eq (InvalidTransition a b)
 
-instance showInvalidTransition ::
-  ( Show a
-  , Show b
-  ) =>
-  Show (InvalidTransition a b) where
+instance (Show a, Show b) => Show (InvalidTransition a b) where
   show a = genericShow a
 
-instance encodeJsonInvalidTransition ::
-  ( EncodeJson a
-  , EncodeJson b
-  ) =>
-  EncodeJson (InvalidTransition a b) where
+instance (EncodeJson a, EncodeJson b) => EncodeJson (InvalidTransition a b) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { tfState: (E.maybe E.value) :: _ (Maybe (State a))
@@ -54,11 +42,7 @@ instance encodeJsonInvalidTransition ::
         }
     )
 
-instance decodeJsonInvalidTransition ::
-  ( DecodeJson a
-  , DecodeJson b
-  ) =>
-  DecodeJson (InvalidTransition a b) where
+instance (DecodeJson a, DecodeJson b) => DecodeJson (InvalidTransition a b) where
   decodeJson = defer \_ -> D.decode $
     ( InvalidTransition <$> D.record "InvalidTransition"
         { tfState: (D.maybe D.value) :: _ (Maybe (State a))
@@ -66,9 +50,9 @@ instance decodeJsonInvalidTransition ::
         }
     )
 
-derive instance genericInvalidTransition :: Generic (InvalidTransition a b) _
+derive instance Generic (InvalidTransition a b) _
 
-derive instance newtypeInvalidTransition :: Newtype (InvalidTransition a b) _
+derive instance Newtype (InvalidTransition a b) _
 
 --------------------------------------------------------------------------------
 
@@ -84,19 +68,19 @@ data SMContractError
   | UnableToExtractTransition
   | SMCContractError ContractError
 
-derive instance eqSMContractError :: Eq SMContractError
+derive instance Eq SMContractError
 
-instance showSMContractError :: Show SMContractError where
+instance Show SMContractError where
   show a = genericShow a
 
-instance encodeJsonSMContractError :: EncodeJson SMContractError where
+instance EncodeJson SMContractError where
   encodeJson = defer \_ -> case _ of
     ChooserError a -> E.encodeTagged "ChooserError" a E.value
     UnableToExtractTransition -> encodeJson
       { tag: "UnableToExtractTransition", contents: jsonNull }
     SMCContractError a -> E.encodeTagged "SMCContractError" a E.value
 
-instance decodeJsonSMContractError :: DecodeJson SMContractError where
+instance DecodeJson SMContractError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "SMContractError"
     $ Map.fromFoldable
@@ -105,7 +89,7 @@ instance decodeJsonSMContractError :: DecodeJson SMContractError where
         , "SMCContractError" /\ D.content (SMCContractError <$> D.value)
         ]
 
-derive instance genericSMContractError :: Generic SMContractError _
+derive instance Generic SMContractError _
 
 --------------------------------------------------------------------------------
 

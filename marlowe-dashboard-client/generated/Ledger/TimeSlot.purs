@@ -4,19 +4,16 @@ module Ledger.TimeSlot where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
@@ -25,18 +22,21 @@ import Data.Tuple.Nested ((/\))
 import Plutus.V1.Ledger.Slot (Slot)
 import Plutus.V1.Ledger.Time (POSIXTime)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype SlotConfig = SlotConfig
   { scSlotLength :: BigInt
   , scSlotZeroTime :: POSIXTime
   }
 
-derive instance eqSlotConfig :: Eq SlotConfig
+derive instance Eq SlotConfig
 
-instance showSlotConfig :: Show SlotConfig where
+instance Show SlotConfig where
   show a = genericShow a
 
-instance encodeJsonSlotConfig :: EncodeJson SlotConfig where
+instance EncodeJson SlotConfig where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { scSlotLength: E.value :: _ BigInt
@@ -44,7 +44,7 @@ instance encodeJsonSlotConfig :: EncodeJson SlotConfig where
         }
     )
 
-instance decodeJsonSlotConfig :: DecodeJson SlotConfig where
+instance DecodeJson SlotConfig where
   decodeJson = defer \_ -> D.decode $
     ( SlotConfig <$> D.record "SlotConfig"
         { scSlotLength: D.value :: _ BigInt
@@ -52,9 +52,9 @@ instance decodeJsonSlotConfig :: DecodeJson SlotConfig where
         }
     )
 
-derive instance genericSlotConfig :: Generic SlotConfig _
+derive instance Generic SlotConfig _
 
-derive instance newtypeSlotConfig :: Newtype SlotConfig _
+derive instance Newtype SlotConfig _
 
 --------------------------------------------------------------------------------
 
@@ -69,12 +69,12 @@ newtype SlotConversionError = SlotOutOfRange
   , horizon :: Tuple Slot POSIXTime
   }
 
-derive instance eqSlotConversionError :: Eq SlotConversionError
+derive instance Eq SlotConversionError
 
-instance showSlotConversionError :: Show SlotConversionError where
+instance Show SlotConversionError where
   show a = genericShow a
 
-instance encodeJsonSlotConversionError :: EncodeJson SlotConversionError where
+instance EncodeJson SlotConversionError where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { requestedSlot: E.value :: _ Slot
@@ -82,7 +82,7 @@ instance encodeJsonSlotConversionError :: EncodeJson SlotConversionError where
         }
     )
 
-instance decodeJsonSlotConversionError :: DecodeJson SlotConversionError where
+instance DecodeJson SlotConversionError where
   decodeJson = defer \_ -> D.decode $
     ( SlotOutOfRange <$> D.record "SlotOutOfRange"
         { requestedSlot: D.value :: _ Slot
@@ -90,9 +90,9 @@ instance decodeJsonSlotConversionError :: DecodeJson SlotConversionError where
         }
     )
 
-derive instance genericSlotConversionError :: Generic SlotConversionError _
+derive instance Generic SlotConversionError _
 
-derive instance newtypeSlotConversionError :: Newtype SlotConversionError _
+derive instance Newtype SlotConversionError _
 
 --------------------------------------------------------------------------------
 

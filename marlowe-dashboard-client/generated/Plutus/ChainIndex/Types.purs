@@ -4,13 +4,11 @@ module Plutus.ChainIndex.Types where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
@@ -19,7 +17,6 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
@@ -28,58 +25,65 @@ import Ledger.Blockchain (BlockId)
 import Plutus.V1.Ledger.Slot (Slot)
 import Plutus.V1.Ledger.TxId (TxId)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
-data Tip
-  = TipAtGenesis
-  | Tip
-      { tipSlot :: Slot
-      , tipBlockId :: BlockId
-      , tipBlockNo :: BlockNumber
-      }
+newtype BlockNumber = BlockNumber { unBlockNumber :: BigInt }
 
-derive instance eqTip :: Eq Tip
+derive instance Eq BlockNumber
 
-instance showTip :: Show Tip where
+instance Show BlockNumber where
   show a = genericShow a
 
-instance encodeJsonTip :: EncodeJson Tip where
-  encodeJson = defer \_ -> case _ of
-    TipAtGenesis -> encodeJson { tag: "TipAtGenesis", contents: jsonNull }
-    Tip { tipSlot, tipBlockId, tipBlockNo } -> encodeJson
-      { tag: "Tip"
-      , tipSlot: flip E.encode tipSlot E.value
-      , tipBlockId: flip E.encode tipBlockId E.value
-      , tipBlockNo: flip E.encode tipBlockNo E.value
-      }
+instance EncodeJson BlockNumber where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { unBlockNumber: E.value :: _ BigInt }
+    )
 
-instance decodeJsonTip :: DecodeJson Tip where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "Tip"
-    $ Map.fromFoldable
-        [ "TipAtGenesis" /\ pure TipAtGenesis
-        , "Tip" /\
-            ( Tip <$> D.object "Tip"
-                { tipSlot: D.value :: _ Slot
-                , tipBlockId: D.value :: _ BlockId
-                , tipBlockNo: D.value :: _ BlockNumber
-                }
-            )
-        ]
+instance DecodeJson BlockNumber where
+  decodeJson = defer \_ -> D.decode $
+    ( BlockNumber <$> D.record "BlockNumber"
+        { unBlockNumber: D.value :: _ BigInt }
+    )
 
-derive instance genericTip :: Generic Tip _
+derive instance Generic BlockNumber _
+
+derive instance Newtype BlockNumber _
 
 --------------------------------------------------------------------------------
 
-_TipAtGenesis :: Prism' Tip Unit
-_TipAtGenesis = prism' (const TipAtGenesis) case _ of
-  TipAtGenesis -> Just unit
-  _ -> Nothing
+_BlockNumber :: Iso' BlockNumber { unBlockNumber :: BigInt }
+_BlockNumber = _Newtype
 
-_Tip :: Prism' Tip
-  { tipSlot :: Slot, tipBlockId :: BlockId, tipBlockNo :: BlockNumber }
-_Tip = prism' Tip case _ of
-  (Tip a) -> Just a
-  _ -> Nothing
+--------------------------------------------------------------------------------
+
+newtype Depth = Depth { unDepth :: Int }
+
+derive instance Eq Depth
+
+instance Show Depth where
+  show a = genericShow a
+
+instance EncodeJson Depth where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { unDepth: E.value :: _ Int }
+    )
+
+instance DecodeJson Depth where
+  decodeJson = defer \_ -> D.decode $
+    (Depth <$> D.record "Depth" { unDepth: D.value :: _ Int })
+
+derive instance Generic Depth _
+
+derive instance Newtype Depth _
+
+--------------------------------------------------------------------------------
+
+_Depth :: Iso' Depth { unDepth :: Int }
+_Depth = _Newtype
 
 --------------------------------------------------------------------------------
 
@@ -90,12 +94,12 @@ data Point
       , pointBlockId :: BlockId
       }
 
-derive instance eqPoint :: Eq Point
+derive instance Eq Point
 
-instance showPoint :: Show Point where
+instance Show Point where
   show a = genericShow a
 
-instance encodeJsonPoint :: EncodeJson Point where
+instance EncodeJson Point where
   encodeJson = defer \_ -> case _ of
     PointAtGenesis -> encodeJson { tag: "PointAtGenesis", contents: jsonNull }
     Point { pointSlot, pointBlockId } -> encodeJson
@@ -104,7 +108,7 @@ instance encodeJsonPoint :: EncodeJson Point where
       , pointBlockId: flip E.encode pointBlockId E.value
       }
 
-instance decodeJsonPoint :: DecodeJson Point where
+instance DecodeJson Point where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "Point"
     $ Map.fromFoldable
@@ -117,7 +121,7 @@ instance decodeJsonPoint :: DecodeJson Point where
             )
         ]
 
-derive instance genericPoint :: Generic Point _
+derive instance Generic Point _
 
 --------------------------------------------------------------------------------
 
@@ -133,105 +137,17 @@ _Point = prism' Point case _ of
 
 --------------------------------------------------------------------------------
 
-data TxValidity
-  = TxValid
-  | TxInvalid
-  | UnknownValidity
-
-derive instance eqTxValidity :: Eq TxValidity
-
-derive instance ordTxValidity :: Ord TxValidity
-
-instance showTxValidity :: Show TxValidity where
-  show a = genericShow a
-
-instance encodeJsonTxValidity :: EncodeJson TxValidity where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonTxValidity :: DecodeJson TxValidity where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericTxValidity :: Generic TxValidity _
-
-instance enumTxValidity :: Enum TxValidity where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedTxValidity :: Bounded TxValidity where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_TxValid :: Prism' TxValidity Unit
-_TxValid = prism' (const TxValid) case _ of
-  TxValid -> Just unit
-  _ -> Nothing
-
-_TxInvalid :: Prism' TxValidity Unit
-_TxInvalid = prism' (const TxInvalid) case _ of
-  TxInvalid -> Just unit
-  _ -> Nothing
-
-_UnknownValidity :: Prism' TxValidity Unit
-_UnknownValidity = prism' (const UnknownValidity) case _ of
-  UnknownValidity -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data TxOutState
-  = Spent TxId
-  | Unspent
-
-derive instance eqTxOutState :: Eq TxOutState
-
-instance showTxOutState :: Show TxOutState where
-  show a = genericShow a
-
-instance encodeJsonTxOutState :: EncodeJson TxOutState where
-  encodeJson = defer \_ -> case _ of
-    Spent a -> E.encodeTagged "Spent" a E.value
-    Unspent -> encodeJson { tag: "Unspent", contents: jsonNull }
-
-instance decodeJsonTxOutState :: DecodeJson TxOutState where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "TxOutState"
-    $ Map.fromFoldable
-        [ "Spent" /\ D.content (Spent <$> D.value)
-        , "Unspent" /\ pure Unspent
-        ]
-
-derive instance genericTxOutState :: Generic TxOutState _
-
---------------------------------------------------------------------------------
-
-_Spent :: Prism' TxOutState TxId
-_Spent = prism' Spent case _ of
-  (Spent a) -> Just a
-  _ -> Nothing
-
-_Unspent :: Prism' TxOutState Unit
-_Unspent = prism' (const Unspent) case _ of
-  Unspent -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 data RollbackState a
   = Unknown
   | TentativelyConfirmed Depth TxValidity a
   | Committed TxValidity a
 
-derive instance eqRollbackState :: (Eq a) => Eq (RollbackState a)
+derive instance (Eq a) => Eq (RollbackState a)
 
-instance showRollbackState :: (Show a) => Show (RollbackState a) where
+instance (Show a) => Show (RollbackState a) where
   show a = genericShow a
 
-instance encodeJsonRollbackState ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (RollbackState a) where
+instance (EncodeJson a) => EncodeJson (RollbackState a) where
   encodeJson = defer \_ -> case _ of
     Unknown -> encodeJson { tag: "Unknown", contents: jsonNull }
     TentativelyConfirmed a b c -> E.encodeTagged "TentativelyConfirmed"
@@ -240,10 +156,7 @@ instance encodeJsonRollbackState ::
     Committed a b -> E.encodeTagged "Committed" (a /\ b)
       (E.tuple (E.value >/\< E.value))
 
-instance decodeJsonRollbackState ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (RollbackState a) where
+instance (DecodeJson a) => DecodeJson (RollbackState a) where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "RollbackState"
     $ Map.fromFoldable
@@ -256,7 +169,7 @@ instance decodeJsonRollbackState ::
             (D.tuple $ Committed </$\> D.value </*\> D.value)
         ]
 
-derive instance genericRollbackState :: Generic (RollbackState a) _
+derive instance Generic (RollbackState a) _
 
 --------------------------------------------------------------------------------
 
@@ -279,58 +192,139 @@ _Committed = prism' (\{ a, b } -> (Committed a b)) case _ of
 
 --------------------------------------------------------------------------------
 
-newtype BlockNumber = BlockNumber { unBlockNumber :: BigInt }
+data Tip
+  = TipAtGenesis
+  | Tip
+      { tipSlot :: Slot
+      , tipBlockId :: BlockId
+      , tipBlockNo :: BlockNumber
+      }
 
-derive instance eqBlockNumber :: Eq BlockNumber
+derive instance Eq Tip
 
-instance showBlockNumber :: Show BlockNumber where
+instance Show Tip where
   show a = genericShow a
 
-instance encodeJsonBlockNumber :: EncodeJson BlockNumber where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { unBlockNumber: E.value :: _ BigInt }
-    )
+instance EncodeJson Tip where
+  encodeJson = defer \_ -> case _ of
+    TipAtGenesis -> encodeJson { tag: "TipAtGenesis", contents: jsonNull }
+    Tip { tipSlot, tipBlockId, tipBlockNo } -> encodeJson
+      { tag: "Tip"
+      , tipSlot: flip E.encode tipSlot E.value
+      , tipBlockId: flip E.encode tipBlockId E.value
+      , tipBlockNo: flip E.encode tipBlockNo E.value
+      }
 
-instance decodeJsonBlockNumber :: DecodeJson BlockNumber where
-  decodeJson = defer \_ -> D.decode $
-    ( BlockNumber <$> D.record "BlockNumber"
-        { unBlockNumber: D.value :: _ BigInt }
-    )
+instance DecodeJson Tip where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "Tip"
+    $ Map.fromFoldable
+        [ "TipAtGenesis" /\ pure TipAtGenesis
+        , "Tip" /\
+            ( Tip <$> D.object "Tip"
+                { tipSlot: D.value :: _ Slot
+                , tipBlockId: D.value :: _ BlockId
+                , tipBlockNo: D.value :: _ BlockNumber
+                }
+            )
+        ]
 
-derive instance genericBlockNumber :: Generic BlockNumber _
-
-derive instance newtypeBlockNumber :: Newtype BlockNumber _
+derive instance Generic Tip _
 
 --------------------------------------------------------------------------------
 
-_BlockNumber :: Iso' BlockNumber { unBlockNumber :: BigInt }
-_BlockNumber = _Newtype
+_TipAtGenesis :: Prism' Tip Unit
+_TipAtGenesis = prism' (const TipAtGenesis) case _ of
+  TipAtGenesis -> Just unit
+  _ -> Nothing
+
+_Tip :: Prism' Tip
+  { tipSlot :: Slot, tipBlockId :: BlockId, tipBlockNo :: BlockNumber }
+_Tip = prism' Tip case _ of
+  (Tip a) -> Just a
+  _ -> Nothing
 
 --------------------------------------------------------------------------------
 
-newtype Depth = Depth { unDepth :: Int }
+data TxOutState
+  = Spent TxId
+  | Unspent
 
-derive instance eqDepth :: Eq Depth
+derive instance Eq TxOutState
 
-instance showDepth :: Show Depth where
+instance Show TxOutState where
   show a = genericShow a
 
-instance encodeJsonDepth :: EncodeJson Depth where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { unDepth: E.value :: _ Int }
-    )
+instance EncodeJson TxOutState where
+  encodeJson = defer \_ -> case _ of
+    Spent a -> E.encodeTagged "Spent" a E.value
+    Unspent -> encodeJson { tag: "Unspent", contents: jsonNull }
 
-instance decodeJsonDepth :: DecodeJson Depth where
-  decodeJson = defer \_ -> D.decode $
-    (Depth <$> D.record "Depth" { unDepth: D.value :: _ Int })
+instance DecodeJson TxOutState where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "TxOutState"
+    $ Map.fromFoldable
+        [ "Spent" /\ D.content (Spent <$> D.value)
+        , "Unspent" /\ pure Unspent
+        ]
 
-derive instance genericDepth :: Generic Depth _
-
-derive instance newtypeDepth :: Newtype Depth _
+derive instance Generic TxOutState _
 
 --------------------------------------------------------------------------------
 
-_Depth :: Iso' Depth { unDepth :: Int }
-_Depth = _Newtype
+_Spent :: Prism' TxOutState TxId
+_Spent = prism' Spent case _ of
+  (Spent a) -> Just a
+  _ -> Nothing
+
+_Unspent :: Prism' TxOutState Unit
+_Unspent = prism' (const Unspent) case _ of
+  Unspent -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data TxValidity
+  = TxValid
+  | TxInvalid
+  | UnknownValidity
+
+derive instance Eq TxValidity
+
+derive instance Ord TxValidity
+
+instance Show TxValidity where
+  show a = genericShow a
+
+instance EncodeJson TxValidity where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson TxValidity where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic TxValidity _
+
+instance Enum TxValidity where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded TxValidity where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_TxValid :: Prism' TxValidity Unit
+_TxValid = prism' (const TxValid) case _ of
+  TxValid -> Just unit
+  _ -> Nothing
+
+_TxInvalid :: Prism' TxValidity Unit
+_TxInvalid = prism' (const TxInvalid) case _ of
+  TxInvalid -> Just unit
+  _ -> Nothing
+
+_UnknownValidity :: Prism' TxValidity Unit
+_UnknownValidity = prism' (const UnknownValidity) case _ of
+  UnknownValidity -> Just unit
+  _ -> Nothing

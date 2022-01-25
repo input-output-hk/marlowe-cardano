@@ -4,13 +4,11 @@ module Ledger.Typed.Tx where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
@@ -18,7 +16,6 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
@@ -27,6 +24,9 @@ import Plutus.V1.Ledger.Address (Address)
 import Plutus.V1.Ledger.Scripts (DatumHash)
 import Plutus.V1.Ledger.Tx (TxInType, TxOutRef)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 data ConnectionError
   = WrongValidatorAddress Address Address
@@ -39,12 +39,12 @@ data ConnectionError
   | NoDatum TxOutRef DatumHash
   | UnknownRef
 
-derive instance eqConnectionError :: Eq ConnectionError
+derive instance Eq ConnectionError
 
-instance showConnectionError :: Show ConnectionError where
+instance Show ConnectionError where
   show a = genericShow a
 
-instance encodeJsonConnectionError :: EncodeJson ConnectionError where
+instance EncodeJson ConnectionError where
   encodeJson = defer \_ -> case _ of
     WrongValidatorAddress a b -> E.encodeTagged "WrongValidatorAddress" (a /\ b)
       (E.tuple (E.value >/\< E.value))
@@ -58,7 +58,7 @@ instance encodeJsonConnectionError :: EncodeJson ConnectionError where
       (E.tuple (E.value >/\< E.value))
     UnknownRef -> encodeJson { tag: "UnknownRef", contents: jsonNull }
 
-instance decodeJsonConnectionError :: DecodeJson ConnectionError where
+instance DecodeJson ConnectionError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ConnectionError"
     $ Map.fromFoldable
@@ -74,7 +74,7 @@ instance decodeJsonConnectionError :: DecodeJson ConnectionError where
         , "UnknownRef" /\ pure UnknownRef
         ]
 
-derive instance genericConnectionError :: Generic ConnectionError _
+derive instance Generic ConnectionError _
 
 --------------------------------------------------------------------------------
 
@@ -130,26 +130,26 @@ data WrongOutTypeError
   = ExpectedScriptGotPubkey
   | ExpectedPubkeyGotScript
 
-derive instance eqWrongOutTypeError :: Eq WrongOutTypeError
+derive instance Eq WrongOutTypeError
 
-derive instance ordWrongOutTypeError :: Ord WrongOutTypeError
+derive instance Ord WrongOutTypeError
 
-instance showWrongOutTypeError :: Show WrongOutTypeError where
+instance Show WrongOutTypeError where
   show a = genericShow a
 
-instance encodeJsonWrongOutTypeError :: EncodeJson WrongOutTypeError where
+instance EncodeJson WrongOutTypeError where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonWrongOutTypeError :: DecodeJson WrongOutTypeError where
+instance DecodeJson WrongOutTypeError where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericWrongOutTypeError :: Generic WrongOutTypeError _
+derive instance Generic WrongOutTypeError _
 
-instance enumWrongOutTypeError :: Enum WrongOutTypeError where
+instance Enum WrongOutTypeError where
   succ = genericSucc
   pred = genericPred
 
-instance boundedWrongOutTypeError :: Bounded WrongOutTypeError where
+instance Bounded WrongOutTypeError where
   bottom = genericBottom
   top = genericTop
 

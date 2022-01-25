@@ -5,18 +5,15 @@ import Prelude
 
 import Control.Lazy (defer)
 import Control.Monad.Freer.Extras.Pagination (Page)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
@@ -24,18 +21,21 @@ import Data.Tuple.Nested ((/\))
 import Plutus.ChainIndex.Types (Tip)
 import Plutus.V1.Ledger.Tx (TxOutRef)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype IsUtxoResponse = IsUtxoResponse
   { currentTip :: Tip
   , isUtxo :: Boolean
   }
 
-derive instance eqIsUtxoResponse :: Eq IsUtxoResponse
+derive instance Eq IsUtxoResponse
 
-instance showIsUtxoResponse :: Show IsUtxoResponse where
+instance Show IsUtxoResponse where
   show a = genericShow a
 
-instance encodeJsonIsUtxoResponse :: EncodeJson IsUtxoResponse where
+instance EncodeJson IsUtxoResponse where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { currentTip: E.value :: _ Tip
@@ -43,7 +43,7 @@ instance encodeJsonIsUtxoResponse :: EncodeJson IsUtxoResponse where
         }
     )
 
-instance decodeJsonIsUtxoResponse :: DecodeJson IsUtxoResponse where
+instance DecodeJson IsUtxoResponse where
   decodeJson = defer \_ -> D.decode $
     ( IsUtxoResponse <$> D.record "IsUtxoResponse"
         { currentTip: D.value :: _ Tip
@@ -51,9 +51,9 @@ instance decodeJsonIsUtxoResponse :: DecodeJson IsUtxoResponse where
         }
     )
 
-derive instance genericIsUtxoResponse :: Generic IsUtxoResponse _
+derive instance Generic IsUtxoResponse _
 
-derive instance newtypeIsUtxoResponse :: Newtype IsUtxoResponse _
+derive instance Newtype IsUtxoResponse _
 
 --------------------------------------------------------------------------------
 
@@ -64,26 +64,26 @@ _IsUtxoResponse = _Newtype
 
 newtype TxosResponse = TxosResponse { paget :: Page TxOutRef }
 
-derive instance eqTxosResponse :: Eq TxosResponse
+derive instance Eq TxosResponse
 
-instance showTxosResponse :: Show TxosResponse where
+instance Show TxosResponse where
   show a = genericShow a
 
-instance encodeJsonTxosResponse :: EncodeJson TxosResponse where
+instance EncodeJson TxosResponse where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { paget: E.value :: _ (Page TxOutRef) }
     )
 
-instance decodeJsonTxosResponse :: DecodeJson TxosResponse where
+instance DecodeJson TxosResponse where
   decodeJson = defer \_ -> D.decode $
     ( TxosResponse <$> D.record "TxosResponse"
         { paget: D.value :: _ (Page TxOutRef) }
     )
 
-derive instance genericTxosResponse :: Generic TxosResponse _
+derive instance Generic TxosResponse _
 
-derive instance newtypeTxosResponse :: Newtype TxosResponse _
+derive instance Newtype TxosResponse _
 
 --------------------------------------------------------------------------------
 
@@ -97,12 +97,12 @@ newtype UtxosResponse = UtxosResponse
   , page :: Page TxOutRef
   }
 
-derive instance eqUtxosResponse :: Eq UtxosResponse
+derive instance Eq UtxosResponse
 
-instance showUtxosResponse :: Show UtxosResponse where
+instance Show UtxosResponse where
   show a = genericShow a
 
-instance encodeJsonUtxosResponse :: EncodeJson UtxosResponse where
+instance EncodeJson UtxosResponse where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { currentTip: E.value :: _ Tip
@@ -110,7 +110,7 @@ instance encodeJsonUtxosResponse :: EncodeJson UtxosResponse where
         }
     )
 
-instance decodeJsonUtxosResponse :: DecodeJson UtxosResponse where
+instance DecodeJson UtxosResponse where
   decodeJson = defer \_ -> D.decode $
     ( UtxosResponse <$> D.record "UtxosResponse"
         { currentTip: D.value :: _ Tip
@@ -118,9 +118,9 @@ instance decodeJsonUtxosResponse :: DecodeJson UtxosResponse where
         }
     )
 
-derive instance genericUtxosResponse :: Generic UtxosResponse _
+derive instance Generic UtxosResponse _
 
-derive instance newtypeUtxosResponse :: Newtype UtxosResponse _
+derive instance Newtype UtxosResponse _
 
 --------------------------------------------------------------------------------
 

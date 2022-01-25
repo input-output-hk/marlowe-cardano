@@ -4,66 +4,66 @@ module Marlowe.Run.WebSocket where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
-
-newtype StreamToServer = ServerMsg Boolean
-
-derive instance eqStreamToServer :: Eq StreamToServer
-
-instance showStreamToServer :: Show StreamToServer where
-  show a = genericShow a
-
-instance encodeJsonStreamToServer :: EncodeJson StreamToServer where
-  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
-
-instance decodeJsonStreamToServer :: DecodeJson StreamToServer where
-  decodeJson = defer \_ -> D.decode $ (ServerMsg <$> D.value)
-
-derive instance genericStreamToServer :: Generic StreamToServer _
-
-derive instance newtypeStreamToServer :: Newtype StreamToServer _
-
---------------------------------------------------------------------------------
-
-_ServerMsg :: Iso' StreamToServer Boolean
-_ServerMsg = _Newtype
-
---------------------------------------------------------------------------------
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype StreamToClient = ClientMsg Boolean
 
-derive instance eqStreamToClient :: Eq StreamToClient
+derive instance Eq StreamToClient
 
-instance showStreamToClient :: Show StreamToClient where
+instance Show StreamToClient where
   show a = genericShow a
 
-instance encodeJsonStreamToClient :: EncodeJson StreamToClient where
+instance EncodeJson StreamToClient where
   encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
 
-instance decodeJsonStreamToClient :: DecodeJson StreamToClient where
+instance DecodeJson StreamToClient where
   decodeJson = defer \_ -> D.decode $ (ClientMsg <$> D.value)
 
-derive instance genericStreamToClient :: Generic StreamToClient _
+derive instance Generic StreamToClient _
 
-derive instance newtypeStreamToClient :: Newtype StreamToClient _
+derive instance Newtype StreamToClient _
 
 --------------------------------------------------------------------------------
 
 _ClientMsg :: Iso' StreamToClient Boolean
 _ClientMsg = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype StreamToServer = ServerMsg Boolean
+
+derive instance Eq StreamToServer
+
+instance Show StreamToServer where
+  show a = genericShow a
+
+instance EncodeJson StreamToServer where
+  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
+
+instance DecodeJson StreamToServer where
+  decodeJson = defer \_ -> D.decode $ (ServerMsg <$> D.value)
+
+derive instance Generic StreamToServer _
+
+derive instance Newtype StreamToServer _
+
+--------------------------------------------------------------------------------
+
+_ServerMsg :: Iso' StreamToServer Boolean
+_ServerMsg = _Newtype

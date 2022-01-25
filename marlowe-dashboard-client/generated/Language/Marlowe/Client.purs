@@ -4,18 +4,15 @@ module Language.Marlowe.Client where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
@@ -25,32 +22,27 @@ import Marlowe.Semantics (MarloweParams, TransactionError)
 import Plutus.Contract.StateMachine (SMContractError)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (ContractError)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 data EndpointResponse a e
   = EndpointSuccess UUID a
   | EndpointException UUID String e
 
-derive instance eqEndpointResponse :: (Eq a, Eq e) => Eq (EndpointResponse a e)
+derive instance (Eq a, Eq e) => Eq (EndpointResponse a e)
 
-instance showEndpointResponse :: (Show a, Show e) => Show (EndpointResponse a e) where
+instance (Show a, Show e) => Show (EndpointResponse a e) where
   show a = genericShow a
 
-instance encodeJsonEndpointResponse ::
-  ( EncodeJson a
-  , EncodeJson e
-  ) =>
-  EncodeJson (EndpointResponse a e) where
+instance (EncodeJson a, EncodeJson e) => EncodeJson (EndpointResponse a e) where
   encodeJson = defer \_ -> case _ of
     EndpointSuccess a b -> E.encodeTagged "EndpointSuccess" (a /\ b)
       (E.tuple (E.value >/\< E.value))
     EndpointException a b c -> E.encodeTagged "EndpointException" (a /\ b /\ c)
       (E.tuple (E.value >/\< E.value >/\< E.value))
 
-instance decodeJsonEndpointResponse ::
-  ( DecodeJson a
-  , DecodeJson e
-  ) =>
-  DecodeJson (EndpointResponse a e) where
+instance (DecodeJson a, DecodeJson e) => DecodeJson (EndpointResponse a e) where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "EndpointResponse"
     $ Map.fromFoldable
@@ -62,7 +54,7 @@ instance decodeJsonEndpointResponse ::
             )
         ]
 
-derive instance genericEndpointResponse :: Generic (EndpointResponse a e) _
+derive instance Generic (EndpointResponse a e) _
 
 --------------------------------------------------------------------------------
 
@@ -82,6 +74,69 @@ _EndpointException = prism' (\{ a, b, c } -> (EndpointException a b c))
 
 --------------------------------------------------------------------------------
 
+data MarloweEndpointResult
+  = CreateResponse MarloweParams
+  | ApplyInputsResponse
+  | AutoResponse
+  | RedeemResponse
+  | CloseResponse
+
+derive instance Eq MarloweEndpointResult
+
+instance Show MarloweEndpointResult where
+  show a = genericShow a
+
+instance EncodeJson MarloweEndpointResult where
+  encodeJson = defer \_ -> case _ of
+    CreateResponse a -> E.encodeTagged "CreateResponse" a E.value
+    ApplyInputsResponse -> encodeJson
+      { tag: "ApplyInputsResponse", contents: jsonNull }
+    AutoResponse -> encodeJson { tag: "AutoResponse", contents: jsonNull }
+    RedeemResponse -> encodeJson { tag: "RedeemResponse", contents: jsonNull }
+    CloseResponse -> encodeJson { tag: "CloseResponse", contents: jsonNull }
+
+instance DecodeJson MarloweEndpointResult where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "MarloweEndpointResult"
+    $ Map.fromFoldable
+        [ "CreateResponse" /\ D.content (CreateResponse <$> D.value)
+        , "ApplyInputsResponse" /\ pure ApplyInputsResponse
+        , "AutoResponse" /\ pure AutoResponse
+        , "RedeemResponse" /\ pure RedeemResponse
+        , "CloseResponse" /\ pure CloseResponse
+        ]
+
+derive instance Generic MarloweEndpointResult _
+
+--------------------------------------------------------------------------------
+
+_CreateResponse :: Prism' MarloweEndpointResult MarloweParams
+_CreateResponse = prism' CreateResponse case _ of
+  (CreateResponse a) -> Just a
+  _ -> Nothing
+
+_ApplyInputsResponse :: Prism' MarloweEndpointResult Unit
+_ApplyInputsResponse = prism' (const ApplyInputsResponse) case _ of
+  ApplyInputsResponse -> Just unit
+  _ -> Nothing
+
+_AutoResponse :: Prism' MarloweEndpointResult Unit
+_AutoResponse = prism' (const AutoResponse) case _ of
+  AutoResponse -> Just unit
+  _ -> Nothing
+
+_RedeemResponse :: Prism' MarloweEndpointResult Unit
+_RedeemResponse = prism' (const RedeemResponse) case _ of
+  RedeemResponse -> Just unit
+  _ -> Nothing
+
+_CloseResponse :: Prism' MarloweEndpointResult Unit
+_CloseResponse = prism' (const CloseResponse) case _ of
+  CloseResponse -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
 data MarloweError
   = StateMachineError SMContractError
   | TransitionError
@@ -90,12 +145,12 @@ data MarloweError
   | MarloweEvaluationError TransactionError
   | OtherContractError ContractError
 
-derive instance eqMarloweError :: Eq MarloweError
+derive instance Eq MarloweError
 
-instance showMarloweError :: Show MarloweError where
+instance Show MarloweError where
   show a = genericShow a
 
-instance encodeJsonMarloweError :: EncodeJson MarloweError where
+instance EncodeJson MarloweError where
   encodeJson = defer \_ -> case _ of
     StateMachineError a -> E.encodeTagged "StateMachineError" a E.value
     TransitionError -> encodeJson { tag: "TransitionError", contents: jsonNull }
@@ -107,7 +162,7 @@ instance encodeJsonMarloweError :: EncodeJson MarloweError where
       E.value
     OtherContractError a -> E.encodeTagged "OtherContractError" a E.value
 
-instance decodeJsonMarloweError :: DecodeJson MarloweError where
+instance DecodeJson MarloweError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "MarloweError"
     $ Map.fromFoldable
@@ -120,7 +175,7 @@ instance decodeJsonMarloweError :: DecodeJson MarloweError where
         , "OtherContractError" /\ D.content (OtherContractError <$> D.value)
         ]
 
-derive instance genericMarloweError :: Generic MarloweError _
+derive instance Generic MarloweError _
 
 --------------------------------------------------------------------------------
 
@@ -152,67 +207,4 @@ _MarloweEvaluationError = prism' MarloweEvaluationError case _ of
 _OtherContractError :: Prism' MarloweError ContractError
 _OtherContractError = prism' OtherContractError case _ of
   (OtherContractError a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data MarloweEndpointResult
-  = CreateResponse MarloweParams
-  | ApplyInputsResponse
-  | AutoResponse
-  | RedeemResponse
-  | CloseResponse
-
-derive instance eqMarloweEndpointResult :: Eq MarloweEndpointResult
-
-instance showMarloweEndpointResult :: Show MarloweEndpointResult where
-  show a = genericShow a
-
-instance encodeJsonMarloweEndpointResult :: EncodeJson MarloweEndpointResult where
-  encodeJson = defer \_ -> case _ of
-    CreateResponse a -> E.encodeTagged "CreateResponse" a E.value
-    ApplyInputsResponse -> encodeJson
-      { tag: "ApplyInputsResponse", contents: jsonNull }
-    AutoResponse -> encodeJson { tag: "AutoResponse", contents: jsonNull }
-    RedeemResponse -> encodeJson { tag: "RedeemResponse", contents: jsonNull }
-    CloseResponse -> encodeJson { tag: "CloseResponse", contents: jsonNull }
-
-instance decodeJsonMarloweEndpointResult :: DecodeJson MarloweEndpointResult where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "MarloweEndpointResult"
-    $ Map.fromFoldable
-        [ "CreateResponse" /\ D.content (CreateResponse <$> D.value)
-        , "ApplyInputsResponse" /\ pure ApplyInputsResponse
-        , "AutoResponse" /\ pure AutoResponse
-        , "RedeemResponse" /\ pure RedeemResponse
-        , "CloseResponse" /\ pure CloseResponse
-        ]
-
-derive instance genericMarloweEndpointResult :: Generic MarloweEndpointResult _
-
---------------------------------------------------------------------------------
-
-_CreateResponse :: Prism' MarloweEndpointResult MarloweParams
-_CreateResponse = prism' CreateResponse case _ of
-  (CreateResponse a) -> Just a
-  _ -> Nothing
-
-_ApplyInputsResponse :: Prism' MarloweEndpointResult Unit
-_ApplyInputsResponse = prism' (const ApplyInputsResponse) case _ of
-  ApplyInputsResponse -> Just unit
-  _ -> Nothing
-
-_AutoResponse :: Prism' MarloweEndpointResult Unit
-_AutoResponse = prism' (const AutoResponse) case _ of
-  AutoResponse -> Just unit
-  _ -> Nothing
-
-_RedeemResponse :: Prism' MarloweEndpointResult Unit
-_RedeemResponse = prism' (const RedeemResponse) case _ of
-  RedeemResponse -> Just unit
-  _ -> Nothing
-
-_CloseResponse :: Prism' MarloweEndpointResult Unit
-_CloseResponse = prism' (const CloseResponse) case _ of
-  CloseResponse -> Just unit
   _ -> Nothing

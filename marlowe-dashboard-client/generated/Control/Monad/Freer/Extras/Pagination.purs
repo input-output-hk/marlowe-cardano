@@ -4,23 +4,23 @@ module Control.Monad.Freer.Extras.Pagination where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype Page a = Page
   { currentPageQuery :: PageQuery a
@@ -28,12 +28,12 @@ newtype Page a = Page
   , pageItems :: Array a
   }
 
-derive instance eqPage :: (Eq a) => Eq (Page a)
+derive instance (Eq a) => Eq (Page a)
 
-instance showPage :: (Show a) => Show (Page a) where
+instance (Show a) => Show (Page a) where
   show a = genericShow a
 
-instance encodeJsonPage :: (EncodeJson a) => EncodeJson (Page a) where
+instance (EncodeJson a) => EncodeJson (Page a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { currentPageQuery: E.value :: _ (PageQuery a)
@@ -42,7 +42,7 @@ instance encodeJsonPage :: (EncodeJson a) => EncodeJson (Page a) where
         }
     )
 
-instance decodeJsonPage :: (DecodeJson a) => DecodeJson (Page a) where
+instance (DecodeJson a) => DecodeJson (Page a) where
   decodeJson = defer \_ -> D.decode $
     ( Page <$> D.record "Page"
         { currentPageQuery: D.value :: _ (PageQuery a)
@@ -51,9 +51,9 @@ instance decodeJsonPage :: (DecodeJson a) => DecodeJson (Page a) where
         }
     )
 
-derive instance genericPage :: Generic (Page a) _
+derive instance Generic (Page a) _
 
-derive instance newtypePage :: Newtype (Page a) _
+derive instance Newtype (Page a) _
 
 --------------------------------------------------------------------------------
 
@@ -73,12 +73,12 @@ newtype PageQuery a = PageQuery
   , pageQueryLastItem :: Maybe a
   }
 
-derive instance eqPageQuery :: (Eq a) => Eq (PageQuery a)
+derive instance (Eq a) => Eq (PageQuery a)
 
-instance showPageQuery :: (Show a) => Show (PageQuery a) where
+instance (Show a) => Show (PageQuery a) where
   show a = genericShow a
 
-instance encodeJsonPageQuery :: (EncodeJson a) => EncodeJson (PageQuery a) where
+instance (EncodeJson a) => EncodeJson (PageQuery a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { pageQuerySize: E.value :: _ PageSize
@@ -86,7 +86,7 @@ instance encodeJsonPageQuery :: (EncodeJson a) => EncodeJson (PageQuery a) where
         }
     )
 
-instance decodeJsonPageQuery :: (DecodeJson a) => DecodeJson (PageQuery a) where
+instance (DecodeJson a) => DecodeJson (PageQuery a) where
   decodeJson = defer \_ -> D.decode $
     ( PageQuery <$> D.record "PageQuery"
         { pageQuerySize: D.value :: _ PageSize
@@ -94,9 +94,9 @@ instance decodeJsonPageQuery :: (DecodeJson a) => DecodeJson (PageQuery a) where
         }
     )
 
-derive instance genericPageQuery :: Generic (PageQuery a) _
+derive instance Generic (PageQuery a) _
 
-derive instance newtypePageQuery :: Newtype (PageQuery a) _
+derive instance Newtype (PageQuery a) _
 
 --------------------------------------------------------------------------------
 
@@ -110,24 +110,24 @@ _PageQuery = _Newtype
 
 newtype PageSize = PageSize { getPageSize :: Int }
 
-derive instance eqPageSize :: Eq PageSize
+derive instance Eq PageSize
 
-instance showPageSize :: Show PageSize where
+instance Show PageSize where
   show a = genericShow a
 
-instance encodeJsonPageSize :: EncodeJson PageSize where
+instance EncodeJson PageSize where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { getPageSize: E.value :: _ Int }
     )
 
-instance decodeJsonPageSize :: DecodeJson PageSize where
+instance DecodeJson PageSize where
   decodeJson = defer \_ -> D.decode $
     (PageSize <$> D.record "PageSize" { getPageSize: D.value :: _ Int })
 
-derive instance genericPageSize :: Generic PageSize _
+derive instance Generic PageSize _
 
-derive instance newtypePageSize :: Newtype PageSize _
+derive instance Newtype PageSize _
 
 --------------------------------------------------------------------------------
 

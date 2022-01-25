@@ -4,46 +4,46 @@ module Plutus.V1.Ledger.TxId where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype TxId = TxId { getTxId :: String }
 
-derive instance eqTxId :: Eq TxId
+derive instance Eq TxId
 
-derive instance ordTxId :: Ord TxId
+derive instance Ord TxId
 
-instance showTxId :: Show TxId where
+instance Show TxId where
   show a = genericShow a
 
-instance encodeJsonTxId :: EncodeJson TxId where
+instance EncodeJson TxId where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { getTxId: E.value :: _ String }
     )
 
-instance decodeJsonTxId :: DecodeJson TxId where
+instance DecodeJson TxId where
   decodeJson = defer \_ -> D.decode $
     (TxId <$> D.record "TxId" { getTxId: D.value :: _ String })
 
-derive instance genericTxId :: Generic TxId _
+derive instance Generic TxId _
 
-derive instance newtypeTxId :: Newtype TxId _
+derive instance Newtype TxId _
 
 --------------------------------------------------------------------------------
 

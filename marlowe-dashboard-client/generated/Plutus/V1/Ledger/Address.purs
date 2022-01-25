@@ -4,38 +4,38 @@ module Plutus.V1.Ledger.Address where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Plutus.V1.Ledger.Credential (Credential, StakingCredential)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 newtype Address = Address
   { addressCredential :: Credential
   , addressStakingCredential :: Maybe StakingCredential
   }
 
-derive instance eqAddress :: Eq Address
+derive instance Eq Address
 
-derive instance ordAddress :: Ord Address
+derive instance Ord Address
 
-instance showAddress :: Show Address where
+instance Show Address where
   show a = genericShow a
 
-instance encodeJsonAddress :: EncodeJson Address where
+instance EncodeJson Address where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { addressCredential: E.value :: _ Credential
@@ -44,7 +44,7 @@ instance encodeJsonAddress :: EncodeJson Address where
         }
     )
 
-instance decodeJsonAddress :: DecodeJson Address where
+instance DecodeJson Address where
   decodeJson = defer \_ -> D.decode $
     ( Address <$> D.record "Address"
         { addressCredential: D.value :: _ Credential
@@ -53,9 +53,9 @@ instance decodeJsonAddress :: DecodeJson Address where
         }
     )
 
-derive instance genericAddress :: Generic Address _
+derive instance Generic Address _
 
-derive instance newtypeAddress :: Newtype Address _
+derive instance Newtype Address _
 
 --------------------------------------------------------------------------------
 

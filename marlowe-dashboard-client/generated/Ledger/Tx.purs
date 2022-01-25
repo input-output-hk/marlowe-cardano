@@ -4,19 +4,16 @@ module Ledger.Tx where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Either (Either)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
@@ -25,6 +22,9 @@ import Plutus.V1.Ledger.Address (Address)
 import Plutus.V1.Ledger.Scripts (DatumHash, Validator)
 import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 data ChainIndexTxOut
   = PublicKeyChainIndexTxOut
@@ -38,12 +38,12 @@ data ChainIndexTxOut
       , _ciTxOutValue :: Value
       }
 
-derive instance eqChainIndexTxOut :: Eq ChainIndexTxOut
+derive instance Eq ChainIndexTxOut
 
-instance showChainIndexTxOut :: Show ChainIndexTxOut where
+instance Show ChainIndexTxOut where
   show a = genericShow a
 
-instance encodeJsonChainIndexTxOut :: EncodeJson ChainIndexTxOut where
+instance EncodeJson ChainIndexTxOut where
   encodeJson = defer \_ -> case _ of
     PublicKeyChainIndexTxOut { _ciTxOutAddress, _ciTxOutValue } -> encodeJson
       { tag: "PublicKeyChainIndexTxOut"
@@ -61,7 +61,7 @@ instance encodeJsonChainIndexTxOut :: EncodeJson ChainIndexTxOut where
         , _ciTxOutValue: flip E.encode _ciTxOutValue E.value
         }
 
-instance decodeJsonChainIndexTxOut :: DecodeJson ChainIndexTxOut where
+instance DecodeJson ChainIndexTxOut where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ChainIndexTxOut"
     $ Map.fromFoldable
@@ -83,7 +83,7 @@ instance decodeJsonChainIndexTxOut :: DecodeJson ChainIndexTxOut where
             )
         ]
 
-derive instance genericChainIndexTxOut :: Generic ChainIndexTxOut _
+derive instance Generic ChainIndexTxOut _
 
 --------------------------------------------------------------------------------
 

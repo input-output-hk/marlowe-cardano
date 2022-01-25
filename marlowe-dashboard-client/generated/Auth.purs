@@ -4,13 +4,11 @@ module Auth where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
-import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
@@ -18,70 +16,39 @@ import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
-
-newtype AuthStatus = AuthStatus { _authStatusAuthRole :: AuthRole }
-
-derive instance eqAuthStatus :: Eq AuthStatus
-
-instance showAuthStatus :: Show AuthStatus where
-  show a = genericShow a
-
-instance encodeJsonAuthStatus :: EncodeJson AuthStatus where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { _authStatusAuthRole: E.value :: _ AuthRole }
-    )
-
-instance decodeJsonAuthStatus :: DecodeJson AuthStatus where
-  decodeJson = defer \_ -> D.decode $
-    ( AuthStatus <$> D.record "AuthStatus"
-        { _authStatusAuthRole: D.value :: _ AuthRole }
-    )
-
-derive instance genericAuthStatus :: Generic AuthStatus _
-
-derive instance newtypeAuthStatus :: Newtype AuthStatus _
-
---------------------------------------------------------------------------------
-
-_AuthStatus :: Iso' AuthStatus { _authStatusAuthRole :: AuthRole }
-_AuthStatus = _Newtype
-
-authStatusAuthRole :: Lens' AuthStatus AuthRole
-authStatusAuthRole = _Newtype <<< prop (Proxy :: _ "_authStatusAuthRole")
-
---------------------------------------------------------------------------------
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
+import Data.Map as Map
 
 data AuthRole
   = Anonymous
   | GithubUser
 
-derive instance eqAuthRole :: Eq AuthRole
+derive instance Eq AuthRole
 
-derive instance ordAuthRole :: Ord AuthRole
+derive instance Ord AuthRole
 
-instance showAuthRole :: Show AuthRole where
+instance Show AuthRole where
   show a = genericShow a
 
-instance encodeJsonAuthRole :: EncodeJson AuthRole where
+instance EncodeJson AuthRole where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonAuthRole :: DecodeJson AuthRole where
+instance DecodeJson AuthRole where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericAuthRole :: Generic AuthRole _
+derive instance Generic AuthRole _
 
-instance enumAuthRole :: Enum AuthRole where
+instance Enum AuthRole where
   succ = genericSucc
   pred = genericPred
 
-instance boundedAuthRole :: Bounded AuthRole where
+instance Bounded AuthRole where
   bottom = genericBottom
   top = genericTop
 
@@ -96,3 +63,36 @@ _GithubUser :: Prism' AuthRole Unit
 _GithubUser = prism' (const GithubUser) case _ of
   GithubUser -> Just unit
   _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype AuthStatus = AuthStatus { _authStatusAuthRole :: AuthRole }
+
+derive instance Eq AuthStatus
+
+instance Show AuthStatus where
+  show a = genericShow a
+
+instance EncodeJson AuthStatus where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { _authStatusAuthRole: E.value :: _ AuthRole }
+    )
+
+instance DecodeJson AuthStatus where
+  decodeJson = defer \_ -> D.decode $
+    ( AuthStatus <$> D.record "AuthStatus"
+        { _authStatusAuthRole: D.value :: _ AuthRole }
+    )
+
+derive instance Generic AuthStatus _
+
+derive instance Newtype AuthStatus _
+
+--------------------------------------------------------------------------------
+
+_AuthStatus :: Iso' AuthStatus { _authStatusAuthRole :: AuthRole }
+_AuthStatus = _Newtype
+
+authStatusAuthRole :: Lens' AuthStatus AuthRole
+authStatusAuthRole = _Newtype <<< prop (Proxy :: _ "_authStatusAuthRole")
