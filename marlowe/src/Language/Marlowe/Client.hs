@@ -39,7 +39,7 @@ import Data.Semigroup.Generic (GenericSemigroupMonoid (..))
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.UUID (UUID)
-import Data.Void (absurd)
+import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import Language.Marlowe.Scripts
 import Language.Marlowe.Semantics
@@ -67,8 +67,6 @@ import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
 import Plutus.ChainIndex (ChainIndexTx (..), _ValidTx, citxInputs, citxOutputs, citxTxId)
 import Plutus.Contract as Contract
-import Plutus.Contract.StateMachine (AsSMContractError (..), Void)
-import qualified Plutus.Contract.StateMachine as SM
 import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
@@ -94,9 +92,9 @@ type MarloweFollowSchema = Endpoint "follow" MarloweParams
 
 
 data MarloweError =
-    StateMachineError SM.SMContractError
-    | TransitionError
+      TransitionError
     | AmbiguousOnChainState
+    | UnableToExtractTransition
     | OnChainStateNotFound
     | MarloweEvaluationError TransactionError
     | OtherContractError ContractError
@@ -105,9 +103,6 @@ data MarloweError =
 
 
 makeClassyPrisms ''MarloweError
-
-instance AsSMContractError MarloweError where
-    _SMContractError = _StateMachineError
 
 instance AsContractError MarloweError where
     _ContractError = _OtherContractError
@@ -704,13 +699,7 @@ mkStep params typedValidator slotInterval@(minSlot, maxSlot) input = do
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
         Just (onChainState, utxo) -> do
-            let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=currentState, tyTxOutTxOut}, ocsTxOutRef} = onChainState
-                oldState = SM.State
-                    { SM.stateData = currentState
-                    , SM.stateValue = Ledger.txOutValue tyTxOutTxOut
-                    }
-                -- inputConstraints :: [InputConstraint [Input]]
-
+            let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=currentState}, ocsTxOutRef} = onChainState
             let MarloweData{..} = currentState
             let asdf (ClientInput i)             = NormalInput i
                 asdf (ClientMerkleizedInput i c) = merkleizedInput i c

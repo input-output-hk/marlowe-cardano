@@ -44,8 +44,7 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
 import Language.Marlowe.Deserialisation (byteStringToInt, byteStringToList)
-import Language.Marlowe.Scripts (MarloweInput, mkMarloweStateMachineTransition, rolePayoutScript, smallTypedValidator,
-                                 smallUntypedValidator, typedValidator)
+import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
 import Language.Marlowe.SemanticsSerialisation (contractToByteString)
@@ -86,8 +85,7 @@ tests = testGroup "Marlowe"
     , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
     , testCase "State serializes into valid JSON" stateSerialization
     , testGroup "Validator size is reasonable"
-        [ testCase "StateMachine validator size" stateMachineValidatorSize
-        , testCase "Typed validator size" typedValidatorSize
+        [ testCase "Typed validator size" typedValidatorSize
         , testCase "Untyped validator size" untypedValidatorSize
         ]
     , testCase "Mul analysis" mulAnalysisTest
@@ -336,17 +334,11 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
 uniqueContractHash :: IO ()
 uniqueContractHash = do
-    let hash1 = Scripts.validatorHash $ typedValidator (marloweParams "11")
-    let hash2 = Scripts.validatorHash $ typedValidator (marloweParams "22")
-    let hash3 = Scripts.validatorHash $ typedValidator (marloweParams "22")
+    let hash1 = Scripts.validatorHash $ smallTypedValidator (marloweParams "11")
+    let hash2 = Scripts.validatorHash $ smallTypedValidator (marloweParams "22")
+    let hash3 = Scripts.validatorHash $ smallTypedValidator (marloweParams "22")
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
-
-stateMachineValidatorSize :: IO ()
-stateMachineValidatorSize = do
-    let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
-    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18900)
 
 typedValidatorSize :: IO ()
 typedValidatorSize = do
@@ -468,16 +460,13 @@ transferBetweenAccountsTest = do
             , boundValues = AssocMap.empty
             , minSlot = 10 }
     let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
-    let marloweData = MarloweData {
-                marloweContract = contract,
-                marloweState = state }
-    let Just result@(constraints, SM.State (MarloweData {marloweState=State{accounts}}) balance) =
-            mkMarloweStateMachineTransition
-                defaultMarloweParams
-                (SM.State marloweData (lovelaceValueOf 100))
-                ((20, 30), [])
-    balance @=? lovelaceValueOf 100
-    assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
+    let txInput = TransactionInput {
+                    txInterval = (20, 30),
+                    txInputs = [] }
+    case computeTransaction txInput state contract of
+        TransactionOutput {txOutPayments, txOutState = State{accounts}, txOutContract} -> do
+            assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
+        e -> fail $ show e
 
 
 divAnalysisTest :: IO ()
