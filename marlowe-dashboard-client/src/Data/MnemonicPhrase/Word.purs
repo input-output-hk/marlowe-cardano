@@ -17,7 +17,7 @@ derive newtype instance showWord :: Show Word
 
 fromString :: String -> Maybe Word
 fromString s =
-  if s `Array.elem` English.words then Just $ Word s
+  if s `Array.elem` English.dictionary then Just $ Word s
   else Nothing
 
 toString :: Word -> String
