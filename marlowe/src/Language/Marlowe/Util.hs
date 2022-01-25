@@ -121,8 +121,3 @@ merkleizedCase :: Action -> Contract -> Case Contract
 merkleizedCase action continuation = let
     hash = dataHash (PlutusTx.toBuiltinData continuation)
     in MerkleizedCase action hash
-
-merkleizedInput :: InputContent -> Contract -> Input
-merkleizedInput input continuation = let
-    hash = dataHash (PlutusTx.toBuiltinData continuation)
-    in MerkleizedInput input hash continuation

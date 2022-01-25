@@ -344,7 +344,7 @@ typedValidatorSize :: IO ()
 typedValidatorSize = do
     let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 16000)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
 
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do

@@ -46,9 +46,9 @@ import Language.Marlowe.Semantics
 import qualified Language.Marlowe.Semantics as Marlowe
 import Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
-import Language.Marlowe.Util (extractNonMerkleizedContractRoles, merkleizedInput)
+import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
 import Ledger (CurrencySymbol, Datum (..), PaymentPubKeyHash (..), PubKeyHash, Slot (..), TokenName, TxOut (..),
-               TxOutRef, inScripts, txOutValue)
+               TxOutRef, dataHash, inScripts, txOutValue)
 import qualified Ledger
 import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
 import Ledger.Address (pubKeyHashAddress, scriptHashAddress)
@@ -701,13 +701,18 @@ mkStep params typedValidator slotInterval@(minSlot, maxSlot) input = do
         Just (onChainState, utxo) -> do
             let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=currentState}, ocsTxOutRef} = onChainState
             let MarloweData{..} = currentState
-            let asdf (ClientInput i)             = NormalInput i
-                asdf (ClientMerkleizedInput i c) = merkleizedInput i c
+
+            let asdf :: MarloweClientInput -> ([Input], TxConstraints Void Void)
+                asdf (ClientInput i)             = ([NormalInput i], mempty)
+                asdf (ClientMerkleizedInput input continuation) = let
+                        builtin = PlutusTx.toBuiltinData continuation
+                        hash = dataHash builtin
+                        in ([MerkleizedInput input hash continuation], singleton (MustIncludeDatum (Datum builtin)))
 
             let inputToTxInput (NormalInput i)         = Input i
                 inputToTxInput (MerkleizedInput i h _) = MerkleizedTxInput i h
 
-            let inputs = fmap asdf input
+            let (inputs, datumConstraints) = foldMap asdf input
             let redeemerInputs = fmap inputToTxInput inputs
             let txInput = TransactionInput {
                     txInterval = slotInterval,
@@ -728,12 +733,12 @@ mkStep params typedValidator slotInterval@(minSlot, maxSlot) input = do
                                     outputsConstraints = payoutConstraints payoutsByParty
                                     totalIncome = P.foldMap (collectDeposits . getInputContent) inputs
                                     totalPayouts = P.foldMap snd payoutsByParty
-                                    inputBalance = totalBalance (accounts txOutState)
+                                    inputBalance = totalBalance (accounts marloweState)
                                     finalBalance = inputBalance P.+ totalIncome P.- totalPayouts
                                     in (outputsConstraints, finalBalance)
 
                     let inputsConstraints = validateInputs params inputs
-                    let newConstraints = inputsConstraints <> outputsConstraints <> mustValidateIn times
+                    let newConstraints = datumConstraints <> inputsConstraints <> outputsConstraints <> mustValidateIn times
                     let isFinal = isClose txOutContract
                         lookups1 =
                             Constraints.typedValidatorLookups typedValidator
