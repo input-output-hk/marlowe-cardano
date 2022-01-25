@@ -10,13 +10,8 @@ import Heterogeneous.Folding
   , hfoldlWithIndex
   )
 import Prim.Row (class Cons, class Lacks) as Row
-import Prim.RowList (Cons) as RL
 import Prim.RowList (class RowToList)
 import Record (insert) as Record
-import Type.Eval (class Eval, TypeExpr)
-import Type.Eval.Function (type (<<<))
-import Type.Eval.Functor (Map, MapWithIndex)
-import Type.Eval.RowList (FromRow, ToRow)
 import Type.Prelude (class IsSymbol, Proxy(..))
 
 data ConstructorStep :: Row Type -> Type

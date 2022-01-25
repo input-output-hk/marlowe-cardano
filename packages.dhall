@@ -20,10 +20,10 @@ in  upstream
       , "record", "transformers", "tuples", "typelevel-prelude"
       , "unsafe-coerce", "validation", "variant"
       ]
-      "https://github.com/purescript-polyform/polyform"
+      "https://github.com/purescript-polyform/polyform.git"
       "d177fa5e04a29babf0f86cf57561ea6bf2317c36"
   with
     typelevel-eval = mkPackage
       [ "console", "effect", "leibniz", "psci-support", "record" ]
-      "https://github.com/natefaubion/purescript-typelevel-eval"
+      "https://github.com/natefaubion/purescript-typelevel-eval.git"
       "v0.5.0"
