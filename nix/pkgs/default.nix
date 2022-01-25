@@ -74,6 +74,11 @@ let
     inherit (sources) nixpkgs;
   });
 
+  writeShellScriptBinInRepoRoot = name: script: pkgs.writeShellScriptBin name ''
+    cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
+    ${script}
+  '';
+
   # easy-purescript-nix has some kind of wacky internal IFD
   # usage that breaks the logic that makes source fetchers
   # use native dependencies. This isn't easy to fix, since
@@ -132,7 +137,7 @@ in
   inherit nix-pre-commit-hooks;
   inherit haskell cabal-install cardano-repo-tool stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-cli cardano-node;
   inherit purs-tidy purs spago spago2nix psa purescript-language-server pscid;
-  inherit fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps;
+  inherit fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps writeShellScriptBinInRepoRoot;
   inherit web-ghc;
   inherit easyPS plutus-haddock-combined;
   inherit lib;

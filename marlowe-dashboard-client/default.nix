@@ -8,16 +8,16 @@
 , filterNpm
 , purs-tidy
 , prettier
+, writeShellScriptBinInRepoRoot
 }:
 let
-  marlowe-setup-invoker = haskell.packages.marlowe.components.exes.marlowe-pab-setup;
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
 
   marlowe-run-backend-invoker = haskell.packages.marlowe-dashboard-server.components.exes.marlowe-dashboard-server;
   psgenerator = haskell.packages.marlowe-dashboard-server.components.exes.psgenerator;
-  build-psgenerator = "$(nix-build ../default.nix -A marlowe-dashboard.psgenerator)";
 
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
+    mkdir $out
     ${psgenerator}/bin/psgenerator $out
     cp ${builtins.path { name = "tidyrc.json"; path = ../.tidyrc.json; } } $out/.tidyrc.json
     cp ${builtins.path { name = "tidyoperators"; path = ../.tidyoperators; } } $out/.tidyoperators
@@ -28,11 +28,11 @@ let
     rm $out/.tidyoperators
   '';
 
-  generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
-    ${build-psgenerator}/bin/psgenerator ./generated
-    cd ..
-    ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-dashboard-client/generated
-    ${prettier}/bin/prettier -w ./marlowe-dashboard-client/generated
+  generate-purescript = writeShellScriptBinInRepoRoot "marlowe-run-generate-purs" ''
+    generated=./marlowe-dashboard-client/generated
+    rm -rf $generated
+    cp -a $(nix-build -A marlowe-dashboard.generated-purescript --no-out-link) $generated
+    chmod -R +w $generated
   '';
 
   start-backend = pkgs.writeShellScriptBin "marlowe-run-server" ''
@@ -78,5 +78,5 @@ let
     });
 in
 {
-  inherit client marlowe-invoker marlowe-run-backend-invoker marlowe-setup-invoker generate-purescript generated-purescript start-backend psgenerator;
+  inherit client marlowe-invoker marlowe-run-backend-invoker generate-purescript generated-purescript start-backend;
 }

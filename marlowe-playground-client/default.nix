@@ -8,6 +8,7 @@
 , filterNpm
 , purs-tidy
 , prettier
+, writeShellScriptBinInRepoRoot
 }:
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
@@ -29,13 +30,11 @@ let
     rm $out/.tidyoperators
   '';
 
-  # generate-purescript: script to create purescript bridge code
-  generate-purescript = pkgs.writeShellScriptBin "marlowe-playground-generate-purs" ''
-    rm -rf ./generated
-    ${build-playground-exe}/bin/marlowe-playground-server psgenerator generated
-    cd ..
-    ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-playground-client/generated
-    ${prettier}/bin/prettier -w ./marlowe-playground-client/generated
+  generate-purescript = writeShellScriptBinInRepoRoot "marlowe-playground-generate-purs" ''
+    generated=./marlowe-playground-client/generated
+    rm -rf $generated
+    cp -a $(nix-build -A marlowe-playground.generated-purescript --no-out-link) $generated
+    chmod -R +w $generated
   '';
 
   # start-backend: script to start the plutus-playground-server

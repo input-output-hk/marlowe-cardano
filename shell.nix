@@ -6,7 +6,7 @@ let
   inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purs-tidy-hook prettier-hook;
+  inherit (marlowe) purs-tidy-hook prettier-hook writeShellScriptBinInRepoRoot;
 
   set-xdg = ''
     export XDG_DATA_HOME="''${XDG_DATA_HOME:-''${HOME}/.local/share}"
@@ -55,6 +55,10 @@ let
     export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
 
     exec -a entrypoint ${bitte-packages.wbe}/bin/entrypoint
+  '';
+
+  generate-purescript = writeShellScriptBinInRepoRoot "generate-purescript" ''
+    marlowe-run-generate-purs; marlowe-playground-generate-purs
   '';
 
   # For Sphinx, and ad-hoc usage
@@ -138,6 +142,7 @@ let
     marlowe-dashboard.start-backend
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
+    generate-purescript
     purs
     purs-tidy
     pscid

@@ -47,7 +47,7 @@ rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit haskell webCommon webCommonMarlowe;
-      inherit (marlowe) purs-tidy;
+      inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
     }) client server generated-purescript generate-purescript start-backend;
   };
@@ -57,9 +57,9 @@ rec {
       inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
-      inherit (marlowe) purs-tidy;
+      inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
-    }) client marlowe-setup-invoker marlowe-invoker psgenerator marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
+    }) client marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
   };
 
   tests = import ./nix/tests/default.nix {
