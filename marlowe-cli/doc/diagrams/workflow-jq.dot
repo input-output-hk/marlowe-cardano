@@ -15,7 +15,7 @@ MinSlot       [label="Minimum\nSlot"]
 MaxSlot       [label="Maximum\nSlot"]
 
 
-ExportCommand [label="marlowe-cli export", shape=box, fontname=monospace]
+ExportCommand [label="marlowe-cli contract marlowe", shape=box, fontname=monospace]
 
 Network       -> ExportCommand [label="--testnet-magic"    , fontname=monospace, fontsize=10, style=dashed]
 StakeAddress  -> ExportCommand [label="--stake-address"    , fontname=monospace, fontsize=10, style=dashed]
@@ -48,7 +48,7 @@ JQ -> DatumHash
 JQ -> RedeemerFile
 
 
-CardanoCLI [label="marlowe-cli build", shape=box, fontname=monospace]
+CardanoCLI [label="marlowe-cli transaction", shape=box, fontname=monospace]
 
 ValidatorAddress -> CardanoCLI [label="--script-address"     , fontname=monospace, fontsize=10]
 ValidatorFile    -> CardanoCLI [label="--tx-in-script-file"  , fontname=monospace, fontsize=10]

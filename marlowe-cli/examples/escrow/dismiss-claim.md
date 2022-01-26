@@ -773,7 +773,12 @@ b93b551188448223a12c51389bf8946a511297ba7d787277d92760073b4a5642     1        30
 b93b551188448223a12c51389bf8946a511297ba7d787277d92760073b4a5642     2        3000000 lovelace + 1 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d.CM + TxOutDatumNone
 ```
 
-# Clean Up
+## Summary of Transactions
+
+![Summary of transactions.](dismiss-claim-txs.svg)
+
+
+## Clean Up
 Send the funds back to the buyer, so that the test can be run again.
 
 ```
