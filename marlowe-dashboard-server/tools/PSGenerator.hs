@@ -88,11 +88,8 @@ dto = equal . genericShow . argonaut
 
 myTypes :: [SumType 'Haskell]
 myTypes =
-    PSGenerator.Common.ledgerTypes <>
-    PSGenerator.Common.walletTypes <>
-    PSGenerator.Common.playgroundTypes <>
-    -- | `WalletInfo` has no `Eq` instance hence
-    -- | `CreateResponse` should not have one.
+    -- `WalletInfo` has no `Eq` instance hence
+    -- `CreateResponse` should not have one.
     [ genericShow . argonaut $ mkSumType @CreateResponse ] <>
     ( dto <$>
         [ mkSumType @StreamToServer,

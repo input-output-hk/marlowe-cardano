@@ -29,8 +29,6 @@ import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
 
--- FIXME: Abstract away AjaxResponse (just return an `m ResponseType` and
--- handle API failures in the concrete Monad instance).
 class Monad m <= ManageWallet m where
   createWallet
     :: WalletNickname
