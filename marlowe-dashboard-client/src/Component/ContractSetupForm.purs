@@ -2,7 +2,10 @@ module Component.ContractSetupForm where
 
 import Prologue
 
+import Component.Icons as Icon
+import Component.Template.Types (Action(..), ContractSetupStage(..))
 import Component.Template.Types as Template
+import Css as Css
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -17,6 +20,7 @@ import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Maybe (isJust)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Validation.Semigroup (V(..))
@@ -25,11 +29,15 @@ import Effect.Aff.Class (class MonadAff)
 import Forms (InputSlots)
 import Forms as Forms
 import Halogen as H
+import Halogen.Css (classNames)
 import Halogen.Form (Form, subform)
 import Halogen.Form as Form
 import Halogen.Form.Component as FC
 import Halogen.HTML as HH
+import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
+import Halogen.Hooks.Extra.Hooks (usePutState)
 import Marlowe.Semantics (TokenName)
 import Polyform.Validator (liftFnV)
 import Type.Proxy (Proxy(..))
@@ -39,6 +47,7 @@ type Input =
   , timeouts :: Set String
   , values :: Set String
   , addressBook :: AddressBook
+  , contractName :: String
   }
 
 type ContractInput =
@@ -106,19 +115,6 @@ roleAssignmentForm addressBook roleName =
             <=< WN.fromString
         )
 
-roleForms
-  :: forall s m
-   . Monad m
-  => AddressBook
-  -> Form
-       Template.Action
-       (InputSlots s)
-       m
-       (Map TokenName String)
-       (Map TokenName Address)
-roleForms addressBook =
-  Form.multiWithIndex $ roleAssignmentForm $ addressBook
-
 timeoutForm
   :: forall parentAction s m
    . Monad m
@@ -147,19 +143,42 @@ valueForm name =
         CV.Invalid -> "Must by a number."
     }
 
+setToMap :: forall t73. Ord t73 => Set t73 -> Map t73 Unit
+setToMap = Map.fromFoldable <<< Set.map \k -> Tuple k unit
+
 component :: forall q m. MonadAff m => Component q m
 component = Hooks.component \{ outputToken } input -> Hooks.do
-  let { addressBook, roles, timeouts, values } = input
-  Tuple _result resultId <- Hooks.useState Nothing
+  let { contractName, addressBook, roles, timeouts, values } = input
+  Tuple result putResult <- usePutState Nothing
   form <- Hooks.captures { addressBook } Hooks.useMemo \_ ->
     FC.component
       { form:
-          ContractParams
-            <$> subform _nickname contractNicknameForm
-            <*> subform _roles (roleForms addressBook)
-            <*> subform _timeouts (Form.multiWithIndex timeoutForm)
-            <*> subform _values (Form.multiWithIndex valueForm)
-      , formClasses: []
+          Form.prepend
+            ( HH.h2 [ classNames [ "text-lg", "font-semibold", "mb-4" ] ]
+                [ HH.text $ contractName <> " setup" ]
+            )
+            ( ContractParams
+                <$> subform _nickname contractNicknameForm
+                <*> subform
+                  _roles
+                  ( Form.traverseFormsWithIndex
+                      (const <<< roleAssignmentForm addressBook)
+                      (setToMap roles)
+                  )
+                <*> subform
+                  _timeouts
+                  ( Form.traverseFormsWithIndex
+                      (const <<< timeoutForm)
+                      (setToMap timeouts)
+                  )
+                <*> subform
+                  _values
+                  ( Form.traverseFormsWithIndex
+                      (const <<< valueForm)
+                      (setToMap values)
+                  )
+            )
+      , formClasses: [ "overflow-y-auto", "p-4" ]
       }
   let
     initialInput =
@@ -169,6 +188,29 @@ component = Hooks.component \{ outputToken } input -> Hooks.do
       , values: Map.fromFoldable $ Set.map (flip Tuple "") values
       }
   Hooks.pure do
-    HH.slot (Proxy :: _ "form") unit form initialInput case _ of
-      FC.Updated res -> Hooks.put resultId res
-      FC.Raised welcomeAction -> Hooks.raise outputToken welcomeAction
+    HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
+      [ HH.slot (Proxy :: _ "form") unit form initialInput case _ of
+          FC.Updated res -> putResult res
+          FC.Raised action -> Hooks.raise outputToken action
+      , HH.div
+          [ classNames
+              [ "flex", "items-baseline", "p-4", "border-gray", "border-t" ]
+          ]
+          [ HH.a
+              [ classNames [ "flex-1", "text-center" ]
+              , onClick_ $ Hooks.raise outputToken $ SetContractSetupStage
+                  Overview
+              ]
+              [ HH.text "Back" ]
+          , HH.button
+              [ classNames $
+                  Css.primaryButton
+                    <> [ "flex-1", "text-left" ]
+                    <> Css.withIcon Icon.ArrowRight
+              , onClick_ $ Hooks.raise outputToken $ SetContractSetupStage
+                  Review
+              , HP.enabled $ isJust result
+              ]
+              [ HH.text "Review" ]
+          ]
+      ]

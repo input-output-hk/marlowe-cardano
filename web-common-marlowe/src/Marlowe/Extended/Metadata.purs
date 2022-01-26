@@ -282,8 +282,7 @@ getHintsFromMetadata
   , choiceNames: Map.keys choiceInfo
   }
 
-type ContractTemplate
-  =
+type ContractTemplate =
   { metaData :: MetaData
   , extendedContract :: Contract
   }

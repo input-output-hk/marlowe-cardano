@@ -3,45 +3,35 @@ module Component.Template.View (contractTemplateCard) where
 import Prologue hiding (Either(..), div)
 
 import Component.Contacts.State (adaToken, getAda)
+import Component.ContractSetupForm as ContractSetupForm
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
-import Component.Icons (Icon, icon, icon_)
+import Component.Icons (icon, icon_)
 import Component.InputField.Lenses (_value)
-import Component.InputField.Types (InputDisplayOptions)
 import Component.InputField.Types (State) as InputField
-import Component.InputField.View (renderInput)
-import Component.Label.View as Label
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.Popper (Placement(..))
 import Component.Template.Lenses
-  ( _contractNicknameInput
-  , _contractSetupStage
+  ( _contractSetupStage
   , _contractTemplate
-  , _roleWalletInputs
   , _slotContentInputs
   , _valueContentInputs
   )
-import Component.Template.State (templateSetupIsValid)
 import Component.Template.Types
   ( Action(..)
   , ContractSetupStage(..)
-  , RoleError
   , SlotError
   , State
   , ValueError
   )
-import Component.Tooltip.State (tooltip)
-import Component.Tooltip.Types (ReferenceId(..))
 import Css as Css
 import Data.AddressBook (AddressBook)
-import Data.AddressBook as AB
-import Data.Lens (view)
-import Data.Map (Map)
+import Data.Lens (view, (^.))
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe)
+import Data.Set as Set
 import Data.Tuple.Nested ((/\))
-import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -56,18 +46,16 @@ import Halogen.HTML
   , h3
   , h4
   , h4_
-  , label
   , li
   , p
   , p_
+  , slot
   , span
   , span_
   , text
-  , ul
   , ul_
   )
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (enabled, for, id)
 import Humanize (contractIcon, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata
@@ -75,17 +63,25 @@ import Marlowe.Extended.Metadata
   , MetaData
   , NumberFormat(..)
   , _contractName
+  , _extendedContract
   , _metaData
   , _slotParameterDescriptions
   , _valueParameterDescription
   , _valueParameterFormat
   , _valueParameterInfo
   )
+import Marlowe.HasParties (getParties)
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
-import Marlowe.Semantics (Assets, TokenName)
-import Marlowe.Template (orderContentUsingMetadata)
+import Marlowe.Semantics (Assets, Party(..))
+import Marlowe.Template
+  ( _slotContent
+  , _valueContent
+  , getPlaceholderIds
+  , initializeTemplateContent
+  )
 import Text.Markdown.TrimmedInline (markdownToHTML)
+import Type.Proxy (Proxy(..))
 
 contractTemplateCard
   :: forall m
@@ -281,63 +277,30 @@ contractSetup addressBook state =
   let
     metaData = view (_contractTemplate <<< _metaData) state
 
+    contract = view (_contractTemplate <<< _extendedContract) state
+
     contractName = view (_contractName) metaData
 
-    contractNicknameInput = view _contractNicknameInput state
+    partyToRole (PK _) = Nothing
+    partyToRole (Role tokenName) = Just tokenName
 
-    roleWalletInputs = view _roleWalletInputs state
+    roles = Set.mapMaybe partyToRole $ getParties contract
 
-    slotContentInputs = view _slotContentInputs state
+    content = initializeTemplateContent $ getPlaceholderIds contract
 
-    valueContentInputs = view _valueContentInputs state
+    timeouts = Map.keys $ content ^. _slotContent
 
-    contractNicknameInputDisplayOptions =
-      { additionalCss: mempty
-      , id_: "contractNickname"
-      , placeholder: "E.g. My Marlowe contract"
-      , readOnly: false
-      , numberFormat: Nothing
-      , valueOptions: mempty
-      , after: Nothing
-      , before:
-          Just
-            $ Label.render
-                Label.defaultInput
-                  { for = "contractNickname", text = contractName <> " title" }
-      }
+    values = Map.keys $ content ^. _valueContent
+
   in
-    div
-      [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
-      [ div
-          [ classNames [ "overflow-y-auto", "p-4" ] ]
-          [ h2
-              [ classNames [ "text-lg", "font-semibold", "mb-2" ] ]
-              [ text $ contractName <> " setup" ]
-          , ContractNicknameInputAction
-              <$> renderInput
-                contractNicknameInputDisplayOptions
-                contractNicknameInput
-          , roleInputs addressBook metaData roleWalletInputs
-          , parameterInputs metaData slotContentInputs valueContentInputs
-          ]
-      , div
-          [ classNames
-              [ "flex", "items-baseline", "p-4", "border-gray", "border-t" ]
-          ]
-          [ a
-              [ classNames [ "flex-1", "text-center" ]
-              , onClick_ $ SetContractSetupStage Overview
-              ]
-              [ text "Back" ]
-          , button
-              [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <>
-                  Css.withIcon Icon.ArrowRight
-              , onClick_ $ SetContractSetupStage Review
-              , enabled $ templateSetupIsValid state
-              ]
-              [ text "Review" ]
-          ]
-      ]
+    slot (Proxy :: _ "contractSetup") unit ContractSetupForm.component
+      { roles
+      , timeouts
+      , values
+      , addressBook
+      , contractName
+      }
+      identity
 
 contractReview
   :: forall m
@@ -512,180 +475,6 @@ parameter label description value =
         ]
     , p_ [ text value ]
     ]
-
--- We range over roleWalletInputs rather than all the parties in the contract. This excludes any `PK` parties.
--- At the moment, this is a good thing: we don't have a design for them, and we only use a `PK` party in one
--- special case, where it is read-only and would be confusing to show the user anyway. But if we ever need to
--- use `PK` inputs properly (and make them editable) we will have to rethink this.
-roleInputs
-  :: forall m
-   . MonadAff m
-  => AddressBook
-  -> MetaData
-  -> Map TokenName (InputField.State RoleError)
-  -> ComponentHTML Action ChildSlots m
-roleInputs addressBook metaData roleWalletInputs =
-  templateInputsSection Icon.Roles "Roles"
-    [ ul_ $ roleInput <$> Map.toUnfoldable roleWalletInputs ]
-  where
-  roleInput (tokenName /\ roleWalletInput) =
-    let
-      description = fromMaybe "no description available" $ Map.lookup tokenName
-        metaData.roleDescriptions
-    in
-      templateInputItem tokenName description
-        [ div
-            [ classNames [ "relative" ] ]
-            [ RoleWalletInputAction tokenName <$> renderInput
-                (roleWalletInputDisplayOptions tokenName)
-                roleWalletInput
-            , button
-                [ classNames [ "absolute", "top-4", "right-4" ]
-                , onClick_ $ OpenCreateWalletCard tokenName
-                , id $ "newContactForRole" <> tokenName
-                ]
-                [ icon Icon.NewContact [ "text-purple" ] ]
-            , tooltip "Create a new contact for this role"
-                (RefId $ "newContactForRole" <> tokenName)
-                Left
-            ]
-        ]
-
-  roleWalletInputDisplayOptions tokenName =
-    { additionalCss: [ "pr-9" ]
-    , id_: tokenName
-    , placeholder: "Choose any nickname"
-    , readOnly: false
-    , numberFormat: Nothing
-    , valueOptions: WN.toString <<< fst <$> AB.toUnfoldable addressBook
-    , after: Nothing
-    , before: Nothing
-    }
-
-parameterInputs
-  :: forall m
-   . MonadAff m
-  => MetaData
-  -> Map String (InputField.State SlotError)
-  -> Map String (InputField.State ValueError)
-  -> ComponentHTML Action ChildSlots m
-parameterInputs metaData slotContentInputs valueContentInputs =
-  templateInputsSection Icon.Terms "Terms"
-    [ ul
-        [ classNames [ "mb-4" ] ]
-        $ valueInput
-            <$> OMap.toUnfoldable
-              ( orderContentUsingMetadata valueContentInputs
-                  (OMap.keys metaData.valueParameterInfo)
-              )
-    , ul_
-        $ slotInput
-            <$> OMap.toUnfoldable
-              ( orderContentUsingMetadata slotContentInputs
-                  (OMap.keys metaData.slotParameterDescriptions)
-              )
-    ]
-  where
-  valueInput (key /\ inputField) =
-    let
-      valueParameterFormats = map (view _valueParameterFormat)
-        (view _valueParameterInfo metaData)
-
-      valueParameterDescriptions = map (view _valueParameterDescription)
-        (view _valueParameterInfo metaData)
-
-      numberFormat = fromMaybe DefaultFormat $ OMap.lookup key
-        valueParameterFormats
-
-      description = fromMaybe "no description available" $ OMap.lookup key
-        valueParameterDescriptions
-    in
-      templateInputItem key description
-        [ ValueContentInputAction key <$> renderInput
-            (inputFieldOptions key false numberFormat)
-            inputField
-        ]
-
-  slotInput (key /\ inputField) =
-    let
-      slotParameterDescriptions = view _slotParameterDescriptions metaData
-
-      numberFormat = TimeFormat
-
-      description = fromMaybe "no description available" $ OMap.lookup key
-        slotParameterDescriptions
-    in
-      templateInputItem key description
-        [ SlotContentInputAction key <$> renderInput
-            (inputFieldOptions key true numberFormat)
-            inputField
-        ]
-
-  inputFieldOptions
-    :: forall w i. String -> Boolean -> NumberFormat -> InputDisplayOptions w i
-  inputFieldOptions key readOnly numberFormat =
-    { additionalCss: mempty
-    , id_: key
-    , placeholder: key
-    , readOnly
-    , numberFormat: Just numberFormat
-    , valueOptions: mempty
-    , after: Nothing
-    , before: Nothing
-    }
-
-templateInputsSection
-  :: forall p. Icon -> String -> Array (HTML p Action) -> HTML p Action
-templateInputsSection icon' heading content =
-  div
-    [ classNames [ "mt-4" ] ]
-    $
-      [ h3
-          [ classNames
-              [ "flex"
-              , "gap-1"
-              , "items-center"
-              , "leading-none"
-              , "text-sm"
-              , "font-semibold"
-              , "pb-2"
-              , "mb-2"
-              , "border-gray"
-              , "border-b"
-              ]
-          ]
-          [ icon icon' [ "text-purple" ]
-          , text heading
-          ]
-      ]
-        <> content
-
-templateInputItem
-  :: forall m
-   . MonadAff m
-  => String
-  -> String
-  -> Array (ComponentHTML Action ChildSlots m)
-  -> ComponentHTML Action ChildSlots m
-templateInputItem id description content =
-  li
-    [ classNames [ "mb-2", "last:mb-0" ] ]
-    $
-      [ label
-          [ classNames [ "block", "mb-2" ]
-          , for id
-          ]
-          [ span
-              [ classNames [ "text-sm", "font-semibold" ] ]
-              [ text id ]
-          , hint
-              [ "ml-2" ]
-              ("template-parameter-input-" <> id)
-              Auto
-              (markdownHintWithTitle id description)
-          ]
-      ]
-        <> content
 
 -- TODO: This function is also included in the Marlowe Playground code. We could/should move it
 -- into a shared folder, but it's not obvious where. It could go in the Hint module, but then it
