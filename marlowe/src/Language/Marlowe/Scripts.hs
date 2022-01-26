@@ -53,9 +53,9 @@ type SmallTypedValidator = Scripts.TypedValidator TypedMarloweValidator
 data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
-instance Scripts.ValidatorTypes (TypedMarloweValidator) where
-    type instance RedeemerType (TypedMarloweValidator) = [Input]
-    type instance DatumType (TypedMarloweValidator) = MarloweData
+instance Scripts.ValidatorTypes TypedMarloweValidator where
+    type instance RedeemerType TypedMarloweValidator = [Input]
+    type instance DatumType TypedMarloweValidator = MarloweData
 
 
 rolePayoutScript :: CurrencySymbol -> Validator
@@ -87,7 +87,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     (interval@(minSlot, maxSlot), inputs) = do
     let positiveBalances = validateBalances marloweState ||
             -- Avoid creating a too-big string literal
-            traceError ("M1")
+            traceError "M1"
 
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
@@ -142,7 +142,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     validateInputs MarloweParams{rolesCurrency} inputs = let
         (keys, roles) = foldMap (validateInputWitness . getInputContent) inputs
         mustSpendSetOfRoleTokens = foldMap mustSpendRoleToken (AssocMap.keys roles)
-        in foldMap mustBeSignedBy keys <> mustSpendSetOfRoleTokens
+        in foldMap mustBeSignedBy (PaymentPubKeyHash <$> keys) <> mustSpendSetOfRoleTokens
       where
         validateInputWitness :: InputContent -> ([PubKeyHash], AssocMap.Map TokenName ())
         validateInputWitness input =
@@ -169,7 +169,7 @@ mkMarloweStateMachineTransition params SM.State{ SM.stateData=MarloweData{..}, S
     payoutConstraints payoutsByParty = foldMap payoutToTxOut payoutsByParty
       where
         payoutToTxOut (party, value) = case party of
-            PK pk  -> mustPayToPubKey pk value
+            PK pk  -> mustPayToPubKey (PaymentPubKeyHash pk) value
             Role role -> let
                 dataValue = Datum $ PlutusTx.toBuiltinData role
                 in mustPayToOtherScript (rolePayoutValidatorHash params) dataValue value
@@ -191,22 +191,17 @@ smallMarloweValidator
     -> [Input]
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
-    let slotConfig = def :: TimeSlot.SlotConfig
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig = (scSlotLength, scSlotZeroTime)} MarloweData{..} inputs ctx@ScriptContext{scriptContextTxInfo} = do
     let ownInput = case findOwnInput ctx of
             Just i -> i
             _      -> traceError "I0" {-"Can't find validation input"-}
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
-    let (minTime, maxTime) =
-            case txInfoValidRange scriptContextTxInfo of
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) False) -> (l, h)
-                -- FIXME remove this when mockchain implementation updates to correct one as above
-                Interval.Interval (Interval.LowerBound (Interval.Finite l) True) (Interval.UpperBound (Interval.Finite h) True) -> (l, h)
+    let interval =
+            case TimeSlot.posixTimeRangeToContainedSlotRange TimeSlot.SlotConfig{..} $ txInfoValidRange scriptContextTxInfo of
+                -- FIXME: Recheck this, but it appears that any inclusiveness can appear at either bound when milliseconds
+                --        of POSIX time is converted from slot number.
+                Interval.Interval (Interval.LowerBound (Interval.Finite l) _) (Interval.UpperBound (Interval.Finite h) _) -> (l, h)
                 _ -> traceError "R0"
-    let timeToSlot = TimeSlot.posixTimeToEnclosingSlot slotConfig
-    let minSlot = timeToSlot minTime
-    let maxSlot = timeToSlot maxTime
-    let interval = (minSlot, maxSlot)
     let positiveBalances = traceIfFalse "B0" $ validateBalances marloweState
 
     {-  We do not check that a transaction contains exact input payments.
@@ -321,10 +316,9 @@ typedValidator params = Scripts.mkTypedValidator @MarloweStateMachine
 
 
 smallTypedValidator :: MarloweParams -> Scripts.TypedValidator TypedMarloweValidator
-smallTypedValidator params = Scripts.mkTypedValidatorParam @TypedMarloweValidator
+smallTypedValidator = Scripts.mkTypedValidatorParam @TypedMarloweValidator
     $$(PlutusTx.compile [|| smallMarloweValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
-    params
     where
         wrap = Scripts.wrapValidator
 

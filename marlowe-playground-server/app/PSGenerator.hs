@@ -186,13 +186,17 @@ myTypes =
     , equal . order . genericShow . argonaut $ mkSumType @CT.Period
     , equal . order . genericShow . argonaut $ mkSumType @CT.Stub
     , argonaut $ mkSumType @CT.ScheduleConfig
-    , argonaut $ mkSumType @CT.ContractStructure
+    , argonaut $ mkSumType @(CT.ContractStructure A)
     , equal . order . genericShow . argonaut $ mkSumType @CT.ReferenceType
     , equal . order . genericShow . argonaut $ mkSumType @CT.ReferenceRole
+    , equal . order . genericShow . argonaut $ mkSumType @CT.Identifier
+    , argonaut $ mkSumType @(CT.Reference A)
     , equal . order . genericShow . argonaut $ mkSumType @CT.DCC
     , equal . order . genericShow . argonaut $ mkSumType @CT.BDC
     , equal . order . genericShow . argonaut $ mkSumType @CT.EOMC
     , equal . order . genericShow . argonaut $ mkSumType @CT.PRF
+    , equal . order . genericShow . argonaut $ mkSumType @CT.CETC
+    , equal . order . genericShow . argonaut $ mkSumType @CT.CEGE
     , equal . order . genericShow . argonaut $ mkSumType @CT.FEB
     , equal . order . genericShow . argonaut $ mkSumType @CT.IPCB
     , equal . order . genericShow . argonaut $ mkSumType @CT.CR

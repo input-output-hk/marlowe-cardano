@@ -56,6 +56,7 @@
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."nothunks" or (errorHandler.buildDepError "nothunks"))
+          (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."ouroboros-network-framework" or (errorHandler.buildDepError "ouroboros-network-framework"))
           (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
@@ -72,7 +73,9 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
+          (hsPkgs."servant-openapi3" or (errorHandler.buildDepError "servant-openapi3"))
           (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
+          (hsPkgs."servant-swagger-ui" or (errorHandler.buildDepError "servant-swagger-ui"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
@@ -123,6 +126,7 @@
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."contra-tracer" or (errorHandler.buildDepError "contra-tracer"))
+            (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
             (hsPkgs."fingertree" or (errorHandler.buildDepError "fingertree"))
             (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
             (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
@@ -130,7 +134,6 @@
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
             (hsPkgs."sqlite-simple" or (errorHandler.buildDepError "sqlite-simple"))
-            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."tasty-hedgehog" or (errorHandler.buildDepError "tasty-hedgehog"))
             ];
@@ -140,6 +143,7 @@
             "Plutus/ChainIndex/Emulator/DiskStateSpec"
             "Plutus/ChainIndex/Emulator/HandlersSpec"
             "Plutus/ChainIndex/HandlersSpec"
+            "Util"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];
@@ -148,11 +152,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "17";
+      url = "18";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "17";
+      url = "18";
       rev = "minimal";
       sha256 = "";
       };

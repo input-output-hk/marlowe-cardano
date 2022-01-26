@@ -28,9 +28,10 @@ import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import Data.String as S
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
-import Ledger (PubKeyHash (..))
+import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
 import Marlowe.Run.Webserver.Types (Env)
-import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError (..), RestorePostData (..))
+import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (CheckPostData (..), RestoreError (..),
+                                                              RestorePostData (..))
 import Marlowe.Run.Webserver.Wallet.Client (callWBE, decodeError)
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
 import Servant (ServerT, (:<|>) ((:<|>)), (:>))
@@ -43,7 +44,14 @@ handlers ::
     MonadIO m =>
     MonadReader Env m =>
     ServerT API m
-handlers = restoreWallet
+handlers = restoreWallet :<|> checkMnemonic
+
+checkMnemonic ::
+    Applicative m =>
+    CheckPostData ->
+    m Bool
+checkMnemonic (CheckPostData  phrase) =
+    pure $ isRight $ mkSomeMnemonic @'[15, 18, 21, 24] phrase
 
 -- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
 restoreWallet ::
@@ -69,7 +77,7 @@ restoreWallet postData = runExceptT $ do
     pubKeyHash <- withExceptT (const FetchPubKeyHashError) $
         ExceptT $ getPubKeyHashFromWallet walletId
 
-    pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPubKeyHash = pubKeyHash }
+    pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPaymentPubKeyHash = PaymentPubKeyHash pubKeyHash }
 
 getPubKeyHashFromWallet ::
     MonadIO m =>

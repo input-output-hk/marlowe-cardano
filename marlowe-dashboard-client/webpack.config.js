@@ -60,35 +60,6 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.purs$/,
-        use: [
-          {
-            loader: "purs-loader",
-            options: {
-              bundle: !isDevelopment,
-              psc: "psa",
-              pscArgs: {
-                strict: false,
-                censorLib: true,
-                stash: isDevelopment,
-                isLib: ["generated", ".spago"],
-              },
-              spago: isDevelopment,
-              watch: isDevelopment,
-              src: isDevelopment
-                ? []
-                : [
-                    ".spago/*/*/src/**/*.purs",
-                    "src/**/*.purs",
-                    "test/**/*.purs",
-                    "generated/**/*.purs",
-                    "web-common-marlowe/src/**/*.purs",
-                  ],
-            },
-          },
-        ],
-      },
-      {
         test: /\.css$/,
         exclude: /node_modules/,
         use: [MiniCssExtractPlugin.loader, "css-loader", "postcss-loader"],
@@ -115,7 +86,7 @@ module.exports = {
       static: path.resolve(__dirname, "./static"),
       src: path.resolve(__dirname, "./src"),
     },
-    extensions: [".purs", ".js"],
+    extensions: [".js"],
   },
   resolveLoader: {
     modules: ["node_modules", path.resolve(__dirname, ".")],

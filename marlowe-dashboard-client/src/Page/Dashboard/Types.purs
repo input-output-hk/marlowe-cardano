@@ -13,11 +13,13 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmInput.Types as ConfirmInput
 import Component.Contacts.Types (Action, State) as Contacts
-import Component.Contacts.Types (WalletDetails, WalletNickname)
+import Component.Contacts.Types (WalletDetails)
 import Component.Template.Types (Action, State) as Template
+import Data.AddressBook (AddressBook)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
+import Data.WalletNickname (WalletNickname)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
@@ -29,6 +31,7 @@ type State =
   , walletCompanionStatus :: WalletCompanionStatus
   , menuOpen :: Boolean
   , card :: Maybe Card
+  -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
   -- TODO: SCP-3208 Move contract state to halogen store
   , contracts :: Map PlutusAppId Contract.State
@@ -57,9 +60,9 @@ data ContractFilter
 
 derive instance eqContractFilter :: Eq ContractFilter
 
-type Input
-  =
-  { currentSlot :: Slot
+type Input =
+  { addressBook :: AddressBook
+  , currentSlot :: Slot
   , tzOffset :: Minutes
   }
 

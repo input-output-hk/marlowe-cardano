@@ -6,12 +6,13 @@ module Toast.Lenses
   ) where
 
 import Prologue
+
 import Data.Lens (Lens', _Just)
 import Data.Lens.Record (prop)
 import Data.Lens.Traversal (Traversal')
-import Type.Proxy (Proxy(..))
 import Halogen (SubscriptionId)
 import Toast.Types (State, ToastMessage, ToastState)
+import Type.Proxy (Proxy(..))
 
 -- TODO: when we upgrade to 0.14 change this to AffineTraversal
 _mToast :: Lens' State (Maybe ToastState)
@@ -25,5 +26,4 @@ _expanded = prop (Proxy :: _ "mToast") <<< _Just <<< prop
   (Proxy :: _ "expanded")
 
 _timeoutSubscription :: Traversal' State SubscriptionId
-_timeoutSubscription = prop (Proxy :: _ "mToast") <<< _Just <<< prop
-  (Proxy :: _ "timeoutSubscription")
+_timeoutSubscription = prop (Proxy :: _ "timeoutSubscription") <<< _Just

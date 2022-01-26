@@ -1,0 +1,65 @@
+digraph {
+
+rankdir=LR
+
+
+Network       [label="Mainnet\nor Testnet"]
+StakeAddress  [label="Stake\nAddress"     ]
+RolesCurrency [label="Currency\nfor Roles"]
+
+ContractFile  [label="Marlowe Contract\nJSON File", shape=tab]
+StateFile     [label="Marlowe State\nJSON File"   , shape=tab]
+
+InputsFile    [label="Marlowe Inputs\nJSON File", shape=tab]
+MinSlot       [label="Minimum\nSlot"]
+MaxSlot       [label="Maximum\nSlot"]
+
+
+ExportCommand [label="marlowe-cli contract marlowe", shape=box, fontname=monospace]
+
+Network       -> ExportCommand [label="--testnet-magic"    , fontname=monospace, fontsize=10, style=dashed]
+StakeAddress  -> ExportCommand [label="--stake-address"    , fontname=monospace, fontsize=10, style=dashed]
+RolesCurrency -> ExportCommand [label="--roles-currency"   , fontname=monospace, fontsize=10, style=dashed]
+ContractFile  -> ExportCommand [label="--contract-file"    , fontname=monospace, fontsize=10]
+StateFile     -> ExportCommand [label="--state-file"       , fontname=monospace, fontsize=10]
+InputsFile    -> ExportCommand [label="--inputs-file"      , fontname=monospace, fontsize=10, style=dashed]
+
+
+MarloweFile [label="Marlowe\nJSON File", shape=tab]
+
+ExportCommand -> MarloweFile [label="--out-file", fontname=monospace, fontsize=10]
+
+
+JQ [label="jq", shape=box, fontname=monospace]
+
+MarloweFile -> JQ
+
+
+ValidatorAddress [label="Validator\nAddress"                       ]
+ValidatorFile    [label="Marlowe Validator\nPlutus File", shape=tab]
+DatumFile        [label="Marlowe Datum\nJSON File"      , shape=tab]
+DatumHash        [label="Marlowe Datum\nHash"                      ]
+RedeemerFile     [label="Marlowe Redeemer\nJSON File"   , shape=tab]
+
+JQ -> ValidatorAddress
+JQ -> ValidatorFile
+JQ -> DatumFile
+JQ -> DatumHash
+JQ -> RedeemerFile
+
+
+CardanoCLI [label="marlowe-cli transaction", shape=box, fontname=monospace]
+
+ValidatorAddress -> CardanoCLI [label="--script-address"     , fontname=monospace, fontsize=10]
+ValidatorFile    -> CardanoCLI [label="--tx-in-script-file"  , fontname=monospace, fontsize=10]
+DatumFile        -> CardanoCLI [label="--tx-in-datum-file"   , fontname=monospace, fontsize=10]
+RedeemerFile     -> CardanoCLI [label="--tx-in-redeemer-file", fontname=monospace, fontsize=10]
+MinSlot          -> CardanoCLI [label="--invalid-before"     , fontname=monospace, fontsize=10]
+MaxSlot          -> CardanoCLI [label="--invalid-hereafter"  , fontname=monospace, fontsize=10]
+
+
+TxBodyFile [label="Tx Body\nFile", shape=tab]
+
+CardanoCLI -> TxBodyFile [label="--out-file", fontname=monospace, fontsize=10]
+
+}

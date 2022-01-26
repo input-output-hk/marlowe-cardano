@@ -39,6 +39,8 @@ rec {
 
   inherit (haskell.packages.marlowe.components.exes) marlowe-pab;
 
+  inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
+
   # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
   # we switch to flakes.
   webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
@@ -48,7 +50,9 @@ rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit haskell webCommon webCommonMarlowe webCommonPlayground;
-    }) client server generate-purescript start-backend;
+      inherit (marlowe) purs-tidy;
+      inherit (pkgs.nodePackages) prettier;
+    }) client server generated-purescript generate-purescript start-backend;
   };
 
   marlowe-dashboard = pkgs.recurseIntoAttrs rec {
@@ -56,7 +60,9 @@ rec {
       inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
-    }) client pab-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
+      inherit (marlowe) purs-tidy;
+      inherit (pkgs.nodePackages) prettier;
+    }) client marlowe-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
   };
 
   tests = import ./nix/tests/default.nix {
@@ -66,6 +72,8 @@ rec {
     inherit (haskell) plutus-pab;
     inherit marlowe-playground marlowe-dashboard web-ghc marlowe-pab;
     src = ./.;
+    run-generated = marlowe-dashboard.generated-purescript;
+    play-generated = marlowe-playground.generated-purescript;
   };
 
   docs = import ./nix/docs.nix { inherit pkgs marlowe; };

@@ -196,6 +196,7 @@ contractTermsGen' ct = do
         contractPerformance = Just PRF_PF,
         creditEventTypeCovered = Just CETC_DF,
         coverageOfCreditEnhancement = Nothing,
+        guaranteedExposure = Nothing,
         -- Penalties
         penaltyRate = Just penaltyrate,
         penaltyType = Just penaltytype,

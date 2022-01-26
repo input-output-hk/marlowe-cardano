@@ -27,7 +27,7 @@ common lang
     default-extensions: ExplicitForAll ScopedTypeVariables
                         DeriveGeneric StandaloneDeriving DeriveLift
                         GeneralizedNewtypeDeriving DeriveFunctor DeriveFoldable
-                        DeriveTraversable MultiParamTypeClasses
+                        DeriveTraversable MultiParamTypeClasses ImportQualifiedPost
     ghc-options: -Wall -Wnoncanonical-monad-instances
                  -Wincomplete-uni-patterns -Wincomplete-record-updates
                  -Wredundant-constraints -Widentities
@@ -65,6 +65,7 @@ executable doc-doctests
       plutus-tx -any,
       plutus-ledger -any,
       plutus-ledger-api -any,
+      plutus-ledger-constraints -any,
       plutus-contract -any,
       playground-common -any,
       plutus-use-cases -any,

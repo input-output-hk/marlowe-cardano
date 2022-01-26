@@ -8,10 +8,12 @@ module Capability.PlutusApps.MarloweApp.Types
   , MarloweSlotRange
   , MarloweAppState
   , EndpointMutex
-  , MarloweAppEndpointMutexEnv
+  , class HasMarloweAppEndpointMutex
+  , marloweAppEndpointMutex
   ) where
 
 import Prologue
+
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -135,5 +137,5 @@ type EndpointMutex
   , requests :: AVar (Array (UUID /\ AVar LastResult))
   }
 
-type MarloweAppEndpointMutexEnv env
-  = { marloweAppEndpointMutex :: EndpointMutex | env }
+class HasMarloweAppEndpointMutex env where
+  marloweAppEndpointMutex :: env -> EndpointMutex

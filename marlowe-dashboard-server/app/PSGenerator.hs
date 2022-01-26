@@ -25,7 +25,7 @@ import Language.PureScript.Bridge (BridgePart, Language (Haskell), SumType, argo
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
 import Marlowe.Run.Webserver.API (HTTPAPI)
-import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (RestoreError, RestorePostData)
+import Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types (CheckPostData, RestoreError, RestorePostData)
 import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds)
 import Marlowe.Run.Webserver.WebSocket (StreamToClient, StreamToServer)
 import qualified PSGenerator.Common
@@ -67,6 +67,7 @@ myTypes =
     equal . genericShow . argonaut $ mkSumType @StreamToClient,
     equal . order . genericShow . argonaut $ mkSumType @RestoreError,
     equal . genericShow . argonaut $ mkSumType @RestorePostData,
+    equal . genericShow . argonaut $ mkSumType @CheckPostData,
     equal . genericShow . argonaut $ mkSumType @GetTotalFunds
   ]
 

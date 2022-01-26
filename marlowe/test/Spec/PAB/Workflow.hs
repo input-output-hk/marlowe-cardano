@@ -8,7 +8,8 @@
 module Spec.PAB.Workflow where
 
 import Cardano.Wallet.Mock.Client (createWallet)
-import Cardano.Wallet.Mock.Types (wiPubKeyHash, wiWallet)
+import Cardano.Wallet.Mock.Types (wiPaymentPubKeyHash, wiWallet)
+import Cardano.Wallet.Types (WalletUrl (..), baseUrl, walletSettings)
 import Control.Concurrent.Async (async)
 import Control.Monad (guard, void)
 import qualified Data.Aeson as Aeson
@@ -22,11 +23,12 @@ import Language.Marlowe.Semantics (MarloweParams)
 import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..), Value (..))
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
 import Language.Marlowe.Util (ada)
-import Ledger (PubKeyHash, Slot)
+import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot)
 import qualified Ledger.Value as Val
 import MarloweContract (MarloweContract (..))
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import qualified Network.WebSockets as WS
+import Plutus.ChainIndex.Types (Point (PointAtGenesis))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..), pabClient)
 import Plutus.PAB.Webserver.Types (ContractActivationArgs (..), InstanceStatusToClient (..))
@@ -38,7 +40,6 @@ import Wallet.Types (ContractInstanceId (..), EndpointDescription (..))
 
 import Network.Socket (withSocketsDo)
 
-import qualified Cardano.Wallet.Mock.Types as Wallet.Types
 import Control.Concurrent (threadDelay)
 import Data.Aeson (decode)
 import Data.ByteString.Builder (toLazyByteString)
@@ -64,6 +65,8 @@ startPab pabConfig = do
               , storageBackend = BeamSqliteBackend
               , cmd = allServices
               , passphrase = Nothing
+              , rollbackHistory = Nothing
+              , resumeFrom = PointAtGenesis
               }
 
   let mc = Just pabConfig
@@ -110,7 +113,7 @@ marloweCompanionFollowerContractExample = do
   let pabConfig = def { PAB.Types.pabWebserverConfig = def { PAB.Types.endpointTimeout = Just 30 } }
       apiUrl = PAB.Types.baseUrl (PAB.Types.pabWebserverConfig pabConfig)
       apiClientEnv = mkClientEnv manager apiUrl
-      walletUrl = coerce $ Wallet.Types.baseUrl (PAB.Types.walletServerConfig pabConfig)
+      WalletUrl walletUrl = Cardano.Wallet.Types.baseUrl . walletSettings . PAB.Types.walletServerConfig $ pabConfig
       walletClientEnv = mkClientEnv manager walletUrl
 
       PabClient{activateContract, instanceClient} = pabClient @MarloweContract @Integer
@@ -137,7 +140,7 @@ marloweCompanionFollowerContractExample = do
   walletInfo <- runWallet createWallet
 
   let wallet = wiWallet walletInfo
-      hash   = wiPubKeyHash walletInfo
+      hash   = unPaymentPubKeyHash $ wiPaymentPubKeyHash walletInfo
       args   = createArgs hash hash
 
   companionContractId <- runApi $ activateContract $ ContractActivationArgs { caID = WalletCompanion, caWallet = Just wallet }

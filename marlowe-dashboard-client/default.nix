@@ -1,25 +1,43 @@
-{ pkgs, gitignore-nix, haskell, webCommon, webCommonMarlowe, buildPursPackage, buildNodeModules, filterNpm }:
+{ pkgs
+, gitignore-nix
+, haskell
+, webCommon
+, webCommonMarlowe
+, buildPursPackage
+, buildNodeModules
+, filterNpm
+, purs-tidy
+, prettier
+}:
 let
+  marlowe-setup-invoker = haskell.packages.marlowe.components.exes.marlowe-pab-setup;
   marlowe-invoker = haskell.packages.marlowe.components.exes.marlowe-pab;
-
-  pab-setup-invoker = haskell.packages.plutus-pab.components.exes.plutus-pab-setup;
 
   marlowe-run-backend-invoker = haskell.packages.marlowe-dashboard-server.components.exes.marlowe-dashboard-server;
 
   generated-purescript = pkgs.runCommand "marlowe-pab-purescript" { } ''
     mkdir $out
-    ${pab-setup-invoker}/bin/plutus-pab-setup psgenerator $out
-    ln -s ${./plutus-pab.yaml} plutus-pab.yaml
-    ${marlowe-invoker}/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $out
+    ${marlowe-setup-invoker}/bin/marlowe-pab-setup psgenerator $out
+    ${marlowe-setup-invoker}/bin/marlowe-pab-setup psapigenerator $out
     ${marlowe-run-backend-invoker}/bin/marlowe-dashboard-server psgenerator $out
+    cp ${builtins.path { name = "tidyrc.json"; path = ../.tidyrc.json; } } $out/.tidyrc.json
+    cp ${builtins.path { name = "tidyoperators"; path = ../.tidyoperators; } } $out/.tidyoperators
+    cd $out
+    ${purs-tidy}/bin/purs-tidy format-in-place $out
+    ${prettier}/bin/prettier -w $out
+    rm $out/.tidyrc.json
+    rm $out/.tidyoperators
   '';
 
   generate-purescript = pkgs.writeShellScriptBin "marlowe-pab-generate-purs" ''
     generatedDir=./generated
     rm -rf $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.pab-setup-invoker)/bin/plutus-pab-setup psgenerator $generatedDir
-    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml psapigenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-setup-invoker)/bin/marlowe-pab-setup psgenerator $generatedDir
+    $(nix-build ../default.nix -A marlowe-dashboard.marlowe-setup-invoker)/bin/marlowe-pab-setup psapigenerator $generatedDir
     $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server psgenerator $generatedDir
+    cd ..
+    ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-dashboard-client/generated
+    ${prettier}/bin/prettier -w ./marlowe-dashboard-client/generated
   '';
 
   start-backend = pkgs.writeShellScriptBin "marlowe-run-server" ''
@@ -56,14 +74,14 @@ let
       name = "marlowe-dashboard-client";
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
-        generated = generated-purescript;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
       WEB_COMMON_SRC = webCommon.cleanSrc;
+      WEB_COMMON_MARLOWE_SRC = webCommonMarlowe;
     });
 in
 {
-  inherit client marlowe-invoker marlowe-run-backend-invoker pab-setup-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker marlowe-run-backend-invoker marlowe-setup-invoker generate-purescript generated-purescript start-backend;
 }
