@@ -252,7 +252,7 @@ instance FromJSON Input where
                          <*> (v .: "continuation_hash")
                          <*> (v .: "merkleized_continuation"))
     <|> (MerkleizedInput INotify <$> (v .: "continuation_hash")
-                                 <*> (v .: "merkleized_notify"))
+                                 <*> (v .: "merkleized_continuation"))
     <|> (NormalInput <$> (IDeposit <$> (v .: "into_account")
                                    <*> (v .: "input_from_party")
                                    <*> (v .: "of_token")
@@ -288,7 +288,7 @@ instance ToJSON Input where
       , "continuation_hash" .= hash
       ]
   toJSON (MerkleizedInput INotify hash continuation) = object
-      [ "merkleized_notify" .= continuation
+      [ "merkleized_continuation" .= continuation
       , "continuation_hash" .= hash
       ]
 
