@@ -233,5 +233,12 @@ smallUntypedValidator params = let
 defaultTxValidationRange :: Slot
 defaultTxValidationRange = 10
 
+marloweTxInputFromInput :: Input -> MarloweTxInput
+marloweTxInputFromInput (NormalInput i)         = Input i
+marloweTxInputFromInput (MerkleizedInput i h _) = MerkleizedTxInput i h
+
+marloweTxInputsFromInputs :: [Input] -> [MarloweTxInput]
+marloweTxInputsFromInputs = fmap marloweTxInputFromInput
+
 makeLift ''MarloweTxInput
 makeIsDataIndexed ''MarloweTxInput [('Input,0),('MerkleizedTxInput,1)]

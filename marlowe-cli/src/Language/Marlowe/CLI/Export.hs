@@ -59,7 +59,7 @@ import Data.Aeson (encode)
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson, maybeWriteTextEnvelope)
 import Language.Marlowe.CLI.Types (CliError (..), DatumInfo (..), MarloweInfo (..), RedeemerInfo (..),
                                    ValidatorInfo (..))
-import Language.Marlowe.Scripts (rolePayoutScript, smallUntypedValidator)
+import Language.Marlowe.Scripts (marloweTxInputsFromInputs, rolePayoutScript, smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.SemanticsTypes (Contract (..), Input, State (..))
 import Ledger.Scripts (datumHash, toCardanoApiScript, validatorHash)
@@ -407,7 +407,7 @@ buildRedeemerImpl redeemer =
 -- | Build the redeemer information about a Marlowe transaction.
 buildRedeemer :: [Input]       -- ^ The contract's input,
               -> RedeemerInfo  -- ^ Information about the transaction redeemer.
-buildRedeemer = buildRedeemerImpl . PlutusTx.toBuiltinData
+buildRedeemer = buildRedeemerImpl . PlutusTx.toBuiltinData . marloweTxInputsFromInputs
 
 
 -- | Export to a file the redeemer information about a Marlowe transaction.
