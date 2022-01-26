@@ -50,10 +50,9 @@ import Component.Contacts.Lenses
   , _walletId
   , _walletInfo
   )
-import Component.Contacts.Types (WalletDetails, WalletId, WalletInfo)
+import Component.Contacts.Types (WalletDetails)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
-import Data.Address (Address)
 import Data.Argonaut.Decode (JsonDecodeError)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (filter, find) as Array
@@ -64,17 +63,21 @@ import Data.Maybe (maybe')
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.MnemonicPhrase.Word (toString) as Word
-import Data.Newtype (un, unwrap)
+import Data.Newtype (unwrap)
 import Data.Passpharse (Passphrase)
+import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
+import Data.PubKeyHash (PubKeyHash)
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
+import Data.WalletId (WalletId)
+import Data.WalletId as WI
 import Data.WalletNickname (WalletNickname)
-import Data.WalletNickname as WN
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId, fromContractInstanceId)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics
   ( Contract
   , MarloweData
@@ -87,9 +90,7 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToServer(..)
   , ContractInstanceClientState
   )
-import Plutus.V1.Ledger.Crypto (PubKeyHash(..)) as Back
 import Types (AjaxResponse, DecodedAjaxResponse)
-import Wallet.Emulator.Wallet (Wallet(..)) as Back
 import WebSocket.Support as WS
 
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
@@ -124,7 +125,7 @@ class
     -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createContract
     :: WalletDetails
-    -> Map TokenName Address
+    -> Map TokenName PubKeyHash
     -> Contract
     -> m (AjaxResponse Unit)
   applyTransactionInput
@@ -169,8 +170,6 @@ fetchWalletDetails walletNickname walletInfo = withExceptT clientServerError do
     }
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
-  -- TODO: This code was meant for mock wallet, as part of SCP-3170 we should re-implement this
-  --       using the WBE.
   createWallet walletName passphrase = runExceptT do
     -- create the wallet itself
     { mnemonic, walletInfo } <- ExceptT $ Wallet.createWallet walletName
@@ -179,7 +178,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     pure { mnemonic, walletDetails }
   restoreWallet walletName mnemonicPhrase passphrase = runExceptT do
     walletInfo <- ExceptT $ Wallet.restoreWallet
-      { walletName: WN.toString walletName
+      { walletName
       , mnemonicPhrase: map Word.toString $ MP.toWords mnemonicPhrase
       , passphrase
       }
@@ -252,9 +251,11 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     let
       marloweAppId = view _marloweAppId walletDetails
 
-      address = view (_walletInfo <<< _pubKeyHash) walletDetails
+      pubKeyHash = view
+        (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
+        walletDetails
     in
-      MarloweApp.redeem marloweAppId marloweParams tokenName address
+      MarloweApp.redeem marloweAppId marloweParams tokenName pubKeyHash
 
   -- get the observable state of a wallet's WalletCompanion
   getRoleContracts walletDetails =
@@ -295,22 +296,10 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           Right observableState -> Right (plutusAppId /\ observableState)
   subscribeToPlutusApp = toBack >>> Left >>> Subscribe >>> sendWsMessage
   subscribeToWallet =
-    toBack
-      >>> un Back.Wallet
-      >>> _.getWalletId
-      >>> (\x -> Back.PubKeyHash { getPubKeyHash: x })
-      >>> Right
-      >>> Subscribe
-      >>> sendWsMessage
+    sendWsMessage <<< Subscribe <<< Right <<< WI.toPubKeyHash
   unsubscribeFromPlutusApp = toBack >>> Left >>> Unsubscribe >>> sendWsMessage
   unsubscribeFromWallet =
-    toBack
-      >>> un Back.Wallet
-      >>> _.getWalletId
-      >>> (\x -> Back.PubKeyHash { getPubKeyHash: x })
-      >>> Right
-      >>> Unsubscribe
-      >>> sendWsMessage
+    sendWsMessage <<< Unsubscribe <<< Right <<< WI.toPubKeyHash
 
 -- Helper function to the restoreWallet so that we can reutilize the wallet companion or marlowe app if available
 activateOrRestorePlutusCompanionContracts

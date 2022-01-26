@@ -28,7 +28,6 @@ import Component.Contacts.Types (WalletDetails)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.Address as A
 import Data.Array
   ( difference
   , filter
@@ -65,6 +64,8 @@ import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.Newtype (unwrap)
 import Data.Ord (abs)
+import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
+import Data.PubKeyHash (_PubKeyHash)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Time.Duration (Milliseconds(..))
@@ -315,7 +316,9 @@ updateState
 getUserParties :: WalletDetails -> MarloweParams -> Set Party
 getUserParties walletDetails marloweParams =
   let
-    pubKeyHash = view (_walletInfo <<< _pubKeyHash) walletDetails
+    pubKeyHash = view
+      (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
+      walletDetails
 
     assets = view _assets walletDetails
 
@@ -326,7 +329,7 @@ getUserParties walletDetails marloweParams =
     roleTokens = foldMap (Set.map Role <<< Map.keys <<< Map.filter ((/=) zero))
       mCurrencyTokens
   in
-    Set.insert (PK $ A.toString pubKeyHash) roleTokens
+    Set.insert (PK pubKeyHash) roleTokens
 
 withStarted
   :: forall action slots msg m

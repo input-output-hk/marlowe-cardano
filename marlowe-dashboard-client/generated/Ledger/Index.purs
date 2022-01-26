@@ -23,11 +23,12 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
+import Data.PubKeyHash (PubKeyHash)
 import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Plutus.V1.Ledger.Crypto (PubKey, PubKeyHash, Signature)
+import Plutus.V1.Ledger.Crypto (PubKey, Signature)
 import Plutus.V1.Ledger.Scripts
   ( DatumHash
   , MintingPolicy

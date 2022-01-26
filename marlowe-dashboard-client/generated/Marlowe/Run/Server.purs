@@ -4,8 +4,6 @@ module Marlowe.Run.Server where
 import Prelude
 
 import Affjax.RequestHeader (RequestHeader(..))
-import Cardano.Wallet.Mock.Types (WalletInfo)
-import Component.Contacts.Types (WalletId)
 import Data.Argonaut (Json, JsonDecodeError)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -17,6 +15,7 @@ import Data.Foldable (fold)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple)
+import Data.WalletId (WalletId)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData
@@ -24,6 +23,7 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   , RestoreError
   , RestorePostData
   )
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Servant.PureScript
   ( class MonadAjax
   , AjaxError

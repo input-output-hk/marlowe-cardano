@@ -49,6 +49,7 @@ import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State) as Template
 import Component.Template.Types (ContractSetupStage(..))
 import Control.Monad.Reader (class MonadAsk)
+import Data.Address as A
 import Data.AddressBook as AB
 import Data.Array (null)
 import Data.Either (hush)
@@ -462,7 +463,8 @@ handleAction
               filterMap (hush <<< WN.fromString <<< view _value)
                 roleWalletInputs
 
-            roles = mapMaybe (flip AB.lookupAddress addressBook) roleWallets
+            roles = A.toPubKeyHash
+              <$> mapMaybe (flip AB.lookupAddress addressBook) roleWallets
           ajaxCreateContract <- createContract walletDetails roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative

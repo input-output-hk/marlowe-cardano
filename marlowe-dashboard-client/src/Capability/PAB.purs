@@ -17,13 +17,13 @@ import Prologue
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
 import Bridge (toBack, toFront)
-import Component.Contacts.Types (WalletId)
 import Control.Monad.Except (lift)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Lens (view)
-import Data.Newtype (unwrap)
 import Data.RawJson (RawJson(..))
+import Data.WalletId (WalletId)
+import Data.WalletId as WalletId
 import Halogen (HalogenM)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
@@ -37,6 +37,7 @@ import Plutus.PAB.Webserver.Types
   , ContractSignatureResponse
   )
 import Types (AjaxResponse)
+import Wallet.Emulator.Wallet (Wallet(..))
 
 -- TODO (possibly): make `AppM` a `MonadError` and remove all the `runExceptT`s
 class
@@ -73,7 +74,9 @@ instance ManagePAB AppM where
     map (map toFront)
       $ PAB.postApiContractActivate
       $ ContractActivationArgs
-          { caID: contractActivationId, caWallet: Just (toBack wallet) }
+          { caID: contractActivationId
+          , caWallet: Just $ Wallet { getWalletId: WalletId.toString wallet }
+          }
   deactivateContract =
     PAB.putApiContractInstanceByContractinstanceidStop <<< toBack
   getContractInstanceClientState =
@@ -93,7 +96,8 @@ instance ManagePAB AppM where
       (toBack plutusAppId)
       endpoint
   getWalletContractInstances wallet =
-    PAB.getApiContractInstancesWalletByWalletid (unwrap wallet) Nothing
+    PAB.getApiContractInstancesWalletByWalletid (WalletId.toString wallet)
+      Nothing
   getAllContractInstances = PAB.getApiContractInstances Nothing
   getContractDefinitions = PAB.getApiContractDefinitions
 

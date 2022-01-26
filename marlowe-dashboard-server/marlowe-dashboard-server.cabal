@@ -21,6 +21,7 @@ library
         Marlowe.Run.API
         Marlowe.Run.Server
         Marlowe.Run.Wallet.V1.API
+        Marlowe.Run.Wallet.V1.Types
         Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
         Marlowe.Run.Wallet.V1.Client
         Marlowe.Run.WebSocket

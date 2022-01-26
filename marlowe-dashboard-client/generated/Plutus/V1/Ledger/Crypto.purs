@@ -52,38 +52,6 @@ _PubKey = _Newtype
 
 --------------------------------------------------------------------------------
 
-newtype PubKeyHash = PubKeyHash { getPubKeyHash :: String }
-
-derive instance Eq PubKeyHash
-
-derive instance Ord PubKeyHash
-
-instance Show PubKeyHash where
-  show a = genericShow a
-
-instance EncodeJson PubKeyHash where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { getPubKeyHash: E.value :: _ String }
-    )
-
-instance DecodeJson PubKeyHash where
-  decodeJson = defer \_ -> D.decode $
-    ( PubKeyHash <$> D.record "PubKeyHash"
-        { getPubKeyHash: D.value :: _ String }
-    )
-
-derive instance Generic PubKeyHash _
-
-derive instance Newtype PubKeyHash _
-
---------------------------------------------------------------------------------
-
-_PubKeyHash :: Iso' PubKeyHash { getPubKeyHash :: String }
-_PubKeyHash = _Newtype
-
---------------------------------------------------------------------------------
-
 newtype Signature = Signature { getSignature :: String }
 
 instance Show Signature where

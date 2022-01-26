@@ -18,9 +18,10 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
+import Data.PubKeyHash (PubKeyHash)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Plutus.V1.Ledger.Crypto (PubKey, PubKeyHash)
+import Plutus.V1.Ledger.Crypto (PubKey)
 import Type.Proxy (Proxy(Proxy))
 
 newtype PaymentPubKey = PaymentPubKey { unPaymentPubKey :: PubKey }
@@ -52,40 +53,6 @@ derive instance Newtype PaymentPubKey _
 
 _PaymentPubKey :: Iso' PaymentPubKey { unPaymentPubKey :: PubKey }
 _PaymentPubKey = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype PaymentPubKeyHash = PaymentPubKeyHash
-  { unPaymentPubKeyHash :: PubKeyHash }
-
-derive instance Eq PaymentPubKeyHash
-
-derive instance Ord PaymentPubKeyHash
-
-instance Show PaymentPubKeyHash where
-  show a = genericShow a
-
-instance EncodeJson PaymentPubKeyHash where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { unPaymentPubKeyHash: E.value :: _ PubKeyHash }
-    )
-
-instance DecodeJson PaymentPubKeyHash where
-  decodeJson = defer \_ -> D.decode $
-    ( PaymentPubKeyHash <$> D.record "PaymentPubKeyHash"
-        { unPaymentPubKeyHash: D.value :: _ PubKeyHash }
-    )
-
-derive instance Generic PaymentPubKeyHash _
-
-derive instance Newtype PaymentPubKeyHash _
-
---------------------------------------------------------------------------------
-
-_PaymentPubKeyHash :: Iso' PaymentPubKeyHash
-  { unPaymentPubKeyHash :: PubKeyHash }
-_PaymentPubKeyHash = _Newtype
 
 --------------------------------------------------------------------------------
 

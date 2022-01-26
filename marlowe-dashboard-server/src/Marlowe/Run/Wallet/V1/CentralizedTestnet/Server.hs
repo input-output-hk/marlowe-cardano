@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE RecordWildCards       #-}
 
 module Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
  ( handlers
@@ -16,7 +17,6 @@ import Cardano.Wallet.Api (WalletKeys)
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import Cardano.Wallet.Api.Types (ApiVerificationKeyShelley (..))
 import qualified Cardano.Wallet.Api.Types as WBE
-import Cardano.Wallet.Mock.Types (WalletInfo (..))
 import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
 import qualified Cardano.Wallet.Primitive.Types as WBE
@@ -29,12 +29,12 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.API (API)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData (..), CreateResponse (..), RestoreError (..),
                                                        RestorePostData (..))
 import Marlowe.Run.Wallet.V1.Client (callWBE, decodeError)
+import Marlowe.Run.Wallet.V1.Types (WalletId (WalletId), WalletInfo (..), WalletName (unWalletName))
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
 import Servant (ServerT, (:<|>) ((:<|>)), (:>))
 import Servant.Client (ClientEnv, ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
 import Text.Regex (Regex)
 import qualified Text.Regex as Regex
-import qualified Wallet.Emulator.Wallet as Pab.Wallet
 
 handlers ::
     MonadIO m =>
@@ -47,19 +47,19 @@ createWallet ::
      MonadReader ClientEnv m =>
      CreatePostData ->
      m (Maybe CreateResponse)
-createWallet postData = runMaybeT $ do
+createWallet CreatePostData{..} = runMaybeT $ do
   mnemonic <- liftIO $ entropyToMnemonic <$> genEntropy @256
   let
-    walletName = WBE.WalletName $ getCreateWalletName postData
-    passphrase = Passphrase $ fromString $ Text.unpack $ getCreatePassphrase postData
+    walletName = unWalletName getCreateWalletName
+    passphrase = Passphrase $ fromString $ Text.unpack getCreatePassphrase
 
   walletId <- MaybeT $ hush <$> createOrRestoreWallet walletName passphrase (SomeMnemonic mnemonic)
 
   pubKeyHash <- MaybeT $ hush <$> getPubKeyHashFromWallet walletId
 
-  pure $ CreateResponse
-    (mnemonicToText mnemonic)
-    (WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPaymentPubKeyHash = PaymentPubKeyHash pubKeyHash })
+  pure
+    $ CreateResponse (mnemonicToText mnemonic)
+    $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
 
 -- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
 restoreWallet ::
@@ -67,11 +67,11 @@ restoreWallet ::
      MonadReader ClientEnv m =>
      RestorePostData ->
      m (Either RestoreError WalletInfo)
-restoreWallet postData = runExceptT $ do
+restoreWallet RestorePostData{..} = runExceptT $ do
     let
-        phrase = getRestoreMnemonicPhrase postData
-        walletName = WBE.WalletName $ getRestoreWalletName postData
-        passphrase = Passphrase $ fromString $ Text.unpack $ getRestorePassphrase postData
+        phrase = getRestoreMnemonicPhrase
+        walletName = unWalletName getRestoreWalletName
+        passphrase = Passphrase $ fromString $ Text.unpack getRestorePassphrase
 
     -- Try to decode the passphrase into a mnemonic or fail with InvalidMnemonic
     mnemonic <- withExceptT (const InvalidMnemonic)
@@ -87,7 +87,7 @@ restoreWallet postData = runExceptT $ do
     pubKeyHash <- withExceptT (const FetchPubKeyHashError) $
         ExceptT $ getPubKeyHashFromWallet walletId
 
-    pure $ WalletInfo{wiWallet=Pab.Wallet.Wallet (Pab.Wallet.WalletId walletId), wiPaymentPubKeyHash = PaymentPubKeyHash pubKeyHash }
+    pure $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
 
 getPubKeyHashFromWallet ::
     MonadIO m =>

@@ -29,6 +29,7 @@ import Data.Compactable (compact)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
+import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
 import Data.WalletNickname as WN
@@ -664,7 +665,8 @@ currentWalletCard walletDetails =
   let
     walletNickname = view _walletNickname walletDetails
 
-    address = view (_walletInfo <<< _pubKeyHash) walletDetails
+    address = view (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
+      walletDetails
 
     assets = view _assets walletDetails
 
@@ -689,7 +691,8 @@ currentWalletCard walletDetails =
           [ h3
               [ classNames [ "font-semibold", "text-lg" ] ]
               [ text $ WN.toString walletNickname ]
-          , copyAddress <$> Address.render (Address.defaultInput address)
+          , copyAddress <$> Address.render
+              (Address.defaultInput $ A.fromPubKeyHash address)
           , div_
               [ h4
                   [ classNames [ "font-semibold" ] ]

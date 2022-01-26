@@ -32,14 +32,13 @@ import Capability.PlutusApps.MarloweApp.Types
   , MarloweEndpointResponse
   )
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.Address (Address)
-import Data.Argonaut.Core (Json)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
 import Data.Foldable (elem)
 import Data.Lens (Lens', toArrayOf, traversed, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
+import Data.PubKeyHash (PubKeyHash)
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID, genUUID)
@@ -59,10 +58,7 @@ import Marlowe.Semantics
   , TransactionInput(..)
   )
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
-import Plutus.V1.Ledger.Crypto (PubKeyHash) as Back
 import Plutus.V1.Ledger.Slot (Slot) as Back
-import Plutus.V1.Ledger.Value (TokenName) as Back
-import PlutusTx.AssocMap (Map) as Back
 import Type.Proxy (Proxy(..))
 import Types (AjaxResponse)
 import Wallet.Types (_EndpointDescription)
@@ -70,7 +66,7 @@ import Wallet.Types (_EndpointDescription)
 class MarloweApp m where
   createContract
     :: PlutusAppId
-    -> Map TokenName Address
+    -> Map TokenName PubKeyHash
     -> Contract
     -> m (AjaxResponse Unit)
   applyInputs
@@ -81,17 +77,13 @@ class MarloweApp m where
     :: PlutusAppId
     -> MarloweParams
     -> TokenName
-    -> Address
+    -> PubKeyHash
     -> m (AjaxResponse Unit)
 
 instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
     reqId <- liftEffect genUUID
-    let
-      backRoles :: Back.Map Back.TokenName Back.PubKeyHash
-      backRoles = toBack roles
-
-      payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
+    let payload = [ encodeJson reqId, encodeJson roles, encodeJson contract ]
     invokeMutexedEndpoint plutusAppId reqId "create" _create payload
   applyInputs
     plutusAppId
@@ -115,8 +107,8 @@ instance marloweAppM :: MarloweApp AppM where
       payload =
         [ encodeJson reqId
         , encodeJson marloweContractId
-        , (encodeJson :: Back.TokenName -> Json) $ toBack tokenName
-        , (encodeJson :: Back.PubKeyHash -> Json) $ toBack pubKeyHash
+        , encodeJson tokenName
+        , encodeJson pubKeyHash
         ]
     invokeMutexedEndpoint plutusAppId reqId "redeem" _redeem payload
 

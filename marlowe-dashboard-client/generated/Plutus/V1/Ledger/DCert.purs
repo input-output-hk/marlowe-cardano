@@ -19,10 +19,10 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
+import Data.PubKeyHash (PubKeyHash)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Plutus.V1.Ledger.Credential (StakingCredential)
-import Plutus.V1.Ledger.Crypto (PubKeyHash)
 import Type.Proxy (Proxy(Proxy))
 
 data DCert

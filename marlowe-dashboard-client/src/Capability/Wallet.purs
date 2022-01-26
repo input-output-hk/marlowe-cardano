@@ -18,14 +18,15 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
   )
 import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
 import AppM (AppM)
-import Component.Contacts.Types (WalletId, WalletInfo)
 import Control.Monad.Except (lift)
 import Data.Passpharse (Passphrase)
+import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen (HalogenM)
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
 

@@ -13,12 +13,9 @@ module API.Marlowe.Run.Wallet.CentralizedTestnet
 
 import Prologue
 
-import Bridge (toFront)
-import Cardano.Wallet.Mock.Types (WalletInfo) as Mock.Types
-import Component.Contacts.Types (WalletInfo)
 import Control.Error.Util (exceptNoteM)
 import Control.Monad.Except (ExceptT(..), except, runExceptT, withExceptT)
-import Data.Bifunctor (bimap, lmap)
+import Data.Bifunctor (lmap)
 import Data.MnemonicPhrase (MnemonicPhrase, MnenonicPhraseErrorRow)
 import Data.MnemonicPhrase (fromStrings) as MnemonicPhrase
 import Data.MnemonicPhrase (injErr) as MnenonicPhrase
@@ -32,7 +29,6 @@ import Data.Variant.Generic
   , mkConstructors'
   )
 import Data.WalletNickname (WalletNickname)
-import Data.WalletNickname (toString) as WalletNickname
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData(..)
@@ -40,13 +36,14 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   , RestorePostData(..)
   ) as BE
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreateResponse(..))
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Servant.PureScript (class MonadAjax)
 import Type.Prelude (Proxy(..))
 import Type.Row (type (+))
 import Types (JsonAjaxError)
 
 type RestoreWalletOptions =
-  { walletName :: String
+  { walletName :: WalletNickname
   , mnemonicPhrase :: Array String
   , passphrase :: Passphrase
   }
@@ -83,11 +80,11 @@ restoreWallet { passphrase, walletName, mnemonicPhrase } = runExceptT do
     fromServerErr BE.InvalidMnemonic = mkRestoreWalletError.invalidMnemonic
     fromServerErr err = mkRestoreWalletError.serverError err
 
-  (res :: Either _ Mock.Types.WalletInfo) <-
-    withExceptT mkRestoreWalletError.clientServerError $ ExceptT $
-      MarloweRun.postApiWalletV1CentralizedtestnetRestore body
+  res <- withExceptT mkRestoreWalletError.clientServerError
+    $ ExceptT
+    $ MarloweRun.postApiWalletV1CentralizedtestnetRestore body
 
-  except $ bimap fromServerErr toFront res
+  except $ lmap fromServerErr res
 
 type CreateWalletError = Variant
   (ClientServerErrorRow + ServerErrorRow Unit + MnenonicPhraseErrorRow + ())
@@ -105,7 +102,7 @@ createWallet walletName passphrase = runExceptT do
   let
     body =
       BE.CreatePostData
-        { "getCreateWalletName": WalletNickname.toString walletName
+        { "getCreateWalletName": walletName
         , "getCreatePassphrase": Passphrase.toString passphrase
         }
     mkError = mkConstructors (Proxy :: Proxy CreateWalletError)
@@ -118,5 +115,5 @@ createWallet walletName passphrase = runExceptT do
     mnemonic
   pure
     { mnemonic: mnemonic'
-    , walletInfo: toFront walletInfo
+    , walletInfo
     }

@@ -11,19 +11,15 @@ module Component.Contacts.Lenses
 
 import Prologue
 
-import Component.Contacts.Types
-  ( CardSection
-  , State
-  , WalletDetails
-  , WalletId
-  , WalletInfo
-  )
-import Data.Address (Address)
+import Component.Contacts.Types (CardSection, State, WalletDetails)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
+import Data.PaymentPubKeyHash (PaymentPubKeyHash)
+import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics (Assets)
 import Type.Proxy (Proxy(..))
 
@@ -50,5 +46,5 @@ _assets = prop (Proxy :: _ "assets")
 _walletId :: Lens' WalletInfo WalletId
 _walletId = _Newtype <<< prop (Proxy :: _ "walletId")
 
-_pubKeyHash :: Lens' WalletInfo Address
+_pubKeyHash :: Lens' WalletInfo PaymentPubKeyHash
 _pubKeyHash = _Newtype <<< prop (Proxy :: _ "pubKeyHash")

@@ -3,7 +3,6 @@ module Marlowe.Run.Wallet.V1.CentralizedTestnet.Types where
 
 import Prelude
 
-import Cardano.Wallet.Mock.Types (WalletInfo)
 import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
@@ -24,11 +23,13 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Data.WalletNickname (WalletNickname)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Type.Proxy (Proxy(Proxy))
 
 newtype CreatePostData = CreatePostData
   { getCreatePassphrase :: String
-  , getCreateWalletName :: String
+  , getCreateWalletName :: WalletNickname
   }
 
 derive instance Eq CreatePostData
@@ -40,7 +41,7 @@ instance EncodeJson CreatePostData where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { getCreatePassphrase: E.value :: _ String
-        , getCreateWalletName: E.value :: _ String
+        , getCreateWalletName: E.value :: _ WalletNickname
         }
     )
 
@@ -48,7 +49,7 @@ instance DecodeJson CreatePostData where
   decodeJson = defer \_ -> D.decode $
     ( CreatePostData <$> D.record "CreatePostData"
         { getCreatePassphrase: D.value :: _ String
-        , getCreateWalletName: D.value :: _ String
+        , getCreateWalletName: D.value :: _ WalletNickname
         }
     )
 
@@ -59,7 +60,7 @@ derive instance Newtype CreatePostData _
 --------------------------------------------------------------------------------
 
 _CreatePostData :: Iso' CreatePostData
-  { getCreatePassphrase :: String, getCreateWalletName :: String }
+  { getCreatePassphrase :: String, getCreateWalletName :: WalletNickname }
 _CreatePostData = _Newtype
 
 --------------------------------------------------------------------------------
@@ -68,6 +69,8 @@ newtype CreateResponse = CreateResponse
   { mnemonic :: Array String
   , walletInfo :: WalletInfo
   }
+
+derive instance Eq CreateResponse
 
 instance Show CreateResponse where
   show a = genericShow a
@@ -150,7 +153,7 @@ _FetchPubKeyHashError = prism' (const FetchPubKeyHashError) case _ of
 newtype RestorePostData = RestorePostData
   { getRestoreMnemonicPhrase :: Array String
   , getRestorePassphrase :: String
-  , getRestoreWalletName :: String
+  , getRestoreWalletName :: WalletNickname
   }
 
 derive instance Eq RestorePostData
@@ -163,7 +166,7 @@ instance EncodeJson RestorePostData where
     ( E.record
         { getRestoreMnemonicPhrase: E.value :: _ (Array String)
         , getRestorePassphrase: E.value :: _ String
-        , getRestoreWalletName: E.value :: _ String
+        , getRestoreWalletName: E.value :: _ WalletNickname
         }
     )
 
@@ -172,7 +175,7 @@ instance DecodeJson RestorePostData where
     ( RestorePostData <$> D.record "RestorePostData"
         { getRestoreMnemonicPhrase: D.value :: _ (Array String)
         , getRestorePassphrase: D.value :: _ String
-        , getRestoreWalletName: D.value :: _ String
+        , getRestoreWalletName: D.value :: _ WalletNickname
         }
     )
 
@@ -185,6 +188,6 @@ derive instance Newtype RestorePostData _
 _RestorePostData :: Iso' RestorePostData
   { getRestoreMnemonicPhrase :: Array String
   , getRestorePassphrase :: String
-  , getRestoreWalletName :: String
+  , getRestoreWalletName :: WalletNickname
   }
 _RestorePostData = _Newtype
