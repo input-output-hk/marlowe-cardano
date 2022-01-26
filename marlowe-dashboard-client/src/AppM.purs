@@ -105,12 +105,10 @@ prependPath prefix =
 instance MonadAjax PAB.Api AppM where
   request api = liftAff <<< request api <<< handleRequest
     where
-    handleRequest = prependPath [ "pab", "api" ]
+    handleRequest = prependPath [ "pab" ]
 
 instance MonadAjax MarloweRun.Api AppM where
-  request api = liftAff <<< request api <<< handleRequest
-    where
-    handleRequest = prependPath [ "api" ]
+  request api = liftAff <<< request api
 
 instance MonadClipboard AppM where
   copy = liftEffect <<< copy
