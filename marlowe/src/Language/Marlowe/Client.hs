@@ -685,7 +685,7 @@ mkStep ::
     -> SlotInterval
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
-mkStep params typedValidator slotInterval@(minSlot, maxSlot) clientInputs = do
+mkStep MarloweParams{..} typedValidator slotInterval@(minSlot, maxSlot) clientInputs = do
     let
       range' =
         Interval.Interval
@@ -693,76 +693,83 @@ mkStep params typedValidator slotInterval@(minSlot, maxSlot) clientInputs = do
           (Interval.UpperBound (Interval.Finite maxSlot) False)
       times =
         slotRangeToPOSIXTimeRange
-          (uncurry SlotConfig $ slotConfig params)
+          (uncurry SlotConfig slotConfig)
           range'
     maybeState <- getOnChainState typedValidator
     case maybeState of
         Nothing -> throwError OnChainStateNotFound
         Just (onChainState, utxo) -> do
             let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=currentState}, ocsTxOutRef} = onChainState
-            let MarloweData{..} = currentState
-            let (inputs, inputsConstraints) = foldMap (clientInputToInputAndConstraints (rolesCurrency params)) clientInputs
-            let txInput = TransactionInput {
-                    txInterval = slotInterval,
-                    txInputs = inputs }
+            let marloweTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef
 
-            case computeTransaction txInput marloweState marloweContract of
-                TransactionOutput {txOutPayments, txOutState, txOutContract} -> do
-                    let marloweData = MarloweData {
-                            marloweContract = txOutContract,
-                            marloweState = txOutState }
-                    let allConstraints :: TxConstraints [MarloweTxInput] MarloweData
-                        allConstraints = let
-                            ownInputsConstraints =
-                                [ InputConstraint
-                                    { icRedeemer = marloweTxInputsFromInputs inputs
-                                    , icTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef
-                                    }
-                                ]
-                            payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
-                            constraints = inputsConstraints
-                                <> payoutConstraints payoutsByParty
-                                <> mustValidateIn times
-                            txConstraints = constraints { txOwnInputs = ownInputsConstraints
-                                                        , txOwnOutputs = []
-                                                        }
-                            in case txOutContract of
-                                Close -> txConstraints
-                                _ -> let
-                                    finalBalance = let
-                                        inputBalance = totalBalance (accounts marloweState)
-                                        totalIncome = P.foldMap (collectDeposits . getInputContent) inputs
-                                        totalPayouts = P.foldMap snd payoutsByParty
-                                        in inputBalance P.+ totalIncome P.- totalPayouts
-                                    in txConstraints { txOwnOutputs =
-                                        [ OutputConstraint
-                                            { ocDatum = marloweData
-                                            , ocValue = finalBalance
-                                            }
-                                        ]
-                                        }
+            (allConstraints, marloweData) <- evaluateTxContstraints currentState times marloweTxOutRef
 
-
-                    pk <- Contract.ownPaymentPubKeyHash
-                    let lookups1 = Constraints.typedValidatorLookups typedValidator
-                            <> Constraints.unspentOutputs utxo
-                    let lookups:: ScriptLookups TypedMarloweValidator
-                        lookups = lookups1 { Constraints.slOwnPaymentPubKeyHash = Just pk }
-                    utx <- either (throwing _ConstraintResolutionError)
-                                pure
-                                (Constraints.mkTx lookups allConstraints)
-                    let utx' = utx
-                               {
-                                 unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
-                               , unBalancedTxValidityTimeRange = times
-                               }
-                    submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
-                    pure marloweData
-                Error e -> throwError $ MarloweEvaluationError e
-
+            pk <- Contract.ownPaymentPubKeyHash
+            let lookups1 = Constraints.typedValidatorLookups typedValidator
+                    <> Constraints.unspentOutputs utxo
+            let lookups:: ScriptLookups TypedMarloweValidator
+                lookups = lookups1 { Constraints.slOwnPaymentPubKeyHash = Just pk }
+            utx <- either (throwing _ConstraintResolutionError)
+                        pure
+                        (Constraints.mkTx lookups allConstraints)
+            let utx' = utx
+                        {
+                            unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
+                        , unBalancedTxValidityTimeRange = times
+                        }
+            submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
+            pure marloweData
   where
-    clientInputToInputAndConstraints :: CurrencySymbol -> MarloweClientInput -> ([Input], TxConstraints Void Void)
-    clientInputToInputAndConstraints rolesCurrency  = \case
+    evaluateTxContstraints :: MarloweData
+        -> Ledger.POSIXTimeRange
+        -> Tx.TxOutRef
+        -> Contract w MarloweSchema MarloweError (TxConstraints [MarloweTxInput] MarloweData, MarloweData)
+    evaluateTxContstraints MarloweData{..} times marloweTxOutRef = do
+        let (inputs, inputsConstraints) = foldMap clientInputToInputAndConstraints clientInputs
+        let txInput = TransactionInput {
+                txInterval = slotInterval,
+                txInputs = inputs }
+
+        case computeTransaction txInput marloweState marloweContract of
+            TransactionOutput {txOutPayments, txOutState, txOutContract} -> do
+                let marloweData = MarloweData {
+                        marloweContract = txOutContract,
+                        marloweState = txOutState }
+                let allConstraints = let
+                        ownInputsConstraints =
+                            [ InputConstraint
+                                { icRedeemer = marloweTxInputsFromInputs inputs
+                                , icTxOutRef = marloweTxOutRef
+                                }
+                            ]
+                        payoutsByParty = AssocMap.toList $ P.foldMap payoutByParty txOutPayments
+                        constraints = inputsConstraints
+                            <> payoutConstraints payoutsByParty
+                            <> mustValidateIn times
+                        txConstraints = constraints { txOwnInputs = ownInputsConstraints
+                                                    , txOwnOutputs = []
+                                                    }
+                        in case txOutContract of
+                            Close -> txConstraints
+                            _ -> let
+                                finalBalance = let
+                                    contractBalance = totalBalance (accounts marloweState)
+                                    totalIncome = P.foldMap (collectDeposits . getInputContent) inputs
+                                    totalPayouts = P.foldMap snd payoutsByParty
+                                    in contractBalance P.+ totalIncome P.- totalPayouts
+                                in txConstraints { txOwnOutputs =
+                                    [ OutputConstraint
+                                        { ocDatum = marloweData
+                                        , ocValue = finalBalance
+                                        }
+                                    ]
+                                    }
+                pure (allConstraints, marloweData)
+
+            Error e -> throwError $ MarloweEvaluationError e
+
+    clientInputToInputAndConstraints :: MarloweClientInput -> ([Input], TxConstraints Void Void)
+    clientInputToInputAndConstraints = \case
         ClientInput input -> ([NormalInput input], inputContentConstraints input)
         ClientMerkleizedInput input continuation -> let
             builtin = PlutusTx.toBuiltinData continuation
@@ -799,7 +806,7 @@ mkStep params typedValidator slotInterval@(minSlot, maxSlot) clientInputs = do
             PK pk  -> mustPayToPubKey (PaymentPubKeyHash pk) value
             Role role -> let
                 dataValue = Datum $ PlutusTx.toBuiltinData role
-                in mustPayToOtherScript (rolePayoutValidatorHash params) dataValue value
+                in mustPayToOtherScript rolePayoutValidatorHash dataValue value
 
 
 

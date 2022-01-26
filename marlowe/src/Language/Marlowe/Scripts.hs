@@ -44,7 +44,7 @@ import qualified Prelude as Haskell
 import Unsafe.Coerce
 
 type MarloweSlotRange = (Slot, Slot)
-type MarloweInput = [Input]
+type MarloweInput = [MarloweTxInput]
 
 -- Yeah, I know
 type SmallUntypedTypedValidator = Scripts.TypedValidator Scripts.Any
@@ -54,7 +54,7 @@ data TypedMarloweValidator
 
 {- Type instances for small typed Marlowe validator -}
 instance Scripts.ValidatorTypes TypedMarloweValidator where
-    type instance RedeemerType TypedMarloweValidator = [MarloweTxInput]
+    type instance RedeemerType TypedMarloweValidator = MarloweInput
     type instance DatumType TypedMarloweValidator = MarloweData
 
 
@@ -88,7 +88,7 @@ defaultRolePayoutValidatorHash = mkRolePayoutValidatorHash adaSymbol
 smallMarloweValidator
     :: MarloweParams
     -> MarloweData
-    -> [MarloweTxInput]
+    -> MarloweInput
     -> ScriptContext
     -> Bool
 smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig =
