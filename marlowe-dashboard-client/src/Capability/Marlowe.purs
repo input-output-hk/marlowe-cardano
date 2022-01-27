@@ -67,6 +67,7 @@ import Data.Newtype (unwrap)
 import Data.Passpharse (Passphrase)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (PubKeyHash)
+import Data.PubKeyHash as PKH
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
@@ -296,10 +297,16 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           Right observableState -> Right (plutusAppId /\ observableState)
   subscribeToPlutusApp = toBack >>> Left >>> Subscribe >>> sendWsMessage
   subscribeToWallet =
-    sendWsMessage <<< Subscribe <<< Right <<< WI.toPubKeyHash
+    sendWsMessage <<< Subscribe <<< Right <<< invalidWalletIdToPubKeyHash
   unsubscribeFromPlutusApp = toBack >>> Left >>> Unsubscribe >>> sendWsMessage
   unsubscribeFromWallet =
-    sendWsMessage <<< Unsubscribe <<< Right <<< WI.toPubKeyHash
+    sendWsMessage <<< Unsubscribe <<< Right <<< invalidWalletIdToPubKeyHash
+
+-- | DO NOT USE! This is incorrect. The WS message type _should_ require a
+-- | wallet ID, not a pub key hash. This is the cost of using strings for types,
+-- | even if wrapped in newtypes!
+invalidWalletIdToPubKeyHash :: WalletId -> PubKeyHash
+invalidWalletIdToPubKeyHash = PKH.fromString <<< WI.toString
 
 -- Helper function to the restoreWallet so that we can reutilize the wallet companion or marlowe app if available
 activateOrRestorePlutusCompanionContracts

@@ -3,7 +3,6 @@ module Data.WalletId
   , WalletIdError(..)
   , fromString
   , toString
-  , toPubKeyHash
   ) where
 
 import Prologue
@@ -26,8 +25,6 @@ import Data.Enum.Generic
   , genericToEnum
   )
 import Data.Generic.Rep (class Generic)
-import Data.PubKeyHash (PubKeyHash)
-import Data.PubKeyHash as PKH
 import Data.Show.Generic (genericShow)
 import Data.String.NonEmpty (NonEmptyString)
 import Data.String.NonEmpty as SNE
@@ -94,7 +91,3 @@ fromString s = do
 
 toString :: WalletId -> String
 toString (WalletId s) = SNE.toString s
-
--- (jhbertra) is this correct? The existing logic seems to imply it is...
-toPubKeyHash :: WalletId -> PubKeyHash
-toPubKeyHash = PKH.fromString <<< toString
