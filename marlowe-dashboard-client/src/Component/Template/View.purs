@@ -26,6 +26,10 @@ import Component.Template.Types
   )
 import Css as Css
 import Data.AddressBook (AddressBook)
+import Data.ContractTimeout as CT
+import Data.ContractValue as CV
+import Data.Either (hush)
+import Data.Filterable (filterMap)
 import Data.Lens (view, (^.))
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
@@ -288,9 +292,9 @@ contractSetup addressBook state =
 
     content = initializeTemplateContent $ getPlaceholderIds contract
 
-    timeouts = Map.keys $ content ^. _slotContent
+    timeouts = filterMap (hush <<< CT.fromBigInt) $ content ^. _slotContent
 
-    values = Map.keys $ content ^. _valueContent
+    values = filterMap (hush <<< CV.fromBigInt) $ content ^. _valueContent
 
   in
     slot (Proxy :: _ "contractSetup") unit ContractSetupForm.component

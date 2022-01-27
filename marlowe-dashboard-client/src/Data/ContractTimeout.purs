@@ -2,7 +2,7 @@ module Data.ContractTimeout
   ( ContractTimeout
   , ContractTimeoutError(..)
   , dual
-  , fromInt
+  , fromBigInt
   , fromString
   , validator
   , toString
@@ -87,10 +87,10 @@ fromString s
   | null s = Left Empty
   | otherwise = case BigInt.fromString s of
       Nothing -> Left Invalid
-      Just i -> fromInt i
+      Just i -> fromBigInt i
 
-fromInt :: BigInt -> Either ContractTimeoutError ContractTimeout
-fromInt i
+fromBigInt :: BigInt -> Either ContractTimeoutError ContractTimeout
+fromBigInt i
   | i < zero = Left Past
   | otherwise = Right $ ContractTimeout i
 

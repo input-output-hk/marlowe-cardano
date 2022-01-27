@@ -2,6 +2,7 @@ module Component.ContractSetupForm where
 
 import Prologue
 
+import Component.Icons (Icon, icon)
 import Component.Icons as Icon
 import Component.Template.Types (Action(..), ContractSetupStage(..))
 import Component.Template.Types as Template
@@ -30,8 +31,8 @@ import Forms (InputSlots)
 import Forms as Forms
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (Form, subform)
-import Halogen.Form as Form
+import Halogen.Form (Form)
+import Halogen.Form as F
 import Halogen.Form.Component as FC
 import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)
@@ -44,8 +45,8 @@ import Type.Proxy (Proxy(..))
 
 type Input =
   { roles :: Set TokenName
-  , timeouts :: Set String
-  , values :: Set String
+  , timeouts :: Map String ContractTimeout
+  , values :: Map String ContractValue
   , addressBook :: AddressBook
   , contractName :: String
   }
@@ -86,7 +87,7 @@ contractNicknameForm
    . Monad m
   => Form parentAction (InputSlots s) m String ContractNickname
 contractNicknameForm =
-  Form.mkForm
+  F.mkForm
     { validator: CN.validator
     , render: Forms.input "contract-nickname" "Contract title" case _ of
         CN.Empty -> "Required."
@@ -99,7 +100,7 @@ roleAssignmentForm
   -> TokenName
   -> Form Template.Action (InputSlots s) m String Address
 roleAssignmentForm addressBook roleName =
-  Form.mkForm
+  F.mkForm
     { validator
     , render: Forms.input ("role-input-" <> roleName) roleName case _ of
         WN.Empty -> "Required."
@@ -121,7 +122,7 @@ timeoutForm
   => String
   -> Form parentAction (InputSlots s) m String ContractTimeout
 timeoutForm name =
-  Form.mkForm
+  F.mkForm
     { validator: CT.validator
     , render: Forms.input ("slot-input-" <> name) name case _ of
         CT.Empty -> "Required."
@@ -135,7 +136,7 @@ valueForm
   => String
   -> Form parentAction (InputSlots s) m String ContractValue
 valueForm name =
-  Form.mkForm
+  F.mkForm
     { validator: CV.validator
     , render: Forms.input ("value-input-" <> name) name case _ of
         CV.Empty -> "Required."
@@ -143,8 +144,25 @@ valueForm name =
         CV.Invalid -> "Must by a number."
     }
 
-setToMap :: forall t73. Ord t73 => Set t73 -> Map t73 Unit
-setToMap = Map.fromFoldable <<< Set.map \k -> Tuple k unit
+templateInputsSection
+  :: forall w i. Icon -> String -> HH.HTML w i
+templateInputsSection icon' heading = HH.h3
+  [ classNames
+      [ "flex"
+      , "gap-1"
+      , "items-center"
+      , "leading-none"
+      , "text-sm"
+      , "font-semibold"
+      , "pb-2"
+      , "mb-4"
+      , "border-gray"
+      , "border-b"
+      ]
+  ]
+  [ icon icon' [ "text-purple" ]
+  , HH.text heading
+  ]
 
 component :: forall q m. MonadAff m => Component q m
 component = Hooks.component \{ outputToken } input -> Hooks.do
@@ -152,40 +170,36 @@ component = Hooks.component \{ outputToken } input -> Hooks.do
   Tuple result putResult <- usePutState Nothing
   form <- Hooks.captures { addressBook } Hooks.useMemo \_ ->
     FC.component
-      { form:
-          Form.prepend
-            ( HH.h2 [ classNames [ "text-lg", "font-semibold", "mb-4" ] ]
-                [ HH.text $ contractName <> " setup" ]
-            )
-            ( ContractParams
-                <$> subform _nickname contractNicknameForm
-                <*> subform
-                  _roles
-                  ( Form.traverseFormsWithIndex
-                      (const <<< roleAssignmentForm addressBook)
-                      (setToMap roles)
-                  )
-                <*> subform
-                  _timeouts
-                  ( Form.traverseFormsWithIndex
-                      (const <<< timeoutForm)
-                      (setToMap timeouts)
-                  )
-                <*> subform
-                  _values
-                  ( Form.traverseFormsWithIndex
-                      (const <<< valueForm)
-                      (setToMap values)
-                  )
-            )
-      , formClasses: [ "overflow-y-auto", "p-4" ]
+      { formClasses: [ "overflow-y-auto", "p-4", "flex", "flex-col", "gap-2" ]
+      , form: ado
+          F.html $ HH.h2
+            [ classNames [ "text-lg", "font-semibold", "mb-2" ] ]
+            [ HH.text $ contractName <> " setup" ]
+
+          name <- F.subform _nickname contractNicknameForm
+
+          F.html (templateInputsSection Icon.Roles "Roles")
+
+          roles' <- F.subform _roles $ F.traverseFormsWithIndex
+            (const <<< roleAssignmentForm addressBook)
+            (Set.toMap roles)
+
+          F.html (templateInputsSection Icon.Terms "Terms")
+
+          timeouts' <- F.subform _timeouts
+            $ F.traverseFormsWithIndex (const <<< timeoutForm) timeouts
+
+          values' <- F.subform _values
+            $ F.traverseFormsWithIndex (const <<< valueForm) values
+
+          in ContractParams name roles' timeouts' values'
       }
   let
     initialInput =
       { nickname: ""
       , roles: Map.fromFoldable $ Set.map (flip Tuple "") roles
-      , timeouts: Map.fromFoldable $ Set.map (flip Tuple "") timeouts
-      , values: Map.fromFoldable $ Set.map (flip Tuple "") values
+      , timeouts: CT.toString <$> timeouts
+      , values: CV.toString <$> values
       }
   Hooks.pure do
     HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]

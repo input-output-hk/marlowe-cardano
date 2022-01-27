@@ -8,17 +8,17 @@ module Halogen.Form
   , FormHTML
   , FormSpec
   , decorate
-  , mkForm
-  , mkAsyncForm
   , hoistForm
-  , update
-  , sequenceForms
-  , traverseForms
-  , traverseFormsWithIndex
-  , prepend
+  , html
+  , mkAsyncForm
+  , mkForm
   , runForm
+  , sequenceForms
   , split
   , subform
+  , traverseForms
+  , traverseFormsWithIndex
+  , update
   ) where
 
 import Prelude
@@ -130,14 +130,13 @@ type FormSpec parentAction slots m error input output =
       -> FormM input m (FormHTML parentAction input slots m)
   }
 
--- | Create a form that renders the given static HTML before another form
-prepend
-  :: forall parentAction slots m input output
+-- | Create a form that just renders the given static HTML.
+html
+  :: forall parentAction slots m input
    . Monad m
   => H.ComponentHTML (Action parentAction input) slots m
-  -> Form parentAction slots m input output
-  -> Form parentAction slots m input output
-prepend html (Form f) = Form $ liftFnR (\i -> Tuple (Just i) [ html ]) >>> f
+  -> Form parentAction slots m input Unit
+html = Form <<< liftFnR <<< const <<< Tuple (Just unit) <<< pure
 
 -- | Create a form that wraps the view produced by another form.
 decorate
