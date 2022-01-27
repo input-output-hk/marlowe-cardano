@@ -98,7 +98,7 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - run: |
           nix flake lock
-          nix-shell --command "update-client-deps || update-client-deps" # Double-call to work around bug in spago2nix on first fetch
+          nix-shell --command "update-client-deps"
           # Disabled until we can find a way to run it only for Linux
           # nix-shell --command "updateMaterialized" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
           git diff --exit-code
