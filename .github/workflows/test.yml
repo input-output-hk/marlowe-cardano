@@ -92,10 +92,13 @@ jobs:
             trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
             substituters = ${{ env.SUBSTITUTERS }}
             experimental-features = nix-command flakes
+      - uses: cachix/cachix-action@v10
+        with:
+          name: ${{ env.CACHE_NAME }}
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - run: |
           nix flake lock
-          nix-shell --command "cd marlowe-playground-client && (update-client-deps || update-client-deps)" # Double-call to work around bug in spago2nix on first fetch
-          nix-shell --command "cd marlowe-dashboard-client && (update-client-deps || update-client-deps)" # Double-call to work around bug in spago2nix on first fetch
+          nix-shell --command "update-client-deps || update-client-deps" # Double-call to work around bug in spago2nix on first fetch
           # Disabled until we can find a way to run it only for Linux
           # nix-shell --command "updateMaterialized" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
           git diff --exit-code
