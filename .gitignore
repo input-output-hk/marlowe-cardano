@@ -115,3 +115,6 @@ plutus-pab/test-node/alonzo-purple/db
 # profiling output files
 *.timelog
 *.stacks
+
+# Arion
+*.tmp-arion-docker*
