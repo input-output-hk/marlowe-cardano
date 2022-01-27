@@ -7,11 +7,13 @@ import Component.Label.View as Label
 import Css as Css
 import Data.Address (Address)
 import Data.Address (AddressError(..), validator) as A
+import Data.BigInt.Argonaut as BigInt
 import Data.Filterable (filter)
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.Set (Set)
+import Data.String (trim)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Halogen as H
@@ -112,6 +114,35 @@ inputAsync id label renderError value = case _ of
         { value, id, label, error, format: identity }
         Form.update
     ]
+
+intInput
+  :: forall parentAction s m e a
+   . Monad m
+  => String
+  -> String
+  -> (e -> String)
+  -> String
+  -> Either e a
+  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
+intInput id label renderError value = case _ of
+  Left e ->
+    render $ Just $ renderError e
+  Right _ ->
+    render Nothing
+  where
+  render error = pure
+    [ HH.slot
+        _input
+        id
+        inputComponent
+        { value, id, label, error, format: formatInt }
+        Form.update
+    ]
+
+formatInt :: String -> String
+formatInt s = case BigInt.fromString $ trim s of
+  Nothing -> s
+  Just n -> BigInt.toString n
 
 input
   :: forall parentAction s m e a

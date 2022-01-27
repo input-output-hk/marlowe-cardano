@@ -124,7 +124,7 @@ timeoutForm
 timeoutForm name =
   F.mkForm
     { validator: CT.validator
-    , render: Forms.input ("slot-input-" <> name) name case _ of
+    , render: Forms.intInput ("slot-input-" <> name) name case _ of
         CT.Empty -> "Required."
         CT.Past -> "Must be in the future."
         CT.Invalid -> "Must be a number of slots from contract start."
