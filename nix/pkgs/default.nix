@@ -56,8 +56,9 @@ let
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-linux)
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-darwin)
   '';
-  updateClientDeps = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/update-client-deps") {
-    inherit purs spago spago2nix;
+
+  updateClientDeps = pkgs.callPackage ./update-client-deps.nix {
+    inherit purs spago spago2nix writeShellScriptBinInRepoRoot;
   };
 
   #
