@@ -58,6 +58,7 @@
           (hsPkgs."servant-websockets" or (errorHandler.buildDepError "servant-websockets"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."text-class" or (errorHandler.buildDepError "text-class"))
+          (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."wai-app-static" or (errorHandler.buildDepError "wai-app-static"))
           (hsPkgs."wai-cors" or (errorHandler.buildDepError "wai-cors"))
           (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
@@ -74,6 +75,7 @@
           "Marlowe/Run/API"
           "Marlowe/Run/Server"
           "Marlowe/Run/Wallet/V1/API"
+          "Marlowe/Run/Wallet/V1/Types"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Types"
           "Marlowe/Run/Wallet/V1/Client"
           "Marlowe/Run/WebSocket"
