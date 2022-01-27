@@ -10,28 +10,15 @@ The [marlowe-pab](https://github.com/input-output-hk/marlowe-cardano/tree/master
 
 ### Starting the backend server
 
-Marlowe Run requires a running instance of the Marlowe PAB to work, and the PAB requires a running testnet, a WalletBackEnd and a chain-index:
+If you want a running backend quickly, we have a script in the nix shell that
+will launch all the required services using Docker Compose. From anywhere in
+the repo, you just need to run:
 
 ```bash
-# Run these first 3 commands in separate terminals
-[nix-shell] $ launch-node
-[nix-shell] $ launch-wbe
-[nix-shell] $ launch-chain-index
-# Then we can start the Marlowe PAB and the Marlowe Run Backend
-[nix-shell] $ cd marlowe-dashboard-client
-[nix-shell] $ plutus-pab-migrate
-[nix-shell] $ marlowe-run-server
+[nix-shell] $ start-marlowe-run
 ```
 
-The command (`plutus-pab-migrate`) initialises the database needed to run the Marlowe PAB. You should only need to do this once, but you might need to do it again if the PAB code changes in ways that require modifications to the database schema.
-
-Note that if you have a local `pab-core.db` file already when you run `plutus-pab-migrate`, you may get the following error:
-
-```
-plutus-pab-examples: user error (autoMigrate: Not performing automatic migration due to data loss)
-```
-
-In this case you will first need to delete your local `pab-core.db` file before running `plutus-pab-migrate` again. Obviously this will wipe any data you might have had from your local development instance.
+This starts all 5 services required to run Marlowe Run.
 
 ### Starting the frontend server
 
@@ -44,7 +31,6 @@ $ npm run start
 The `start` script will:
 
 - Install npm dependencies
-- Generate PureScript bridge code
 - Compile the PureScript code
 - Start the Webpack server
 
@@ -65,6 +51,19 @@ $ npm run build:webpack:dev
 This is the final step of the `start` script described above, and is all you need to get up and running subsequently if you have already installed the npm modules and generated the PureScript bridge code.
 
 Please refer to [package.json](./package.json) for the full set of provided scripts.
+
+There is also a convenience script for building all the PureScript with
+warnings-as-errors reporting.
+
+```
+[nix-shell] $ marlowe-run-spago
+```
+
+This can be very useful if you are using `purs ide`. When it rebuilds a module,
+it doesn't rebuild the other modules that depends on it. Because our webpack
+watches the `output` directory, this can result in inconsistencies in the
+compiled code, leading to runtime errors. When this happens, you should be able
+to run `marlowe-run-spago` and it will rebuild all the purescript for you.
 
 ### Generating PureScript Code
 
