@@ -138,6 +138,7 @@ let
     haskell-language-server-wrapper
     hie-bios
     hlint
+    marlowe-dashboard.build-client
     marlowe-dashboard.generate-purescript
     marlowe-dashboard.start-backend
     marlowe-playground.generate-purescript

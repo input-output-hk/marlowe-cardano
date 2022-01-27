@@ -50,6 +50,11 @@ let
     )
   '';
 
+  build-client = writeShellScriptBinInRepoRoot "marlowe-run-spago" ''
+    cd marlowe-dashboard-client
+    spago build --purs-args "--strict --stash --censor-lib --stash --is-lib=generated --is-lib=.spago"
+  '';
+
   cleanSrc = gitignore-nix.gitignoreSource ./.;
 
   nodeModules = buildNodeModules {
@@ -78,5 +83,5 @@ let
     });
 in
 {
-  inherit client marlowe-invoker marlowe-run-backend-invoker generate-purescript generated-purescript start-backend;
+  inherit client marlowe-invoker marlowe-run-backend-invoker generate-purescript generated-purescript start-backend build-client;
 }

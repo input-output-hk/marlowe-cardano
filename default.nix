@@ -59,7 +59,7 @@ rec {
       inherit webCommon webCommonMarlowe;
       inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
-    }) client marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
+    }) client marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend build-client;
   };
 
   tests = import ./nix/tests/default.nix {
