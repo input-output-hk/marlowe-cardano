@@ -957,7 +957,7 @@ let
         name = "polyform";
         version = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
         src = pkgs.fetchgit {
-          url = "https://github.com/purescript-polyform/polyform";
+          url = "https://github.com/purescript-polyform/polyform.git";
           rev = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
           sha256 = "0n77rmfsq85bzf4klggp004hbfcrj0hlmn80syqca34i1l268hwm";
         };
