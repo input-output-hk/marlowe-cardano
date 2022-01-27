@@ -3,10 +3,10 @@
 , ...
 }:
 let
-  inherit (pkgs) cardano-wallet;
   node-port = "3001";
+  wallet-port = "8090";
   socket-path = "/ipc/node.socket";
-  node-config = pkgs.runCommand "node-config"
+  config = pkgs.runCommand "config"
     { }
     ''
       mkdir $out
@@ -18,14 +18,14 @@ let
       ls $out
     '';
 
-  cardano-node = {
+  node = {
     service = {
-      image = "cardano-node:1.33.0";
+      image = "inputoutput/cardano-node:1.33.0";
       ports = [ "${node-port}:${node-port}" ];
       volumes = [
         "cardano-ipc:/ipc"
-        "cardano-data:/data"
-        "${node-config}:/config"
+        "cardano-node-data:/data"
+        "${config}:/config"
       ];
       command = [
         "run"
@@ -33,6 +33,8 @@ let
         "/config/config.json"
         "--topology"
         "/config/topology.yaml"
+        "--port"
+        node-port
         "--socket-path"
         socket-path
         "--database-path"
@@ -41,14 +43,39 @@ let
     };
   };
 
+  wallet = {
+    service = {
+      image = "inputoutput/cardano-wallet:2021.12.15";
+      ports = [ "${wallet-port}:${wallet-port}" ];
+      volumes = [
+        "cardano-ipc:/ipc"
+        "cardano-wallet-data:/data"
+        "${config}:/config"
+      ];
+      command = [
+        "serve"
+        "--testnet"
+        "/config/byron-genesis.json"
+        "--database"
+        "/data"
+        "--node-socket"
+        socket-path
+        "--port"
+        wallet-port
+      ];
+    };
+  };
+
 in
 {
   config.services = {
-    inherit cardano-node;
+    inherit node;
+    inherit wallet;
   };
   config.docker-compose.raw = {
     volumes = {
-      cardano-data = { };
+      cardano-node-data = { };
+      cardano-wallet-data = { };
       cardano-ipc = { };
     };
   };
