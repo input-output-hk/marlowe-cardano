@@ -3,63 +3,40 @@
 , ...
 }:
 let
-  inherit (pkgs) cardano-wallet cardano-node;
+  inherit (pkgs) cardano-wallet;
   node-port = "3001";
-  wallet-port = "8090";
+  socket-path = "/ipc/node.socket";
+  node-config = pkgs.runCommand "node-config"
+    { }
+    ''
+      mkdir $out
+      echo '${builtins.toJSON (import ./dev/node-config.nix)}' > $out/config.json
+      cp ${../bitte/node/config/alonzo-genesis.json} $out/alonzo-genesis.json
+      cp ${../bitte/node/config/byron-genesis.json} $out/byron-genesis.json
+      cp ${../bitte/node/config/shelly-genesis.json} $out/shelly-genesis.json
+      cp ${../bitte/node/config/topology.yaml} $out/topology.yaml
+      ls $out
+    '';
 
-  cardano-node-service = {
-    image = {
-      name = "cardano-node";
-      contents = [ cardano-node ];
+  cardano-node = {
+    service = {
+      image = "cardano-node:1.33.0";
+      ports = [ "${node-port}:${node-port}" ];
+      volumes = [
+        "cardano-ipc:/ipc"
+        "cardano-data:/data"
+        "${node-config}:/config"
+      ];
       command = [
-        "${cardano-node}/bin/cardano-node"
         "run"
         "--config"
-        "/var/config/config.json"
+        "/config/config.json"
         "--topology"
-        "/var/config/topology.yaml"
-        "--database-path"
-        "/var/db"
+        "/config/topology.yaml"
         "--socket-path"
-        "/var/alloc/node.sock"
-        "--port"
-        "8000"
-      ];
-    };
-    service = {
-      useHostStore = true;
-      ports = [ "${node-port}:8000" ];
-      volumes = [
-        "alloc-volume:/var/alloc"
-        "${../bitte/node/config}:/var/config"
-        "/var/db"
-      ];
-    };
-  };
-
-  cardano-wallet-service = {
-    image = {
-      name = "cardano-wallet";
-      contents = [ cardano-wallet ];
-      command = [
-        "${cardano-wallet}/bin/cardano-wallet"
-        "serve"
-        "--listen-address"
-        "*"
-        "--node-socket"
-        "/var/alloc/node.sock"
-        "--testnet"
-        "/var/config/byron-genesis.json"
-        "--port"
-        "8000"
-      ];
-    };
-    service = {
-      useHostStore = true;
-      ports = [ "${wallet-port}:8000" ];
-      volumes = [
-        "alloc-volume:/var/alloc"
-        "${../bitte/node/config}:/var/config"
+        socket-path
+        "--database-path"
+        "/data"
       ];
     };
   };
@@ -67,11 +44,12 @@ let
 in
 {
   config.services = {
-    inherit cardano-node-service cardano-wallet-service;
+    inherit cardano-node;
   };
   config.docker-compose.raw = {
     volumes = {
-      alloc-volume = { };
+      cardano-data = { };
+      cardano-ipc = { };
     };
   };
 }
