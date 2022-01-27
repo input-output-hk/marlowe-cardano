@@ -22,6 +22,7 @@ import Halogen.Form.FormM (FormM)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
+import Halogen.Hooks.Extra.Hooks (usePutState)
 import Network.RemoteData (RemoteData(..))
 import Type.Proxy (Proxy(..))
 
@@ -39,38 +40,50 @@ inputComponent
        , id :: String
        , label :: String
        , value :: String
+       , format :: String -> String
        }
        String
        m
 inputComponent =
-  Hooks.component \{ outputToken } { value, id, label, error } -> Hooks.do
-    Tuple pristine pristineId <- Hooks.useState true
-    let error' = filter (\_ -> not pristine) error
-    Hooks.pure do
-      HH.div [ classNames [ "relative" ] ]
-        [ Input.renderWithChildren
-            Input.defaultInput
-              { value = value
-              , onChange = Just \value' -> do
-                  Hooks.put pristineId false
-                  Hooks.raise outputToken value'
-              , invalid = isJust error'
-              , id = id
-              }
-            \i ->
-              [ Label.render Label.defaultInput
-                  { for = id
-                  , text = label
-                  }
-              , i
+  Hooks.component \{ outputToken } { value, id, label, format, error } ->
+    Hooks.do
+      Tuple pristine putPristine <- usePutState true
+      Tuple visited putVisited <- usePutState false
+      Tuple focused putFocused <- usePutState false
+      Hooks.captures { value, focused } Hooks.useTickEffect do
+        when (not focused) do
+          Hooks.raise outputToken $ format value
+        pure Nothing
+      let error' = filter (\_ -> not pristine && visited) error
+      Hooks.pure do
+        HH.div [ classNames [ "relative" ] ]
+          [ Input.renderWithChildren
+              Input.defaultInput
+                { value = value
+                , onChange = Just \value' -> do
+                    putPristine false
+                    Hooks.raise outputToken value'
+                , invalid = isJust error'
+                , id = id
+                , onFocus = Just $ putFocused true
+                , onBlur = Just do
+                    putVisited true
+                    putFocused false
+                }
+              \i ->
+                [ Label.render Label.defaultInput
+                    { for = id
+                    , text = label
+                    }
+                , i
+                ]
+          , HH.label
+              [ classNames
+                  $ Css.inputError <> maybe [ "invisible" ] (const []) error'
+              , HP.for id
               ]
-        , HH.label
-            [ classNames
-                $ Css.inputError <> maybe [ "invisible" ] (const []) error'
-            , HP.for id
-            ]
-            [ HH.text $ fromMaybe "Valid" error ]
-        ]
+              [ HH.text $ fromMaybe "Valid" error ]
+          ]
 
 inputAsync
   :: forall parentAction s m e a
@@ -92,7 +105,13 @@ inputAsync id label renderError value = case _ of
     render Nothing
   where
   render error = pure
-    [ HH.slot _input id inputComponent { value, id, label, error } Form.update ]
+    [ HH.slot
+        _input
+        id
+        inputComponent
+        { value, id, label, error, format: identity }
+        Form.update
+    ]
 
 input
   :: forall parentAction s m e a
@@ -110,7 +129,13 @@ input id label renderError value = case _ of
     render Nothing
   where
   render error = pure
-    [ HH.slot _input id inputComponent { value, id, label, error } Form.update ]
+    [ HH.slot
+        _input
+        id
+        inputComponent
+        { value, id, label, error, format: identity }
+        Form.update
+    ]
 
 walletNickname
   :: forall parentAction s m
