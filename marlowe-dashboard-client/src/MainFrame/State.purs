@@ -26,7 +26,6 @@ import Component.Contacts.Lenses
   , _walletId
   , _walletInfo
   )
-import Component.Template.Types as Template
 import Control.Monad.Reader (class MonadAsk)
 import Control.Monad.State (modify_)
 import Data.AddressBook as AB
@@ -43,7 +42,6 @@ import Data.Traversable (for)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env)
-import Examples.PureScript.Escrow as Escrow
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen.Extra (imapState)
 import Halogen.Query.HalogenM (mapAction)
@@ -76,7 +74,6 @@ import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts)
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.Types (Action(..), State) as Dashboard
-import Page.Dashboard.Types (Card(..))
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types
