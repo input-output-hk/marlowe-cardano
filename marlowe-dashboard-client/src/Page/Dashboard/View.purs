@@ -17,6 +17,7 @@ import Component.Contacts.Lenses
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.Types (WalletDetails)
 import Component.Contacts.View (contactsCard)
+import Component.ContractPreview.View (contractPreviewCard)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.Popper (Placement(..))
@@ -68,7 +69,7 @@ import Marlowe.Semantics (PubKey, Slot)
 import Page.Contract.Lenses (_stateNickname)
 import Page.Contract.State (isContractClosed)
 import Page.Contract.Types (State) as Contract
-import Page.Contract.View (contractPreviewCard, contractScreen)
+import Page.Contract.View (contractScreen)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen

@@ -1,11 +1,18 @@
 module Page.Contract.View
-  ( contractPreviewCard
-  , contractScreen
+  ( contractScreen
   ) where
 
 import Prologue hiding (div)
 
 import Component.Contacts.State (adaToken)
+import Component.Contract.View
+  ( currentStepActions
+  , firstLetterInCircle
+  , participantWithNickname
+  , renderParty
+  , startingStepActions
+  , timeoutString
+  )
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -15,97 +22,56 @@ import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
 import Component.Transfer.Types (Termini(..))
 import Component.Transfer.View (transfer)
-import Css as Css
 import Data.Array (fromFoldable, intercalate, length)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
-import Data.BigInt.Argonaut (BigInt, fromString)
+import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
 import Data.List.NonEmpty (foldr)
-import Data.Map (intersectionWith, keys, lookup, toUnfoldable) as Map
+import Data.Map (intersectionWith, keys, toUnfoldable) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.Set as Set
-import Data.String (take, trim)
-import Data.String.Extra (capitalize)
+import Data.String (take)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
 import Halogen.Extra (LifecycleEvent(..), lifeCycleSlot)
-import Halogen.HTML
-  ( HTML
-  , a
-  , button
-  , div
-  , div_
-  , h3
-  , h4
-  , h4_
-  , input
-  , p
-  , p_
-  , span
-  , span_
-  , text
-  )
+import Halogen.HTML (HTML, a, button, div, div_, h4_, span, span_, text)
 import Halogen.HTML.Events (onClick)
-import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
-import Halogen.HTML.Properties
-  ( IProp
-  , InputType(..)
-  , enabled
-  , id
-  , placeholder
-  , ref
-  , type_
-  , value
-  )
-import Humanize
-  ( contractIcon
-  , formatDate
-  , formatTime
-  , humanizeDuration
-  , humanizeOffset
-  , humanizeValue
-  )
+import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties (IProp, enabled, id, ref)
+import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
 import MainFrame.Types (ChildSlots)
-import Marlowe.Execution.Lenses (_contract, _mNextTimeout, _semanticState)
+import Marlowe.Execution.Lenses (_contract, _semanticState)
 import Marlowe.Execution.State (expandBalances)
 import Marlowe.Execution.Types (NamedAction(..))
-import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics
-  ( Bound(..)
-  , ChoiceId(..)
+  ( ChoiceId(..)
   , Contract(..)
   , Party(..)
-  , Slot
   , SlotInterval(..)
   , Token
   , TransactionInput(..)
   , _accounts
-  , getEncompassBound
   )
 import Marlowe.Semantics (Input(..)) as S
-import Marlowe.Slot (secondsDiff, slotToDateTime)
+import Marlowe.Slot (slotToDateTime)
 import Page.Contract.Lenses
   ( _executionState
   , _expandPayments
-  , _metadata
   , _namedActions
   , _participants
   , _pendingTransaction
   , _previousSteps
   , _resultingPayments
   , _selectedStep
-  , _stateMetadata
-  , _stateNickname
   , _userParties
   )
 import Page.Contract.State
@@ -126,87 +92,10 @@ import Page.Contract.Types
   , TimeoutInfo
   , scrollContainerRef
   )
-import Text.Markdown.TrimmedInline (markdownToHTML)
 
 -------------------------------------------------------------------------------
 -- Top-level views
 -------------------------------------------------------------------------------
--- This card shows a preview of the contract (intended to be used in the dashboard)
-contractPreviewCard
-  :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
-contractPreviewCard currentSlot state =
-  let
-    nickname = state ^. _stateNickname
-
-    contractType = state ^. (_stateMetadata <<< _contractType)
-
-    contractName = state ^. (_stateMetadata <<< _contractName)
-
-    stepPanel = case state of
-      Started started ->
-        div
-          [ classNames [ "px-4", "py-2" ] ]
-          [ p
-              [ classNames [ "text-xs", "font-semibold" ] ]
-              [ text $ "Current step:" <> show (currentStep started + 1) ]
-          , p
-              [ classNames [ "font-semibold" ] ]
-              [ text $ timeoutString currentSlot started ]
-          ]
-      Starting _ ->
-        div
-          [ classNames
-              [ "px-4"
-              , "py-2"
-              , "flex"
-              , "items-center"
-              , "justify-between"
-              ]
-          ]
-          [ p
-              [ classNames [ "text-sm", "font-semibold" ] ]
-              [ text $ "Starting contract…" ]
-          , Progress.view Progress.defaultSpec
-          ]
-  in
-    div
-      [ classNames
-          [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
-      ]
-      [ div
-          [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
-          [ div
-              [ classNames [ "flex-1" ] ]
-              [ h3
-                  [ classNames [ "flex", "gap-2", "items-center" ] ]
-                  [ contractIcon contractType
-                  , text contractName
-                  ]
-              , input
-                  [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
-                  , type_ InputText
-                  , value nickname
-                  , onValueInput_ SetNickname
-                  , placeholder "Please rename"
-                  ]
-              ]
-          , a
-              [ classNames [ "flex", "items-center" ]
-              , onClick_ SelectSelf
-              ]
-              [ icon Icon.ArrowRight [ "text-28px" ] ]
-          ]
-      , stepPanel
-      , div
-          [ classNames [ "h-dashboard-card-actions", "overflow-y-auto", "p-4" ]
-          ]
-          [ case state of
-              Started started -> currentStepActions (currentStep started + 1)
-                started
-              Starting _ -> startingStepActions
-          ]
-      ]
-
 contractScreen
   :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
 contractScreen viewInput state =
@@ -298,18 +187,6 @@ contractScreen viewInput state =
 -------------------------------------------------------------------------------
 -- UI components
 -------------------------------------------------------------------------------
-timeoutString :: Slot -> StartedState -> String
-timeoutString currentSlot state =
-  let
-    mNextTimeout = state ^. (_executionState <<< _mNextTimeout)
-  in
-    maybe'
-      ( \_ ->
-          if isContractClosed (Started state) then "Contract closed"
-          else "Timed out"
-      )
-      (\nextTimeout -> humanizeDuration $ secondsDiff nextTimeout currentSlot)
-      mNextTimeout
 
 statusIndicatorMessage :: State -> String
 statusIndicatorMessage (Starting _) = "Starting contract…"
@@ -760,114 +637,6 @@ renderCurrentStep viewInput state =
           ]
     ]
 
-startingStepActions :: forall p a. HTML p a
-startingStepActions =
-  div [ classNames [ "space-y-6" ] ]
-    [ placeholderAccount
-    , placeholderContent
-    ]
-  where
-  placeholderAccount =
-    div [ classNames [ "flex", "items-center", "gap-1" ] ]
-      [ placeholderAvatar
-      , placeholderName
-      ]
-
-  placeholderAvatar = div
-    [ classNames [ "bg-gray", "rounded-full", "w-5", "h-5" ] ]
-    []
-
-  placeholderName = div
-    [ classNames [ "bg-gray", "rounded-sm", "w-1/2", "h-6" ] ]
-    []
-
-  placeholderContent = div
-    [ classNames [ "bg-gray", "rounded-full", "w-full", "h-12" ] ]
-    []
-
-currentStepActions
-  :: forall m
-   . MonadAff m
-  => Int
-  -> StartedState
-  -> ComponentHTML Action ChildSlots m
-currentStepActions _ state =
-  case
-    isContractClosed (Started state),
-    isJust state.pendingTransaction,
-    state.namedActions
-    of
-    true, _, _ ->
-      div
-        [ classNames
-            [ "h-full", "flex", "flex-col", "justify-center", "items-center" ]
-        ]
-        [ icon Icon.TaskAlt [ "text-green", "text-big-icon" ]
-        , div
-            -- The bottom margin on this div means the whole thing isn't perfectly centered vertically.
-            -- Because there's an image on top and text below, being perfectly centered vertically
-            -- looks wrong.
-            [ classNames [ "text-center", "text-sm", "mb-4" ] ]
-            [ div [ classNames [ "font-semibold" ] ]
-                [ text "This contract is now closed" ]
-            , div_ [ text "There are no tasks to complete" ]
-            ]
-        ]
-    _, true, _ ->
-      -- FIXME: when we have a design for this, we can include more information (probably making this look more like
-      -- the past step card)
-      div_
-        [ text
-            "Your transaction has been submitted. You will be notified when confirmation is received."
-        ]
-    _, _, [] ->
-      let
-        purpleDot extraCss = div
-          [ classNames $
-              [ "rounded-full", "bg-lightpurple", "w-3", "h-3", "animate-grow" ]
-                <> extraCss
-          ]
-          []
-      in
-        div
-          [ classNames [ "text-xs", "flex", "flex-col", "h-full", "gap-2" ] ]
-          [ h4 [ classNames [ "font-semibold" ] ] [ text "Please wait…" ]
-          , p_
-              [ text
-                  "There are no tasks to complete at this step. The contract will progress automatically when the timeout passes."
-              ]
-          , div
-              [ classNames
-                  [ "flex-grow"
-                  , "flex"
-                  , "justify-center"
-                  , "items-center"
-                  , "gap-2"
-                  ]
-              ]
-              [ purpleDot []
-              , purpleDot [ "animate-delay-150" ]
-              , purpleDot [ "animate-delay-300" ]
-              ]
-          ]
-    _, _, namedActions ->
-      div
-        [ classNames [ "space-y-4" ] ]
-        $ uncurry (renderPartyTasks state)
-            <$> namedActions
-
-participantWithNickname :: StartedState -> Party -> String
-participantWithNickname state party =
-  let
-    mNickname = join $ Map.lookup party (state ^. _participants)
-  in
-    capitalize case party, mNickname of
-      -- TODO: For the demo we wont have PK, but eventually we probably want to limit the amount of characters
-      PK publicKey, _ -> publicKey
-      Role roleName, Just nickname -> roleName <> " (" <> WN.toString nickname
-        <> ")"
-      Role roleName, Nothing -> roleName
-
 accountIndicator
   :: forall p a
    . { colorStyles :: Array String
@@ -887,241 +656,6 @@ accountIndicator { colorStyles, otherStyles, name } =
         , "rounded-full"
         ]
     ]
-
-firstLetterInCircle
-  :: forall p a. { styles :: Array String, name :: String } -> HTML p a
-firstLetterInCircle { styles, name } =
-  div
-    [ classNames
-        $
-          [ "rounded-full"
-          , "w-5"
-          , "h-5"
-          , "text-center"
-          , "font-semibold"
-          ]
-            <> styles
-    ]
-    [ text $ take 1 name ]
-
--- TODO: In zeplin all participants have a different color. We need to decide how are we going to assing
---       colors to users. For now they all have purple
-renderParty :: forall p a. StartedState -> Party -> HTML p a
-renderParty state party =
-  let
-    participantName = participantWithNickname state party
-
-    userParties = state ^. _userParties
-  in
-    div [ classNames $ [ "text-xs", "flex", "gap-1" ] ]
-      [ firstLetterInCircle
-          { styles:
-              [ "bg-gradient-to-r"
-              , "from-purple"
-              , "to-lightpurple"
-              , "text-white"
-              ]
-          , name: participantName
-          }
-      , div [ classNames [ "font-semibold" ] ]
-          [ text $
-              if Set.member party userParties then participantName <> " (you)"
-              else participantName
-          ]
-      ]
-
-renderPartyTasks
-  :: forall p. StartedState -> Party -> Array NamedAction -> HTML p Action
-renderPartyTasks state party actions =
-  let
-    actionsSeparatedByOr =
-      intercalate
-        [ div [ classNames [ "font-semibold", "text-center", "text-xs" ] ]
-            [ text "OR" ]
-        ]
-        (Array.singleton <<< renderAction state party <$> actions)
-  in
-    div [ classNames [ "space-y-2" ] ]
-      ([ renderParty state party ] <> actionsSeparatedByOr)
-
--- FIXME: This was added to allow anybody being able to do any actions for debug purposes...
---        Remove once the PAB is connected
-debugMode :: Boolean
-debugMode = false
-
--- The Party parameter represents who is taking the action
-renderAction :: forall p. StartedState -> Party -> NamedAction -> HTML p Action
-renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) =
-  let
-    userParties = state ^. _userParties
-
-    isActiveParticipant = Set.member party userParties
-
-    fromDescription =
-      if isActiveParticipant then
-        "You make"
-      else case party of
-        PK publicKey -> "Account " <> publicKey <> " makes"
-        Role roleName -> capitalize roleName <> " makes"
-
-    toDescription =
-      if Set.member intoAccountOf userParties then
-        "your"
-      else if by == intoAccountOf then
-        "their"
-      else case intoAccountOf of
-        PK publicKey -> publicKey <> " public key"
-        Role roleName -> roleName <> "'s"
-
-    description = fromDescription <> " a deposit into " <> toDescription <>
-      " account"
-  in
-    div [ classNames [ "space-y-2" ] ]
-      [ shortDescription isActiveParticipant description
-      , button
-          [ classNames $ Css.button <> Css.withAnimation
-              <> [ "flex", "justify-between", "w-full" ]
-              <>
-                if isActiveParticipant || debugMode then
-                  Css.bgBlueGradient <> Css.withShadow
-                else
-                  [ "text-black", "cursor-default" ]
-          , enabled $ isActiveParticipant || debugMode
-          , onClick_ $ AskConfirmation namedAction
-          ]
-          [ span_ [ text "Deposit:" ]
-          , span_ [ text $ humanizeValue token value ]
-          ]
-      ]
-
-renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
-  let
-    userParties = state ^. _userParties
-
-    isActiveParticipant = Set.member party userParties
-
-    metadata = state ^. _metadata
-
-    -- NOTE': We could eventually add an heuristic that if the difference between min and max is less
-    --        than 10 elements, we could show a `select` instead of a input[number]
-    Bound minBound maxBound = getEncompassBound bounds
-
-    ChoiceId choiceIdKey _ = choiceId
-
-    choiceDescription = case Map.lookup choiceIdKey metadata.choiceInfo of
-      Just { choiceDescription: description }
-        | trim description /= "" -> shortDescription isActiveParticipant
-            description
-      _ -> div_ []
-
-    isValid = maybe false (between minBound maxBound) mChosenNum
-
-    multipleInput = \_ ->
-      div
-        [ classNames
-            $
-              [ "flex"
-              , "w-full"
-              , "rounded"
-              , "overflow-hidden"
-              , "focus-within:ring-1"
-              , "ring-black"
-              ]
-                <> applyWhen (isActiveParticipant || debugMode) Css.withShadow
-        ]
-        [ input
-            [ classNames
-                [ "border-0"
-                , "py-4"
-                , "pl-4"
-                , "pr-1"
-                , "flex-grow"
-                , "focus:ring-0"
-                , "min-w-0"
-                , "text-sm"
-                , "disabled:bg-lightgray"
-                ]
-            , type_ InputNumber
-            , enabled $ isActiveParticipant || debugMode
-            , maybe'
-                ( \_ -> placeholder $ "Choose between "
-                    <> BigInt.toString minBound
-                    <> " and "
-                    <> BigInt.toString maxBound
-                )
-                (value <<< BigInt.toString)
-                mChosenNum
-            , onValueInput_ $ ChangeChoice choiceId <<< fromString
-            ]
-        , button
-            [ classNames
-                ( [ "px-5", "font-bold" ]
-                    <>
-                      if isValid then
-                        Css.bgBlueGradient
-                      else
-                        [ "bg-darkgray"
-                        , "text-white"
-                        , "opacity-50"
-                        , "cursor-default"
-                        ]
-                )
-            , onClick_ $ AskConfirmation namedAction
-            , enabled $ isValid && isActiveParticipant
-            ]
-            [ text "..." ]
-        ]
-
-    singleInput = \_ ->
-      button
-        [ classNames $ Css.button <> Css.withAnimation <> [ "w-full" ]
-            <>
-              if isActiveParticipant || debugMode then
-                Css.bgBlueGradient <> Css.withShadow
-              else
-                [ "text-black", "cursor-default" ]
-        , enabled $ isActiveParticipant || debugMode
-        , onClick_ $ AskConfirmation $ MakeChoice choiceId bounds $ Just
-            minBound
-        ]
-        [ span_ [ text choiceIdKey ]
-        ]
-  in
-    div [ classNames [ "space-y-2" ] ]
-      [ choiceDescription
-      , if minBound == maxBound then
-          singleInput unit
-        else
-          multipleInput unit
-      ]
-
-renderAction _ _ (MakeNotify _) = div [] [ text "FIXME: awaiting observation?" ]
-
-renderAction _ _ (Evaluate _) = div []
-  [ text "FIXME: what should we put here? Evaluate" ]
-
-renderAction state party CloseContract =
-  let
-    userParties = state ^. _userParties
-
-    isActiveParticipant = Set.member party userParties
-  in
-    div [ classNames [ "space-y-2" ] ]
-      -- FIXME: revisit the text
-      [ shortDescription isActiveParticipant
-          "The contract is still open and needs to be manually closed by any participant for the remainder of the balances to be distributed (charges may apply)"
-      , button
-          [ classNames $ Css.button <> Css.withAnimation <> [ "w-full" ]
-              <>
-                if isActiveParticipant || debugMode then
-                  Css.bgBlueGradient <> Css.withShadow
-                else
-                  [ "text-black", "cursor-default" ]
-          , enabled $ isActiveParticipant || debugMode
-          , onClick_ $ AskConfirmation CloseContract
-          ]
-          [ text "Close contract" ]
-      ]
 
 renderBalances
   :: forall m a
@@ -1227,16 +761,6 @@ renderBalances stepNumber state stepBalance =
                 )
           )
       ]
-
-shortDescription :: forall p a. Boolean -> String -> HTML p a
-shortDescription isActiveParticipant description =
-  div
-    [ classNames
-        ([ "text-xs" ] <> applyWhen (not isActiveParticipant) [ "opacity-50" ])
-    ]
-    [ span [ classNames [ "font-semibold" ] ] [ text "Short description: " ]
-    , span_ $ markdownToHTML description
-    ]
 
 getParty :: S.Input -> Maybe Party
 getParty (S.IDeposit _ p _ _) = Just p
