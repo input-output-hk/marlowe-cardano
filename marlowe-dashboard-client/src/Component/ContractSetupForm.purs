@@ -138,7 +138,7 @@ valueForm
 valueForm name =
   F.mkForm
     { validator: CV.validator
-    , render: Forms.input ("value-input-" <> name) name case _ of
+    , render: Forms.adaInput ("value-input-" <> name) name case _ of
         CV.Empty -> "Required."
         CV.Negative -> "Must by positive."
         CV.Invalid -> "Must by a number."
