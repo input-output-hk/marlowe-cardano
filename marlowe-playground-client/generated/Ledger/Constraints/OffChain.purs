@@ -23,12 +23,10 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Ledger.Address (PaymentPubKey, PaymentPubKeyHash)
 import Ledger.Typed.Tx (ConnectionError)
-import Plutus.V1.Ledger.Address (Address)
 import Plutus.V1.Ledger.Interval (Interval)
 import Plutus.V1.Ledger.Scripts (DatumHash)
 import Plutus.V1.Ledger.Time (POSIXTime)
-import Plutus.V1.Ledger.Tx (Tx, TxOutRef)
-import Plutus.V1.Ledger.Value (Value)
+import Plutus.V1.Ledger.Tx (Tx, TxOut, TxOutRef)
 import Type.Proxy (Proxy(Proxy))
 
 data MkTxError
@@ -140,85 +138,11 @@ _CannotSatisfyAny = prism' (const CannotSatisfyAny) case _ of
 
 --------------------------------------------------------------------------------
 
-data ScriptOutput
-  = ScriptOutput
-      { scriptOutputValidatorHash :: String
-      , scriptOutputValue :: Value
-      , scriptOutputDatumHash :: DatumHash
-      }
-  | PublicKeyOutput
-      { publicKeyOutputAddress :: Address
-      , publicKeyOutputValue :: Value
-      }
-
-derive instance Eq ScriptOutput
-
-instance Show ScriptOutput where
-  show a = genericShow a
-
-instance EncodeJson ScriptOutput where
-  encodeJson = defer \_ -> case _ of
-    ScriptOutput
-      { scriptOutputValidatorHash, scriptOutputValue, scriptOutputDatumHash } ->
-      encodeJson
-        { tag: "ScriptOutput"
-        , scriptOutputValidatorHash: flip E.encode scriptOutputValidatorHash
-            E.value
-        , scriptOutputValue: flip E.encode scriptOutputValue E.value
-        , scriptOutputDatumHash: flip E.encode scriptOutputDatumHash E.value
-        }
-    PublicKeyOutput { publicKeyOutputAddress, publicKeyOutputValue } ->
-      encodeJson
-        { tag: "PublicKeyOutput"
-        , publicKeyOutputAddress: flip E.encode publicKeyOutputAddress E.value
-        , publicKeyOutputValue: flip E.encode publicKeyOutputValue E.value
-        }
-
-instance DecodeJson ScriptOutput where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "ScriptOutput"
-    $ Map.fromFoldable
-        [ "ScriptOutput" /\
-            ( ScriptOutput <$> D.object "ScriptOutput"
-                { scriptOutputValidatorHash: D.value :: _ String
-                , scriptOutputValue: D.value :: _ Value
-                , scriptOutputDatumHash: D.value :: _ DatumHash
-                }
-            )
-        , "PublicKeyOutput" /\
-            ( PublicKeyOutput <$> D.object "PublicKeyOutput"
-                { publicKeyOutputAddress: D.value :: _ Address
-                , publicKeyOutputValue: D.value :: _ Value
-                }
-            )
-        ]
-
-derive instance Generic ScriptOutput _
-
---------------------------------------------------------------------------------
-
-_ScriptOutput :: Prism' ScriptOutput
-  { scriptOutputValidatorHash :: String
-  , scriptOutputValue :: Value
-  , scriptOutputDatumHash :: DatumHash
-  }
-_ScriptOutput = prism' ScriptOutput case _ of
-  (ScriptOutput a) -> Just a
-  _ -> Nothing
-
-_PublicKeyOutput :: Prism' ScriptOutput
-  { publicKeyOutputAddress :: Address, publicKeyOutputValue :: Value }
-_PublicKeyOutput = prism' PublicKeyOutput case _ of
-  (PublicKeyOutput a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 newtype UnbalancedTx = UnbalancedTx
   { unBalancedTxTx :: Tx
   , unBalancedTxRequiredSignatories ::
       Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
+  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
   , unBalancedTxValidityTimeRange :: Interval POSIXTime
   }
 
@@ -235,7 +159,7 @@ instance EncodeJson UnbalancedTx where
             (E.dictionary E.value (E.maybe E.value)) :: _
               (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
-            (E.dictionary E.value E.value) :: _ (Map TxOutRef ScriptOutput)
+            (E.dictionary E.value E.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
         }
     )
@@ -248,7 +172,7 @@ instance DecodeJson UnbalancedTx where
             (D.dictionary D.value (D.maybe D.value)) :: _
               (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
-            (D.dictionary D.value D.value) :: _ (Map TxOutRef ScriptOutput)
+            (D.dictionary D.value D.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)
         }
     )
@@ -263,7 +187,7 @@ _UnbalancedTx :: Iso' UnbalancedTx
   { unBalancedTxTx :: Tx
   , unBalancedTxRequiredSignatories ::
       Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
+  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
   , unBalancedTxValidityTimeRange :: Interval POSIXTime
   }
 _UnbalancedTx = _Newtype
