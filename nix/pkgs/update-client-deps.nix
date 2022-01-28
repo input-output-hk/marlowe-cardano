@@ -19,7 +19,8 @@ let
   doUpdate = dir: name: ''
     pushd ${dir}
     echo Generating nix configs for ${name}.
-    spago2nix generate
+    # Sometimes this command fails on a fresh fetch. So we retry it if it does.
+    spago2nix generate || spago2nix generate
     popd
   '';
 
