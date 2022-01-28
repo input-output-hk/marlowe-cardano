@@ -26,26 +26,26 @@ let
     };
 
     nodeServerConfig = {
-      mscBaseUrl = "http://localhost:${builtins.toString cfg.nodePort}";
-      mscSocketPath = "/tmp/node-server.sock";
-      mscSlotConfig = {
+      pscBaseUrl = "http://localhost:${builtins.toString cfg.nodePort}";
+      pscSocketPath = "/tmp/node-server.sock";
+      pscSlotConfig = {
         scSlotZeroTime = cfg.slotZeroTime;
         scSlotLength = cfg.slotLength;
       };
-      mscFeeConfig = {
+      pscFeeConfig = {
         fcConstantFee = {
           getLovelace = cfg.constantFee;
         };
         fcScriptsFeeFactor = cfg.scriptsFeeFactor;
       };
-      mscNetworkId = ""; # Empty string for Mainnet. Put a network magic number in the string to use the Testnet.
-      mscKeptBlocks = 100000;
-      mscInitialTxWallets = [
+      pscNetworkId = ""; # Empty string for Mainnet. Put a network magic number in the string to use the Testnet.
+      pscKeptBlocks = 100000;
+      pscInitialTxWallets = [
         { getWallet = 1; }
         { getWallet = 2; }
         { getWallet = 3; }
       ];
-      mscNodeMode = "MockNode";
+      pscNodeMode = "MockNode";
     };
 
     chainIndexConfig = {
