@@ -27,6 +27,7 @@ import Component.Contacts.Lenses
   , _walletInfo
   )
 import Control.Monad.Reader (class MonadAsk)
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (modify_)
 import Data.AddressBook as AB
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
@@ -115,6 +116,7 @@ mkMainFrame
    . MonadAff m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
+  => MonadRec m
   => ManageMarlowe m
   => Toast m
   => MonadClipboard m

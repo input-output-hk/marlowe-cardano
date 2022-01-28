@@ -13,6 +13,7 @@ module Halogen.Form
   , mkAsyncForm
   , mkForm
   , runForm
+  , runFormHalogenM
   , sequenceForms
   , split
   , subform
@@ -25,6 +26,7 @@ import Prelude
 
 import Control.Alt (class Alt)
 import Control.Monad.Maybe.Trans (MaybeT(..), mapMaybeT)
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT(..), mapWriterT)
 import Control.Plus (class Plus)
@@ -42,9 +44,10 @@ import Data.Show.Generic (genericShow)
 import Data.TraversableWithIndex (class TraversableWithIndex, traverseWithIndex)
 import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V(..))
+import Halogen (HalogenM)
 import Halogen as H
 import Halogen.Component (hoistSlot)
-import Halogen.Form.FormM (FormM, hoistFormM, runFormM, zoom)
+import Halogen.Form.FormM (FormM, hoistFormM, runFormM, runFormMHalogenM, zoom)
 import Halogen.Form.FormM (update) as FormM
 import Network.RemoteData (RemoteData(..), fromEither, toMaybe)
 import Polyform (Reporter(..), Validator)
@@ -121,15 +124,6 @@ type AsyncForm parentAction slots m input error output =
 type FormEvalResult parentAction slots m input a =
   MaybeT (WriterT (FormHTML parentAction input slots m) (FormM input m)) a
 
--- | A specification used to create a form with the mkForm function.
-type FormSpec parentAction slots m error input output =
-  { validator :: Validator m error input output
-  , render ::
-      input
-      -> Either error output
-      -> FormM input m (FormHTML parentAction input slots m)
-  }
-
 -- | Create a form that just renders the given static HTML.
 html
   :: forall parentAction slots m input
@@ -148,6 +142,15 @@ decorate
   -> Form parentAction slots m input output
   -> Form parentAction slots m input output
 decorate = over Form <<< lmapReporter <<< map pure
+
+-- | A specification used to create a form with the mkForm function.
+type FormSpec parentAction slots m error input output =
+  { validator :: Validator m error input output
+  , render ::
+      input
+      -> Either error output
+      -> FormM input m (FormHTML parentAction input slots m)
+  }
 
 -- | Create a form from a specification. Input will be validated with the
 -- | provided `Validator` and rendered with the `render` callback. The results
@@ -297,9 +300,24 @@ hoistForm
 hoistForm alpha =
   over Form $ over Reporter $ over Star $ map $ hoistFormEvalResult alpha
 
+runFormHalogenM
+  :: forall state action houtput parentAction slots m input output
+   . MonadRec m
+  => Form parentAction slots m input output
+  -> input
+  -> ((input -> input) -> HalogenM state action slots houtput m Unit)
+  -> HalogenM
+       state
+       action
+       slots
+       houtput
+       m
+       (R (FormHTML parentAction input slots m) output)
+runFormHalogenM (Form f) = runFormMHalogenM <<< Reporter.runReporter f
+
 runForm
   :: forall parentAction slots m input output
-   . Applicative m
+   . MonadRec m
   => Form parentAction slots m input output
   -> input
   -> ((input -> input) -> m Unit)

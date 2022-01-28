@@ -6,6 +6,7 @@ import Component.Icons (Icon, icon)
 import Component.Icons as Icon
 import Component.Template.Types (Action(..), ContractSetupStage(..))
 import Component.Template.Types as Template
+import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
@@ -164,7 +165,7 @@ templateInputsSection icon' heading = HH.h3
   , HH.text heading
   ]
 
-component :: forall q m. MonadAff m => Component q m
+component :: forall q m. MonadAff m => MonadRec m => Component q m
 component = Hooks.component \{ outputToken } input -> Hooks.do
   let { contractName, addressBook, roles, timeouts, values } = input
   Tuple result putResult <- usePutState Nothing

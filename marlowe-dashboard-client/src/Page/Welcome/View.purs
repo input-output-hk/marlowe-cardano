@@ -9,6 +9,7 @@ import Capability.Marlowe (class ManageMarlowe)
 import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
+import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -68,6 +69,7 @@ welcomeScreen _ =
 welcomeCard
   :: forall m
    . MonadAff m
+  => MonadRec m
   => ManageMarlowe m
   => AddressBook
   -> State
@@ -263,6 +265,7 @@ generateWalletHelpCard =
 restoreTestnetWalletCard
   :: forall m
    . MonadAff m
+  => MonadRec m
   => ManageMarlowe m
   => AddressBook
   -> Array (ComponentHTML Action ChildSlots m)

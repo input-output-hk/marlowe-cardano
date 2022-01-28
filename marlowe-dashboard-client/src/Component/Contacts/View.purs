@@ -8,10 +8,7 @@ import Prelude hiding (div)
 import Clipboard (Action(..)) as Clipboard
 import Component.AddContactForm (component) as AddContactForm
 import Component.Address.View as Address
-import Component.Contacts.Lenses
-  ( _cardSection
-  , _walletNickname
-  )
+import Component.Contacts.Lenses (_cardSection, _walletNickname)
 import Component.Contacts.Types
   ( Action(..)
   , CardSection(..)
@@ -20,6 +17,7 @@ import Component.Contacts.Types
   )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
+import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address (Address)
 import Data.Address as A
@@ -56,6 +54,7 @@ import Type.Prelude (Proxy(..))
 contactsCard
   :: forall m
    . MonadAff m
+  => MonadRec m
   => AddressBook
   -> WalletDetails
   -> State

@@ -5,6 +5,7 @@ import Prologue
 import Component.Button.Types (Variant(..)) as Button
 import Component.Button.View (button)
 import Component.Contacts.Types (Action(..), CardSection(..))
+import Control.Monad.Rec.Class (class MonadRec)
 import Css (button) as Css
 import Data.AddressBook (AddressBook)
 import Data.AddressBook (addresses, nicknames) as AB
@@ -28,6 +29,7 @@ initialInput = Tuple "" ""
 component
   :: forall m query
    . MonadAff m
+  => MonadRec m
   => Component
        query
        { addressBook :: AddressBook
@@ -80,4 +82,3 @@ component = Hooks.component \{ outputToken } { mTokenName, addressBook } ->
               [ HH.text "Save" ]
           ]
       ]
-

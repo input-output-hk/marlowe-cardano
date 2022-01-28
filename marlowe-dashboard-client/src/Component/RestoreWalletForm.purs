@@ -7,6 +7,7 @@ import Capability.Marlowe (class ManageMarlowe, restoreWallet)
 import Component.Button.Types as Button
 import Component.Button.View (button)
 import Component.Progress.Circular as Progress
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.MnemonicPhrase (MnemonicPhrase)
@@ -40,6 +41,7 @@ initialInput = Tuple "" ""
 component
   :: forall q m
    . MonadAff m
+  => MonadRec m
   => ManageMarlowe m
   => Component q m
 component = Hooks.component \{ outputToken } used -> Hooks.do

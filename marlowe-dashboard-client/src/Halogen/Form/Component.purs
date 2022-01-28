@@ -3,7 +3,7 @@ module Halogen.Form.Component where
 
 import Prelude
 
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Bifunctor (bimap)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse_)
@@ -12,7 +12,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (Form, FormHTML, runForm)
+import Halogen.Form (Form, FormHTML, runFormHalogenM)
 import Halogen.Form as Form
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -58,6 +58,7 @@ type ComponentHTML parentAction slots m input output =
 component
   :: forall query parentAction slots m input output
    . MonadAff m
+  => MonadRec m
   => Eq input
   => Eq output
   => Show input
@@ -106,8 +107,6 @@ component spec = H.mkComponent
     handleUpdate listener
   handleUpdate listener = do
     input <- H.gets _.input
-    Tuple result children <-
-      lift
-        $ runForm spec.form input
-        $ liftEffect <<< HS.notify listener <<< UpdateFromFormM listener
+    Tuple result children <- runFormHalogenM spec.form input
+      $ liftEffect <<< HS.notify listener <<< UpdateFromFormM listener
     liftEffect $ HS.notify listener $ UpdateResult result children

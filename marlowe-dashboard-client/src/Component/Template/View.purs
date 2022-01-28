@@ -24,6 +24,7 @@ import Component.Template.Types
   , State
   , ValueError
   )
+import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.AddressBook (AddressBook)
 import Data.ContractTimeout as CT
@@ -90,6 +91,7 @@ import Type.Proxy (Proxy(..))
 contractTemplateCard
   :: forall m
    . MonadAff m
+  => MonadRec m
   => AddressBook
   -> Assets
   -> State
@@ -274,6 +276,7 @@ contractOverview contractTemplate =
 contractSetup
   :: forall m
    . MonadAff m
+  => MonadRec m
   => AddressBook
   -> State
   -> ComponentHTML Action ChildSlots m

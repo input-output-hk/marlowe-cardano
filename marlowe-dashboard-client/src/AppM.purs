@@ -3,8 +3,9 @@ module AppM (AppM, passphrase, runAppM) where
 import Prologue
 
 import Clipboard (class MonadClipboard, copy)
-import Control.Monad.Reader (class MonadReader, ReaderT, runReaderT)
+import Control.Monad.Reader (class MonadReader, ReaderT, mapReaderT, runReaderT)
 import Control.Monad.Reader.Class (class MonadAsk)
+import Control.Monad.Rec.Class (class MonadRec, tailRecM)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
 import Data.Lens (Lens', over)
@@ -20,7 +21,7 @@ import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad
   ( class MonadStore
-  , StoreT
+  , StoreT(..)
   , emitSelected
   , getStore
   , runStoreT
@@ -67,6 +68,14 @@ derive newtype instance Monad AppM
 derive newtype instance MonadEffect AppM
 
 derive newtype instance MonadAff AppM
+
+-- TODO use newtype deriving when MonadRec instance is added to StoreT
+instance MonadRec AppM where
+  tailRecM rec a = AppM $ mapReaderT StoreT $ tailRecM rec' a
+    where
+    rec' = map (mapReaderT unStoreT <<< unAppM) rec
+    unAppM (AppM m) = m
+    unStoreT (StoreT m) = m
 
 instance MonadStore Store.Action Store.Store AppM where
   getStore = AppM (lift getStore)
