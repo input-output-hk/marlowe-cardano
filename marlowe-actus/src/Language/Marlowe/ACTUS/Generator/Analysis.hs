@@ -101,12 +101,13 @@ genSchedules ct@ContractTermsPoly {..} =
   filter filtersSchedules . postProcessSchedules . sortOn (paymentDay . snd) $
     concatMap scheduleEvent eventTypes
   where
-    eventTypes = [IED, MD, IP, IPFX, IPFL, RR, RRF, PR, PRF, IPCB, IPCI, PRD, TD, SC, DV, XD, STD]
+    eventTypes = enumFrom (toEnum 0)
     scheduleEvent ev = (ev,) <$> schedule ev ct
 
     filtersSchedules :: (EventType, ShiftedDay) -> Bool
     filtersSchedules (_, ShiftedDay {..}) | contractType == OPTNS = calculationDay > statusDate
     filtersSchedules (_, ShiftedDay {..}) | contractType == FUTUR = calculationDay > statusDate
+    filtersSchedules (_, ShiftedDay {..}) | contractType == CLM = calculationDay > statusDate
     filtersSchedules (_, ShiftedDay {..}) = isNothing terminationDate || Just calculationDay <= terminationDate
 
     postProcessSchedules :: [(EventType, ShiftedDay)] -> [(EventType, ShiftedDay)]
@@ -145,6 +146,7 @@ genStates scs stn =
                           b2 = let m = maturityDate <|> amortizationDate <|> S.maturity ct in isNothing m || Just calculationDay <= m
                        in b1 && b2
                     SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                    CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
                     _ -> True
 
 -- |Generate payoffs

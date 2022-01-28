@@ -46,6 +46,19 @@ stateTransition ev t sn = reader stateTransition'
         ---------------------
         -- Monitoring (AD) --
         ---------------------
+        -- STF_AD_CSH
+        stf
+          AD
+          _
+          ContractTermsPoly
+            { contractType = CSH
+            }
+          st@ContractStatePoly
+            {
+            } =
+            st
+              { sd = t
+              }
         -- STF_AD_*
         stf
           AD
@@ -69,11 +82,12 @@ stateTransition ev t sn = reader stateTransition'
         -- Initial Exchange (IED) --
         ----------------------------
         -- STF_IED_PAM
+        -- STF_IED_CLM
         stf
           IED
           _
           ContractTermsPoly
-            { contractType = PAM,
+            { contractType,
               nominalInterestRate,
               notionalPrincipal = Just nt,
               accruedInterest = Just ipac,
@@ -81,7 +95,7 @@ stateTransition ev t sn = reader stateTransition'
             }
           st@ContractStatePoly
             {
-            } =
+            } | contractType `elem` [PAM, CLM] =
             st
               { nt = _r contractRole * nt,
                 ipnr = fromMaybe _zero nominalInterestRate,
@@ -488,11 +502,11 @@ stateTransition ev t sn = reader stateTransition'
           IP
           _
           ContractTermsPoly
-            { contractType = SWPPV
+            { contractType
             }
           st@ContractStatePoly
             {
-            } =
+            } | contractType `elem` [SWPPV, CLM] =
             st
               { ipac = _zero,
                 sd = t
@@ -555,18 +569,19 @@ stateTransition ev t sn = reader stateTransition'
         ------------------------------------
         -- Interest Capitalization (IPCI) --
         ------------------------------------
-        -- STF_IPCI_LAM
+        -- STF_IPCI_PAM
+        -- STF_IPCI_CLM
         stf
           IPCI
           rf
           ct@ContractTermsPoly
-            { contractType = PAM,
+            { contractType,
               dayCountConvention = Just dcc,
               maturityDate
             }
           st@ContractStatePoly
             { ..
-            } =
+            } | contractType `elem` [PAM, CLM] =
             let y_sd_t = _y dcc sd t maturityDate
                 st' = stf IP rf ct st
              in st'
@@ -619,13 +634,14 @@ stateTransition ev t sn = reader stateTransition'
         -- Rate Reset (RR) --
         -------------------------------
         -- STF_RR_PAM
+        -- STF_RR_CLM
         stf
           RR
           rf@RiskFactorsPoly
             { o_rf_RRMO
             }
           ct@ContractTermsPoly
-            { contractType = PAM,
+            { contractType,
               feeBasis = Just FEB_N,
               feeRate = Just fer,
               lifeFloor = Just rrlf,
@@ -639,7 +655,7 @@ stateTransition ev t sn = reader stateTransition'
             }
           st@ContractStatePoly
             { ..
-            } =
+              } | contractType `elem` [PAM, CLM] =
             let y_sd_t = _y dcc sd t maturityDate
                 st' = stf PRD rf ct st
                 delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - ipnr) rrpf) rrpc
@@ -656,7 +672,7 @@ stateTransition ev t sn = reader stateTransition'
             { o_rf_RRMO
             }
           ct@ContractTermsPoly
-            { contractType = PAM,
+            { contractType,
               feeRate = Just fer,
               lifeFloor = Just rrlf,
               lifeCap = Just rrlc,
@@ -670,7 +686,7 @@ stateTransition ev t sn = reader stateTransition'
             }
           st@ContractStatePoly
             { ..
-            } =
+            } | contractType `elem` [PAM, CLM] =
             let y_sd_t = _y dcc sd t maturityDate
                 y_tfpminus_t = _y dcc tfp_minus t maturityDate
                 y_tfpminus_tfpplus = _y dcc tfp_minus tfp_plus maturityDate
@@ -679,7 +695,7 @@ stateTransition ev t sn = reader stateTransition'
                 ipnr' = _min (_max (ipnr + delta_r) rrlf) rrlc
              in st'
                   { ipac = ipac + y_sd_t * ipnr * nt,
-                    feac = (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fer,
+                    feac = if y_tfpminus_tfpplus == _zero then _zero else (y_tfpminus_t / y_tfpminus_tfpplus) * _r contractRole * fer,
                     ipnr = ipnr',
                     sd = t
                   }

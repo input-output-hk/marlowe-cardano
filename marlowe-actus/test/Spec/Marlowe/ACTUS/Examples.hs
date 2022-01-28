@@ -28,6 +28,7 @@ tests = testGroup "Marlowe represenation of sample ACTUS contracts"
   , testCase "NAM examples" ex_nam1
   , testCase "ANN examples" ex_ann1
   , testCase "OPTNS examples" ex_optns1
+  , testCase "COM examples" ex_com1
   ]
 
 -- |ex_pam1 defines a contract of type PAM
@@ -327,6 +328,37 @@ ex_optns1 =
               xd_payoff = 0.0,
               dv_payoff = 0.0
             }
+
+
+-- |ex_com1 defines a contract of type COM
+ex_com1 :: IO ()
+ex_com1 =
+  contractFromFile "test/Spec/Marlowe/ACTUS/ex_com1.json"
+    >>= either msg run
+  where
+    msg err = putStr err
+    run ct = case genFsContract defaultRiskFactors (toMarlowe ct) of
+      Failure _ -> assertFailure "Terms validation should not fail"
+      Success contract ->
+          let principal = NormalInput . IDeposit (Role "party") "party" ada
+              out =
+                computeTransaction
+                  ( TransactionInput
+                      (0, 0)
+                      [ principal 1400
+                      ]
+                  )
+                  (emptyState 0)
+                  contract
+           in case out of
+                Error _ -> assertFailure "Transactions are not expected to fail"
+                TransactionOutput txWarn txPay _ con -> do
+                  assertBool "Contract is in Close" $ con == Close
+                  assertBool "No warnings" $ null txWarn
+
+                  assertBool "total payments to party" (totalPayments (Party "party") txPay == 0)
+                  let tc = totalPayments (Party "counterparty") txPay
+                  assertBool ("total payments to counterparty: " ++ show tc) (tc == 1400)
 
 contractFromFile :: FilePath -> IO (Either String ContractTerms)
 contractFromFile f = eitherDecode <$> B.readFile f

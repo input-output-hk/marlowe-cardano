@@ -137,6 +137,8 @@ contractTermsGen' ct = do
   priceAtTerminationDate <- smallamount
   priceAtPurchaseDate <- smallamount
 
+  quantity <- smallamount
+
   optionalityCycle <- mightbe datecycle
   optionalityAnchor <- mightbe $ dateBefore upperBound
 
@@ -190,6 +192,7 @@ contractTermsGen' ct = do
         notionalPrincipal = Just notional,
         priceAtPurchaseDate = priceAtPurchaseDate <$ purchaseDate,
         priceAtTerminationDate = priceAtTerminationDate <$ terminationDate,
+        quantity = Just quantity,
         dayCountConvention = Just dcc,
         prepaymentEffect = Just ppef,
         -- Counterparty

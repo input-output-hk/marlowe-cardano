@@ -46,6 +46,18 @@ payoff ev t st = reader payoff'
             { contractType = SWPPV
             }
           _ = _zero
+        -- POF_IED_CLM
+        pof
+          IED
+          RiskFactorsPoly
+            { o_rf_CURS
+            }
+          ContractTermsPoly
+            { contractType = CLM,
+              contractRole,
+              notionalPrincipal = Just nt
+            }
+          _ = _negate $ o_rf_CURS * _r contractRole * nt
         -- POF_IED_*
         pof
           IED
@@ -277,6 +289,17 @@ payoff ev t st = reader payoff'
               contractRole
             }
           _ | contractType `elem` [STK, OPTNS, FUTUR, SWPPV, CEG] = _negate $ _r contractRole * pprd
+        -- POF_PRD_COM
+        pof
+          PRD
+          _
+          ContractTermsPoly
+            { contractType = COM,
+              priceAtPurchaseDate = Just pprd,
+              quantity = Just qt,
+              contractRole
+            }
+          _ = _negate $ _r contractRole * pprd * qt
         ----------------------
         -- Termination (TD) --
         ----------------------
@@ -322,6 +345,17 @@ payoff ev t st = reader payoff'
               priceAtTerminationDate = Just ptd
             }
           _ = o_rf_CURS * ptd
+        -- POF_TD_COM
+        pof
+          TD
+          _
+          ContractTermsPoly
+            { contractType = COM,
+              priceAtTerminationDate = Just ptd,
+              contractRole,
+              quantity = Just qt
+            }
+          _ = _r contractRole * ptd * qt
         -- POF_TD_*
         pof
           TD
@@ -385,6 +419,25 @@ payoff ev t st = reader payoff'
             } =
             let y_sd_t = _y dcc sd t maturityDate
              in o_rf_CURS * (ipac + y_sd_t * (ipnr' - ipnr) * nt)
+        -- POF_IP_CLM
+        pof
+          IP
+          RiskFactorsPoly
+            { o_rf_CURS
+            }
+          ContractTermsPoly
+            { contractType = CLM,
+              dayCountConvention = Just dcc,
+              maturityDate
+            }
+          ContractStatePoly
+            { nt,
+              ipac,
+              ipnr,
+              sd
+            } =
+            let y_sd_t = _y dcc sd t maturityDate
+             in o_rf_CURS * (ipac + y_sd_t * ipnr * nt)
         -- POF_IP_*
         pof
           IP
@@ -494,13 +547,14 @@ payoff ev t st = reader payoff'
         -- Rate Reset (RR) --
         -------------------------------
         -- POF_RR_SWPPV
+        -- POF_RR_CLM
         pof
           RR
           _
           ContractTermsPoly
-            { contractType = SWPPV
-            }
-          _ = _zero
+          { contractType
+          }
+          _ | contractType `elem` [SWPPV, CLM] = _zero
         -------------
         -- Default --
         -------------

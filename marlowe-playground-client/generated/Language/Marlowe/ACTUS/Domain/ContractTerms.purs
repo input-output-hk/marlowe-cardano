@@ -68,6 +68,7 @@ newtype ContractTermsPoly a = ContractTermsPoly
   , priceAtPurchaseDate :: Maybe a
   , terminationDate :: Maybe String
   , priceAtTerminationDate :: Maybe a
+  , quantity :: Maybe a
   , scalingIndexAtStatusDate :: Maybe a
   , cycleAnchorDateOfScalingIndex :: Maybe String
   , cycleOfScalingIndex :: Maybe Cycle
@@ -154,6 +155,7 @@ instance encodeJsonContractTermsPoly ::
         , priceAtPurchaseDate: (E.maybe E.value) :: _ (Maybe a)
         , terminationDate: (E.maybe E.value) :: _ (Maybe String)
         , priceAtTerminationDate: (E.maybe E.value) :: _ (Maybe a)
+        , quantity: (E.maybe E.value) :: _ (Maybe a)
         , scalingIndexAtStatusDate: (E.maybe E.value) :: _ (Maybe a)
         , cycleAnchorDateOfScalingIndex: (E.maybe E.value) :: _ (Maybe String)
         , cycleOfScalingIndex: (E.maybe E.value) :: _ (Maybe Cycle)
@@ -241,6 +243,7 @@ instance decodeJsonContractTermsPoly ::
         , priceAtPurchaseDate: (D.maybe D.value) :: _ (Maybe a)
         , terminationDate: (D.maybe D.value) :: _ (Maybe String)
         , priceAtTerminationDate: (D.maybe D.value) :: _ (Maybe a)
+        , quantity: (D.maybe D.value) :: _ (Maybe a)
         , scalingIndexAtStatusDate: (D.maybe D.value) :: _ (Maybe a)
         , cycleAnchorDateOfScalingIndex: (D.maybe D.value) :: _ (Maybe String)
         , cycleOfScalingIndex: (D.maybe D.value) :: _ (Maybe Cycle)
@@ -328,6 +331,7 @@ _ContractTermsPoly
        , priceAtPurchaseDate :: Maybe a
        , terminationDate :: Maybe String
        , priceAtTerminationDate :: Maybe a
+       , quantity :: Maybe a
        , scalingIndexAtStatusDate :: Maybe a
        , cycleAnchorDateOfScalingIndex :: Maybe String
        , cycleOfScalingIndex :: Maybe Cycle
@@ -1634,6 +1638,9 @@ data CT
   | STK
   | OPTNS
   | FUTUR
+  | COM
+  | CSH
+  | CLM
   | SWPPV
   | CEG
   | CEC
@@ -1696,6 +1703,21 @@ _OPTNS = prism' (const OPTNS) case _ of
 _FUTUR :: Prism' CT Unit
 _FUTUR = prism' (const FUTUR) case _ of
   FUTUR -> Just unit
+  _ -> Nothing
+
+_COM :: Prism' CT Unit
+_COM = prism' (const COM) case _ of
+  COM -> Just unit
+  _ -> Nothing
+
+_CSH :: Prism' CT Unit
+_CSH = prism' (const CSH) case _ of
+  CSH -> Just unit
+  _ -> Nothing
+
+_CLM :: Prism' CT Unit
+_CLM = prism' (const CLM) case _ of
+  CLM -> Just unit
   _ -> Nothing
 
 _SWPPV :: Prism' CT Unit

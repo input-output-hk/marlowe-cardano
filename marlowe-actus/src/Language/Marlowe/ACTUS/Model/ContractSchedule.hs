@@ -112,6 +112,17 @@ schedule MD   ct@ContractTermsPoly{ contractType = CEG }   = _SCHED_MD_PAM ct
 schedule XD   ct@ContractTermsPoly{ contractType = CEG }   = _SCHED_XD_CEG ct
 schedule PRD  ct@ContractTermsPoly{ contractType = CEC }   = _SCHED_PRD_PAM ct
 schedule MD   ct@ContractTermsPoly{ contractType = CEC }   = _SCHED_MD_PAM ct
+schedule PRD  ct@ContractTermsPoly{ contractType = COM }   = _SCHED_PRD_PAM ct
+schedule TD   ct@ContractTermsPoly{ contractType = COM }   = _SCHED_TD_PAM ct
+
+schedule IED  ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IED_PAM ct
+schedule MD   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_MD_PAM ct
+schedule FP   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_FP_PAM ct
+schedule PR   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_PR_LAM ct
+schedule IP   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IP_CLM ct
+schedule IPCI ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_IPCI_CLM ct
+schedule RR   ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_RR_PAM ct
+schedule RRF  ct@ContractTermsPoly{ contractType = CLM }   = _SCHED_RRF_PAM ct
 schedule _ _                                               = []
 
 -- |Determine the maturity of a contract
@@ -226,7 +237,7 @@ _SCHED_MD_PAM
     { maturityDate,
       scheduleConfig
     } = case maturityDate <|> maturity ct of
-    Just m  -> [applyBDCWithCfg scheduleConfig m]
+    Just m  -> [let d = applyBDCWithCfg scheduleConfig m in d { paymentDay = m }]
     Nothing -> []
 
 _SCHED_PP_PAM :: ContractTermsPoly a -> [ShiftedDay]
@@ -415,6 +426,12 @@ _SCHED_RR_PAM
     } = case maturity ct <|> maturityDate of
     Just m  -> generateRecurrentSchedule (ied <+> rrcl) rrcl {includeEndDay = False} m scheduleConfig
     Nothing -> []
+_SCHED_RR_PAM
+  ContractTermsPoly
+    { cycleAnchorDateOfRateReset = Just rranx,
+      cycleOfRateReset = Nothing,
+      scheduleConfig
+    } = [applyBDCWithCfg scheduleConfig rranx] -- if no cycle then only start (if specified) and end dates (see ScheduleFactory.java)
 _SCHED_RR_PAM _ = []
 
 _SCHED_RRF_PAM :: (ActusNum a, ActusOps a, ScheduleOps a, YearFractionOps a) =>
@@ -791,3 +808,34 @@ _SCHED_RR_SWPPV _ = []
 
 _SCHED_XD_CEG :: ContractTermsPoly a -> [ShiftedDay]
 _SCHED_XD_CEG _ = []
+
+_SCHED_IP_CLM :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_IP_CLM
+  ContractTermsPoly
+    { maturityDate = Just md,
+      scheduleConfig
+    } = [let d = applyBDCWithCfg scheduleConfig md in d { paymentDay = md }]
+_SCHED_IP_CLM _ = []
+
+_SCHED_IPCI_CLM :: ContractTermsPoly a -> [ShiftedDay]
+_SCHED_IPCI_CLM
+  ContractTermsPoly
+    { nominalInterestRate = Nothing
+    } = []
+_SCHED_IPCI_CLM
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Just ipanx,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      scheduleConfig
+    } = generateRecurrentSchedule ipanx ipcl {includeEndDay = False} md scheduleConfig
+_SCHED_IPCI_CLM
+  ContractTermsPoly
+    { cycleAnchorDateOfInterestPayment = Nothing,
+      cycleOfInterestPayment = Just ipcl,
+      maturityDate = Just md,
+      initialExchangeDate = Just ied,
+      scheduleConfig
+    } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = False} md scheduleConfig
+_SCHED_IPCI_CLM _ = []
+
