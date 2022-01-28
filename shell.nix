@@ -109,19 +109,12 @@ let
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
     generate-purescript
-    purs
-    purs-tidy
-    pscid
-    spago
-    psa
-    purescript-language-server
-    spago2nix
     stylish-haskell
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
     start-marlowe-run
-  ]);
+  ] ++ easyPS.buildInputs);
 
 in
 haskell.project.shellFor {
