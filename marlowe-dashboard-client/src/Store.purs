@@ -12,6 +12,7 @@ import Data.AddressBook (AddressBook)
 import Data.Lens (_Just, (.~))
 import Data.Map (Map)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
+import Store.Contract as Contract
 import Toast.Types (ToastMessage)
 
 type Store =
@@ -19,6 +20,10 @@ type Store =
   , currentSlot :: Slot
   , toast :: Maybe ToastMessage
   , wallet :: Maybe WalletDetails
+  -- This contains the state of Marlowe contracts as seen by the backend. Most operations should
+  -- trigger an API call that modifies the state of the Blockchain and when the PAB detect a change
+  -- it notifies us via the ObservableState of the FollowerContract.
+  , contracts :: Contract.Store
   -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
   -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
   -- really has changed anything
