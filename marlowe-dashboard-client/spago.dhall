@@ -28,6 +28,7 @@ You can edit this file as you like.
   , "halogen"
   , "halogen-hooks"
   , "halogen-hooks-extra"
+  , "halogen-nselect"
   , "halogen-store"
   , "halogen-subscriptions"
   , "heterogeneous"

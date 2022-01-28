@@ -81,3 +81,20 @@ in  upstream
       ]
       "https://github.com/input-output-hk/purescript-web-common"
       "v2.0.1"
+  with
+    halogen-nselect = mkPackage
+      [ "aff"
+      , "effect"
+      , "foldable-traversable"
+      , "halogen"
+      , "maybe"
+      , "prelude"
+      , "psci-support"
+      , "unsafe-coerce"
+      , "web-dom"
+      , "web-events"
+      , "web-html"
+      , "web-uievents"
+      ]
+      "https://github.com/input-output-hk/purescript-halogen-nselect"
+      "5e88b528ed332562d5bc8bfbbc80f00fa435a620"
