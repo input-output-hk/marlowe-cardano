@@ -8,6 +8,7 @@ packages: doc
           marlowe-dashboard-server
           marlowe-symbolic
           marlowe-cli
+          marlowe-examples
 
 -- We never, ever, want this.
 write-ghc-environment-files: never

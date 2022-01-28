@@ -1,0 +1,51 @@
+cabal-version: 2.2
+name: marlowe-examples
+version: 0.1.0.0
+license: Apache-2.0
+license-files:
+  LICENSE
+  NOTICE
+build-type: Simple
+maintainer: yves.hauser@iohk.io
+stability: experimental
+author: Yves Hauser
+synopsis:
+  Collection of Marlowe contract examples
+description:
+  Collection of Marlowe contract examples
+category: Language
+extra-doc-files: ReadMe.md
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-examples
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+common lang
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
+library
+  import: lang
+  hs-source-dirs: contracts
+  exposed-modules:
+    Common
+    Options
+  build-depends:
+    base >= 4.9 && < 5,
+    marlowe -any
