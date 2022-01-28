@@ -11,6 +11,7 @@
   , "console"
   , "control"
   , "datetime"
+  , "dom-indexed"
   , "effect"
   , "either"
   , "enums"

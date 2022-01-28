@@ -12,6 +12,7 @@ module Halogen.Form
   , html
   , mkAsyncForm
   , mkForm
+  , raise
   , runForm
   , runFormHalogenM
   , sequenceForms
@@ -64,6 +65,9 @@ update
    . input
   -> Action parentAction input
 update = Update <<< const
+
+raise :: forall parentAction input. parentAction -> Action parentAction input
+raise = Raise
 
 -- | An array of HTML nodes used to render a form. The action type is the input
 -- | type.

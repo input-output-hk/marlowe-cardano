@@ -415,8 +415,9 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
         <<< _Started
         <<< filtered
           ( \contract ->
-              contract.executionState.mNextTimeout /= Nothing &&
-                contract.executionState.mNextTimeout <= Just currentSlot
+              contract.executionState.mNextTimeout /= Nothing
+                && contract.executionState.mNextTimeout
+                  <= Just currentSlot
           )
     )
     (applyTimeout currentSlot)
@@ -522,7 +523,10 @@ handleAction
   input@{ walletDetails, currentSlot, tzOffset }
   (ContractAction followerAppId contractAction) = do
   startedState <- peruse
-    $ _contracts <<< at followerAppId <<< _Just <<< _Started
+    $ _contracts
+        <<< at followerAppId
+        <<< _Just
+        <<< _Started
   let
     contractInput = { currentSlot, walletDetails, followerAppId, tzOffset }
   mContractState <- peruse $ _contract followerAppId

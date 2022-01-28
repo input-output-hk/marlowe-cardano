@@ -2,12 +2,13 @@ module Forms where
 
 import Prologue hiding (div)
 
-import Component.Input (InputType(..))
-import Component.Input.View as Input
 import Component.Label.View as Label
 import Css as Css
+import DOM.HTML.Indexed (HTMLinput)
+import DOM.HTML.Indexed.InputType (InputType)
 import Data.Address (Address)
 import Data.Address (AddressError(..), validator) as A
+import Data.Array ((:))
 import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.Filterable (filter)
@@ -21,15 +22,18 @@ import Data.String as String
 import Data.String.Extra (leftPadTo, rightPadTo)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Effect.Aff.Class (class MonadAff)
 import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.Form (Form, FormHTML)
 import Halogen.Form as Form
 import Halogen.Form.FormM (FormM)
 import Halogen.HTML as HH
+import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
 import Halogen.Hooks.Extra.Hooks (usePutState)
+import NSelect as Select
 import Network.RemoteData (RemoteData(..))
 import Type.Proxy (Proxy(..))
 
@@ -38,6 +42,84 @@ type InputSlots slots =
 
 _input :: Proxy "input"
 _input = Proxy
+
+type AutocompleteSlots parentAction slots =
+  ( autocomplete ::
+      forall query
+       . H.Slot
+           query
+           (Form.Action parentAction AutocompleteInput)
+           String
+  | slots
+  )
+
+_autocomplete :: Proxy "autocomplete"
+_autocomplete = Proxy
+
+_select :: Proxy "select"
+_select = Proxy
+
+renderInput
+  :: forall w action
+   . Array (HH.IProp HTMLinput action)
+  -> { after :: Array (HH.HTML w action)
+     , before :: Array (HH.HTML w action)
+     , error :: Maybe String
+     , id :: String
+     , inputType :: InputType
+     , label :: String
+     , value :: String
+     }
+  -> HH.HTML w action
+renderInput props inp =
+  HH.div [ classNames containerStyles ]
+    $ labelEl : before <> [ inputEl ] <> after
+  where
+  { after, before, error, id, inputType, label, value } = inp
+  labelEl = Label.render Label.defaultInput
+    { for = id
+    , text = label
+    }
+  inputEl = HH.input $ props <>
+    [ classNames inputStyles
+    , HP.id id
+    , HP.value value
+    , HP.type_ inputType
+    ]
+  containerStyles =
+    [ "border-2"
+    , "duration-200"
+    , "flex"
+    , "gap-1"
+    , "items-baseline"
+    , "p-4"
+    , "relative"
+    , "rounded-sm"
+    , "transition-all"
+    , "w-full"
+    , "focus:border-transparent"
+    , "focus:ring-2"
+    , "focus-within:border-transparent"
+    , "focus-within:ring-2"
+    ] <>
+      if isJust error then
+        [ "border-red", "ring-red" ]
+      else
+        [ "border-gray", "ring-purple" ]
+
+  inputStyles =
+    [ "border-0"
+    , "duration-200"
+    , "flex-1"
+    , "focus:outline-none"
+    , "focus:ring-0"
+    , "leading-none"
+    , "outline-none"
+    , "p-0"
+    , "ring-0"
+    , "text-black"
+    , "transition-all"
+    ]
 
 inputComponent
   :: forall q m
@@ -71,28 +153,23 @@ inputComponent =
         let error' = filter (\_ -> not pristine && visited) error
         Hooks.pure do
           HH.div [ classNames [ "relative" ] ]
-            [ Input.renderWithChildren
-                Input.defaultInput
-                  { value = value
-                  , onChange = Just \value' -> do
-                      putPristine false
-                      Hooks.raise outputToken value'
-                  , invalid = isJust error'
-                  , id = id
-                  , onFocus = Just $ putFocused true
-                  , onBlur = Just do
-                      putVisited true
-                      putFocused false
-                  , inputType = inputType
-                  }
-                \i ->
-                  [ Label.render Label.defaultInput
-                      { for = id
-                      , text = label
-                      }
-                  ] <> before
-                    <> [ i ]
-                    <> after
+            [ renderInput
+                [ HE.onValueChange \value' -> do
+                    putPristine false
+                    Hooks.raise outputToken value'
+                , HE.onFocus \_ -> putFocused true
+                , HE.onBlur \_ -> do
+                    putVisited true
+                    putFocused false
+                ]
+                { before
+                , after
+                , value: value
+                , error: error'
+                , id: id
+                , inputType: inputType
+                , label
+                }
             , HH.label
                 [ classNames
                     $ Css.inputError <> maybe [ "invisible" ] (const []) error'
@@ -100,6 +177,124 @@ inputComponent =
                 ]
                 [ HH.text $ fromMaybe "Valid" error ]
             ]
+
+type AutocompleteInput =
+  { options :: Array String
+  , value :: String
+  }
+
+autocompleteComponent
+  :: forall parentAction q slots m
+   . MonadAff m
+  => H.Component
+       q
+       { after ::
+           Array (HH.ComponentHTML (Select.Action parentAction slots m) slots m)
+       , before ::
+           Array (HH.ComponentHTML (Select.Action parentAction slots m) slots m)
+       , error :: Maybe String
+       , id :: String
+       , label :: String
+       , value :: AutocompleteInput
+       }
+       (Form.Action parentAction AutocompleteInput)
+       m
+autocompleteComponent = Hooks.component \{ outputToken } inp -> Hooks.do
+  Tuple pristine putPristine <- usePutState true
+  let { after, before, label, id, value } = inp
+  filtered <- Hooks.captures { value } Hooks.useMemo \_ ->
+    Array.filter (String.contains (String.Pattern value.value)) value.options
+  let error = filter (\_ -> not pristine) inp.error
+  let
+    selectProps =
+      { itemCount: Array.length filtered
+      , render: render
+          { after
+          , before
+          , error
+          , id
+          , label
+          , options: filtered
+          , value: value.value
+          }
+      }
+  Hooks.pure do
+    HH.slot _select id Select.component selectProps case _ of
+      Select.Selected index -> do
+        putPristine false
+        Hooks.raise outputToken $ Form.update value
+          { value = fromMaybe value.value $ Array.index value.options index
+          }
+      Select.InputValueChanged value' -> do
+        putPristine false
+        Hooks.raise outputToken $ Form.update value { value = value' }
+      Select.Emit parentAction ->
+        Hooks.raise outputToken $ Form.raise parentAction
+      _ -> pure unit
+  where
+  render { error, id, label, before, after, value, options } state =
+    HH.div
+      (Select.setRootProps [ classNames [ "relative", "inline-block" ] ])
+      [ renderInput (Select.setInputProps [])
+          { before
+          , after
+          , value
+          , error
+          , id: id
+          , inputType: HP.InputText
+          , label
+          }
+      , if state.isOpen then
+          HH.div []
+            [ HH.div (Select.setMenuProps [])
+                $ options # Array.mapWithIndex \index item ->
+                    HH.div (Select.setItemProps index [])
+                      [ HH.text item
+                      ]
+            ]
+        else
+          HH.label
+            [ classNames
+                $ Css.inputError <> maybe [ "invisible" ] (const []) error
+            , HP.for id
+            ]
+            [ HH.text $ fromMaybe "Valid" error ]
+      ]
+
+autocomplete
+  :: forall parentAction s m e a
+   . MonadAff m
+  => String
+  -> String
+  -> (e -> String)
+  -> AutocompleteInput
+  -> Either e a
+  -> FormM
+       AutocompleteInput
+       m
+       ( FormHTML
+           parentAction
+           AutocompleteInput
+           (AutocompleteSlots parentAction s)
+           m
+       )
+autocomplete id label renderError value = case _ of
+  Left e ->
+    render $ Just $ renderError e
+  Right _ ->
+    render Nothing
+  where
+  props error =
+    { after: []
+    , before: []
+    , error
+    , id
+    , label
+    , value
+    }
+  render error = pure
+    [ HH.slot _autocomplete id autocompleteComponent (props error) identity
+    ]
 
 inputAsync
   :: forall parentAction s m e a
@@ -125,7 +320,7 @@ inputAsync id label renderError value = case _ of
         _input
         id
         inputComponent
-        { inputType: Text
+        { inputType: HP.InputText
         , after: []
         , before: []
         , value
@@ -157,7 +352,7 @@ intInput id label renderError value = case _ of
         _input
         id
         inputComponent
-        { inputType: Numeric
+        { inputType: HP.InputNumber
         , after: []
         , before: []
         , value
@@ -194,7 +389,7 @@ adaInput id label renderError value = case _ of
         _input
         id
         inputComponent
-        { inputType: Numeric
+        { inputType: HP.InputNumber
         , after: []
         , before: [ HH.span_ [ HH.text "₳" ] ]
         , value
@@ -281,7 +476,7 @@ input id label renderError value = case _ of
         _input
         id
         inputComponent
-        { inputType: Text
+        { inputType: HP.InputText
         , after: []
         , before: []
         , value
