@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -43,14 +42,9 @@ import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpr
                                      languageExtensions, runInterpreter, set, setImports)
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
-import Language.Marlowe.Deserialisation (byteStringToInt, byteStringToList)
-import Language.Marlowe.Scripts (MarloweInput, mkMarloweStateMachineTransition, rolePayoutScript, smallTypedValidator,
-                                 smallUntypedValidator, typedValidator)
+import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
 import Language.Marlowe.Semantics
-import Language.Marlowe.SemanticsDeserialisation (byteStringToContract)
-import Language.Marlowe.SemanticsSerialisation (contractToByteString)
 import Language.Marlowe.SemanticsTypes
-import Language.Marlowe.Serialisation (intToByteString, listToByteString)
 import Language.Marlowe.Util
 import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
@@ -86,8 +80,7 @@ tests = testGroup "Marlowe"
     , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
     , testCase "State serializes into valid JSON" stateSerialization
     , testGroup "Validator size is reasonable"
-        [ testCase "StateMachine validator size" stateMachineValidatorSize
-        , testCase "Typed validator size" typedValidatorSize
+        [ testCase "Typed validator size" typedValidatorSize
         , testCase "Untyped validator size" untypedValidatorSize
         ]
     , testCase "Mul analysis" mulAnalysisTest
@@ -102,15 +95,8 @@ tests = testGroup "Marlowe"
     , testProperty "Multiply by zero" mulTest
     , testProperty "Divide zero and by zero" divZeroTest
     , testProperty "DivValue rounding" divisionRoundingTest
-    , testGroup "ByteString ad-hoc (de)serialisation"
-        [ testProperty "Integer (de)serialisation roundtrip" integerBSRoundtripTest
-        , testProperty "Integer list (de)serialisation roundtrip" integerListBSRoundtripTest
-        , testProperty "Contract (de)serialisation roundtrip" contractBSRoundtripTest
-        ]
     , zeroCouponBondTest
-#ifndef DisableMerkleization
     , merkleizedZeroCouponBondTest
-#endif
     , errorHandlingTest
     , trustFundTest
     ]
@@ -158,10 +144,10 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 75_000_000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 75_000_000])
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk bobPk ada 90_000_000])
+    Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk bobPk ada 90_000_000])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -185,12 +171,12 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
 
     let params = defaultMarloweParams
 
-    let zeroCouponBondStage1 = When [ MerkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
-                                                     (sha2_256 (contractToByteString zeroCouponBondStage2))
+    let zeroCouponBondStage1 = When [ merkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
+                                                     zeroCouponBondStage2
                                     ] (Slot 100) Close
         zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 75_000_000)
-                                  (When [ MerkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
-                                                         (sha2_256 (contractToByteString zeroCouponBondStage3))
+                                  (When [ merkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
+                                                         zeroCouponBondStage3
                                         ] (Slot 200) Close)
         zeroCouponBondStage3 = Close
 
@@ -201,11 +187,11 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing,
-                                                 [MerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
+                                                 [ClientMerkleizedInput (IDeposit alicePk alicePk ada 75_000_000) zeroCouponBondStage2])
     Trace.waitNSlots 2
 
     Trace.callEndpoint @"apply-inputs" bobHdl (reqId, params, Nothing,
-                                               [MerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
+                                               [ClientMerkleizedInput (IDeposit alicePk bobPk ada 90_000_000) zeroCouponBondStage3])
     void $ Trace.waitNSlots 2
 
     Trace.callEndpoint @"close" aliceHdl reqId
@@ -239,7 +225,7 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     Trace.callEndpoint @"create" aliceHdl (reqId, AssocMap.empty, zeroCouponBond)
     Trace.waitNSlots 2
 
-    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [NormalInput $ IDeposit alicePk alicePk ada 90_000_000])
+    Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, params, Nothing, [ClientInput $ IDeposit alicePk alicePk ada 90_000_000])
     Trace.waitNSlots 2
     pure ()
 
@@ -286,8 +272,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         (pms, _) : _ -> do
 
             Trace.callEndpoint @"apply-inputs" aliceHdl (reqId, pms, Nothing,
-                [ NormalInput $ IChoice chId 25_600_000
-                , NormalInput $ IDeposit "alice" "alice" ada 25_600_000
+                [ ClientInput $ IChoice chId 25_600_000
+                , ClientInput $ IDeposit "alice" "alice" ada 25_600_000
                 ])
             Trace.waitNSlots 17
 
@@ -295,7 +281,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Trace.callEndpoint @"follow" bobFollowHdl pms
             Trace.waitNSlots 2
 
-            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [NormalInput INotify])
+            Trace.callEndpoint @"apply-inputs" bobHdl (reqId, pms, Nothing, [ClientInput INotify])
 
             Trace.waitNSlots 2
             Trace.callEndpoint @"redeem" bobHdl (reqId, pms, "bob", bobPkh)
@@ -336,23 +322,17 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
 
 uniqueContractHash :: IO ()
 uniqueContractHash = do
-    let hash1 = Scripts.validatorHash $ typedValidator (marloweParams "11")
-    let hash2 = Scripts.validatorHash $ typedValidator (marloweParams "22")
-    let hash3 = Scripts.validatorHash $ typedValidator (marloweParams "22")
+    let hash1 = Scripts.validatorHash $ smallTypedValidator (marloweParams "11")
+    let hash2 = Scripts.validatorHash $ smallTypedValidator (marloweParams "22")
+    let hash3 = Scripts.validatorHash $ smallTypedValidator (marloweParams "22")
     assertBool "Hashes must be different" (hash1 /= hash2)
     assertBool "Hashes must be same" (hash2 == hash3)
-
-stateMachineValidatorSize :: IO ()
-stateMachineValidatorSize = do
-    let validator = Scripts.validatorScript $ typedValidator defaultMarloweParams
-    let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("StateMachine Validator is too large " <> show vsize) (vsize < 18900)
 
 typedValidatorSize :: IO ()
 typedValidatorSize = do
     let validator = Scripts.validatorScript $ smallTypedValidator defaultMarloweParams
     let vsize = SBS.length. SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 16000)
+    assertBool ("smallTypedValidator is too large " <> show vsize) (vsize < 17200)
 
 untypedValidatorSize :: IO ()
 untypedValidatorSize = do
@@ -468,16 +448,13 @@ transferBetweenAccountsTest = do
             , boundValues = AssocMap.empty
             , minSlot = 10 }
     let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
-    let marloweData = MarloweData {
-                marloweContract = contract,
-                marloweState = state }
-    let Just result@(constraints, SM.State (MarloweData {marloweState=State{accounts}}) balance) =
-            mkMarloweStateMachineTransition
-                defaultMarloweParams
-                (SM.State marloweData (lovelaceValueOf 100))
-                ((20, 30), [])
-    balance @=? lovelaceValueOf 100
-    assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
+    let txInput = TransactionInput {
+                    txInterval = (20, 30),
+                    txInputs = [] }
+    case computeTransaction txInput state contract of
+        TransactionOutput {txOutPayments, txOutState = State{accounts}, txOutContract} -> do
+            assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob",Token "" ""), 100)]
+        e -> fail $ show e
 
 
 divAnalysisTest :: IO ()
@@ -600,12 +577,3 @@ jsonLoops cont = decode (encode cont) === Just cont
 
 prop_jsonLoops :: Property
 prop_jsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract jsonLoops
-
-integerBSRoundtripTest :: Property
-integerBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen Integer) (\num -> byteStringToInt (intToByteString num) === Just (num, emptyByteString))
-
-integerListBSRoundtripTest :: Property
-integerListBSRoundtripTest = withMaxSuccess 1000 $ forAll (arbitrary :: Gen [Integer]) (\numList -> byteStringToList byteStringToInt (listToByteString intToByteString numList) === Just (numList, emptyByteString))
-
-contractBSRoundtripTest :: Property
-contractBSRoundtripTest = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract (\contract -> byteStringToContract (contractToByteString contract) === Just (contract, emptyByteString))

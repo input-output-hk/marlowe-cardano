@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveAnyClass             #-}
@@ -53,9 +52,6 @@ import Data.Text (pack)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-#ifndef DisableMerkleization
-import Language.Marlowe.SemanticsSerialisation (contractToByteString)
-#endif
 import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
                                         Observation (..), Party, Payee (..), SlotInterval, State (..), Token (..),
@@ -454,12 +450,10 @@ applyAction _ _ _ _ = NotAppliedAction
 -- | Try to get a continuation from a pair of Input and Case
 getContinuation :: Input -> Case Contract -> Maybe Contract
 getContinuation (NormalInput _) (Case _ continuation) = Just continuation
-#ifndef DisableMerkleization
-getContinuation (MerkleizedInput _ continuation) (MerkleizedCase _ continuationHash) =
-    if Builtins.sha2_256 (contractToByteString continuation) == continuationHash
+getContinuation (MerkleizedInput _ inputContinuationHash continuation) (MerkleizedCase _ continuationHash) =
+    if inputContinuationHash == continuationHash
     then Just continuation
     else Nothing
-#endif
 getContinuation _ _ = Nothing
 
 applyCases :: Environment -> State -> Input -> [Case Contract] -> ApplyResult
