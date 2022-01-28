@@ -39,7 +39,9 @@ import Halogen.HTML.Properties
 import Humanize (humanizeDuration, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.Lenses (_mNextTimeout)
+import Marlowe.Execution.State (isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
+import Marlowe.Execution.Types as Execution
 import Marlowe.Semantics
   ( Bound(..)
   , ChoiceId(..)
@@ -54,18 +56,17 @@ import Page.Contract.Lenses
   , _participants
   , _userParties
   )
-import Page.Contract.State (isContractClosed)
-import Page.Contract.Types (Action(..), StartedState, State(..))
+import Page.Contract.Types (Action(..), StartedState)
 import Text.Markdown.TrimmedInline (markdownToHTML)
 
-timeoutString :: Slot -> StartedState -> String
-timeoutString currentSlot state =
+timeoutString :: Slot -> Execution.State -> String
+timeoutString currentSlot executionState =
   let
-    mNextTimeout = state ^. (_executionState <<< _mNextTimeout)
+    mNextTimeout = executionState ^. _mNextTimeout
   in
     maybe'
       ( \_ ->
-          if isContractClosed (Started state) then "Contract closed"
+          if isClosed executionState then "Contract closed"
           else "Timed out"
       )
       (\nextTimeout -> humanizeDuration $ secondsDiff nextTimeout currentSlot)
@@ -78,69 +79,77 @@ currentStepActions
   -> StartedState
   -> ComponentHTML Action ChildSlots m
 currentStepActions _ state =
-  case
-    isContractClosed (Started state),
-    isJust state.pendingTransaction,
-    state.namedActions
-    of
-    true, _, _ ->
-      div
-        [ classNames
-            [ "h-full", "flex", "flex-col", "justify-center", "items-center" ]
-        ]
-        [ icon Icon.TaskAlt [ "text-green", "text-big-icon" ]
-        , div
-            -- The bottom margin on this div means the whole thing isn't perfectly centered vertically.
-            -- Because there's an image on top and text below, being perfectly centered vertically
-            -- looks wrong.
-            [ classNames [ "text-center", "text-sm", "mb-4" ] ]
-            [ div [ classNames [ "font-semibold" ] ]
-                [ text "This contract is now closed" ]
-            , div_ [ text "There are no tasks to complete" ]
-            ]
-        ]
-    _, true, _ ->
-      -- FIXME: when we have a design for this, we can include more information (probably making this look more like
-      -- the past step card)
-      div_
-        [ text
-            "Your transaction has been submitted. You will be notified when confirmation is received."
-        ]
-    _, _, [] ->
-      let
-        purpleDot extraCss = div
-          [ classNames $
-              [ "rounded-full", "bg-lightpurple", "w-3", "h-3", "animate-grow" ]
-                <> extraCss
-          ]
-          []
-      in
+  let
+    executionState = state ^. _executionState
+  in
+    case
+      isClosed executionState,
+      isJust state.pendingTransaction,
+      state.namedActions
+      of
+      true, _, _ ->
         div
-          [ classNames [ "text-xs", "flex", "flex-col", "h-full", "gap-2" ] ]
-          [ h4 [ classNames [ "font-semibold" ] ] [ text "Please wait…" ]
-          , p_
-              [ text
-                  "There are no tasks to complete at this step. The contract will progress automatically when the timeout passes."
-              ]
+          [ classNames
+              [ "h-full", "flex", "flex-col", "justify-center", "items-center" ]
+          ]
+          [ icon Icon.TaskAlt [ "text-green", "text-big-icon" ]
           , div
-              [ classNames
-                  [ "flex-grow"
-                  , "flex"
-                  , "justify-center"
-                  , "items-center"
-                  , "gap-2"
-                  ]
-              ]
-              [ purpleDot []
-              , purpleDot [ "animate-delay-150" ]
-              , purpleDot [ "animate-delay-300" ]
+              -- The bottom margin on this div means the whole thing isn't perfectly centered vertically.
+              -- Because there's an image on top and text below, being perfectly centered vertically
+              -- looks wrong.
+              [ classNames [ "text-center", "text-sm", "mb-4" ] ]
+              [ div [ classNames [ "font-semibold" ] ]
+                  [ text "This contract is now closed" ]
+              , div_ [ text "There are no tasks to complete" ]
               ]
           ]
-    _, _, namedActions ->
-      div
-        [ classNames [ "space-y-4" ] ]
-        $ uncurry (renderPartyTasks state)
-            <$> namedActions
+      _, true, _ ->
+        -- FIXME: when we have a design for this, we can include more information (probably making this look more like
+        -- the past step card)
+        div_
+          [ text
+              "Your transaction has been submitted. You will be notified when confirmation is received."
+          ]
+      _, _, [] ->
+        let
+          purpleDot extraCss = div
+            [ classNames $
+                [ "rounded-full"
+                , "bg-lightpurple"
+                , "w-3"
+                , "h-3"
+                , "animate-grow"
+                ]
+                  <> extraCss
+            ]
+            []
+        in
+          div
+            [ classNames [ "text-xs", "flex", "flex-col", "h-full", "gap-2" ] ]
+            [ h4 [ classNames [ "font-semibold" ] ] [ text "Please wait…" ]
+            , p_
+                [ text
+                    "There are no tasks to complete at this step. The contract will progress automatically when the timeout passes."
+                ]
+            , div
+                [ classNames
+                    [ "flex-grow"
+                    , "flex"
+                    , "justify-center"
+                    , "items-center"
+                    , "gap-2"
+                    ]
+                ]
+                [ purpleDot []
+                , purpleDot [ "animate-delay-150" ]
+                , purpleDot [ "animate-delay-300" ]
+                ]
+            ]
+      _, _, namedActions ->
+        div
+          [ classNames [ "space-y-4" ] ]
+          $ uncurry (renderPartyTasks state)
+              <$> namedActions
 
 -- TODO: In zeplin all participants have a different color. We need to decide how are we going to assing
 --       colors to users. For now they all have purple

@@ -49,7 +49,7 @@ import Halogen.HTML.Properties (IProp, enabled, id, ref)
 import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.Lenses (_contract, _semanticState)
-import Marlowe.Execution.State (expandBalances)
+import Marlowe.Execution.State (expandBalances, isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics
@@ -74,12 +74,7 @@ import Page.Contract.Lenses
   , _selectedStep
   , _userParties
   )
-import Page.Contract.State
-  ( currentStep
-  , isContractClosed
-  , partyToParticipant
-  , paymentToTransfer
-  )
+import Page.Contract.State (currentStep, partyToParticipant, paymentToTransfer)
 import Page.Contract.Types
   ( Action(..)
   , Input
@@ -594,8 +589,8 @@ renderCurrentStep viewInput state =
     stepNumber = currentStep state
 
     pendingTransaction = state ^. _pendingTransaction
-
-    contractIsClosed = isContractClosed (Started state)
+    executionState = state ^. _executionState
+    contractIsClosed = isClosed executionState
   in
     [ tabBar state.tab $ Just (SelectTab stepNumber)
     , cardBody []
@@ -608,7 +603,7 @@ renderCurrentStep viewInput state =
                       _, true -> [ stepStatusText "Awaiting confirmation" [] ]
                       _, _ ->
                         [ stepStatusText
-                            (timeoutString viewInput.currentSlot state)
+                            (timeoutString viewInput.currentSlot executionState)
                             []
                         , icon Icon.Timer []
                         ]
