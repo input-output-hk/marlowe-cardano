@@ -1,6 +1,7 @@
 module MainFrame.Types where
 
 import Prologue hiding (div)
+
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Auth (AuthStatus)
 import Component.Blockly.Types as Blockly
@@ -9,19 +10,18 @@ import Component.Demos.Types as Demos
 import Component.NewProject.Types as NewProject
 import Component.Projects.Types (Lang(..))
 import Component.Projects.Types as Projects
-import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Component.Tooltip.Types (ReferenceId)
+import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Data.Argonaut.Core (jsonNull)
 import Data.Argonaut.Decode ((.:), (.:?))
 import Data.Argonaut.Decode.Decoders (decodeJObject)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has, (^.))
 import Data.Lens.Record (prop)
 import Data.Maybe (maybe)
 import Data.Newtype (class Newtype)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Gist (Gist, GistId)
 import Gists.Types (GistAction)
 import Halogen (ClassName)
@@ -40,6 +40,7 @@ import Page.Simulation.Types as Simulation
 import Rename.Types as Rename
 import Router (Route)
 import SaveAs.Types as SaveAs
+import Type.Proxy (Proxy(..))
 import Types (WebData)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 

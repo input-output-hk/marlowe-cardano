@@ -7,9 +7,10 @@ module Examples.PureScript.Swap
   ) where
 
 import Prelude
+
 import Data.BigInt.Argonaut (BigInt, fromInt)
-import Data.Map as Map
 import Data.Map (Map)
+import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Examples.Metadata as Metadata
 import Marlowe.Extended
@@ -20,9 +21,9 @@ import Marlowe.Extended
   , Timeout(..)
   , Value(..)
   )
-import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
-import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics (Party(..), Token(..))
+import Marlowe.Template (TemplateContent(..), fillTemplate)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }

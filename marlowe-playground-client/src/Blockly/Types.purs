@@ -13,14 +13,15 @@ module Blockly.Types
   ) where
 
 import Prologue
+
 import Blockly.Events
   ( ChangeEvent
   , CreateEvent
   , FinishLoadingEvent
   , MoveEvent
+  , SelectEvent
   , UIEvent
   , element
-  , SelectEvent
   )
 import Effect (Effect)
 

@@ -1,6 +1,7 @@
 module Language.Javascript.Monaco where
 
 import Prologue
+
 import Halogen (RefLabel(..))
 import Halogen.Monaco (Settings)
 import Monaco (Editor, LanguageExtensionPoint(..))

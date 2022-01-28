@@ -1,6 +1,7 @@
 module Rename.Types where
 
 import Prologue
+
 import Analytics (class IsEvent)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)

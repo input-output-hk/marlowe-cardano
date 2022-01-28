@@ -1,6 +1,7 @@
 module Page.Simulation.View where
 
 import Prologue hiding (div)
+
 import Component.BottomPanel.Types as BottomPanelTypes
 import Component.BottomPanel.View as BottomPanel
 import Component.CurrencyInput (currencyInput)
@@ -12,7 +13,7 @@ import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Enum (fromEnum)
-import Data.Lens (has, only, previewOn, to, view, (^?), (^.))
+import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.NonEmptyList (_Head)
 import Data.Map (Map)

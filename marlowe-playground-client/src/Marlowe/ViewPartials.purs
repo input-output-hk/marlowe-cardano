@@ -1,6 +1,7 @@
 module Marlowe.ViewPartials where
 
 import Prologue hiding (div)
+
 import Component.Hint.State (hint)
 import Component.Popper (Placement(..))
 import Data.Array (mapWithIndex)

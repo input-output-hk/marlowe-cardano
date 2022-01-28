@@ -103,6 +103,11 @@ let
 
   webCommon = pkgs.callPackage sources.web-common { inherit gitignore-nix; };
 
+  formatting = pkgs.callPackage ./formatting.nix {
+    inherit easyPS writeShellScriptBinInRepoRoot;
+  };
+
+
   # combined haddock documentation for all public plutus libraries
   plutus-haddock-combined =
     let
@@ -143,5 +148,5 @@ in
   inherit easyPS plutus-haddock-combined;
   inherit lib;
   inherit webCommon;
-  inherit (webCommon.flake.defaultNix.packages.${builtins.currentSystem}) fix-prettier prettier-hook fix-purs-tidy purs-tidy-hook;
+  inherit (formatting) fix-prettier fix-purs-tidy fix-dhall purs-tidy-hook dhall-hook;
 }

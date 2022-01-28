@@ -16,12 +16,12 @@ import Prologue
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Effect.AVar (AVar)
-import Marlowe.Semantics (Input, Slot)
 import Language.Marlowe.Client
   ( EndpointResponse
   , MarloweEndpointResult
   , MarloweError
   )
+import Marlowe.Semantics (Input, Slot)
 
 type EndpointName
   = String

@@ -2,9 +2,10 @@
 module Marlowe.Holes where
 
 import Prologue
+
 import Data.Argonaut (class DecodeJson, class EncodeJson, encodeJson)
 import Data.Argonaut.Decode.Aeson as D
-import Data.Array (foldl, foldMap, mapMaybe)
+import Data.Array (foldMap, foldl, mapMaybe)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
@@ -34,7 +35,7 @@ import Data.Show.Generic (genericShow)
 import Data.String (splitAt, toLower)
 import Data.String.CodeUnits (dropRight)
 import Data.Traversable (traverse)
-import Data.Tuple.Nested ((/\), type (/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception.Unsafe (unsafeThrow)
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM

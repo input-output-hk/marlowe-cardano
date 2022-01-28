@@ -1,6 +1,7 @@
 module Page.JavascriptEditor.View where
 
 import Prologue hiding (div)
+
 import Component.BottomPanel.Types (Action(..)) as BottomPanel
 import Component.BottomPanel.View (render) as BottomPanel
 import Component.MetadataTab.View (metadataView)

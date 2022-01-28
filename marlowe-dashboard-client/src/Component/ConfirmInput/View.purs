@@ -1,6 +1,7 @@
 module Component.ConfirmInput.View (render) where
 
 import Prologue hiding (div)
+
 import Component.Amount (amount)
 import Component.Box (box)
 import Component.Box as Box

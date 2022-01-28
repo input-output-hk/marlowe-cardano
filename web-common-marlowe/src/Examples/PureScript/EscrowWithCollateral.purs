@@ -7,9 +7,10 @@ module Examples.PureScript.EscrowWithCollateral
   ) where
 
 import Prelude
+
 import Data.BigInt.Argonaut (BigInt, fromInt)
-import Data.Map as Map
 import Data.Map (Map)
+import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Examples.Metadata as Metadata
 import Marlowe.Extended
@@ -20,15 +21,15 @@ import Marlowe.Extended
   , Timeout(..)
   , Value(..)
   )
-import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
-import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics
   ( Bound(..)
   , ChoiceId(..)
+  , ChoiceName
   , Party(..)
   , Token(..)
-  , ChoiceName
   )
+import Marlowe.Template (TemplateContent(..), fillTemplate)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }

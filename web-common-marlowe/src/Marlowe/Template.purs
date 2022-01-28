@@ -1,6 +1,7 @@
 module Marlowe.Template where
 
 import Prelude
+
 import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (foldl)
 import Data.Lens (Lens')

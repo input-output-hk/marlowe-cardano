@@ -1,9 +1,10 @@
 module Marlowe.ParserTests where
 
 import Prologue
+
 import Data.Maybe (fromMaybe)
 import Data.String (Pattern(..), stripPrefix, stripSuffix, trim)
-import Marlowe.Gen (genContract, GenerationOptions(..))
+import Marlowe.Gen (GenerationOptions(..), genContract)
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (Contract)
 import Marlowe.Parser (parseContract)

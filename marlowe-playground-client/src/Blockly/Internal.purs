@@ -49,6 +49,7 @@ module Blockly.Internal
   ) where
 
 import Prologue
+
 import Blockly.Toolbox (Toolbox, encodeToolbox)
 import Blockly.Types
   ( Block

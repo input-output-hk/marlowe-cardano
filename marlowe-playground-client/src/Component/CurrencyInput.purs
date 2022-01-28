@@ -1,6 +1,7 @@
 module Component.CurrencyInput where
 
 import Prologue hiding (div)
+
 import Control.MonadZero (guard)
 import Data.Array (replicate, (!!))
 import Data.BigInt.Argonaut (BigInt)

@@ -1,6 +1,7 @@
 module Component.Amount where
 
 import Prologue
+
 import Data.BigInt.Argonaut (BigInt)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, span, text)

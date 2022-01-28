@@ -3,6 +3,7 @@ module Component.Modal.ViewHelpers
   ) where
 
 import Prologue hiding (div)
+
 import Halogen.Classes (closeModal)
 import Halogen.HTML (ClassName(ClassName), HTML, div, h2, img, text)
 import Halogen.HTML.Events (onClick)

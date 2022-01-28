@@ -1,11 +1,12 @@
 module SaveAs.Types where
 
 import Prologue
+
 import Analytics (class IsEvent)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
 import Network.RemoteData (RemoteData(..))
+import Type.Proxy (Proxy(..))
 
 data Action
   = ChangeInput String

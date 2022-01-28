@@ -1,6 +1,7 @@
 module Component.Demos.Types where
 
 import Prologue
+
 import Analytics (class IsEvent)
 import Component.Projects.Types (Lang)
 import Data.Newtype (class Newtype)

@@ -1,7 +1,3 @@
-{-
-Welcome to a Spago project!
-You can edit this file as you like.
--}
 { name = "marlowe-dashboard-client"
 , dependencies =
   [ "aff"

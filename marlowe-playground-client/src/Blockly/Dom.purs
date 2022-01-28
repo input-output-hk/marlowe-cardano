@@ -62,6 +62,7 @@
 module Blockly.Dom where
 
 import Prologue
+
 import Blockly.Internal (workspaceToDom)
 import Blockly.Types (BlocklyState)
 import Control.Monad.Error.Extra (toMonadThrow)
@@ -72,12 +73,12 @@ import Data.Compactable (separate)
 import Data.Either (note')
 import Data.Lens (Lens', _1, view)
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
 import Foreign.Object (Object)
 import Foreign.Object as Object
+import Type.Proxy (Proxy(..))
 import Web.DOM (Element)
 import Web.DOM.Element as Element
 import Web.DOM.HTMLCollection as HTMLCollection

@@ -1,6 +1,7 @@
 module Data.NonEmptyList.Extra where
 
 import Prologue
+
 import Data.List.NonEmpty (cons, fromList, head, tail)
 import Data.List.Types (NonEmptyList)
 

@@ -1,9 +1,10 @@
 module Capability.MainFrameLoop where
 
 import Prologue
+
 import AppM (AppM)
 import Halogen (HalogenM, raise)
-import MainFrame.Types (Msg(..), Action)
+import MainFrame.Types (Action, Msg(..))
 
 -- This capability allows child components to trigger an action in the MainFrame. It uses
 -- a loop between a MainFrame output message and a MainFrame query, which was the only way

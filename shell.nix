@@ -6,7 +6,7 @@ let
   inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purs-tidy-hook prettier-hook writeShellScriptBinInRepoRoot;
+  inherit (marlowe) writeShellScriptBinInRepoRoot;
 
   set-xdg = ''
     export XDG_DATA_HOME="''${XDG_DATA_HOME:-''${HOME}/.local/share}"
@@ -46,8 +46,11 @@ let
       shellcheck = pkgs.shellcheck;
     };
     hooks = {
-      inherit purs-tidy-hook;
-      prettier = prettier-hook;
+      inherit (marlowe) dhall-hook purs-tidy-hook;
+      prettier = {
+        enable = true;
+        types_or = [ "javascript" "css" "html" ];
+      };
       stylish-haskell.enable = true;
       nixpkgs-fmt = {
         enable = true;
@@ -98,6 +101,7 @@ let
     fixPngOptimization
     fix-prettier
     fix-purs-tidy
+    fix-dhall
     fixStylishHaskell
     haskell-language-server
     haskell-language-server-wrapper
