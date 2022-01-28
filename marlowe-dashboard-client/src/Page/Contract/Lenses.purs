@@ -1,33 +1,29 @@
 module Page.Contract.Lenses
-  ( _Starting
-  , _Started
-  , _nickname
-  , _tab
+  ( _Started
+  , _Starting
   , _executionState
+  , _expandPayments
+  , _marloweParams
+  , _metadata
+  , _namedActions
+  , _nickname
+  , _participants
   , _pendingTransaction
   , _previousSteps
-  , _marloweParams
-  , _selectedStep
-  , _metadata
-  , _participants
-  , _userParties
-  , _namedActions
-  , _expandPayments
   , _resultingPayments
-  , _stateNickname
+  , _selectedStep
   , _stateMetadata
-  , _stateParticipants
+  , _stateNickname
+  , _tab
+  , _userParties
   ) where
 
 import Prologue
 
 import Data.Lens (Lens', Prism', lens', prism')
 import Data.Lens.Record (prop)
-import Data.Map (Map)
 import Data.Tuple.Nested ((/\))
-import Data.WalletNickname (WalletNickname)
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics (Party)
 import Page.Contract.Types (StartedState, StartingState, State(..))
 import Type.Proxy (Proxy(..))
 
@@ -89,13 +85,6 @@ _stateMetadata = lens' go
 
 _participants :: forall a r. Lens' { participants :: a | r } a
 _participants = prop (Proxy :: _ "participants")
-
-_stateParticipants :: Lens' State (Map Party (Maybe WalletNickname))
-_stateParticipants = lens' go
-  where
-  go (Starting s) = s.participants /\ Starting <<< s { participants = _ }
-
-  go (Started s) = s.participants /\ Started <<< s { participants = _ }
 
 _userParties :: forall a r. Lens' { userParties :: a | r } a
 _userParties = prop (Proxy :: _ "userParties")
