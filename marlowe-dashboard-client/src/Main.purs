@@ -35,8 +35,10 @@ import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import Humanize (getTimezoneOffset)
 import LocalStorage (getItem)
+
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..), Query(..))
+import Store.Contract as ContractStore
 import WebSocket.Support as WS
 
 newtype MainArgs = MainArgs
@@ -89,6 +91,7 @@ main args = do
         , currentSlot: zero
         , toast: Nothing
         , wallet
+        , contracts: ContractStore.initialStore
         , previousCompanionAppState: Nothing
         }
     body <- awaitBody
