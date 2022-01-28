@@ -1,16 +1,15 @@
 module Page.Contract.State
-  ( dummyState
-  , mkPlaceholderState
-  , mkInitialState
-  , updateState
-  , handleAction
-  , currentStep
-  , isContractClosed
+  ( applyTimeout
   , applyTx
-  , applyTimeout
-  , toInput
+  , currentStep
+  , dummyState
+  , handleAction
+  , mkInitialState
+  , mkPlaceholderState
   , partyToParticipant
   , paymentToTransfer
+  , toInput
+  , updateState
   ) where
 
 import Prologue
@@ -103,7 +102,6 @@ import Marlowe.Execution.State
   ( expandBalances
   , extractNamedActions
   , getActionParticipant
-  , isClosed
   , mkTx
   , nextState
   , timeoutState
@@ -313,9 +311,13 @@ updateState
       # selectLastStep
       # Started
 
+-- This function creates a Set of the different Contract `Party` a `logged-user`
+-- may hold. It is the sum of the role tokens we hold for the contract and any
+-- direct usage through the PK (Public Key) constructor
 getUserParties :: WalletDetails -> MarloweParams -> Set Party
 getUserParties walletDetails marloweParams =
   let
+    -- the Payment PubKeyHash of the `logged-user`
     pubKeyHash = view
       (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
       walletDetails
@@ -324,11 +326,14 @@ getUserParties walletDetails marloweParams =
 
     rolesCurrency = view _rolesCurrency marloweParams
 
+    -- See if we have any role for the currencySymbol of the contract
     mCurrencyTokens = Map.lookup rolesCurrency (unwrap assets)
 
+    -- Convert it to a Set of Role's
     roleTokens = foldMap (Set.map Role <<< Map.keys <<< Map.filter ((/=) zero))
       mCurrencyTokens
   in
+    -- Add a reference to PK directly
     Set.insert (PK pubKeyHash) roleTokens
 
 withStarted
@@ -439,10 +444,6 @@ applyTransactionInputs transactionInputs state = foldl (flip nextState) state
 
 currentStep :: StartedState -> Int
 currentStep = length <<< view _previousSteps
-
-isContractClosed :: State -> Boolean
-isContractClosed = maybe false isClosed <<< preview
-  (_Started <<< _executionState)
 
 applyTx :: Slot -> TransactionInput -> StartedState -> StartedState
 applyTx currentSlot txInput state =

@@ -67,7 +67,6 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (PubKey, Slot)
 import Page.Contract.Lenses (_stateNickname)
-import Page.Contract.State (isContractClosed)
 import Page.Contract.Types (State) as Contract
 import Page.Contract.View (contractScreen)
 import Page.Dashboard.Lenses
@@ -552,7 +551,10 @@ contractCards
   case walletCompanionStatus of
     FirstUpdateComplete ->
       let
-        runningContracts = filter (not isContractClosed) contracts
+        -- FIXME: Change the Dashboard state to include two Maps/List, one for
+        --        runningContracts and one for completedContracts
+        -- runningContracts = filter (not isContractClosed) contracts
+        runningContracts = filter (const true) contracts
       in
         if isEmpty runningContracts then
           noContractsMessage Running
@@ -573,7 +575,9 @@ contractCards
 
 contractCards currentSlot { contractFilter: Completed, contracts } =
   let
-    completedContracts = filter isContractClosed contracts
+    -- FIXME: Same as `runningContracts`
+    -- completedContracts = filter isContractClosed contracts
+    completedContracts = filter (const false) contracts
   in
     if isEmpty completedContracts then
       noContractsMessage Completed

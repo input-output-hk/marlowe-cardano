@@ -24,7 +24,7 @@ import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
-import Page.Contract.Lenses (_stateMetadata, _stateNickname)
+import Page.Contract.Lenses (_executionState, _stateMetadata, _stateNickname)
 import Page.Contract.State (currentStep)
 import Page.Contract.Types (Action(..), State(..))
 
@@ -41,15 +41,18 @@ contractPreviewCard currentSlot state =
 
     stepPanel = case state of
       Started started ->
-        div
-          [ classNames [ "px-4", "py-2" ] ]
-          [ p
-              [ classNames [ "text-xs", "font-semibold" ] ]
-              [ text $ "Current step:" <> show (currentStep started + 1) ]
-          , p
-              [ classNames [ "font-semibold" ] ]
-              [ text $ timeoutString currentSlot started ]
-          ]
+        let
+          executionState = started ^. _executionState
+        in
+          div
+            [ classNames [ "px-4", "py-2" ] ]
+            [ p
+                [ classNames [ "text-xs", "font-semibold" ] ]
+                [ text $ "Current step:" <> show (currentStep started + 1) ]
+            , p
+                [ classNames [ "font-semibold" ] ]
+                [ text $ timeoutString currentSlot executionState ]
+            ]
       Starting _ ->
         div
           [ classNames
