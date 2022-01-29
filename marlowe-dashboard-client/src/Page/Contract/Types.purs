@@ -16,6 +16,7 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
 import Component.Contacts.Types (WalletDetails)
+import Data.ContractNickname (ContractNickname)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
@@ -41,12 +42,12 @@ data State
   | Started StartedState
 
 type StartingState =
-  { nickname :: String
+  { nickname :: ContractNickname
   , metadata :: MetaData
   }
 
 type StartedState =
-  { nickname :: String
+  { nickname :: ContractNickname
   , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
   -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
@@ -108,8 +109,7 @@ type Input =
 
 data Action
   = SelectSelf
-  -- TODO: fix primitive obsession
-  | SetNickname String
+  | SetNickname ContractNickname
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
   | SelectTab Int Tab

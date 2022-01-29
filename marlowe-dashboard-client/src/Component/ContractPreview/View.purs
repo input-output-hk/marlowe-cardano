@@ -13,6 +13,8 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import Css as Css
+import Data.ContractNickname as ContractNickname
+import Data.Either (fromLeft, fromRight)
 import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
@@ -82,11 +84,15 @@ contractPreviewCard currentSlot state =
                   [ contractIcon contractType
                   , text contractName
                   ]
+              -- FIXME: Replace with form
               , input
                   [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
                   , type_ InputText
-                  , value nickname
-                  , onValueInput_ SetNickname
+                  , value (ContractNickname.toString nickname)
+                  , onValueInput_
+                      ( SetNickname <<< fromRight ContractNickname.unknown <<<
+                          ContractNickname.fromString
+                      )
                   , placeholder "Please rename"
                   ]
               ]

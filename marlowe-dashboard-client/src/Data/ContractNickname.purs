@@ -6,6 +6,7 @@ module Data.ContractNickname
   , fromString
   , validator
   , toString
+  , unknown
   ) where
 
 import Prologue
@@ -101,3 +102,9 @@ dual
    . Applicative m
   => Dual m ContractNicknameError String ContractNickname
 dual = Dual.dual validator (pure <<< toString)
+
+-------------------------------------------------------------------------------
+-- Fallback constructor
+-------------------------------------------------------------------------------
+unknown :: ContractNickname
+unknown = ContractNickname "Unknown"
