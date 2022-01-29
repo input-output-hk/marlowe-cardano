@@ -35,10 +35,9 @@ import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import Humanize (getTimezoneOffset)
 import LocalStorage (getItem)
-
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..), Query(..))
-import Store.Contract as ContractStore
+import Store (mkStore)
 import WebSocket.Support as WS
 
 newtype MainArgs = MainArgs
@@ -86,14 +85,7 @@ main args = do
     wsManager <- WS.mkWebSocketManager
     env <- liftEffect $ mkEnv pollingInterval wsManager
     let
-      store =
-        { addressBook
-        , currentSlot: zero
-        , toast: Nothing
-        , wallet
-        , contracts: ContractStore.initialStore
-        , previousCompanionAppState: Nothing
-        }
+      store = mkStore addressBook wallet
     body <- awaitBody
     rootComponent <- runAppM env store mkMainFrame
     driver <- runUI rootComponent { tzOffset } body
