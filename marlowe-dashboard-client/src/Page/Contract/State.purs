@@ -46,7 +46,6 @@ import Data.Lens
   ( assign
   , modifying
   , over
-  , preview
   , set
   , to
   , toArrayOf
@@ -60,7 +59,6 @@ import Data.Lens.Lens.Tuple (_2)
 import Data.List (toUnfoldable)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (maybe)
 import Data.Newtype (unwrap)
 import Data.Ord (abs)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
@@ -168,17 +166,16 @@ dummyState =
   Starting
     { nickname: mempty
     , metadata: emptyContractMetadata
-    , participants: Map.empty
     }
 
+-- FIXME: Almost sure delete this
 -- this is for making a placeholder state for the user who created the contract, used for displaying
 -- something before we get the MarloweParams back from the WalletCompanion app
-mkPlaceholderState :: String -> MetaData -> Contract -> State
-mkPlaceholderState nickname metaData contract =
+mkPlaceholderState :: String -> MetaData -> State
+mkPlaceholderState nickname metaData =
   Starting
     { nickname
     , metadata: metaData
-    , participants: getParticipants contract
     }
 
 -- this is for making a fully fleshed out state from nothing, used when someone who didn't create the
@@ -269,20 +266,23 @@ updateState
   state =
   let
     state' = case state of
-      Starting { nickname, metadata, participants } ->
-        { nickname
-        , tab: Tasks
-        , executionState: Execution.mkInitialState currentSlot $ marloweData ^.
-            _marloweContract
-        , pendingTransaction: Nothing
-        , previousSteps: []
-        , marloweParams
-        , selectedStep: 0
-        , metadata
-        , participants
-        , userParties: getUserParties walletDetails marloweParams
-        , namedActions: []
-        }
+      Starting { nickname, metadata } ->
+        let
+          contract = marloweData ^. _marloweContract
+          participants = getParticipants contract
+        in
+          { nickname
+          , tab: Tasks
+          , executionState: Execution.mkInitialState currentSlot contract
+          , pendingTransaction: Nothing
+          , previousSteps: []
+          , marloweParams
+          , selectedStep: 0
+          , metadata
+          , participants
+          , userParties: getUserParties walletDetails marloweParams
+          , namedActions: []
+          }
       Started s -> s
 
     previousTransactionInputs = toArrayOf

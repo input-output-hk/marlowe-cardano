@@ -43,8 +43,6 @@ data State
 type StartingState =
   { nickname :: String
   , metadata :: MetaData
-  , participants :: Map Party (Maybe WalletNickname)
-  -- TODO: add marlowe params
   }
 
 type StartedState =
