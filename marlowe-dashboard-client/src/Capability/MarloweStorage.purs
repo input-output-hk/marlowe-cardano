@@ -18,6 +18,7 @@ import AppM (AppM)
 import Control.Monad.Except (lift)
 import Data.AddressBook (AddressBook)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
+import Data.ContractNickname (ContractNickname)
 import Data.Either (hush)
 import Data.Map (Map, insert, lookup)
 import Data.Map as Map
@@ -49,8 +50,8 @@ class
   -- Address book
   modifyAddressBook :: (AddressBook -> AddressBook) -> m AddressBook
   -- contract nicknames
-  getContractNicknames :: m (Map PlutusAppId String)
-  insertIntoContractNicknames :: PlutusAppId -> String -> m Unit
+  getContractNicknames :: m (Map PlutusAppId ContractNickname)
+  insertIntoContractNicknames :: PlutusAppId -> ContractNickname -> m Unit
   getAllWalletRoleContracts :: m (Map String (Map MarloweParams MarloweData))
   getWalletRoleContracts :: String -> m (Map MarloweParams MarloweData)
   insertWalletRoleContracts :: String -> MarloweParams -> MarloweData -> m Unit

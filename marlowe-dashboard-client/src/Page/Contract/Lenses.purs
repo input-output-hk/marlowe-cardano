@@ -20,6 +20,7 @@ module Page.Contract.Lenses
 
 import Prologue
 
+import Data.ContractNickname (ContractNickname)
 import Data.Lens (Lens', Prism', lens', prism')
 import Data.Lens.Record (prop)
 import Data.Tuple.Nested ((/\))
@@ -48,7 +49,7 @@ _Started =
 _nickname :: forall a r. Lens' { nickname :: a | r } a
 _nickname = prop (Proxy :: _ "nickname")
 
-_stateNickname :: Lens' State String
+_stateNickname :: Lens' State ContractNickname
 _stateNickname = lens' go
   where
   go (Starting s) = s.nickname /\ Starting <<< s { nickname = _ }
