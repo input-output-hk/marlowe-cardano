@@ -43,7 +43,10 @@ import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
 import Data.Array (null)
-import Data.ContractNickname as CN
+import Data.ContractNickname (ContractNickname)
+import Data.ContractNickname as ContractNickname
+import Data.Either (hush)
+import Data.Filterable (filterMap)
 import Data.Foldable (for_)
 import Data.Lens
   ( _Just
@@ -146,14 +149,15 @@ mkInitialState
   :: WalletDetails
   -> Map PlutusAppId ContractHistory
   -- FIXME: Contract nicknames should be indexed by MarloweParams
-  -> Map PlutusAppId String
+  -> Map PlutusAppId ContractNickname
   -> Slot
   -> State
 mkInitialState walletDetails contracts contractNicknames currentSlot =
   let
     mkInitialContractState followerAppId contractHistory =
       let
-        nickname = fromMaybe mempty $ lookup followerAppId contractNicknames
+        nickname = fromMaybe ContractNickname.unknown $ lookup followerAppId
+          contractNicknames
       in
         Contract.mkInitialState walletDetails currentSlot nickname
           contractHistory
@@ -347,7 +351,8 @@ handleAction
                   Contract.MoveToStep
               )
       Nothing -> for_
-        ( Contract.mkInitialState walletDetails currentSlot mempty
+        ( Contract.mkInitialState walletDetails currentSlot
+            ContractNickname.unknown
             contractHistory
         )
         (modifying _contracts <<< insert followerAppId)
@@ -460,7 +465,7 @@ handleAction
               -- contractNickname <- use
               --   (_templateState <<< _contractNicknameInput <<< _value)
               -- FIXME
-              -- insertIntoContractNicknames followerAppId $ CN.toString nickname
+              -- insertIntoContractNicknames followerAppId $ ContractNickname.toString nickname
               -- let metaData = template.metaData
               -- modifying _contracts $ insert followerAppId $
               --   Contract.mkPlaceholderState contractNickname metaData

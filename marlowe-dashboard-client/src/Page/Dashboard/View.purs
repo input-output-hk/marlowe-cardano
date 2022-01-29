@@ -28,6 +28,7 @@ import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address as A
 import Data.Compactable (compact)
+import Data.ContractNickname as ContractNickname
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
@@ -357,13 +358,11 @@ dashboardBreadcrumb mSelectedContractState =
                 [ icon_ Icon.Next
                 , tooltip "Go to dashboard" (RefId "goToDashboard") Bottom
                 , span_
-                    [ text
-                        if nickname == mempty then "My new contract"
-                        else nickname
+                    [ text nickname
                     ]
                 ]
                 where
-                nickname = state ^. _stateNickname
+                nickname = ContractNickname.toString $ state ^. _stateNickname
               Nothing -> []
     ]
 

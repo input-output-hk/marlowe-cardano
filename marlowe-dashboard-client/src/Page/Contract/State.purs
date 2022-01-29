@@ -40,6 +40,8 @@ import Data.Array
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
+import Data.ContractNickname (ContractNickname)
+import Data.ContractNickname as ContractNickname
 import Data.Foldable (foldMap, for_)
 import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Lens
@@ -164,14 +166,14 @@ import Web.HTML.HTMLElement as HTMLElement
 dummyState :: State
 dummyState =
   Starting
-    { nickname: mempty
+    { nickname: ContractNickname.unknown
     , metadata: emptyContractMetadata
     }
 
 -- FIXME: Almost sure delete this
 -- this is for making a placeholder state for the user who created the contract, used for displaying
 -- something before we get the MarloweParams back from the WalletCompanion app
-mkPlaceholderState :: String -> MetaData -> State
+mkPlaceholderState :: ContractNickname -> MetaData -> State
 mkPlaceholderState nickname metaData =
   Starting
     { nickname
@@ -182,7 +184,7 @@ mkPlaceholderState nickname metaData =
 -- contract is given a role in it, and gets the MarloweParams at the same time as they hear about
 -- everything else
 mkInitialState
-  :: WalletDetails -> Slot -> String -> ContractHistory -> Maybe State
+  :: WalletDetails -> Slot -> ContractNickname -> ContractHistory -> Maybe State
 mkInitialState walletDetails currentSlot nickname contractHistory =
   let
     chParams = view _chParams contractHistory
