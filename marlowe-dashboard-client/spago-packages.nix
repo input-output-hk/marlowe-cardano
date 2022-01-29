@@ -773,6 +773,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "logging" = pkgs.stdenv.mkDerivation {
+        name = "logging";
+        version = "v3.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/rightfold/purescript-logging.git";
+          rev = "148c371aa97e30663532d548faaca3555fbd3fca";
+          sha256 = "0dhc3a3w68vgf03pycwxwspcqdhp1j8l140q5dbqy0a0wmmmknac";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "markdown" = pkgs.stdenv.mkDerivation {
         name = "markdown";
         version = "022d8afd0d9e0ef8114da9e9ef5a67d9ffc86a29";

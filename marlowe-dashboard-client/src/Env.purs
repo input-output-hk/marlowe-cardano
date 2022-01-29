@@ -5,6 +5,7 @@ module Env
 
 import Capability.PlutusApps.MarloweApp.Types (class HasMarloweAppEndpointMutex)
 import Capability.PlutusApps.MarloweApp.Types as MarloweApp
+import Control.Logger.Effect (Logger)
 import Data.Newtype (class Newtype)
 import Effect.AVar (AVar)
 import Halogen (SubscriptionId)
@@ -27,6 +28,7 @@ newtype Env =
       --    creation functions didn't require that, so it seemed wrong to lift several functions into Effect.
       --    In contrast, the Env is created in Main, where we already have access to Effect
       contractStepCarouselSubscription :: AVar SubscriptionId
+    , logger :: Logger String
     -- See note on Capability.PlutusApps.MarloweApp.Types
     , marloweAppEndpointMutex :: MarloweApp.EndpointMutex
     , wsManager :: WebSocketManager

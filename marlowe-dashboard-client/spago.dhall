@@ -32,6 +32,7 @@
   , "integers"
   , "json-helpers"
   , "lists"
+  , "logging"
   , "maybe"
   , "newtype"
   , "now"

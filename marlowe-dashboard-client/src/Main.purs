@@ -10,6 +10,7 @@ import Capability.MarloweStorage
   , walletLocalStorageKey
   )
 import Capability.PlutusApps.MarloweApp as MarloweApp
+import Control.Logger.Effect.Console (logger) as Console
 import Data.AddressBook as AddressBook
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Either (hush)
@@ -34,6 +35,9 @@ mkEnv wsManager = do
   marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
   pure $ Env
     { contractStepCarouselSubscription
+    -- FIXME: Configure logger using bundle build
+    -- context (devel vs production etc.)
+    , logger: Console.logger identity
     , marloweAppEndpointMutex
     , wsManager
     }

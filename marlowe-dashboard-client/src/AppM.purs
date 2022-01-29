@@ -3,7 +3,9 @@ module AppM (AppM, passphrase, runAppM) where
 import Prologue
 
 import Clipboard (class MonadClipboard, copy)
-import Control.Monad.Reader (class MonadReader, ReaderT, mapReaderT, runReaderT)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
+import Control.Monad.Reader (class MonadReader, ReaderT, mapReaderT, runReaderT, withReaderT)
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec, tailRecM)
 import Control.Monad.Trans.Class (lift)
@@ -11,22 +13,16 @@ import Data.Array as A
 import Data.Lens (Lens', over)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
+import Data.Newtype (un)
 import Data.Passpharse (Passphrase)
 import Data.Passpharse as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (Env)
+import Env (Env(..))
 import Halogen (Component)
 import Halogen.Component (hoist)
-import Halogen.Store.Monad
-  ( class MonadStore
-  , StoreT(..)
-  , emitSelected
-  , getStore
-  , runStoreT
-  , updateStore
-  )
+import Halogen.Store.Monad (class MonadStore, StoreT(..), emitSelected, getStore, runStoreT, updateStore)
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
@@ -118,6 +114,10 @@ instance MonadAjax PAB.Api AppM where
 
 instance MonadAjax MarloweRun.Api AppM where
   request api = liftAff <<< request api
+
+instance MonadLogger String AppM where
+  -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`
+  log m = AppM $ withReaderT (un Env) (Control.Monad.Effect.Class.log' m)
 
 instance MonadClipboard AppM where
   copy = liftEffect <<< copy

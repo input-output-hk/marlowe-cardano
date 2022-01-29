@@ -14,13 +14,15 @@ module API.Marlowe.Run.Wallet.CentralizedTestnet
 import Prologue
 
 import Control.Error.Util (exceptNoteM)
+import Control.Logger.Capability (class MonadLogger, error)
+import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (ExceptT(..), except, runExceptT, withExceptT)
 import Data.Bifunctor (lmap)
 import Data.MnemonicPhrase (MnemonicPhrase, MnenonicPhraseErrorRow)
 import Data.MnemonicPhrase (fromStrings) as MnemonicPhrase
-import Data.MnemonicPhrase (injErr) as MnenonicPhrase
 import Data.Passpharse (Passphrase)
 import Data.Passpharse (toString) as Passphrase
+import Data.String (joinWith) as String
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
 import Data.Variant.Generic
@@ -77,6 +79,9 @@ restoreWallet { passphrase, walletName, mnemonicPhrase } = runExceptT do
         , "getRestoreMnemonicPhrase": mnemonicPhrase
         , "getRestorePassphrase": Passphrase.toString passphrase
         }
+    -- TODO: provide more fine grained info about mnemonic validation error
+    -- (from the server side) so we can handle it.
+    -- Validation inconsistency should be logged here too.
     fromServerErr BE.InvalidMnemonic = mkRestoreWalletError.invalidMnemonic
     fromServerErr err = mkRestoreWalletError.serverError err
 
@@ -95,6 +100,7 @@ type CreateWalletResponse =
 createWallet
   :: forall m
    . MonadAjax MarloweRun.Api m
+  => MonadLogger String m
   => WalletNickname
   -> Passphrase
   -> m (Either CreateWalletError CreateWalletResponse)
@@ -111,8 +117,12 @@ createWallet walletName passphrase = runExceptT do
     MarloweRun.postApiWalletV1CentralizedtestnetCreate body
   CreateResponse { mnemonic, walletInfo } <- res `exceptNoteM`
     mkError.serverError
-  mnemonic' <- except $ lmap MnenonicPhrase.injErr $ MnemonicPhrase.fromStrings
-    mnemonic
+  mnemonic' <- case MnemonicPhrase.fromStrings mnemonic of
+    Left _ -> do
+      error $
+        "Invalid mnemonic from server: " <> String.joinWith " " mnemonic
+      throwError mkError.serverError
+    Right m -> pure m
   pure
     { mnemonic: mnemonic'
     , walletInfo
