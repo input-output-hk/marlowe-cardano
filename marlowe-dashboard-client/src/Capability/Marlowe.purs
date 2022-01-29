@@ -3,7 +3,6 @@ module Capability.Marlowe
   , createWallet
   , restoreWallet
   , followContract
-  , createPendingFollowerApp
   , followContractWithPendingFollowerApp
   , createContract
   , applyTransactionInput
@@ -33,13 +32,13 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.MarloweStorage (class ManageMarloweStorage)
-import Capability.PAB (class ManagePAB)
 import Capability.PAB
   ( activateContract
   , getContractInstanceObservableState
   , getWalletContractInstances
   , invokeEndpoint
   ) as PAB
+import Capability.PAB (class ManagePAB)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Capability.Wallet as Wallet
@@ -70,6 +69,7 @@ import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
+import Data.UUID.Argonaut (UUID)
 import Data.Variant (Variant)
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
@@ -118,7 +118,6 @@ class
     :: WalletDetails
     -> MarloweParams
     -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
-  createPendingFollowerApp :: WalletDetails -> m (AjaxResponse PlutusAppId)
   followContractWithPendingFollowerApp
     :: WalletDetails
     -> MarloweParams
@@ -128,7 +127,7 @@ class
     :: WalletDetails
     -> Map TokenName PubKeyHash
     -> Contract
-    -> m (AjaxResponse Unit)
+    -> m (AjaxResponse UUID)
   applyTransactionInput
     :: WalletDetails
     -> MarloweParams
@@ -205,13 +204,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           $ parseDecodeJson
           $ unwrap observableStateJson
       pure $ followAppId /\ observableState
-  -- create a MarloweFollower app and return its PlutusAppId, but don't call its "follow" endpoint
-  -- (this function is used for creating "placeholder" contracts before we know the MarloweParams)
-  createPendingFollowerApp walletDetails =
-    let
-      walletId = view (_walletInfo <<< _walletId) walletDetails
-    in
-      PAB.activateContract MarloweFollower walletId
   -- call the "follow" endpoint of a pending MarloweFollower app, and return its PlutusAppId and
   -- observable state (to call this function, we must already know its PlutusAppId, but we return
   -- it anyway because it is convenient to have this function return the same type as
@@ -352,7 +344,6 @@ instance monadMarloweHalogenM ::
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams
-  createPendingFollowerApp = lift <<< createPendingFollowerApp
   followContractWithPendingFollowerApp walletDetails marloweParams followAppId =
     lift $ followContractWithPendingFollowerApp
       walletDetails

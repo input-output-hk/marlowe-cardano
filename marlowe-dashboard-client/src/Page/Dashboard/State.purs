@@ -11,7 +11,6 @@ import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe
   ( class ManageMarlowe
   , createContract
-  , createPendingFollowerApp
   , followContract
   , followContractWithPendingFollowerApp
   , redeem
@@ -146,6 +145,7 @@ When we connect a wallet, it has this initial state. Notable is the walletCompan
 mkInitialState
   :: WalletDetails
   -> Map PlutusAppId ContractHistory
+  -- FIXME: Contract nicknames should be indexed by MarloweParams
   -> Map PlutusAppId String
   -> Slot
   -> State
@@ -455,33 +455,22 @@ handleAction
                 SubmitResult (Milliseconds 600.0) (Left "Error")
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
-            _ -> do
-              -- Here we create a `MarloweFollower` app with no `MarloweParams`; when the next status
-              -- update of the wallet's `WalletCompanion` app comes in, we will know the `MarloweParams`,
-              -- and can use this placeholder `MarloweFollower` app to follow it. Follow the workflow
-              -- comments to see more...
-              ajaxPendingFollowerApp <- createPendingFollowerApp walletDetails
-              case ajaxPendingFollowerApp of
-                Left ajaxError -> do
-                  void $ tell _submitButtonSlot "action-pay-and-start" $
-                    SubmitResult (Milliseconds 600.0) (Left "Error")
-                  addToast $ ajaxErrorToast "Failed to initialise contract."
-                    ajaxError
-                Right followerAppId -> do
-                  insertIntoContractNicknames followerAppId
-                    $ CN.toString nickname
-                  let metaData = template.metaData
-                  modifying _contracts $ insert followerAppId $
-                    Contract.mkPlaceholderState
-                      (CN.toString nickname)
-                      metaData
-                      contract
-                  handleAction input CloseCard
-                  void $ tell _submitButtonSlot "action-pay-and-start" $
-                    SubmitResult (Milliseconds 600.0) (Right "")
-                  addToast $ successToast
-                    "The request to initialise this contract has been submitted."
-                  assign _templateState Template.initialState
+            -- Right reqId -> do
+            Right _ -> do
+              -- contractNickname <- use
+              --   (_templateState <<< _contractNicknameInput <<< _value)
+              -- FIXME
+              -- insertIntoContractNicknames followerAppId $ CN.toString nickname
+              -- let metaData = template.metaData
+              -- modifying _contracts $ insert followerAppId $
+              --   Contract.mkPlaceholderState contractNickname metaData
+              --     contract
+              handleAction input CloseCard
+              void $ tell _submitButtonSlot "action-pay-and-start" $
+                SubmitResult (Milliseconds 600.0) (Right "")
+              addToast $ successToast
+                "The request to initialise this contract has been submitted."
+              assign _templateState Template.initialState
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
