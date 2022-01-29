@@ -68,7 +68,7 @@ class MarloweApp m where
     :: PlutusAppId
     -> Map TokenName PubKeyHash
     -> Contract
-    -> m (AjaxResponse Unit)
+    -> m (AjaxResponse UUID)
   applyInputs
     :: PlutusAppId -> MarloweParams -> TransactionInput -> m (AjaxResponse Unit)
   -- TODO auto
@@ -84,7 +84,9 @@ instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
     reqId <- liftEffect genUUID
     let payload = [ encodeJson reqId, encodeJson roles, encodeJson contract ]
-    invokeMutexedEndpoint plutusAppId reqId "create" _create payload
+    map (const reqId) <$> invokeMutexedEndpoint plutusAppId reqId "create"
+      _create
+      payload
   applyInputs
     plutusAppId
     marloweContractId

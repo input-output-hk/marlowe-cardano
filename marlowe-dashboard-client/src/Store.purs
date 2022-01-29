@@ -41,10 +41,8 @@ data Action
   | ClearToast
 
 reduce :: Store -> Action -> Store
--- TODO: currently we are only setting the currentSlot global variable, but once we
---       refactor contract state to live under the halogen store (SCP-3208) we can also move the
---       logic of AdvanceTimedoutSteps here.
 reduce store = case _ of
+  -- FIXME: SCP-3208
   AdvanceToSlot newSlot -> store { currentSlot = newSlot }
   ShowToast msg -> store { toast = Just msg }
   ClearToast -> store { toast = Nothing }

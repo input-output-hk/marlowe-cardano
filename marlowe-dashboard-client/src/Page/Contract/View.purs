@@ -192,9 +192,9 @@ statusIndicatorMessage (Started state) =
 
     participantsWithAction = Set.fromFoldable $ map fst $ state ^. _namedActions
 
-    contract = state ^. (_executionState <<< _contract)
+    executionState = state ^. _executionState
   in
-    if contract == Close then
+    if isClosed executionState then
       "Contract completed"
     else if Set.isEmpty (Set.intersection userParties participantsWithAction) then
       "Waiting for "
