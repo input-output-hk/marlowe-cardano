@@ -54,6 +54,9 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
       , formClasses: [ "relative", "space-y-4" ]
       }
   let
+    {- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
+      This is the form used to restore a wallet and what initializes the use case.
+    -}
     submit nickname mnemonic = do
       Hooks.put serverErrorId ""
       Hooks.put restoringId true

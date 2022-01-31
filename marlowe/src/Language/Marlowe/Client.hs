@@ -306,6 +306,7 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
             logWarn @String (show err)
             tell $ Just $ EndpointException reqId endpointName err
             marlowePlutusContract)
+    -- [UC-CONTRACT-1][1] Starting a Marlowe contract
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
@@ -592,6 +593,8 @@ instance FromJSON CompanionState where
     parseJSON v = CompanionState . Map.fromList <$> parseJSON v
 
 {-|
+    [UC-CONTRACT-2][0] Receive a role token for a marlowe contract
+
     Contract that monitors a user wallet for receiving a Marlowe role token.
     When it sees that a Marlowe contract exists on chain with a role currency
     of a token the user owns it updates its @CompanionState@

@@ -186,7 +186,7 @@ handleAction
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
-{- [Workflow 3][0] Disconnect a wallet -}
+{- [UC-WALLET-3][0] Disconnect a wallet -}
 handleAction { walletDetails } DisconnectWallet = do
   contracts <- use _contracts
   callMainFrameAction $ MainFrame.EnterWelcomeState walletDetails contracts
@@ -240,7 +240,7 @@ In this case, we change the walletCompanionStatus to `LoadingNewContracts`, and 
 new `MarloweFollower`. We'll know the loading is finished when we've received the first status
 update for each of these `MarloweFollower` apps through the WebSocket.
 -}
-{- [Workflow 4][2] Start a Marlowe contract
+{- [UC-CONTRACT-1][2] Start a Marlowe contract
 After starting a new Marlowe contract, we should receive a WebSocket notification informing us of
 the `MarloweParams` and initial `MarloweData` for that contract (via a status update for our
 `WalletCompanion` app). We now need to start following that contract with a `MarloweFollower` app.
@@ -250,6 +250,7 @@ So here we need to check whether there is an existing `MarloweFollower` app with
 If someone else started the contract, and gave us a role, we will have no placeholder
 `MarloweFollower` app, and so we simply create a new one and start following immediately.
 -}
+{- [UC-CONTRACT-2][X] Receive a role token for a marlowe contract -}
 handleAction { walletDetails } (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
   existingContracts <- use _contracts
@@ -306,14 +307,15 @@ after we connected the wallet, but _before_ the walletCompanionStatus was set to
 the last element of that set, we can set the walletCompanionStatus to `FirstUpdateComplete`. This
 (finally!) completes the workflow of connecting a wallet.
 -}
-{- [Workflow 4][4] Start a contract
+{- [UC-CONTRACT-1][4] Start a contract
+   [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
 If we started a contract (or someone else started one and gave us a role in it), we will have
 created a `MarloweFollower` app for that contract, and started following the contract with that
 `MarloweFollower` app. Since we will also be subscribed to that app, we will receive an update
 about its initial state through the WebSocket. We potentially use that to change the corresponding
 `Contract.State` from `Starting` to `Started`.
 -}
-{- [Workflow 5][2] Move a contract forward -}
+{- [UC-CONTRACT-3][2] Apply an input to a contract -}
 handleAction
   input@{ currentSlot, walletDetails }
   (UpdateContract followerAppId contractHistory) = do
@@ -370,7 +372,7 @@ handleAction
             updatedPendingMarloweParams
       _ -> pure unit
 
-{- [Workflow 6][1] Redeem payments
+{- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
 handler looks, in the corresponding contract, for any payments to roles for which the current
 wallet holds the token, and then calls the "redeem" endpoint of the wallet's `MarloweApp` for each
@@ -440,10 +442,16 @@ handleAction
         $ set _card (Just $ ContactsCard)
             <<< set (_contactsState <<< _cardSection)
               (NewWallet $ Just tokenName)
-    {- [Workflow 4][0] Starting a Marlowe contract -}
-    Template.OnStartContract template params -> do
-      let ContractParams nickname roles _ _ = params
-      case instantiateExtendedContract currentSlot template params of
+    {- [UC-CONTRACT-1][0] Starting a Marlowe contract
+     The flow of creating a new marlowe contract starts when we submit the
+     Template form. In here we apply the contract parameters to the Marlowe
+     Extended contract to receive a Marlowe Core contract, and we call the
+     PAB endpoint to create and distribute the role tokens. We also create
+     a placeholder so the user can see that that the contract is being created
+    -}
+    Template.StartContract -> do
+      templateState <- use _templateState
+      case instantiateExtendedContract currentSlot templateState of
         Nothing -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
             (Milliseconds 600.0)

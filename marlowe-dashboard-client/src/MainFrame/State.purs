@@ -99,25 +99,13 @@ import Toast.Types
 import WebSocket.Support as WS
 
 {-
-The Marlowe Run app consists of six main workflows:
+The Marlowe Run App features are defined in the docs/use-cases/Readme.md file, and they have indices
+that can be searched throughout the code.
 
-1. UC-WALLET-TESTNET-1 Create a testnet wallet (this only make sense for the centralized testnet site and may become redundant when we integrate with light wallets).
-2. UC-WALLET-TESTNET-2 Restore a testnet wallet (same note as before).
-3. Disconnect a wallet.
-4. Start a contract.
-5. Move a contract forward.
-6. Redeem payments (this is triggered automatically - but may need to be manual when we
-   integrate with real wallets).
-
-There are two main application states: the `Welcome` state (for workflows 1 and 2), and the
-`Dashboard` state (for workflows 3-6). Initially we are in the `Welcome` state. Connecting a wallet
-(workflow 2) moves you into the `Dashboard` state; disconnecting a wallet (workflow 4) moves you
-back into the `Welcome` state.
-
-Because of the synchronous nature of the app, with messages passing between the browser and the PAB
-(both through direct API calls and a WebSocket), these workflows are in general spread out all over
-the code. Comments are added throughout with the format "[Workflow n][m]" - so you can search the
-code for e.g. "[Workflow 4]" to see all of the steps involved in starting a contract.
+There are two main application states: the `Welcome` state (UC-WALLET-TESTNET-1 and UC-WALLET-TESTNET-2),
+and the `Dashboard` state (for the rest of the use cases). The application starts in the `Welcome` state.
+Creating or restoring a wallet moves you into the `Dashboard` state; disconnecting a wallet (UC-WALLET-3)
+moves you back into the `Welcome` state.
 -}
 mkMainFrame
   :: forall m
@@ -247,7 +235,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       updateStore
                         $ Store.NewCompanionAppStateObserved companionAppState
                       {- [Workflow 2][5] Connect a wallet -}
-                      {- [Workflow 4][1] Start a contract
+                      {- [UC-CONTRACT-1][X] Starting a Marlowe contract
                     When we start a contract, our wallet will initially receive all the role tokens for that contract
                     (before they are paid out to the people we gave those roles to). And if someone else started a
                     contract and gave us a role, we will receive that role token. Either way, our `WalletCompanion` app
@@ -299,12 +287,12 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       decodingError
                     Right contractHistory -> do
                       {- [Workflow 2][7] Connect a wallet -}
-                      {- [Workflow 4][3] Start a contract -}
-                      {- [Workflow 5][1] Move a contract forward -}
+                      {- [UC-CONTRACT-1][3] Start a contract -}
+                      {- [UC-CONTRACT-3][1] Apply an input to a contract -}
                       handleAction $ DashboardAction $ Dashboard.UpdateContract
                         plutusAppId
                         contractHistory
-                      {- [Workflow 6][0] Redeem payments -}
+                      {- [UC-CONTRACT-4][0] Redeem payments -}
                       handleAction $ DashboardAction $ Dashboard.RedeemPayments
                         plutusAppId
           NewActiveEndpoints activeEndpoints -> do
@@ -369,6 +357,11 @@ handleAction
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction Init = do
+  {- [UC-WALLET-TESTNET-2][4b] Restore a testnet wallet
+  This is another path for "restoring" a wallet. When we initialize the app,
+  if we have some wallet details in the local storage, we try to enter the dashboard
+  state with it.
+  -}
   mWalletDetails <- peruse $ _subState <<< _Left <<< _1 <<< _Just
   traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
   handleWalletChange mWalletDetails
@@ -382,7 +375,7 @@ handleAction (Receive input) = do
 
 handleAction (OnPoll wallet) = updateTotalFunds wallet
 
-{- [Workflow 3][1] Disconnect a wallet
+{- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
 need to unsubscribe from all the apps related to the wallet that was previously connected.
 -}
@@ -397,7 +390,7 @@ handleAction (EnterWelcomeState walletDetails followerApps) = do
   assign _subState $ Left $ Tuple Nothing Welcome.initialState
   updateStore Store.DeactivateWallet
 
-{- [Workflow 2][3] Connect a wallet
+{- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
 the PAB to get the given wallet's `MarloweFollower` apps, and subscribe to all the relevant apps.
 If the wallet has been given a role token for a new contract while the user was disconnected, they
