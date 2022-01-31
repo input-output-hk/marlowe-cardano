@@ -97,6 +97,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (UpdateContract _ _) = Nothing
   toEvent (RedeemPayments _) = Nothing
   toEvent AdvanceTimedoutSteps = Nothing
-  toEvent (TemplateAction templateAction) = toEvent templateAction
+  toEvent (TemplateAction _) = Nothing
   toEvent (ContractAction _ contractAction) = toEvent contractAction
   toEvent (SetContactForRole _ _) = Nothing

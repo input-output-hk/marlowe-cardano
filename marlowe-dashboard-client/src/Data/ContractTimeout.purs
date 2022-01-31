@@ -6,7 +6,7 @@ module Data.ContractTimeout
   , fromString
   , validator
   , toString
-  , toInt
+  , toBigInt
   ) where
 
 import Prologue
@@ -95,10 +95,10 @@ fromBigInt i
   | otherwise = Right $ ContractTimeout i
 
 toString :: ContractTimeout -> String
-toString = BigInt.toString <<< toInt
+toString = BigInt.toString <<< toBigInt
 
-toInt :: ContractTimeout -> BigInt
-toInt (ContractTimeout i) = i
+toBigInt :: ContractTimeout -> BigInt
+toBigInt (ContractTimeout i) = i
 
 -------------------------------------------------------------------------------
 -- Polyform adapters

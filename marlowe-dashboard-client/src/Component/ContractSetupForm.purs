@@ -4,13 +4,12 @@ import Prologue
 
 import Component.Icons (Icon, icon)
 import Component.Icons as Icon
-import Component.Template.Types (Action(..), ContractSetupStage(..))
-import Component.Template.Types as Template
 import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
+import Data.Compactable (compact)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as CN
 import Data.ContractTimeout (ContractTimeout)
@@ -52,6 +51,10 @@ type Input =
   , contractName :: String
   }
 
+data Msg
+  = Back
+  | Continue ContractParams
+
 type ContractInput =
   { nickname :: String
   , roles :: Map TokenName String
@@ -81,7 +84,7 @@ data ContractParams =
 derive instance Eq ContractParams
 
 type Component q m =
-  H.Component q Input Template.Action m
+  H.Component q Input Msg m
 
 contractNicknameForm
   :: forall parentAction s m
@@ -95,11 +98,11 @@ contractNicknameForm =
     }
 
 roleAssignmentForm
-  :: forall s m
+  :: forall pa s m
    . Monad m
   => AddressBook
   -> TokenName
-  -> Form Template.Action (InputSlots s) m String Address
+  -> Form pa (InputSlots s) m String Address
 roleAssignmentForm addressBook roleName =
   F.mkForm
     { validator
@@ -213,19 +216,19 @@ component = Hooks.component \{ outputToken } input -> Hooks.do
           ]
           [ HH.a
               [ classNames [ "flex-1", "text-center" ]
-              , onClick_ $ Hooks.raise outputToken $ SetContractSetupStage
-                  Overview
+              , onClick_ $ Hooks.raise outputToken $ Back
               ]
               [ HH.text "Back" ]
           , HH.button
-              [ classNames $
-                  Css.primaryButton
-                    <> [ "flex-1", "text-left" ]
-                    <> Css.withIcon Icon.ArrowRight
-              , onClick_ $ Hooks.raise outputToken $ SetContractSetupStage
-                  Review
-              , HP.enabled $ isJust result
-              ]
+              ( compact
+                  [ pure $ classNames $
+                      Css.primaryButton
+                        <> [ "flex-1", "text-left" ]
+                        <> Css.withIcon Icon.ArrowRight
+                  , onClick_ <<< Hooks.raise outputToken <<< Continue <$> result
+                  , pure $ HP.enabled $ isJust result
+                  ]
+              )
               [ HH.text "Review" ]
           ]
       ]
