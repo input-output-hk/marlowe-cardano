@@ -39,6 +39,8 @@
   , "ordered-collections"
   , "partial"
   , "polyform"
+  , "polyform-batteries-core"
+  , "polyform-batteries-urlencoded"
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
