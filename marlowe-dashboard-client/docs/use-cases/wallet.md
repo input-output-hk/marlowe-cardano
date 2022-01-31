@@ -10,3 +10,9 @@ Allow a user to create a new wallet in a centralized server connected to the tes
 With the use of a mnemonic phrase the user can retrieve the wallet created in `UC-WALLET-TESTNET-1` in the centralized server.
 
 **IMPORTANT!!!: ** The user should never use a mnemonic phrase from a real mainnet wallet.
+
+## Disconnect a wallet
+#### UC-WALLET-3
+
+Disconnecting a wallet is our way of "logging-out". The user moves from the Dashboard page back
+to the Welcome page.

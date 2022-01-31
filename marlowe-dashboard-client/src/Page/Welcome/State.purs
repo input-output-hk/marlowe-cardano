@@ -74,10 +74,10 @@ that wallet: a `WalletCompanion` and a `MarloweApp`.
 -- TODO: This functionality is disabled, I'll re-enable it as part of SCP-3170.
 handleAction GenerateWallet = pure unit
 
-{- [Workflow 2][2] Connect a wallet
-This action is triggered by clicking the confirmation button on the UseWalletCard or
-UseNewWalletCard. It saves the wallet nickname to LocalStorage, and then calls the
-`MainFrame.EnterDashboardState` action.
+{- [UC-WALLET-TESTNET-2][4a] Restore a testnet wallet
+This action is triggered after the restore wallet form submits it's data and receive
+the Wallet details. It stores the wallet nickname in LocalStorage, and then it enters the
+dashboard.
 -}
 handleAction (ConnectWallet walletNickname walletDetails) = do
   assign _enteringDashboardState true

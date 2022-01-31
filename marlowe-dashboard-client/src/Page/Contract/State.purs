@@ -366,7 +366,7 @@ handleAction { followerAppId } (SetNickname nickname) =
     put $ Started started { nickname = nickname }
     insertIntoContractNicknames followerAppId nickname
 
-{- [Workflow 5][0] Move a contract forward -}
+{- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction { currentSlot, walletDetails } (ConfirmAction namedAction) =
   withStarted \started@{ executionState, marloweParams } -> do
     let

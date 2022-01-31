@@ -144,6 +144,15 @@ class
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
   unsubscribeFromWallet :: WalletId -> m Unit
 
+{- [UC-WALLET-TESTNET-2][3] Restore a testnet wallet
+  After receiving the WalletId from the backend, we need to fetch the plutus
+  contracts this wallet might have, and see if there is already an instance of
+  the WalletCompanion and MarloweApp plutus scripts.
+  TODO: there are two possible flows to restore a wallet, (search 4a and 4b), in
+        step 5 we are subscribing again to the plutus scripts. While I think it doesn't
+        cause a bug, it is a little bit weird. We should modify WalletDetails to have the
+        concept of "connected/disconnected", and connect in step 5 rather than here.
+-}
 fetchWalletDetails
   :: forall m r
    . ManageMarlowe m

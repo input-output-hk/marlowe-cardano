@@ -29,20 +29,20 @@ walletServerConfig:
   walletSettings:
     baseUrl: http://localhost:8090
 nodeServerConfig:
-  mscSocketPath: node.socket
-  mscBaseUrl: "localhost"
-  mscKeptBlocks: 2160
-  mscNetworkId: "1564"
-  mscSlotConfig:
+  pscSocketPath: node.socket
+  pscBaseUrl: "localhost"
+  pscKeptBlocks: 2160
+  pscNetworkId: "1564"
+  pscSlotConfig:
     scSlotZeroTime: 1638215277000
     scSlotLength: 1000
-  mscFeeConfig:
+  pscFeeConfig:
     fcConstantFee:
       getLovelace: 10
     fcScriptsFeeFactor: 1.0
-  mscInitialTxWallets: []
-  mscNodeMode: AlonzoNode
-  mscProtocolParametersJsonPath: testnet.protocol
+  pscInitialTxWallets: []
+  pscNodeMode: AlonzoNode
+  pscProtocolParametersJsonPath: testnet.protocol
 chainIndexConfig:
   ciBaseUrl: http://localhost:9083
   ciWatchedAddresses: []
