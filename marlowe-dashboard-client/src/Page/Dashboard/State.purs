@@ -35,25 +35,15 @@ import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, initialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..), WalletDetails)
-import Component.InputField.Lenses (_value)
-import Component.InputField.Types (Action(..)) as InputField
+import Component.ContractSetupForm (ContractParams(..))
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
-import Component.Template.Lenses
-  ( _contractNicknameInput
-  , _contractSetupStage
-  , _contractTemplate
-  , _roleWalletInputs
-  )
 import Component.Template.State (dummyState, handleAction, initialState) as Template
 import Component.Template.State (instantiateExtendedContract)
-import Component.Template.Types (Action(..), State) as Template
-import Component.Template.Types (ContractSetupStage(..))
+import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
-import Data.AddressBook as AB
 import Data.Array (null)
-import Data.Either (hush)
-import Data.Filterable (filterMap)
+import Data.ContractNickname as CN
 import Data.Foldable (for_)
 import Data.Lens
   ( _Just
@@ -88,7 +78,6 @@ import Data.Set (delete, fromFoldable, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
-import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
@@ -100,7 +89,6 @@ import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
-import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
@@ -219,7 +207,7 @@ handleAction { walletDetails } (OpenCard card) = do
   modify_
     $ set _card (Just card)
         <<< set (_contactsState <<< _cardSection) Home
-        <<< set (_templateState <<< _contractSetupStage) Start
+        <<< set _templateState Template.Start
   -- then we set the card to open (and close the mobile menu) in a separate `modify_`, so that the
   -- CSS transition animation works
   modify_
@@ -438,7 +426,7 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
         Contract.CancelConfirmation
 
 handleAction
-  input@{ currentSlot, addressBook, walletDetails }
+  input@{ currentSlot, walletDetails }
   (TemplateAction templateAction) =
   case templateAction of
     Template.OpenCreateWalletCard tokenName -> do
@@ -447,9 +435,9 @@ handleAction
             <<< set (_contactsState <<< _cardSection)
               (NewWallet $ Just tokenName)
     {- [Workflow 4][0] Starting a Marlowe contract -}
-    Template.StartContract -> do
-      templateState <- use _templateState
-      case instantiateExtendedContract currentSlot templateState of
+    Template.OnStartContract template params -> do
+      let ContractParams nickname roles _ _ = params
+      case instantiateExtendedContract currentSlot template params of
         Nothing -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
             (Milliseconds 600.0)
@@ -457,16 +445,8 @@ handleAction
           addToast $ errorToast "Failed to instantiate contract." $ Just
             "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
         Just contract -> do
-          -- the user enters wallet nicknames for roles; here we convert these into pubKeyHashes
-          roleWalletInputs <- use (_templateState <<< _roleWalletInputs)
-          let
-            roleWallets =
-              filterMap (hush <<< WN.fromString <<< view _value)
-                roleWalletInputs
-
-            roles = A.toPubKeyHash
-              <$> mapMaybe (flip AB.lookupAddress addressBook) roleWallets
-          ajaxCreateContract <- createContract walletDetails roles contract
+          ajaxCreateContract <-
+            createContract walletDetails (A.toPubKeyHash <$> roles) contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
             Left ajaxError -> do
@@ -487,13 +467,13 @@ handleAction
                   addToast $ ajaxErrorToast "Failed to initialise contract."
                     ajaxError
                 Right followerAppId -> do
-                  contractNickname <- use
-                    (_templateState <<< _contractNicknameInput <<< _value)
-                  insertIntoContractNicknames followerAppId contractNickname
-                  metaData <- use
-                    (_templateState <<< _contractTemplate <<< _metaData)
+                  insertIntoContractNicknames followerAppId
+                    $ CN.toString nickname
+                  let metaData = template.metaData
                   modifying _contracts $ insert followerAppId $
-                    Contract.mkPlaceholderState contractNickname metaData
+                    Contract.mkPlaceholderState
+                      (CN.toString nickname)
+                      metaData
                       contract
                   handleAction input CloseCard
                   void $ tell _submitButtonSlot "action-pay-and-start" $
@@ -502,22 +482,23 @@ handleAction
                     "The request to initialise this contract has been submitted."
                   assign _templateState Template.initialState
     _ -> do
-      toTemplate $ Template.handleAction { addressBook } templateAction
+      toTemplate $ Template.handleAction templateAction
 
 -- FIXME: this all feels like a horrible hack that should be refactored.
 -- This action is a bridge from the Contacts to the Template modules. It is used to create a
 -- contract for a specific role during contract setup.
-handleAction input (SetContactForRole tokenName walletNickname) = do
-  handleAction input $ TemplateAction Template.UpdateRoleWalletValidators
-  handleAction input
-    $ TemplateAction
-    $ Template.RoleWalletInputAction tokenName
-    $ InputField.SetValue
-    $ WN.toString walletNickname
-  -- we assign the card directly rather than calling the OpenCard action, because this action is
-  -- triggered when the ContactsCard is open, and we don't want to animate opening and closing
-  -- cards - we just want to switch instantly back to this card
-  assign _card $ Just ContractTemplateCard
+handleAction _ (SetContactForRole _ _) = do
+  pure unit
+-- handleAction input $ TemplateAction Template.UpdateRoleWalletValidators
+-- handleAction input
+--   $ TemplateAction
+--   $ Template.RoleWalletInputAction tokenName
+--   $ InputField.SetValue
+--   $ WN.toString walletNickname
+-- -- we assign the card directly rather than calling the OpenCard action, because this action is
+-- -- triggered when the ContactsCard is open, and we don't want to animate opening and closing
+-- -- cards - we just want to switch instantly back to this card
+-- assign _card $ Just ContractTemplateCard
 
 handleAction
   input@{ walletDetails, currentSlot, tzOffset }

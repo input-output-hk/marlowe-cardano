@@ -3,31 +3,20 @@ module Component.Template.View (contractTemplateCard) where
 import Prologue hiding (Either(..), div)
 
 import Component.Contacts.State (adaToken, getAda)
+import Component.ContractSetupForm (ContractParams(..), Msg(..))
 import Component.ContractSetupForm as ContractSetupForm
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
-import Component.InputField.Lenses (_value)
-import Component.InputField.Types (State) as InputField
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.Popper (Placement(..))
-import Component.Template.Lenses
-  ( _contractSetupStage
-  , _contractTemplate
-  , _slotContentInputs
-  , _valueContentInputs
-  )
-import Component.Template.Types
-  ( Action(..)
-  , ContractSetupStage(..)
-  , SlotError
-  , State
-  , ValueError
-  )
+import Component.Template.Types (Action(..), State(..))
 import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.AddressBook (AddressBook)
+import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
+import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
 import Data.Either (hush)
 import Data.Filterable (filterMap)
@@ -66,13 +55,11 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
   , MetaData
-  , NumberFormat(..)
   , _contractName
   , _extendedContract
   , _metaData
   , _slotParameterDescriptions
   , _valueParameterDescription
-  , _valueParameterFormat
   , _valueParameterInfo
   )
 import Marlowe.HasParties (getParties)
@@ -97,35 +84,30 @@ contractTemplateCard
   -> State
   -> ComponentHTML Action ChildSlots m
 contractTemplateCard addressBook assets state =
-  let
-    contractSetupStage = view _contractSetupStage state
-
-    contractTemplate = view _contractTemplate state
-  in
-    div
-      [ classNames
-          [ "h-full"
-          , "grid"
-          , "grid-rows-auto-auto-1fr"
-          , "divide-y"
-          , "divide-gray"
-          ]
-      ]
-      [ h2
-          [ classNames Css.cardHeader ]
-          [ text "Contract templates" ]
-      , contractTemplateBreadcrumb contractSetupStage contractTemplate
-      , case contractSetupStage of
-          Start -> contractSelection
-          Overview -> contractOverview contractTemplate
-          Setup -> contractSetup addressBook state
-          Review -> contractReview assets state
-      ]
+  div
+    [ classNames
+        [ "h-full"
+        , "grid"
+        , "grid-rows-auto-auto-1fr"
+        , "divide-y"
+        , "divide-gray"
+        ]
+    ]
+    [ h2
+        [ classNames Css.cardHeader ]
+        [ text "Contract templates" ]
+    , contractTemplateBreadcrumb state
+    , case state of
+        Start -> contractSelection
+        Overview template -> contractOverview template
+        Setup template mParams -> contractSetup addressBook template mParams
+        Review template params -> contractReview assets template params
+    ]
 
 ------------------------------------------------------------
 contractTemplateBreadcrumb
-  :: forall p. ContractSetupStage -> ContractTemplate -> HTML p Action
-contractTemplateBreadcrumb contractSetupStage contractTemplate =
+  :: forall p. State -> HTML p Action
+contractTemplateBreadcrumb contractSetupStage =
   div
     [ classNames
         [ "overflow-x-auto"
@@ -140,24 +122,26 @@ contractTemplateBreadcrumb contractSetupStage contractTemplate =
     ]
     case contractSetupStage of
       Start -> [ activeItem "Templates" ]
-      Overview ->
-        [ previousItem "Templates" Start
+      Overview template ->
+        [ previousItem "Templates" OnReset
         , arrow
-        , activeItem contractTemplate.metaData.contractName
+        , activeItem template.metaData.contractName
         ]
-      Setup ->
-        [ previousItem "Templates" Start
+      Setup template _ ->
+        [ previousItem "Templates" OnReset
         , arrow
-        , previousItem contractTemplate.metaData.contractName Overview
+        , previousItem template.metaData.contractName
+            $ OnTemplateChosen template
         , arrow
         , activeItem "Setup"
         ]
-      Review ->
-        [ previousItem "Templates" Start
+      Review template params ->
+        [ previousItem "Templates" OnReset
         , arrow
-        , previousItem contractTemplate.metaData.contractName Overview
+        , previousItem template.metaData.contractName
+            $ OnTemplateChosen template
         , arrow
-        , previousItem "Setup" Setup
+        , previousItem "Setup" $ OnSetup template (Just params)
         , arrow
         , activeItem "Review and pay"
         ]
@@ -174,7 +158,7 @@ contractTemplateBreadcrumb contractSetupStage contractTemplate =
       ]
       [ text itemText ]
 
-  previousItem itemText stage =
+  previousItem itemText action =
     a
       [ classNames
           [ "whitespace-nowrap"
@@ -185,7 +169,7 @@ contractTemplateBreadcrumb contractSetupStage contractTemplate =
           , "hover:border-purple"
           , "font-semibold"
           ]
-      , onClick_ $ SetContractSetupStage stage
+      , onClick_ action
       ]
       [ text itemText ]
 
@@ -217,7 +201,7 @@ contractSelection =
           , "border-b"
           , "cursor-pointer"
           ]
-      , onClick_ $ SetTemplate contractTemplate
+      , onClick_ $ OnTemplateChosen contractTemplate
       ]
       [ contractIcon contractTemplate.metaData.contractType
       , div_
@@ -261,13 +245,13 @@ contractOverview contractTemplate =
         ]
         [ a
             [ classNames [ "flex-1", "text-center" ]
-            , onClick_ $ SetContractSetupStage Start
+            , onClick_ OnBack
             ]
             [ text "Back" ]
         , button
             [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <>
                 Css.withIcon Icon.ArrowRight
-            , onClick_ $ SetContractSetupStage Setup
+            , onClick_ $ OnSetup contractTemplate Nothing
             ]
             [ text "Setup" ]
         ]
@@ -278,15 +262,16 @@ contractSetup
    . MonadAff m
   => MonadRec m
   => AddressBook
-  -> State
+  -> ContractTemplate
+  -> Maybe ContractParams
   -> ComponentHTML Action ChildSlots m
-contractSetup addressBook state =
+contractSetup addressBook template _ =
   let
-    metaData = view (_contractTemplate <<< _metaData) state
+    metaData = view _metaData template
 
-    contract = view (_contractTemplate <<< _extendedContract) state
+    contract = view _extendedContract template
 
-    contractName = view (_contractName) metaData
+    contractName = view _contractName metaData
 
     partyToRole (PK _) = Nothing
     partyToRole (Role tokenName) = Just tokenName
@@ -307,23 +292,24 @@ contractSetup addressBook state =
       , addressBook
       , contractName
       }
-      identity
+      case _ of
+        Back -> OnBack
+        Continue params -> OnReview template params
 
 contractReview
   :: forall m
    . MonadAff m
   => Assets
-  -> State
+  -> ContractTemplate
+  -> ContractParams
   -> ComponentHTML Action ChildSlots m
-contractReview assets state =
+contractReview assets template params =
   let
     hasSufficientFunds = getAda assets >= contractCreationFee
 
-    metaData = view (_contractTemplate <<< _metaData) state
+    metaData = view _metaData template
 
-    slotContentInputs = view _slotContentInputs state
-
-    valueContentInputs = view _valueContentInputs state
+    ContractParams _ _ slots values = params
   in
     div
       [ classNames
@@ -356,10 +342,8 @@ contractReview assets state =
               ]
           , div
               [ classNames [ "p-4" ] ]
-              [ ul_ $ slotParameter metaData <$> Map.toUnfoldable
-                  slotContentInputs
-              , ul_ $ valueParameter metaData <$> Map.toUnfoldable
-                  valueContentInputs
+              [ ul_ $ slotParameter metaData <$> Map.toUnfoldable slots
+              , ul_ $ valueParameter metaData <$> Map.toUnfoldable values
               ]
           ]
       , div
@@ -390,7 +374,7 @@ contractReview assets state =
                   [ classNames [ "flex", "items-baseline" ] ]
                   [ a
                       [ classNames [ "flex-1", "text-center" ]
-                      , onClick_ $ SetContractSetupStage Setup
+                      , onClick_ OnBack
                       ]
                       [ text "Back" ]
                   , loadingSubmitButton
@@ -398,7 +382,7 @@ contractReview assets state =
                       , caption: "Pay and start"
                       , styles: [ "flex-1" ]
                       , enabled: true
-                      , handler: StartContract
+                      , handler: OnStartContract template params
                       }
                   ]
               , div
@@ -418,45 +402,32 @@ slotParameter
   :: forall m
    . MonadAff m
   => MetaData
-  -> Tuple String (InputField.State SlotError)
+  -> Tuple String ContractTimeout
   -> ComponentHTML Action ChildSlots m
-slotParameter metaData (key /\ slotContentInput) =
+slotParameter metaData (key /\ timeout) =
   let
     slotParameterDescriptions = view _slotParameterDescriptions metaData
 
     description = fromMaybe "no description available" $ OMap.lookup key
       slotParameterDescriptions
-
-    value = view _value slotContentInput
   in
-    parameter key description $ value <> " minutes"
+    parameter key description $ CT.toString timeout <> " minutes"
 
 valueParameter
   :: forall m
    . MonadAff m
   => MetaData
-  -> Tuple String (InputField.State ValueError)
+  -> Tuple String ContractValue
   -> ComponentHTML Action ChildSlots m
-valueParameter metaData (key /\ valueContentInput) =
+valueParameter metaData (key /\ value) =
   let
-    valueParameterFormats = map (view _valueParameterFormat)
-      (view _valueParameterInfo metaData)
-
-    numberFormat = fromMaybe DefaultFormat $ OMap.lookup key
-      valueParameterFormats
-
     valueParameterDescriptions = map (view _valueParameterDescription)
       (view _valueParameterInfo metaData)
 
     description = fromMaybe "no description available" $ OMap.lookup key
       valueParameterDescriptions
 
-    value = view _value valueContentInput
-
-    formattedValue = case numberFormat of
-      DefaultFormat -> value
-      DecimalFormat _ prefix -> prefix <> " " <> value
-      TimeFormat -> value <> " minutes"
+    formattedValue = CV.toString value
   in
     parameter key description formattedValue
 
