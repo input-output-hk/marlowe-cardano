@@ -5,7 +5,13 @@ import Prologue
 import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
-import Control.Monad.Reader (class MonadReader, ReaderT, mapReaderT, runReaderT, withReaderT)
+import Control.Monad.Reader
+  ( class MonadReader
+  , ReaderT
+  , mapReaderT
+  , runReaderT
+  , withReaderT
+  )
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec, tailRecM)
 import Control.Monad.Trans.Class (lift)
@@ -22,7 +28,14 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Env (Env(..))
 import Halogen (Component)
 import Halogen.Component (hoist)
-import Halogen.Store.Monad (class MonadStore, StoreT(..), emitSelected, getStore, runStoreT, updateStore)
+import Halogen.Store.Monad
+  ( class MonadStore
+  , StoreT(..)
+  , emitSelected
+  , getStore
+  , runStoreT
+  , updateStore
+  )
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB

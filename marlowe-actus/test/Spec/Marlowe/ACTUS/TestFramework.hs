@@ -26,7 +26,7 @@ import Data.ByteString.Lazy as B (readFile)
 import Data.Char (toUpper)
 import Data.List as L (find, unzip4)
 import Data.Map as Map (Map, elems, lookup)
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Sort (sortOn)
 import Data.Time (LocalTime (..))
 import GHC.Generics (Generic)
@@ -38,11 +38,14 @@ import Language.Marlowe.ACTUS.Domain.Schedule
 import Language.Marlowe.ACTUS.Generator.Analysis
 import Language.Marlowe.ACTUS.Model.ContractSchedule as S (maturity, schedule)
 import Language.Marlowe.ACTUS.Model.Payoff (CtxPOF (CtxPOF))
+import Language.Marlowe.ACTUS.Model.StateInitialization (initializeState)
 import Language.Marlowe.ACTUS.Model.StateTransition (CtxSTF (..))
-import Language.Marlowe.ACTUS.Utility.DateShift (getFollowingBusinessDay)
+import Language.Marlowe.ACTUS.Utility.DateShift (applyBDCWithCfg)
 import Test.Tasty
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
 import Text.Printf (printf)
+
+import Debug.Pretty.Simple
 
 tests :: String -> [TestCase] -> TestTree
 tests n t =
@@ -75,7 +78,7 @@ tests n t =
                   ValueObserved {value} <-
                     L.find
                       ( \ValueObserved {timestamp} ->
-                          getFollowingBusinessDay timestamp (fromJust . calendar $ scheduleConfig terms) == date
+                          let d = applyBDCWithCfg (scheduleConfig terms) timestamp in calculationDay d == date
                       )
                       values
                   return value
@@ -105,13 +108,13 @@ tests n t =
     assertTestResults _ _                 = assertFailure "Sizes differ"
 
     assertTestResult :: CashFlow -> TestResult -> IO ()
-    assertTestResult CashFlowPoly {..} TestResult {eventDate, eventType, payoff} = do
+    assertTestResult cf@CashFlowPoly {..} tr@TestResult {eventDate, eventType, payoff} = do
       assertEqual cashEvent eventType
       assertEqual cashPaymentDay eventDate
       assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)
       where
         assertEqual a b = assertBool (err a b) $ a == b
-        err a b = printf "Mismatch: actual %s, expected %s" (show a) (show b)
+        err a b = pTraceShow (cf, tr) $ printf "Mismatch: actual %s, expected %s" (show a) (show b)
 
 testCasesFromFile :: [String] -> FilePath -> IO [TestCase]
 testCasesFromFile excluded testfile =
@@ -179,16 +182,25 @@ unscheduledEvents
     { eventType = CE,
       contractId,
       time,
-      states = PRF_DF
+      states = Just PRF_DF
     }
     | contractType `elem` [CEG, CEC]
-        && Just contractId `elem` map (getContractIdentifier . reference) contractStructure =
+        && contractId `elem` map (getContractIdentifier . reference) contractStructure =
       let stn = last $ filter (\st -> sd st < time) sts
        in genStates
             [ (XD, ShiftedDay time time),
               (STD, ShiftedDay time time)
             ]
             stn
+unscheduledEvents
+  ContractTermsPoly
+    { contractType = CSH
+    }
+  _
+  EventObserved
+    { eventType = AD,
+      time
+    } = initializeState >>= genStates [(AD, ShiftedDay time time)]
 unscheduledEvents _ _ _ = return []
 
 getMarketObjectCode :: Reference Double -> Maybe String
@@ -231,8 +243,8 @@ data EventObserved = EventObserved
   { time       :: LocalTime
   , eventType  :: EventType
   , value      :: Double
-  , contractId :: String
-  , states     :: PRF
+  , contractId :: Maybe String
+  , states     :: Maybe PRF
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON)
@@ -243,11 +255,12 @@ instance FromJSON EventObserved where
       <$> v .: "time"
       <*> v .: "type"
       <*> v .: "value"
-      <*> v .: "contractId"
-      <*> (v .: "states" >>= obj)
+      <*> v .:? "contractId"
+      <*> (v .:? "states" >>= obj)
     where
-      obj (Object o) = o .: "contractPerformance"
-      obj _          = fail "Error parsing states"
+      obj Nothing           = pure Nothing
+      obj (Just (Object o)) = o .: "contractPerformance"
+      obj _                 = fail "Error parsing states"
   parseJSON _ = mzero
 
 data TestResult = TestResult

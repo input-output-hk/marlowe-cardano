@@ -93,6 +93,7 @@ toMarlowe ct =
       priceAtPurchaseDate = constnt <$> priceAtPurchaseDate ct,
       terminationDate = terminationDate ct,
       priceAtTerminationDate = constnt <$> priceAtTerminationDate ct,
+      quantity = constnt <$> quantity ct,
       scalingIndexAtStatusDate = constnt <$> scalingIndexAtStatusDate ct,
       cycleAnchorDateOfScalingIndex = cycleAnchorDateOfScalingIndex ct,
       cycleOfScalingIndex = cycleOfScalingIndex ct,

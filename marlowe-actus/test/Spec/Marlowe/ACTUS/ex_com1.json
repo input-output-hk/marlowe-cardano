@@ -1,0 +1,12 @@
+{
+  "contractType": "COM",
+  "contractID": "com01",
+  "statusDate": "2014-12-30T00:00:00",
+  "contractDealDate": "2014-12-15T00:00:00",
+  "purchaseDate": "2015-03-30T00:00:00",
+  "priceAtPurchaseDate": 700,
+  "contractRole": "RPL",
+  "currency": "USD",
+  "quantity": 2,
+  "unit": "BRL"
+}

@@ -23,6 +23,11 @@ main = do
   stkTests <- testCasesFromFile [] $ p ++ "actus-tests-stk.json"
   optnsTests <- testCasesFromFile [] $ p ++ "actus-tests-optns.json"
   futurTests <- testCasesFromFile [] $ p ++ "actus-tests-futur.json"
+  comTests <- testCasesFromFile [] $ p ++ "actus-tests-com.json"
+  cshTests <- testCasesFromFile [] $ p ++ "actus-tests-csh.json"
+  clmTests <- testCasesFromFile
+    [ "clm07", "clm08", "clm09", "clm13", "clm14" -- same as in CallMoneyTest.java
+    ] $ p ++ "actus-tests-clm.json"
   swppvTests <- testCasesFromFile [] $ p ++ "actus-tests-swppv.json"
   cegTests <- testCasesFromFile
     [ "guarantee09", "guarantee10" , "guarantee11" , "guarantee12" , "guarantee13" , "guarantee14"
@@ -41,6 +46,9 @@ main = do
           , Spec.Marlowe.ACTUS.TestFramework.tests "STK" stkTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "OPTNS" optnsTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "FUTUR" futurTests
+          , Spec.Marlowe.ACTUS.TestFramework.tests "COM" comTests
+          , Spec.Marlowe.ACTUS.TestFramework.tests "CSH" cshTests
+          , Spec.Marlowe.ACTUS.TestFramework.tests "CLM" clmTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "SWPPV" swppvTests
           , Spec.Marlowe.ACTUS.TestFramework.tests "CEG" cegTests
           -- , Spec.Marlowe.ACTUS.TestFramework.tests "CEC" cecTests

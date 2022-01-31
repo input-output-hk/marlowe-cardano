@@ -28,6 +28,9 @@ data CT = PAM   -- ^ Principal at maturity
         | STK   -- ^ Stock
         | OPTNS -- ^ Option
         | FUTUR -- ^ Future
+        | COM   -- ^ Commodity
+        | CSH   -- ^ Cash
+        | CLM   -- ^ Call Money
         | SWPPV -- ^ Plain Vanilla Swap
         | CEG   -- ^ Guarantee
         | CEC   -- ^ Collateral
@@ -441,6 +444,7 @@ data ContractTermsPoly a = ContractTermsPoly
   , priceAtPurchaseDate                      :: Maybe a          -- ^ Price At Purchase Date
   , terminationDate                          :: Maybe LocalTime  -- ^ Termination Date
   , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
+  , quantity                                 :: Maybe a          -- ^ Quantity
 
   -- Scaling Index
   , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
@@ -541,6 +545,7 @@ instance FromJSON ContractTerms where
       <*> v .!? "priceAtPurchaseDate"
       <*> v .:? "terminationDate"
       <*> v .!? "priceAtTerminationDate"
+      <*> v .!? "quantity"
       <*> v .:? "scalingIndexAtStatusDate"
       <*> v .:? "cycleAnchorDateOfScalingIndex"
       <*> v .:? "cycleOfScalingIndex"
@@ -611,7 +616,10 @@ setDefaultContractTermValues ct@ContractTermsPoly {..} =
       periodCap                      = applyDefault infinity periodCap,
       lifeCap                        = applyDefault infinity lifeCap,
       lifeFloor                      = applyDefault (- infinity) lifeFloor,
-      interestCalculationBaseA       = applyDefault 0.0 interestCalculationBaseA
+      interestCalculationBaseA       = applyDefault 0.0 interestCalculationBaseA,
+
+      -- see ContractModel.java
+      cycleAnchorDateOfInterestPayment = cycleAnchorDateOfInterestPayment <|> ((guard $ contractType == CLM) >> initialExchangeDate)
     }
   where
     infinity :: Double

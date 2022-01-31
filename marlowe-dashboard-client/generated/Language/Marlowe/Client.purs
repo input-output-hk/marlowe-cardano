@@ -22,7 +22,6 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Semantics (MarloweParams, TransactionError)
-import Plutus.Contract.StateMachine (SMContractError)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (ContractError)
 
@@ -138,9 +137,9 @@ _CloseResponse = prism' (const CloseResponse) case _ of
 --------------------------------------------------------------------------------
 
 data MarloweError
-  = StateMachineError SMContractError
-  | TransitionError
+  = TransitionError
   | AmbiguousOnChainState
+  | UnableToExtractTransition
   | OnChainStateNotFound
   | MarloweEvaluationError TransactionError
   | OtherContractError ContractError
@@ -152,10 +151,11 @@ instance Show MarloweError where
 
 instance EncodeJson MarloweError where
   encodeJson = defer \_ -> case _ of
-    StateMachineError a -> E.encodeTagged "StateMachineError" a E.value
     TransitionError -> encodeJson { tag: "TransitionError", contents: jsonNull }
     AmbiguousOnChainState -> encodeJson
       { tag: "AmbiguousOnChainState", contents: jsonNull }
+    UnableToExtractTransition -> encodeJson
+      { tag: "UnableToExtractTransition", contents: jsonNull }
     OnChainStateNotFound -> encodeJson
       { tag: "OnChainStateNotFound", contents: jsonNull }
     MarloweEvaluationError a -> E.encodeTagged "MarloweEvaluationError" a
@@ -166,9 +166,9 @@ instance DecodeJson MarloweError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "MarloweError"
     $ Map.fromFoldable
-        [ "StateMachineError" /\ D.content (StateMachineError <$> D.value)
-        , "TransitionError" /\ pure TransitionError
+        [ "TransitionError" /\ pure TransitionError
         , "AmbiguousOnChainState" /\ pure AmbiguousOnChainState
+        , "UnableToExtractTransition" /\ pure UnableToExtractTransition
         , "OnChainStateNotFound" /\ pure OnChainStateNotFound
         , "MarloweEvaluationError" /\ D.content
             (MarloweEvaluationError <$> D.value)
@@ -179,11 +179,6 @@ derive instance Generic MarloweError _
 
 --------------------------------------------------------------------------------
 
-_StateMachineError :: Prism' MarloweError SMContractError
-_StateMachineError = prism' StateMachineError case _ of
-  (StateMachineError a) -> Just a
-  _ -> Nothing
-
 _TransitionError :: Prism' MarloweError Unit
 _TransitionError = prism' (const TransitionError) case _ of
   TransitionError -> Just unit
@@ -192,6 +187,11 @@ _TransitionError = prism' (const TransitionError) case _ of
 _AmbiguousOnChainState :: Prism' MarloweError Unit
 _AmbiguousOnChainState = prism' (const AmbiguousOnChainState) case _ of
   AmbiguousOnChainState -> Just unit
+  _ -> Nothing
+
+_UnableToExtractTransition :: Prism' MarloweError Unit
+_UnableToExtractTransition = prism' (const UnableToExtractTransition) case _ of
+  UnableToExtractTransition -> Just unit
   _ -> Nothing
 
 _OnChainStateNotFound :: Prism' MarloweError Unit

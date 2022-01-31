@@ -231,9 +231,10 @@ data InputContent = IDeposit AccountId Party Token Integer
                   | INotify
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
+  deriving anyclass (ToJSON, FromJSON)
 
 data Input = NormalInput InputContent
-           | MerkleizedInput InputContent Contract
+           | MerkleizedInput InputContent BuiltinByteString Contract
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
 
@@ -242,13 +243,16 @@ instance FromJSON Input where
   parseJSON (Object v) =
         (MerkleizedInput <$> (IChoice <$> (v .: "for_choice_id")
                                       <*> (v .: "input_that_chooses_num"))
+                         <*> (v .: "continuation_hash")
                          <*> (v .: "merkleized_continuation"))
     <|> (MerkleizedInput <$> (IDeposit <$> (v .: "into_account")
                                        <*> (v .: "input_from_party")
                                        <*> (v .: "of_token")
                                        <*> (v .: "that_deposits"))
+                         <*> (v .: "continuation_hash")
                          <*> (v .: "merkleized_continuation"))
-    <|> (MerkleizedInput INotify <$> (v .: "merkleized_notify"))
+    <|> (MerkleizedInput INotify <$> (v .: "continuation_hash")
+                                 <*> (v .: "merkleized_continuation"))
     <|> (NormalInput <$> (IDeposit <$> (v .: "into_account")
                                    <*> (v .: "input_from_party")
                                    <*> (v .: "of_token")
@@ -269,25 +273,28 @@ instance ToJSON Input where
       , "for_choice_id" .= choiceId
       ]
   toJSON (NormalInput INotify) = JSON.String $ pack "input_notify"
-  toJSON (MerkleizedInput (IDeposit accId party tok amount) continuation) = object
+  toJSON (MerkleizedInput (IDeposit accId party tok amount) hash continuation) = object
       [ "input_from_party" .= party
       , "that_deposits" .= amount
       , "of_token" .= tok
       , "into_account" .= accId
       , "merkleized_continuation" .= continuation
+      , "continuation_hash" .= hash
       ]
-  toJSON (MerkleizedInput (IChoice choiceId chosenNum) continuation) = object
+  toJSON (MerkleizedInput (IChoice choiceId chosenNum) hash continuation) = object
       [ "input_that_chooses_num" .= chosenNum
       , "for_choice_id" .= choiceId
       , "merkleized_continuation" .= continuation
+      , "continuation_hash" .= hash
       ]
-  toJSON (MerkleizedInput INotify continuation) = object
-      [ "merkleized_notify" .= continuation
+  toJSON (MerkleizedInput INotify hash continuation) = object
+      [ "merkleized_continuation" .= continuation
+      , "continuation_hash" .= hash
       ]
 
 getInputContent :: Input -> InputContent
-getInputContent (NormalInput inputContent)       = inputContent
-getInputContent (MerkleizedInput inputContent _) = inputContent
+getInputContent (NormalInput inputContent)         = inputContent
+getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
 {-| Slot interval errors.
     'InvalidInterval' means @slotStart > slotEnd@, and
@@ -780,6 +787,6 @@ makeLift ''State
 makeIsDataIndexed ''State [('State,0)]
 makeLift ''Environment
 makeLift ''Input
-makeIsDataIndexed ''Input [('NormalInput,0),('MerkleizedInput,2)]
+makeIsDataIndexed ''Input [('NormalInput,0),('MerkleizedInput,1)]
 makeLift ''InputContent
 makeIsDataIndexed ''InputContent [('IDeposit,0),('IChoice,1),('INotify,2)]
