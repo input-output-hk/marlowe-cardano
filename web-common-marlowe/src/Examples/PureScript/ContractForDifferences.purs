@@ -6,9 +6,10 @@ module Examples.PureScript.ContractForDifferences
   ) where
 
 import Prelude
+
 import Data.BigInt.Argonaut (BigInt, fromInt)
-import Data.Map as Map
 import Data.Map (Map)
+import Data.Map as Map
 import Data.Tuple.Nested ((/\))
 import Examples.Metadata as Metadata
 import Marlowe.Extended
@@ -20,7 +21,7 @@ import Marlowe.Extended
   , Timeout(..)
   , Value(..)
   )
-import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
+import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics
   ( Bound(..)
   , ChoiceId(..)

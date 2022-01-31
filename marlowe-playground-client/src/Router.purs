@@ -1,14 +1,15 @@
 module Router where
 
 import Prologue hiding ((/))
+
 import Data.Generic.Rep (class Generic)
 import Data.Newtype (unwrap)
 import Data.Profunctor (dimap)
-import Type.Proxy (Proxy(..))
 import Gist (GistId(..))
 import Routing.Duplex (RouteDuplex', optional, param, record, root, (:=))
 import Routing.Duplex.Generic (noArgs, sum)
 import Routing.Duplex.Generic.Syntax ((/))
+import Type.Proxy (Proxy(..))
 
 type Route
   =

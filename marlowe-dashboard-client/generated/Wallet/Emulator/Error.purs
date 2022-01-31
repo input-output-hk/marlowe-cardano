@@ -4,11 +4,11 @@ module Wallet.Emulator.Error where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -18,9 +18,9 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
+import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Ledger.Address (PaymentPubKeyHash)
 import Ledger.Constraints.OffChain (MkTxError)
 import Ledger.Index (ValidationError)
 import Ledger.Tx.CardanoAPI (ToCardanoError)
@@ -38,12 +38,12 @@ data WalletAPIError
   | RemoteClientFunctionNotYetSupported String
   | OtherError String
 
-derive instance eqWalletAPIError :: Eq WalletAPIError
+derive instance Eq WalletAPIError
 
-instance showWalletAPIError :: Show WalletAPIError where
+instance Show WalletAPIError where
   show a = genericShow a
 
-instance encodeJsonWalletAPIError :: EncodeJson WalletAPIError where
+instance EncodeJson WalletAPIError where
   encodeJson = defer \_ -> case _ of
     InsufficientFunds a -> E.encodeTagged "InsufficientFunds" a E.value
     ChangeHasLessThanNAda a b -> E.encodeTagged "ChangeHasLessThanNAda" (a /\ b)
@@ -59,7 +59,7 @@ instance encodeJsonWalletAPIError :: EncodeJson WalletAPIError where
       E.value
     OtherError a -> E.encodeTagged "OtherError" a E.value
 
-instance decodeJsonWalletAPIError :: DecodeJson WalletAPIError where
+instance DecodeJson WalletAPIError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "WalletAPIError"
     $ Map.fromFoldable
@@ -76,7 +76,7 @@ instance decodeJsonWalletAPIError :: DecodeJson WalletAPIError where
         , "OtherError" /\ D.content (OtherError <$> D.value)
         ]
 
-derive instance genericWalletAPIError :: Generic WalletAPIError _
+derive instance Generic WalletAPIError _
 
 --------------------------------------------------------------------------------
 

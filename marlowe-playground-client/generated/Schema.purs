@@ -4,11 +4,11 @@ module Schema where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -28,146 +28,6 @@ import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
 
-data FormSchema
-  = FormSchemaUnit
-  | FormSchemaBool
-  | FormSchemaInt
-  | FormSchemaInteger
-  | FormSchemaString
-  | FormSchemaHex
-  | FormSchemaArray FormSchema
-  | FormSchemaMaybe FormSchema
-  | FormSchemaRadio (Array String)
-  | FormSchemaTuple FormSchema FormSchema
-  | FormSchemaObject (Array (Tuple String FormSchema))
-  | FormSchemaValue
-  | FormSchemaPOSIXTimeRange
-  | FormSchemaUnsupported String
-
-instance showFormSchema :: Show FormSchema where
-  show a = genericShow a
-
-derive instance eqFormSchema :: Eq FormSchema
-
-instance encodeJsonFormSchema :: EncodeJson FormSchema where
-  encodeJson = defer \_ -> case _ of
-    FormSchemaUnit -> encodeJson { tag: "FormSchemaUnit", contents: jsonNull }
-    FormSchemaBool -> encodeJson { tag: "FormSchemaBool", contents: jsonNull }
-    FormSchemaInt -> encodeJson { tag: "FormSchemaInt", contents: jsonNull }
-    FormSchemaInteger -> encodeJson
-      { tag: "FormSchemaInteger", contents: jsonNull }
-    FormSchemaString -> encodeJson
-      { tag: "FormSchemaString", contents: jsonNull }
-    FormSchemaHex -> encodeJson { tag: "FormSchemaHex", contents: jsonNull }
-    FormSchemaArray a -> E.encodeTagged "FormSchemaArray" a E.value
-    FormSchemaMaybe a -> E.encodeTagged "FormSchemaMaybe" a E.value
-    FormSchemaRadio a -> E.encodeTagged "FormSchemaRadio" a E.value
-    FormSchemaTuple a b -> E.encodeTagged "FormSchemaTuple" (a /\ b)
-      (E.tuple (E.value >/\< E.value))
-    FormSchemaObject a -> E.encodeTagged "FormSchemaObject" a E.value
-    FormSchemaValue -> encodeJson { tag: "FormSchemaValue", contents: jsonNull }
-    FormSchemaPOSIXTimeRange -> encodeJson
-      { tag: "FormSchemaPOSIXTimeRange", contents: jsonNull }
-    FormSchemaUnsupported a -> E.encodeTagged "FormSchemaUnsupported" a E.value
-
-instance decodeJsonFormSchema :: DecodeJson FormSchema where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "FormSchema"
-    $ Map.fromFoldable
-        [ "FormSchemaUnit" /\ pure FormSchemaUnit
-        , "FormSchemaBool" /\ pure FormSchemaBool
-        , "FormSchemaInt" /\ pure FormSchemaInt
-        , "FormSchemaInteger" /\ pure FormSchemaInteger
-        , "FormSchemaString" /\ pure FormSchemaString
-        , "FormSchemaHex" /\ pure FormSchemaHex
-        , "FormSchemaArray" /\ D.content (FormSchemaArray <$> D.value)
-        , "FormSchemaMaybe" /\ D.content (FormSchemaMaybe <$> D.value)
-        , "FormSchemaRadio" /\ D.content (FormSchemaRadio <$> D.value)
-        , "FormSchemaTuple" /\ D.content
-            (D.tuple $ FormSchemaTuple </$\> D.value </*\> D.value)
-        , "FormSchemaObject" /\ D.content (FormSchemaObject <$> D.value)
-        , "FormSchemaValue" /\ pure FormSchemaValue
-        , "FormSchemaPOSIXTimeRange" /\ pure FormSchemaPOSIXTimeRange
-        , "FormSchemaUnsupported" /\ D.content
-            (FormSchemaUnsupported <$> D.value)
-        ]
-
-derive instance genericFormSchema :: Generic FormSchema _
-
---------------------------------------------------------------------------------
-
-_FormSchemaUnit :: Prism' FormSchema Unit
-_FormSchemaUnit = prism' (const FormSchemaUnit) case _ of
-  FormSchemaUnit -> Just unit
-  _ -> Nothing
-
-_FormSchemaBool :: Prism' FormSchema Unit
-_FormSchemaBool = prism' (const FormSchemaBool) case _ of
-  FormSchemaBool -> Just unit
-  _ -> Nothing
-
-_FormSchemaInt :: Prism' FormSchema Unit
-_FormSchemaInt = prism' (const FormSchemaInt) case _ of
-  FormSchemaInt -> Just unit
-  _ -> Nothing
-
-_FormSchemaInteger :: Prism' FormSchema Unit
-_FormSchemaInteger = prism' (const FormSchemaInteger) case _ of
-  FormSchemaInteger -> Just unit
-  _ -> Nothing
-
-_FormSchemaString :: Prism' FormSchema Unit
-_FormSchemaString = prism' (const FormSchemaString) case _ of
-  FormSchemaString -> Just unit
-  _ -> Nothing
-
-_FormSchemaHex :: Prism' FormSchema Unit
-_FormSchemaHex = prism' (const FormSchemaHex) case _ of
-  FormSchemaHex -> Just unit
-  _ -> Nothing
-
-_FormSchemaArray :: Prism' FormSchema FormSchema
-_FormSchemaArray = prism' FormSchemaArray case _ of
-  (FormSchemaArray a) -> Just a
-  _ -> Nothing
-
-_FormSchemaMaybe :: Prism' FormSchema FormSchema
-_FormSchemaMaybe = prism' FormSchemaMaybe case _ of
-  (FormSchemaMaybe a) -> Just a
-  _ -> Nothing
-
-_FormSchemaRadio :: Prism' FormSchema (Array String)
-_FormSchemaRadio = prism' FormSchemaRadio case _ of
-  (FormSchemaRadio a) -> Just a
-  _ -> Nothing
-
-_FormSchemaTuple :: Prism' FormSchema { a :: FormSchema, b :: FormSchema }
-_FormSchemaTuple = prism' (\{ a, b } -> (FormSchemaTuple a b)) case _ of
-  (FormSchemaTuple a b) -> Just { a, b }
-  _ -> Nothing
-
-_FormSchemaObject :: Prism' FormSchema (Array (Tuple String FormSchema))
-_FormSchemaObject = prism' FormSchemaObject case _ of
-  (FormSchemaObject a) -> Just a
-  _ -> Nothing
-
-_FormSchemaValue :: Prism' FormSchema Unit
-_FormSchemaValue = prism' (const FormSchemaValue) case _ of
-  FormSchemaValue -> Just unit
-  _ -> Nothing
-
-_FormSchemaPOSIXTimeRange :: Prism' FormSchema Unit
-_FormSchemaPOSIXTimeRange = prism' (const FormSchemaPOSIXTimeRange) case _ of
-  FormSchemaPOSIXTimeRange -> Just unit
-  _ -> Nothing
-
-_FormSchemaUnsupported :: Prism' FormSchema String
-_FormSchemaUnsupported = prism' FormSchemaUnsupported case _ of
-  (FormSchemaUnsupported a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 data FormArgumentF a
   = FormUnitF
   | FormBoolF Boolean
@@ -184,19 +44,16 @@ data FormArgumentF a
   | FormPOSIXTimeRangeF (Interval POSIXTime)
   | FormUnsupportedF String
 
-derive instance functorFormArgumentF :: Functor FormArgumentF
+derive instance Functor FormArgumentF
 
-derive instance eqFormArgumentF :: (Eq a) => Eq (FormArgumentF a)
+derive instance (Eq a) => Eq (FormArgumentF a)
 
-derive instance eq1FormArgumentF :: Eq1 FormArgumentF
+derive instance Eq1 FormArgumentF
 
-instance showFormArgumentF :: (Show a) => Show (FormArgumentF a) where
+instance (Show a) => Show (FormArgumentF a) where
   show a = genericShow a
 
-instance encodeJsonFormArgumentF ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (FormArgumentF a) where
+instance (EncodeJson a) => EncodeJson (FormArgumentF a) where
   encodeJson = defer \_ -> case _ of
     FormUnitF -> encodeJson { tag: "FormUnitF", contents: jsonNull }
     FormBoolF a -> E.encodeTagged "FormBoolF" a E.value
@@ -217,10 +74,7 @@ instance encodeJsonFormArgumentF ::
     FormPOSIXTimeRangeF a -> E.encodeTagged "FormPOSIXTimeRangeF" a E.value
     FormUnsupportedF a -> E.encodeTagged "FormUnsupportedF" a E.value
 
-instance decodeJsonFormArgumentF ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (FormArgumentF a) where
+instance (DecodeJson a) => DecodeJson (FormArgumentF a) where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "FormArgumentF"
     $ Map.fromFoldable
@@ -244,7 +98,7 @@ instance decodeJsonFormArgumentF ::
         , "FormUnsupportedF" /\ D.content (FormUnsupportedF <$> D.value)
         ]
 
-derive instance genericFormArgumentF :: Generic (FormArgumentF a) _
+derive instance Generic (FormArgumentF a) _
 
 --------------------------------------------------------------------------------
 
@@ -319,4 +173,144 @@ _FormPOSIXTimeRangeF = prism' FormPOSIXTimeRangeF case _ of
 _FormUnsupportedF :: forall a. Prism' (FormArgumentF a) String
 _FormUnsupportedF = prism' FormUnsupportedF case _ of
   (FormUnsupportedF a) -> Just a
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data FormSchema
+  = FormSchemaUnit
+  | FormSchemaBool
+  | FormSchemaInt
+  | FormSchemaInteger
+  | FormSchemaString
+  | FormSchemaHex
+  | FormSchemaArray FormSchema
+  | FormSchemaMaybe FormSchema
+  | FormSchemaRadio (Array String)
+  | FormSchemaTuple FormSchema FormSchema
+  | FormSchemaObject (Array (Tuple String FormSchema))
+  | FormSchemaValue
+  | FormSchemaPOSIXTimeRange
+  | FormSchemaUnsupported String
+
+instance Show FormSchema where
+  show a = genericShow a
+
+derive instance Eq FormSchema
+
+instance EncodeJson FormSchema where
+  encodeJson = defer \_ -> case _ of
+    FormSchemaUnit -> encodeJson { tag: "FormSchemaUnit", contents: jsonNull }
+    FormSchemaBool -> encodeJson { tag: "FormSchemaBool", contents: jsonNull }
+    FormSchemaInt -> encodeJson { tag: "FormSchemaInt", contents: jsonNull }
+    FormSchemaInteger -> encodeJson
+      { tag: "FormSchemaInteger", contents: jsonNull }
+    FormSchemaString -> encodeJson
+      { tag: "FormSchemaString", contents: jsonNull }
+    FormSchemaHex -> encodeJson { tag: "FormSchemaHex", contents: jsonNull }
+    FormSchemaArray a -> E.encodeTagged "FormSchemaArray" a E.value
+    FormSchemaMaybe a -> E.encodeTagged "FormSchemaMaybe" a E.value
+    FormSchemaRadio a -> E.encodeTagged "FormSchemaRadio" a E.value
+    FormSchemaTuple a b -> E.encodeTagged "FormSchemaTuple" (a /\ b)
+      (E.tuple (E.value >/\< E.value))
+    FormSchemaObject a -> E.encodeTagged "FormSchemaObject" a E.value
+    FormSchemaValue -> encodeJson { tag: "FormSchemaValue", contents: jsonNull }
+    FormSchemaPOSIXTimeRange -> encodeJson
+      { tag: "FormSchemaPOSIXTimeRange", contents: jsonNull }
+    FormSchemaUnsupported a -> E.encodeTagged "FormSchemaUnsupported" a E.value
+
+instance DecodeJson FormSchema where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "FormSchema"
+    $ Map.fromFoldable
+        [ "FormSchemaUnit" /\ pure FormSchemaUnit
+        , "FormSchemaBool" /\ pure FormSchemaBool
+        , "FormSchemaInt" /\ pure FormSchemaInt
+        , "FormSchemaInteger" /\ pure FormSchemaInteger
+        , "FormSchemaString" /\ pure FormSchemaString
+        , "FormSchemaHex" /\ pure FormSchemaHex
+        , "FormSchemaArray" /\ D.content (FormSchemaArray <$> D.value)
+        , "FormSchemaMaybe" /\ D.content (FormSchemaMaybe <$> D.value)
+        , "FormSchemaRadio" /\ D.content (FormSchemaRadio <$> D.value)
+        , "FormSchemaTuple" /\ D.content
+            (D.tuple $ FormSchemaTuple </$\> D.value </*\> D.value)
+        , "FormSchemaObject" /\ D.content (FormSchemaObject <$> D.value)
+        , "FormSchemaValue" /\ pure FormSchemaValue
+        , "FormSchemaPOSIXTimeRange" /\ pure FormSchemaPOSIXTimeRange
+        , "FormSchemaUnsupported" /\ D.content
+            (FormSchemaUnsupported <$> D.value)
+        ]
+
+derive instance Generic FormSchema _
+
+--------------------------------------------------------------------------------
+
+_FormSchemaUnit :: Prism' FormSchema Unit
+_FormSchemaUnit = prism' (const FormSchemaUnit) case _ of
+  FormSchemaUnit -> Just unit
+  _ -> Nothing
+
+_FormSchemaBool :: Prism' FormSchema Unit
+_FormSchemaBool = prism' (const FormSchemaBool) case _ of
+  FormSchemaBool -> Just unit
+  _ -> Nothing
+
+_FormSchemaInt :: Prism' FormSchema Unit
+_FormSchemaInt = prism' (const FormSchemaInt) case _ of
+  FormSchemaInt -> Just unit
+  _ -> Nothing
+
+_FormSchemaInteger :: Prism' FormSchema Unit
+_FormSchemaInteger = prism' (const FormSchemaInteger) case _ of
+  FormSchemaInteger -> Just unit
+  _ -> Nothing
+
+_FormSchemaString :: Prism' FormSchema Unit
+_FormSchemaString = prism' (const FormSchemaString) case _ of
+  FormSchemaString -> Just unit
+  _ -> Nothing
+
+_FormSchemaHex :: Prism' FormSchema Unit
+_FormSchemaHex = prism' (const FormSchemaHex) case _ of
+  FormSchemaHex -> Just unit
+  _ -> Nothing
+
+_FormSchemaArray :: Prism' FormSchema FormSchema
+_FormSchemaArray = prism' FormSchemaArray case _ of
+  (FormSchemaArray a) -> Just a
+  _ -> Nothing
+
+_FormSchemaMaybe :: Prism' FormSchema FormSchema
+_FormSchemaMaybe = prism' FormSchemaMaybe case _ of
+  (FormSchemaMaybe a) -> Just a
+  _ -> Nothing
+
+_FormSchemaRadio :: Prism' FormSchema (Array String)
+_FormSchemaRadio = prism' FormSchemaRadio case _ of
+  (FormSchemaRadio a) -> Just a
+  _ -> Nothing
+
+_FormSchemaTuple :: Prism' FormSchema { a :: FormSchema, b :: FormSchema }
+_FormSchemaTuple = prism' (\{ a, b } -> (FormSchemaTuple a b)) case _ of
+  (FormSchemaTuple a b) -> Just { a, b }
+  _ -> Nothing
+
+_FormSchemaObject :: Prism' FormSchema (Array (Tuple String FormSchema))
+_FormSchemaObject = prism' FormSchemaObject case _ of
+  (FormSchemaObject a) -> Just a
+  _ -> Nothing
+
+_FormSchemaValue :: Prism' FormSchema Unit
+_FormSchemaValue = prism' (const FormSchemaValue) case _ of
+  FormSchemaValue -> Just unit
+  _ -> Nothing
+
+_FormSchemaPOSIXTimeRange :: Prism' FormSchema Unit
+_FormSchemaPOSIXTimeRange = prism' (const FormSchemaPOSIXTimeRange) case _ of
+  FormSchemaPOSIXTimeRange -> Just unit
+  _ -> Nothing
+
+_FormSchemaUnsupported :: Prism' FormSchema String
+_FormSchemaUnsupported = prism' FormSchemaUnsupported case _ of
+  (FormSchemaUnsupported a) -> Just a
   _ -> Nothing

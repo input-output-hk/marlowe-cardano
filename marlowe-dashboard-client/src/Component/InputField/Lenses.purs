@@ -15,12 +15,13 @@ module Component.InputField.Lenses
   ) where
 
 import Prologue
+
 import Component.InputField.Types (InputDisplayOptions, State)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
 import Halogen.HTML (HTML)
 import Marlowe.Extended.Metadata (NumberFormat)
+import Type.Proxy (Proxy(..))
 
 _value :: forall e. Lens' (State e) String
 _value = prop (Proxy :: _ "value")

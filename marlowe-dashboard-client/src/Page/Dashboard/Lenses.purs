@@ -1,6 +1,5 @@
 module Page.Dashboard.Lenses
   ( _contactsState
-  , _walletDetails
   , _walletCompanionStatus
   , _menuOpen
   , _card
@@ -16,7 +15,6 @@ module Page.Dashboard.Lenses
 import Prologue
 
 import Component.Contacts.Types (State) as Contacts
-import Component.Contacts.Types (WalletDetails)
 import Component.Template.Types (State) as Template
 import Data.Lens (Lens', Traversal', set, wander)
 import Data.Lens.At (at)
@@ -30,9 +28,6 @@ import Type.Proxy (Proxy(..))
 
 _contactsState :: Lens' State Contacts.State
 _contactsState = prop (Proxy :: _ "contactsState")
-
-_walletDetails :: Lens' State WalletDetails
-_walletDetails = prop (Proxy :: _ "walletDetails")
 
 _walletCompanionStatus :: Lens' State WalletCompanionStatus
 _walletCompanionStatus = prop (Proxy :: _ "walletCompanionStatus")

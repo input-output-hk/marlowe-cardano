@@ -31,24 +31,24 @@ let
     };
 
     nodeServerConfig = {
-      mscBaseUrl = "@NOMAD_ADDR_node@";
-      mscSocketPath = "@NOMAD_ALLOC_DIR@/node.sock";
-      mscRandomTxInterval = 20000000;
-      mscSlotConfig = {
+      pscBaseUrl = "@NOMAD_ADDR_node@";
+      pscSocketPath = "@NOMAD_ALLOC_DIR@/node.sock";
+      pscRandomTxInterval = 20000000;
+      pscSlotConfig = {
         scSlotZeroTime = slotZeroTime;
         scSlotLength = slotLengthMillis;
       };
-      mscFeeConfig = {
+      pscFeeConfig = {
         fcConstantFee = {
           getLovelace = constantFee;
         };
         fcScriptsFeeFactor = scriptsFeeFactor;
       };
-      mscNetworkId = "1564";
-      mscKeptBlocks = 100000;
-      mscInitialTxWallets = [ ];
-      mscNodeMode = "AlonzoNode";
-      mscProtocolParametersJsonPath = ../marlowe-dashboard-client/private-testnet.protocol;
+      pscNetworkId = "1564";
+      pscKeptBlocks = 100000;
+      pscInitialTxWallets = [ ];
+      pscNodeMode = "AlonzoNode";
+      pscProtocolParametersJsonPath = ../marlowe-dashboard-client/private-testnet.protocol;
     };
 
     chainIndexConfig = {

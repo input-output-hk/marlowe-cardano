@@ -5,11 +5,11 @@ import Prelude
 
 import Control.Lazy (defer)
 import Control.Monad.Freer.Extras.Beam (BeamLog)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -42,12 +42,12 @@ data ChainIndexLog
   | NoDatumScriptAddr TxOut
   | BeamLogItem BeamLog
 
-derive instance eqChainIndexLog :: Eq ChainIndexLog
+derive instance Eq ChainIndexLog
 
-instance showChainIndexLog :: Show ChainIndexLog where
+instance Show ChainIndexLog where
   show a = genericShow a
 
-instance encodeJsonChainIndexLog :: EncodeJson ChainIndexLog where
+instance EncodeJson ChainIndexLog where
   encodeJson = defer \_ -> case _ of
     InsertionSuccess a b -> E.encodeTagged "InsertionSuccess" (a /\ b)
       (E.tuple (E.value >/\< E.value))
@@ -60,7 +60,7 @@ instance encodeJsonChainIndexLog :: EncodeJson ChainIndexLog where
     NoDatumScriptAddr a -> E.encodeTagged "NoDatumScriptAddr" a E.value
     BeamLogItem a -> E.encodeTagged "BeamLogItem" a E.value
 
-instance decodeJsonChainIndexLog :: DecodeJson ChainIndexLog where
+instance DecodeJson ChainIndexLog where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ChainIndexLog"
     $ Map.fromFoldable
@@ -76,7 +76,7 @@ instance decodeJsonChainIndexLog :: DecodeJson ChainIndexLog where
         , "BeamLogItem" /\ D.content (BeamLogItem <$> D.value)
         ]
 
-derive instance genericChainIndexLog :: Generic ChainIndexLog _
+derive instance Generic ChainIndexLog _
 
 --------------------------------------------------------------------------------
 
@@ -131,26 +131,26 @@ data InsertUtxoPosition
   = InsertAtEnd
   | InsertBeforeEnd
 
-derive instance eqInsertUtxoPosition :: Eq InsertUtxoPosition
+derive instance Eq InsertUtxoPosition
 
-derive instance ordInsertUtxoPosition :: Ord InsertUtxoPosition
+derive instance Ord InsertUtxoPosition
 
-instance showInsertUtxoPosition :: Show InsertUtxoPosition where
+instance Show InsertUtxoPosition where
   show a = genericShow a
 
-instance encodeJsonInsertUtxoPosition :: EncodeJson InsertUtxoPosition where
+instance EncodeJson InsertUtxoPosition where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonInsertUtxoPosition :: DecodeJson InsertUtxoPosition where
+instance DecodeJson InsertUtxoPosition where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericInsertUtxoPosition :: Generic InsertUtxoPosition _
+derive instance Generic InsertUtxoPosition _
 
-instance enumInsertUtxoPosition :: Enum InsertUtxoPosition where
+instance Enum InsertUtxoPosition where
   succ = genericSucc
   pred = genericPred
 
-instance boundedInsertUtxoPosition :: Bounded InsertUtxoPosition where
+instance Bounded InsertUtxoPosition where
   bottom = genericBottom
   top = genericTop
 

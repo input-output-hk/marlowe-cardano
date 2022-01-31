@@ -6,24 +6,24 @@ import Blockly.Internal
   , Arg(..)
   , BlockDefinition(..)
   , Pair(..)
+  , clearUndoStack
   , clearWorkspace
   , connect
   , connectToOutput
   , connectToPrevious
+  , defaultBlockDefinition
   , fieldName
   , fieldRow
+  , getBlockById
   , getInputWithName
+  , initializeWorkspace
   , inputList
   , inputName
   , inputType
   , nextConnection
   , previousConnection
-  , setFieldText
-  , clearUndoStack
-  , defaultBlockDefinition
-  , getBlockById
-  , initializeWorkspace
   , render
+  , setFieldText
   , typedArguments
   )
 import Blockly.Toolbox

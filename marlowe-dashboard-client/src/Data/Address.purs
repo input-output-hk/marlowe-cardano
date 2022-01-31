@@ -4,6 +4,8 @@ module Data.Address
   , dual
   , empty
   , fromString
+  , fromPubKeyHash
+  , toPubKeyHash
   , toString
   , validator
   ) where
@@ -27,6 +29,8 @@ import Data.Enum.Generic
   , genericToEnum
   )
 import Data.Generic.Rep (class Generic)
+import Data.PubKeyHash (PubKeyHash)
+import Data.PubKeyHash as PKH
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Show.Generic (genericShow)
@@ -85,11 +89,23 @@ instance DecodeJson Address where
 empty :: Address
 empty = Address "00000000000000000000000000000000000000000000000000000000"
 
+-- TODO right now Addresses and pub key hashes are the same... this is
+-- obviously not what we want. This should bech32 encode it and somehow combine
+-- a staking key hash and payment key hash...
+fromPubKeyHash :: PubKeyHash -> Address
+fromPubKeyHash = Address <<< PKH.toString
+
+-- TODO right now Addresses and pub key hashes are the same... this is
+-- obviously not what we want. This should bech32 encode it and somehow combine
+-- a staking key hash and payment key hash...
+toPubKeyHash :: Address -> PubKeyHash
+toPubKeyHash = PKH.fromString <<< toString
+
 fromString :: Set Address -> String -> Either AddressError Address
 fromString used s
   | String.null s = Left Empty
   | Set.member (Address s) used = Left Exists
-  | String.length s /= 56 = Right $ Address s
+  | String.length s == 56 = Right $ Address s
   | otherwise = Left Invalid
 
 toString :: Address -> String

@@ -4,11 +4,11 @@ module Language.Marlowe.ACTUS.Domain.BusinessEvents where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -52,26 +52,26 @@ data EventType
   | PI
   | AD
 
-derive instance eqEventType :: Eq EventType
+derive instance Eq EventType
 
-derive instance ordEventType :: Ord EventType
+derive instance Ord EventType
 
-instance showEventType :: Show EventType where
+instance Show EventType where
   show a = genericShow a
 
-instance encodeJsonEventType :: EncodeJson EventType where
+instance EncodeJson EventType where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonEventType :: DecodeJson EventType where
+instance DecodeJson EventType where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericEventType :: Generic EventType _
+derive instance Generic EventType _
 
-instance enumEventType :: Enum EventType where
+instance Enum EventType where
   succ = genericSucc
   pred = genericPred
 
-instance boundedEventType :: Bounded EventType where
+instance Bounded EventType where
   bottom = genericBottom
   top = genericTop
 

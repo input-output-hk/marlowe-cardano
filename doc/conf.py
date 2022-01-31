@@ -13,12 +13,10 @@ sys.path.append(os.path.abspath('exts'))
 
 # -- Doc config values
 marlowe_playground_url = "https://alpha.marlowe.iohkdev.io/"
-plutus_playground_url = "https://alpha.plutus.iohkdev.io/"
 
 rst_epilog = """
-.. _Plutus Playground: {0}
-.. _Marlowe Playground: {1}
-""".format(plutus_playground_url, marlowe_playground_url)
+.. _Marlowe Playground: {0}
+""".format(marlowe_playground_url)
 
 # -- RTD configuration ------------------------------------------------
 
@@ -31,7 +29,7 @@ if rtd_version not in ["stable", "latest"]:
 
 # -- Project information -----------------------------------------------------
 
-project = 'The Plutus Platform and Marlowe'
+project = 'Marlowe'
 copyright = '2021, IOHK'
 author = 'IOHK'
 
@@ -121,8 +119,8 @@ html_logo = "cardano-logo.png"
 html_context = {
   "display_github": True, # Add 'Edit on Github' link instead of 'View page source'
   "github_user": "input-output-hk",
-  "github_repo": "plutus",
-  "github_version": "master",
+  "github_repo": "marlowe-cardano",
+  "github_version": "main",
   "conf_py_path": "/doc/",
   "source_suffix": source_suffix,
 }

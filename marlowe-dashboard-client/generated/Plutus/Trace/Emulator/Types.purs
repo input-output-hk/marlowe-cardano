@@ -4,11 +4,11 @@ module Plutus.Trace.Emulator.Types where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -39,12 +39,12 @@ newtype ContractInstanceLog = ContractInstanceLog
   , _cilTag :: ContractInstanceTag
   }
 
-derive instance eqContractInstanceLog :: Eq ContractInstanceLog
+derive instance Eq ContractInstanceLog
 
-instance showContractInstanceLog :: Show ContractInstanceLog where
+instance Show ContractInstanceLog where
   show a = genericShow a
 
-instance encodeJsonContractInstanceLog :: EncodeJson ContractInstanceLog where
+instance EncodeJson ContractInstanceLog where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { _cilMessage: E.value :: _ ContractInstanceMsg
@@ -53,7 +53,7 @@ instance encodeJsonContractInstanceLog :: EncodeJson ContractInstanceLog where
         }
     )
 
-instance decodeJsonContractInstanceLog :: DecodeJson ContractInstanceLog where
+instance DecodeJson ContractInstanceLog where
   decodeJson = defer \_ -> D.decode $
     ( ContractInstanceLog <$> D.record "ContractInstanceLog"
         { _cilMessage: D.value :: _ ContractInstanceMsg
@@ -62,9 +62,9 @@ instance decodeJsonContractInstanceLog :: DecodeJson ContractInstanceLog where
         }
     )
 
-derive instance genericContractInstanceLog :: Generic ContractInstanceLog _
+derive instance Generic ContractInstanceLog _
 
-derive instance newtypeContractInstanceLog :: Newtype ContractInstanceLog _
+derive instance Newtype ContractInstanceLog _
 
 --------------------------------------------------------------------------------
 
@@ -86,44 +86,6 @@ cilTag = _Newtype <<< prop (Proxy :: _ "_cilTag")
 
 --------------------------------------------------------------------------------
 
-data UserThreadMsg
-  = UserThreadErr EmulatorRuntimeError
-  | UserLog String
-
-derive instance eqUserThreadMsg :: Eq UserThreadMsg
-
-instance showUserThreadMsg :: Show UserThreadMsg where
-  show a = genericShow a
-
-instance encodeJsonUserThreadMsg :: EncodeJson UserThreadMsg where
-  encodeJson = defer \_ -> case _ of
-    UserThreadErr a -> E.encodeTagged "UserThreadErr" a E.value
-    UserLog a -> E.encodeTagged "UserLog" a E.value
-
-instance decodeJsonUserThreadMsg :: DecodeJson UserThreadMsg where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "UserThreadMsg"
-    $ Map.fromFoldable
-        [ "UserThreadErr" /\ D.content (UserThreadErr <$> D.value)
-        , "UserLog" /\ D.content (UserLog <$> D.value)
-        ]
-
-derive instance genericUserThreadMsg :: Generic UserThreadMsg _
-
---------------------------------------------------------------------------------
-
-_UserThreadErr :: Prism' UserThreadMsg EmulatorRuntimeError
-_UserThreadErr = prism' UserThreadErr case _ of
-  (UserThreadErr a) -> Just a
-  _ -> Nothing
-
-_UserLog :: Prism' UserThreadMsg String
-_UserLog = prism' UserLog case _ of
-  (UserLog a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 data ContractInstanceMsg
   = Started
   | StoppedNoError
@@ -142,12 +104,12 @@ data ContractInstanceMsg
   | SendingContractState ThreadId
   | Freezing
 
-derive instance eqContractInstanceMsg :: Eq ContractInstanceMsg
+derive instance Eq ContractInstanceMsg
 
-instance showContractInstanceMsg :: Show ContractInstanceMsg where
+instance Show ContractInstanceMsg where
   show a = genericShow a
 
-instance encodeJsonContractInstanceMsg :: EncodeJson ContractInstanceMsg where
+instance EncodeJson ContractInstanceMsg where
   encodeJson = defer \_ -> case _ of
     Started -> encodeJson { tag: "Started", contents: jsonNull }
     StoppedNoError -> encodeJson { tag: "StoppedNoError", contents: jsonNull }
@@ -171,7 +133,7 @@ instance encodeJsonContractInstanceMsg :: EncodeJson ContractInstanceMsg where
     SendingContractState a -> E.encodeTagged "SendingContractState" a E.value
     Freezing -> encodeJson { tag: "Freezing", contents: jsonNull }
 
-instance decodeJsonContractInstanceMsg :: DecodeJson ContractInstanceMsg where
+instance DecodeJson ContractInstanceMsg where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ContractInstanceMsg"
     $ Map.fromFoldable
@@ -195,7 +157,7 @@ instance decodeJsonContractInstanceMsg :: DecodeJson ContractInstanceMsg where
         , "Freezing" /\ pure Freezing
         ]
 
-derive instance genericContractInstanceMsg :: Generic ContractInstanceMsg _
+derive instance Generic ContractInstanceMsg _
 
 --------------------------------------------------------------------------------
 
@@ -288,12 +250,12 @@ newtype ContractInstanceTag = ContractInstanceTag
   , shortContractInstanceTag :: String
   }
 
-derive instance eqContractInstanceTag :: Eq ContractInstanceTag
+derive instance Eq ContractInstanceTag
 
-instance showContractInstanceTag :: Show ContractInstanceTag where
+instance Show ContractInstanceTag where
   show a = genericShow a
 
-instance encodeJsonContractInstanceTag :: EncodeJson ContractInstanceTag where
+instance EncodeJson ContractInstanceTag where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unContractInstanceTag: E.value :: _ String
@@ -301,7 +263,7 @@ instance encodeJsonContractInstanceTag :: EncodeJson ContractInstanceTag where
         }
     )
 
-instance decodeJsonContractInstanceTag :: DecodeJson ContractInstanceTag where
+instance DecodeJson ContractInstanceTag where
   decodeJson = defer \_ -> D.decode $
     ( ContractInstanceTag <$> D.record "ContractInstanceTag"
         { unContractInstanceTag: D.value :: _ String
@@ -309,9 +271,9 @@ instance decodeJsonContractInstanceTag :: DecodeJson ContractInstanceTag where
         }
     )
 
-derive instance genericContractInstanceTag :: Generic ContractInstanceTag _
+derive instance Generic ContractInstanceTag _
 
-derive instance newtypeContractInstanceTag :: Newtype ContractInstanceTag _
+derive instance Newtype ContractInstanceTag _
 
 --------------------------------------------------------------------------------
 
@@ -329,12 +291,12 @@ data EmulatorRuntimeError
   | EmulatedWalletError WalletAPIError
   | AssertionError String
 
-derive instance eqEmulatorRuntimeError :: Eq EmulatorRuntimeError
+derive instance Eq EmulatorRuntimeError
 
-instance showEmulatorRuntimeError :: Show EmulatorRuntimeError where
+instance Show EmulatorRuntimeError where
   show a = genericShow a
 
-instance encodeJsonEmulatorRuntimeError :: EncodeJson EmulatorRuntimeError where
+instance EncodeJson EmulatorRuntimeError where
   encodeJson = defer \_ -> case _ of
     ThreadIdNotFound a -> E.encodeTagged "ThreadIdNotFound" a E.value
     InstanceIdNotFound a -> E.encodeTagged "InstanceIdNotFound" a E.value
@@ -345,7 +307,7 @@ instance encodeJsonEmulatorRuntimeError :: EncodeJson EmulatorRuntimeError where
     EmulatedWalletError a -> E.encodeTagged "EmulatedWalletError" a E.value
     AssertionError a -> E.encodeTagged "AssertionError" a E.value
 
-instance decodeJsonEmulatorRuntimeError :: DecodeJson EmulatorRuntimeError where
+instance DecodeJson EmulatorRuntimeError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "EmulatorRuntimeError"
     $ Map.fromFoldable
@@ -358,7 +320,7 @@ instance decodeJsonEmulatorRuntimeError :: DecodeJson EmulatorRuntimeError where
         , "AssertionError" /\ D.content (AssertionError <$> D.value)
         ]
 
-derive instance genericEmulatorRuntimeError :: Generic EmulatorRuntimeError _
+derive instance Generic EmulatorRuntimeError _
 
 --------------------------------------------------------------------------------
 
@@ -393,4 +355,42 @@ _EmulatedWalletError = prism' EmulatedWalletError case _ of
 _AssertionError :: Prism' EmulatorRuntimeError String
 _AssertionError = prism' AssertionError case _ of
   (AssertionError a) -> Just a
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data UserThreadMsg
+  = UserThreadErr EmulatorRuntimeError
+  | UserLog String
+
+derive instance Eq UserThreadMsg
+
+instance Show UserThreadMsg where
+  show a = genericShow a
+
+instance EncodeJson UserThreadMsg where
+  encodeJson = defer \_ -> case _ of
+    UserThreadErr a -> E.encodeTagged "UserThreadErr" a E.value
+    UserLog a -> E.encodeTagged "UserLog" a E.value
+
+instance DecodeJson UserThreadMsg where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "UserThreadMsg"
+    $ Map.fromFoldable
+        [ "UserThreadErr" /\ D.content (UserThreadErr <$> D.value)
+        , "UserLog" /\ D.content (UserLog <$> D.value)
+        ]
+
+derive instance Generic UserThreadMsg _
+
+--------------------------------------------------------------------------------
+
+_UserThreadErr :: Prism' UserThreadMsg EmulatorRuntimeError
+_UserThreadErr = prism' UserThreadErr case _ of
+  (UserThreadErr a) -> Just a
+  _ -> Nothing
+
+_UserLog :: Prism' UserThreadMsg String
+_UserLog = prism' UserLog case _ of
+  (UserLog a) -> Just a
   _ -> Nothing

@@ -4,11 +4,11 @@ module Plutus.V1.Ledger.Interval where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -27,20 +27,20 @@ data Extended a
   | Finite a
   | PosInf
 
-derive instance functorExtended :: Functor Extended
+derive instance Functor Extended
 
-derive instance eqExtended :: (Eq a) => Eq (Extended a)
+derive instance (Eq a) => Eq (Extended a)
 
-instance showExtended :: (Show a) => Show (Extended a) where
+instance (Show a) => Show (Extended a) where
   show a = genericShow a
 
-instance encodeJsonExtended :: (EncodeJson a) => EncodeJson (Extended a) where
+instance (EncodeJson a) => EncodeJson (Extended a) where
   encodeJson = defer \_ -> case _ of
     NegInf -> encodeJson { tag: "NegInf", contents: jsonNull }
     Finite a -> E.encodeTagged "Finite" a E.value
     PosInf -> encodeJson { tag: "PosInf", contents: jsonNull }
 
-instance decodeJsonExtended :: (DecodeJson a) => DecodeJson (Extended a) where
+instance (DecodeJson a) => DecodeJson (Extended a) where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "Extended"
     $ Map.fromFoldable
@@ -49,7 +49,7 @@ instance decodeJsonExtended :: (DecodeJson a) => DecodeJson (Extended a) where
         , "PosInf" /\ pure PosInf
         ]
 
-derive instance genericExtended :: Generic (Extended a) _
+derive instance Generic (Extended a) _
 
 --------------------------------------------------------------------------------
 
@@ -75,14 +75,14 @@ newtype Interval a = Interval
   , ivTo :: UpperBound a
   }
 
-derive instance functorInterval :: Functor Interval
+derive instance Functor Interval
 
-derive instance eqInterval :: (Eq a) => Eq (Interval a)
+derive instance (Eq a) => Eq (Interval a)
 
-instance showInterval :: (Show a) => Show (Interval a) where
+instance (Show a) => Show (Interval a) where
   show a = genericShow a
 
-instance encodeJsonInterval :: (EncodeJson a) => EncodeJson (Interval a) where
+instance (EncodeJson a) => EncodeJson (Interval a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { ivFrom: E.value :: _ (LowerBound a)
@@ -90,7 +90,7 @@ instance encodeJsonInterval :: (EncodeJson a) => EncodeJson (Interval a) where
         }
     )
 
-instance decodeJsonInterval :: (DecodeJson a) => DecodeJson (Interval a) where
+instance (DecodeJson a) => DecodeJson (Interval a) where
   decodeJson = defer \_ -> D.decode $
     ( Interval <$> D.record "Interval"
         { ivFrom: D.value :: _ (LowerBound a)
@@ -98,9 +98,9 @@ instance decodeJsonInterval :: (DecodeJson a) => DecodeJson (Interval a) where
         }
     )
 
-derive instance genericInterval :: Generic (Interval a) _
+derive instance Generic (Interval a) _
 
-derive instance newtypeInterval :: Newtype (Interval a) _
+derive instance Newtype (Interval a) _
 
 --------------------------------------------------------------------------------
 
@@ -113,22 +113,22 @@ _Interval = _Newtype
 
 data LowerBound a = LowerBound (Extended a) Boolean
 
-derive instance functorLowerBound :: Functor LowerBound
+derive instance Functor LowerBound
 
-derive instance eqLowerBound :: (Eq a) => Eq (LowerBound a)
+derive instance (Eq a) => Eq (LowerBound a)
 
-instance showLowerBound :: (Show a) => Show (LowerBound a) where
+instance (Show a) => Show (LowerBound a) where
   show a = genericShow a
 
-instance encodeJsonLowerBound :: (EncodeJson a) => EncodeJson (LowerBound a) where
+instance (EncodeJson a) => EncodeJson (LowerBound a) where
   encodeJson = defer \_ -> E.encode $ (case _ of LowerBound a b -> (a /\ b)) >$<
     (E.tuple (E.value >/\< E.value))
 
-instance decodeJsonLowerBound :: (DecodeJson a) => DecodeJson (LowerBound a) where
+instance (DecodeJson a) => DecodeJson (LowerBound a) where
   decodeJson = defer \_ -> D.decode $
     (D.tuple $ LowerBound </$\> D.value </*\> D.value)
 
-derive instance genericLowerBound :: Generic (LowerBound a) _
+derive instance Generic (LowerBound a) _
 
 --------------------------------------------------------------------------------
 
@@ -140,22 +140,22 @@ _LowerBound = iso (\(LowerBound a b) -> { a, b })
 
 data UpperBound a = UpperBound (Extended a) Boolean
 
-derive instance functorUpperBound :: Functor UpperBound
+derive instance Functor UpperBound
 
-derive instance eqUpperBound :: (Eq a) => Eq (UpperBound a)
+derive instance (Eq a) => Eq (UpperBound a)
 
-instance showUpperBound :: (Show a) => Show (UpperBound a) where
+instance (Show a) => Show (UpperBound a) where
   show a = genericShow a
 
-instance encodeJsonUpperBound :: (EncodeJson a) => EncodeJson (UpperBound a) where
+instance (EncodeJson a) => EncodeJson (UpperBound a) where
   encodeJson = defer \_ -> E.encode $ (case _ of UpperBound a b -> (a /\ b)) >$<
     (E.tuple (E.value >/\< E.value))
 
-instance decodeJsonUpperBound :: (DecodeJson a) => DecodeJson (UpperBound a) where
+instance (DecodeJson a) => DecodeJson (UpperBound a) where
   decodeJson = defer \_ -> D.decode $
     (D.tuple $ UpperBound </$\> D.value </*\> D.value)
 
-derive instance genericUpperBound :: Generic (UpperBound a) _
+derive instance Generic (UpperBound a) _
 
 --------------------------------------------------------------------------------
 

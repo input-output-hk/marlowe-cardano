@@ -1,17 +1,16 @@
 module StaticAnalysis.Types where
 
 import Prologue
+
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)
 import Data.List.Types (NonEmptyList)
 import Data.Map (Map)
 import Data.Set (Set)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\))
-import Marlowe.Template (TemplateContent)
 import Marlowe.Semantics
   ( AccountId
   , Case
@@ -25,7 +24,9 @@ import Marlowe.Semantics
   )
 import Marlowe.Semantics as S
 import Marlowe.Symbolic.Types.Response (Result)
+import Marlowe.Template (TemplateContent)
 import Network.RemoteData (isLoading)
+import Type.Proxy (Proxy(..))
 import Types (WarningAnalysisData)
 
 -------------------------------------------------------------------------------

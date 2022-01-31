@@ -4,11 +4,11 @@ module MarloweContract where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -30,26 +30,26 @@ data MarloweContract
   | WalletCompanion
   | MarloweFollower
 
-derive instance eqMarloweContract :: Eq MarloweContract
+derive instance Eq MarloweContract
 
-derive instance ordMarloweContract :: Ord MarloweContract
+derive instance Ord MarloweContract
 
-instance showMarloweContract :: Show MarloweContract where
+instance Show MarloweContract where
   show a = genericShow a
 
-instance encodeJsonMarloweContract :: EncodeJson MarloweContract where
+instance EncodeJson MarloweContract where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonMarloweContract :: DecodeJson MarloweContract where
+instance DecodeJson MarloweContract where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericMarloweContract :: Generic MarloweContract _
+derive instance Generic MarloweContract _
 
-instance enumMarloweContract :: Enum MarloweContract where
+instance Enum MarloweContract where
   succ = genericSucc
   pred = genericPred
 
-instance boundedMarloweContract :: Bounded MarloweContract where
+instance Bounded MarloweContract where
   bottom = genericBottom
   top = genericTop
 

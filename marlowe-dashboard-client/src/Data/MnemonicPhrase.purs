@@ -1,23 +1,19 @@
 module Data.MnemonicPhrase
   ( MnemonicPhrase
   , MnemonicPhraseError(..)
-  , Word
-  , checkMnemonic
-  , class CheckMnemonic
+  , MnenonicPhraseErrorRow
   , dual
-  , fromString
+  , fromStrings
   , fromWords
   , toString
   , toWords
   , validator
-  , wordFromString
-  , wordToString
+  , injErr
   ) where
 
 import Prologue
 
-import Control.Monad.Except (ExceptT, except, runExceptT, throwError)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Except (throwError)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Either (note)
 import Data.Enum (class BoundedEnum, class Enum)
@@ -30,14 +26,18 @@ import Data.Enum.Generic
   )
 import Data.Filterable (filter)
 import Data.Generic.Rep (class Generic)
+import Data.MnemonicPhrase.Word (Word)
+import Data.MnemonicPhrase.Word (fromString, toString) as Word
 import Data.Show.Generic (genericShow)
-import Data.String (Pattern(..), contains, joinWith, split, trim)
+import Data.String (Pattern(..), joinWith, split)
 import Data.Traversable (traverse)
-import Data.Validation.Semigroup (V(..))
+import Data.Variant (Variant)
+import Data.Variant (inj) as Variant
 import Polyform (Validator)
 import Polyform.Dual as Dual
-import Polyform.Validator (liftFnMV)
+import Polyform.Validator (liftFnEither)
 import Polyform.Validator.Dual (Dual)
+import Type.Proxy (Proxy(..))
 
 data MnemonicPhraseError
   = Empty
@@ -71,12 +71,6 @@ instance boundedEnumMnemonicPhraseError :: BoundedEnum MnemonicPhraseError where
 instance showMnemonicPhraseError :: Show MnemonicPhraseError where
   show = genericShow
 
-newtype Word = Word String
-
-derive instance eqWord :: Eq Word
-derive instance ordWord :: Ord Word
-derive newtype instance showWord :: Show Word
-
 data MnemonicPhrase =
   MnemonicPhrase
     Word
@@ -109,35 +103,25 @@ derive instance ordMnemonicPhrase :: Ord MnemonicPhrase
 instance showMnemonicPhrase :: Show MnemonicPhrase where
   show = show <<< toWords
 
-class Monad m <= CheckMnemonic m where
-  checkMnemonic :: MnemonicPhrase -> m Boolean
-
-wordFromString :: String -> Maybe Word
-wordFromString s =
-  case trim s of
-    "" -> Nothing
-    _
-      | contains (Pattern " ") s -> Nothing
-    _ -> Just $ Word s
-
 fromString
-  :: forall m
-   . CheckMnemonic m
-  => String
-  -> ExceptT MnemonicPhraseError m MnemonicPhrase
+  :: String
+  -> Either MnemonicPhraseError MnemonicPhrase
 fromString =
+  fromStrings
+    <<< filter (notEq "")
+    <<< split (Pattern " ")
+
+fromStrings
+  :: Array String
+  -> Either MnemonicPhraseError MnemonicPhrase
+fromStrings =
   fromWords
-    <=< except
-      <<< note ContainsInvalidWords
-      <<< traverse wordFromString
-      <<< filter (notEq "")
-      <<< split (Pattern " ")
+    <=< note ContainsInvalidWords
+      <<< traverse Word.fromString
 
 fromWords
-  :: forall m
-   . CheckMnemonic m
-  => Array Word
-  -> ExceptT MnemonicPhraseError m MnemonicPhrase
+  :: Array Word
+  -> Either MnemonicPhraseError MnemonicPhrase
 fromWords = case _ of
   [] -> throwError Empty
   [ w1
@@ -164,45 +148,43 @@ fromWords = case _ of
   , w22
   , w23
   , w24
-  ] -> do
-    let
-      m = MnemonicPhrase
-        w1
-        w2
-        w3
-        w4
-        w5
-        w6
-        w7
-        w8
-        w9
-        w10
-        w11
-        w12
-        w13
-        w14
-        w15
-        w16
-        w17
-        w18
-        w19
-        w20
-        w21
-        w22
-        w23
-        w24
-    valid <- lift $ checkMnemonic m
-    if valid then
-      pure m
-    else
-      throwError ContainsInvalidWords
+  ] -> pure $ MnemonicPhrase
+    w1
+    w2
+    w3
+    w4
+    w5
+    w6
+    w7
+    w8
+    w9
+    w10
+    w11
+    w12
+    w13
+    w14
+    w15
+    w16
+    w17
+    w18
+    w19
+    w20
+    w21
+    w22
+    w23
+    w24
   _ -> throwError WrongWordCount
 
-wordToString :: Word -> String
-wordToString (Word s) = s
+type MnenonicPhraseErrorRow r = (mnemonicPharseError :: MnemonicPhraseError | r)
+
+injErr
+  :: forall r
+   . MnemonicPhraseError
+  -> Variant (MnenonicPhraseErrorRow r)
+injErr = Variant.inj (Proxy :: Proxy "mnemonicPharseError")
 
 toString :: MnemonicPhrase -> String
-toString = joinWith " " <<< map wordToString <<< toWords
+toString = joinWith " " <<< map Word.toString <<< toWords
 
 toWords :: MnemonicPhrase -> Array Word
 toWords
@@ -264,12 +246,10 @@ toWords
 
 validator
   :: forall m
-   . CheckMnemonic m
+   . Applicative m
   => Validator m MnemonicPhraseError String MnemonicPhrase
-validator = liftFnMV $ map V <<< runExceptT <<< fromString
+validator = liftFnEither fromString
 
 dual
-  :: forall m
-   . CheckMnemonic m
-  => Dual m MnemonicPhraseError String MnemonicPhrase
+  :: forall m. Applicative m => Dual m MnemonicPhraseError String MnemonicPhrase
 dual = Dual.dual validator (pure <<< toString)

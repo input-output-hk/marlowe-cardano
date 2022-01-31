@@ -1,6 +1,7 @@
 module Marlowe.Gen where
 
 import Prologue
+
 import Control.Lazy (class Lazy, defer)
 import Control.Monad.Gen
   ( class MonadGen

@@ -4,6 +4,7 @@ module Marlowe.Parser
   ) where
 
 import Prologue
+
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Function.Uncurried (Fn5, runFn5)

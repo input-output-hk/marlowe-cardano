@@ -1,16 +1,16 @@
 module Page.JavascriptEditor.Types where
 
 import Prologue
+
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
-import Data.Lens (Getter', Lens', Prism', Fold', prism, to, (^.))
+import Data.Lens (Fold', Getter', Lens', Prism', prism, to, (^.))
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Language.Javascript.Interpreter (_result)
@@ -20,6 +20,7 @@ import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Template (IntegerTemplateType)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Text.Pretty (pretty)
+import Type.Proxy (Proxy(..))
 
 data CompilationState
   = NotCompiled

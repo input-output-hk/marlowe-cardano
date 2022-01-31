@@ -10,6 +10,7 @@ module Marlowe.Monaco
   ) where
 
 import Prologue
+
 import Data.Traversable (traverse)
 import Data.Unfoldable as Unfoldable
 import Effect (Effect)

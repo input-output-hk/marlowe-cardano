@@ -43,7 +43,7 @@ import Language.Marlowe.Extended
 import Language.Marlowe.SemanticsTypes (State (..))
 import Language.PureScript.Bridge (BridgePart, Language (Haskell), PSType, SumType, TypeInfo (TypeInfo), argonaut,
                                    buildBridge, equal, genericShow, mkSumType, order, psTypeParameters, typeModule,
-                                   typeName, writePSTypes, (^==))
+                                   typeName, (^==))
 import Language.PureScript.Bridge.Builder (BridgeData)
 import Language.PureScript.Bridge.PSTypes (psString)
 import Language.PureScript.Bridge.TypeParameters (A)
@@ -55,8 +55,8 @@ import qualified Marlowe.Symbolic.Types.Response as MSRes
 import qualified PSGenerator.Common
 import qualified PlutusTx.AssocMap as Map
 import Servant ((:<|>), (:>))
-import Servant.PureScript (HasBridge, Settings, apiModuleName, defaultBridge, defaultSettings, languageBridge,
-                           writeAPIModuleWithSettings)
+import Servant.PureScript (HasBridge, Settings, addTypes, apiModuleName, defaultBridge, defaultSettings,
+                           generateWithSettings, languageBridge)
 import qualified Swap
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
@@ -211,7 +211,9 @@ myTypes =
     ]
 
 mySettings :: Settings
-mySettings = defaultSettings & set apiModuleName "Marlowe"
+mySettings = defaultSettings
+    & set apiModuleName "Marlowe"
+    & addTypes myTypes
 
 multilineString :: BS.ByteString -> BS.ByteString -> BS.ByteString
 multilineString name value =
@@ -300,11 +302,6 @@ type Web = ("api" :> (API.API :<|> Auth.FrontendAPI)) :<|> MS.API :<|> Webghc.Fr
 
 generate :: FilePath -> IO ()
 generate outputDir = do
-    writePSTypes outputDir (buildBridge myBridge) myTypes
-    writeAPIModuleWithSettings
-        mySettings
-        outputDir
-        myBridgeProxy
-        (Proxy @Web)
+    generateWithSettings mySettings outputDir myBridgeProxy (Proxy @Web)
     writeUsecases outputDir
     writePangramJson outputDir

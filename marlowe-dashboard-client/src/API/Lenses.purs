@@ -11,10 +11,10 @@ module API.Lenses
   ) where
 
 import Prologue
+
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.RawJson (RawJson)
-import Type.Proxy (Proxy(..))
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.Contract.Resumable (Request, _Request)
@@ -26,6 +26,7 @@ import Plutus.PAB.Webserver.Types
   ( ContractInstanceClientState
   , _ContractInstanceClientState
   )
+import Type.Proxy (Proxy(..))
 import Wallet.Emulator.Wallet (Wallet)
 import Wallet.Types
   ( ContractInstanceId

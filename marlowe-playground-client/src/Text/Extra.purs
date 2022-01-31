@@ -1,6 +1,7 @@
 module Text.Extra where
 
 import Prologue
+
 import Data.Maybe (fromMaybe)
 import Data.String (Pattern(..), stripPrefix, stripSuffix, take, trim)
 import Data.String as String

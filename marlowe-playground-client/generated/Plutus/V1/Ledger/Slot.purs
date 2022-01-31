@@ -4,11 +4,11 @@ module Plutus.V1.Ledger.Slot where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -25,24 +25,24 @@ import Type.Proxy (Proxy(Proxy))
 
 newtype Slot = Slot { getSlot :: BigInt }
 
-derive instance eqSlot :: Eq Slot
+derive instance Eq Slot
 
-instance showSlot :: Show Slot where
+instance Show Slot where
   show a = genericShow a
 
-instance encodeJsonSlot :: EncodeJson Slot where
+instance EncodeJson Slot where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { getSlot: E.value :: _ BigInt }
     )
 
-instance decodeJsonSlot :: DecodeJson Slot where
+instance DecodeJson Slot where
   decodeJson = defer \_ -> D.decode $
     (Slot <$> D.record "Slot" { getSlot: D.value :: _ BigInt })
 
-derive instance genericSlot :: Generic Slot _
+derive instance Generic Slot _
 
-derive instance newtypeSlot :: Newtype Slot _
+derive instance Newtype Slot _
 
 --------------------------------------------------------------------------------
 

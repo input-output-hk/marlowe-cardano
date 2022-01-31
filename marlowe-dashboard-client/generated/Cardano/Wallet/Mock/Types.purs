@@ -4,11 +4,11 @@ module Cardano.Wallet.Mock.Types where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -18,9 +18,9 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
+import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
-import Ledger.Address (PaymentPubKeyHash)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Wallet (Wallet)
 
@@ -29,10 +29,10 @@ newtype WalletInfo = WalletInfo
   , wiPaymentPubKeyHash :: PaymentPubKeyHash
   }
 
-instance showWalletInfo :: Show WalletInfo where
+instance Show WalletInfo where
   show a = genericShow a
 
-instance encodeJsonWalletInfo :: EncodeJson WalletInfo where
+instance EncodeJson WalletInfo where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { wiWallet: E.value :: _ Wallet
@@ -40,7 +40,7 @@ instance encodeJsonWalletInfo :: EncodeJson WalletInfo where
         }
     )
 
-instance decodeJsonWalletInfo :: DecodeJson WalletInfo where
+instance DecodeJson WalletInfo where
   decodeJson = defer \_ -> D.decode $
     ( WalletInfo <$> D.record "WalletInfo"
         { wiWallet: D.value :: _ Wallet
@@ -48,9 +48,9 @@ instance decodeJsonWalletInfo :: DecodeJson WalletInfo where
         }
     )
 
-derive instance genericWalletInfo :: Generic WalletInfo _
+derive instance Generic WalletInfo _
 
-derive instance newtypeWalletInfo :: Newtype WalletInfo _
+derive instance Newtype WalletInfo _
 
 --------------------------------------------------------------------------------
 

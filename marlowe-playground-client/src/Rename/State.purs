@@ -1,6 +1,7 @@
 module Rename.State where
 
 import Prologue hiding (div)
+
 import Component.Modal.ViewHelpers (modalHeader)
 import Data.Lens (assign, (^.))
 import Effect.Aff.Class (class MonadAff)

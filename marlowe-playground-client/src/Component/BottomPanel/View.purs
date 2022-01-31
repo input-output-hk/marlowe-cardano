@@ -1,6 +1,7 @@
 module Component.BottomPanel.View (render) where
 
 import Prologue hiding (div)
+
 import Component.BottomPanel.Types
   ( Action(..)
   , State

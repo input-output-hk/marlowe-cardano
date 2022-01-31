@@ -4,11 +4,11 @@ module Ledger.Tx.CardanoAPI where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -28,26 +28,26 @@ import Type.Proxy (Proxy(Proxy))
 
 data FromCardanoError = SimpleScriptsNotSupported
 
-derive instance eqFromCardanoError :: Eq FromCardanoError
+derive instance Eq FromCardanoError
 
-derive instance ordFromCardanoError :: Ord FromCardanoError
+derive instance Ord FromCardanoError
 
-instance showFromCardanoError :: Show FromCardanoError where
+instance Show FromCardanoError where
   show a = genericShow a
 
-instance encodeJsonFromCardanoError :: EncodeJson FromCardanoError where
+instance EncodeJson FromCardanoError where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonFromCardanoError :: DecodeJson FromCardanoError where
+instance DecodeJson FromCardanoError where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericFromCardanoError :: Generic FromCardanoError _
+derive instance Generic FromCardanoError _
 
-instance enumFromCardanoError :: Enum FromCardanoError where
+instance Enum FromCardanoError where
   succ = genericSucc
   pred = genericPred
 
-instance boundedFromCardanoError :: Bounded FromCardanoError where
+instance Bounded FromCardanoError where
   bottom = genericBottom
   top = genericTop
 
@@ -72,12 +72,12 @@ data ToCardanoError
   | ScriptPurposeNotSupported ScriptTag
   | Tag String ToCardanoError
 
-derive instance eqToCardanoError :: Eq ToCardanoError
+derive instance Eq ToCardanoError
 
-instance showToCardanoError :: Show ToCardanoError where
+instance Show ToCardanoError where
   show a = genericShow a
 
-instance encodeJsonToCardanoError :: EncodeJson ToCardanoError where
+instance EncodeJson ToCardanoError where
   encodeJson = defer \_ -> case _ of
     TxBodyError a -> E.encodeTagged "TxBodyError" a E.value
     DeserialisationError -> encodeJson
@@ -100,7 +100,7 @@ instance encodeJsonToCardanoError :: EncodeJson ToCardanoError where
       E.value
     Tag a b -> E.encodeTagged "Tag" (a /\ b) (E.tuple (E.value >/\< E.value))
 
-instance decodeJsonToCardanoError :: DecodeJson ToCardanoError where
+instance DecodeJson ToCardanoError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ToCardanoError"
     $ Map.fromFoldable
@@ -120,7 +120,7 @@ instance decodeJsonToCardanoError :: DecodeJson ToCardanoError where
         , "Tag" /\ D.content (D.tuple $ Tag </$\> D.value </*\> D.value)
         ]
 
-derive instance genericToCardanoError :: Generic ToCardanoError _
+derive instance Generic ToCardanoError _
 
 --------------------------------------------------------------------------------
 

@@ -1,12 +1,13 @@
 module Simulator.Types where
 
 import Prologue
+
 import Data.Argonaut.Decode (class DecodeJson)
-import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
+import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
-import Data.Argonaut.Encode.Aeson as E
 import Data.Argonaut.Encode.Aeson ((>$<))
+import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
@@ -14,7 +15,6 @@ import Data.Map as Map
 import Data.Newtype (class Newtype, unwrap)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Template (TemplateContent)
 import Marlowe.Holes (Holes, Term)
 import Marlowe.Holes as T
 import Marlowe.Semantics
@@ -34,6 +34,7 @@ import Marlowe.Semantics
   , TransactionWarning
   )
 import Marlowe.Semantics as S
+import Marlowe.Template (TemplateContent)
 import Monaco (IMarker)
 
 data ActionInputId

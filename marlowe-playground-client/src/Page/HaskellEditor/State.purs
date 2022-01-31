@@ -4,11 +4,11 @@ module Page.HaskellEditor.State
   ) where
 
 import Prologue hiding (div)
+
 import CloseAnalysis (analyseClose)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State) as BottomPanel
-import Control.Monad.Except (runExceptT)
-import Control.Monad.Reader (class MonadAsk)
+import Control.Monad.Trans.Class (lift)
 import Data.Array (catMaybes)
 import Data.Either (hush)
 import Data.Foldable (for_)
@@ -17,7 +17,6 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Examples.Haskell.Contracts (example) as HE
 import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)
@@ -29,7 +28,7 @@ import Language.Haskell.Interpreter
   )
 import Language.Haskell.Monaco as HM
 import MainFrame.Types (ChildSlots, _haskellEditorSlot)
-import Marlowe (postApiCompile)
+import Marlowe (Api, postApiCompile)
 import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
 import Marlowe.Holes (fromTerm)
@@ -48,6 +47,7 @@ import Page.HaskellEditor.Types
   , _haskellEditorKeybindings
   , _metadataHintInfo
   )
+import Servant.PureScript (class MonadAjax)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability)
 import StaticAnalysis.StaticTools (analyseContract)
@@ -75,7 +75,7 @@ toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction DoNothing = pure unit
@@ -108,8 +108,8 @@ handleAction Compile = do
     Nothing -> pure unit
     Just code -> do
       assign _compilationResult Loading
-      result <- RemoteData.fromEither <$> runExceptT
-        (postApiCompile $ CompileRequest { code, implicitPrelude: true })
+      result <- lift $ RemoteData.fromEither
+        <$> postApiCompile (CompileRequest { code, implicitPrelude: true })
       assign _compilationResult result
       -- Update the error display.
       case result of
@@ -171,7 +171,7 @@ handleAction ClearAnalysisResults = assign
 analyze
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => (Contract -> HalogenM State Action ChildSlots Void m Unit)
   -> HalogenM State Action ChildSlots Void m Unit
 analyze doAnalyze = do

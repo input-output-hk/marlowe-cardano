@@ -5,10 +5,10 @@ module Page.JavascriptEditor.State
   ) where
 
 import Prologue hiding (div)
+
 import CloseAnalysis (analyseClose)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State) as BottomPanel
-import Control.Monad.Reader (class MonadAsk)
 import Data.Array as Array
 import Data.Lens (assign, modifying, over, set, use, view)
 import Data.List ((:))
@@ -20,7 +20,6 @@ import Data.String (drop, joinWith, length, take)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
-import Env (Env)
 import Examples.JS.Contracts as JSE
 import Halogen (Component, HalogenM, gets, liftEffect, modify_, query)
 import Halogen.Extra (mapSubmodule)
@@ -31,6 +30,7 @@ import Language.Javascript.Interpreter (InterpreterResult(..))
 import Language.Javascript.Interpreter as JSI
 import Language.Javascript.Monaco as JSM
 import MainFrame.Types (ChildSlots, _jsEditorSlot)
+import Marlowe (Api)
 import Marlowe.Extended (Contract)
 import Marlowe.Extended.Metadata (MetadataHintInfo, getMetadataHintInfo)
 import Marlowe.Template (getPlaceholderIds, typeToLens, updateTemplateContent)
@@ -47,6 +47,7 @@ import Page.JavascriptEditor.Types
   , _keybindings
   , _metadataHintInfo
   )
+import Servant.PureScript (class MonadAjax)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability (analyseReachability)
 import StaticAnalysis.StaticTools (analyseContract)
@@ -84,7 +85,7 @@ checkDecorationPosition _ _ _ = false
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction DoNothing = pure unit
@@ -222,7 +223,7 @@ handleAction ClearAnalysisResults = assign
 analyze
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => (Contract -> HalogenM State Action ChildSlots Void m Unit)
   -> HalogenM State Action ChildSlots Void m Unit
 analyze doAnalyze = do

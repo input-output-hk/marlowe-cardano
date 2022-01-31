@@ -1,6 +1,7 @@
 module Page.Simulation.BottomPanel (panelContents) where
 
 import Prologue hiding (div)
+
 import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (foldMap)
 import Data.Lens (preview, to, view, (^.))

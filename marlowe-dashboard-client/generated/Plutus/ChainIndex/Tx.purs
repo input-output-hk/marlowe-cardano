@@ -4,11 +4,11 @@ module Plutus.ChainIndex.Tx where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -41,12 +41,12 @@ newtype ChainIndexTx = ChainIndexTx
   , _citxCardanoTx :: Maybe RawJson
   }
 
-derive instance eqChainIndexTx :: Eq ChainIndexTx
+derive instance Eq ChainIndexTx
 
-instance showChainIndexTx :: Show ChainIndexTx where
+instance Show ChainIndexTx where
   show a = genericShow a
 
-instance encodeJsonChainIndexTx :: EncodeJson ChainIndexTx where
+instance EncodeJson ChainIndexTx where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { _citxTxId: E.value :: _ TxId
@@ -61,7 +61,7 @@ instance encodeJsonChainIndexTx :: EncodeJson ChainIndexTx where
         }
     )
 
-instance decodeJsonChainIndexTx :: DecodeJson ChainIndexTx where
+instance DecodeJson ChainIndexTx where
   decodeJson = defer \_ -> D.decode $
     ( ChainIndexTx <$> D.record "ChainIndexTx"
         { _citxTxId: D.value :: _ TxId
@@ -76,9 +76,9 @@ instance decodeJsonChainIndexTx :: DecodeJson ChainIndexTx where
         }
     )
 
-derive instance genericChainIndexTx :: Generic ChainIndexTx _
+derive instance Generic ChainIndexTx _
 
-derive instance newtypeChainIndexTx :: Newtype ChainIndexTx _
+derive instance Newtype ChainIndexTx _
 
 --------------------------------------------------------------------------------
 
@@ -124,17 +124,17 @@ data ChainIndexTxOutputs
   = InvalidTx
   | ValidTx (Array TxOut)
 
-derive instance eqChainIndexTxOutputs :: Eq ChainIndexTxOutputs
+derive instance Eq ChainIndexTxOutputs
 
-instance showChainIndexTxOutputs :: Show ChainIndexTxOutputs where
+instance Show ChainIndexTxOutputs where
   show a = genericShow a
 
-instance encodeJsonChainIndexTxOutputs :: EncodeJson ChainIndexTxOutputs where
+instance EncodeJson ChainIndexTxOutputs where
   encodeJson = defer \_ -> case _ of
     InvalidTx -> encodeJson { tag: "InvalidTx", contents: jsonNull }
     ValidTx a -> E.encodeTagged "ValidTx" a E.value
 
-instance decodeJsonChainIndexTxOutputs :: DecodeJson ChainIndexTxOutputs where
+instance DecodeJson ChainIndexTxOutputs where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ChainIndexTxOutputs"
     $ Map.fromFoldable
@@ -142,7 +142,7 @@ instance decodeJsonChainIndexTxOutputs :: DecodeJson ChainIndexTxOutputs where
         , "ValidTx" /\ D.content (ValidTx <$> D.value)
         ]
 
-derive instance genericChainIndexTxOutputs :: Generic ChainIndexTxOutputs _
+derive instance Generic ChainIndexTxOutputs _
 
 --------------------------------------------------------------------------------
 

@@ -3,10 +3,10 @@
 , packages ? import ./. { inherit system enableHaskellProfiling; }
 }:
 let
-  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon webCommonPlayground bitte-packages marlowe-cli;
+  inherit (packages) pkgs marlowe marlowe-playground marlowe-dashboard docs webCommon bitte-packages marlowe-cli;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin;
   inherit (marlowe) haskell stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-cli cardano-node;
-  inherit (marlowe) purs-tidy-hook prettier-hook;
+  inherit (marlowe) writeShellScriptBinInRepoRoot;
 
   set-xdg = ''
     export XDG_DATA_HOME="''${XDG_DATA_HOME:-''${HOME}/.local/share}"
@@ -15,46 +15,14 @@ let
     mkdir -p "''${XDG_RUNTIME_DIR}"
   '';
 
-  launch-node = writeShellScriptBin "launch-node" ''
-    set -eEuo pipefail
-
-    ${set-xdg}
-
-    export NODE_STATE_DIR="''${NODE_STATE_DIR:-''${XDG_DATA_HOME}/node}"
-    mkdir -p "$NODE_STATE_DIR"
-
-    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
-
-    export NOMAD_PORT_node="''${NOMAD_PORT_node:-3001}"
-
-    exec -a entrypoint ${bitte-packages.node}/bin/entrypoint
+  start-marlowe-run = writeShellScriptBinInRepoRoot "start-marlowe-run" ''
+    cd marlowe-dashboard-client
+    ${pkgs.arion}/bin/arion down
+    ${pkgs.arion}/bin/arion up
   '';
 
-  launch-chain-index = writeShellScriptBin "launch-chain-index" ''
-    set -eEuo pipefail
-
-    ${set-xdg}
-
-    export INDEX_STATE_DIR="''${INDEX_STATE_DIR:-''${XDG_DATA_HOME}/index}"
-    mkdir -p "$INDEX_STATE_DIR"
-
-    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
-
-    export NOMAD_PORT_index="''${NOMAD_PORT_index:-9083}"
-
-    exec -a entrypoint ${bitte-packages.chain-index}/bin/entrypoint
-  '';
-
-  launch-wbe = writeShellScriptBin "launch-wbe" ''
-    set -eEuo pipefail
-
-    ${set-xdg}
-
-    export NOMAD_ALLOC_DIR="''${NOMAD_ALLOC_DIR:-''${XDG_RUNTIME_DIR}}"
-
-    export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
-
-    exec -a entrypoint ${bitte-packages.wbe}/bin/entrypoint
+  generate-purescript = writeShellScriptBinInRepoRoot "generate-purescript" ''
+    marlowe-run-generate-purs; marlowe-playground-generate-purs
   '';
 
   # For Sphinx, and ad-hoc usage
@@ -78,8 +46,11 @@ let
       shellcheck = pkgs.shellcheck;
     };
     hooks = {
-      inherit purs-tidy-hook;
-      prettier = prettier-hook;
+      inherit (marlowe) dhall-hook purs-tidy-hook;
+      prettier = {
+        enable = true;
+        types_or = [ "javascript" "css" "html" ];
+      };
       stylish-haskell.enable = true;
       nixpkgs-fmt = {
         enable = true;
@@ -106,6 +77,7 @@ let
 
   # build inputs from nixpkgs ( -> ./nix/default.nix )
   nixpkgsInputs = (with pkgs; [
+    arion
     cacert
     editorconfig-core-c
     ghcid
@@ -129,30 +101,24 @@ let
     fixPngOptimization
     fix-prettier
     fix-purs-tidy
+    fix-dhall
     fixStylishHaskell
     haskell-language-server
     haskell-language-server-wrapper
     hie-bios
     hlint
+    marlowe-dashboard.build-client
     marlowe-dashboard.generate-purescript
     marlowe-dashboard.start-backend
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
-    purs
-    purs-tidy
-    spago
-    psa
-    purescript-language-server
-    spago2nix
+    generate-purescript
     stylish-haskell
     updateMaterialized
     updateClientDeps
     docs.build-and-serve-docs
-
-    launch-node
-    launch-chain-index
-    launch-wbe
-  ]);
+    start-marlowe-run
+  ] ++ easyPS.buildInputs);
 
 in
 haskell.project.shellFor {
@@ -176,6 +142,5 @@ haskell.project.shellFor {
   + ''
     export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
     export WEB_COMMON_SRC="${webCommon.cleanSrc}"
-    export WEB_COMMON_PLAYGROUND_SRC="${webCommonPlayground}"
   '';
 }

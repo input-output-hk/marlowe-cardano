@@ -16,6 +16,7 @@ module Blockly.Events
   ) where
 
 import Prologue
+
 import Data.Function.Uncurried (Fn4, runFn4)
 import Web.Event.Event (Event)
 

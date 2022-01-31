@@ -5,11 +5,11 @@ import Prelude
 
 import Control.Lazy (defer)
 import Control.Monad.Freer.Extras.Log (LogMessage)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -33,21 +33,12 @@ newtype PartiallyDecodedResponse a = PartiallyDecodedResponse
   , observableState :: RawJson
   }
 
-derive instance eqPartiallyDecodedResponse ::
-  ( Eq a
-  ) =>
-  Eq (PartiallyDecodedResponse a)
+derive instance (Eq a) => Eq (PartiallyDecodedResponse a)
 
-instance showPartiallyDecodedResponse ::
-  ( Show a
-  ) =>
-  Show (PartiallyDecodedResponse a) where
+instance (Show a) => Show (PartiallyDecodedResponse a) where
   show a = genericShow a
 
-instance encodeJsonPartiallyDecodedResponse ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (PartiallyDecodedResponse a) where
+instance (EncodeJson a) => EncodeJson (PartiallyDecodedResponse a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { hooks: E.value :: _ (Array (Request a))
@@ -58,10 +49,7 @@ instance encodeJsonPartiallyDecodedResponse ::
         }
     )
 
-instance decodeJsonPartiallyDecodedResponse ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (PartiallyDecodedResponse a) where
+instance (DecodeJson a) => DecodeJson (PartiallyDecodedResponse a) where
   decodeJson = defer \_ -> D.decode $
     ( PartiallyDecodedResponse <$> D.record "PartiallyDecodedResponse"
         { hooks: D.value :: _ (Array (Request a))
@@ -72,11 +60,9 @@ instance decodeJsonPartiallyDecodedResponse ::
         }
     )
 
-derive instance genericPartiallyDecodedResponse ::
-  Generic (PartiallyDecodedResponse a) _
+derive instance Generic (PartiallyDecodedResponse a) _
 
-derive instance newtypePartiallyDecodedResponse ::
-  Newtype (PartiallyDecodedResponse a) _
+derive instance Newtype (PartiallyDecodedResponse a) _
 
 --------------------------------------------------------------------------------
 

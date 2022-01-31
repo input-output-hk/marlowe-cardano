@@ -29,7 +29,6 @@ import Data.Either (fromRight, isRight)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust, isNothing)
 import Data.Monoid (First (..))
-import Data.Ratio ((%))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String
@@ -40,6 +39,7 @@ import Data.UUID (UUID)
 import qualified Data.UUID as UUID
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
+import qualified Language.Marlowe as M ((%))
 import Language.Marlowe.Analysis.FSSemantics
 import Language.Marlowe.Client
 import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValidator, smallUntypedValidator)
@@ -122,8 +122,8 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
     T..&&. walletFundsChange alice (lovelaceValueOf 15_000_000)
     T..&&. walletFundsChange bob (lovelaceValueOf (-15_000_000))
-    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (OK reqId "close")) "should be OK"
-    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (OK reqId "close")) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
     ) $ do
     -- Init a contract
     let alicePk = PK (walletPubKeyHash alice)
@@ -162,8 +162,8 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
     T..&&. assertDone marlowePlutusContract (Trace.walletInstanceTag bob) (const True) "contract should close"
     T..&&. walletFundsChange alice (lovelaceValueOf 15_000_000)
     T..&&. walletFundsChange bob (lovelaceValueOf (-15_000_000))
-    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (OK reqId "close")) "should be OK"
-    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (OK reqId "close")) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (Trace.walletInstanceTag bob) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
     ) $ do
     -- Init a contract
     let alicePk = PK (walletPubKeyHash alice)
@@ -202,9 +202,9 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
 errorHandlingTest :: TestTree
 errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
     (assertAccumState marlowePlutusContract (Trace.walletInstanceTag alice)
-    (\case SomeError _ "apply-inputs" _ -> True
-           _                            -> False
-    ) "should be fail with SomeError"
+    (\case (Just (EndpointException _ "apply-inputs" _)) -> True
+           _                                             -> False
+    ) "should be fail with EndpointException"
     ) $ do
     -- Init a contract
     let alicePk = PK (walletPubKeyHash alice)
@@ -402,7 +402,7 @@ divisionRoundingTest = property $ do
             n <- amount
             d <- suchThat amount (/= 0)
             return (n, d)
-    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n P.% d)
+    forAll gen $ \(n, d) -> eval (DivValue (Constant n) (Constant d)) === halfEvenRound (n M.% d)
     where
       halfEvenRound = P.round
 

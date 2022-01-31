@@ -3,17 +3,17 @@
 , haskell
 , webCommon
 , webCommonMarlowe
-, webCommonPlayground
 , buildPursPackage
 , buildNodeModules
 , filterNpm
 , purs-tidy
 , prettier
+, writeShellScriptBinInRepoRoot
 }:
 let
   playground-exe = haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server;
 
-  build-playground-exe = "$(nix-build --quiet --no-build-output ../default.nix -A marlowe.haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server)";
+  build-playground-exe = "$(nix-build ../default.nix -A marlowe.haskell.packages.marlowe-playground-server.components.exes.marlowe-playground-server)";
 
   build-ghc-with-marlowe = "$(nix-build --quiet --no-build-output -E '(import ./.. {}).marlowe.haskell.project.ghcWithPackages(ps: [ ps.marlowe ])')";
 
@@ -30,13 +30,11 @@ let
     rm $out/.tidyoperators
   '';
 
-  # generate-purescript: script to create purescript bridge code
-  generate-purescript = pkgs.writeShellScriptBin "marlowe-playground-generate-purs" ''
-    rm -rf ./generated
-    ${build-playground-exe}/bin/marlowe-playground-server psgenerator generated
-    cd ..
-    ${purs-tidy}/bin/purs-tidy format-in-place ./marlowe-playground-client/generated
-    ${prettier}/bin/prettier -w ./marlowe-playground-client/generated
+  generate-purescript = writeShellScriptBinInRepoRoot "marlowe-playground-generate-purs" ''
+    generated=./marlowe-playground-client/generated
+    rm -rf $generated
+    cp -a $(nix-build -A marlowe-playground.generated-purescript --no-out-link) $generated
+    chmod -R +w $generated
   '';
 
   # start-backend: script to start the plutus-playground-server
@@ -74,13 +72,11 @@ let
       name = "marlowe-playground-client";
       extraSrcs = {
         web-common-marlowe = webCommonMarlowe;
-        web-common-playground = webCommonPlayground;
       };
       spagoPackages = pkgs.callPackage ./spago-packages.nix { };
     })
     (_: {
       WEB_COMMON_SRC = webCommon.cleanSrc;
-      WEB_COMMON_PLAYGROUND_SRC = webCommonPlayground;
       WEB_COMMON_MARLOWE_SRC = webCommonMarlowe;
     });
 in

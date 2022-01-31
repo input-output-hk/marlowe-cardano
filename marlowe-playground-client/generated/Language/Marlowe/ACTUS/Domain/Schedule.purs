@@ -4,11 +4,11 @@ module Language.Marlowe.ACTUS.Domain.Schedule where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -36,7 +36,7 @@ newtype CashFlowPoly a = CashFlowPoly
   , currency :: String
   }
 
-instance encodeJsonCashFlowPoly :: (EncodeJson a) => EncodeJson (CashFlowPoly a) where
+instance (EncodeJson a) => EncodeJson (CashFlowPoly a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { tick: E.value :: _ BigInt
@@ -52,7 +52,7 @@ instance encodeJsonCashFlowPoly :: (EncodeJson a) => EncodeJson (CashFlowPoly a)
         }
     )
 
-instance decodeJsonCashFlowPoly :: (DecodeJson a) => DecodeJson (CashFlowPoly a) where
+instance (DecodeJson a) => DecodeJson (CashFlowPoly a) where
   decodeJson = defer \_ -> D.decode $
     ( CashFlowPoly <$> D.record "CashFlowPoly"
         { tick: D.value :: _ BigInt
@@ -68,9 +68,9 @@ instance decodeJsonCashFlowPoly :: (DecodeJson a) => DecodeJson (CashFlowPoly a)
         }
     )
 
-derive instance genericCashFlowPoly :: Generic (CashFlowPoly a) _
+derive instance Generic (CashFlowPoly a) _
 
-derive instance newtypeCashFlowPoly :: Newtype (CashFlowPoly a) _
+derive instance Newtype (CashFlowPoly a) _
 
 --------------------------------------------------------------------------------
 

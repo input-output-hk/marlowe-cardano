@@ -11,10 +11,11 @@ module Component.Template.Lenses
   ) where
 
 import Prologue
+
 import Component.InputField.Types (State) as InputField
 import Component.Template.Types
-  ( ContractSetupStage
-  , ContractNicknameError
+  ( ContractNicknameError
+  , ContractSetupStage
   , RoleError
   , SlotError
   , State
@@ -25,9 +26,9 @@ import Data.Lens.At (at)
 import Data.Lens.Prism.Maybe (_Just)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Type.Proxy (Proxy(..))
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Semantics (TokenName)
+import Type.Proxy (Proxy(..))
 
 _contractSetupStage :: Lens' State ContractSetupStage
 _contractSetupStage = prop (Proxy :: _ "contractSetupStage")

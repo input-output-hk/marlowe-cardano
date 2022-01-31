@@ -1,20 +1,21 @@
 module Component.Projects.Types where
 
 import Prologue
+
 import Analytics (class IsEvent, Event)
 import Data.Argonaut (class DecodeJson, class EncodeJson)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class Enum)
 import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', has)
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Gist (Gist, GistId)
 import Network.RemoteData (RemoteData(..), _Loading)
-import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson as E
+import Type.Proxy (Proxy(..))
 
 -----------------------------------------------------------
 data Lang

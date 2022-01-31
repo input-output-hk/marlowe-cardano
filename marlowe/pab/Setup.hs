@@ -19,31 +19,18 @@ import SetupParser (AppOpts (..), NoConfigCommand (..), parseOptions)
 
 import qualified Cardano.BM.Configuration.Model as CM
 import Control.Monad.Logger (logErrorN, runStdoutLoggingT)
-import Data.Proxy (Proxy (..))
 import Data.Text.Extras (tshow)
-import MarloweContract (MarloweContract)
 import qualified Plutus.PAB.Monitoring.Monitoring as LM
-import qualified Plutus.PAB.Run.PSGenerator as PSGenerator
 import Plutus.PAB.Types (PABError)
 
 import System.Exit (ExitCode (ExitFailure), exitSuccess, exitWith)
 
+-- Get default logging configuration
 runNoConfigCommand ::
     NoConfigCommand
     -> IO ()
-runNoConfigCommand = \case
-
-    -- Generate PureScript bridge code
-    PSGenerator {psGenOutputDir} -> do
-        PSGenerator.generateDefault psGenOutputDir
-
-    -- Generate PureScript API code
-    PSApiGenerator {psGenOutputDir} -> do
-        PSGenerator.generateAPIModule (Proxy :: Proxy MarloweContract) psGenOutputDir
-        PSGenerator.generateWith @MarloweContract psGenOutputDir
-
-    -- Get default logging configuration
-    WriteDefaultConfig{outputFile} -> LM.defaultConfig >>= flip CM.exportConfiguration outputFile
+runNoConfigCommand WriteDefaultConfig{outputFile} =
+    LM.defaultConfig >>= flip CM.exportConfiguration outputFile
 
 main :: IO ()
 main = do

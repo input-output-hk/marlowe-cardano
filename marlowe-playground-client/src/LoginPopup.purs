@@ -1,6 +1,7 @@
 module LoginPopup where
 
 import Prologue
+
 import Auth (AuthRole)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Argonaut.Foreign (decodeForeign)
@@ -19,7 +20,7 @@ import Web.Event.EventTarget
   , removeEventListener
   )
 import Web.HTML as Web
-import Web.HTML.Location (replace, origin)
+import Web.HTML.Location (origin, replace)
 import Web.HTML.Window (outerHeight, outerWidth)
 import Web.HTML.Window as Window
 import Web.HTML.WindowExtra (close, postMessage)

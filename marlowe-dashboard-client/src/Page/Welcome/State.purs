@@ -17,8 +17,10 @@ import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.Contacts.Lenses (_pubKeyHash, _walletInfo, _walletNickname)
 import Control.Monad.Reader (class MonadAsk)
+import Data.Address as A
 import Data.AddressBook as AddressBook
 import Data.Lens (assign, set, view)
+import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_)
@@ -82,8 +84,12 @@ handleAction (ConnectWallet walletNickname walletDetails) = do
   let
     walletDetailsWithNickname = set _walletNickname walletNickname walletDetails
 
-    address = view (_walletInfo <<< _pubKeyHash) walletDetailsWithNickname
-  modifyAddressBook_ (AddressBook.insert walletNickname address)
+    pubKeyHash = view
+      (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
+      walletDetailsWithNickname
+
+  modifyAddressBook_
+    (AddressBook.insert walletNickname $ A.fromPubKeyHash pubKeyHash)
   callMainFrameAction $ MainFrame.EnterDashboardState walletDetailsWithNickname
 
 handleAction ClearLocalStorage = do

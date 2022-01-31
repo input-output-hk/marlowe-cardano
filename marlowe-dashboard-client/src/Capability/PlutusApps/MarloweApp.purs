@@ -17,8 +17,8 @@ import Prologue
 
 import AppM (AppM)
 import Bridge (toBack)
-import Capability.Contract (class ManageContract)
-import Capability.Contract (invokeEndpoint) as Contract
+import Capability.PAB (class ManagePAB)
+import Capability.PAB (invokeEndpoint) as PAB
 import Capability.PlutusApps.MarloweApp.Lenses
   ( _applyInputs
   , _create
@@ -29,17 +29,16 @@ import Capability.PlutusApps.MarloweApp.Lenses
 import Capability.PlutusApps.MarloweApp.Types
   ( class HasMarloweAppEndpointMutex
   , EndpointMutex
-  , LastResult(..)
+  , MarloweEndpointResponse
   )
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.Address (Address)
-import Data.Argonaut.Core (Json)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
 import Data.Foldable (elem)
 import Data.Lens (Lens', toArrayOf, traversed, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
+import Data.PubKeyHash (PubKeyHash)
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID, genUUID)
@@ -49,6 +48,7 @@ import Effect.AVar as EAVar
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
+import Language.Marlowe.Client (EndpointResponse(..))
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
@@ -58,10 +58,7 @@ import Marlowe.Semantics
   , TransactionInput(..)
   )
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
-import Plutus.V1.Ledger.Crypto (PubKeyHash) as Back
 import Plutus.V1.Ledger.Slot (Slot) as Back
-import Plutus.V1.Ledger.Value (TokenName) as Back
-import PlutusTx.AssocMap (Map) as Back
 import Type.Proxy (Proxy(..))
 import Types (AjaxResponse)
 import Wallet.Types (_EndpointDescription)
@@ -69,7 +66,7 @@ import Wallet.Types (_EndpointDescription)
 class MarloweApp m where
   createContract
     :: PlutusAppId
-    -> Map TokenName Address
+    -> Map TokenName PubKeyHash
     -> Contract
     -> m (AjaxResponse Unit)
   applyInputs
@@ -80,17 +77,13 @@ class MarloweApp m where
     :: PlutusAppId
     -> MarloweParams
     -> TokenName
-    -> Address
+    -> PubKeyHash
     -> m (AjaxResponse Unit)
 
 instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
     reqId <- liftEffect genUUID
-    let
-      backRoles :: Back.Map Back.TokenName Back.PubKeyHash
-      backRoles = toBack roles
-
-      payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
+    let payload = [ encodeJson reqId, encodeJson roles, encodeJson contract ]
     invokeMutexedEndpoint plutusAppId reqId "create" _create payload
   applyInputs
     plutusAppId
@@ -114,8 +107,8 @@ instance marloweAppM :: MarloweApp AppM where
       payload =
         [ encodeJson reqId
         , encodeJson marloweContractId
-        , (encodeJson :: Back.TokenName -> Json) $ toBack tokenName
-        , (encodeJson :: Back.PubKeyHash -> Json) $ toBack pubKeyHash
+        , encodeJson tokenName
+        , encodeJson pubKeyHash
         ]
     invokeMutexedEndpoint plutusAppId reqId "redeem" _redeem payload
 
@@ -135,7 +128,7 @@ invokeMutexedEndpoint
   :: forall payload m env
    . EncodeJson payload
   => MonadAff m
-  => ManageContract m
+  => ManagePAB m
   => MonadAsk env m
   => HasMarloweAppEndpointMutex env
   => PlutusAppId
@@ -158,7 +151,7 @@ invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
   -- TODO: We could change this take for a read and listen for a 500 error with EndpointUnavailabe
   --       to retry and take it (instead of preemptively taking it).
   liftAff $ AVar.take endpointMutex
-  result <- Contract.invokeEndpoint plutusAppId endpointName payload
+  result <- PAB.invokeEndpoint plutusAppId endpointName payload
   -- After making the request, we lock on the global request array so we can add
   -- a new request id with its corresponding mutex.
   -- TODO: It would be nice if the invokeEndpoint returns a requestId instead of having to generate
@@ -183,12 +176,11 @@ onNewObservableState
    . MonadAff m
   => MonadAsk env m
   => HasMarloweAppEndpointMutex env
-  => LastResult
-  -> m (Maybe LastResult)
+  => MarloweEndpointResponse
+  -> m (Maybe MarloweEndpointResponse)
 onNewObservableState lastResult = case lastResult of
-  OK reqId _ -> onNewObservableState' reqId
-  SomeError reqId _ _ -> onNewObservableState' reqId
-  _ -> pure Nothing
+  EndpointSuccess reqId _ -> onNewObservableState' reqId
+  EndpointException reqId _ _ -> onNewObservableState' reqId
   where
   onNewObservableState' reqId = do
     requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
@@ -198,7 +190,10 @@ onNewObservableState lastResult = case lastResult of
       liftAff $ AVar.put lastResult reqMutex
       pure lastResult
 
-findReqId :: UUID -> Array (UUID /\ AVar LastResult) -> Maybe (AVar LastResult)
+findReqId
+  :: UUID
+  -> Array (UUID /\ AVar MarloweEndpointResponse)
+  -> Maybe (AVar MarloweEndpointResponse)
 findReqId reqId = findMap
   (\(reqId' /\ reqMutex) -> if reqId == reqId' then Just reqMutex else Nothing)
 
@@ -210,7 +205,7 @@ waitForResponse
   => MonadAsk env m
   => HasMarloweAppEndpointMutex env
   => UUID
-  -> m (Maybe LastResult)
+  -> m (Maybe MarloweEndpointResponse)
 waitForResponse reqId = do
   requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
   -- This read is blocking but does not take the mutex.

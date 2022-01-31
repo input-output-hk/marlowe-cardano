@@ -13,20 +13,20 @@ walletServerConfig:
     baseUrl: http://localhost:8090
 
 nodeServerConfig:
-  mscSocketPath: public-testnet.socket                    # Public Marlowe testnet
-  mscBaseUrl: "localhost"                                 # Not used by real nodes.
-  mscKeptBlocks: 2160                                     # Not used by real nodes.
-  mscNetworkId: "1564"                                    # Public Marlowe testnet.
-  mscSlotConfig:                                          # Public Marlowe testnet.
+  pscSocketPath: public-testnet.socket                    # Public Marlowe testnet
+  pscBaseUrl: "localhost"                                 # Not used by real nodes.
+  pscKeptBlocks: 2160                                     # Not used by real nodes.
+  pscNetworkId: "1564"                                    # Public Marlowe testnet.
+  pscSlotConfig:                                          # Public Marlowe testnet.
     scSlotZeroTime: 1594369216000                         # Public Marlowe testnet.
     scSlotLength: 1000                                    # Public Marlowe testnet.
-  mscFeeConfig:                                           # Not used by real nodes.
+  pscFeeConfig:                                           # Not used by real nodes.
     fcConstantFee:                                        # Not used by real nodes.
       getLovelace: 10                                     # Not used by real nodes.
     fcScriptsFeeFactor: 1.0                               # Not used by real nodes.
-  mscInitialTxWallets: []                                 # Not used by real nodes.
-  mscNodeMode: AlonzoNode                                 # Public Marlowe testnet.
-  mscProtocolParametersJsonPath: public-testnet.protocol  # Public Marlowe testnet.
+  pscInitialTxWallets: []                                 # Not used by real nodes.
+  pscNodeMode: AlonzoNode                                 # Public Marlowe testnet.
+  pscProtocolParametersJsonPath: public-testnet.protocol  # Public Marlowe testnet.
 
 chainIndexConfig:
   ciBaseUrl: http://localhost:9083

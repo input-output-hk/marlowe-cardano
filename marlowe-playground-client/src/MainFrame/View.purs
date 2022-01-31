@@ -1,6 +1,7 @@
 module MainFrame.View where
 
 import Prologue hiding (div)
+
 import Auth (_GithubUser, authStatusAuthRole)
 import Component.Modal.View (modal)
 import Data.Lens (has, (^.))

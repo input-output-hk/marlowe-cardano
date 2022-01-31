@@ -5,7 +5,7 @@ import Prologue
 import Capability.PlutusApps.MarloweApp.Types
   ( class HasMarloweAppEndpointMutex
   , EndpointMutex
-  , LastResult
+  , MarloweEndpointResponse
   , marloweAppEndpointMutex
   )
 import Data.Lens (Getter', Lens', to)
@@ -28,5 +28,6 @@ _create = prop (Proxy :: _ "create")
 _applyInputs :: Lens' EndpointMutex (AVar Unit)
 _applyInputs = prop (Proxy :: _ "applyInputs")
 
-_requests :: Lens' EndpointMutex (AVar (Array (UUID /\ AVar LastResult)))
+_requests :: Lens' EndpointMutex
+  (AVar (Array (UUID /\ AVar MarloweEndpointResponse)))
 _requests = prop (Proxy :: _ "requests")

@@ -1,6 +1,7 @@
 module Marlowe.Deinstantiate where
 
 import Prelude
+
 import Data.Array (filter, zipWith)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Foldable (all)

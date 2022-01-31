@@ -18,4 +18,10 @@ import Language.Marlowe.SemanticsTypes hiding (getAction)
 import Language.Marlowe.Util
 import Ledger (Slot (..))
 import Ledger.Ada (adaSymbol, adaToken)
-import PlutusTx.Ratio
+import PlutusTx.Ratio as P
+
+
+{-# INLINABLE (%) #-}
+
+(%) :: Integer -> Integer -> P.Rational
+(%) = P.unsafeRatio

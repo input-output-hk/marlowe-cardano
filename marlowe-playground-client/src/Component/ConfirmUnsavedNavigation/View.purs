@@ -1,6 +1,7 @@
 module Component.ConfirmUnsavedNavigation.View where
 
 import Prologue hiding (div)
+
 import Component.ConfirmUnsavedNavigation.Types as CN
 import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)

@@ -229,10 +229,3 @@ removing the contract from the set of unspent transaction outputs.
    *Advanced.* Explore running Marlowe contracts in Plutus. In order to
    be able to do this you will need to use the latest version of
    Marlowe, rather than ``v1.3``.
-
-Where to go to find out more
-----------------------------
-
--  :ref:`plutus_tx_tutorial`
-
--  :ref:`basic_validators_tutorial`

@@ -10,6 +10,7 @@ module Marlowe.Slot
   ) where
 
 import Prelude
+
 import Data.BigInt.Argonaut (fromInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime, adjust, diff)

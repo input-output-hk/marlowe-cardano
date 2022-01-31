@@ -1,47 +1,30 @@
 module Component.Contacts.Lenses
   ( _cardSection
-  , _walletNicknameInput
-  , _addressInput
   , _walletNickname
   , _companionAppId
   , _marloweAppId
   , _walletInfo
   , _assets
-  , _previousCompanionAppState
   , _walletId
   , _pubKeyHash
   ) where
 
 import Prologue
 
-import Component.Contacts.Types
-  ( AddressError
-  , CardSection
-  , State
-  , WalletDetails
-  , WalletId
-  , WalletInfo
-  , WalletNicknameError
-  )
-import Component.InputField.Types (State) as InputField
-import Data.Address (Address)
+import Component.Contacts.Types (CardSection, State, WalletDetails)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map (Map)
+import Data.PaymentPubKeyHash (PaymentPubKeyHash)
+import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
+import Marlowe.Semantics (Assets)
 import Type.Proxy (Proxy(..))
 
 _cardSection :: Lens' State CardSection
 _cardSection = prop (Proxy :: _ "cardSection")
-
-_walletNicknameInput :: Lens' State (InputField.State WalletNicknameError)
-_walletNicknameInput = prop (Proxy :: _ "walletNicknameInput")
-
-_addressInput :: Lens' State (InputField.State AddressError)
-_addressInput = prop (Proxy :: _ "addressInput")
 
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname
@@ -59,13 +42,9 @@ _walletInfo = prop (Proxy :: _ "walletInfo")
 _assets :: Lens' WalletDetails Assets
 _assets = prop (Proxy :: _ "assets")
 
-_previousCompanionAppState :: Lens' WalletDetails
-  (Maybe (Map MarloweParams MarloweData))
-_previousCompanionAppState = prop (Proxy :: _ "previousCompanionAppState")
-
 ------------------------------------------------------------
 _walletId :: Lens' WalletInfo WalletId
 _walletId = _Newtype <<< prop (Proxy :: _ "walletId")
 
-_pubKeyHash :: Lens' WalletInfo Address
+_pubKeyHash :: Lens' WalletInfo PaymentPubKeyHash
 _pubKeyHash = _Newtype <<< prop (Proxy :: _ "pubKeyHash")

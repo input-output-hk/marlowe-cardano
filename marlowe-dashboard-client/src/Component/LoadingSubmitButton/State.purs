@@ -1,6 +1,7 @@
 module Component.LoadingSubmitButton.State (loadingSubmitButton) where
 
 import Prologue
+
 import Component.LoadingSubmitButton.Lenses
   ( _buttonHeight
   , _caption

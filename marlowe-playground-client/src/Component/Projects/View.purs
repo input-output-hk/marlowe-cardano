@@ -1,6 +1,7 @@
 module Component.Projects.View (render) where
 
 import Prologue hiding (div)
+
 import Component.Modal.ViewHelpers (modalHeader)
 import Component.Projects.Types
   ( Action(..)

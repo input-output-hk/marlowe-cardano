@@ -4,11 +4,11 @@ module Marlowe.Symbolic.Types.Response where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -29,10 +29,10 @@ newtype Response = Response
   , durationMs :: BigInt
   }
 
-instance showResponse :: Show Response where
+instance Show Response where
   show a = genericShow a
 
-instance encodeJsonResponse :: EncodeJson Response where
+instance EncodeJson Response where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { result: E.value :: _ Result
@@ -40,7 +40,7 @@ instance encodeJsonResponse :: EncodeJson Response where
         }
     )
 
-instance decodeJsonResponse :: DecodeJson Response where
+instance DecodeJson Response where
   decodeJson = defer \_ -> D.decode $
     ( Response <$> D.record "Response"
         { result: D.value :: _ Result
@@ -48,9 +48,9 @@ instance decodeJsonResponse :: DecodeJson Response where
         }
     )
 
-derive instance genericResponse :: Generic Response _
+derive instance Generic Response _
 
-derive instance newtypeResponse :: Newtype Response _
+derive instance Newtype Response _
 
 --------------------------------------------------------------------------------
 
@@ -68,10 +68,10 @@ data Result
       }
   | Error String
 
-instance showResult :: Show Result where
+instance Show Result where
   show a = genericShow a
 
-instance encodeJsonResult :: EncodeJson Result where
+instance EncodeJson Result where
   encodeJson = defer \_ -> case _ of
     Valid -> encodeJson { tag: "Valid", contents: jsonNull }
     CounterExample { initialSlot, transactionList, transactionWarning } ->
@@ -83,7 +83,7 @@ instance encodeJsonResult :: EncodeJson Result where
         }
     Error a -> E.encodeTagged "Error" a E.value
 
-instance decodeJsonResult :: DecodeJson Result where
+instance DecodeJson Result where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "Result"
     $ Map.fromFoldable
@@ -98,7 +98,7 @@ instance decodeJsonResult :: DecodeJson Result where
         , "Error" /\ D.content (Error <$> D.value)
         ]
 
-derive instance genericResult :: Generic Result _
+derive instance Generic Result _
 
 --------------------------------------------------------------------------------
 

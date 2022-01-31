@@ -1,6 +1,7 @@
 module Page.BlocklyEditor.View where
 
 import Prologue hiding (div)
+
 import Blockly.Internal (block, blockType, style, x, xml, y)
 import Component.Blockly.State as Blockly
 import Component.BottomPanel.Types (Action(..)) as BottomPanel

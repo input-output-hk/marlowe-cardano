@@ -3,6 +3,7 @@ module Page.BlocklyEditor.BottomPanel
   ) where
 
 import Prologue hiding (div)
+
 import Component.MetadataTab.View (metadataView)
 import Data.Array as Array
 import Data.Lens (to, (^.))

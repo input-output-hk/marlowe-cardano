@@ -10,8 +10,8 @@ writeShellScriptBin "entrypoint" ''
 
   cat > marlowe-run.json <<EOF
   {
-    "getWbeConfig": { "_wbeHost": "$NOMAD_IP_wbe", "_wbePort": $NOMAD_PORT_wbe },
-    "getStaticPath": "/var/empty"
+    "wbeConfig": { "host": "$NOMAD_IP_wbe", "port": $NOMAD_PORT_wbe },
+    "staticPath": "/var/empty"
   }
   EOF
 

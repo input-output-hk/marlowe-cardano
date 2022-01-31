@@ -1,6 +1,7 @@
 module Component.MetadataTab.View (metadataView) where
 
 import Prologue hiding (div, min)
+
 import Component.MetadataTab.Types (MetadataAction(..))
 import Data.Array (concat, concatMap)
 import Data.Foldable (foldMap)
@@ -14,7 +15,7 @@ import Data.Map.Ordered.OMap as OMap
 import Data.Set (Set, toUnfoldable)
 import Data.Set.Ordered.OSet (OSet)
 import Data.Tuple.Nested (type (/\), (/\))
-import Halogen.Classes (minusBtn, plusBtn, btn)
+import Halogen.Classes (btn, minusBtn, plusBtn)
 import Halogen.HTML
   ( ClassName(..)
   , HTML

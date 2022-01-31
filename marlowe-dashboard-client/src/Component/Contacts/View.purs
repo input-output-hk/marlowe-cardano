@@ -6,50 +6,62 @@ module Component.Contacts.View
 import Prelude hiding (div)
 
 import Clipboard (Action(..)) as Clipboard
+import Component.AddContactForm (component) as AddContactForm
 import Component.Address.View as Address
-import Component.Contacts.Lenses
-  ( _addressInput
-  , _cardSection
-  , _walletNickname
-  , _walletNicknameInput
-  )
+import Component.Contacts.Lenses (_cardSection, _walletNickname)
 import Component.Contacts.Types
   ( Action(..)
-  , AddressError
   , CardSection(..)
   , State
   , WalletDetails
-  , WalletNicknameError
   )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
-import Component.InputField.State (validate)
-import Component.InputField.Types (State) as InputField
-import Component.InputField.View (renderInput)
-import Component.Label.View as Label
+import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address (Address)
 import Data.Address as A
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
+import Data.Array (singleton) as Array
 import Data.Lens ((^.))
-import Data.Maybe (Maybe(..), isJust)
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Effect.Aff.Class (class MonadAff)
+import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, button, div, h2, h3, li, p, span, span_, text, ul)
+import Halogen.HTML
+  ( HTML
+  , a
+  , button
+  , div
+  , h2
+  , h3
+  , li
+  , p
+  , slot
+  , span
+  , span_
+  , text
+  , ul
+  )
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (disabled)
+import MainFrame.Types (ChildSlots)
+import Type.Prelude (Proxy(..))
 
-contactsCard :: forall p. AddressBook -> WalletDetails -> State -> HTML p Action
+contactsCard
+  :: forall m
+   . MonadAff m
+  => MonadRec m
+  => AddressBook
+  -> WalletDetails
+  -> State
+  -> ComponentHTML Action ChildSlots m
 contactsCard addressBook currentWallet state =
   let
     cardSection = state ^. _cardSection
-
-    walletNicknameInput = state ^. _walletNicknameInput
-
-    addressInput = state ^. _addressInput
   in
     div
       [ classNames
@@ -70,8 +82,12 @@ contactsCard addressBook currentWallet state =
             Home -> addressBookCard addressBook
             ViewWallet nickname address ->
               contactDetailsCard currentWallet nickname address
-            NewWallet mTokenName ->
-              newWalletCard walletNicknameInput addressInput mTokenName
+            NewWallet mTokenName -> Array.singleton $ slot
+              (Proxy :: Proxy "addContactForm")
+              unit
+              AddContactForm.component
+              { addressBook, mTokenName }
+              identity
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action
 contactsBreadcrumb cardSection =
@@ -195,70 +211,6 @@ contactDetailsCard currentWallet walletNickname address =
               [ text "Using this wallet" ]
           else
             span_ []
-        ]
-    ]
-
-newWalletCard
-  :: forall p
-   . InputField.State WalletNicknameError
-  -> InputField.State AddressError
-  -> Maybe String
-  -> Array (HTML p Action)
-newWalletCard walletNicknameInput walletIdInput mTokenName =
-  let
-    walletNicknameInputDisplayOptions =
-      { additionalCss: mempty
-      , id_: "newWalletNickname"
-      , placeholder: "Nickname"
-      , readOnly: false
-      , numberFormat: Nothing
-      , valueOptions: mempty
-      , after: Nothing
-      , before:
-          Just
-            $ Label.render
-                Label.defaultInput
-                  { for = "newWalletNickname", text = "Wallet nickname" }
-      }
-
-    addressInputDisplayOptions =
-      { additionalCss: mempty
-      , id_: "newAddress"
-      , placeholder: "Address"
-      , readOnly: false
-      , numberFormat: Nothing
-      , valueOptions: mempty
-      , after: Nothing
-      , before:
-          Just
-            $ Label.render
-                Label.defaultInput
-                  { for = "newAddress", text = "Wallet address" }
-      }
-  in
-    [ div [ classNames [ "space-y-4", "p-4" ] ]
-        [ WalletNicknameInputAction <$> renderInput
-            walletNicknameInputDisplayOptions
-            walletNicknameInput
-        , AddressInputAction <$> renderInput addressInputDisplayOptions
-            walletIdInput
-        ]
-    , div
-        [ classNames [ "flex", "gap-4", "p-4" ] ]
-        [ a
-            [ classNames $ Css.button <> [ "flex-1", "text-center" ]
-            , onClick_ case mTokenName of
-                Just _ -> CancelNewContactForRole
-                Nothing -> SetCardSection Home
-            ]
-            [ text "Back" ]
-        , button
-            [ classNames $ Css.primaryButton <> [ "flex-1" ]
-            , disabled $ isJust (validate walletNicknameInput) || isJust
-                (validate walletIdInput)
-            , onClick_ $ SaveWallet mTokenName
-            ]
-            [ text "Save" ]
         ]
     ]
 

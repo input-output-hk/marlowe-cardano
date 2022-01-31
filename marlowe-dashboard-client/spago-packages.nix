@@ -341,6 +341,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "errors" = pkgs.stdenv.mkDerivation {
+        name = "errors";
+        version = "v4.1.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/passy/purescript-errors.git";
+          rev = "30abf43a6e6b62552e18769c0b624c1d7ef10f7d";
+          sha256 = "09xph8rhd25l24az1bfyjkbrp0h7ymxm4b8kw180f8kn2qx6q99a";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "exceptions" = pkgs.stdenv.mkDerivation {
         name = "exceptions";
         version = "v5.0.0";
@@ -569,6 +581,30 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "halogen-hooks-extra" = pkgs.stdenv.mkDerivation {
+        name = "halogen-hooks-extra";
+        version = "v0.8.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/jordanmartinez/purescript-halogen-hooks-extra.git";
+          rev = "c400f9983123f5ce137cce8cda23285ec8062e5e";
+          sha256 = "0clwakcz76636y2z8cc3n6y5x1iqjpj9rv8c9d3731y2fg5n1g4a";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "halogen-nselect" = pkgs.stdenv.mkDerivation {
+        name = "halogen-nselect";
+        version = "5e88b528ed332562d5bc8bfbbc80f00fa435a620";
+        src = pkgs.fetchgit {
+          url = "https://github.com/input-output-hk/purescript-halogen-nselect";
+          rev = "5e88b528ed332562d5bc8bfbbc80f00fa435a620";
+          sha256 = "035rw49viv3kq21mgmz4wbw26bi5layc8s58armf88bix2x0s0aa";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "halogen-store" = pkgs.stdenv.mkDerivation {
         name = "halogen-store";
         version = "v0.2.0";
@@ -600,6 +636,18 @@ let
           url = "https://github.com/purescript-halogen/purescript-halogen-vdom.git";
           rev = "ebab8125a513de17dec3b9e69804fc2ac9c517aa";
           sha256 = "14jcmca3crwc9phx1hfnr5gpdb4sw4amf5ssdfvjrs9fky06gfqy";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "heterogeneous" = pkgs.stdenv.mkDerivation {
+        name = "heterogeneous";
+        version = "v0.5.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/natefaubion/purescript-heterogeneous.git";
+          rev = "550445cf7932e158395423fc087cdc05bab41c40";
+          sha256 = "08bpgm9p8ib1jzrmssqpa1bqqzfmba43lsih1xvr3pf1jfizayxg";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -720,6 +768,18 @@ let
           url = "https://github.com/purescript/purescript-lists.git";
           rev = "6383c4f202b3f69474f9f7da182c2d42fcc3111c";
           sha256 = "0xmg918s3mqvfvwgjfqcs1yvcz6hy2n7h3ygqz2iyvk868gz25qs";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "logging" = pkgs.stdenv.mkDerivation {
+        name = "logging";
+        version = "v3.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/rightfold/purescript-logging.git";
+          rev = "148c371aa97e30663532d548faaca3555fbd3fca";
+          sha256 = "0dhc3a3w68vgf03pycwxwspcqdhp1j8l140q5dbqy0a0wmmmknac";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -921,7 +981,7 @@ let
         name = "polyform";
         version = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
         src = pkgs.fetchgit {
-          url = "https://github.com/purescript-polyform/polyform";
+          url = "https://github.com/purescript-polyform/polyform.git";
           rev = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
           sha256 = "0n77rmfsq85bzf4klggp004hbfcrj0hlmn80syqca34i1l268hwm";
         };
@@ -1087,11 +1147,11 @@ let
 
     "servant-support" = pkgs.stdenv.mkDerivation {
         name = "servant-support";
-        version = "78a0693a9409bce31bf538a8f2aa54adb8200733";
+        version = "010bc7b3ea8e2707a00c23fd510201aabd4eb13f";
         src = pkgs.fetchgit {
           url = "https://github.com/input-output-hk/purescript-servant-support";
-          rev = "78a0693a9409bce31bf538a8f2aa54adb8200733";
-          sha256 = "11x6lzv6a9yp5ccdi6fay931brm8cfacg3kmi4rphgdg01037cn6";
+          rev = "010bc7b3ea8e2707a00c23fd510201aabd4eb13f";
+          sha256 = "16dnwh0f9wr03dydypl6lslifha1f8h538rl2f60j9lw4hcsigbh";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -1152,6 +1212,18 @@ let
           url = "https://github.com/purescript/purescript-tailrec.git";
           rev = "5fbf0ac05dc6ab1a228b2897630195eb7483b962";
           sha256 = "1jjl2q2hyhjcdxpamzr1cdlxhmq2bl170x5p3jajb9zgwkqx0x22";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "these" = pkgs.stdenv.mkDerivation {
+        name = "these";
+        version = "v5.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript-contrib/purescript-these.git";
+          rev = "38dcf86a9bd772091e1153f2f1c13223703599b7";
+          sha256 = "0d6yg3lwgralh1kcm5cd4myyz66k9qzld61hc5dg3z92d96zbvlr";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
@@ -1265,6 +1337,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "uri" = pkgs.stdenv.mkDerivation {
+        name = "uri";
+        version = "v8.0.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript-contrib/purescript-uri.git";
+          rev = "d56b9c24933e40b523a0d64e272f3b9f603a1f7c";
+          sha256 = "095svp82ik9574klx8s7vjsw34d4psda1hniqnhb75jkycspmqzw";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "uuid" = pkgs.stdenv.mkDerivation {
         name = "uuid";
         version = "v8.0.0";
@@ -1315,11 +1399,11 @@ let
 
     "web-common" = pkgs.stdenv.mkDerivation {
         name = "web-common";
-        version = "v1.2.2";
+        version = "v2.0.1";
         src = pkgs.fetchgit {
           url = "https://github.com/input-output-hk/purescript-web-common";
-          rev = "cc8d6533475924ec59e96d4e0825c9bac2a183d2";
-          sha256 = "1g7c254avvs4vqgizvalkj72x4v7hjf3br2zr0nl1f7vxcclq1l4";
+          rev = "fa101cd785ef6aa2f7aa908b38c2195aa2c2ff3d";
+          sha256 = "0sbngaydgrmn948hyvx1ifdanvph1wchsdmjmvc1b25z2zrdc74q";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
