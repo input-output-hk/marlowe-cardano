@@ -61,7 +61,7 @@ createWallet CreatePostData{..} = runMaybeT $ do
     $ CreateResponse (mnemonicToText mnemonic)
     $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
 
--- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
+-- [UC-WALLET-TESTNET-2][2] Restore a testnet wallet
 restoreWallet ::
      MonadIO m =>
      MonadReader ClientEnv m =>
