@@ -116,15 +116,15 @@ coveredCall buyer seller currency underlying strike ratio issue maturity settlem
 -- a put option and a call option for the underlying security with the same strike price
 -- and the same expiration date." -- investopedia
 straddle ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value Observation    -- ^ Ratio
-  -> Value Observation    -- ^ Strike
-  -> Timeout  -- ^ Maturity
+     Party             -- ^ Buyer
+  -> Party             -- ^ Seller
+  -> Token             -- ^ Currency
+  -> Token             -- ^ Underlying
+  -> Value Observation -- ^ Ratio
+  -> Value Observation -- ^ Strike
+  -> Timeout           -- ^ Maturity
   -> Timeout           -- ^ Settlement Date
-  -> Contract -- ^ Straddle Contract
+  -> Contract          -- ^ Straddle Contract
 straddle buyer seller currency underlying ratio strike maturity settlement =
   let c = option European Call buyer seller (currency, strike) (underlying, ratio) maturity settlement
       p = option European Put  buyer seller (currency, strike) (underlying, ratio) maturity settlement
@@ -134,16 +134,16 @@ straddle buyer seller currency underlying ratio strike maturity settlement =
 -- a call and a put option with different strike prices, but with the same expiration
 -- date and underlying asset." -- investopedia
 strangle ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value Observation    -- ^ Ratio
-  -> Value Observation    -- ^ Lower Strike
-  -> Value Observation    -- ^ Upper Strike
-  -> Timeout  -- ^ Maturity
+     Party             -- ^ Buyer
+  -> Party             -- ^ Seller
+  -> Token             -- ^ Currency
+  -> Token             -- ^ Underlying
+  -> Value Observation -- ^ Ratio
+  -> Value Observation -- ^ Lower Strike
+  -> Value Observation -- ^ Upper Strike
+  -> Timeout           -- ^ Maturity
   -> Timeout           -- ^ Settlement Date
-  -> Contract -- ^ Straddle Contract
+  -> Contract          -- ^ Straddle Contract
 strangle buyer seller currency underlying ratio strike1 strike2 maturity settlement =
   let c = option European Call buyer seller (currency, strike1) (underlying, ratio) maturity settlement
       p = option European Put  buyer seller (currency, strike2) (underlying, ratio) maturity settlement
@@ -153,16 +153,16 @@ strangle buyer seller currency underlying ratio strike1 strike2 maturity settlem
 -- limited increase in price. The strategy uses two call options to create a range consisting
 -- of a lower strike price and an upper strike price." -- investopedia
 callSpread ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value Observation    -- ^ Strike price (in currency) for the long position
-  -> Value Observation    -- ^ Strike price (in currency) for the short position
-  -> Value Observation    -- ^ Amount of underlying tokens per contract
-  -> Timeout  -- ^ Maturity
+     Party             -- ^ Buyer
+  -> Party             -- ^ Seller
+  -> Token             -- ^ Currency
+  -> Token             -- ^ Underlying
+  -> Value Observation -- ^ Strike price (in currency) for the long position
+  -> Value Observation -- ^ Strike price (in currency) for the short position
+  -> Value Observation -- ^ Amount of underlying tokens per contract
+  -> Timeout           -- ^ Maturity
   -> Timeout           -- ^ Settlement Date
-  -> Contract -- ^ Call Spread Contract
+  -> Contract          -- ^ Call Spread Contract
 callSpread buyer seller currency underlying strike1 strike2 ratio maturity settlement =
   let s = option European Call buyer seller (currency, strike1) (underlying, ratio) maturity settlement
       l = option European Call seller buyer (currency, strike2) (underlying, ratio) maturity settlement
