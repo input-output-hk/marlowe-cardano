@@ -12,6 +12,7 @@
 , z3
 , enableHaskellProfiling
 , actus-tests
+, source-repo-override
 }:
 let
   # The Hackage index-state from cabal.project
@@ -42,6 +43,7 @@ let
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
       inherit actus-tests;
+      inherit source-repo-override;
     };
   project = baseProject { deferPluginErrors = false; };
   # The same as above, but this time with we defer plugin errors so that we

@@ -15,6 +15,7 @@
   # it. If set to true, we will also build the haddocks for those packages.
 , deferPluginErrors
 , actus-tests
+, source-repo-override
 }:
 let
   r-packages = with rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
@@ -35,12 +36,13 @@ let
     # At the moment, we only need one but conceivably we might need one for darwin in future.
     # See https://github.com/input-output-hk/nix-tools/issues/97
     materialized =
-      if pkgs.stdenv.hostPlatform.isLinux then ./materialized-linux
+      if source-repo-override != { } then null
+      else if pkgs.stdenv.hostPlatform.isLinux then ./materialized-linux
       else if pkgs.stdenv.hostPlatform.isDarwin then ./materialized-darwin
       else if pkgs.stdenv.hostPlatform.isWindows then ./materialized-windows
       else builtins.error "Don't have materialized files for this platform";
     # If true, we check that the generated files are correct. Set in the CI so we don't make mistakes.
-    inherit checkMaterialization;
+    inherit checkMaterialization source-repo-override;
     sha256map = {
       "https://github.com/Quid2/flat.git"."ee59880f47ab835dbd73bea0847dab7869fc20d8" = "1lrzknw765pz2j97nvv9ip3l1mcpf2zr4n56hwlz0rk7wq7ls4cm";
       "https://github.com/input-output-hk/purescript-bridge.git"."366fc70b341e2633f3ad0158a577d52e1cd2b138" = "18j0rysfccbmfpbw2d1rsjkpd5h84alpsn6b5rwzdxw9h5vqi9m5";

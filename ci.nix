@@ -7,6 +7,7 @@
 , checkMaterialization ? false
 , sourcesOverride ? { }
 , sources ? import ./nix/sources.nix { system = builtins.currentSystem; } // sourcesOverride
+, source-repo-override ? { }
 }:
 let
   inherit (import (sources.plutus-core + "/nix/lib/ci.nix")) dimension platformFilterGeneric filterAttrsOnlyRecursive filterSystems;
@@ -56,7 +57,7 @@ let
       # given a system ("x86_64-linux") return an attrset of derivations to build
       _select = _: system: crossSystem:
         let
-          packages = import ./default.nix { inherit system crossSystem checkMaterialization; };
+          packages = import ./default.nix { inherit system crossSystem checkMaterialization source-repo-override; };
           pkgs = packages.pkgs;
           marlowe = packages.marlowe;
           # Map `crossSystem.config` to a name used in `lib.platforms`

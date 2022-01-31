@@ -4,6 +4,7 @@
 , config ? { allowUnfreePredicate = (import ../lib/unfree.nix).unfreePredicate; }
 , sources
 , enableHaskellProfiling
+, source-repo-override
 }:
 let
   inherit (pkgs) stdenv;
@@ -14,6 +15,7 @@ let
   haskell = pkgs.callPackage ./haskell {
     inherit gitignore-nix sources;
     inherit checkMaterialization enableHaskellProfiling;
+    inherit source-repo-override;
     inherit (sources) actus-tests;
 
     # This ensures that the utility scripts produced in here will run on the current system, not
