@@ -3,18 +3,15 @@ module Forms where
 import Prologue hiding (div)
 
 import Component.FormInput as Input
-import Component.Label.View as Label
 import Control.Alternative (guard)
 import Css as Css
 import DOM.HTML.Indexed (HTMLinput)
-import DOM.HTML.Indexed.InputType (InputType)
 import Data.Address (Address)
 import Data.Address (AddressError(..), validator) as A
-import Data.Array ((:))
 import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.Int as Int
-import Data.Maybe (fromMaybe, isJust, maybe)
+import Data.Maybe (fromMaybe, maybe)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.Set (Set)
@@ -39,70 +36,48 @@ type InputSlots pa slots =
 _input :: Proxy "input"
 _input = Proxy
 
-_select :: Proxy "select"
-_select = Proxy
+renderLabel :: forall w i. String -> String -> HH.HTML w i
+renderLabel id label =
+  HH.label [ classNames $ Css.labelBox <> Css.labelText, HP.for id ]
+    [ HH.text label ]
+
+renderErrorLabel :: forall w i. String -> Maybe String -> HH.HTML w i
+renderErrorLabel id error = HH.label
+  [ classNames $ Css.inputError <> maybe [ "invisible" ] (const []) error
+  , HP.for id
+  ]
+  [ HH.text $ fromMaybe "Valid" error ]
+
+renderInputBox
+  :: forall w error i. Maybe error -> Array (HH.HTML w i) -> HH.HTML w i
+renderInputBox error =
+  HH.div [ classNames $ Css.inputBox error ]
 
 renderInput
-  :: forall w action
-   . Array (HH.IProp HTMLinput action)
-  -> { after :: Array (HH.HTML w action)
-     , before :: Array (HH.HTML w action)
-     , error :: Maybe String
+  :: forall w pa slots m
+   . String
+  -> Input.State
+  -> Array (HP.IProp HTMLinput (Input.Action pa slots m))
+  -> HH.HTML w (Input.Action pa slots m)
+renderInput id { value } props = HH.input
+  ( Input.setInputProps value $ props <> [ HP.id id, classNames Css.inputText ]
+  )
+
+mountInput
+  :: forall pa slots m
+   . MonadEffect m
+  => { format :: String -> String
      , id :: String
-     , inputType :: InputType
-     , label :: String
      , value :: String
      }
-  -> HH.HTML w action
-renderInput props inp =
-  HH.div [ classNames containerStyles ]
-    $ labelEl : before <> [ inputEl ] <> after
-  where
-  { after, before, error, id, inputType, label, value } = inp
-  labelEl = Label.render Label.defaultInput
-    { for = id
-    , text = label
-    }
-  inputEl = HH.input $ props <>
-    [ classNames inputStyles
-    , HP.id id
-    , HP.value value
-    , HP.type_ inputType
-    ]
-  containerStyles =
-    [ "border-2"
-    , "duration-200"
-    , "flex"
-    , "gap-1"
-    , "items-baseline"
-    , "p-4"
-    , "relative"
-    , "rounded-sm"
-    , "transition-all"
-    , "w-full"
-    , "focus:border-transparent"
-    , "focus:ring-2"
-    , "focus-within:border-transparent"
-    , "focus-within:ring-2"
-    ] <>
-      if isJust error then
-        [ "border-red", "ring-red" ]
-      else
-        [ "border-gray", "ring-purple" ]
-
-  inputStyles =
-    [ "border-0"
-    , "duration-200"
-    , "flex-1"
-    , "focus:outline-none"
-    , "focus:ring-0"
-    , "leading-none"
-    , "outline-none"
-    , "p-0"
-    , "ring-0"
-    , "text-black"
-    , "transition-all"
-    ]
+  -> (Input.State -> Input.ComponentHTML pa slots m)
+  -> Form.ComponentHTML pa String (InputSlots pa slots) m
+mountInput { id, value, format } render =
+  HH.slot _input id Input.component { value, render, format } $
+    case _ of
+      Input.Updated newValue -> Form.update newValue
+      Input.Emit pa -> Form.raise pa
+      _ -> Form.ignore
 
 inputAsync
   :: forall pa s m e a
@@ -113,48 +88,25 @@ inputAsync
   -> String
   -> RemoteData e a
   -> FormM String m (FormHTML pa String (InputSlots pa s) m)
-inputAsync id label renderError value remote =
-  pure
-    [ HH.slot
-        _input
-        id
-        Input.component
-        { value, render, format: identity }
-        case _ of
-          Input.Updated newValue -> Form.update newValue
-          Input.Emit pa -> Form.raise pa
-          _ -> Form.update value
-    ]
-  where
-  render state =
-    let
-      error = guard (not state.pristine && state.visited) *> case remote of
-        Loading ->
-          Just "Checking..."
-        Failure e ->
-          Just $ renderError e
-        NotAsked ->
-          Nothing
-        Success _ ->
-          Nothing
-    in
-      HH.div [ classNames [ "relative" ] ]
-        [ renderInput (Input.setInputProps value [])
-            { before: []
-            , after: []
-            , value: value
-            , error
-            , id: id
-            , inputType: HP.InputText
-            , label
-            }
-        , HH.label
-            [ classNames
-                $ Css.inputError <> maybe [ "invisible" ] (const []) error
-            , HP.for id
-            ]
-            [ HH.text $ fromMaybe "Valid" error ]
-        ]
+inputAsync id label renderError value remote = pure
+  [ mountInput { id, value, format: identity } \state ->
+      let
+        error = guard (not state.pristine && state.visited) *> case remote of
+          Loading ->
+            Just "Checking..."
+          Failure e ->
+            Just $ renderError e
+          NotAsked ->
+            Nothing
+          Success _ ->
+            Nothing
+      in
+        HH.div [ classNames [ "relative" ] ]
+          [ renderLabel id label
+          , renderInputBox error [ renderInput id state [] ]
+          , renderErrorLabel id error
+          ]
+  ]
 
 intInput
   :: forall pa s m e a
@@ -165,44 +117,23 @@ intInput
   -> String
   -> Either e a
   -> FormM String m (FormHTML pa String (InputSlots pa s) m)
-intInput id label renderError value result =
-  pure
-    [ HH.slot
-        _input
-        id
-        Input.component
-        { value, render, format: formatInt }
-        case _ of
-          Input.Updated newValue -> Form.update newValue
-          Input.Emit pa -> Form.raise pa
-          _ -> Form.update value
-    ]
-  where
-  render state =
-    let
-      error = guard (not state.pristine && state.visited) *> case result of
-        Left e ->
-          Just $ renderError e
-        Right _ ->
-          Nothing
-    in
-      HH.div [ classNames [ "relative" ] ]
-        [ renderInput (Input.setInputProps value [])
-            { inputType: HP.InputNumber
-            , after: []
-            , before: []
-            , value
-            , id
-            , label
-            , error
-            }
-        , HH.label
-            [ classNames
-                $ Css.inputError <> maybe [ "invisible" ] (const []) error
-            , HP.for id
-            ]
-            [ HH.text $ fromMaybe "Valid" error ]
-        ]
+intInput id label renderError value result = pure
+  [ mountInput { id, value, format: formatInt } \state ->
+      let
+        error = guard (not state.pristine && state.visited) *> case result of
+          Left e ->
+            Just $ renderError e
+          Right _ ->
+            Nothing
+      in
+        HH.div [ classNames [ "relative" ] ]
+          [ renderLabel id label
+          , renderInputBox error
+              [ renderInput id state [ HP.type_ HP.InputNumber ]
+              ]
+          , renderErrorLabel id error
+          ]
+  ]
 
 formatInt :: String -> String
 formatInt s = case BigInt.fromString $ trim s of
@@ -219,42 +150,23 @@ adaInput
   -> Either e a
   -> FormM String m (FormHTML pa String (InputSlots pa s) m)
 adaInput id label renderError value result = pure
-  [ HH.slot
-      _input
-      id
-      Input.component
-      { value, render, format: formatCurrency 6 }
-      case _ of
-        Input.Updated newValue -> Form.update newValue
-        Input.Emit pa -> Form.raise pa
-        _ -> Form.update value
+  [ mountInput { id, value, format: formatCurrency 6 } \state ->
+      let
+        error = guard (not state.pristine && state.visited) *> case result of
+          Left e ->
+            Just $ renderError e
+          Right _ ->
+            Nothing
+      in
+        HH.div [ classNames [ "relative" ] ]
+          [ renderLabel id label
+          , renderInputBox error
+              [ HH.span_ [ HH.text "₳" ]
+              , renderInput id state [ HP.type_ HP.InputNumber ]
+              ]
+          , renderErrorLabel id error
+          ]
   ]
-  where
-  render state =
-    let
-      error = guard (not state.pristine && state.visited) *> case result of
-        Left e ->
-          Just $ renderError e
-        Right _ ->
-          Nothing
-    in
-      HH.div [ classNames [ "relative" ] ]
-        [ renderInput (Input.setInputProps value [])
-            { inputType: HP.InputNumber
-            , after: []
-            , before: [ HH.span_ [ HH.text "₳" ] ]
-            , value
-            , id
-            , label
-            , error
-            }
-        , HH.label
-            [ classNames
-                $ Css.inputError <> maybe [ "invisible" ] (const []) error
-            , HP.for id
-            ]
-            [ HH.text $ fromMaybe "Valid" error ]
-        ]
 
 formatCurrency :: Int -> String -> String
 formatCurrency decimals s =
@@ -320,44 +232,21 @@ input
   -> String
   -> Either e a
   -> FormM String m (FormHTML pa String (InputSlots pa s) m)
-input id label renderError value result =
-  pure
-    [ HH.slot
-        _input
-        id
-        Input.component
-        { value, render, format: identity }
-        case _ of
-          Input.Updated newValue -> Form.update newValue
-          Input.Emit pa -> Form.raise pa
-          _ -> Form.update value
-    ]
-  where
-  render state =
-    let
-      error = guard (not state.pristine && state.visited) *> case result of
-        Left e ->
-          Just $ renderError e
-        Right _ ->
-          Nothing
-    in
-      HH.div [ classNames [ "relative" ] ]
-        [ renderInput (Input.setInputProps value [])
-            { before: []
-            , after: []
-            , value: value
-            , error
-            , id: id
-            , inputType: HP.InputText
-            , label
-            }
-        , HH.label
-            [ classNames
-                $ Css.inputError <> maybe [ "invisible" ] (const []) error
-            , HP.for id
-            ]
-            [ HH.text $ fromMaybe "Valid" error ]
-        ]
+input id label renderError value result = pure
+  [ mountInput { id, value, format: identity } \state ->
+      let
+        error = guard (not state.pristine && state.visited) *> case result of
+          Left e ->
+            Just $ renderError e
+          Right _ ->
+            Nothing
+      in
+        HH.div [ classNames [ "relative" ] ]
+          [ renderLabel id label
+          , renderInputBox error [ renderInput id state [] ]
+          , renderErrorLabel id error
+          ]
+  ]
 
 walletNickname
   :: forall pa s m
