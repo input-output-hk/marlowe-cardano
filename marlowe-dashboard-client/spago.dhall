@@ -62,6 +62,7 @@
   , "web-events"
   , "web-html"
   , "web-socket"
+  , "web-uievents"
   ]
 , packages = ../packages.dhall
 , sources =

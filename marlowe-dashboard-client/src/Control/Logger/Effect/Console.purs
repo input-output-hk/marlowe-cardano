@@ -5,18 +5,21 @@ import Prelude
 import Control.Logger (Logger(..)) as Logger
 import Control.Logger.Effect (Logger)
 import Control.Monad.Freer.Extras.Log (LogLevel(..), LogMessage(..))
+import Effect (Effect)
 import Effect.Class (liftEffect)
 import Effect.Class.Console (error, log, warn)
 import Effect.Console (info)
+
+foreign import _debug :: String -> Effect Unit
 
 logger
   :: forall msg
    . (msg -> String)
   -> Logger msg
 logger show = Logger.Logger $ liftEffect <<< case _ of
-  LogMessage { _logLevel: Debug, _logMessageContent: msg } -> log (show msg)
+  LogMessage { _logLevel: Debug, _logMessageContent: msg } -> _debug (show msg)
   LogMessage { _logLevel: Info, _logMessageContent: msg } -> info (show msg)
-  LogMessage { _logLevel: Notice, _logMessageContent: msg } -> info (show msg)
+  LogMessage { _logLevel: Notice, _logMessageContent: msg } -> log (show msg)
   LogMessage { _logLevel: Warning, _logMessageContent: msg } -> warn (show msg)
   LogMessage { _logLevel: Error, _logMessageContent: msg } -> error (show msg)
   LogMessage { _logLevel: Critical, _logMessageContent: msg } -> error
