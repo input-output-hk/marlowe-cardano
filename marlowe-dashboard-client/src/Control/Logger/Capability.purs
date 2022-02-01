@@ -16,6 +16,7 @@ import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT)
+import Halogen (HalogenM)
 
 class Monad m <= MonadLogger msg m where
   log :: LogMessage msg -> m Unit
@@ -42,6 +43,11 @@ instance (Monoid w, MonadLogger msg m) => MonadLogger msg (WriterT w m) where
   log = lift <<< log
 
 instance MonadLogger msg m => MonadLogger msg (StateT s m) where
+  log = lift <<< log
+
+instance
+  MonadLogger msg m =>
+  MonadLogger msg (HalogenM state action slots output m) where
   log = lift <<< log
 
 debug :: forall m msg. MonadLogger msg m => msg -> m Unit

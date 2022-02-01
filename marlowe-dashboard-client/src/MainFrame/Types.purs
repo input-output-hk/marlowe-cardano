@@ -13,6 +13,7 @@ import Data.AddressBook (AddressBook)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Time.Duration (Minutes)
+import Halogen (SubscriptionId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Halogen.Store.Connect (Connected)
@@ -50,6 +51,7 @@ type State =
       Either
         (Tuple (Maybe WalletDetails) Welcome.State)
         (Tuple WalletDetails Dashboard.State)
+  , pollingSubscription :: Maybe SubscriptionId
   }
 
 data WebSocketStatus
@@ -96,6 +98,7 @@ data Action
   | DashboardAction Dashboard.Action
   | Receive (Connected Slice Input)
   | Init
+  | OnPoll WalletDetails
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
@@ -104,5 +107,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (EnterDashboardState _) = Just $ defaultEvent "EnterDashboardState"
   toEvent (Receive _) = Just $ defaultEvent "Receive"
   toEvent Init = Just $ defaultEvent "Init"
+  toEvent (OnPoll _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction

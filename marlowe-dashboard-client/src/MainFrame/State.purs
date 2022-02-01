@@ -26,9 +26,11 @@ import Component.Contacts.Lenses
   , _walletId
   , _walletInfo
   )
+import Component.Contacts.Types (WalletDetails)
 import Component.Template.Types as Template
-import Control.Monad.Reader (class MonadAsk)
-import Control.Monad.Rec.Class (class MonadRec)
+import Control.Logger.Capability (class MonadLogger, info)
+import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.Rec.Class (class MonadRec, forever)
 import Control.Monad.State (modify_)
 import Data.AddressBook as AB
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
@@ -41,16 +43,19 @@ import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
+import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Env (Env)
+import Env (Env, _pollingInterval)
 import Examples.PureScript.Escrow as Escrow
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
+import Halogen as H
 import Halogen.Extra (imapState)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
+import Halogen.Subscription as HS
 import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import LocalStorage (removeItem, setItem)
 import MainFrame.Lenses
@@ -76,6 +81,7 @@ import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts)
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
+import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), Card(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
@@ -116,6 +122,7 @@ code for e.g. "[Workflow 4]" to see all of the steps involved in starting a cont
 mkMainFrame
   :: forall m
    . MonadAff m
+  => MonadLogger String m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
   => MonadRec m
@@ -145,6 +152,7 @@ emptyState =
   , webSocketStatus: WebSocketClosed Nothing
   , currentSlot: zero -- this will be updated as soon as the websocket connection is working
   , subState: Left (Tuple Nothing Welcome.initialState)
+  , pollingSubscription: Nothing
   }
 
 deriveState :: State -> Connected Slice Input -> State
@@ -160,6 +168,7 @@ deriveState state { context, input } = state
 handleQuery
   :: forall a m
    . MonadAff m
+  => MonadLogger String m
   => MonadAsk Env m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m
@@ -317,6 +326,26 @@ handleQuery (MainFrameActionQuery action next) = do
   handleAction action
   pure $ Just next
 
+handleWalletChange
+  :: forall m
+   . MonadAsk Env m
+  => MonadLogger String m
+  => Maybe WalletDetails
+  -> HalogenM State Action ChildSlots Msg m Unit
+handleWalletChange mWallet = do
+  currentSubscription <- H.gets _.pollingSubscription
+  traverse_ H.unsubscribe currentSubscription
+  pollingInterval <- asks $ view _pollingInterval
+  newSubscription <- for mWallet \wallet -> do
+    info $ "Subscribing to polling subscription at an interval of "
+      <> show pollingInterval
+    H.subscribe $ HS.makeEmitter \push -> do
+      fibre <- launchAff $ forever do
+        delay pollingInterval
+        liftEffect $ push $ OnPoll wallet
+      pure $ launchAff_ $ killFiber (error "Unsubscribing") fibre
+  H.modify_ _ { pollingSubscription = newSubscription }
+
 -- Note [State]: Some actions belong logically in one part of the state, but
 -- from the user's point of view in another. For example, the action of picking
 -- up a wallet belongs logically in the MainFrame state (because it modifies
@@ -330,6 +359,7 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadLogger String m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
@@ -341,12 +371,16 @@ handleAction
 handleAction Init = do
   mWalletDetails <- peruse $ _subState <<< _Left <<< _1 <<< _Just
   traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
+  handleWalletChange mWalletDetails
 
 handleAction (Receive input) = do
   modify_ $ flip deriveState input
   liftEffect case input.context.wallet of
     Nothing -> removeItem walletLocalStorageKey
     Just wallet -> setItem walletLocalStorageKey $ encodeStringifyJson wallet
+  handleWalletChange input.context.wallet
+
+handleAction (OnPoll wallet) = updateTotalFunds wallet
 
 {- [Workflow 3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just

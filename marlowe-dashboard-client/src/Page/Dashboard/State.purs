@@ -1,6 +1,7 @@
 module Page.Dashboard.State
   ( handleAction
   , mkInitialState
+  , updateTotalFunds
   ) where
 
 import Prologue
@@ -530,25 +531,13 @@ handleAction
       s
       (Contract.handleAction contractInput contractAction)
 
-------------------------------------------------------------
--- Note [polling updateTotalFunds]
--- We used to have a WebSocket notification whenever the wallet assets changed but that was
--- removed from the Mock Wallet (see link below) and the WalletBackEnd doesn't provide such
--- a mechanism anyways.
--- https://github.com/input-output-hk/plutus-apps/pull/50
--- Besides that, the WBE has the notion of a wallet being synced, so it makes sense to eventually
--- switch from WebSocket push to a rest Pull. The reason I didn't do this change in the PR I
--- introduced this code is that the wallet information is scattered between the Dashboard, Contract
--- and Contact page.
--- TODO: SCP-3211 After Halogen Store is merged and once we refactor wallet state into a global store
---       Refactor this code and do a global polling mechanism.
 updateTotalFunds
-  :: forall m slots msg
+  :: forall m
    . MonadAff m
   => ManageWallet m
   => MonadStore Store.Action Store.Store m
   => WalletDetails
-  -> HalogenM State Action slots msg m Unit
+  -> m Unit
 updateTotalFunds walletDetails = do
   let walletId = walletDetails ^. _walletInfo <<< _walletId
   response <- getWalletTotalFunds walletId
