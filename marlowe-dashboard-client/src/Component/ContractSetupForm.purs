@@ -27,6 +27,7 @@ import Data.Set as Set
 import Data.Validation.Semigroup (V(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
+import Effect.Class (class MonadEffect)
 import Forms (InputSlots)
 import Forms as Forms
 import Halogen as H
@@ -87,9 +88,9 @@ type Component q m =
   H.Component q Input Msg m
 
 contractNicknameForm
-  :: forall parentAction s m
-   . Monad m
-  => Form parentAction (InputSlots s) m String ContractNickname
+  :: forall pa s m
+   . MonadEffect m
+  => Form pa (InputSlots pa s) m String ContractNickname
 contractNicknameForm =
   F.mkForm
     { validator: CN.validator
@@ -99,10 +100,10 @@ contractNicknameForm =
 
 roleAssignmentForm
   :: forall pa s m
-   . Monad m
+   . MonadEffect m
   => AddressBook
   -> TokenName
-  -> Form pa (InputSlots s) m String Address
+  -> Form pa (InputSlots pa s) m String Address
 roleAssignmentForm addressBook roleName =
   F.mkForm
     { validator
@@ -121,10 +122,10 @@ roleAssignmentForm addressBook roleName =
         )
 
 timeoutForm
-  :: forall parentAction s m
-   . Monad m
+  :: forall pa s m
+   . MonadEffect m
   => String
-  -> Form parentAction (InputSlots s) m String ContractTimeout
+  -> Form pa (InputSlots pa s) m String ContractTimeout
 timeoutForm name =
   F.mkForm
     { validator: CT.validator
@@ -135,10 +136,10 @@ timeoutForm name =
     }
 
 valueForm
-  :: forall parentAction s m
-   . Monad m
+  :: forall pa s m
+   . MonadEffect m
   => String
-  -> Form parentAction (InputSlots s) m String ContractValue
+  -> Form pa (InputSlots pa s) m String ContractValue
 valueForm name =
   F.mkForm
     { validator: CV.validator
