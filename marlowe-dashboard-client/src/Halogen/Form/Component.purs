@@ -87,6 +87,7 @@ component spec = H.mkComponent
       H.modify_ \s -> s { input = updater s.input }
       handleUpdateWithNewSubscription
     PublicAction (Form.Raise parentAction) -> H.raise $ Raised parentAction
+    PublicAction Form.Ignore -> pure unit
     Init -> handleUpdateWithNewSubscription
     OnSubmit event -> liftEffect $ preventDefault event
     UpdateFromFormM listener updater -> do

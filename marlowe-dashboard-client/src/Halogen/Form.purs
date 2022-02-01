@@ -4,12 +4,14 @@ module Halogen.Form
   , AsyncForm
   , AsyncFormSpec
   , AsyncInput(..)
+  , ComponentHTML
   , Form(..)
   , FormHTML
   , FormSpec
   , decorate
   , hoistForm
   , html
+  , ignore
   , mkAsyncForm
   , mkForm
   , raise
@@ -59,6 +61,7 @@ import Polyform.Validator (runValidator)
 data Action parentAction input
   = Update (input -> input)
   | Raise parentAction
+  | Ignore
 
 update
   :: forall parentAction input
@@ -66,13 +69,21 @@ update
   -> Action parentAction input
 update = Update <<< const
 
+ignore :: forall parentAction input. Action parentAction input
+ignore = Ignore
+
 raise :: forall parentAction input. parentAction -> Action parentAction input
 raise = Raise
 
 -- | An array of HTML nodes used to render a form. The action type is the input
 -- | type.
+type ComponentHTML parentAction input slots m =
+  H.ComponentHTML (Action parentAction input) slots m
+
+-- | An array of HTML nodes used to render a form. The action type is the input
+-- | type.
 type FormHTML parentAction input slots m =
-  Array (H.ComponentHTML (Action parentAction input) slots m)
+  Array (ComponentHTML parentAction input slots m)
 
 -- | A Form is a specialization of a Reporter. It operates in the `FormM`
 -- | monad, which allows the input to be updated imperatively, and it
@@ -132,7 +143,7 @@ type FormEvalResult parentAction slots m input a =
 html
   :: forall parentAction slots m input
    . Monad m
-  => H.ComponentHTML (Action parentAction input) slots m
+  => ComponentHTML parentAction input slots m
   -> Form parentAction slots m input Unit
 html = Form <<< liftFnR <<< const <<< Tuple (Just unit) <<< pure
 
@@ -141,7 +152,7 @@ decorate
   :: forall parentAction slots m input output
    . Monad m
   => ( FormHTML parentAction input slots m
-       -> H.ComponentHTML (Action parentAction input) slots m
+       -> ComponentHTML parentAction input slots m
      )
   -> Form parentAction slots m input output
   -> Form parentAction slots m input output
@@ -336,6 +347,7 @@ subAction
 subAction l = case _ of
   Update updater -> Update $ Lens.over l updater
   Raise parentAction -> Raise parentAction
+  Ignore -> Ignore
 
 -- | Internal
 subformHTML
