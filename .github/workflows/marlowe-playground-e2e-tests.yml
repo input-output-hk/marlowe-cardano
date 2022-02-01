@@ -11,7 +11,7 @@ jobs:
   plutus-playground-e2e-tests:
     runs-on: ubuntu-20.04
     steps:
-    - name: Checkout Plutus
+    - name: Checkout Marlowe
       uses: actions/checkout@v2
 
     - name: Setup Haskell
@@ -28,6 +28,10 @@ jobs:
           substituters        = https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/
           trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 
+    - name: Open nix-shell
+      working-directory: ./
+      run: |
+        nix-shell
     - name: Run Marlowe Playground Server
       working-directory: ./
       env:
@@ -38,7 +42,7 @@ jobs:
         FRONTEND_URL: https://localhost:8009
         GITHUB_CALLBACK_PATH: "/#/gh-oauth-cb"
       run: |
-        nix-shell --run $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver
+         $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver
 
     - name: Setup NodeJs
       uses: actions/setup-node@v2
