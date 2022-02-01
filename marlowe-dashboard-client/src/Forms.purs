@@ -2,7 +2,9 @@ module Forms where
 
 import Prologue hiding (div)
 
+import Component.FormInput as Input
 import Component.Label.View as Label
+import Control.Alternative (guard)
 import Css as Css
 import DOM.HTML.Indexed (HTMLinput)
 import DOM.HTML.Indexed.InputType (InputType)
@@ -11,7 +13,6 @@ import Data.Address (AddressError(..), validator) as A
 import Data.Array ((:))
 import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
-import Data.Filterable (filter)
 import Data.Int as Int
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.MnemonicPhrase (MnemonicPhrase)
@@ -22,39 +23,21 @@ import Data.String as String
 import Data.String.Extra (leftPadTo, rightPadTo)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
-import Effect.Aff.Class (class MonadAff)
-import Halogen as H
+import Effect.Class (class MonadEffect)
 import Halogen.Css (classNames)
 import Halogen.Form (Form, FormHTML)
 import Halogen.Form as Form
 import Halogen.Form.FormM (FormM)
 import Halogen.HTML as HH
-import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Halogen.Hooks as Hooks
-import Halogen.Hooks.Extra.Hooks (usePutState)
-import NSelect as Select
 import Network.RemoteData (RemoteData(..))
 import Type.Proxy (Proxy(..))
 
-type InputSlots slots =
-  (input :: forall query. H.Slot query String String | slots)
+type InputSlots pa slots =
+  (input :: Input.Slot pa String | slots)
 
 _input :: Proxy "input"
 _input = Proxy
-
-type AutocompleteSlots parentAction slots =
-  ( autocomplete ::
-      forall query
-       . H.Slot
-           query
-           (Form.Action parentAction AutocompleteInput)
-           String
-  | slots
-  )
-
-_autocomplete :: Proxy "autocomplete"
-_autocomplete = Proxy
 
 _select :: Proxy "select"
 _select = Proxy
@@ -121,248 +104,105 @@ renderInput props inp =
     , "transition-all"
     ]
 
-inputComponent
-  :: forall q m
-   . H.Component
-       q
-       { after ::
-           Array (HH.ComponentHTML (Hooks.HookM m Unit) (InputSlots ()) m)
-       , before ::
-           Array (HH.ComponentHTML (Hooks.HookM m Unit) (InputSlots ()) m)
-       , error :: Maybe String
-       , id :: String
-       , label :: String
-       , value :: String
-       , format :: String -> String
-       , inputType :: InputType
-       }
-       String
-       m
-inputComponent =
-  Hooks.component
-    \{ outputToken }
-     { inputType, after, before, value, id, label, format, error } ->
-      Hooks.do
-        Tuple pristine putPristine <- usePutState true
-        Tuple visited putVisited <- usePutState false
-        Tuple focused putFocused <- usePutState false
-        let error' = filter (\_ -> not pristine && visited) error
-        Hooks.pure do
-          HH.div [ classNames [ "relative" ] ]
-            [ renderInput
-                [ HE.onValueChange \value' -> do
-                    putPristine false
-                    if focused then
-                      Hooks.raise outputToken value'
-                    else
-                      Hooks.raise outputToken $ format value'
-                , HE.onFocus \_ -> putFocused true
-                , HE.onBlur \_ -> do
-                    Hooks.raise outputToken $ format value
-                    putVisited true
-                    putFocused false
-                ]
-                { before
-                , after
-                , value: value
-                , error: error'
-                , id: id
-                , inputType: inputType
-                , label
-                }
-            , HH.label
-                [ classNames
-                    $ Css.inputError <> maybe [ "invisible" ] (const []) error'
-                , HP.for id
-                ]
-                [ HH.text $ fromMaybe "Valid" error ]
-            ]
-
-type AutocompleteInput =
-  { options :: Array String
-  , value :: String
-  }
-
-autocompleteComponent
-  :: forall parentAction q slots m
-   . MonadAff m
-  => H.Component
-       q
-       { after ::
-           Array (HH.ComponentHTML (Select.Action parentAction slots m) slots m)
-       , before ::
-           Array (HH.ComponentHTML (Select.Action parentAction slots m) slots m)
-       , error :: Maybe String
-       , id :: String
-       , label :: String
-       , value :: AutocompleteInput
-       }
-       (Form.Action parentAction AutocompleteInput)
-       m
-autocompleteComponent = Hooks.component \{ outputToken } inp -> Hooks.do
-  Tuple pristine putPristine <- usePutState true
-  let { after, before, label, id, value } = inp
-  filtered <- Hooks.captures { value } Hooks.useMemo \_ ->
-    Array.filter (String.contains (String.Pattern value.value)) value.options
-  let error = filter (\_ -> not pristine) inp.error
-  let
-    selectProps =
-      { itemCount: Array.length filtered
-      , render: render
-          { after
-          , before
-          , error
-          , id
-          , label
-          , options: filtered
-          , value: value.value
-          }
-      }
-  Hooks.pure do
-    HH.slot _select id Select.component selectProps case _ of
-      Select.Selected index -> do
-        putPristine false
-        Hooks.raise outputToken $ Form.update value
-          { value = fromMaybe value.value $ Array.index value.options index
-          }
-      Select.InputValueChanged value' -> do
-        putPristine false
-        Hooks.raise outputToken $ Form.update value { value = value' }
-      Select.Emit parentAction ->
-        Hooks.raise outputToken $ Form.raise parentAction
-      _ -> pure unit
-  where
-  render { error, id, label, before, after, value, options } state =
-    HH.div
-      (Select.setRootProps [ classNames [ "relative", "inline-block" ] ])
-      [ renderInput (Select.setInputProps [])
-          { before
-          , after
-          , value
-          , error
-          , id: id
-          , inputType: HP.InputText
-          , label
-          }
-      , if state.isOpen then
-          HH.div []
-            [ HH.div (Select.setMenuProps [])
-                $ options # Array.mapWithIndex \index item ->
-                    HH.div (Select.setItemProps index [])
-                      [ HH.text item
-                      ]
-            ]
-        else
-          HH.label
-            [ classNames
-                $ Css.inputError <> maybe [ "invisible" ] (const []) error
-            , HP.for id
-            ]
-            [ HH.text $ fromMaybe "Valid" error ]
-      ]
-
-autocomplete
-  :: forall parentAction s m e a
-   . MonadAff m
-  => String
-  -> String
-  -> (e -> String)
-  -> AutocompleteInput
-  -> Either e a
-  -> FormM
-       AutocompleteInput
-       m
-       ( FormHTML
-           parentAction
-           AutocompleteInput
-           (AutocompleteSlots parentAction s)
-           m
-       )
-autocomplete id label renderError value = case _ of
-  Left e ->
-    render $ Just $ renderError e
-  Right _ ->
-    render Nothing
-  where
-  props error =
-    { after: []
-    , before: []
-    , error
-    , id
-    , label
-    , value
-    }
-  render error = pure
-    [ HH.slot _autocomplete id autocompleteComponent (props error) identity
-    ]
-
 inputAsync
-  :: forall parentAction s m e a
-   . Monad m
+  :: forall pa s m e a
+   . MonadEffect m
   => String
   -> String
   -> (e -> String)
   -> String
   -> RemoteData e a
-  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
-inputAsync id label renderError value = case _ of
-  Loading ->
-    render $ Just "Checking..."
-  Failure e ->
-    render $ Just $ renderError e
-  NotAsked ->
-    render Nothing
-  Success _ ->
-    render Nothing
-  where
-  render error = pure
+  -> FormM String m (FormHTML pa String (InputSlots pa s) m)
+inputAsync id label renderError value remote =
+  pure
     [ HH.slot
         _input
         id
-        inputComponent
-        { inputType: HP.InputText
-        , after: []
-        , before: []
-        , value
-        , id
-        , label
-        , error
-        , format: identity
-        }
-        Form.update
+        Input.component
+        { value, render, format: identity }
+        case _ of
+          Input.Updated newValue -> Form.update newValue
+          Input.Emit pa -> Form.raise pa
+          _ -> Form.update value
     ]
+  where
+  render state =
+    let
+      error = guard (not state.pristine && state.visited) *> case remote of
+        Loading ->
+          Just "Checking..."
+        Failure e ->
+          Just $ renderError e
+        NotAsked ->
+          Nothing
+        Success _ ->
+          Nothing
+    in
+      HH.div [ classNames [ "relative" ] ]
+        [ renderInput (Input.setInputProps value [])
+            { before: []
+            , after: []
+            , value: value
+            , error
+            , id: id
+            , inputType: HP.InputText
+            , label
+            }
+        , HH.label
+            [ classNames
+                $ Css.inputError <> maybe [ "invisible" ] (const []) error
+            , HP.for id
+            ]
+            [ HH.text $ fromMaybe "Valid" error ]
+        ]
 
 intInput
-  :: forall parentAction s m e a
-   . Monad m
+  :: forall pa s m e a
+   . MonadEffect m
   => String
   -> String
   -> (e -> String)
   -> String
   -> Either e a
-  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
-intInput id label renderError value = case _ of
-  Left e ->
-    render $ Just $ renderError e
-  Right _ ->
-    render Nothing
-  where
-  render error = pure
+  -> FormM String m (FormHTML pa String (InputSlots pa s) m)
+intInput id label renderError value result =
+  pure
     [ HH.slot
         _input
         id
-        inputComponent
-        { inputType: HP.InputNumber
-        , after: []
-        , before: []
-        , value
-        , id
-        , label
-        , error
-        , format: formatInt
-        }
-        Form.update
+        Input.component
+        { value, render, format: formatInt }
+        case _ of
+          Input.Updated newValue -> Form.update newValue
+          Input.Emit pa -> Form.raise pa
+          _ -> Form.update value
     ]
+  where
+  render state =
+    let
+      error = guard (not state.pristine && state.visited) *> case result of
+        Left e ->
+          Just $ renderError e
+        Right _ ->
+          Nothing
+    in
+      HH.div [ classNames [ "relative" ] ]
+        [ renderInput (Input.setInputProps value [])
+            { inputType: HP.InputNumber
+            , after: []
+            , before: []
+            , value
+            , id
+            , label
+            , error
+            }
+        , HH.label
+            [ classNames
+                $ Css.inputError <> maybe [ "invisible" ] (const []) error
+            , HP.for id
+            ]
+            [ HH.text $ fromMaybe "Valid" error ]
+        ]
 
 formatInt :: String -> String
 formatInt s = case BigInt.fromString $ trim s of
@@ -370,36 +210,51 @@ formatInt s = case BigInt.fromString $ trim s of
   Just n -> BigInt.toString n
 
 adaInput
-  :: forall parentAction s m e a
-   . Monad m
+  :: forall pa s m e a
+   . MonadEffect m
   => String
   -> String
   -> (e -> String)
   -> String
   -> Either e a
-  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
-adaInput id label renderError value = case _ of
-  Left e ->
-    render $ Just $ renderError e
-  Right _ ->
-    render Nothing
+  -> FormM String m (FormHTML pa String (InputSlots pa s) m)
+adaInput id label renderError value result = pure
+  [ HH.slot
+      _input
+      id
+      Input.component
+      { value, render, format: formatCurrency 6 }
+      case _ of
+        Input.Updated newValue -> Form.update newValue
+        Input.Emit pa -> Form.raise pa
+        _ -> Form.update value
+  ]
   where
-  render error = pure
-    [ HH.slot
-        _input
-        id
-        inputComponent
-        { inputType: HP.InputNumber
-        , after: []
-        , before: [ HH.span_ [ HH.text "₳" ] ]
-        , value
-        , id
-        , label
-        , error
-        , format: formatCurrency 6
-        }
-        Form.update
-    ]
+  render state =
+    let
+      error = guard (not state.pristine && state.visited) *> case result of
+        Left e ->
+          Just $ renderError e
+        Right _ ->
+          Nothing
+    in
+      HH.div [ classNames [ "relative" ] ]
+        [ renderInput (Input.setInputProps value [])
+            { inputType: HP.InputNumber
+            , after: []
+            , before: [ HH.span_ [ HH.text "₳" ] ]
+            , value
+            , id
+            , label
+            , error
+            }
+        , HH.label
+            [ classNames
+                $ Css.inputError <> maybe [ "invisible" ] (const []) error
+            , HP.for id
+            ]
+            [ HH.text $ fromMaybe "Valid" error ]
+        ]
 
 formatCurrency :: Int -> String -> String
 formatCurrency decimals s =
@@ -457,42 +312,58 @@ formatCurrency decimals s =
       decimalString <> "." <> fractionalString
 
 input
-  :: forall parentAction s m e a
-   . Monad m
+  :: forall pa s m e a
+   . MonadEffect m
   => String
   -> String
   -> (e -> String)
   -> String
   -> Either e a
-  -> FormM String m (FormHTML parentAction String (InputSlots s) m)
-input id label renderError value = case _ of
-  Left e ->
-    render $ Just $ renderError e
-  Right _ ->
-    render Nothing
-  where
-  render error = pure
+  -> FormM String m (FormHTML pa String (InputSlots pa s) m)
+input id label renderError value result =
+  pure
     [ HH.slot
         _input
         id
-        inputComponent
-        { inputType: HP.InputText
-        , after: []
-        , before: []
-        , value
-        , id
-        , label
-        , error
-        , format: identity
-        }
-        Form.update
+        Input.component
+        { value, render, format: identity }
+        case _ of
+          Input.Updated newValue -> Form.update newValue
+          Input.Emit pa -> Form.raise pa
+          _ -> Form.update value
     ]
+  where
+  render state =
+    let
+      error = guard (not state.pristine && state.visited) *> case result of
+        Left e ->
+          Just $ renderError e
+        Right _ ->
+          Nothing
+    in
+      HH.div [ classNames [ "relative" ] ]
+        [ renderInput (Input.setInputProps value [])
+            { before: []
+            , after: []
+            , value: value
+            , error
+            , id: id
+            , inputType: HP.InputText
+            , label
+            }
+        , HH.label
+            [ classNames
+                $ Css.inputError <> maybe [ "invisible" ] (const []) error
+            , HP.for id
+            ]
+            [ HH.text $ fromMaybe "Valid" error ]
+        ]
 
 walletNickname
-  :: forall parentAction s m
-   . Monad m
+  :: forall pa s m
+   . MonadEffect m
   => Set WalletNickname
-  -> Form parentAction (InputSlots s) m String WalletNickname
+  -> Form pa (InputSlots pa s) m String WalletNickname
 walletNickname used =
   Form.mkForm
     { validator: WN.validatorExclusive used
@@ -506,9 +377,9 @@ walletNickname used =
 -- type MnemonicPhraseInput = Input String MnemonicPhraseError MnemonicPhrase
 
 mnemonicPhrase
-  :: forall parentAction s m
-   . Monad m
-  => Form parentAction (InputSlots s) m String MnemonicPhrase
+  :: forall pa s m
+   . MonadEffect m
+  => Form pa (InputSlots pa s) m String MnemonicPhrase
 mnemonicPhrase =
   Form.mkForm
     { validator: MP.validator
@@ -519,10 +390,10 @@ mnemonicPhrase =
     }
 
 address
-  :: forall parentAction s m
-   . Monad m
+  :: forall pa s m
+   . MonadEffect m
   => Set Address
-  -> Form parentAction (InputSlots s) m String Address
+  -> Form pa (InputSlots pa s) m String Address
 address used =
   Form.mkForm
     { validator: A.validator used
