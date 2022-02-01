@@ -435,13 +435,6 @@ handleAction (EnterDashboardState walletDetails) = do
             contractNicknames
             currentSlot
       updateStore $ Store.ActivateWallet walletDetails
-      handleAction
-        $ DashboardAction
-        $ Dashboard.OpenCard Dashboard.ContractTemplateCard
-      handleAction
-        $ DashboardAction
-        $ Dashboard.TemplateAction
-        $ Template.OnSetup Escrow.contractTemplate Nothing
 
 handleAction (WelcomeAction wa) = do
   mWelcomeState <- peruse _welcomeState
