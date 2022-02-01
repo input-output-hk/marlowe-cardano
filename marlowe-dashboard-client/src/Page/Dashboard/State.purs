@@ -449,9 +449,9 @@ handleAction
      PAB endpoint to create and distribute the role tokens. We also create
      a placeholder so the user can see that that the contract is being created
     -}
-    Template.StartContract -> do
-      templateState <- use _templateState
-      case instantiateExtendedContract currentSlot templateState of
+    Template.OnStartContract template params -> do
+      let ContractParams nickname roles _ _ = params
+      case instantiateExtendedContract currentSlot template params of
         Nothing -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
             (Milliseconds 600.0)
@@ -468,16 +468,16 @@ handleAction
                 SubmitResult (Milliseconds 600.0) (Left "Error")
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
-            -- Right reqId -> do
-            Right _ -> do
-              -- contractNickname <- use
-              --   (_templateState <<< _contractNicknameInput <<< _value)
+            Right reqId -> do
               -- FIXME
-              -- insertIntoContractNicknames followerAppId $ ContractNickname.toString nickname
-              -- let metaData = template.metaData
-              -- modifying _contracts $ insert followerAppId $
-              --   Contract.mkPlaceholderState contractNickname metaData
-              --     contract
+              -- insertIntoContractNicknames followerAppId nickname
+              let metaData = template.metaData
+              -- We save in the store the request of a created contract with
+              -- the information relevant to show a placeholder of a starting contract.
+              updateStore $ Store.AddStartingContract $ reqId
+                /\ nickname
+                /\
+                  metaData
               handleAction input CloseCard
               void $ tell _submitButtonSlot "action-pay-and-start" $
                 SubmitResult (Milliseconds 600.0) (Right "")
