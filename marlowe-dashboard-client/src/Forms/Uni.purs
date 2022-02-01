@@ -40,7 +40,7 @@ import Data.Profunctor (class Profunctor, dimap)
 import Data.Profunctor.Choice (class Choice, left, right)
 import Data.Profunctor.Strong (class Strong, first, second)
 import Forms.FormM (FormM)
-import Forms.FormM (mapUpdateFn) as FormM
+import Forms.FormM (mapUpdateFormDataFn) as FormM
 import Forms.Types (RenderFn, WidgetId(..))
 import Polyform (Validator)
 import Polyform.Batteries.UrlEncoded (Errors) as UrlEncoded
@@ -209,7 +209,8 @@ mkFieldForm { id: fieldId, render, validator } = do
     , validator:
         validator <<< liftFn (flattenValue fieldId)
           # lmapValidator (Errors.singleton errId)
-          # Validator.hoist (FormM.mapUpdateFn (alterOverFieldValue fieldId))
+          # Validator.hoist
+              (FormM.mapUpdateFormDataFn (alterOverFieldValue fieldId))
     }
 
 type RenderStFieldFn o err wd = o -> Maybe FieldValue -> FieldErrors err -> wd
@@ -254,6 +255,7 @@ mkStFieldForm { id: l, init, render, validator } = do
     , validator:
         validator <<< liftFn (flattenValue fieldId)
           # lmapValidator (Errors.singleton errId)
-          # Validator.hoist (FormM.mapUpdateFn (alterOverFieldValue fieldId))
+          # Validator.hoist
+              (FormM.mapUpdateFormDataFn (alterOverFieldValue fieldId))
     }
 
