@@ -38,9 +38,8 @@ jobs:
         FRONTEND_URL: https://localhost:8009
         GITHUB_CALLBACK_PATH: "/#/gh-oauth-cb"
       run: |
-        nix-shell --run $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver ../shell.nix &
-        while ! echo exit | nc localhost $CLIENT_PORT; do echo "Waiting for playground server on $CLIENT_PORT" && sleep 10; done
-  
+        nix-shell --run $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver
+
     - name: Setup NodeJs
       uses: actions/setup-node@v2
       with:
@@ -51,7 +50,7 @@ jobs:
       env:
         CLIENT_PORT: 8009
       run: |
-        nix-shell --run $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs ../shell.nix &
+        nix-shell --run $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
         npm install
         npm run build:spago
         npm run build:webpack:dev:vendor
