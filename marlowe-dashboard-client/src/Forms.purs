@@ -146,19 +146,19 @@ inputComponent =
         Tuple pristine putPristine <- usePutState true
         Tuple visited putVisited <- usePutState false
         Tuple focused putFocused <- usePutState false
-        Hooks.captures { value, focused } Hooks.useTickEffect do
-          when (not focused) do
-            Hooks.raise outputToken $ format value
-          pure Nothing
         let error' = filter (\_ -> not pristine && visited) error
         Hooks.pure do
           HH.div [ classNames [ "relative" ] ]
             [ renderInput
                 [ HE.onValueChange \value' -> do
                     putPristine false
-                    Hooks.raise outputToken value'
+                    if focused then
+                      Hooks.raise outputToken value'
+                    else
+                      Hooks.raise outputToken $ format value'
                 , HE.onFocus \_ -> putFocused true
                 , HE.onBlur \_ -> do
+                    Hooks.raise outputToken $ format value
                     putVisited true
                     putFocused false
                 ]
