@@ -30,8 +30,7 @@ jobs:
 
     - name: Open nix-shell
       working-directory: ./
-      run: |
-        nix-shell
+      run: nix-shell
     - name: Run Marlowe Playground Server
       working-directory: ./
       env:
@@ -45,7 +44,7 @@ jobs:
     - name: Setup NodeJs
       uses: actions/setup-node@v2
       with:
-        node-version: '12.12.0'
+        node-version: '12.16.1'
 
     - name: Build Marlowe Playground Client
       working-directory: ./marlowe-playground-client
