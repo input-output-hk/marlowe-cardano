@@ -4,7 +4,7 @@ on:
   schedule:
   - cron: '0 4 * * *'
   push:
-    branches: [ playwright-e2e-tests ]
+    branches: [ SCP-3139/e2e-tests ]
   workflow_dispatch:
 
 jobs:
