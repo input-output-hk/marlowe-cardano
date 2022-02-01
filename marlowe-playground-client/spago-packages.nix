@@ -593,6 +593,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "halogen-hooks-extra" = pkgs.stdenv.mkDerivation {
+        name = "halogen-hooks-extra";
+        version = "v0.8.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/jordanmartinez/purescript-halogen-hooks-extra.git";
+          rev = "c400f9983123f5ce137cce8cda23285ec8062e5e";
+          sha256 = "0clwakcz76636y2z8cc3n6y5x1iqjpj9rv8c9d3731y2fg5n1g4a";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "halogen-subscriptions" = pkgs.stdenv.mkDerivation {
         name = "halogen-subscriptions";
         version = "v1.0.0";
@@ -636,6 +648,18 @@ let
           url = "https://github.com/purescript/purescript-identity.git";
           rev = "5c150ac5ee4fa6f145932f6322a1020463dae8e9";
           sha256 = "0a58y71ihvb5b7plnn2sxsbphqzd9nzfafak4d5a576agn76q0ql";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "infinite-lists" = pkgs.stdenv.mkDerivation {
+        name = "infinite-lists";
+        version = "v3.2.0";
+        src = pkgs.fetchgit {
+          url = "https://git@github.com/Thimoteus/purescript-infinite-lists";
+          rev = "9cfc3962c521454da7c4c928fe0718243f31d784";
+          sha256 = "0zblzpkah6a6nj0s323hp4p1z1vyr26s8qh2cxhk0jriswdn00qf";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

@@ -1,5 +1,6 @@
 module Component.MetadataTab.Types where
 
+import Contrib.Data.Unfoldable (Move) as Unfoldable
 import Marlowe.Extended (ContractType)
 import Marlowe.Extended.Metadata (NumberFormat)
 import Marlowe.Semantics as S
@@ -16,7 +17,9 @@ data MetadataAction
   | DeleteRoleDescription S.TokenName
   | SetSlotParameterDescription String String
   | DeleteSlotParameterDescription String
+  | MoveSlotParameterDescription Unfoldable.Move
   | SetValueParameterDescription String String
+  | MoveValueParameterDescription Unfoldable.Move
   | SetValueParameterFormat String NumberFormat
   | DeleteValueParameterInfo String
   | SetChoiceDescription String String
@@ -33,10 +36,14 @@ instance metadataActionShowConstructor :: ShowConstructor MetadataAction where
   showConstructor (DeleteRoleDescription _) = "DeleteRoleDescription"
   showConstructor (SetSlotParameterDescription _ _) =
     "SetSlotParameterDescription"
+  showConstructor (MoveSlotParameterDescription _) =
+    "MoveSlotParameterDescription"
   showConstructor (DeleteSlotParameterDescription _) =
     "DeleteSlotParameterDescription"
   showConstructor (SetValueParameterDescription _ _) =
     "SetValueParameterDescription"
+  showConstructor (MoveValueParameterDescription _) =
+    "MoveValueParameterDescription"
   showConstructor (SetValueParameterFormat _ _) = "SetValueParameterFormat"
   showConstructor (DeleteValueParameterInfo _) = "DeleteValueParameterInfo"
   showConstructor (SetChoiceDescription _ _) = "SetChoiceDescription"

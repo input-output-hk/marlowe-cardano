@@ -40,6 +40,12 @@ button.minus-btn {
   height: 25px;
 }
 
+button.move-btn {
+  padding: 0;
+  width: 25px;
+  height: 25px;
+}
+
 button.minus-btn.disabled {
   background: lightgray;
 }
@@ -307,14 +313,26 @@ button.minus-btn:hover {
 }
 
 .metadata-form {
+  margin-bottom: 1.5rem;
+}
+
+.metadata-form,
+.metadata-sortable-form-row {
   display: grid;
-  grid-template-columns: auto 1fr 2fr auto auto;
+  grid-template-columns: 30% 1fr 2fr auto auto;
   gap: 0.5rem;
   width: clamp(calc(100% - 3rem), 75rem, 100%);
   box-sizing: border-box;
   align-items: center;
-  margin: auto;
-  padding: 1rem;
+}
+/* simulating grid gap */
+.metadata-sortable-form-row {
+  margin-bottom: 0.5rem;
+}
+.sortable-metadata-form {
+  align-items: center;
+  box-sizing: border-box;
+  margin-bottom: 1.5rem;
 }
 
 .metadata-mainprop-label {
@@ -362,4 +380,9 @@ button.minus-btn:hover {
 .metadata-prop-create {
   grid-column-start: 4;
   grid-column-end: 5;
+}
+.metadata-prop-drag {
+  font-size: 1rem;
+  margin-right: 0.8rem;
+  cursor: grab;
 }

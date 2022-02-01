@@ -3,8 +3,12 @@ module Component.MetadataTab.View (metadataView) where
 import Prologue hiding (div, min)
 
 import Component.MetadataTab.Types (MetadataAction(..))
+import Contrib.Data.Array.Builder (build, cons) as AB
+import Contrib.Data.List.Infinite.Finalize (zip) as Infinite.Finalize
+import Contrib.Halogen.Components.Sortable (DragHandlers(..), GenDragHandlers)
 import Data.Array (concat, concatMap)
-import Data.Foldable (foldMap)
+import Data.Array (length) as Array
+import Data.Foldable (foldMap, foldMapDefaultL)
 import Data.Int as Int
 import Data.Lens (Lens', (^.))
 import Data.List (List)
@@ -12,6 +16,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
+import Data.Monoid (guard) as Monoid
 import Data.Set (Set, toUnfoldable)
 import Data.Set.Ordered.OSet (OSet)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -21,11 +26,13 @@ import Halogen.HTML
   , HTML
   , button
   , div
+  , div_
   , em_
   , h6_
   , input
   , option
   , select
+  , span
   , text
   )
 import Halogen.HTML.Events (onClick, onValueChange)
@@ -33,6 +40,7 @@ import Halogen.HTML.Properties
   ( InputType(..)
   , class_
   , classes
+  , draggable
   , min
   , placeholder
   , required
@@ -52,7 +60,6 @@ import Marlowe.Extended.Metadata
   , MetadataHintInfo
   , NumberFormat(..)
   , NumberFormatType(..)
-  , ValueParameterInfo
   , _choiceInfo
   , _choiceNames
   , _roleDescriptions
@@ -68,52 +75,63 @@ import Marlowe.Extended.Metadata
   , isDefaultFormat
   , toString
   )
+import Record (merge, set) as Record
+import Type.Prelude (Proxy(..))
+
+type SubformOptsRow v =
+  ( key :: String
+  , value :: v
+  , needed :: Boolean
+  , sortable :: Boolean
+  , typeNameTitle :: String
+  , typeNameSmall :: String
+  )
+
+type SubformOpts v = { | SubformOptsRow v }
+
+propLabel :: forall a p. { sortable :: Boolean, title :: String } -> HTML p a
+propLabel { sortable, title } = div [ class_ $ ClassName "metadata-prop-label" ]
+  $
+    Monoid.guard sortable
+      [ span [ class_ $ ClassName "metadata-prop-drag" ] [ text "☰" ] ]
+      <> [ text $ title ]
 
 onlyDescriptionRenderer
-  :: forall a b p
-   . (String -> String -> b)
-  -> (String -> b)
-  -> String
-  -> String
-  -> Boolean
-  -> (b -> a)
-  -> String
-  -> String
+  :: forall a p r
+   . { delete :: String -> a, set :: String -> String -> a | r }
+  -> SubformOpts String
   -> Array (HTML p a)
 onlyDescriptionRenderer
-  setAction
-  deleteAction
-  key
-  info
-  needed
-  metadataAction
-  typeNameTitle
-  typeNameSmall =
-  [ div [ class_ $ ClassName "metadata-prop-label" ]
-      [ text $ typeNameTitle <> " " <> show key <> ": " ]
+  actions
+  opts =
+  [ propLabel
+      { sortable: opts.sortable
+      , title: opts.typeNameTitle <> " " <> show opts.key <> ": "
+      }
   , div [ class_ $ ClassName "metadata-prop-edit" ]
       [ input
           [ type_ InputText
-          , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
+          , placeholder $ "Description for " <> opts.typeNameSmall <> " " <>
+              show opts.key
           , class_ $ ClassName "metadata-input"
-          , value info
-          , onValueChange $ metadataAction <<< setAction key
+          , value opts.value
+          , onValueChange $ actions.set opts.key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
       [ button
           [ classes
-              [ if needed then plusBtn else minusBtn
+              [ if opts.needed then plusBtn else minusBtn
               , ClassName "align-top"
               , btn
               ]
-          , onClick $ const $ metadataAction $ deleteAction key
+          , onClick $ const $ actions.delete opts.key
           ]
           [ text "-" ]
       ]
   ]
     <>
-      if needed then []
+      if opts.needed then []
       else
         [ div
             [ classes
@@ -124,37 +142,39 @@ onlyDescriptionRenderer
             [ text "Not used" ]
         ]
 
-type FormattedNumberInfo
-  =
-  { key :: String
-  , description :: String
-  , format :: NumberFormat
-  , setFormat :: String -> NumberFormat -> MetadataAction
-  , setDescription :: String -> String -> MetadataAction
-  , deleteInfo :: String -> MetadataAction
+type FormattedNumberInfo a =
+  { setFormat :: String -> NumberFormat -> a
+  , setDescription :: String -> String -> a
+  , deleteInfo :: String -> a
+  | SubformOptsRow
+      { description :: String
+      , format :: NumberFormat
+      }
   }
 
 formattedNumberMetadataRenderer
   :: forall a p
-   . FormattedNumberInfo
-  -> Boolean
-  -> (MetadataAction -> a)
-  -> String
-  -> String
+   . FormattedNumberInfo a
   -> Array (HTML p a)
 formattedNumberMetadataRenderer
-  { key, description, format, setFormat, setDescription, deleteInfo }
-  needed
-  metadataAction
-  typeNameTitle
-  typeNameSmall =
-  [ div [ class_ $ ClassName "metadata-prop-label" ]
-      [ text $ typeNameTitle <> " " <> show key <> ": " ]
+  { key
+  , needed
+  , value: { description, format }
+  , setFormat
+  , setDescription
+  , deleteInfo
+  , typeNameTitle
+  , typeNameSmall
+  , sortable
+  } =
+  [ propLabel
+      { sortable: sortable
+      , title: typeNameTitle <> " " <> show key <> ": "
+      }
   , div [ class_ $ ClassName "metadata-prop-formattednum-col1" ]
       [ select
           [ class_ $ ClassName "metadata-input"
-          , onValueChange $ metadataAction <<< setFormat key <<<
-              setNumberFormatType
+          , onValueChange $ setFormat key <<< setNumberFormatType
           ]
           [ option
               [ value $ toString DefaultFormatType
@@ -176,7 +196,7 @@ formattedNumberMetadataRenderer
           , placeholder $ "Description for " <> typeNameSmall <> " " <> show key
           , class_ $ ClassName "metadata-input"
           , value description
-          , onValueChange $ metadataAction <<< setDescription key
+          , onValueChange $ setDescription key
           ]
       ]
   , div [ class_ $ ClassName "metadata-prop-delete" ]
@@ -186,7 +206,7 @@ formattedNumberMetadataRenderer
               , ClassName "align-top"
               , btn
               ]
-          , onClick $ const $ metadataAction $ deleteInfo key
+          , onClick $ const $ deleteInfo key
           ]
           [ text "-" ]
       ]
@@ -216,8 +236,7 @@ formattedNumberMetadataRenderer
                 , value $ if numDecimals == 0 then "" else show numDecimals
                 , required true
                 , min zero
-                , onValueChange $ metadataAction <<< setFormat key <<<
-                    setDecimals labelStr
+                , onValueChange $ setFormat key <<< setDecimals labelStr
                 ]
             ]
         , div [ class_ $ ClassName "metadata-prop-formattednum-col2" ]
@@ -227,8 +246,7 @@ formattedNumberMetadataRenderer
                     show key
                 , class_ $ ClassName "metadata-input"
                 , value labelStr
-                , onValueChange $ metadataAction <<< setFormat key <<<
-                    DecimalFormat numDecimals
+                , onValueChange $ setFormat key <<< DecimalFormat numDecimals
                 ]
             ]
         ]
@@ -252,70 +270,43 @@ formattedNumberMetadataRenderer
       labelStr
 
 choiceMetadataRenderer
-  :: forall a p
-   . String
-  -> ChoiceInfo
-  -> Boolean
-  -> (MetadataAction -> a)
-  -> String
-  -> String
-  -> Array (HTML p a)
-choiceMetadataRenderer key { choiceDescription, choiceFormat } =
+  :: forall p
+   . SubformOpts ChoiceInfo
+  -> Array (HTML p MetadataAction)
+choiceMetadataRenderer
+  { key, needed, value, sortable, typeNameTitle, typeNameSmall } =
   formattedNumberMetadataRenderer
     { key: key
-    , description: choiceDescription
-    , format: choiceFormat
+    , value:
+        { description: value.choiceDescription
+        , format: value.choiceFormat
+        }
+    , needed
     , setFormat: SetChoiceFormat
     , setDescription: SetChoiceDescription
+    , sortable
+    , typeNameTitle
+    , typeNameSmall
     , deleteInfo: DeleteChoiceInfo
     }
 
-valueParameterMetadataRenderer
-  :: forall a p
-   . String
-  -> ValueParameterInfo
-  -> Boolean
-  -> (MetadataAction -> a)
-  -> String
-  -> String
-  -> Array (HTML p a)
-valueParameterMetadataRenderer
-  key
-  { valueParameterDescription, valueParameterFormat } =
-  formattedNumberMetadataRenderer
-    { key: key
-    , description: valueParameterDescription
-    , format: valueParameterFormat
-    , setFormat: SetValueParameterFormat
-    , setDescription: SetValueParameterDescription
-    , deleteInfo: DeleteValueParameterInfo
-    }
-
 metadataList
-  :: forall a b c p
-   . (b -> a)
+  :: forall a c p r v
+   . Monoid v
+  => { set :: String -> v -> a | r }
   -> Map String c
   -> Set String
-  -> ( String
-       -> c
-       -> Boolean
-       -> (b -> a)
-       -> String
-       -> String
-       -> Array (HTML p a)
-     )
+  -> (SubformOpts c -> Array (HTML p a))
   -> String
   -> String
-  -> (String -> b)
   -> Array (HTML p a)
 metadataList
-  metadataAction
+  actions
   metadataMap
   hintSet
   metadataRenderer
   typeNameTitle
-  typeNameSmall
-  setEmptyMetadata =
+  typeNameSmall =
   if Map.isEmpty combinedMap then
     []
   else
@@ -326,10 +317,14 @@ metadataList
         ( concatMap
             ( \(key /\ val) ->
                 ( case val of
-                    Just (info /\ needed) -> metadataRenderer key info needed
-                      metadataAction
-                      typeNameTitle
-                      typeNameSmall
+                    Just (value /\ needed) -> metadataRenderer
+                      { key
+                      , value
+                      , needed
+                      , typeNameTitle
+                      , typeNameSmall
+                      , sortable: false
+                      }
                     Nothing ->
                       [ div
                           [ classes
@@ -343,12 +338,12 @@ metadataList
                       , div [ class_ $ ClassName "metadata-prop-create" ]
                           [ button
                               [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ metadataAction
-                                  (setEmptyMetadata key)
+                              , onClick $ const $ (actions.set key mempty)
                               ]
                               [ text "+" ]
                           ]
                       ]
+
                 )
             )
             $ Map.toUnfoldable combinedMap
@@ -376,67 +371,75 @@ metadataList
       )
 
 sortableMetadataList
-  :: forall a b c p
-   . (b -> a)
+  :: forall a c p r v
+   . Monoid v
+  => { dragging :: DraggingState a
+     , set :: String -> v -> a
+     | r
+     }
   -> OMap String c
   -> OSet String
-  -> ( String
-       -> c
-       -> Boolean
-       -> (b -> a)
-       -> String
-       -> String
-       -> Array (HTML p a)
-     )
+  -> (SubformOpts c -> Array (HTML p a))
   -> String
   -> String
-  -> (String -> b)
   -> Array (HTML p a)
 sortableMetadataList
-  metadataAction
+  actions
   metadataMap
   hintSet
   metadataRenderer
   typeNameTitle
-  typeNameSmall
-  setEmptyMetadata =
+  typeNameSmall = do
+  let
+    items :: Array _
+    items = Infinite.Finalize.zip
+      actions.dragging.genDragHandlers
+      (OMap.toUnfoldable combinedMap :: Array _)
+    itemsCount = Array.length items
+    sortable = itemsCount > 1
+    row key value needed h = do
+      let
+        props =
+          if sortable then
+            [ h.onDragEnd
+            , h.onDragStart
+            , h.onDragEnter
+            , class_ $ ClassName "metadata-sortable-form-row"
+            , draggable true
+            ]
+          else
+            [ class_ $ ClassName "metadata-sortable-form-row" ]
+        children = metadataRenderer
+          { key, needed, typeNameTitle, typeNameSmall, sortable, value }
+      div props children
   if OMap.isEmpty combinedMap then
     []
-  else
-    [ div [ class_ $ ClassName "metadata-group-title" ]
+  else AB.build $
+    AB.cons do
+      div [ class_ $ ClassName "metadata-group-title" ]
         [ h6_ [ em_ [ text $ typeNameTitle <> " descriptions" ] ] ]
-    ]
-      <>
-        ( concatMap
-            ( \(key /\ val) ->
-                ( case val of
-                    Just (info /\ needed) -> metadataRenderer key info needed
-                      metadataAction
-                      typeNameTitle
-                      typeNameSmall
-                    Nothing ->
-                      [ div
-                          [ classes
-                              [ ClassName "metadata-error"
-                              , ClassName "metadata-prop-not-defined"
-                              ]
-                          ]
-                          [ text $ typeNameTitle <> " " <> show key <>
-                              " meta-data not defined"
-                          ]
-                      , div [ class_ $ ClassName "metadata-prop-create" ]
-                          [ button
-                              [ classes [ minusBtn, ClassName "align-top", btn ]
-                              , onClick $ const $ metadataAction
-                                  (setEmptyMetadata key)
-                              ]
-                              [ text "+" ]
-                          ]
-                      ]
-                )
-            )
-            $ OMap.toUnfoldable combinedMap
-        )
+      <> items `flip foldMapDefaultL` \(DragHandlers h /\ key /\ item) ->
+        case item of
+          Just (val /\ needed) -> AB.cons $ row key val needed h
+          Nothing -> AB.cons $ div
+            [ class_ $ ClassName "metadata-sortable-form-row" ]
+            [ div
+                [ classes
+                    [ ClassName "metadata-error"
+                    , ClassName "metadata-prop-not-defined"
+                    ]
+                ]
+                [ text $ typeNameTitle <> " " <> show key <>
+                    " meta-data not defined"
+                ]
+            , div [ class_ $ ClassName "metadata-prop-create" ]
+                [ button
+                    [ classes [ minusBtn, ClassName "align-top", btn ]
+                    , onClick $ const $ actions.set key mempty
+                    ]
+                    [ text "+" ]
+                ]
+            ]
   where
   mergeMaps
     :: forall c2
@@ -457,134 +460,194 @@ sortableMetadataList
       (map (\x -> Just (x /\ false)) metadataMap)
       (foldMap (\x -> OMap.singleton x Nothing) hintSet)
 
+type DraggingState a =
+  { dragged :: Maybe Int
+  , genDragHandlers :: GenDragHandlers a
+  }
+
+type Dragging a =
+  { slotParameterDescriptions :: DraggingState a
+  , valueParameterInfos :: DraggingState a
+  }
+
+type Handlers a =
+  { raise :: MetadataAction -> a
+  , dragging :: Dragging a
+  }
+
 metadataView
   :: forall a p
-   . MetadataHintInfo
+   . Handlers a
+  -> MetadataHintInfo
   -> MetaData
-  -> (MetadataAction -> a)
   -> HTML p a
-metadataView metadataHints metadata metadataAction =
-  div [ classes [ ClassName "metadata-form" ] ]
-    ( concat
-        [ [ div [ class_ $ ClassName "metadata-mainprop-label" ]
-              [ text "Contract type: " ]
-          , div [ class_ $ ClassName "metadata-mainprop-edit" ]
-              [ select
-                  [ class_ $ ClassName "metadata-input"
-                  , onValueChange $ metadataAction <<< SetContractType <<<
-                      initialsToContractType
-                  ]
-                  do
-                    ct <- contractTypeArray
-                    pure
-                      $ option
-                          [ value $ contractTypeInitials ct
-                          , selected (ct == metadata.contractType)
-                          ]
-                          [ text $ contractTypeName ct
-                          ]
-              ]
-          ]
-        , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
-              [ text "Contract name: " ]
-          , div [ class_ $ ClassName "metadata-mainprop-edit" ]
-              [ input
-                  [ type_ InputText
-                  , placeholder "Contract name"
-                  , class_ $ ClassName "metadata-input"
-                  , value metadata.contractName
-                  , onValueChange $ metadataAction <<< SetContractName
-                  ]
-              ]
-          ]
-        , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
-              [ text "Contract short description: " ]
-          , div [ class_ $ ClassName "metadata-mainprop-edit" ]
-              [ input
-                  [ type_ InputText
-                  , placeholder "Contract description"
-                  , class_ $ ClassName "metadata-input"
-                  , value metadata.contractShortDescription
-                  , onValueChange $ metadataAction <<<
-                      SetContractShortDescription
-                  ]
-              ]
-          ]
-        , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
-              [ text "Contract long description: " ]
-          , div [ class_ $ ClassName "metadata-mainprop-edit" ]
-              [ input
-                  [ type_ InputText
-                  , placeholder "Contract description"
-                  , class_ $ ClassName "metadata-input"
-                  , value metadata.contractLongDescription
-                  , onValueChange $ metadataAction <<<
-                      SetContractLongDescription
-                  ]
-              ]
-          ]
-        , generateMetadataList _roleDescriptions _roles
-            (onlyDescriptionRenderer SetRoleDescription DeleteRoleDescription)
-            "Role"
-            "role"
-            (\x -> SetRoleDescription x mempty)
-        , generateMetadataList _choiceInfo _choiceNames choiceMetadataRenderer
-            "Choice"
-            "choice"
-            (\x -> SetChoiceDescription x mempty)
-        , generateSortableMetadataList _slotParameterDescriptions
-            _slotParameters
-            ( onlyDescriptionRenderer SetSlotParameterDescription
-                DeleteSlotParameterDescription
-            )
-            "Slot parameter"
-            "slot parameter"
-            (\x -> SetSlotParameterDescription x mempty)
-        , generateSortableMetadataList _valueParameterInfo _valueParameters
-            valueParameterMetadataRenderer
-            "Value parameter"
-            "value parameter"
-            (\x -> SetValueParameterDescription x mempty)
+metadataView handlers metadataHints metadata = div_
+  [ div [ classes [ ClassName "metadata-form" ] ] $ concat
+      [ [ div [ class_ $ ClassName "metadata-mainprop-label" ]
+            [ text "Contract type: " ]
+        , div [ class_ $ ClassName "metadata-mainprop-edit" ]
+            [ select
+                [ class_ $ ClassName "metadata-input"
+                , onValueChange $ handlers.raise <<< SetContractType <<<
+                    initialsToContractType
+                ]
+                do
+                  ct <- contractTypeArray
+                  pure
+                    $ option
+                        [ value $ contractTypeInitials ct
+                        , selected (ct == metadata.contractType)
+                        ]
+                        [ text $ contractTypeName ct
+                        ]
+            ]
         ]
-    )
+      , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
+            [ text "Contract name: " ]
+        , div [ class_ $ ClassName "metadata-mainprop-edit" ]
+            [ input
+                [ type_ InputText
+                , placeholder "Contract name"
+                , class_ $ ClassName "metadata-input"
+                , value metadata.contractName
+                , onValueChange $ handlers.raise <<< SetContractName
+                ]
+            ]
+        ]
+      , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
+            [ text "Contract short description: " ]
+        , div [ class_ $ ClassName "metadata-mainprop-edit" ]
+            [ input
+                [ type_ InputText
+                , placeholder "Contract description"
+                , class_ $ ClassName "metadata-input"
+                , value metadata.contractShortDescription
+                , onValueChange $ handlers.raise <<< SetContractShortDescription
+                ]
+            ]
+        ]
+      , [ div [ class_ $ ClassName "metadata-mainprop-label" ]
+            [ text "Contract long description: " ]
+        , div [ class_ $ ClassName "metadata-mainprop-edit" ]
+            [ input
+                [ type_ InputText
+                , placeholder "Contract description"
+                , class_ $ ClassName "metadata-input"
+                , value metadata.contractLongDescription
+                , onValueChange $ handlers.raise <<< SetContractLongDescription
+                ]
+            ]
+        ]
+      ]
+  , div [ classes [ ClassName "metadata-form" ] ] do
+      let
+        actions =
+          { delete: handlers.raise <<< DeleteRoleDescription
+          , set: map handlers.raise <<< SetRoleDescription
+          }
+        render = onlyDescriptionRenderer actions
+      generateMetadataList
+        actions
+        _roleDescriptions
+        _roles
+        render
+        "Role"
+        "role"
+  , div [ classes [ ClassName "metadata-form" ] ] do
+      let
+        actions = { set: SetChoiceDescription }
+
+      map handlers.raise <$> generateMetadataList
+        actions
+        _choiceInfo
+        _choiceNames
+        choiceMetadataRenderer
+        "Choice"
+        "choice"
+  , div
+      [ classes
+          [ ClassName "sortable-metadata-form"
+          , ClassName "metadata-only-description"
+          ]
+      ]
+      do
+        let
+          actions =
+            { delete: handlers.raise <<< DeleteSlotParameterDescription
+            , dragging: handlers.dragging.slotParameterDescriptions
+            , set: map handlers.raise <<< SetSlotParameterDescription
+            }
+          render = onlyDescriptionRenderer actions
+        generateSortableMetadataList
+          actions
+          _slotParameterDescriptions
+          _slotParameters
+          render
+          "Slot parameter"
+          "slot parameter"
+  , div [ classes [ ClassName "sortable-metadata-form" ] ] do
+      let
+        actions =
+          { set: map handlers.raise <<< SetValueParameterDescription
+          , dragging: handlers.dragging.valueParameterInfos
+          }
+        render opts = do
+          let
+            value =
+              { description: opts.value.valueParameterDescription
+              , format: opts.value.valueParameterFormat
+              }
+          formattedNumberMetadataRenderer
+            $ Record.set (Proxy :: Proxy "value") value
+            $ Record.merge
+                { setFormat: map handlers.raise <<< SetValueParameterFormat
+                , setDescription: map handlers.raise <<<
+                    SetValueParameterDescription
+                , deleteInfo: handlers.raise <<< DeleteValueParameterInfo
+                }
+                opts
+
+      generateSortableMetadataList
+        actions
+        _valueParameterInfo
+        _valueParameters
+        render
+        "Value parameter"
+        "value parameter"
+  ]
   where
   generateMetadataList
-    :: forall c
-     . Lens' MetaData (Map String c)
+    :: forall b c v r
+     . Monoid v
+    => { set :: String -> v -> b | r }
+    -> Lens' MetaData (Map String c)
     -> Lens' MetadataHintInfo (Set String)
-    -> ( String
-         -> c
-         -> Boolean
-         -> (MetadataAction -> a)
-         -> String
-         -> String
-         -> Array (HTML p a)
-       )
+    -> (SubformOpts c -> Array (HTML p b))
     -> String
     -> String
-    -> (String -> MetadataAction)
-    -> Array (HTML p a)
-  generateMetadataList mapLens setLens = metadataList metadataAction
-    (metadata ^. mapLens)
-    (metadataHints ^. setLens)
+    -> Array (HTML p b)
+  generateMetadataList actions mapLens setLens =
+    metadataList actions (metadata ^. mapLens) (metadataHints ^. setLens)
 
   generateSortableMetadataList
-    :: forall c
-     . Lens' MetaData (OMap String c)
+    :: forall c r v
+     . Monoid v
+    => { dragging :: DraggingState a
+       , set :: String -> v -> a
+       | r
+       }
+    -> Lens' MetaData (OMap String c)
     -> Lens' MetadataHintInfo (OSet String)
-    -> ( String
-         -> c
-         -> Boolean
-         -> (MetadataAction -> a)
-         -> String
-         -> String
-         -> Array (HTML p a)
-       )
+    -> (SubformOpts c -> Array (HTML p a))
     -> String
     -> String
-    -> (String -> MetadataAction)
     -> Array (HTML p a)
-  generateSortableMetadataList mapLens setLens = sortableMetadataList
-    metadataAction
-    (metadata ^. mapLens)
-    (metadataHints ^. setLens)
+  generateSortableMetadataList actions mapLens setLens render label labelLower =
+    sortableMetadataList
+      actions
+      (metadata ^. mapLens)
+      (metadataHints ^. setLens)
+      render
+      label
+      labelLower
+
