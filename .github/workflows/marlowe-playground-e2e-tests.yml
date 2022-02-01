@@ -31,6 +31,7 @@ jobs:
     - name: Run Marlowe Playground Server
       working-directory: ./
       env:
+        CLIENT_PORT: 8009
         GITHUB_CLIENT_ID: 6a3f7261090cca952175
         GITHUB_CLIENT_SECRET: f9c06abeef4031285f152b83e6a307fa46c0be97
         JWT_SIGNATURE: bb0bc0314501f981b0441b90f6771f262afed7743dbb3a8999c7309ebcbb5e867d42ebc0864e325d
