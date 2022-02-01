@@ -45,6 +45,7 @@ library
   hs-source-dirs: contracts
   exposed-modules:
     Common
+    Futures
     Options
   build-depends:
     base >= 4.9 && < 5,
