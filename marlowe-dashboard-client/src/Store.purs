@@ -50,7 +50,7 @@ data Action
   = AdvanceToSlot Slot
   | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
   -- Contract
-  | ContractCreated (UUID /\ ContractNickname /\ MetaData)
+  | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
   -- Wallet
   | ModifyAddressBook (AddressBook -> AddressBook)
   | ActivateWallet WalletDetails
@@ -68,7 +68,7 @@ reduce store = case _ of
   NewCompanionAppStateObserved state ->
     store { previousCompanionAppState = Just state }
   -- Contract
-  ContractCreated (reqId /\ contractNickname /\ metadata) -> store
+  AddStartingContract (reqId /\ contractNickname /\ metadata) -> store
     { newContracts = Map.insert reqId (contractNickname /\ metadata)
         store.newContracts
     }
