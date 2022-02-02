@@ -71,16 +71,15 @@ class
 
 instance ManagePAB AppM where
   activateContract contractActivationId wallet =
-    map (map toFront)
-      $ PAB.postApiContractActivate
+    PAB.postApiContractActivate
       $ ContractActivationArgs
           { caID: contractActivationId
           , caWallet: Just $ Wallet { getWalletId: WalletId.toString wallet }
           }
   deactivateContract =
-    PAB.putApiContractInstanceByContractinstanceidStop <<< toBack
+    PAB.putApiContractInstanceByContractinstanceidStop
   getContractInstanceClientState =
-    PAB.getApiContractInstanceByContractinstanceidStatus <<< toBack
+    PAB.getApiContractInstanceByContractinstanceidStatus
   getContractInstanceCurrentState plutusAppId = do
     clientState <- getContractInstanceClientState plutusAppId
     pure $ map (view _cicCurrentState) clientState
@@ -93,7 +92,7 @@ instance ManagePAB AppM where
   invokeEndpoint plutusAppId endpoint payload =
     PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
       (RawJson $ encodeStringifyJson payload)
-      (toBack plutusAppId)
+      plutusAppId
       endpoint
   getWalletContractInstances wallet =
     PAB.getApiContractInstancesWalletByWalletid (WalletId.toString wallet)

@@ -15,6 +15,7 @@ import Prologue
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.RawJson (RawJson)
+import Marlowe.PAB (PlutusAppId(..))
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.Contract.Resumable (Request, _Request)
@@ -28,14 +29,10 @@ import Plutus.PAB.Webserver.Types
   )
 import Type.Proxy (Proxy(..))
 import Wallet.Emulator.Wallet (Wallet)
-import Wallet.Types
-  ( ContractInstanceId
-  , EndpointDescription
-  , _EndpointDescription
-  )
+import Wallet.Types (EndpointDescription, _EndpointDescription)
 
 _cicContract :: Lens' (ContractInstanceClientState MarloweContract)
-  ContractInstanceId
+  PlutusAppId
 _cicContract = _ContractInstanceClientState <<< prop (Proxy :: _ "cicContract")
 
 _cicCurrentState :: Lens' (ContractInstanceClientState MarloweContract)

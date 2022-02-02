@@ -28,6 +28,7 @@ import Data.Tuple.Nested ((/\))
 import Ledger.Constraints.OffChain (UnbalancedTx)
 import Ledger.TimeSlot (SlotConversionError)
 import Ledger.Tx (ChainIndexTxOut)
+import Marlowe.PAB (PlutusAppId)
 import Plutus.ChainIndex.Api (IsUtxoResponse, TxosResponse, UtxosResponse)
 import Plutus.ChainIndex.Tx (ChainIndexTx)
 import Plutus.ChainIndex.Types (RollbackState, Tip, TxOutState)
@@ -47,7 +48,7 @@ import Plutus.V1.Ledger.TxId (TxId)
 import Plutus.V1.Ledger.Value (AssetClass)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Error (WalletAPIError)
-import Wallet.Types (ContractInstanceId, EndpointDescription, EndpointValue)
+import Wallet.Types (EndpointDescription, EndpointValue)
 
 newtype ActiveEndpoint = ActiveEndpoint
   { aeDescription :: EndpointDescription
@@ -583,7 +584,7 @@ data PABResp
   | AwaitTxOutStatusChangeResp TxOutRef (RollbackState TxOutState)
   | CurrentSlotResp Slot
   | CurrentTimeResp POSIXTime
-  | OwnContractInstanceIdResp ContractInstanceId
+  | OwnContractInstanceIdResp PlutusAppId
   | OwnPaymentPublicKeyHashResp PaymentPubKeyHash
   | ChainIndexQueryResp ChainIndexResponse
   | BalanceTxResp BalanceTxResponse
@@ -711,7 +712,7 @@ _CurrentTimeResp = prism' CurrentTimeResp case _ of
   (CurrentTimeResp a) -> Just a
   _ -> Nothing
 
-_OwnContractInstanceIdResp :: Prism' PABResp ContractInstanceId
+_OwnContractInstanceIdResp :: Prism' PABResp PlutusAppId
 _OwnContractInstanceIdResp = prism' OwnContractInstanceIdResp case _ of
   (OwnContractInstanceIdResp a) -> Just a
   _ -> Nothing

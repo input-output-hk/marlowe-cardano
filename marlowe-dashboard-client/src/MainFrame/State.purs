@@ -27,7 +27,6 @@ import Component.Contacts.Lenses
   , _walletInfo
   )
 import Component.Contacts.Types (WalletDetails)
-import Component.Template.Types as Template
 import Control.Logger.Capability (class MonadLogger, info)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (class MonadRec, forever)
@@ -47,7 +46,6 @@ import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env, _pollingInterval)
-import Examples.PureScript.Escrow as Escrow
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -82,7 +80,7 @@ import Marlowe.PAB (PlutusAppId)
 import Page.Dashboard.Lenses (_contracts)
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.State (updateTotalFunds)
-import Page.Dashboard.Types (Action(..), Card(..), State) as Dashboard
+import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types
@@ -205,7 +203,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract
       -- instances, including its wallet companion contract
-      InstanceUpdate contractInstanceId instanceStatusToClient ->
+      InstanceUpdate plutusAppId instanceStatusToClient ->
         case instanceStatusToClient of
           NewObservableState rawJson -> do
             -- TODO: If we receive a second status update for the same contract / plutus app, while
@@ -213,8 +211,6 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
             -- does not seem very likely. Still, it might be worth considering guarding against this
             -- possibility by e.g. keeping a list/array of updates and having a subscription that
             -- handles them synchronously in the order in which they arrive.
-            let
-              plutusAppId = toFront contractInstanceId
             mDashboardState <- peruse _dashboardState
             -- these updates should only ever be coming when we are in the Dashboard state (and if
             -- we're not, we don't care about them _)
@@ -301,8 +297,6 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
             -- we're not, we don't care about them anyway)
             for_ mDashboardState \(Tuple walletDetails _) -> do
               let
-                plutusAppId = toFront contractInstanceId
-
                 marloweAppId = view _marloweAppId walletDetails
               when (plutusAppId == marloweAppId) $
                 MarloweApp.onNewActiveEndpoints activeEndpoints
