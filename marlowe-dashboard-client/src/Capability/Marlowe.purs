@@ -21,6 +21,7 @@ import API.Lenses
   ( _cicContract
   , _cicCurrentState
   , _cicDefinition
+  , _cicStatus
   , _observableState
   )
 import API.Marlowe.Run.Wallet.CentralizedTestnet
@@ -92,6 +93,7 @@ import Plutus.PAB.Webserver.Types
   , ContractInstanceClientState
   )
 import Types (AjaxResponse, DecodedAjaxResponse)
+import Wallet.Types (ContractActivityStatus(..))
 import WebSocket.Support as WS
 
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
@@ -321,10 +323,17 @@ activateOrRestorePlutusCompanionContracts
        )
 activateOrRestorePlutusCompanionContracts walletId plutusContracts = do
   let
+    isActiveContract contractType cic =
+      let
+        definition = view _cicDefinition cic
+        status = view _cicStatus cic
+      in
+        definition == contractType && status == Active
+
     findOrActivateContract :: _ -> m (AjaxResponse PlutusAppId)
     findOrActivateContract contractType =
       -- Try to find the contract by its type
-      Array.find (eq contractType <<< view _cicDefinition) plutusContracts
+      Array.find (isActiveContract contractType) plutusContracts
         # maybe'
             -- If we cannot find it, activate a new one
             (\_ -> PAB.activateContract contractType walletId)

@@ -7,18 +7,20 @@ module Store
 
 import Prologue
 
-import Component.Contacts.Lenses (_assets)
+import Component.Contacts.Lenses (_assets, _companionAppId, _marloweAppId)
 import Component.Contacts.Types (WalletDetails)
 import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
 import Data.Lens (_Just, (.~))
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Execution.Types as Execution
-import Data.Tuple.Nested (type (/\), (/\))
 import Marlowe.Extended.Metadata (MetaData)
+import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
+import MarloweContract (MarloweContract(..))
 import Toast.Types (ToastMessage)
 
 type Store =
@@ -54,6 +56,7 @@ data Action
   -- Wallet
   | ModifyAddressBook (AddressBook -> AddressBook)
   | ActivateWallet WalletDetails
+  | ChangePlutusScript MarloweContract PlutusAppId
   | UpdateAssets Assets
   | DeactivateWallet
   -- Toast
@@ -75,6 +78,11 @@ reduce store = case _ of
   -- Wallet
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
   ActivateWallet wallet -> store { wallet = Just wallet }
+  ChangePlutusScript MarloweApp plutusAppId ->
+    store { wallet = store.wallet # _Just <<< _marloweAppId .~ plutusAppId }
+  ChangePlutusScript WalletCompanion plutusAppId ->
+    store { wallet = store.wallet # _Just <<< _companionAppId .~ plutusAppId }
+  ChangePlutusScript MarloweFollower _ -> store
   UpdateAssets assets ->
     store { wallet = store.wallet # _Just <<< _assets .~ assets }
   DeactivateWallet -> store { wallet = Nothing }

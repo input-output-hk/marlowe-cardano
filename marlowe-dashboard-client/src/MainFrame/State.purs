@@ -6,6 +6,7 @@ import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
+  , followContract
   , getFollowerApps
   , subscribeToPlutusApp
   , subscribeToWallet
@@ -17,6 +18,7 @@ import Capability.MarloweStorage
   , getContractNicknames
   , walletLocalStorageKey
   )
+import Capability.PAB as PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
@@ -27,7 +29,8 @@ import Component.Contacts.Lenses
   , _walletInfo
   )
 import Component.Contacts.Types (WalletDetails)
-import Control.Logger.Capability (class MonadLogger, info)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Capability as Logger
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (class MonadRec, forever)
 import Control.Monad.State (modify_)
@@ -42,6 +45,7 @@ import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
+import Data.Tuple.Nested ((/\))
 import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -77,6 +81,7 @@ import MainFrame.Types
   )
 import MainFrame.View (render)
 import Marlowe.PAB (PlutusAppId)
+import MarloweContract (MarloweContract(..))
 import Page.Dashboard.Lenses (_contracts)
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.State (updateTotalFunds)
@@ -89,7 +94,8 @@ import Plutus.PAB.Webserver.Types
   )
 import Store as Store
 import Toast.Types
-  ( decodedAjaxErrorToast
+  ( ajaxErrorToast
+  , decodedAjaxErrorToast
   , decodingErrorToast
   , errorToast
   , successToast
@@ -300,7 +306,30 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                 marloweAppId = view _marloweAppId walletDetails
               when (plutusAppId == marloweAppId) $
                 MarloweApp.onNewActiveEndpoints activeEndpoints
-          ContractFinished _ -> pure unit
+          -- If one of the control apps closes unexpectedly we re-activate them
+          ContractFinished mVal -> do
+            mDashboardState <- peruse _dashboardState
+            -- these updates should only ever be coming when we are in the Dashboard state (and if
+            -- we're not, we don't care about them _)
+            for_ mDashboardState \(Tuple walletDetails _) ->
+              let
+                walletId = view (_walletInfo <<< _walletId) walletDetails
+                walletCompanionAppId = view _companionAppId walletDetails
+                marloweAppId = view _marloweAppId walletDetails
+
+                reActivatePlutusScript contractType = do
+                  Logger.error $ "Plutus script " <> show contractType
+                    <> " has closed unexpectedly: "
+                    <> show mVal
+                  mNewAppId <- PAB.activateContract contractType walletId
+                  for_ mNewAppId
+                    (updateStore <<< Store.ChangePlutusScript contractType)
+              in
+                if (plutusAppId == walletCompanionAppId) then
+                  reActivatePlutusScript WalletCompanion
+                else if (plutusAppId == marloweAppId) then
+                  reActivatePlutusScript MarloweApp
+                else pure unit
           NewYieldedExportTxs _ -> pure unit -- TODO how to handle this? What spago build --watch --clear-screenis this?
   pure $ Just next
 
@@ -319,7 +348,7 @@ handleWalletChange mWallet = do
   traverse_ H.unsubscribe currentSubscription
   pollingInterval <- asks $ view _pollingInterval
   newSubscription <- for mWallet \wallet -> do
-    info $ "Subscribing to polling subscription at an interval of "
+    Logger.info $ "Subscribing to polling subscription at an interval of "
       <> show pollingInterval
     H.subscribe $ HS.makeEmitter \push -> do
       fibre <- launchAff $ forever do
