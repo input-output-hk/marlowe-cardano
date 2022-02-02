@@ -4,20 +4,15 @@ module Marlowe.Contracts.ZeroCouponBond where
 import Language.Marlowe
 import Marlowe.Contracts.Common
 
-discountedPrice, notionalPrice :: Value Observation
-discountedPrice = Constant 90
-notionalPrice = Constant 100
-
-initialExchange, maturityExchangeTimeout :: Timeout
-initialExchange = Slot 10
-maturityExchangeTimeout = 100
-
 zeroCouponBond ::
-     Party
+     Timeout
+  -> Timeout
+  -> Value Observation
+  -> Value Observation
+  -> Party
   -> Party
   -> Contract
-zeroCouponBond investor issuer =
-    transfer initialExchange investor issuer discountedPrice
-  $ transfer maturityExchangeTimeout issuer investor notionalPrice
+zeroCouponBond fixing maturity discounted notional investor issuer =
+    transfer investor issuer (ada, discounted) fixing
+  $ deposit issuer investor (ada, notional) maturity Close
     Close
-
