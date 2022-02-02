@@ -16,7 +16,6 @@ import Prologue
 
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
-import Bridge (toBack, toFront)
 import Control.Monad.Except (lift)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Extra (encodeStringifyJson)
