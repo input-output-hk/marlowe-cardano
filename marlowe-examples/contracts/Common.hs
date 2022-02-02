@@ -1,7 +1,30 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
 module Common where
 
 import Language.Marlowe
+
+-- |Role for oracle
+oracle :: Party
+oracle = Role "kraken"
+
+-- |Exchange rates
+dirRate, invRate :: ChoiceId
+dirRate = ChoiceId "dir-adausd" oracle -- USC/ADA
+invRate = ChoiceId "inv-adausd" oracle -- ADA/UCS
+
+-- |Oracle input
+oracleInput ::
+     ChoiceId  -- ^ Oracle selector
+  -> Timeout   -- ^ Timeout for oracle input
+  -> Contract  -- ^ Continuation in case of timeout
+  -> Contract  -- ^ Continuation contract
+  -> Contract  -- ^ Composed contract
+oracleInput choiceId timeout timeoutContinuation continuation =
+  When
+    [Case (Choice choiceId [Bound 0 100_000_000_000]) continuation]
+    timeout
+    timeoutContinuation
 
 -- |Wait until timeout
 waitUntil ::
@@ -35,6 +58,26 @@ deposit ::
   -> Contract                   -- ^ Combined Contract
 deposit fromParty toParty (token, value) timeout timeoutContinuation continuation =
   When
-    [Case (Deposit toParty fromParty token value) continuation]
+    [ Case
+        (Deposit toParty fromParty token value)
+        continuation
+    ]
     timeout
     timeoutContinuation
+
+-- |Transfer
+transfer ::
+     Timeout
+  -> Party
+  -> Party
+  -> Value Observation
+  -> Contract
+  -> Contract
+transfer timeout from to amount continuation =
+  When
+    [ Case
+        (Deposit from from ada amount)
+        (Pay from (Party to) ada amount continuation)
+    ]
+    timeout
+    Close
