@@ -1,19 +1,24 @@
 module Marlowe.PAB
   ( PlutusAppId(..)
   , contractCreationFee
-  , fromContractInstanceId
   , transactionFee
   ) where
 
 import Prologue
 
-import Data.Argonaut.Decode (class DecodeJson)
-import Data.Argonaut.Encode (class EncodeJson)
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , decodeJson
+  , encodeJson
+  , (.:)
+  )
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Generic.Rep (class Generic)
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, unwrap)
 import Data.UUID.Argonaut (UUID)
-import Wallet.Types (ContractInstanceId(..))
+import Data.UUID.Argonaut as UUID
+import Servant.PureScript (class ToPathSegment)
 
 -- In the Marlowe PAB, transactions have a fixed cost of 10 lovelace; in the real node, transaction
 -- fees will vary, but this will serve as an approximation for now.
@@ -32,20 +37,26 @@ module.
 newtype PlutusAppId
   = PlutusAppId UUID
 
-derive instance newtypePlutusAppId :: Newtype PlutusAppId _
+derive instance Newtype PlutusAppId _
 
-derive instance eqPlutusAppId :: Eq PlutusAppId
+derive newtype instance Show PlutusAppId
 
-derive instance ordPlutusAppId :: Ord PlutusAppId
+derive instance Eq PlutusAppId
 
-derive instance genericPlutusAppId :: Generic PlutusAppId _
+derive instance Ord PlutusAppId
 
--- note we need to encode this type, not to communicate with the PAB (we have the `ContractInstanceId`
--- for that), but to save `WalletData` to local storage
-derive newtype instance encodeJsonPlutusAppId :: EncodeJson PlutusAppId
+derive instance Generic PlutusAppId _
 
-derive newtype instance decodeJsonPlutusAppId :: DecodeJson PlutusAppId
+instance EncodeJson PlutusAppId
+  where
+  encodeJson (PlutusAppId unContractInstanceId) = encodeJson
+    { unContractInstanceId }
 
-fromContractInstanceId :: ContractInstanceId -> PlutusAppId
-fromContractInstanceId (ContractInstanceId { unContractInstanceId }) =
-  PlutusAppId unContractInstanceId
+instance DecodeJson PlutusAppId where
+  decodeJson json = do
+    obj <- decodeJson json
+    s <- obj .: "unContractInstanceId"
+    pure $ PlutusAppId s
+
+instance ToPathSegment PlutusAppId where
+  toPathSegment = UUID.toString <<< unwrap

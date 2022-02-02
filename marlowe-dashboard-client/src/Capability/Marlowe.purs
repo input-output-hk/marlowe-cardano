@@ -32,13 +32,13 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
 import AppM (AppM)
 import Bridge (toBack, toFront)
 import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.PAB (class ManagePAB)
 import Capability.PAB
   ( activateContract
   , getContractInstanceObservableState
   , getWalletContractInstances
   , invokeEndpoint
   ) as PAB
-import Capability.PAB (class ManagePAB)
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Capability.Wallet as Wallet
@@ -77,7 +77,7 @@ import Data.WalletNickname (WalletNickname)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
-import Marlowe.PAB (PlutusAppId, fromContractInstanceId)
+import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics
   ( Contract
@@ -288,7 +288,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       -> Either JsonDecodeError (Tuple PlutusAppId ContractHistory)
     decodeFollowerAppState contractInstanceClientState =
       let
-        plutusAppId = toFront $ view _cicContract contractInstanceClientState
+        plutusAppId = view _cicContract contractInstanceClientState
 
         rawJson = view (_cicCurrentState <<< _observableState)
           contractInstanceClientState
@@ -296,10 +296,10 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         case parseDecodeJson $ unwrap rawJson of
           Left decodingErrors -> Left decodingErrors
           Right observableState -> Right (plutusAppId /\ observableState)
-  subscribeToPlutusApp = toBack >>> Left >>> Subscribe >>> sendWsMessage
+  subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
   subscribeToWallet =
     sendWsMessage <<< Subscribe <<< Right <<< invalidWalletIdToPubKeyHash
-  unsubscribeFromPlutusApp = toBack >>> Left >>> Unsubscribe >>> sendWsMessage
+  unsubscribeFromPlutusApp = Left >>> Unsubscribe >>> sendWsMessage
   unsubscribeFromWallet =
     sendWsMessage <<< Unsubscribe <<< Right <<< invalidWalletIdToPubKeyHash
 
@@ -329,7 +329,7 @@ activateOrRestorePlutusCompanionContracts walletId plutusContracts = do
             -- If we cannot find it, activate a new one
             (\_ -> PAB.activateContract contractType walletId)
             -- If we find it, return the id
-            (pure <<< Right <<< fromContractInstanceId <<< view _cicContract)
+            (pure <<< Right <<< view _cicContract)
 
   ajaxWalletCompanionId <- findOrActivateContract WalletCompanion
   ajaxMarloweAppId <- findOrActivateContract MarloweApp

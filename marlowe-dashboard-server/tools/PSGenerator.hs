@@ -100,6 +100,12 @@ walletBridge = do
 marloweParamsBridge :: BridgePart
 marloweParamsBridge = typeName ^== "MarloweParams" >> return psMarloweParams
 
+psPlutusAppId :: TypeInfo 'PureScript
+psPlutusAppId = TypeInfo "" "Marlowe.PAB" "PlutusAppId" []
+
+contractInstanceBridge :: BridgePart
+contractInstanceBridge = typeName ^== "ContractInstanceId" >> return psPlutusAppId
+
 myBridge :: BridgePart
 myBridge =
   doubleBridge
@@ -108,6 +114,7 @@ myBridge =
     <|> walletBridge
     <|> transactionErrorBridge
     <|> marloweParamsBridge
+    <|> contractInstanceBridge
     <|> PSGenerator.Common.aesonBridge
     <|> PSGenerator.Common.containersBridge
     <|> PSGenerator.Common.ledgerBridge
@@ -157,6 +164,7 @@ pabSettings = defaultSettings
   overriddenTypes =
     [ ("Plutus.V1.Ledger.Crypto", "PubKeyHash")
     , ("Ledger.Address", "PaymentPubKeyHash")
+    , ("Wallet.Types", "ContractInstanceId")
     ]
 
 argParser :: Parser FilePath

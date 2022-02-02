@@ -21,21 +21,17 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Marlowe.PAB (PlutusAppId)
 import Plutus.Contract.Resumable (Request, Response)
 import Plutus.Trace.Scheduler (ThreadId)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Error (WalletAPIError)
 import Wallet.Emulator.Wallet (Wallet)
-import Wallet.Types
-  ( ContractInstanceId
-  , EndpointDescription
-  , Notification
-  , NotificationError
-  )
+import Wallet.Types (EndpointDescription, Notification, NotificationError)
 
 newtype ContractInstanceLog = ContractInstanceLog
   { _cilMessage :: ContractInstanceMsg
-  , _cilId :: ContractInstanceId
+  , _cilId :: PlutusAppId
   , _cilTag :: ContractInstanceTag
   }
 
@@ -48,7 +44,7 @@ instance EncodeJson ContractInstanceLog where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { _cilMessage: E.value :: _ ContractInstanceMsg
-        , _cilId: E.value :: _ ContractInstanceId
+        , _cilId: E.value :: _ PlutusAppId
         , _cilTag: E.value :: _ ContractInstanceTag
         }
     )
@@ -57,7 +53,7 @@ instance DecodeJson ContractInstanceLog where
   decodeJson = defer \_ -> D.decode $
     ( ContractInstanceLog <$> D.record "ContractInstanceLog"
         { _cilMessage: D.value :: _ ContractInstanceMsg
-        , _cilId: D.value :: _ ContractInstanceId
+        , _cilId: D.value :: _ PlutusAppId
         , _cilTag: D.value :: _ ContractInstanceTag
         }
     )
@@ -70,7 +66,7 @@ derive instance Newtype ContractInstanceLog _
 
 _ContractInstanceLog :: Iso' ContractInstanceLog
   { _cilMessage :: ContractInstanceMsg
-  , _cilId :: ContractInstanceId
+  , _cilId :: PlutusAppId
   , _cilTag :: ContractInstanceTag
   }
 _ContractInstanceLog = _Newtype
@@ -78,7 +74,7 @@ _ContractInstanceLog = _Newtype
 cilMessage :: Lens' ContractInstanceLog ContractInstanceMsg
 cilMessage = _Newtype <<< prop (Proxy :: _ "_cilMessage")
 
-cilId :: Lens' ContractInstanceLog ContractInstanceId
+cilId :: Lens' ContractInstanceLog PlutusAppId
 cilId = _Newtype <<< prop (Proxy :: _ "_cilId")
 
 cilTag :: Lens' ContractInstanceLog ContractInstanceTag
@@ -284,7 +280,7 @@ _ContractInstanceTag = _Newtype
 --------------------------------------------------------------------------------
 
 data EmulatorRuntimeError
-  = ThreadIdNotFound ContractInstanceId
+  = ThreadIdNotFound PlutusAppId
   | InstanceIdNotFound Wallet
   | EmulatorJSONDecodingError String RawJson
   | GenericError String
@@ -324,7 +320,7 @@ derive instance Generic EmulatorRuntimeError _
 
 --------------------------------------------------------------------------------
 
-_ThreadIdNotFound :: Prism' EmulatorRuntimeError ContractInstanceId
+_ThreadIdNotFound :: Prism' EmulatorRuntimeError PlutusAppId
 _ThreadIdNotFound = prism' ThreadIdNotFound case _ of
   (ThreadIdNotFound a) -> Just a
   _ -> Nothing
