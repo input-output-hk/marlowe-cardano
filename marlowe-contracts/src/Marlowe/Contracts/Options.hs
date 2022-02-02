@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Options where
+module Marlowe.Contracts.Options where
 
-import Common
 import Language.Marlowe
+import Marlowe.Contracts.Common
 
 -- = Options
 
