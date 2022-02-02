@@ -1,11 +1,10 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
-module Futures where
+module Marlowe.Contracts.Futures where
 
 import Data.String (IsString (..))
 import Language.Marlowe
-
-import Common
+import Marlowe.Contracts.Common
 
 -- = Futures
 
