@@ -7,7 +7,7 @@ packages: marlowe
           marlowe-dashboard-server
           marlowe-symbolic
           marlowe-cli
-          marlowe-examples
+          marlowe-contracts
 
 -- We never, ever, want this.
 write-ghc-environment-files: never

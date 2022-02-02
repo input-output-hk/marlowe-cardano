@@ -1,5 +1,5 @@
 cabal-version: 2.2
-name: marlowe-examples
+name: marlowe-contracts
 version: 0.1.0.0
 license: Apache-2.0
 license-files:
@@ -19,7 +19,7 @@ extra-doc-files: ReadMe.md
 source-repository head
   type: git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: marlowe-examples
+  subdir: marlowe-contracts
 
 flag defer-plugin-errors
     description:
@@ -42,11 +42,25 @@ common lang
 
 library
   import: lang
-  hs-source-dirs: contracts
+  hs-source-dirs: src
   exposed-modules:
-    Common
-    Futures
-    Options
+    Marlowe.Contracts.Common
+    Marlowe.Contracts.Futures
+    Marlowe.Contracts.Options
+    Marlowe.Contracts.ReverseConvertible
+    Marlowe.Contracts.ZeroCouponBond
   build-depends:
     base >= 4.9 && < 5,
     marlowe -any
+
+executable marlowe-contracts-exe
+  import: lang
+  hs-source-dirs: app
+  main-is: Main.hs
+  build-depends:
+    base >= 4.9 && < 5,
+    marlowe -any,
+    marlowe-contracts -any
+  ghc-options:
+    -threaded
+
