@@ -148,7 +148,7 @@ When we connect a wallet, it has this initial state. Notable is the walletCompan
 mkInitialState
   :: WalletDetails
   -> Map PlutusAppId ContractHistory
-  -- FIXME: Contract nicknames should be indexed by MarloweParams
+  -- FIXME-3208: Contract nicknames should be indexed by MarloweParams
   -> Map PlutusAppId ContractNickname
   -> Slot
   -> State
@@ -469,7 +469,7 @@ handleAction
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
             Right reqId -> do
-              -- FIXME
+              -- FIXME-3208
               -- insertIntoContractNicknames followerAppId nickname
               let metaData = template.metaData
               -- We save in the store the request of a created contract with

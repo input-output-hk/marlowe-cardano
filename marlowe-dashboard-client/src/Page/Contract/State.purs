@@ -170,7 +170,7 @@ dummyState =
     , metadata: emptyContractMetadata
     }
 
--- FIXME: Almost sure delete this
+-- FIXME-3208: Almost sure delete this
 -- this is for making a placeholder state for the user who created the contract, used for displaying
 -- something before we get the MarloweParams back from the WalletCompanion app
 mkPlaceholderState :: ContractNickname -> MetaData -> State

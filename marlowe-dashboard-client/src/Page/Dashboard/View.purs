@@ -550,7 +550,7 @@ contractCards
   case walletCompanionStatus of
     FirstUpdateComplete ->
       let
-        -- FIXME: Change the Dashboard state to include two Maps/List, one for
+        -- FIXME-3208: Change the Dashboard state to include two Maps/List, one for
         --        runningContracts and one for completedContracts
         -- runningContracts = filter (not isContractClosed) contracts
         runningContracts = filter (const true) contracts
@@ -574,7 +574,7 @@ contractCards
 
 contractCards currentSlot { contractFilter: Completed, contracts } =
   let
-    -- FIXME: Same as `runningContracts`
+    -- FIXME-3208: Same as `runningContracts`
     -- completedContracts = filter isContractClosed contracts
     completedContracts = filter (const false) contracts
   in
