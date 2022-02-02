@@ -64,3 +64,26 @@ executable marlowe-contracts-exe
   ghc-options:
     -threaded
 
+test-suite marlowe-contracts-test
+    import: lang
+    hs-source-dirs: test
+    type: exitcode-stdio-1.0
+    main-is: Spec.hs
+    other-modules:
+        Spec.Marlowe.Contracts
+    build-depends:
+        base >=4.9 && <5,
+        bytestring -any,
+        tasty -any,
+        tasty-hunit -any,
+        tasty-quickcheck,
+        text -any,
+        plutus-contract -any,
+        plutus-ledger -any,
+        plutus-ledger-api -any,
+        plutus-ledger-constraints -any,
+        marlowe,
+        marlowe-contracts,
+        plutus-tx -any,
+        QuickCheck,
+        uuid -any

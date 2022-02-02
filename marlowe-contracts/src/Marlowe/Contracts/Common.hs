@@ -40,10 +40,10 @@ pay ::
   -> (Token, Value Observation) -- ^ Token and Value
   -> Contract                   -- ^ Continuation Contract
   -> Contract                   -- ^ Combined Contract
-pay fromParty toParty (token, value) =
+pay from to (token, value) =
   Pay
-    fromParty
-    (Party toParty)
+    from
+    (Party to)
     token
     value
 
@@ -56,10 +56,10 @@ deposit ::
   -> Contract                   -- ^ Continuation Contract in case of timeout of deposit
   -> Contract                   -- ^ Continuation Contract after deposit
   -> Contract                   -- ^ Combined Contract
-deposit fromParty toParty (token, value) timeout timeoutContinuation continuation =
+deposit from to (token, value) timeout timeoutContinuation continuation =
   When
     [ Case
-        (Deposit toParty fromParty token value)
+        (Deposit to from token value)
         continuation
     ]
     timeout
@@ -67,17 +67,17 @@ deposit fromParty toParty (token, value) timeout timeoutContinuation continuatio
 
 -- |Transfer
 transfer ::
-     Timeout
-  -> Party
-  -> Party
-  -> Value Observation
-  -> Contract
-  -> Contract
-transfer timeout from to amount continuation =
+     Party                      -- ^ Payer
+  -> Party                      -- ^ Payee
+  -> (Token, Value Observation) -- ^ Value
+  -> Timeout                    -- ^ Timeout for transfer
+  -> Contract                   -- ^ Continuation Contract
+  -> Contract                   -- ^ Combined Contract
+transfer from to (token, value) timeout continuation =
   When
     [ Case
-        (Deposit from from ada amount)
-        (Pay from (Party to) ada amount continuation)
+        (Deposit from from ada value)
+        (Pay from (Party to) ada value continuation)
     ]
     timeout
     Close

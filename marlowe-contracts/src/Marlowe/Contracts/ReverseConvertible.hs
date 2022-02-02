@@ -11,16 +11,21 @@ reverseConvertible ::
   -> Party
   -> Timeout
   -> Timeout
+  -> Timeout
   -> Token
   -> Token
   -> Value Observation
   -> Value Observation
   -> Contract
-reverseConvertible investor issuer maturity settlement currency underlying strike ratio =
+reverseConvertible investor issuer fixing maturity settlement currency underlying strike ratio =
   zcb `both` shortCall
   where
     zcb =
       zeroCouponBond
+        fixing
+        maturity
+        strike -- FIXME: discounted
+        ratio -- FIXME: notional
         investor
         issuer
     shortCall =
