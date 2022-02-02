@@ -10,7 +10,7 @@ let
   writeFormatter = name: cmd: extensions: writeShellScriptBinInRepoRoot "fix-${name}" ''
     set -e
     echo formatting with ${name}
-    ${pkgs.git}/bin/git ls-files \
+    ${pkgs.git}/bin/git ls-files ':!:bitte/node/config/*'\
       | grep -E '${extensionsToRegex extensions}' \
       | xargs -d $'\\n' ${cmd}
     echo done.
