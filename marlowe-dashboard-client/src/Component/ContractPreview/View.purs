@@ -14,7 +14,7 @@ import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import Css as Css
 import Data.ContractNickname as ContractNickname
-import Data.Either (fromLeft, fromRight)
+import Data.Either (fromRight)
 import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)

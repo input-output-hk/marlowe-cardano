@@ -18,7 +18,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.PAB (PlutusAppId(..))
+import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
 import MarloweContract (MarloweContract(..))
 import Toast.Types (ToastMessage)
