@@ -146,7 +146,7 @@ useWalletBox =
         [ classNames [ "pt-2", "flex", "justify-between" ] ]
         [ a
             [ classNames [ "flex", "font-bold" ]
-            , href "https://staging.marlowe-web.iohkdev.io"
+            , href "https://marlowe-finance.io"
             ]
             [ icon_ Icon.Previous
             , text "Back to home page"
