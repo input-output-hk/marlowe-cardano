@@ -31,7 +31,6 @@ import API.Marlowe.Run.Wallet.CentralizedTestnet
   , clientServerError
   )
 import AppM (AppM)
-import Bridge (toBack, toFront)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PAB (class ManagePAB)
 import Capability.PAB

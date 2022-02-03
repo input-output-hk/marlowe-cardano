@@ -6,7 +6,6 @@ import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
-  , followContract
   , getFollowerApps
   , subscribeToPlutusApp
   , subscribeToWallet
@@ -45,7 +44,6 @@ import Data.Newtype (unwrap)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
-import Data.Tuple.Nested ((/\))
 import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -94,8 +92,7 @@ import Plutus.PAB.Webserver.Types
   )
 import Store as Store
 import Toast.Types
-  ( ajaxErrorToast
-  , decodedAjaxErrorToast
+  ( decodedAjaxErrorToast
   , decodingErrorToast
   , errorToast
   , successToast

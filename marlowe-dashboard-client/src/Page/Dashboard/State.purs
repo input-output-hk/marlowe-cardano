@@ -18,7 +18,6 @@ import Capability.Marlowe
   )
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , insertIntoContractNicknames
   )
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -45,8 +44,6 @@ import Data.Address as A
 import Data.Array (null)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
-import Data.Either (hush)
-import Data.Filterable (filterMap)
 import Data.Foldable (for_)
 import Data.Lens
   ( _Just
@@ -108,7 +105,6 @@ import Page.Contract.State (applyTimeout)
 import Page.Contract.State
   ( handleAction
   , mkInitialState
-  , mkPlaceholderState
   , updateState
   ) as Contract
 import Page.Contract.Types (Action(..), StartingState, State(..)) as Contract

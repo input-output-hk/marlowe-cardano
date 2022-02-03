@@ -16,7 +16,7 @@ import Prologue
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.RawJson (RawJson)
-import Marlowe.PAB (PlutusAppId(..))
+import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.Contract.Resumable (Request, _Request)
