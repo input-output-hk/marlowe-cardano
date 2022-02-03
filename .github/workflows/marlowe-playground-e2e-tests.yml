@@ -44,10 +44,12 @@ jobs:
       run: nix-shell --run $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
 
     - name: Build Marlowe Playground Client
-      working-directory: ./
+      working-directory: ./marlowe-playground-client
       run: |
-        nix-shell --run cd marlowe-playground-client && $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &&
-        npm install && npm run build:spago && npm run build:webpack:dev:vendor
+        nix-shell --run  '$(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs' ../shell.nix
+        nix-shell --run  'npm install' ../shell.nix
+        nix-shell --run  'npm run build:spago' ../shell.nix
+        nix-shell --run  'npm run build:webpack:dev:vendor ../shell.nix
  
     - name: Run Marlowe Playground Client
       working-directory: ./marlowe-playground-client
