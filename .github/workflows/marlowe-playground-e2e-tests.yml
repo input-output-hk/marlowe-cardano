@@ -45,7 +45,10 @@ jobs:
 
     - name: Build Marlowe Playground Client
       working-directory: ./
-      run: nix-shell --run cd marlowe-playground-client && npm run start
+      run: |
+      nix-shell
+      cd marlowe-playground-client
+      npm run start
 
     - name: Setup Playwright
       working-directory: ./e2e-tests/
