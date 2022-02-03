@@ -363,6 +363,13 @@ startSimulationWidget metadata { initialSlot, templateContent } =
         , div [ classes [ ClassName "transaction-btns", flex, justifyCenter ] ]
             [ button
                 [ classes [ btn, bold ]
+                , onClick $ const DownloadAsJson
+                ]
+                [ text "Download as JSON" ]
+            ]
+        , div [ classes [ ClassName "transaction-btns", flex, justifyCenter ] ]
+            [ button
+                [ classes [ btn, bold ]
                 , onClick $ const StartSimulation
                 ]
                 [ text "Start simulation" ]

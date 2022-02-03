@@ -11,23 +11,27 @@ import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State, initialState) as BottomPanel
 import Control.Monad.Except (lift, runExcept)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Data.Argonaut (printJsonDecodeError, stringify)
+import Data.Argonaut (encodeJson, printJsonDecodeError, stringify)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt, fromString)
 import Data.Decimal (fromNumber, truncated)
 import Data.Decimal as Decimal
 import Data.Either (hush)
 import Data.Foldable (for_)
+import Data.Hashable (hash)
+import Data.Int (fromNumber, toNumber) as Int
 import Data.Lens (_Just, assign, modifying, use)
 import Data.Lens.Extra (peruse)
 import Data.List.NonEmpty (last)
 import Data.List.NonEmpty as NEL
 import Data.List.Types (NonEmptyList)
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
+import Data.MediaType.Common (applicationJSON)
 import Data.NonEmptyList.Extra (tailIfNotEmpty)
 import Data.RawJson (RawJson(..))
 import Data.String (splitAt)
+import Data.Traversable (sequence)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -38,14 +42,22 @@ import Halogen (HalogenM, get, query, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
-import MainFrame.Types (ChildSlots, _simulatorEditorSlot)
+import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
 import Marlowe (Api)
 import Marlowe as Server
-import Marlowe.Holes (Location(..), getLocation)
+import Marlowe.Extended (toCore)
+import Marlowe.Holes (Location(..), fromTerm, getLocation)
 import Marlowe.Monaco as MM
 import Marlowe.Parser (parseContract)
-import Marlowe.Semantics (ChoiceId(..), Input(..), Party(..), inBounds)
+import Marlowe.Semantics
+  ( ChoiceId(..)
+  , Contract
+  , Input(..)
+  , Party(..)
+  , inBounds
+  )
 import Marlowe.Template (fillTemplate, typeToLens)
+import Math (abs)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.Simulation.Lenses
@@ -55,6 +67,7 @@ import Page.Simulation.Lenses
   , _showRightPanel
   )
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
+import Partial.Unsafe (unsafePartial)
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses
@@ -85,12 +98,18 @@ import Simulator.Types
   , Parties(..)
   )
 import StaticData (simulatorBufferLocalStorageKey)
+import Unsafe.Coerce (unsafeCoerce)
+import Web.Blob.Download (HandleMethod(..), download)
 import Web.DOM.Document as D
 import Web.DOM.Element (setScrollTop)
 import Web.DOM.Element as E
 import Web.DOM.HTMLCollection as WC
+import Web.File.Blob (fromString) as Blob
+import Web.File.Url (createObjectURL)
+import Web.HTML (window)
 import Web.HTML as Web
 import Web.HTML.HTMLDocument (toDocument)
+import Web.HTML.Window (open) as Window
 import Web.HTML.Window as W
 
 mkState :: State
@@ -113,6 +132,24 @@ toBottomPanel
        a
   -> HalogenM State Action ChildSlots Void m a
 toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
+
+mkContract
+  :: forall m
+   . MonadAff m
+  => MonadEffect m
+  => MonadAjax Api m
+  => HalogenM State Action ChildSlots Void m (Maybe _)
+mkContract = runMaybeT do
+  termContract <- MaybeT $ peruse
+    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+        <<< _termContract
+        <<< _Just
+    )
+  templateContent <- MaybeT $ peruse
+    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+        <<< _templateContent
+    )
+  pure $ fillTemplate templateContent termContract
 
 handleAction
   :: forall m
@@ -145,30 +182,31 @@ handleAction (SetIntegerTemplateParam templateType key value) = do
     (Map.insert key value)
   setOraclePrice
 
-handleAction StartSimulation =
-  void
-    {- The marloweState is a non empty list of an object that includes the ExecutionState (SimulationRunning | SimulationNotStarted)
-    Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
-    this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
+handleAction StartSimulation = do
+  {- The marloweState is a non empty list of an object that includes the ExecutionState (SimulationRunning | SimulationNotStarted)
+  Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
+  this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
+  initialSlot <- peruse
+    ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
+        <<< _initialSlot
+    )
+  contract <- mkContract
+  void $ sequence $ startSimulation <$> initialSlot <*> contract
+  updateOracleAndContractEditor
 
-    $ runMaybeT do
-        initialSlot <- MaybeT $ peruse
-          ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
-              <<< _initialSlot
-          )
-        termContract <- MaybeT $ peruse
-          ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
-              <<< _termContract
-              <<< _Just
-          )
-        templateContent <- MaybeT $ peruse
-          ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
-              <<< _templateContent
-          )
-        let
-          contract = fillTemplate templateContent termContract
-        startSimulation initialSlot contract
-        lift $ updateOracleAndContractEditor
+handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
+  Just (contract :: Contract) -> do
+    let
+      contractJson = stringify $ encodeJson contract
+      blob = Blob.fromString contractJson applicationJSON
+      -- FIXME: Dirty hack to make a daily push ;-)
+      -- TODO: pass project name to here from the main frame state
+      -- name <- use _projectName
+      name = unsafePartial $ fromJust $
+        Int.fromNumber (abs (Int.toNumber (hash contractJson)))
+    liftEffect do
+      download (FileDownload $ show name <> ".json") blob
+  Nothing -> pure unit
 
 handleAction (MoveSlot slot) = do
   inTheFuture <- inFuture <$> get <*> pure slot

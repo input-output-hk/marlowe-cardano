@@ -100,6 +100,7 @@ import Page.JavascriptEditor.Types (CompilationState(..))
 import Page.MarloweEditor.State as MarloweEditor
 import Page.MarloweEditor.Types as ME
 import Page.Simulation.State as Simulation
+import Page.Simulation.Types (Action(..))
 import Page.Simulation.Types as ST
 import Rename.State (handleAction) as Rename
 import Rename.Types (Action(..), State, _projectName, emptyState) as Rename
