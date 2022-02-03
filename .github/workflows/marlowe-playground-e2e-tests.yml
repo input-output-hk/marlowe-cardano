@@ -55,6 +55,7 @@ jobs:
       working-directory: ./marlowe-playground-client
       env:
         CLIENT_PORT: 8009
+      run: |
         npm run build:webpack:dev
         while ! echo exit | nc localhost $CLIENT_PORT; do echo "Waiting for playground client on $CLIENT_PORT" && sleep 10; done
 
