@@ -106,7 +106,6 @@ settlement buyer seller forwardPrice deliveryDate continuation =
        (pay seller buyer (ada, amount) continuation)
        (pay buyer seller (ada, NegValue amount) continuation)
 
-
 -- |Constants
 scale, contractSize :: Value Observation
 scale        = Constant 1_000_000

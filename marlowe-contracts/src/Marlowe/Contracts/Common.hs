@@ -76,8 +76,8 @@ transfer ::
 transfer from to (token, value) timeout continuation =
   When
     [ Case
-        (Deposit from from ada value)
-        (Pay from (Party to) ada value continuation)
+        (Deposit from from token value)
+        (Pay from (Party to) token value continuation)
     ]
     timeout
     Close
