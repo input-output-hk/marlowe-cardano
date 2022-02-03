@@ -2,10 +2,11 @@ module Component.ContractSetupForm where
 
 import Prologue
 
+import Component.Form as HF
 import Component.Icons (Icon, icon)
 import Component.Icons as Icon
-import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
+import DOM.HTML.Indexed (HTMLinput)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -16,137 +17,242 @@ import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
-import Data.Either (note)
-import Data.Lens (Lens')
+import Data.Either (either, note)
+import Data.FunctorWithIndex (mapWithIndex)
+import Data.Lens (_Just, (^?))
+import Data.Lens.AffineTraversal (AffineTraversal')
+import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
+import Data.List as List
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.Set (Set)
 import Data.Set as Set
-import Data.Validation.Semigroup (V(..))
 import Data.WalletNickname as WN
-import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
-import Forms (InputSlots)
-import Forms as Forms
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form (Form)
-import Halogen.Form as F
-import Halogen.Form.Component as FC
+import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Extra (mapComponent)
 import Halogen.HTML.Properties as HP
-import Halogen.Hooks as Hooks
-import Halogen.Hooks.Extra.Hooks (usePutState)
+import Halogen.Store.Connect (connect)
+import Halogen.Store.Monad (class MonadStore)
+import Halogen.Store.Select (selectEq)
+import Marlowe.Extended.Metadata (NumberFormat(..))
 import Marlowe.Semantics (TokenName)
-import Polyform.Validator (liftFnV)
+import Store as Store
 import Type.Proxy (Proxy(..))
+
+type ContractParams =
+  { nickname :: ContractNickname
+  , roles :: Map TokenName Address
+  , timeouts :: Map String ContractTimeout
+  , values :: Map String ContractValue
+  }
 
 type Input =
   { roles :: Set TokenName
   , timeouts :: Map String ContractTimeout
-  , values :: Map String ContractValue
-  , addressBook :: AddressBook
+  , values :: Map String NumberFormat
   , contractName :: String
+  , params :: Maybe ContractParams
   }
 
 data Msg
-  = Back
-  | Continue ContractParams
+  = Review ContractParams
+  | Back
 
-type ContractInput =
-  { nickname :: String
-  , roles :: Map TokenName String
-  , timeouts :: Map String String
-  , values :: Map String String
-  }
+type Slot = HF.Slot Msg Unit
 
-_nickname :: Lens' ContractInput String
-_nickname = prop (Proxy :: _ "nickname")
+type ChildSlots pa =
+  ( nickname :: Input.Slot pa ContractNickname Unit
+  , roles :: Input.Slot pa Address TokenName
+  , timeouts :: Input.Slot pa ContractTimeout String
+  , values :: Input.Slot pa ContractValue String
+  )
 
-_roles :: Lens' ContractInput (Map TokenName String)
-_roles = prop (Proxy :: _ "roles")
+type ComponentHTML pa output m =
+  HF.ComponentHTML pa output (ChildSlots pa) m
 
-_timeouts :: Lens' ContractInput (Map String String)
-_timeouts = prop (Proxy :: _ "timeouts")
+_nickname :: Proxy "nickname"
+_nickname = Proxy
 
-_values :: Lens' ContractInput (Map String String)
-_values = prop (Proxy :: _ "values")
+_roles :: Proxy "roles"
+_roles = Proxy
 
-data ContractParams =
-  ContractParams
-    ContractNickname
-    (Map TokenName Address)
-    (Map String ContractTimeout)
-    (Map String ContractValue)
+_timeouts :: Proxy "timeouts"
+_timeouts = Proxy
 
-derive instance Eq ContractParams
+_values :: Proxy "values"
+_values = Proxy
 
-type Component q m =
-  H.Component q Input Msg m
+timeoutAt :: String -> AffineTraversal' ContractParams ContractTimeout
+timeoutAt name = prop _timeouts <<< ix name
+
+valueAt :: String -> AffineTraversal' ContractParams ContractValue
+valueAt name = prop _values <<< ix name
+
+renderLabel :: forall w i. String -> String -> HH.HTML w i
+renderLabel id label =
+  HH.label [ classNames $ Css.labelBox <> Css.labelText, HP.for id ]
+    [ HH.text label ]
+
+renderErrorLabel :: forall w i. String -> Maybe String -> HH.HTML w i
+renderErrorLabel id error = HH.label
+  [ classNames $ Css.inputError <> maybe [ "invisible" ] (const []) error
+  , HP.for id
+  ]
+  [ HH.text $ fromMaybe "Valid" error ]
+
+renderInputBox
+  :: forall w error i. Maybe error -> Array (HH.HTML w i) -> HH.HTML w i
+renderInputBox error =
+  HH.div [ classNames $ Css.inputBox error ]
+
+renderInput
+  :: forall pa slots error output m
+   . String
+  -> String
+  -> Array (HP.IProp HTMLinput (Input.Action pa slots error output m))
+  -> Input.ComponentHTML pa slots error output m
+renderInput id value props = HH.input
+  ( Input.setInputProps value $ props <> [ HP.id id, classNames Css.inputText ]
+  )
 
 contractNicknameForm
-  :: forall pa s m
+  :: forall pa m
    . MonadEffect m
-  => Form pa (InputSlots pa s) m String ContractNickname
-contractNicknameForm =
-  F.mkForm
-    { validator: CN.validator
-    , render: Forms.input "contract-nickname" "Contract title" case _ of
-        CN.Empty -> "Required."
+  => Maybe ContractParams
+  -> ComponentHTML pa ContractNickname m
+contractNicknameForm params =
+  Input.renderInSlot _nickname unit
+    { options:
+        { load: _.nickname <$> params
+        , format: CN.toString
+        , validate: CN.fromString
+        }
+    , handlers: Input.defaultHandlers
+    , render: \state ->
+        let
+          id = "contract-nickname"
+          mkError = case _ of
+            CN.Empty -> "Required."
+          error = mkError <$> state.error
+        in
+          HH.div [ classNames [ "relative" ] ]
+            [ renderLabel id "Contract title"
+            , renderInputBox error [ renderInput id state.value [] ]
+            , renderErrorLabel id error
+            ]
     }
 
 roleAssignmentForm
-  :: forall pa s m
+  :: forall pa m
    . MonadEffect m
   => AddressBook
+  -> Maybe ContractParams
   -> TokenName
-  -> Form pa (InputSlots pa s) m String Address
-roleAssignmentForm addressBook roleName =
-  F.mkForm
-    { validator
-    , render: Forms.input ("role-input-" <> roleName) roleName case _ of
-        WN.Empty -> "Required."
-        WN.Exists -> "Already exists."
-        WN.DoesNotExist -> "Not found."
-        WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+  -> ComponentHTML pa (Map TokenName Address) m
+roleAssignmentForm addressBook params name =
+  HF.zoom (ix name) $ Input.renderInSlot _roles name
+    { options:
+        { load: params ^? _Just <<< prop _roles <<< ix name
+        , format: \addr ->
+            maybe "" WN.toString $ AddressBook.lookupNickname addr addressBook
+        , validate:
+            note WN.DoesNotExist
+              <<< flip AddressBook.lookupAddress addressBook
+              <=< WN.fromString
+        }
+    , handlers: Input.defaultHandlers
+    , render: \state ->
+        let
+          id = "role-" <> name
+          mkError = case _ of
+            WN.Empty -> "Required."
+            WN.Exists -> "Already exists."
+            WN.DoesNotExist -> "Not found."
+            WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+          error = mkError <$> state.error
+        in
+          HH.div [ classNames [ "relative" ] ]
+            [ renderLabel id name
+            , renderInputBox error
+                [ renderInput id state.value [] ]
+            , renderErrorLabel id error
+            ]
     }
-  where
-  validator =
-    liftFnV $
-      V <<<
-        ( note WN.DoesNotExist <<< flip AddressBook.lookupAddress addressBook
-            <=< WN.fromString
-        )
 
 timeoutForm
-  :: forall pa s m
+  :: forall pa m
    . MonadEffect m
   => String
-  -> Form pa (InputSlots pa s) m String ContractTimeout
-timeoutForm name =
-  F.mkForm
-    { validator: CT.validator
-    , render: Forms.intInput ("slot-input-" <> name) name case _ of
-        CT.Empty -> "Required."
-        CT.Past -> "Must be in the future."
-        CT.Invalid -> "Must be a number of slots from contract start."
+  -> ContractTimeout
+  -> ComponentHTML pa (Map String ContractTimeout) m
+timeoutForm name timeout =
+  HF.zoom (ix name) $ Input.renderInSlot _timeouts name
+    { options:
+        { load: Just timeout
+        , format: CT.toString
+        , validate: CT.fromString
+        }
+    , handlers: Input.defaultHandlers
+    , render: \state ->
+        let
+          id = "timeout-" <> name
+          mkError = case _ of
+            CT.Empty -> "Required."
+            CT.Past -> "Must be in the future."
+            CT.Invalid -> "Must be a number of slots from contract start."
+          error = mkError <$> state.error
+        in
+          HH.div [ classNames [ "relative" ] ]
+            [ renderLabel id name
+            , renderInputBox error
+                [ renderInput id state.value [ HP.type_ HP.InputNumber ]
+                , HH.span_ [ HH.text "minutes" ]
+                ]
+            , renderErrorLabel id error
+            ]
     }
 
 valueForm
-  :: forall pa s m
+  :: forall pa m
    . MonadEffect m
-  => String
-  -> Form pa (InputSlots pa s) m String ContractValue
-valueForm name =
-  F.mkForm
-    { validator: CV.validator
-    , render: Forms.adaInput ("value-input-" <> name) name case _ of
-        CV.Empty -> "Required."
-        CV.Negative -> "Must by positive."
-        CV.Invalid -> "Must by a number."
+  => Maybe ContractParams
+  -> String
+  -> NumberFormat
+  -> ComponentHTML pa (Map String ContractValue) m
+valueForm params name format =
+  HF.zoom (ix name) $ Input.renderInSlot _values name
+    { options:
+        { load: params ^? _Just <<< valueAt name
+        , format: CV.toString format
+        , validate: CV.fromString format
+        }
+    , handlers: Input.defaultHandlers
+    , render: \state ->
+        let
+          id = "value-" <> name
+          mkError = case _ of
+            CV.Empty -> "Required."
+            CV.Negative -> "Must by positive."
+            CV.Invalid -> "Must by a number."
+          error = mkError <$> state.error
+        in
+          HH.div [ classNames [ "relative" ] ]
+            [ renderLabel id name
+            , renderInputBox error $ join
+                [ case format of
+                    DecimalFormat _ symbol -> [ HH.span_ [ HH.text symbol ] ]
+                    _ -> []
+                , [ renderInput id state.value [ HP.type_ HP.InputNumber ] ]
+                ]
+            , renderErrorLabel id error
+            ]
     }
 
 templateInputsSection
@@ -169,67 +275,93 @@ templateInputsSection icon' heading = HH.h3
   , HH.text heading
   ]
 
-component :: forall q m. MonadAff m => MonadRec m => Component q m
-component = Hooks.component \{ outputToken } input -> Hooks.do
-  let { contractName, addressBook, roles, timeouts, values } = input
-  Tuple result putResult <- usePutState Nothing
-  form <- Hooks.captures { addressBook } Hooks.useMemo \_ ->
-    FC.component
-      { formClasses: [ "overflow-y-auto", "p-4", "flex", "flex-col", "gap-2" ]
-      , form: ado
-          F.html $ HH.h2
-            [ classNames [ "text-lg", "font-semibold", "mb-2" ] ]
-            [ HH.text $ contractName <> " setup" ]
+_contractSetup :: Proxy "contractSetup"
+_contractSetup = Proxy
 
-          name <- F.subform _nickname contractNicknameForm
+component
+  :: forall m
+   . MonadEffect m
+  => MonadStore Store.Action Store.Store m
+  => H.Component HF.Query Input Msg m
 
-          F.html (templateInputsSection Icon.Roles "Roles")
-
-          roles' <- F.subform _roles $ F.traverseFormsWithIndex
-            (const <<< roleAssignmentForm addressBook)
-            (Set.toMap roles)
-
-          F.html (templateInputsSection Icon.Terms "Terms")
-
-          timeouts' <- F.subform _timeouts
-            $ F.traverseFormsWithIndex (const <<< timeoutForm) timeouts
-
-          values' <- F.subform _values
-            $ F.traverseFormsWithIndex (const <<< valueForm) values
-
-          in ContractParams name roles' timeouts' values'
+component = connect (selectEq _.addressBook) $ H.mkComponent
+  { initialState: identity
+  , eval: H.mkEval $ H.defaultEval
+      { handleAction = either H.put H.raise
+      , receive = Just <<< Left
       }
-  let
-    initialInput =
-      { nickname: ""
-      , roles: Map.fromFoldable $ Set.map (flip Tuple "") roles
-      , timeouts: CT.toString <$> timeouts
-      , values: CV.toString <$> values
-      }
-  Hooks.pure do
-    HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
-      [ HH.slot (Proxy :: _ "form") unit form initialInput case _ of
-          FC.Updated res -> putResult res
-          FC.Raised action -> Hooks.raise outputToken action
-      , HH.div
-          [ classNames
-              [ "flex", "items-baseline", "p-4", "border-gray", "border-t" ]
-          ]
-          [ HH.a
-              [ classNames [ "flex-1", "text-center" ]
-              , onClick_ $ Hooks.raise outputToken $ Back
-              ]
-              [ HH.text "Back" ]
-          , HH.button
-              ( compact
-                  [ pure $ classNames $
-                      Css.primaryButton
-                        <> [ "flex-1", "text-left" ]
-                        <> Css.withIcon Icon.ArrowRight
-                  , onClick_ <<< Hooks.raise outputToken <<< Continue <$> result
-                  , pure $ HP.enabled $ isJust result
-                  ]
-              )
-              [ HH.text "Review" ]
-          ]
-      ]
+  , render: \({ context: addressBook, input }) -> do
+      let { contractName, params, roles, timeouts, values } = input
+      mapComponent Right $
+        HF.renderInSlot _contractSetup unit params \result ->
+          HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
+            [ HH.form
+                ( HF.setFormProps
+                    [ classNames
+                        [ "overflow-y-auto"
+                        , "p-4"
+                        , "flex"
+                        , "flex-col"
+                        , "gap-2"
+                        ]
+                    ]
+                )
+                [ HH.h2
+                    [ classNames [ "text-lg", "font-semibold", "mb-2" ] ]
+                    [ HH.text $ contractName <> " setup" ]
+                , HF.zoom (prop _nickname) $ contractNicknameForm result
+                , templateInputsSection Icon.Roles "Roles"
+                , HF.zoom (prop _roles)
+                    $ HH.fieldset [ classNames [ "space-y-2" ] ]
+                    $ map (roleAssignmentForm addressBook result)
+                    $ Set.toUnfoldable roles
+                , templateInputsSection Icon.Terms "Terms"
+                , HH.fieldset [ classNames [ "space-y-2" ] ] $
+                    ( map (HF.zoom (prop _timeouts))
+                        $ List.toUnfoldable
+                        $ Map.values
+                        $ mapWithIndex timeoutForm timeouts
+                    )
+                      <>
+                        ( map (HF.zoom (prop _values))
+                            $ List.toUnfoldable
+                            $ Map.values
+                            $ mapWithIndex (valueForm result) values
+                        )
+                ]
+            , HH.div
+                [ classNames
+                    [ "flex"
+                    , "items-baseline"
+                    , "p-4"
+                    , "border-gray"
+                    , "border-t"
+                    ]
+                ]
+                [ HH.a
+                    [ classNames [ "flex-1", "text-center" ]
+                    , onClick_ $ HF.emit Back
+                    ]
+                    [ HH.text "Back" ]
+                , HH.button
+                    ( compact
+                        [ pure $ classNames $
+                            Css.primaryButton
+                              <> [ "flex-1", "text-left" ]
+                              <> Css.withIcon Icon.ArrowRight
+                        , onClick_ <<< HF.emit <<< Review <$> result
+                        , pure $ HP.enabled $ isJust result
+                        ]
+                    )
+                    [ HH.text "Review" ]
+                ]
+            ]
+  }
+
+render
+  :: forall slots m
+   . MonadEffect m
+  => MonadStore Store.Action Store.Store m
+  => Input
+  -> HH.ComponentHTML Msg (contractSetup :: Slot | slots) m
+render input = HH.slot _contractSetup unit component input identity

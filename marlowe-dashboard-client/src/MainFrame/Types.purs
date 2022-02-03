@@ -78,7 +78,7 @@ type ChildSlots =
   , createWalletForm :: forall query. H.Slot query Welcome.Action Unit
   , restoreWalletForm :: forall query. H.Slot query Welcome.Action Unit
   , toaster :: forall q m. H.Slot q m Unit
-  , contractSetup :: forall q. H.Slot q ContractSetup.Msg Unit
+  , contractSetup :: ContractSetupForm.Slot
   )
 
 _toaster :: Proxy "toaster"
