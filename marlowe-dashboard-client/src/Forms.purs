@@ -12,7 +12,7 @@ import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.Int as Int
 import Data.Maybe (fromMaybe, maybe)
-import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.MnemonicPhrase (MnemonicPhrase, MnemonicPhraseError)
 import Data.MnemonicPhrase as MP
 import Data.Set (Set)
 import Data.String (Pattern(..), trim)
@@ -263,7 +263,11 @@ walletNickname used =
         WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
     }
 
--- type MnemonicPhraseInput = Input String MnemonicPhraseError MnemonicPhrase
+printMnemonicPhraseError :: MnemonicPhraseError -> String
+printMnemonicPhraseError = case _ of
+  MP.Empty -> "Required."
+  MP.WrongWordCount -> "24 words required."
+  MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
 
 mnemonicPhrase
   :: forall pa s m
@@ -272,10 +276,7 @@ mnemonicPhrase
 mnemonicPhrase =
   Form.mkForm
     { validator: MP.validator
-    , render: input "wallet-mnemonic" "Mnemonic phrase" case _ of
-        MP.Empty -> "Required."
-        MP.WrongWordCount -> "24 words required."
-        MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
+    , render: input "wallet-mnemonic" "Mnemonic phrase" printMnemonicPhraseError
     }
 
 address

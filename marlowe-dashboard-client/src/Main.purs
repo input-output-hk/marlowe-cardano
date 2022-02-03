@@ -42,22 +42,29 @@ import WebSocket.Support as WS
 
 newtype MainArgs = MainArgs
   { pollingInterval :: Milliseconds
+  , webpackBuildMode :: WebpackBuildMode
   }
+
+data WebpackBuildMode = Production | Development
 
 instance DecodeJson MainArgs where
   decodeJson = decodeJson >=> \obj -> ado
     pollingInterval <- Milliseconds <$> obj .: "pollingInterval"
-    in MainArgs { pollingInterval }
+    webpackBuildMode <- obj .: "webpackBuildMode" <#>
+      if _ then Development
+      else Production
+    in MainArgs { pollingInterval, webpackBuildMode }
 
-mkEnv :: Milliseconds -> WebSocketManager -> Effect Env
-mkEnv pollingInterval wsManager = do
+mkEnv :: Milliseconds -> WebSocketManager -> WebpackBuildMode -> Effect Env
+mkEnv pollingInterval wsManager webpackBuildMode = do
   contractStepCarouselSubscription <- AVar.empty
   marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
   pure $ Env
     { contractStepCarouselSubscription
-    -- FIXME: Configure logger using bundle build
-    -- context (devel vs production etc.)
-    , logger: Console.logger identity
+    , logger: case webpackBuildMode of
+        -- Add backend logging capability
+        Production -> mempty
+        Development -> Console.logger identity
     , marloweAppEndpointMutex
     , wsManager
     , pollingInterval
@@ -70,7 +77,8 @@ exitBadArgs e = throwError
 
 main :: Json -> Effect Unit
 main args = do
-  MainArgs { pollingInterval } <- either exitBadArgs pure $ decodeJson args
+  MainArgs { pollingInterval, webpackBuildMode } <- either exitBadArgs pure $
+    decodeJson args
   tzOffset <- getTimezoneOffset
   addressBookJson <- getItem addressBookLocalStorageKey
   -- TODO this is for dev purposes only. The need for this should go away when
@@ -83,7 +91,7 @@ main args = do
 
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
-    env <- liftEffect $ mkEnv pollingInterval wsManager
+    env <- liftEffect $ mkEnv pollingInterval wsManager webpackBuildMode
     let
       store = mkStore addressBook wallet
     body <- awaitBody

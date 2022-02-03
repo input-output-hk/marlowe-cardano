@@ -1,6 +1,8 @@
 module Page.Welcome.Types
   ( Action(..)
   , Card(..)
+  , CreateWalletStep(..)
+  , NewWalletDetails
   , State
   ) where
 
@@ -9,7 +11,7 @@ import Prologue
 import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Component.Contacts.Types (WalletDetails)
-import Data.WalletNickname (WalletNickname)
+import Data.MnemonicPhrase (MnemonicPhrase)
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so
@@ -27,14 +29,26 @@ type State =
   , enteringDashboardState :: Boolean
   }
 
+type NewWalletDetails =
+  { mnemonic :: MnemonicPhrase
+  , walletDetails :: WalletDetails
+  }
+
+-- This type is probably not testnet specific.
+data CreateWalletStep
+  = CreateWalletSetWalletName
+  | CreateWalletPresentMnemonic NewWalletDetails
+  | CreateWalletConfirmMnemonic NewWalletDetails
+
+derive instance Eq CreateWalletStep
+
 -- TODO: When we implement another wallet connetctor, we should probably move this to
 -- Welcome.Testnet and split the Actions into general wallet logic and Testnet wallet logic
 data Card
   = GetStartedHelpCard
-  | GenerateWalletHelpCard
-  | UseNewWalletCard
-  | UseWalletCard
-  | RestoreTestnetWalletCard
+  | CreateWalletHelpCard
+  | CreateWalletCard CreateWalletStep
+  | RestoreWalletCard
   | LocalWalletMissingCard
 
 derive instance eqCard :: Eq Card
@@ -42,8 +56,7 @@ derive instance eqCard :: Eq Card
 data Action
   = OpenCard Card
   | CloseCard
-  | GenerateWallet
-  | ConnectWallet WalletNickname WalletDetails
+  | ConnectWallet WalletDetails
   | ClearLocalStorage
   | ClipboardAction Clipboard.Action
 
@@ -51,7 +64,6 @@ data Action
 instance actionIsEvent :: IsEvent Action where
   toEvent (OpenCard _) = Nothing
   toEvent CloseCard = Nothing
-  toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
-  toEvent (ConnectWallet _ _) = Just $ defaultEvent "ConnectWallet"
+  toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
   toEvent ClearLocalStorage = Just $ defaultEvent "ClearLocalStorage"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

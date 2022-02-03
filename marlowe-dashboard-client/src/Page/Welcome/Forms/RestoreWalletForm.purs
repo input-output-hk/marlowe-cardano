@@ -1,12 +1,9 @@
-module Componenet.RestoreWalletForm where
+module Component.RestoreWalletForm where
 
 import Prologue
 
 import AppM (passphrase) as AppM
 import Capability.Marlowe (class ManageMarlowe, restoreWallet)
-import Component.Button.Types as Button
-import Component.Button.View (button)
-import Component.Progress.Circular as Progress
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
@@ -23,6 +20,7 @@ import Halogen.Form as Form
 import Halogen.Form.Component as FC
 import Halogen.HTML as HH
 import Halogen.Hooks as Hooks
+import Page.Welcome.Forms.Render (render)
 import Page.Welcome.Types as Welcome
 import Type.Proxy (Proxy(..))
 
@@ -31,7 +29,6 @@ type Input = Set WalletNickname
 type RestoreWalletInput = Tuple String String
 
 type RestoreWalletOutput = Tuple WalletNickname MnemonicPhrase
-
 type Component q m =
   H.Component q Input Welcome.Action m
 
@@ -54,9 +51,6 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
       , formClasses: [ "relative", "space-y-4" ]
       }
   let
-    {- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
-      This is the form used to restore a wallet and what initializes the use case.
-    -}
     submit nickname mnemonic = do
       Hooks.put serverErrorId ""
       Hooks.put restoringId true
@@ -68,41 +62,29 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
           (const $ Hooks.put serverErrorId "Error from server.")
           err
         Right walletDetails ->
-          Hooks.raise outputToken $ Welcome.ConnectWallet nickname walletDetails
-  Hooks.pure do
-    HH.div [ classNames [ "p-5", "lg:p-6", "space-y-2" ] ]
-      [ HH.h2
-          [ classNames [ "font-bold" ] ]
-          [ HH.text "Restore testnet wallet" ]
-      , HH.slot (Proxy :: _ "form") unit form initialInput case _ of
-          FC.Updated res -> Hooks.put resultId res
-          FC.Raised welcomeAction -> Hooks.raise outputToken welcomeAction
-      , HH.p_
-          [ HH.b_ [ HH.text "IMPORTANT:" ]
-          -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it
-          , HH.text "Do not use a real wallet phrase <read more>"
-          ]
-      -- TODO replace with progress buttons when refactored.
-      , HH.p [ classNames Css.inputError ] [ HH.text serverError ]
-      , HH.div
-          [ classNames [ "flex", "justify-center", "gap-4" ] ]
-          if restoring then
-            [ Progress.view Progress.defaultSpec
-                { color = "text-purple"
-                , width = "w-14"
-                , height = "h-14"
-                }
+          Hooks.raise outputToken $ Welcome.ConnectWallet walletDetails
+  Hooks.pure $ render
+    { body:
+        [ HH.slot (Proxy :: _ "form") unit form initialInput case _ of
+            FC.Updated res -> Hooks.put resultId res
+            FC.Raised welcomeAction -> Hooks.raise outputToken welcomeAction
+        , HH.p_
+            [ HH.b_ [ HH.text "IMPORTANT:" ]
+            -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it
+            , HH.text "Do not use a real wallet phrase <read more>"
             ]
-          else
-            [ button
-                Button.Secondary
-                (Just $ Hooks.raise outputToken Welcome.CloseCard)
-                [ "flex-1" ]
-                [ HH.text "Cancel" ]
-            , button
-                Button.Primary
-                (uncurry submit <$> result)
-                [ "flex-1" ]
-                [ HH.text "Restore Wallet" ]
-            ]
-      ]
+        -- TODO replace with progress buttons when refactored.
+        , HH.p [ classNames Css.inputError ] [ HH.text serverError ]
+        ]
+    , inProgress: restoring
+    , onCancel:
+        { action: Just $ Hooks.raise outputToken Welcome.CloseCard
+        , label: "Cancel"
+        }
+    , onSkip: Nothing
+    , onSubmit:
+        { action: uncurry submit <$> result
+        , label: "Restore wallet"
+        }
+    , title: "Restore testnet wallet"
+    }

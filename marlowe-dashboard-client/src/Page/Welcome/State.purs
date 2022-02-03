@@ -15,11 +15,11 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses (_pubKeyHash, _walletInfo, _walletNickname)
+import Component.Contacts.Lenses (_pubKeyHash, _walletInfo)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
 import Data.AddressBook as AddressBook
-import Data.Lens (assign, set, view)
+import Data.Lens (assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
@@ -61,36 +61,30 @@ handleAction CloseCard =
   modify_ _ { enteringDashboardState = false, cardOpen = false }
 
 {- [UC-WALLET-TESTNET-1][0] Create a new testnet wallet
-Here we attempt to create a new demo wallet (with everything that entails), and - if successful -
-open up the UseNewWalletCard for connecting the wallet just created.
-Note the `createWallet` function doesn't just create a wallet. It also creates two PAB apps for
-that wallet: a `WalletCompanion` and a `MarloweApp`.
+   [UC-WALLET-TESTNET-2][4a] Restore a testnet wallet
+This action is triggered either after the restore wallet form or create wallet form submit.
+In both cases we receive a fully populated wallet details here so we can add them to the address
+book. Then we enter the dashboard.
+
+Both `createWallet` and `restoreWallet` (performed during respective form submition)
+functions don't just create or restore a wallet.  They also create and attach or just attach to the
+two PAB apps for that wallet: a `WalletCompanion` and a `MarloweApp`.
 - The `WalletCompanion` will watch for any new role tokens paid to this wallet, and then update its
   internal state to include the `MarloweParams` and initial `MarloweData` for the corresponding
   contract.
 - The `MarloweApp` is a control app, used to create Marlowe contracts, apply inputs, and redeem
   payments to this wallet.
 -}
--- TODO: This functionality is disabled, I'll re-enable it as part of SCP-3170.
-handleAction GenerateWallet = pure unit
-
-{- [UC-WALLET-TESTNET-2][4a] Restore a testnet wallet
-This action is triggered after the restore wallet form submits it's data and receive
-the Wallet details. It stores the wallet nickname in LocalStorage, and then it enters the
-dashboard.
--}
-handleAction (ConnectWallet walletNickname walletDetails) = do
+handleAction (ConnectWallet walletDetails@{ walletNickname }) = do
   assign _enteringDashboardState true
   let
-    walletDetailsWithNickname = set _walletNickname walletNickname walletDetails
-
     pubKeyHash = view
       (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
-      walletDetailsWithNickname
+      walletDetails
 
   modifyAddressBook_
     (AddressBook.insert walletNickname $ A.fromPubKeyHash pubKeyHash)
-  callMainFrameAction $ MainFrame.EnterDashboardState walletDetailsWithNickname
+  callMainFrameAction $ MainFrame.EnterDashboardState walletDetails
 
 handleAction ClearLocalStorage = do
   clearAllLocalStorage

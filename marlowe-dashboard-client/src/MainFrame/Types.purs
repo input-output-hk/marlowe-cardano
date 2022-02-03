@@ -74,6 +74,8 @@ type ChildSlots =
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
   , expandSlot :: Expand.Slot Void String
+  , confirmMnemonicForm :: forall q. H.Slot q Welcome.Action Unit
+  , createWalletForm :: forall query. H.Slot query Welcome.Action Unit
   , restoreWalletForm :: forall query. H.Slot query Welcome.Action Unit
   , toaster :: forall q m. H.Slot q m Unit
   , contractSetup :: forall q. H.Slot q ContractSetup.Msg Unit
