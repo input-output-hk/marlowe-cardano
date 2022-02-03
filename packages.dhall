@@ -57,7 +57,7 @@ in  upstream
         , "validation"
         , "variant"
         ]
-        "https://github.com/purescript-polyform/polyform.git"
+        "https://github.com/purescript-polyform/polyform"
         "d177fa5e04a29babf0f86cf57561ea6bf2317c36"
   with markdown =
       mkPackage
