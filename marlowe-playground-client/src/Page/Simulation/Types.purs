@@ -35,6 +35,7 @@ data Action
   | SetInitialSlot Slot
   | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | StartSimulation
+  | DownloadAsJson
   | MoveSlot Slot
   | SetSlot Slot
   | AddInput Input (Array Bound)
@@ -60,6 +61,7 @@ instance isEventAction :: IsEvent Action where
   toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
     "SetIntegerTemplateParam"
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
+  toEvent DownloadAsJson = Just $ defaultEvent "DownloadAsJson"
   toEvent (MoveSlot _) = Just $ defaultEvent "MoveSlot"
   toEvent (SetSlot _) = Just $ defaultEvent "SetSlot"
   toEvent (AddInput _ _) = Just $ defaultEvent "AddInput"
