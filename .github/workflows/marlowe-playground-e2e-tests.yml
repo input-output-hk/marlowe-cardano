@@ -44,8 +44,8 @@ jobs:
       run: nix-shell --run $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
 
     - name: Build Marlowe Playground Client
-      working-directory: ./marlowe-playground-client
-      run: nix-shell --run npm run start
+      working-directory: ./
+      run: nix-shell --run cd marlowe-playground-client && npm run start
 
     - name: Setup Playwright
       working-directory: ./e2e-tests/
