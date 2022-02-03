@@ -58,7 +58,6 @@ import Data.Array (filter, find) as Array
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
-import Data.Maybe (maybe')
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.MnemonicPhrase.Word (toString) as Word
@@ -87,6 +86,7 @@ import Marlowe.Semantics
   , TransactionInput
   )
 import MarloweContract (MarloweContract(..))
+import Page.Welcome.Types (NewWalletDetails)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToServer(..)
   , ContractInstanceClientState
@@ -106,10 +106,7 @@ class
   createWallet
     :: WalletNickname
     -> Passphrase
-    -> m
-         ( Either CreateWalletError
-             { mnemonic :: MnemonicPhrase, walletDetails :: WalletDetails }
-         )
+    -> m (Either CreateWalletError NewWalletDetails)
   restoreWallet
     :: WalletNickname
     -> MnemonicPhrase
@@ -138,7 +135,7 @@ class
   getRoleContracts
     :: WalletDetails -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
   getFollowerApps
-    :: WalletDetails
+    :: WalletId
     -> m (DecodedAjaxResponse (Map PlutusAppId ContractHistory))
   subscribeToPlutusApp :: PlutusAppId -> m Unit
   subscribeToWallet :: WalletId -> m Unit
@@ -157,42 +154,53 @@ class
 fetchWalletDetails
   :: forall m r
    . ManageMarlowe m
-  => WalletNickname
-  -> WalletInfo
+  => { newWallet :: Boolean
+     , walletNickname :: WalletNickname
+     , walletInfo :: WalletInfo
+     }
   -> ExceptT (Variant (ClientServerErrorRow r)) m WalletDetails
-fetchWalletDetails walletNickname walletInfo = withExceptT clientServerError do
-  let
-    walletId = view _walletId walletInfo
-  -- Get all plutus contracts associated with the restored wallet.
-  plutusContracts <- ExceptT $ PAB.getWalletContractInstances walletId
-  -- If we already have the plutus contract for the wallet companion and marlowe app
-  -- let's use those, if note activate new instances of them
-  { companionAppId, marloweAppId } <- ExceptT $
-    activateOrRestorePlutusCompanionContracts walletId plutusContracts
-  -- TODO (as part of SCP-3360):
-  --   create a list of "loading contracts" with the plutusContracts of type MarloweFollower
-  pure
-    { walletNickname
-    , companionAppId
-    , marloweAppId
-    , walletInfo
-    , assets: mempty
-    }
+fetchWalletDetails { newWallet, walletNickname, walletInfo } = withExceptT
+  clientServerError
+  do
+    let
+      walletId = view _walletId walletInfo
+
+    contracts <-
+      if newWallet then pure []
+      else
+        ExceptT $
+          PAB.getWalletContractInstances (view _walletId walletInfo)
+
+    -- If we already have the plutus contract for the wallet companion and marlowe app
+    -- let's use those, if note activate new instances of them
+    { companionAppId, marloweAppId } <- ExceptT $
+      activateOrRestorePlutusCompanionContracts walletId contracts
+    -- TODO (as part of SCP-3360):
+    --   create a list of "loading contracts" with the plutusContracts of type MarloweFollower
+    pure
+      { walletNickname
+      , companionAppId
+      , marloweAppId
+      , walletInfo
+      , assets: mempty
+      }
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
-  createWallet walletName passphrase = runExceptT do
+  createWallet walletNickname passphrase = runExceptT do
     -- create the wallet itself
-    { mnemonic, walletInfo } <- ExceptT $ Wallet.createWallet walletName
+    { mnemonic, walletInfo } <- ExceptT $ Wallet.createWallet walletNickname
       passphrase
-    walletDetails <- fetchWalletDetails walletName walletInfo
+    walletDetails <- fetchWalletDetails
+      { newWallet: true, walletNickname, walletInfo }
     pure { mnemonic, walletDetails }
-  restoreWallet walletName mnemonicPhrase passphrase = runExceptT do
+  restoreWallet walletNickname mnemonicPhrase passphrase = runExceptT do
     walletInfo <- ExceptT $ Wallet.restoreWallet
-      { walletName
+      { walletName: walletNickname
       , mnemonicPhrase: map Word.toString $ MP.toWords mnemonicPhrase
       , passphrase
       }
-    fetchWalletDetails walletName walletInfo
+    -- Get all plutus contracts associated with the restored wallet.
+    fetchWalletDetails { walletNickname, walletInfo, newWallet: false }
 
   -- create a MarloweFollower app, call its "follow" endpoint with the given MarloweParams, and then
   -- return its PlutusAppId and observable state
@@ -269,10 +277,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         PAB.getContractInstanceObservableState companionAppId
       except $ lmap Right $ parseDecodeJson $ unwrap observableStateJson
   -- get all MarloweFollower apps for a given wallet
-  getFollowerApps walletDetails =
+  getFollowerApps walletId =
     runExceptT do
-      let
-        walletId = view (_walletInfo <<< _walletId) walletDetails
       runningApps <- withExceptT Left $ ExceptT $
         PAB.getWalletContractInstances walletId
       let
@@ -320,30 +326,28 @@ activateOrRestorePlutusCompanionContracts
        ( AjaxResponse
            { companionAppId :: PlutusAppId, marloweAppId :: PlutusAppId }
        )
-activateOrRestorePlutusCompanionContracts walletId plutusContracts = do
-  let
-    isActiveContract contractType cic =
-      let
-        definition = view _cicDefinition cic
-        status = view _cicStatus cic
-      in
-        definition == contractType && status == Active
+activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
+  do
+    let
+      isActiveContract contractType cic =
+        let
+          definition = view _cicDefinition cic
+          status = view _cicStatus cic
+        in
+          definition == contractType && status == Active
 
-    findOrActivateContract :: _ -> m (AjaxResponse PlutusAppId)
-    findOrActivateContract contractType =
-      -- Try to find the contract by its type
-      Array.find (isActiveContract contractType) plutusContracts
-        # maybe'
+      findOrActivateContract contractType =
+        -- Try to find the contract by its type
+        Array.find (isActiveContract contractType) plutusContracts # case _ of
+          Nothing ->
             -- If we cannot find it, activate a new one
-            (\_ -> PAB.activateContract contractType walletId)
+            ExceptT $ PAB.activateContract contractType walletId
+          Just contract ->
             -- If we find it, return the id
-            (pure <<< Right <<< view _cicContract)
-
-  ajaxWalletCompanionId <- findOrActivateContract WalletCompanion
-  ajaxMarloweAppId <- findOrActivateContract MarloweApp
-  pure $ (\companionAppId marloweAppId -> { companionAppId, marloweAppId })
-    <$> ajaxWalletCompanionId
-    <*> ajaxMarloweAppId
+            pure $ view _cicContract contract
+    { companionAppId: _, marloweAppId: _ }
+      <$> findOrActivateContract WalletCompanion
+      <*> findOrActivateContract MarloweApp
 
 sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
 sendWsMessage msg = do

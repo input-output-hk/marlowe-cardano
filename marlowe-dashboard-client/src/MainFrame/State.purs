@@ -420,7 +420,9 @@ finished loading them yet) is a bit convoluted - follow the trail of workflow co
 it works.
 -}
 handleAction (EnterDashboardState walletDetails) = do
-  ajaxFollowerApps <- getFollowerApps walletDetails
+  let
+    walletId = view (_walletInfo <<< _walletId) walletDetails
+  ajaxFollowerApps <- getFollowerApps walletId
   currentSlot <- use _currentSlot
   case ajaxFollowerApps of
     Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
@@ -430,7 +432,7 @@ handleAction (EnterDashboardState walletDetails) = do
       let
         followerAppIds :: Array PlutusAppId
         followerAppIds = Set.toUnfoldable $ keys followerApps
-      subscribeToWallet $ view (_walletInfo <<< _walletId) walletDetails
+      subscribeToWallet $ walletId
       subscribeToPlutusApp $ view _companionAppId walletDetails
       subscribeToPlutusApp $ view _marloweAppId walletDetails
       for_ followerAppIds subscribeToPlutusApp
