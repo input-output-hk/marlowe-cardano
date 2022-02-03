@@ -46,13 +46,11 @@ jobs:
     - name: Build Marlowe Playground Client
       working-directory: ./
       run: |
-        nix-shell
-        cd marlowe-playground-client
-        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
-        npm install
-        npm run build:spago
-        npm run build:webpack:dev:vendor
-        npm run build:webpack:dev &
+        nix-shell --command "cd marlowe-playground-client && $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
+        npm install --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
+        npm run build:spago --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
+        npm run build:webpack:dev:vendor --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
+        npm run build:webpack:dev --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" &
 
     - name: Setup Playwright
       working-directory: ./e2e-tests/
