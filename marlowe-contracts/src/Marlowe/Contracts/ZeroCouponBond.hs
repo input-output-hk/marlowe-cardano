@@ -13,6 +13,6 @@ zeroCouponBond ::
   -> Party
   -> Contract
 zeroCouponBond fixing maturity discounted notional investor issuer =
-    transfer fixing investor issuer discounted
+    transfer investor issuer (ada, discounted) fixing
   $ deposit issuer investor (ada, notional) maturity Close
     Close
