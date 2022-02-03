@@ -46,7 +46,9 @@ jobs:
     - name: Build Marlowe Playground Client
       working-directory: ./
       run: |
-        nix-shell --command "cd marlowe-playground-client && $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs" --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
+        nix-shell
+        cd marlowe-playground-client --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
+        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
         npm install --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
         npm run build:spago --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
         npm run build:webpack:dev:vendor --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}"
