@@ -6,7 +6,14 @@ module Page.Dashboard.State
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe (class ManageMarlowe, createContract, redeem)
+import Capability.Marlowe
+  ( class ManageMarlowe
+  , createContract
+  , followContract
+  , followContractWithPendingFollowerApp
+  , redeem
+  , subscribeToPlutusApp
+  )
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -17,7 +24,6 @@ import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, initialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..))
-import Component.ContractSetupForm (ContractParams(..))
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
 import Component.Template.State (instantiateExtendedContract)
@@ -454,7 +460,7 @@ handleAction
      a placeholder so the user can see that that the contract is being created
     -}
     Template.OnStartContract template params -> do
-      let ContractParams nickname roles _ _ = params
+      let { nickname, roles } = params
       case instantiateExtendedContract currentSlot template params of
         Nothing -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult

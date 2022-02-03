@@ -1,10 +1,8 @@
 module Data.ContractValue
   ( ContractValue
   , ContractValueError(..)
-  , dual
   , fromBigInt
   , fromString
-  , validator
   , toString
   , toBigInt
   ) where
@@ -17,11 +15,11 @@ import Data.Argonaut
   , JsonDecodeError(..)
   , decodeJson
   )
-import Data.Array (replicate)
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Either (note)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
   ( genericCardinality
@@ -31,15 +29,13 @@ import Data.Enum.Generic
   , genericToEnum
   )
 import Data.Generic.Rep (class Generic)
+import Data.Int as Int
+import Data.Ord as Ring
 import Data.Show.Generic (genericShow)
-import Data.String (Pattern(..), null, split)
+import Data.String (Pattern(..))
 import Data.String as String
-import Data.String.CodeUnits (dropRight, fromCharArray)
-import Data.Validation.Semigroup (V(..))
-import Polyform (Validator)
-import Polyform.Dual as Dual
-import Polyform.Validator (liftFnV)
-import Polyform.Validator.Dual (Dual)
+import Data.String.Extra (leftPadTo, rightPadTo)
+import Marlowe.Extended.Metadata (NumberFormat(..))
 
 data ContractValueError
   = Empty
@@ -82,63 +78,70 @@ derive newtype instance EncodeJson ContractValue
 
 instance DecodeJson ContractValue where
   decodeJson =
-    lmap (const $ TypeMismatch "ContractValue") <<< fromString
+    lmap (const $ TypeMismatch "ContractValue") <<< fromString DefaultFormat
       <=< decodeJson
 
-fromString :: String -> Either ContractValueError ContractValue
-fromString s
-  | null s = Left Empty
-  | otherwise = case split (Pattern ".") s of
-      [ s' ] -> case BigInt.fromString s' of
-        Nothing -> Left Invalid
-        Just i -> fromBigInt $ i * BigInt.fromInt 1000000
-      [ whole, fractional ] ->
-        case BigInt.fromString whole of
-          Nothing -> Left Invalid
-          Just whole' -> fromFractional whole' fractional
-      _ -> Left Invalid
-  | otherwise = Left Invalid
+fromString :: NumberFormat -> String -> Either ContractValueError ContractValue
+fromString format s
+  | String.null s = Right $ ContractValue zero
+  | otherwise = ContractValue <$> case format of
+      DefaultFormat -> fromStringDefault s
+      DecimalFormat decimals _ -> fromStringDecimal decimals s
+      TimeFormat -> fromStringTime s
 
-fromFractional :: BigInt -> String -> Either ContractValueError ContractValue
-fromFractional whole fractional = case BigInt.fromString normalized of
-  Nothing -> Left Invalid
-  Just fractional' -> Right $ ContractValue
-    (whole * BigInt.fromInt 1000000 + fractional')
-  where
-  normalized = case compare (String.length fractional) 6 of
-    GT -> dropRight (6 - String.length fractional) fractional
-    LT -> pad (String.length fractional - 6) fractional
-    EQ -> fractional
-  pad num value = value <> fromCharArray (replicate num '0')
+fromStringDefault :: String -> Either ContractValueError BigInt
+fromStringDefault = note Invalid <<< BigInt.fromString
+
+fromStringTime :: String -> Either ContractValueError BigInt
+fromStringTime =
+  note Invalid <<< map (mul (BigInt.fromInt 60)) <<< BigInt.fromString
+
+fromStringDecimal :: Int -> String -> Either ContractValueError BigInt
+fromStringDecimal decimals value = do
+  let
+    { signum, absoluteValue } =
+      if String.take 1 value == "-" then
+        { signum: negate one, absoluteValue: String.drop 1 value }
+      else
+        { signum: one, absoluteValue: value }
+  Tuple wholePart fracPart <- case String.split (Pattern ".") absoluteValue of
+    [ s ] -> Right $ Tuple s "0"
+    [ s, t ] -> Right $ Tuple s t
+    _ -> Left Invalid
+
+  -- if zeros have been deleted from the end of the string, the fractional part will be wrong
+  let normalizedFrac = String.take decimals $ rightPadTo decimals "0" fracPart
+  let multiplier = BigInt.fromInt $ Int.pow 10 decimals
+  whole <- note Invalid $ BigInt.fromString wholePart
+  frac <-
+    note Invalid $ BigInt.fromString $ String.take decimals $ normalizedFrac
+  pure $ signum * multiplier * whole + frac
 
 fromBigInt :: BigInt -> Either ContractValueError ContractValue
 fromBigInt i
   | i < zero = Left Negative
   | otherwise = Right $ ContractValue i
 
-toString :: ContractValue -> String
-toString (ContractValue i) =
-  BigInt.toString whole <> "." <> normalized (BigInt.toString fractional)
-  where
-  whole = i / BigInt.fromInt 1000000
-  fractional = i `mod` BigInt.fromInt 1000000
-  normalized s = fromCharArray (replicate (String.length s - 6) '0') <> s
+toString :: NumberFormat -> ContractValue -> String
+toString DefaultFormat (ContractValue value) = BigInt.toString value
+toString TimeFormat (ContractValue value) = BigInt.toString $ value /
+  BigInt.fromInt 60
+toString (DecimalFormat decimals _) (ContractValue value) =
+  let
+    signum = Ring.signum value
+    absoluteValue = Ring.abs value
+    string = leftPadTo decimals "0" $ BigInt.toString absoluteValue
+    len = String.length string
+
+    { before, after: fracPart } = String.splitAt (len - decimals) string
+
+    wholePart = case before of
+      "" -> "0"
+      _ -> before
+    prefix = if signum < zero then "-" else ""
+    suffix = if decimals > zero then "." <> fracPart else ""
+  in
+    prefix <> wholePart <> suffix
 
 toBigInt :: ContractValue -> BigInt
 toBigInt (ContractValue i) = i
-
--------------------------------------------------------------------------------
--- Polyform adapters
--------------------------------------------------------------------------------
-
-validator
-  :: forall m
-   . Applicative m
-  => Validator m ContractValueError String ContractValue
-validator = liftFnV \s -> V $ fromString s
-
-dual
-  :: forall m
-   . Applicative m
-  => Dual m ContractValueError String ContractValue
-dual = Dual.dual validator (pure <<< toString)

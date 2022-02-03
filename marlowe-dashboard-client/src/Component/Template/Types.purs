@@ -1,27 +1,22 @@
 module Component.Template.Types
   ( State(..)
-  , Input
   , Action(..)
   ) where
 
 import Prologue
 
 import Component.ContractSetupForm (ContractParams)
-import Data.AddressBook (AddressBook)
+import Component.ContractSetupForm as ContractSetupForm
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Semantics (TokenName)
 
 data State
   = Start
   | Overview ContractTemplate
-  | Setup ContractTemplate (Maybe ContractParams)
+  | Setup ContractTemplate ContractSetupForm.Input
   | Review ContractTemplate ContractParams
 
 derive instance Eq State
-
-type Input =
-  { addressBook :: AddressBook
-  }
 
 data Action
   = OnReset

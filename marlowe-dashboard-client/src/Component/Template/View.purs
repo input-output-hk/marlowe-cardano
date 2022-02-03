@@ -3,7 +3,7 @@ module Component.Template.View (contractTemplateCard) where
 import Prologue hiding (Either(..), div)
 
 import Component.Contacts.State (adaToken, getAda)
-import Component.ContractSetupForm (ContractParams(..), Msg(..))
+import Component.ContractSetupForm (ContractParams)
 import Component.ContractSetupForm as ContractSetupForm
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
@@ -11,20 +11,16 @@ import Component.Icons (icon, icon_)
 import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.Popper (Placement(..))
 import Component.Template.Types (Action(..), State(..))
-import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
-import Data.AddressBook (AddressBook)
 import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
-import Data.Either (hush)
-import Data.Filterable (filterMap)
-import Data.Lens (view, (^.))
+import Data.Lens (view)
 import Data.Map as Map
+import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
-import Data.Maybe (fromMaybe)
-import Data.Set as Set
+import Data.Maybe (fromMaybe, maybe)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
@@ -43,47 +39,38 @@ import Halogen.HTML
   , li
   , p
   , p_
-  , slot
   , span
   , span_
   , text
   , ul_
   )
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Extra (mapComponent)
+import Halogen.Store.Monad (class MonadStore)
 import Humanize (contractIcon, humanizeValue)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
   , MetaData
-  , _contractName
-  , _extendedContract
+  , NumberFormat(..)
+  , ValueParameterInfo
   , _metaData
   , _slotParameterDescriptions
-  , _valueParameterDescription
-  , _valueParameterInfo
   )
-import Marlowe.HasParties (getParties)
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
-import Marlowe.Semantics (Assets, Party(..))
-import Marlowe.Template
-  ( _slotContent
-  , _valueContent
-  , getPlaceholderIds
-  , initializeTemplateContent
-  )
+import Marlowe.Semantics (Assets)
+import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
-import Type.Proxy (Proxy(..))
 
 contractTemplateCard
   :: forall m
    . MonadAff m
-  => MonadRec m
-  => AddressBook
-  -> Assets
+  => MonadStore Store.Action Store.Store m
+  => Assets
   -> State
   -> ComponentHTML Action ChildSlots m
-contractTemplateCard addressBook assets state =
+contractTemplateCard assets state =
   div
     [ classNames
         [ "h-full"
@@ -100,7 +87,10 @@ contractTemplateCard addressBook assets state =
     , case state of
         Start -> contractSelection
         Overview template -> contractOverview template
-        Setup template mParams -> contractSetup addressBook template mParams
+        Setup template input ->
+          ContractSetupForm.render input # mapComponent case _ of
+            ContractSetupForm.Back -> OnBack
+            ContractSetupForm.Review params -> OnReview template params
         Review template params -> contractReview assets template params
     ]
 
@@ -257,45 +247,6 @@ contractOverview contractTemplate =
         ]
     ]
 
-contractSetup
-  :: forall m
-   . MonadAff m
-  => MonadRec m
-  => AddressBook
-  -> ContractTemplate
-  -> Maybe ContractParams
-  -> ComponentHTML Action ChildSlots m
-contractSetup addressBook template _ =
-  let
-    metaData = view _metaData template
-
-    contract = view _extendedContract template
-
-    contractName = view _contractName metaData
-
-    partyToRole (PK _) = Nothing
-    partyToRole (Role tokenName) = Just tokenName
-
-    roles = Set.mapMaybe partyToRole $ getParties contract
-
-    content = initializeTemplateContent $ getPlaceholderIds contract
-
-    timeouts = filterMap (hush <<< CT.fromBigInt) $ content ^. _slotContent
-
-    values = filterMap (hush <<< CV.fromBigInt) $ content ^. _valueContent
-
-  in
-    slot (Proxy :: _ "contractSetup") unit ContractSetupForm.component
-      { roles
-      , timeouts
-      , values
-      , addressBook
-      , contractName
-      }
-      case _ of
-        Back -> OnBack
-        Continue params -> OnReview template params
-
 contractReview
   :: forall m
    . MonadAff m
@@ -309,7 +260,7 @@ contractReview assets template params =
 
     metaData = view _metaData template
 
-    ContractParams _ _ slots values = params
+    { timeouts, values } = params
   in
     div
       [ classNames
@@ -342,8 +293,9 @@ contractReview assets template params =
               ]
           , div
               [ classNames [ "p-4" ] ]
-              [ ul_ $ slotParameter metaData <$> Map.toUnfoldable slots
-              , ul_ $ valueParameter metaData <$> Map.toUnfoldable values
+              [ ul_ $ slotParameter metaData <$> Map.toUnfoldable timeouts
+              , ul_ $ valueParameter metaData.valueParameterInfo
+                  <$> Map.toUnfoldable values
               ]
           ]
       , div
@@ -416,18 +368,19 @@ slotParameter metaData (key /\ timeout) =
 valueParameter
   :: forall m
    . MonadAff m
-  => MetaData
+  => OMap String ValueParameterInfo
   -> Tuple String ContractValue
   -> ComponentHTML Action ChildSlots m
-valueParameter metaData (key /\ value) =
+valueParameter infoMap (key /\ value) =
   let
-    valueParameterDescriptions = map (view _valueParameterDescription)
-      (view _valueParameterInfo metaData)
+    info = OMap.lookup key infoMap
 
-    description = fromMaybe "no description available" $ OMap.lookup key
-      valueParameterDescriptions
+    format = maybe DefaultFormat _.valueParameterFormat info
 
-    formattedValue = CV.toString value
+    description =
+      maybe "no description available" _.valueParameterDescription info
+
+    formattedValue = CV.toString format value
   in
     parameter key description formattedValue
 

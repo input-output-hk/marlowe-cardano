@@ -87,7 +87,7 @@ fromString s
   | null s = Left Empty
   | otherwise = case BigInt.fromString s of
       Nothing -> Left Invalid
-      Just i -> fromBigInt i
+      Just i -> fromBigInt $ BigInt.fromInt 60 * i
 
 fromBigInt :: BigInt -> Either ContractTimeoutError ContractTimeout
 fromBigInt i
@@ -95,7 +95,7 @@ fromBigInt i
   | otherwise = Right $ ContractTimeout i
 
 toString :: ContractTimeout -> String
-toString = BigInt.toString <<< toBigInt
+toString = BigInt.toString <<< (_ / BigInt.fromInt 60) <<< toBigInt
 
 toBigInt :: ContractTimeout -> BigInt
 toBigInt (ContractTimeout i) = i

@@ -62,6 +62,7 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id, src)
+import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
@@ -88,6 +89,7 @@ import Page.Dashboard.Types
   , State
   , WalletCompanionStatus(..)
   )
+import Store as Store
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
@@ -148,6 +150,7 @@ dashboardCard
   :: forall m
    . MonadAff m
   => MonadRec m
+  => MonadStore Store.Action Store.Store m
   => Input
   -> State
   -> ComponentHTML Action ChildSlots m
@@ -176,7 +179,7 @@ dashboardCard { addressBook, walletDetails } state = case view _card state of
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
-                    (contractTemplateCard addressBook assets)
+                    (contractTemplateCard assets)
                     state
                   ContractActionConfirmationCard contractId input ->
                     mapComponentAction
