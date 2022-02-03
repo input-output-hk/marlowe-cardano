@@ -51,8 +51,13 @@ library
     aeson -any,
     base -any,
     bytestring,
+    cardano-api -any,
+    cardano-binary -any,
+    cardano-ledger-alonzo -any,
+    cardano-ledger-core -any,
     containers -any,
     deriving-aeson -any,
+    extra -any,
     lens,
     mtl,
     newtype-generics,
@@ -61,6 +66,7 @@ library
     plutus-contract -any,
     plutus-core,
     plutus-ledger,
+    plutus-ledger-api -any,
     plutus-ledger-constraints,
     plutus-tx -any,
     plutus-use-cases,
@@ -78,6 +84,7 @@ library
     Language.Marlowe.Semantics
     Language.Marlowe.SemanticsTypes
     Language.Marlowe.Client
+    Language.Marlowe.Client.History
     Language.Marlowe.Util
     Language.Marlowe.ParserUtil
     Language.Marlowe.Scripts
