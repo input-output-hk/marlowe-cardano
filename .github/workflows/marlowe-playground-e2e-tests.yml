@@ -40,17 +40,18 @@ jobs:
         JWT_SIGNATURE: bb0bc0314501f981b0441b90f6771f262afed7743dbb3a8999c7309ebcbb5e867d42ebc0864e325d
         FRONTEND_URL: https://localhost:8009
         GITHUB_CALLBACK_PATH: "/#/gh-oauth-cb"
-      run: nix-shell --run $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
+        SERVER_PORT: 8080
+      run: |
+        nix-shell
+        $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver
+        while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground client on $SERVER_PORT" && sleep 10; done
 
     - name: Build Marlowe Playground Client
       working-directory: ./
-      env:
-        SERVER_PORT: 8080
       run: |
         nix-shell
         cd marlowe-playground-client
         $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
-        while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground client on $SERVER_PORT" && sleep 10; done
 
     - name: Install npm
       working-directory: ./
