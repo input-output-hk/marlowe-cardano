@@ -43,7 +43,7 @@ jobs:
         SERVER_PORT: 8080
       run: |
         nix-shell
-        $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver
+        $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
         while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground client on $SERVER_PORT" && sleep 10; done
 
     - name: Build Marlowe Playground Client
