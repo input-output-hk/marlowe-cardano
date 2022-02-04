@@ -4,7 +4,7 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Component.Contacts.Types (Action) as Contacts
-import Component.ContractSetupForm as ContractSetup
+import Component.ContractSetup.Types as ContractSetup
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
@@ -78,7 +78,7 @@ type ChildSlots =
   , createWalletForm :: forall query. H.Slot query Welcome.Action Unit
   , restoreWalletForm :: forall query. H.Slot query Welcome.Action Unit
   , toaster :: forall q m. H.Slot q m Unit
-  , contractSetup :: ContractSetupForm.Slot
+  , contractSetup :: ContractSetup.Slot Unit
   )
 
 _toaster :: Proxy "toaster"
