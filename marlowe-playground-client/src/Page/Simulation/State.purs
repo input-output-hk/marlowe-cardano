@@ -19,14 +19,13 @@ import Data.Decimal as Decimal
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Hashable (hash)
-import Data.Int (fromNumber, toNumber) as Int
 import Data.Lens (_Just, assign, modifying, use)
 import Data.Lens.Extra (peruse)
 import Data.List.NonEmpty (last)
 import Data.List.NonEmpty as NEL
 import Data.List.Types (NonEmptyList)
 import Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.MediaType.Common (applicationJSON)
 import Data.NonEmptyList.Extra (tailIfNotEmpty)
 import Data.RawJson (RawJson(..))
@@ -45,8 +44,8 @@ import Help (HelpContext(..))
 import MainFrame.Types (ChildSlots, _projectName, _simulatorEditorSlot)
 import Marlowe (Api)
 import Marlowe as Server
-import Marlowe.Extended (toCore)
-import Marlowe.Holes (Location(..), fromTerm, getLocation)
+import Marlowe.Holes (Contract) as Term
+import Marlowe.Holes (Location(..), Term, fromTerm, getLocation)
 import Marlowe.Monaco as MM
 import Marlowe.Parser (parseContract)
 import Marlowe.Semantics
@@ -57,7 +56,6 @@ import Marlowe.Semantics
   , inBounds
   )
 import Marlowe.Template (fillTemplate, typeToLens)
-import Math (abs)
 import Network.RemoteData (RemoteData(..))
 import Network.RemoteData as RemoteData
 import Page.Simulation.Lenses
@@ -67,7 +65,6 @@ import Page.Simulation.Lenses
   , _showRightPanel
   )
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
-import Partial.Unsafe (unsafePartial)
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses
@@ -98,18 +95,14 @@ import Simulator.Types
   , Parties(..)
   )
 import StaticData (simulatorBufferLocalStorageKey)
-import Unsafe.Coerce (unsafeCoerce)
 import Web.Blob.Download (HandleMethod(..), download)
 import Web.DOM.Document as D
 import Web.DOM.Element (setScrollTop)
 import Web.DOM.Element as E
 import Web.DOM.HTMLCollection as WC
 import Web.File.Blob (fromString) as Blob
-import Web.File.Url (createObjectURL)
-import Web.HTML (window)
 import Web.HTML as Web
 import Web.HTML.HTMLDocument (toDocument)
-import Web.HTML.Window (open) as Window
 import Web.HTML.Window as W
 
 mkState :: State
@@ -119,6 +112,7 @@ mkState =
   , helpContext: MarloweHelp
   , bottomPanelState: BottomPanel.initialState CurrentStateView
   , decorationIds: []
+  , projectName: ""
   }
 
 toBottomPanel
@@ -138,7 +132,7 @@ mkContract
    . MonadAff m
   => MonadEffect m
   => MonadAjax Api m
-  => HalogenM State Action ChildSlots Void m (Maybe _)
+  => HalogenM State Action ChildSlots Void m (Maybe (Term Term.Contract))
 mkContract = runMaybeT do
   termContract <- MaybeT $ peruse
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
@@ -199,13 +193,11 @@ handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
     let
       contractJson = stringify $ encodeJson contract
       blob = Blob.fromString contractJson applicationJSON
-      -- FIXME: Dirty hack to make a daily push ;-)
-      -- TODO: pass project name to here from the main frame state
-      -- name <- use _projectName
-      name = unsafePartial $ fromJust $
-        Int.fromNumber (abs (Int.toNumber (hash contractJson)))
+      abs i = if i < 0 then -1 * i else i
+      id = abs $ hash contractJson
+    projectName <- use _projectName
     liftEffect do
-      download (FileDownload $ show name <> ".json") blob
+      download (FileDownload $ projectName <> "-" <> show id <> ".json") blob
   Nothing -> pure unit
 
 handleAction (MoveSlot slot) = do

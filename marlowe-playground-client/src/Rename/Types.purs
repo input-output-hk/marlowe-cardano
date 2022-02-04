@@ -29,8 +29,5 @@ type State
 emptyState :: State
 emptyState = { projectName: "New Project", error: Nothing }
 
-_projectName :: Lens' State String
-_projectName = prop (Proxy :: _ "projectName")
-
 _error :: Lens' State (Maybe String)
 _error = prop (Proxy :: _ "error")

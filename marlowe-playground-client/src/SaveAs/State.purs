@@ -27,9 +27,9 @@ import Halogen.HTML (button, div, h2, input, text)
 import Halogen.HTML.Events (onClick, onValueInput)
 import Halogen.HTML.Properties (class_, classes, disabled, placeholder, value)
 import Icons (Icon(..), icon)
-import MainFrame.Types (ChildSlots)
+import MainFrame.Types (ChildSlots, _projectName)
 import Network.RemoteData (RemoteData(..), isFailure, isLoading)
-import SaveAs.Types (Action(..), State, _projectName, _status)
+import SaveAs.Types (Action(..), State, _status)
 
 handleAction
   :: forall m
