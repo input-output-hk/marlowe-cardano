@@ -5,6 +5,7 @@ import Prelude
 
 import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -21,7 +22,6 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Ledger.Constraints.OffChain (MkTxError)
@@ -278,20 +278,17 @@ _WrongVariantError = _Newtype
 newtype Notification = Notification
   { notificationContractID :: PlutusAppId
   , notificationContractEndpoint :: EndpointDescription
-  , notificationContractArg :: RawJson
+  , notificationContractArg :: Json
   }
 
 derive instance Eq Notification
-
-instance Show Notification where
-  show a = genericShow a
 
 instance EncodeJson Notification where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { notificationContractID: E.value :: _ PlutusAppId
         , notificationContractEndpoint: E.value :: _ EndpointDescription
-        , notificationContractArg: E.value :: _ RawJson
+        , notificationContractArg: E.value :: _ Json
         }
     )
 
@@ -300,7 +297,7 @@ instance DecodeJson Notification where
     ( Notification <$> D.record "Notification"
         { notificationContractID: D.value :: _ PlutusAppId
         , notificationContractEndpoint: D.value :: _ EndpointDescription
-        , notificationContractArg: D.value :: _ RawJson
+        , notificationContractArg: D.value :: _ Json
         }
     )
 
@@ -313,7 +310,7 @@ derive instance Newtype Notification _
 _Notification :: Iso' Notification
   { notificationContractID :: PlutusAppId
   , notificationContractEndpoint :: EndpointDescription
-  , notificationContractArg :: RawJson
+  , notificationContractArg :: Json
   }
 _Notification = _Newtype
 
@@ -324,12 +321,9 @@ data NotificationError
   | MoreThanOneEndpointAvailable PlutusAppId EndpointDescription
   | InstanceDoesNotExist PlutusAppId
   | OtherNotificationError ContractError
-  | NotificationJSONDecodeError EndpointDescription RawJson String
+  | NotificationJSONDecodeError EndpointDescription Json String
 
 derive instance Eq NotificationError
-
-instance Show NotificationError where
-  show a = genericShow a
 
 instance EncodeJson NotificationError where
   encodeJson = defer \_ -> case _ of
@@ -394,7 +388,7 @@ _OtherNotificationError = prism' OtherNotificationError case _ of
   _ -> Nothing
 
 _NotificationJSONDecodeError :: Prism' NotificationError
-  { a :: EndpointDescription, b :: RawJson, c :: String }
+  { a :: EndpointDescription, b :: Json, c :: String }
 _NotificationJSONDecodeError = prism'
   (\{ a, b, c } -> (NotificationJSONDecodeError a b c))
   case _ of

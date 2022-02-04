@@ -5,6 +5,7 @@ import Prelude
 
 import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -86,9 +87,6 @@ _ChainReport = _Newtype
 data CombinedWSStreamToClient
   = InstanceUpdate PlutusAppId InstanceStatusToClient
   | SlotChange Slot
-
-instance Show CombinedWSStreamToClient where
-  show a = genericShow a
 
 instance EncodeJson CombinedWSStreamToClient where
   encodeJson = defer \_ -> case _ of
@@ -207,9 +205,6 @@ newtype ContractInstanceClientState a = ContractInstanceClientState
   , cicYieldedExportTxs :: Array RawJson
   }
 
-instance (Show a) => Show (ContractInstanceClientState a) where
-  show a = genericShow a
-
 instance (EncodeJson a) => EncodeJson (ContractInstanceClientState a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
@@ -263,9 +258,6 @@ newtype ContractReport a = ContractReport
   }
 
 derive instance (Eq a) => Eq (ContractReport a)
-
-instance (Show a) => Show (ContractReport a) where
-  show a = genericShow a
 
 instance (EncodeJson a) => EncodeJson (ContractReport a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
@@ -353,9 +345,6 @@ newtype FullReport a = FullReport
 
 derive instance (Eq a) => Eq (FullReport a)
 
-instance (Show a) => Show (FullReport a) where
-  show a = genericShow a
-
 instance (EncodeJson a) => EncodeJson (FullReport a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
@@ -387,13 +376,10 @@ _FullReport = _Newtype
 --------------------------------------------------------------------------------
 
 data InstanceStatusToClient
-  = NewObservableState RawJson
+  = NewObservableState Json
   | NewActiveEndpoints (Array ActiveEndpoint)
   | NewYieldedExportTxs (Array RawJson)
-  | ContractFinished (Maybe RawJson)
-
-instance Show InstanceStatusToClient where
-  show a = genericShow a
+  | ContractFinished (Maybe Json)
 
 instance EncodeJson InstanceStatusToClient where
   encodeJson = defer \_ -> case _ of
@@ -417,7 +403,7 @@ derive instance Generic InstanceStatusToClient _
 
 --------------------------------------------------------------------------------
 
-_NewObservableState :: Prism' InstanceStatusToClient RawJson
+_NewObservableState :: Prism' InstanceStatusToClient Json
 _NewObservableState = prism' NewObservableState case _ of
   (NewObservableState a) -> Just a
   _ -> Nothing
@@ -432,7 +418,7 @@ _NewYieldedExportTxs = prism' NewYieldedExportTxs case _ of
   (NewYieldedExportTxs a) -> Just a
   _ -> Nothing
 
-_ContractFinished :: Prism' InstanceStatusToClient (Maybe RawJson)
+_ContractFinished :: Prism' InstanceStatusToClient (Maybe Json)
 _ContractFinished = prism' ContractFinished case _ of
   (ContractFinished a) -> Just a
   _ -> Nothing

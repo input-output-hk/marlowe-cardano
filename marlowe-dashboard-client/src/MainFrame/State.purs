@@ -6,6 +6,7 @@ import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
+  , followContract
   , getFollowerApps
   , subscribeToPlutusApp
   , subscribeToWallet
@@ -34,16 +35,17 @@ import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (class MonadRec, forever)
 import Control.Monad.State (modify_)
 import Data.AddressBook as AB
-import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
+import Data.Argonaut (decodeJson, stringify)
+import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Foldable (for_, traverse_)
 import Data.Lens (_1, _2, _Just, _Left, assign, lens, preview, set, use, view)
 import Data.Lens.Extra (peruse)
 import Data.Map (keys)
-import Data.Maybe (fromMaybe)
-import Data.Newtype (unwrap)
+import Data.Maybe (fromMaybe, maybe)
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
+import Data.Tuple.Nested ((/\))
 import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -224,7 +226,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
               in
                 -- if this is the wallet's WalletCompanion app...
                 if (plutusAppId == walletCompanionAppId) then
-                  case parseDecodeJson $ unwrap rawJson of
+                  case decodeJson rawJson of
                     Left decodingError -> addToast $ decodingErrorToast
                       "Failed to parse an update from the wallet companion."
                       decodingError
@@ -247,7 +249,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                 else do
                   -- if this is the wallet's MarloweApp...
                   if (plutusAppId == marloweAppId) then
-                    case parseDecodeJson $ unwrap rawJson of
+                    case decodeJson rawJson of
                       Left decodingError -> addToast $ decodingErrorToast
                         "Failed to parse an update from the marlowe controller."
                         decodingError
@@ -263,10 +265,29 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                         mEndpointResponse <- MarloweApp.onNewObservableState
                           endpointResponse
                         case mEndpointResponse of
+
                           Just
-                            (EndpointSuccess _ (CreateResponse _)) ->
-                            addToast $ successToast
-                              "Contract initialised."
+                            ( EndpointSuccess reqId
+                                (CreateResponse marloweParams)
+                            ) -> do
+                            {- [UC-CONTRACT-1][2] Starting a Marlowe contract
+                              After the PAB endpoint finishes creating the contract, it modifies
+                              its observable state with the MarloweParams of the newly created
+                              contract. We take this opportunity to create a FollowerContract
+                              that will give us updates on the state of the contract
+                            -}
+                            -- TODO: refactor into a function and co-locate this handler with
+                            --       step 0.
+                            mFollower <- followContract walletDetails
+                              marloweParams
+                            case mFollower of
+                              Left _ -> addToast $ errorToast
+                                "Can't follow the contract"
+                                Nothing
+                              Right (followerId /\ contractState) -> do
+                                -- FIXME-3208: swap store contract from new to running
+                                addToast $ successToast
+                                  "Contract initialised."
                           Just (EndpointSuccess _ ApplyInputsResponse) ->
                             addToast $ successToast
                               "Contract update applied."
@@ -280,7 +301,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                               errorToast "Failed to update contract." Nothing
                           _ -> pure unit
                   -- otherwise this should be one of the wallet's `MarloweFollower` apps
-                  else case parseDecodeJson $ unwrap rawJson of
+                  else case decodeJson rawJson of
                     Left decodingError -> addToast $ decodingErrorToast
                       "Failed to parse an update from a contract."
                       decodingError
@@ -317,7 +338,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                 reActivatePlutusScript contractType = do
                   Logger.error $ "Plutus script " <> show contractType
                     <> " has closed unexpectedly: "
-                    <> show mVal
+                    <> maybe "" stringify mVal
                   mNewAppId <- PAB.activateContract contractType walletId
                   for_ mNewAppId
                     (updateStore <<< Store.ChangePlutusScript contractType)

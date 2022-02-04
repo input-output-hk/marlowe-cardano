@@ -35,9 +35,10 @@ import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
 import Data.Foldable (elem)
-import Data.Lens (Lens', toArrayOf, traversed, view)
+import Data.Lens (Lens', _1, over, toArrayOf, traversed, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
+import Data.Map as Map
 import Data.PubKeyHash (PubKeyHash)
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -59,6 +60,8 @@ import Marlowe.Semantics
   )
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.V1.Ledger.Slot (Slot) as Back
+import Plutus.V1.Ledger.Value (TokenName) as Back
+import PlutusTx.AssocMap (Map(..)) as Back
 import Type.Proxy (Proxy(..))
 import Types (AjaxResponse)
 import Wallet.Types (_EndpointDescription)
@@ -83,7 +86,11 @@ class MarloweApp m where
 instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
     reqId <- liftEffect genUUID
-    let payload = [ encodeJson reqId, encodeJson roles, encodeJson contract ]
+    let
+      backRoles :: Back.Map Back.TokenName PubKeyHash
+      backRoles = Back.Map $ map (over _1 toBack) $ Map.toUnfoldable roles
+
+      payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
     map (const reqId) <$> invokeMutexedEndpoint plutusAppId reqId "create"
       _create
       payload
