@@ -7,7 +7,8 @@ module Component.Template.State
 
 import Prologue
 
-import Component.ContractSetupForm (ContractParams)
+import Component.ContractSetup.Types (ContractParams)
+import Component.ContractSetup.Types as CS
 import Component.Template.Types (Action(..), State(..))
 import Data.ContractTimeout as CT
 import Data.ContractValue as CV
@@ -26,6 +27,8 @@ import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
+import Halogen.Form.Projective (blank)
+import Halogen.Form.Types as HF
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata
@@ -52,14 +55,25 @@ initialState = Start
 
 setup :: ContractTemplate -> Maybe ContractParams -> State
 setup { metaData, extendedContract } params = do
-  Setup { metaData, extendedContract }
-    { roles: Set.mapMaybe partyToRole $ getParties extendedContract
-    , timeouts: Map.mapMaybeWithKey getTimeout slotContent
-    , values: mapWithIndex getValue valueContent
-    , contractName: metaData.contractName
-    , params
+  Setup
+    { metaData, extendedContract }
+    { templateRoles
+    , templateTimeouts
+    , templateValues
+    , templateName: metaData.contractName
+    , initialize:
+        { nickname: HF.fromMaybe $ _.nickname <$> params
+        , roles: mapWithIndex (const <<< HF.fromMaybe <<< lookupRole)
+            $ Set.toMap templateRoles
+        , timeouts: HF.FromOutput <$> templateTimeouts
+        , values: mapWithIndex (const <<< HF.fromMaybe <<< lookupValue)
+            templateValues
+        }
     }
+    blank
   where
+  lookupRole tokenName = Map.lookup tokenName =<< _.roles <$> params
+  lookupValue name = Map.lookup name =<< _.values <$> params
   partyToRole (Role tokenName) = Just tokenName
   partyToRole _ = Nothing
   TemplateContent { slotContent, valueContent } =
@@ -78,6 +92,9 @@ setup { metaData, extendedContract } params = do
       hush $ CT.fromBigInt bigIntValue
   getValue key _ = maybe DefaultFormat _.valueParameterFormat
     $ OMap.lookup key metaData.valueParameterInfo
+  templateRoles = Set.mapMaybe partyToRole $ getParties extendedContract
+  templateTimeouts = Map.mapMaybeWithKey getTimeout slotContent
+  templateValues = mapWithIndex getValue valueContent
 
 handleAction
   :: forall m
@@ -93,9 +110,6 @@ handleAction (OnTemplateChosen template) = do
 handleAction (OnSetup template params) = do
   H.put $ setup template params
 
-handleAction (OnReview template params) = do
-  H.put $ Review template params
-
 handleAction (OpenCreateWalletCard _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
 handleAction (OnStartContract _ _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
@@ -103,11 +117,24 @@ handleAction (OnStartContract _ _) = pure unit -- handled in Dashboard.State (se
 handleAction OnBack = H.modify_ case _ of
   Start -> Start
   Overview _ -> Start
-  Setup template _ -> Overview template
+  Setup template _ _ -> Overview template
   Review template params -> setup template (Just params)
+
+handleAction (OnContractSetupMsg CS.BackClicked) = handleAction OnBack
+
+handleAction (OnContractSetupMsg (CS.ReviewClicked params)) =
+  H.get >>= case _ of
+    Setup template _ _ -> H.put $ Review template params
+    _ -> pure unit
+
+handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
+  H.modify_ case _ of
+    Setup template input _ -> Setup template input fields
+    s -> s
 
 instantiateExtendedContract
   :: Slot -> ContractTemplate -> ContractParams -> Maybe Semantic.Contract
+
 instantiateExtendedContract currentSlot template params =
   let
     extendedContract = view (_extendedContract) template

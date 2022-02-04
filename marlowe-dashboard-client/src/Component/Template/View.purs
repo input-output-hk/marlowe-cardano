@@ -3,8 +3,9 @@ module Component.Template.View (contractTemplateCard) where
 import Prologue hiding (Either(..), div)
 
 import Component.Contacts.State (adaToken, getAda)
-import Component.ContractSetupForm (ContractParams)
-import Component.ContractSetupForm as ContractSetupForm
+import Component.ContractSetup (_contractSetup)
+import Component.ContractSetup as ContractSetup
+import Component.ContractSetup.Types (ContractParams)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -22,6 +23,7 @@ import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Tuple.Nested ((/\))
+import Debug (spy)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -44,8 +46,8 @@ import Halogen.HTML
   , text
   , ul_
   )
+import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Extra (mapComponent)
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (contractIcon, humanizeValue)
 import MainFrame.Types (ChildSlots)
@@ -87,10 +89,12 @@ contractTemplateCard assets state =
     , case state of
         Start -> contractSelection
         Overview template -> contractOverview template
-        Setup template input ->
-          ContractSetupForm.render input # mapComponent case _ of
-            ContractSetupForm.Back -> OnBack
-            ContractSetupForm.Review params -> OnReview template params
+        Setup _ input _ -> HH.slot
+          _contractSetup
+          unit
+          ContractSetup.component
+          input
+          OnContractSetupMsg
         Review template params -> contractReview assets template params
     ]
 
@@ -117,7 +121,7 @@ contractTemplateBreadcrumb contractSetupStage =
         , arrow
         , activeItem template.metaData.contractName
         ]
-      Setup template _ ->
+      Setup template _ _ ->
         [ previousItem "Templates" OnReset
         , arrow
         , previousItem template.metaData.contractName
@@ -260,7 +264,7 @@ contractReview assets template params =
 
     metaData = view _metaData template
 
-    { timeouts, values } = params
+    { timeouts, values } = spy "ContractParams" params
   in
     div
       [ classNames

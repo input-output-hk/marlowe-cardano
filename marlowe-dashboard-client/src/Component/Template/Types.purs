@@ -1,28 +1,28 @@
 module Component.Template.Types
-  ( State(..)
-  , Action(..)
+  ( Action(..)
+  , State(..)
   ) where
 
 import Prologue
 
-import Component.ContractSetupForm (ContractParams)
-import Component.ContractSetupForm as ContractSetupForm
+import Component.ContractSetup.Types (ContractFields, ContractParams)
+import Component.ContractSetup.Types as ContractSetup
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Semantics (TokenName)
 
 data State
   = Start
   | Overview ContractTemplate
-  | Setup ContractTemplate ContractSetupForm.Input
+  | Setup ContractTemplate ContractSetup.Input ContractFields
   | Review ContractTemplate ContractParams
 
 derive instance Eq State
 
 data Action
   = OnReset
+  | OnBack
   | OnTemplateChosen ContractTemplate
   | OnSetup ContractTemplate (Maybe ContractParams)
   | OpenCreateWalletCard TokenName
-  | OnReview ContractTemplate ContractParams
   | OnStartContract ContractTemplate ContractParams
-  | OnBack
+  | OnContractSetupMsg ContractSetup.Msg
