@@ -35,10 +35,10 @@ module Language.Marlowe.Client.History (
 
 import Cardano.Api.Shelley (ShelleyBasedEra (ShelleyBasedEraAlonzo), Tx (ShelleyTx))
 import Cardano.Binary (toCBOR, toStrictByteString)
-import Control.Arrow ((&&&))
 import Control.Lens ((^.))
 import Control.Monad (guard)
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Bifunctor (second)
 import Data.List (nub)
 import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
 import Data.Tuple.Extra (secondM)
@@ -148,9 +148,14 @@ historyFrom :: Address             -- ^ The Marlowe validator address.
 historyFrom address citxs consumed =
   let
     consumed' = tyTxOutRefRef consumed
+    anyInputsConsumed citx =
+      let
+        inputs = S.toList $ citx ^. citxInputs
+      in
+        any (\txIn -> consumed' == txInRef txIn) inputs
   in
     -- The next redemption must consume the input.
-    case (any ((consumed' ==) . txInRef) . S.toList . (^. citxInputs)) `filter` citxs of
+    case filter anyInputsConsumed citxs of
       -- Only one transaction can consume the output of the previous step.
       [citx] -> -- Find the redeemer
                 case lookup consumed' $ txInputs citx of
@@ -180,7 +185,11 @@ marloweUtxoStatesAt validator =
     utxos <- utxosTxOutTxAt $ validatorAddress validator
     let
       toMarlowe' (txOutRef, (citxOut, citx)) = toMarlowe citx (toTxOut citxOut) txOutRef
-    pure (mapMaybe toMarlowe' $ M.toList utxos, fst <$> utxos)
+    pure
+      (
+        mapMaybe toMarlowe' $ M.toList utxos
+      , fst <$> utxos
+      )
 
 
 -- | Retrieve the Marlowe history from a transaction.
@@ -201,9 +210,13 @@ marloweHistoryFrom validator citx =
           noDatum = null $ txMarloweData citx'
         in
           case (toAddress, inputs, extractDatum citxOut, noDatum) of
+            -- The address received the UTxO, no contract input was consumed, and datum is in the UTxO.
             (True,  []          , Just md, _   ) -> Just $ Created txOutRef md Nothing
+            -- The address received the UTxO, contract input was consumed, and the datum is in the UTxO.
             (True,  [(_, input)], Just md, _   ) -> Just $ InputApplied input txOutRef md Nothing
+            -- Another address received the UTxO, the contract input was consumed, but no datum is in the UTxO.
             (False, [(_, input)], _      , True) -> Just $ Closed input $ citx' ^. citxTxId
+            -- An unexpected UTxO was found, violating the constraints on the script.
             _                                    -> Nothing
     nub
       . mapMaybe toHistory
@@ -249,7 +262,8 @@ creationTxOut MarloweParams{..} address citx =
   do
     -- Ensure that the transaction minted the role currency.
     guard
-      . elem (ScriptHash $ unCurrencySymbol rolesCurrency) . M.keys
+      . elem (ScriptHash $ unCurrencySymbol rolesCurrency)
+      . M.keys
       $ citx ^. citxScripts
     -- Find the output to the script address, if any.
     case filterOutputs address citx of
@@ -295,8 +309,8 @@ txDatums :: ChainIndexTx         -- ^ The transaction.
          -> [(TxOut, TxOutRef)]  -- ^ The outputs that have datum.
 txDatums citx =
   case citx ^. citxOutputs of
-    ValidTx txOuts -> filter (isJust . txOutDatumHash . fst)
-                      $ (fst &&& (TxOutRef (citx ^. citxTxId) . snd))
+    ValidTx txOuts -> filter (\(txOut, _) -> isJust $ txOutDatumHash txOut)
+                      $ second (\i -> TxOutRef (citx ^. citxTxId) i)
                       <$> zip txOuts [0..]
     InvalidTx      -> []
 
@@ -329,7 +343,7 @@ txRedeemers citx =
             pure (TxOutRef{..}, Redeemer . dataToBuiltinData $ dat)
         |
           txin@(Cardano.TxIn txid txix) <- S.toList . Alonzo.inputs . Alonzo.body $ tx
-        , let txOutRefId = TxId . toBuiltin . BS.drop 2 . toStrictByteString . toCBOR $ txid
+        , let txOutRefId = TxId . toBuiltin . BS.drop 2 . toStrictByteString . toCBOR $ txid  -- TODO: Find a pre-existing function to convert Alonzo to Plutus TxIds.
               txOutRefIdx = fromIntegral txix
         ]
     _ -> []
