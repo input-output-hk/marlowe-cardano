@@ -67,6 +67,7 @@ import Data.Wallet
   , _pubKeyHash
   , _walletId
   , _walletInfo
+  , mkWalletDetails
   )
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
@@ -175,13 +176,7 @@ fetchWalletDetails { newWallet, walletNickname, walletInfo } = withExceptT
       activateOrRestorePlutusCompanionContracts walletId contracts
     -- TODO (as part of SCP-3360):
     --   create a list of "loading contracts" with the plutusContracts of type MarloweFollower
-    pure
-      { walletNickname
-      , companionAppId
-      , marloweAppId
-      , walletInfo
-      , assets: mempty
-      }
+    pure $ mkWalletDetails walletNickname companionAppId marloweAppId walletInfo
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
   createWallet walletNickname passphrase = runExceptT do

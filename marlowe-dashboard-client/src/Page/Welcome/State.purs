@@ -20,7 +20,7 @@ import Data.Address as A
 import Data.AddressBook as AddressBook
 import Data.Lens (assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
-import Data.Wallet (_pubKeyHash, _walletInfo)
+import Data.Wallet (_pubKeyHash, _walletInfo, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_)
@@ -75,9 +75,10 @@ two PAB apps for that wallet: a `WalletCompanion` and a `MarloweApp`.
 - The `MarloweApp` is a control app, used to create Marlowe contracts, apply inputs, and redeem
   payments to this wallet.
 -}
-handleAction (ConnectWallet walletDetails@{ walletNickname }) = do
+handleAction (ConnectWallet walletDetails) = do
   assign _enteringDashboardState true
   let
+    walletNickname = view _walletNickname walletDetails
     pubKeyHash = view
       (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
       walletDetails
