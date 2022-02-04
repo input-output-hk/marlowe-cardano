@@ -15,11 +15,11 @@ module Page.Contract.Types
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
-import Component.Contacts.Types (WalletDetails)
 import Data.ContractNickname (ContractNickname)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
+import Data.Wallet (WalletDetails)
 import Data.WalletNickname (WalletNickname)
 import Halogen (RefLabel(..))
 import Marlowe.Execution.Types (NamedAction)

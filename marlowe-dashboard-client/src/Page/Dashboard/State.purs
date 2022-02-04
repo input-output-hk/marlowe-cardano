@@ -7,24 +7,16 @@ module Page.Dashboard.State
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, createContract, redeem)
-import Capability.MarloweStorage
-  ( class ManageMarloweStorage
-  )
+import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses
-  ( _assets
-  , _cardSection
-  , _walletId
-  , _walletInfo
-  , _walletNickname
-  )
+import Component.Contacts.Lenses (_cardSection)
 import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, initialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
-import Component.Contacts.Types (CardSection(..), WalletDetails)
+import Component.Contacts.Types (CardSection(..))
 import Component.ContractSetupForm (ContractParams(..))
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
@@ -69,6 +61,13 @@ import Data.Set (delete, fromFoldable, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet
+  ( WalletDetails
+  , _assets
+  , _walletId
+  , _walletInfo
+  , _walletNickname
+  )
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
@@ -93,11 +92,7 @@ import Marlowe.Semantics
   )
 import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
 import Page.Contract.State (applyTimeout)
-import Page.Contract.State
-  ( handleAction
-  , mkInitialState
-  , updateState
-  ) as Contract
+import Page.Contract.State (handleAction, mkInitialState, updateState) as Contract
 import Page.Contract.Types (Action(..), StartingState, State(..)) as Contract
 import Page.Dashboard.Lenses
   ( _card
@@ -247,6 +242,7 @@ new `MarloweFollower`. We'll know the loading is finished when we've received th
 update for each of these `MarloweFollower` apps through the WebSocket.
 -}
 {- [UC-CONTRACT-1][2] Start a Marlowe contract
+-- FIXME-3208 redo comments
 After starting a new Marlowe contract, we should receive a WebSocket notification informing us of
 the `MarloweParams` and initial `MarloweData` for that contract (via a status update for our
 `WalletCompanion` app). We now need to start following that contract with a `MarloweFollower` app.

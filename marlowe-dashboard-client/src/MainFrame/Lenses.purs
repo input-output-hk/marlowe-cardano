@@ -2,13 +2,13 @@ module MainFrame.Lenses where
 
 import Prologue
 
-import Component.Contacts.Types (WalletDetails)
 import Data.AddressBook (AddressBook)
 import Data.Lens (Lens', _2)
 import Data.Lens.AffineTraversal (AffineTraversal')
 import Data.Lens.Prism.Either (_Left, _Right)
 import Data.Lens.Record (prop)
 import Data.Time.Duration (Minutes)
+import Data.Wallet (WalletDetails)
 import MainFrame.Types (State, WebSocketStatus)
 import Marlowe.Semantics (Slot)
 import Page.Dashboard.Types (State) as Dashboard

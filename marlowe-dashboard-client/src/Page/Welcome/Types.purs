@@ -10,8 +10,8 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
-import Component.Contacts.Types (WalletDetails)
 import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.Wallet (WalletDetails)
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so

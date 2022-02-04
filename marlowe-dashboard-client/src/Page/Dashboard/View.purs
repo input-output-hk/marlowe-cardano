@@ -8,14 +8,7 @@ import Prologue hiding (Either(..), div)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
 import Component.ConfirmInput.View as ConfirmInput
-import Component.Contacts.Lenses
-  ( _assets
-  , _pubKeyHash
-  , _walletInfo
-  , _walletNickname
-  )
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (WalletDetails)
 import Component.Contacts.View (contactsCard)
 import Component.ContractPreview.View (contractPreviewCard)
 import Component.Icons (Icon(..)) as Icon
@@ -35,6 +28,13 @@ import Data.Maybe (isJust)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet
+  ( WalletDetails
+  , _assets
+  , _pubKeyHash
+  , _walletInfo
+  , _walletNickname
+  )
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
