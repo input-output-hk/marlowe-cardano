@@ -51,27 +51,28 @@ jobs:
 
     - name: Install npm
       working-directory: ./marlowe-playground-client
-      run: npm install
+      run: nix-shell --run npm install
 
     - name: Build Spago
       working-directory: ./marlowe-playground-client
-      run: npm run build:spago
+      run: nix-shell --run npm run build:spago
 
     - name: Build Spago
       working-directory: ./marlowe-playground-client
-      run: npm run build:spago
+      run: nix-shell --run npm run build:spago
 
     - name: Build Spago
       working-directory: ./marlowe-playground-client
-      run: npm run build:webpack:dev:vendor
+      run: nix-shell --run npm run build:webpack:dev:vendor
 
     - name: Build Spago
       working-directory: ./marlowe-playground-client
-      run: npm run build:webpack:dev
+      run: nix-shell --run npm run build:webpack:dev
 
     - name: Setup Playwright
       working-directory: ./e2e-tests/
       run: |
+        nix-shell
         npm install -D @playwright/test
         npx playwright install
   
