@@ -44,14 +44,17 @@ jobs:
 
     - name: Build Marlowe Playground Client
       working-directory: ./
+      env:
+        SERVER_PORT: 8080
       run: |
         nix-shell
         cd marlowe-playground-client
-        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
+        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &
+        while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground client on $SERVER_PORT" && sleep 10; done
 
     - name: Install npm
-      working-directory: ./marlowe-playground-client
-      run: nix-shell --run npm install
+      working-directory: ./
+      run: nix-shell --run cd marlowe-playground-client && npm install
 
     - name: Build Spago
       working-directory: ./
