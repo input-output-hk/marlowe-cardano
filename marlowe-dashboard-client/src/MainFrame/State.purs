@@ -22,13 +22,6 @@ import Capability.PAB as PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
-import Component.Contacts.Lenses
-  ( _companionAppId
-  , _marloweAppId
-  , _walletId
-  , _walletInfo
-  )
-import Component.Contacts.Types (WalletDetails)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Capability as Logger
 import Control.Monad.Reader (class MonadAsk, asks)
@@ -46,6 +39,13 @@ import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet
+  ( WalletDetails
+  , _companionAppId
+  , _marloweAppId
+  , _walletId
+  , _walletInfo
+  )
 import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)

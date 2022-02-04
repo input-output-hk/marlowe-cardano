@@ -13,12 +13,12 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmInput.Types as ConfirmInput
 import Component.Contacts.Types (Action, State) as Contacts
-import Component.Contacts.Types (WalletDetails)
 import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
+import Data.Wallet (WalletDetails)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)

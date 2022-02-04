@@ -7,8 +7,6 @@ module Store
 
 import Prologue
 
-import Component.Contacts.Lenses (_assets, _companionAppId, _marloweAppId)
-import Component.Contacts.Types (WalletDetails)
 import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
 import Data.Lens (_Just, (.~))
@@ -16,6 +14,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
+import Data.Wallet (WalletDetails, _assets, _companionAppId, _marloweAppId)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)

@@ -4,7 +4,6 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Component.Contacts.Types (Action) as Contacts
-import Component.Contacts.Types (WalletDetails)
 import Component.ContractSetupForm as ContractSetup
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
@@ -13,6 +12,7 @@ import Data.AddressBook (AddressBook)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Time.Duration (Minutes)
+import Data.Wallet (WalletDetails)
 import Halogen (SubscriptionId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)

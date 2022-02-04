@@ -21,9 +21,7 @@ import Capability.MarloweStorage
   , insertIntoContractNicknames
   )
 import Capability.Toast (class Toast, addToast)
-import Component.Contacts.Lenses (_assets, _pubKeyHash, _walletInfo)
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (WalletDetails)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Control.Monad.Reader (class MonadAsk, asks)
@@ -71,6 +69,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.Unfoldable as Unfoldable
+import Data.Wallet (WalletDetails, _assets, _pubKeyHash, _walletInfo)
 import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Aff.AVar as AVar

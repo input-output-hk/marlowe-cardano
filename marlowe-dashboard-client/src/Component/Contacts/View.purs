@@ -8,13 +8,8 @@ import Prelude hiding (div)
 import Clipboard (Action(..)) as Clipboard
 import Component.AddContactForm (component) as AddContactForm
 import Component.Address.View as Address
-import Component.Contacts.Lenses (_cardSection, _walletNickname)
-import Component.Contacts.Types
-  ( Action(..)
-  , CardSection(..)
-  , State
-  , WalletDetails
-  )
+import Component.Contacts.Lenses (_cardSection)
+import Component.Contacts.Types (Action(..), CardSection(..), State)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
 import Control.Monad.Rec.Class (class MonadRec)
@@ -27,6 +22,7 @@ import Data.Array (singleton) as Array
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\))
+import Data.Wallet (WalletDetails, _walletNickname)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)

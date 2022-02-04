@@ -42,14 +42,6 @@ import Capability.PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Capability.Wallet as Wallet
-import Component.Contacts.Lenses
-  ( _companionAppId
-  , _marloweAppId
-  , _pubKeyHash
-  , _walletId
-  , _walletInfo
-  )
-import Component.Contacts.Types (WalletDetails)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
@@ -68,6 +60,14 @@ import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Variant (Variant)
+import Data.Wallet
+  ( WalletDetails
+  , _companionAppId
+  , _marloweAppId
+  , _pubKeyHash
+  , _walletId
+  , _walletInfo
+  )
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
 import Data.WalletNickname (WalletNickname)

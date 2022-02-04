@@ -15,12 +15,12 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses (_pubKeyHash, _walletInfo)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
 import Data.AddressBook as AddressBook
 import Data.Lens (assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
+import Data.Wallet (_pubKeyHash, _walletInfo)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_)
