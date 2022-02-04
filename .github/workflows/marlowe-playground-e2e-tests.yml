@@ -49,7 +49,7 @@ jobs:
       run: |
         nix-shell
         cd marlowe-playground-client
-        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &
+        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
         while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground client on $SERVER_PORT" && sleep 10; done
 
     - name: Install npm
