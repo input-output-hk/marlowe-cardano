@@ -52,8 +52,7 @@ import Component.Contacts.Lenses
 import Component.Contacts.Types (WalletDetails)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
-import Data.Argonaut.Decode (JsonDecodeError)
-import Data.Argonaut.Extra (parseDecodeJson)
+import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
 import Data.Array (filter, find) as Array
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
@@ -61,7 +60,6 @@ import Data.Map (Map, fromFoldable)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.MnemonicPhrase.Word (toString) as Word
-import Data.Newtype (unwrap)
 import Data.Passpharse (Passphrase)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (PubKeyHash)
@@ -219,8 +217,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       observableState <-
         except
           $ lmap Right
-          $ parseDecodeJson
-          $ unwrap observableStateJson
+          $ decodeJson
+          $ observableStateJson
       pure $ followAppId /\ observableState
   -- call the "follow" endpoint of a pending MarloweFollower app, and return its PlutusAppId and
   -- observable state (to call this function, we must already know its PlutusAppId, but we return
@@ -237,8 +235,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       observableState <-
         except
           $ lmap Right
-          $ parseDecodeJson
-          $ unwrap observableStateJson
+          $ decodeJson
+          $ observableStateJson
       pure $ followerAppId /\ observableState
   -- "create" a Marlowe contract on the blockchain
   -- FIXME: if we want users to be able to follow contracts that they don't have roles in, we need this function
@@ -275,7 +273,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         companionAppId = view _companionAppId walletDetails
       observableStateJson <- withExceptT Left $ ExceptT $
         PAB.getContractInstanceObservableState companionAppId
-      except $ lmap Right $ parseDecodeJson $ unwrap observableStateJson
+      except $ lmap Right $ decodeJson observableStateJson
   -- get all MarloweFollower apps for a given wallet
   getFollowerApps walletId =
     runExceptT do
@@ -300,7 +298,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         rawJson = view (_cicCurrentState <<< _observableState)
           contractInstanceClientState
       in
-        case parseDecodeJson $ unwrap rawJson of
+        case decodeJson rawJson of
           Left decodingErrors -> Left decodingErrors
           Right observableState -> Right (plutusAppId /\ observableState)
   subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage

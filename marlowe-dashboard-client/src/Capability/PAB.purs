@@ -17,10 +17,9 @@ import Prologue
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import AppM (AppM)
 import Control.Monad.Except (lift)
+import Data.Argonaut (Json, encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
-import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Lens (view)
-import Data.RawJson (RawJson(..))
 import Data.WalletId (WalletId)
 import Data.WalletId as WalletId
 import Halogen (HalogenM)
@@ -50,7 +49,7 @@ class
     -> m (AjaxResponse (ContractInstanceClientState MarloweContract))
   getContractInstanceCurrentState
     :: PlutusAppId -> m (AjaxResponse (PartiallyDecodedResponse ActiveEndpoint))
-  getContractInstanceObservableState :: PlutusAppId -> m (AjaxResponse RawJson)
+  getContractInstanceObservableState :: PlutusAppId -> m (AjaxResponse Json)
   getContractInstanceHooks
     :: PlutusAppId -> m (AjaxResponse (Array (Request ActiveEndpoint)))
   invokeEndpoint
@@ -88,9 +87,9 @@ instance ManagePAB AppM where
   getContractInstanceHooks plutusAppId = do
     currentState <- getContractInstanceCurrentState plutusAppId
     pure $ map (view _hooks) currentState
-  invokeEndpoint plutusAppId endpoint payload =
+  invokeEndpoint plutusAppId endpoint payload = do
     PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
-      (RawJson $ encodeStringifyJson payload)
+      (encodeJson payload)
       plutusAppId
       endpoint
   getWalletContractInstances wallet =

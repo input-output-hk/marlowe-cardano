@@ -26,7 +26,7 @@ import Language.Marlowe.Client (EndpointResponse, MarloweEndpointResult, Marlowe
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), SumType (SumType), TypeInfo (..),
                                    argonaut, buildBridge, typeModule, typeName, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
-import Language.PureScript.Bridge.SumType (equal, genericShow, mkSumType, order)
+import Language.PureScript.Bridge.SumType (Instance (..), equal, genericShow, mkSumType, order)
 import Language.PureScript.Bridge.TypeParameters (A, E)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
@@ -106,9 +106,19 @@ psPlutusAppId = TypeInfo "" "Marlowe.PAB" "PlutusAppId" []
 contractInstanceBridge :: BridgePart
 contractInstanceBridge = typeName ^== "ContractInstanceId" >> return psPlutusAppId
 
+psJson :: TypeInfo 'PureScript
+psJson = TypeInfo "argonaut-core" "Data.Argonaut.Core" "Json" []
+
+jsonBridge :: BridgePart
+jsonBridge = do
+    typeName ^== "Value"
+    typeModule ^== "Data.Aeson.Types.Internal"
+    pure psJson
+
 myBridge :: BridgePart
 myBridge =
   doubleBridge
+    <|> jsonBridge
     <|> dayBridge
     <|> defaultBridge
     <|> walletBridge
@@ -156,7 +166,7 @@ marloweRunSettings = defaultSettings
 pabSettings :: Settings
 pabSettings = defaultSettings
   & set apiModuleName "Plutus.PAB.Webserver"
-  & addTypes (filter notOverridden pabTypes)
+  & addTypes ( noShow <$> filter notOverridden pabTypes)
   & addTypes [ order . dto $ mkSumType @MarloweContract ]
   where
   -- These types are overridden, and should not be manually generated.
@@ -165,6 +175,33 @@ pabSettings = defaultSettings
     [ ("Plutus.V1.Ledger.Crypto", "PubKeyHash")
     , ("Ledger.Address", "PaymentPubKeyHash")
     , ("Wallet.Types", "ContractInstanceId")
+    ]
+  -- We remove the GenericShow instance for the types that rely on Json under the hood
+  -- as Json doesn't have a show instance.
+  noShow :: SumType lang -> SumType lang
+  noShow sumType@(SumType TypeInfo{..} _ _) =
+    if elem (_typeModule, _typeName) typesWithNoShow
+        then removeShowInstance sumType
+        else sumType
+  removeShowInstance (SumType typeInfo dataConstructors instances) =
+      SumType typeInfo dataConstructors $ filter (/= GenericShow) instances
+  typesWithNoShow =
+    [ ("Wallet.Types", "Notification")
+    , ("Wallet.Types", "NotificationError")
+    , ("Plutus.Contract.Checkpoint", "CheckpointStore")
+    , ("Plutus.Trace.Emulator.Types", "ContractInstanceLog")
+    , ("Plutus.Trace.Emulator.Types", "ContractInstanceMsg")
+    , ("Plutus.Trace.Emulator.Types", "EmulatorRuntimeError")
+    , ("Plutus.Trace.Emulator.Types", "UserThreadMsg")
+    , ("Plutus.PAB.Webserver.Types", "CombinedWSStreamToClient")
+    , ("Plutus.PAB.Webserver.Types", "ContractInstanceClientState")
+    , ("Plutus.PAB.Webserver.Types", "ContractReport")
+    , ("Plutus.PAB.Webserver.Types", "FullReport")
+    , ("Plutus.PAB.Webserver.Types", "InstanceStatusToClient")
+    , ("Plutus.PAB.Events.ContractInstanceState", "PartiallyDecodedResponse")
+    , ("Plutus.Contract.Effects", "ActiveEndpoint")
+    , ("Plutus.Contract.Effects", "PABReq")
+    , ("Plutus.Contract.Effects", "PABResp")
     ]
 
 argParser :: Parser FilePath

@@ -13,9 +13,9 @@ module API.Lenses
 
 import Prologue
 
+import Data.Argonaut (Json)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Data.RawJson (RawJson)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
@@ -58,7 +58,7 @@ _cicStatus :: Lens' (ContractInstanceClientState MarloweContract)
 _cicStatus = _ContractInstanceClientState <<< prop (Proxy :: _ "cicStatus")
 
 ----------
-_observableState :: Lens' (PartiallyDecodedResponse ActiveEndpoint) RawJson
+_observableState :: Lens' (PartiallyDecodedResponse ActiveEndpoint) Json
 _observableState = _PartiallyDecodedResponse <<< prop
   (Proxy :: _ "observableState")
 

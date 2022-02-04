@@ -4,18 +4,9 @@ module Page.Dashboard.State
   , updateTotalFunds
   ) where
 
-import Prologue
-
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , createContract
-  , followContract
-  , followContractWithPendingFollowerApp
-  , redeem
-  , subscribeToPlutusApp
-  )
+import Capability.Marlowe (class ManageMarlowe, createContract, redeem)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   )
@@ -129,13 +120,32 @@ import Page.Dashboard.Types
   , State
   , WalletCompanionStatus(..)
   )
-import Store as Store
-import Toast.Types
-  ( ajaxErrorToast
-  , decodedAjaxErrorToast
-  , errorToast
-  , successToast
+import Prologue
+  ( class Functor
+  , Either(..)
+  , Maybe(..)
+  , Tuple
+  , Unit
+  , bind
+  , discard
+  , flip
+  , fst
+  , map
+  , not
+  , pure
+  , unit
+  , void
+  , when
+  , ($)
+  , (&&)
+  , (/=)
+  , (<$>)
+  , (<<<)
+  , (<=)
+  , (==)
   )
+import Store as Store
+import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 {- [Workflow 2][4] Connect a wallet
 When we connect a wallet, it has this initial state. Notable is the walletCompanionStatus of
@@ -246,7 +256,7 @@ So here we need to check whether there is an existing `MarloweFollower` app with
 If someone else started the contract, and gave us a role, we will have no placeholder
 `MarloweFollower` app, and so we simply create a new one and start following immediately.
 -}
-{- [UC-CONTRACT-2][X] Receive a role token for a marlowe contract -}
+{- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
 handleAction { walletDetails } (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
   existingContracts <- use _contracts
@@ -284,17 +294,19 @@ handleAction { walletDetails } (UpdateFollowerApps companionAppState) = do
 
           mPendingContract = findMin $ mapMaybe isStartingAndMetadataMatches
             existingContracts
-        ajaxFollowerApp <- case mPendingContract of
-          Just { key: followerAppId } -> followContractWithPendingFollowerApp
-            walletDetails
-            marloweParams
-            followerAppId
-          Nothing -> followContract walletDetails marloweParams
-        case ajaxFollowerApp of
-          Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
-            "Failed to load new contract."
-            decodedAjaxError
-          Right (followerAppId /\ _) -> subscribeToPlutusApp followerAppId
+        pure unit
+-- FIXME-3208: removed to avoid infinite loop
+-- ajaxFollowerApp <- case mPendingContract of
+--   Just { key: followerAppId } -> followContractWithPendingFollowerApp
+--     walletDetails
+--     marloweParams
+--     followerAppId
+--   Nothing -> followContract walletDetails marloweParams
+-- case ajaxFollowerApp of
+--   Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
+--     "Failed to load new contract."
+--     decodedAjaxError
+--   Right (followerAppId /\ _) -> subscribeToPlutusApp followerAppId
 
 {- [Workflow 2][8] Connect a wallet
 If this is the first update we are receiving from a new `MarloweFollower` app that was created

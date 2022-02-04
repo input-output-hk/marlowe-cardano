@@ -5,6 +5,7 @@ import Prelude
 
 import Affjax.RequestHeader (RequestHeader(..))
 import Data.Argonaut (Json, JsonDecodeError)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
@@ -14,7 +15,6 @@ import Data.Either (Either(..))
 import Data.Foldable (fold)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
-import Data.RawJson (RawJson)
 import Data.Tuple (Tuple)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
@@ -177,7 +177,7 @@ getApiContractInstanceByContractinstanceidSchema contract_instance_id =
 postApiContractInstanceByContractinstanceidEndpointByEndpointname
   :: forall m
    . MonadAjax Api m
-  => RawJson
+  => Json
   -> PlutusAppId
   -> String
   -> m (Either (AjaxError JsonDecodeError Json) Unit)
