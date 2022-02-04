@@ -48,30 +48,17 @@ jobs:
 
     - name: Build Marlowe Playground Client
       working-directory: ./
+      env:
+        CLIENT_PORT: 8009
       run: |
         nix-shell
         cd marlowe-playground-client
         $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
-
-    - name: Install npm
-      working-directory: ./
-      run: nix-shell --run cd marlowe-playground-client && npm install
-
-    - name: Build Spago
-      working-directory: ./
-      run: nix-shell --run cd marlowe-playground-client && npm run build:spago
-
-    - name: Build Spago
-      working-directory: ./
-      run: nix-shell --run cd marlowe-playground-client && npm run build:spago
-
-    - name: Build Spago
-      working-directory: ./
-      run: nix-shell --run npm run build:webpack:dev:vendor
-
-    - name: Build Spago
-      working-directory: ./
-      run: nix-shell --run cd marlowe-playground-client && npm run build:webpack:dev
+        npm install
+        npm run build:spago
+        npm run build:webpack:dev:vendor
+        npm run build:webpack:dev &
+        while ! echo exit | nc localhost $CLIENT_PORT; do echo "Waiting for playground client on $CLIENT_PORT" && sleep 10; done
 
     - name: Setup Playwright
       working-directory: ./e2e-tests/
