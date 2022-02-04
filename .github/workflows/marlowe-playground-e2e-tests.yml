@@ -52,7 +52,7 @@ jobs:
       working-directory: ./
       run: |
         nix-shell
-        cd marlowe-playground-client --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
+        cd marlowe-playground-client
         $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
         npm install --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
         npm run build:spago --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
