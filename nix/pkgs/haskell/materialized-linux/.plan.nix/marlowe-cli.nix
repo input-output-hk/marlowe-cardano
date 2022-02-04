@@ -40,19 +40,31 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+          (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+          (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+          (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
+          (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+          (hsPkgs."network" or (errorHandler.buildDepError "network"))
+          (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
           (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
+          (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
+          (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+          (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
+          (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
           (hsPkgs."regex-posix" or (errorHandler.buildDepError "regex-posix"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
+          (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
           (hsPkgs."split" or (errorHandler.buildDepError "split"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
+          (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
           ];
         buildable = true;
         modules = [
@@ -60,6 +72,7 @@
           "Language/Marlowe/CLI/Command/Contract"
           "Language/Marlowe/CLI/Command/Input"
           "Language/Marlowe/CLI/Command/Parse"
+          "Language/Marlowe/CLI/Command/PAB"
           "Language/Marlowe/CLI/Command/Role"
           "Language/Marlowe/CLI/Command/Run"
           "Language/Marlowe/CLI/Command/Template"
@@ -73,9 +86,11 @@
           "Language/Marlowe/CLI/Export"
           "Language/Marlowe/CLI/IO"
           "Language/Marlowe/CLI/Orphans"
+          "Language/Marlowe/CLI/PAB"
           "Language/Marlowe/CLI/Run"
           "Language/Marlowe/CLI/Transaction"
           "Language/Marlowe/CLI/Types"
+          "Language/Marlowe/Contract"
           "Paths_marlowe_cli"
           ];
         hsSourceDirs = [ "src" ];
