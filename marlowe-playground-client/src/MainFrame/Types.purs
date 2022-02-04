@@ -95,7 +95,6 @@ data Action
   | GistAction GistAction
   | OpenModal ModalView
   | CloseModal
-  | ChangeProjectName String
   | OpenLoginPopup Action
 
 -- | Here we decide which top-level queries to track as GA events, and
@@ -123,7 +122,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenModal view) = Just $ (defaultEvent (show view))
     { category = Just "OpenModal" }
   toEvent CloseModal = Just $ defaultEvent "CloseModal"
-  toEvent (ChangeProjectName _) = Just $ defaultEvent "ChangeProjectName"
   toEvent (OpenLoginPopup _) = Just $ defaultEvent "OpenLoginPopup"
 
 data View
@@ -271,7 +269,7 @@ _createGistResult = prop (Proxy :: _ "createGistResult")
 _loadGistResult :: Lens' State (Either String (WebData Gist))
 _loadGistResult = prop (Proxy :: _ "loadGistResult")
 
-_projectName :: Lens' State String
+_projectName :: forall r. Lens' { projectName :: String | r } String
 _projectName = prop (Proxy :: _ "projectName")
 
 _showModal :: Lens' State (Maybe ModalView)
@@ -374,6 +372,7 @@ sessionToState (Session sessionData) defaultState =
   defaultState
     { projectName = sessionData.projectName
     , gistId = sessionData.gistId
+    , simulationState { projectName = sessionData.projectName }
     , workflow = sessionData.workflow
     , contractMetadata = sessionData.contractMetadata
     }

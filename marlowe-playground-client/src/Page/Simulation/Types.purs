@@ -27,6 +27,8 @@ type State
   , helpContext :: HelpContext
   -- List of decoration ids used by the monaco editor to track the running contract
   , decorationIds :: Array String
+  -- Required for download json button to build up file name
+  , projectName :: String
   }
 
 data Action
