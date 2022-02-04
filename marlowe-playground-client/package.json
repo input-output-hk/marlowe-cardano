@@ -51,7 +51,7 @@
     "postcss-nested": "^5.0.5",
     "postcss-scss": "^3.0.5",
     "raw-loader": "^4.0.2",
-    "tailwindcss": "^2.2.7",
+    "tailwindcss": "^2.2.19",
     "ts-loader": "^6.2.1",
     "typescript": "^3.8.3",
     "url-loader": "^1.1.2",
