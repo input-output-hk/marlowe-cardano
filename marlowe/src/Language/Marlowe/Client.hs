@@ -543,6 +543,7 @@ defaultMarloweParams = marloweParams adaSymbol
 
 
 newtype CompanionState = CompanionState (Map MarloweParams MarloweData)
+  deriving (Eq, Show)
   deriving (Semigroup,Monoid) via (Map MarloweParams MarloweData)
 
 instance ToJSON CompanionState where

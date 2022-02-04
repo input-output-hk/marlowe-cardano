@@ -30,9 +30,9 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxIn
 , parseTxIx
 , parseTxOut
+, parseUrl
 , parseValue
-
-
+, parseWalletId
 , readTokenName
 ) where
 
@@ -48,8 +48,10 @@ import Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent 
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot (..))
+import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
+import Wallet.Emulator.Wallet (WalletId, fromBase16)
 
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
@@ -295,3 +297,19 @@ parseInputContent =
       parseNotify =
         INotify
           <$ O.flag' () (O.long "notify" <> O.help "Notify the contract.")
+
+
+-- | Parse a URL.
+parseUrl :: O.ReadM BaseUrl
+parseUrl =
+  O.eitherReader
+    $ either (Left . show) Right
+    . parseBaseUrl
+
+
+-- | Parse a WalletId.
+parseWalletId :: O.ReadM WalletId
+parseWalletId =
+  O.eitherReader
+    $ fromBase16
+    . T.pack
