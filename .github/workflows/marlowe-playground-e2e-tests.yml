@@ -1,10 +1,4 @@
 name: "Marlowe-Playground E2E tests"
-env:
-  CACHE_NAME: marlowe-temp
-  ALLOWED_URIS: "https://github.com https://api.github.com"
-  TRUSTED_PUBLIC_KEYS: "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec="
-  SUBSTITUTERS: "https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/ https://marlowe-temp.cachix.org"
-
 on:
   schedule:
   - cron: '0 4 * * *'
@@ -30,8 +24,8 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-unstable
         extra_nix_config: |
-          substituters        = https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/
-          trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+          substituters        = https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/ https://marlowe-temp.cachix.org
+          trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec=
     - name: Setup NodeJs
       uses: actions/setup-node@v2
       with:
@@ -53,11 +47,27 @@ jobs:
       run: |
         nix-shell
         cd marlowe-playground-client
-        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
-        npm install --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
-        npm run build:spago --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
-        npm run build:webpack:dev:vendor --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
-        npm run build:webpack:dev --option trusted-public-keys "${{ env.TRUSTED_PUBLIC_KEYS }}" --option substituters "${{ env.SUBSTITUTERS }}"
+        $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
+
+    - name: Install npm
+      working-directory: ./marlowe-playground-client
+      run: npm install
+
+    - name: Build Spago
+      working-directory: ./marlowe-playground-client
+      run: npm run build:spago
+
+    - name: Build Spago
+      working-directory: ./marlowe-playground-client
+      run: npm run build:spago
+
+    - name: Build Spago
+      working-directory: ./marlowe-playground-client
+      run: npm run build:webpack:dev:vendor
+
+    - name: Build Spago
+      working-directory: ./marlowe-playground-client
+      run: npm run build:webpack:dev
 
     - name: Setup Playwright
       working-directory: ./e2e-tests/
