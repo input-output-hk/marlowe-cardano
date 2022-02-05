@@ -101,6 +101,7 @@ library
     split,
     text,
     unordered-containers,
+    uuid,
     websockets
 
 executable marlowe-cli

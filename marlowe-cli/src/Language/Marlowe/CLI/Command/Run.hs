@@ -107,7 +107,7 @@ data RunCommand =
 runRunCommand :: MonadError CliError m
                    => MonadIO m
                    => RunCommand  -- ^ The command.
-                   -> m ()             -- ^ Action for running the command.
+                   -> m ()        -- ^ Action for running the command.
 runRunCommand command =
   do
     costModel <-
@@ -216,8 +216,8 @@ prepareOptions =
   Prepare
     <$> O.strOption                (O.long "marlowe-file"      <> O.metavar "MARLOWE_FILE"  <> O.help "JSON input file for the Marlowe state and contract.")
     <*> O.many parseInput
-    <*> O.option parseSlotNo       (O.long "invalid-before"    <> O.metavar "SLOT"          <> O.help "Minimum slot for the redemption."                   )
-    <*> O.option parseSlotNo       (O.long "invalid-hereafter" <> O.metavar "SLOT"          <> O.help "Maximum slot for the redemption."                   )
+    <*> O.option parseSlotNo       (O.long "invalid-before"    <> O.metavar "SLOT"          <> O.help "Minimum slot for the input."                        )
+    <*> O.option parseSlotNo       (O.long "invalid-hereafter" <> O.metavar "SLOT"          <> O.help "Maximum slot for the input."                        )
     <*> (O.optional . O.strOption) (O.long "out-file"          <> O.metavar "OUTPUT_FILE"   <> O.help "JSON output file for contract."                     )
     <*> O.switch                   (O.long "print-stats"                                    <> O.help "Print statistics."                                  )
 

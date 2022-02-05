@@ -39,7 +39,7 @@ import qualified Options.Applicative as O
 
 -- | Marlowe CLI commands and options for exporting data.
 data ContractCommand =
-    -- | Export comprehensive Marlowe contrac and transactiont information.
+    -- | Export comprehensive Marlowe contract and transaction information.
     Export
     {
       network        :: Maybe NetworkId              -- ^ The network ID, if any.
