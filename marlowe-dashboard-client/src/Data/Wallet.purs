@@ -5,7 +5,6 @@ module Data.Wallet
   , _marloweAppId
   , _pubKeyHash
   , _walletId
-  , _walletInfo
   , _walletNickname
   , mkWalletDetails
   ) where
@@ -13,7 +12,7 @@ module Data.Wallet
 import Prologue
 
 import Data.Argonaut (class DecodeJson, class EncodeJson)
-import Data.Lens (Lens', lens)
+import Data.Lens (Lens', iso)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
@@ -24,7 +23,7 @@ import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics (Assets)
 import Type.Proxy (Proxy(..))
 
-type WalletDetails' =
+type WalletDetailsFields =
   { walletNickname :: WalletNickname
   -- FIXME-3208: Put the plutusAppId under a Connected/Disconnected
   , companionAppId :: PlutusAppId
@@ -33,7 +32,7 @@ type WalletDetails' =
   , assets :: Assets
   }
 
-newtype WalletDetails = WalletDetails WalletDetails'
+newtype WalletDetails = WalletDetails WalletDetailsFields
 
 derive instance Eq WalletDetails
 
@@ -53,31 +52,30 @@ mkWalletDetails walletNickname companionAppId marloweAppId walletInfo =
     , assets: mempty
     }
 
-_PrivateNewtype :: Lens' WalletDetails WalletDetails'
-_PrivateNewtype = lens
+_WalletDetails :: Lens' WalletDetails WalletDetailsFields
+_WalletDetails = iso
   (\(WalletDetails details) -> details)
-  (\_ details -> WalletDetails details)
+  (\details -> WalletDetails details)
 
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname
-_walletNickname = _PrivateNewtype <<< prop (Proxy :: _ "walletNickname")
+_walletNickname = _WalletDetails <<< prop (Proxy :: _ "walletNickname")
 
 _companionAppId :: Lens' WalletDetails PlutusAppId
-_companionAppId = _PrivateNewtype <<< prop (Proxy :: _ "companionAppId")
+_companionAppId = _WalletDetails <<< prop (Proxy :: _ "companionAppId")
 
 _marloweAppId :: Lens' WalletDetails PlutusAppId
-_marloweAppId = _PrivateNewtype <<< prop (Proxy :: _ "marloweAppId")
-
-_walletInfo :: Lens' WalletDetails WalletInfo
-_walletInfo = _PrivateNewtype <<< prop (Proxy :: _ "walletInfo")
+_marloweAppId = _WalletDetails <<< prop (Proxy :: _ "marloweAppId")
 
 _assets :: Lens' WalletDetails Assets
-_assets = _PrivateNewtype <<< prop (Proxy :: _ "assets")
+_assets = _WalletDetails <<< prop (Proxy :: _ "assets")
 
-------------------------------------------------------------
-_walletId :: Lens' WalletInfo WalletId
-_walletId = _Newtype <<< prop (Proxy :: _ "walletId")
+_walletInfo :: Lens' WalletDetails WalletInfo
+_walletInfo = _WalletDetails <<< prop (Proxy :: _ "walletInfo")
 
-_pubKeyHash :: Lens' WalletInfo PaymentPubKeyHash
-_pubKeyHash = _Newtype <<< prop (Proxy :: _ "pubKeyHash")
+_walletId :: Lens' WalletDetails WalletId
+_walletId = _walletInfo <<< _Newtype <<< prop (Proxy :: _ "walletId")
+
+_pubKeyHash :: Lens' WalletDetails PaymentPubKeyHash
+_pubKeyHash = _walletInfo <<< _Newtype <<< prop (Proxy :: _ "pubKeyHash")
 

@@ -44,7 +44,6 @@ import Data.Wallet
   , _companionAppId
   , _marloweAppId
   , _walletId
-  , _walletInfo
   )
 import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
 import Effect.Aff.Class (class MonadAff)
@@ -176,7 +175,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       mDashboardState <- peruse _dashboardState
       for_ mDashboardState \(Tuple walletDetails dashboardState) -> do
         let
-          walletId = view (_walletInfo <<< _walletId) walletDetails
+          walletId = view _walletId walletDetails
 
           followAppIds :: Array PlutusAppId
           followAppIds =
@@ -331,7 +330,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
             -- we're not, we don't care about them _)
             for_ mDashboardState \(Tuple walletDetails _) ->
               let
-                walletId = view (_walletInfo <<< _walletId) walletDetails
+                walletId = view _walletId walletDetails
                 walletCompanionAppId = view _companionAppId walletDetails
                 marloweAppId = view _marloweAppId walletDetails
 
@@ -424,7 +423,7 @@ handleAction (EnterWelcomeState walletDetails followerApps) = do
   let
     followerAppIds :: Array PlutusAppId
     followerAppIds = Set.toUnfoldable $ keys followerApps
-  unsubscribeFromWallet $ view (_walletInfo <<< _walletId) walletDetails
+  unsubscribeFromWallet $ view _walletId walletDetails
   unsubscribeFromPlutusApp $ view _companionAppId walletDetails
   unsubscribeFromPlutusApp $ view _marloweAppId walletDetails
   for_ followerAppIds unsubscribeFromPlutusApp
@@ -442,7 +441,7 @@ it works.
 -}
 handleAction (EnterDashboardState walletDetails) = do
   let
-    walletId = view (_walletInfo <<< _walletId) walletDetails
+    walletId = view _walletId walletDetails
   ajaxFollowerApps <- getFollowerApps walletId
   currentSlot <- use _currentSlot
   case ajaxFollowerApps of

@@ -69,7 +69,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.Unfoldable as Unfoldable
-import Data.Wallet (WalletDetails, _assets, _pubKeyHash, _walletInfo)
+import Data.Wallet (WalletDetails, _assets, _pubKeyHash)
 import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
@@ -320,7 +320,7 @@ getUserParties walletDetails marloweParams =
   let
     -- the Payment PubKeyHash of the `logged-user`
     pubKeyHash = view
-      (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
+      (_pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
       walletDetails
 
     assets = view _assets walletDetails

@@ -66,7 +66,6 @@ import Data.Wallet
   , _marloweAppId
   , _pubKeyHash
   , _walletId
-  , _walletInfo
   , mkWalletDetails
   )
 import Data.WalletId (WalletId)
@@ -76,7 +75,7 @@ import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Run.Wallet.V1.Types (WalletInfo)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics
   ( Contract
   , MarloweData
@@ -162,13 +161,13 @@ fetchWalletDetails { newWallet, walletNickname, walletInfo } = withExceptT
   clientServerError
   do
     let
-      walletId = view _walletId walletInfo
+      WalletInfo { walletId } = walletInfo
 
     contracts <-
       if newWallet then pure []
       else
         ExceptT $
-          PAB.getWalletContractInstances (view _walletId walletInfo)
+          PAB.getWalletContractInstances walletId
 
     -- If we already have the plutus contract for the wallet companion and marlowe app
     -- let's use those, if note activate new instances of them
@@ -200,7 +199,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   followContract walletDetails marloweParams =
     runExceptT do
       let
-        walletId = view (_walletInfo <<< _walletId) walletDetails
+        walletId = view _walletId walletDetails
       followAppId <- withExceptT Left $ ExceptT $ PAB.activateContract
         MarloweFollower
         walletId
@@ -256,7 +255,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       marloweAppId = view _marloweAppId walletDetails
 
       pubKeyHash = view
-        (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
+        (_pubKeyHash <<< _PaymentPubKeyHash)
         walletDetails
     in
       MarloweApp.redeem marloweAppId marloweParams tokenName pubKeyHash

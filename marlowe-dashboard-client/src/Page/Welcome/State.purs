@@ -20,7 +20,7 @@ import Data.Address as A
 import Data.AddressBook as AddressBook
 import Data.Lens (assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
-import Data.Wallet (_pubKeyHash, _walletInfo, _walletNickname)
+import Data.Wallet (_pubKeyHash, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, liftEffect, modify_)
@@ -80,7 +80,7 @@ handleAction (ConnectWallet walletDetails) = do
   let
     walletNickname = view _walletNickname walletDetails
     pubKeyHash = view
-      (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
+      (_pubKeyHash <<< _PaymentPubKeyHash)
       walletDetails
 
   modifyAddressBook_

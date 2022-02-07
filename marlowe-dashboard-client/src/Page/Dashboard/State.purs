@@ -55,7 +55,6 @@ import Data.Wallet
   ( WalletDetails
   , _assets
   , _walletId
-  , _walletInfo
   , _walletNickname
   )
 import Effect.Aff.Class (class MonadAff)
@@ -532,7 +531,7 @@ updateTotalFunds
   => WalletDetails
   -> m Unit
 updateTotalFunds walletDetails = do
-  let walletId = walletDetails ^. _walletInfo <<< _walletId
+  let walletId = walletDetails ^. _walletId
   response <- getWalletTotalFunds walletId
   for_ response \(GetTotalFundsResponse { assets }) ->
     updateStore $ Store.UpdateAssets $ toFront assets

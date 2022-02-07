@@ -32,7 +32,6 @@ import Data.Wallet
   ( WalletDetails
   , _assets
   , _pubKeyHash
-  , _walletInfo
   , _walletNickname
   )
 import Data.WalletNickname as WN
@@ -674,7 +673,7 @@ currentWalletCard walletDetails =
   let
     walletNickname = view _walletNickname walletDetails
 
-    address = view (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
+    address = view (_pubKeyHash <<< _PaymentPubKeyHash)
       walletDetails
 
     assets = view _assets walletDetails
