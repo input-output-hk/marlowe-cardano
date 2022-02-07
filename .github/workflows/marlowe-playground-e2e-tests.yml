@@ -62,8 +62,7 @@ jobs:
         run: |
           cd marlowe-playground-client
           $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
-          npl install
-          we-playg
+          npm install
           npm run build:spago
           npm run build:webpack:dev:vendor
           npm run build:webpack:dev &
