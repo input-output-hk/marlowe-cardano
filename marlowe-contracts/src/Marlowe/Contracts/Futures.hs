@@ -8,7 +8,7 @@ import Marlowe.Contracts.Common
 
 -- = Futures
 
--- |Future on the exchange rate of USC/ADA
+-- |Future on the exchange rate of USD/ADA
 future ::
      Party             -- ^ Buyer
   -> Party             -- ^ Seller

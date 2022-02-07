@@ -47,7 +47,7 @@ library
     Marlowe.Contracts.Common
     Marlowe.Contracts.Futures
     Marlowe.Contracts.Options
-    Marlowe.Contracts.ReverseConvertible
+    Marlowe.Contracts.StructuredProducts
     Marlowe.Contracts.ZeroCouponBond
   build-depends:
     base >= 4.9 && < 5,
