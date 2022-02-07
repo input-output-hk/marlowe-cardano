@@ -32,7 +32,8 @@ import Type.Proxy (Proxy(..))
 -- | Class for projecting a result from a structure. Laws:
 -- |
 -- |  ```
--- |  project blank == Nothing
+-- |  project (inject r) == Just r
+-- |  map inject (project a) == a
 -- |  ```
 -- |
 class Injective r a | a -> r where
@@ -142,8 +143,6 @@ instance
     where
     label = Proxy :: _ label
 
--- | Note: unlawful instance. project blank == Just {}
--- | Needed for record instances to resolve though.
 instance ProjectiveRecord RL.Nil rip () () roi where
   projectRecord _ _ = pure identity
   injectRecord _ _ = identity
