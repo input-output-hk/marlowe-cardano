@@ -6,14 +6,7 @@ module Page.Dashboard.State
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , createContract
-  , followContract
-  , followContractWithPendingFollowerApp
-  , redeem
-  , subscribeToPlutusApp
-  )
+import Capability.Marlowe (class ManageMarlowe, createContract, redeem)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -52,16 +45,7 @@ import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Lens.Traversal (traversed)
 import Data.List (filter, fromFoldable) as List
-import Data.Map
-  ( Map
-  , filterKeys
-  , findMin
-  , insert
-  , lookup
-  , mapMaybe
-  , mapMaybeWithKey
-  , toUnfoldable
-  )
+import Data.Map (Map, filterKeys, insert, lookup, mapMaybeWithKey, toUnfoldable)
 import Data.Maybe (fromMaybe)
 import Data.Set (delete, fromFoldable, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
@@ -83,7 +67,6 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
-import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.PAB (PlutusAppId, transactionFee)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
@@ -94,12 +77,11 @@ import Marlowe.Semantics
   , Payee(..)
   , Payment(..)
   , Slot
-  , _marloweContract
   )
 import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
 import Page.Contract.State (applyTimeout)
 import Page.Contract.State (handleAction, mkInitialState, updateState) as Contract
-import Page.Contract.Types (Action(..), StartingState, State(..)) as Contract
+import Page.Contract.Types (Action(..), State) as Contract
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
@@ -259,7 +241,7 @@ If someone else started the contract, and gave us a role, we will have no placeh
 `MarloweFollower` app, and so we simply create a new one and start following immediately.
 -}
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
-handleAction { walletDetails } (UpdateFollowerApps companionAppState) = do
+handleAction {} (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
   existingContracts <- use _contracts
   let
@@ -282,33 +264,32 @@ handleAction { walletDetails } (UpdateFollowerApps companionAppState) = do
       newContractsArray
   else
     assign _walletCompanionStatus FirstUpdateComplete
-  void
-    $ for newContractsArray \(marloweParams /\ marloweData) -> do
-        let
-          mTemplate = findTemplate $ view _marloweContract marloweData
-
-          isStartingAndMetadataMatches
-            :: Contract.State -> Maybe Contract.StartingState
-          isStartingAndMetadataMatches = case _, mTemplate of
-            Contract.Starting starting@{ metadata }, Just template
-              | template.metaData == metadata -> Just starting
-            _, _ -> Nothing
-
-          mPendingContract = findMin $ mapMaybe isStartingAndMetadataMatches
-            existingContracts
-        pure unit
 -- FIXME-3208: removed to avoid infinite loop
--- ajaxFollowerApp <- case mPendingContract of
---   Just { key: followerAppId } -> followContractWithPendingFollowerApp
---     walletDetails
---     marloweParams
---     followerAppId
---   Nothing -> followContract walletDetails marloweParams
--- case ajaxFollowerApp of
---   Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
---     "Failed to load new contract."
---     decodedAjaxError
---   Right (followerAppId /\ _) -> subscribeToPlutusApp followerAppId
+--   void
+--     $ for newContractsArray \(_ /\ marloweData) -> do
+--         let
+--           mTemplate = findTemplate $ view _marloweContract marloweData
+
+--           isStartingAndMetadataMatches
+--             :: Contract.State -> Maybe Contract.StartingState
+--           isStartingAndMetadataMatches = case _, mTemplate of
+--             Contract.Starting starting@{ metadata }, Just template
+--               | template.metaData == metadata -> Just starting
+--             _, _ -> Nothing
+
+--   mPendingContract = findMin $ mapMaybe isStartingAndMetadataMatches
+--     existingContracts
+--   ajaxFollowerApp <- case mPendingContract of
+--     Just { key: followerAppId } -> followContractWithPendingFollowerApp
+--       walletDetails
+--       marloweParams
+--       followerAppId
+--     Nothing -> followContract walletDetails marloweParams
+--   case ajaxFollowerApp of
+--     Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
+--       "Failed to load new contract."
+--       decodedAjaxError
+--     Right (followerAppId /\ _) -> subscribeToPlutusApp followerAppId
 
 {- [Workflow 2][8] Connect a wallet
 If this is the first update we are receiving from a new `MarloweFollower` app that was created

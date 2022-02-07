@@ -267,7 +267,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                         case mEndpointResponse of
 
                           Just
-                            ( EndpointSuccess reqId
+                            ( EndpointSuccess _
                                 (CreateResponse marloweParams)
                             ) -> do
                             {- [UC-CONTRACT-1][2] Starting a Marlowe contract
@@ -284,7 +284,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                               Left _ -> addToast $ errorToast
                                 "Can't follow the contract"
                                 Nothing
-                              Right (followerId /\ contractState) -> do
+                              Right (_ /\ _) -> do
                                 -- FIXME-3208: swap store contract from new to running
                                 addToast $ successToast
                                   "Contract initialised."

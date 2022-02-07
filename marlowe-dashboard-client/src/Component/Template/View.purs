@@ -23,7 +23,6 @@ import Data.Map.Ordered.OMap (OMap)
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Tuple.Nested ((/\))
-import Debug (spy)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -264,7 +263,7 @@ contractReview assets template params =
 
     metaData = view _metaData template
 
-    { timeouts, values } = spy "ContractParams" params
+    { timeouts, values } = params
   in
     div
       [ classNames
