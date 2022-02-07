@@ -36,11 +36,11 @@ jobs:
           nix flake lock
           nix-shell --command "update-client-deps"
       - name: Setup SSH Keys and known_hosts
-          env:
-              SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-          run: |
-              ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-              ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+        run: |
+          ssh-agent -a $SSH_AUTH_SOCK > /dev/null
+          ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
       - name: Run Marlowe Playground Server
         working-directory: ./
         env:
