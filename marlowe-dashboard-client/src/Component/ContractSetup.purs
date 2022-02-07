@@ -13,10 +13,10 @@ import Component.ContractSetup.Types
   , _timeouts
   , _values
   )
+import Component.Form (renderNumberInput, renderTextInput)
 import Component.Icons (Icon, icon)
 import Component.Icons as Icon
 import Css as Css
-import DOM.HTML.Indexed (HTMLinput)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -96,33 +96,6 @@ type ComponentHTML m =
 type DSL m a =
   H.HalogenM State Action ChildSlots Msg m a
 
-renderLabel :: forall w i. String -> String -> HH.HTML w i
-renderLabel id label =
-  HH.label [ classNames $ Css.labelBox <> Css.labelText, HP.for id ]
-    [ HH.text label ]
-
-renderErrorLabel :: forall w i. String -> Maybe String -> HH.HTML w i
-renderErrorLabel id error = HH.label
-  [ classNames $ Css.inputError <> maybe [ "invisible" ] (const []) error
-  , HP.for id
-  ]
-  [ HH.text $ fromMaybe "Valid" error ]
-
-renderInputBox
-  :: forall w error i. Maybe error -> Array (HH.HTML w i) -> HH.HTML w i
-renderInputBox error =
-  HH.div [ classNames $ Css.inputBox error ]
-
-renderInput
-  :: forall pa slots error output m
-   . String
-  -> String
-  -> Array (HP.IProp HTMLinput (Input.Action pa slots error output m))
-  -> Input.ComponentHTML pa slots error output m
-renderInput id value props = HH.input
-  ( Input.setInputProps value $ props <> [ HP.id id, classNames Css.inputText ]
-  )
-
 _contractSetup :: Proxy "contractSetup"
 _contractSetup = Proxy
 
@@ -189,23 +162,20 @@ render state = do
             [ HH.text $ templateName <> " setup" ]
         , nicknameInput fields.nickname
         , templateInputsSection Icon.Roles "Roles"
-        , HH.fieldset [ classNames [ "space-y-2" ] ]
             $ List.toUnfoldable
             $ Map.values
             $ mapWithIndex (roleInput state)
             $ fields.roles
-        , templateInputsSection Icon.Terms "Terms"
-        , HH.fieldset [ classNames [ "space-y-2" ] ]
-            $
-              ( List.toUnfoldable
-                  $ Map.values
-                  $ mapWithIndex timeoutInput fields.timeouts
-              )
-                <>
-                  ( List.toUnfoldable
-                      $ Map.values
-                      $ mapWithIndex (valueInput state) fields.values
-                  )
+        , templateInputsSection Icon.Terms "Terms" $
+            ( List.toUnfoldable
+                $ Map.values
+                $ mapWithIndex timeoutInput fields.timeouts
+            )
+              <>
+                ( List.toUnfoldable
+                    $ Map.values
+                    $ mapWithIndex (valueInput state) fields.values
+                )
         ]
     , HH.div
         [ classNames
@@ -245,17 +215,8 @@ nicknameInput fieldState =
     , format: CN.toString
     , validate: CN.fromString
     , render: \s ->
-        let
-          id = "contract-nickname"
-          mkError = case _ of
-            CN.Empty -> "Required."
-          error = mkError <$> s.error
-        in
-          HH.div [ classNames [ "relative" ] ]
-            [ renderLabel id "Contract title"
-            , renderInputBox error [ renderInput id s.value [] ]
-            , renderErrorLabel id error
-            ]
+        renderTextInput "contract-nickname" "Contract title" s case _ of
+          CN.Empty -> "Required."
     }
 
 roleInput
@@ -278,21 +239,11 @@ roleInput state name fieldState =
           <<< flip AddressBook.lookupAddress addressBook
           <=< WN.fromString
     , render: \s ->
-        let
-          id = "role-" <> name
-          mkError = case _ of
-            WN.Empty -> "Required."
-            WN.Exists -> "Already exists."
-            WN.DoesNotExist -> "Not found."
-            WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
-          error = mkError <$> s.error
-        in
-          HH.div [ classNames [ "relative" ] ]
-            [ renderLabel id name
-            , renderInputBox error
-                [ renderInput id s.value [] ]
-            , renderErrorLabel id error
-            ]
+        renderTextInput ("role-" <> name) name s case _ of
+          WN.Empty -> "Required."
+          WN.Exists -> "Already exists."
+          WN.DoesNotExist -> "Not found."
+          WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
     }
 
 timeoutInput
@@ -309,23 +260,10 @@ timeoutInput name fieldState =
     , format: CT.toString
     , validate: CT.fromString
     , render: \s ->
-        let
-          id = "timeout-" <> name
-          mkError = case _ of
-            CT.Empty -> "Required."
-            CT.Past -> "Must be in the future."
-            CT.Invalid -> "Must be a number of slots from contract start."
-          error = mkError <$> s.error
-        in
-          HH.div [ classNames [ "relative" ] ]
-            [ renderLabel id name
-            , renderInputBox error
-                [ renderInput id s.value
-                    [ HP.type_ HP.InputNumber, HP.readOnly true ]
-                , HH.span_ [ HH.text "minutes" ]
-                ]
-            , renderErrorLabel id error
-            ]
+        renderNumberInput TimeFormat ("timeout-" <> name) name s case _ of
+          CT.Empty -> "Required."
+          CT.Past -> "Must be in the future."
+          CT.Invalid -> "Must be a number of slots from contract start."
     }
 
 valueInput
@@ -347,44 +285,33 @@ valueInput state name fieldState =
         DecimalFormat d cs -> CV.currencyFromString cs d
         _ -> CV.fromString
     , render: \s ->
-        let
-          id = "value-" <> name
-          mkError = case _ of
-            CV.Empty -> "Required."
-            CV.Invalid -> "Must by a number."
-          error = mkError <$> s.error
-        in
-          HH.div [ classNames [ "relative" ] ]
-            [ renderLabel id name
-            , renderInputBox error $ join
-                [ case format of
-                    DecimalFormat _ symbol -> [ HH.span_ [ HH.text symbol ] ]
-                    _ -> []
-                , [ renderInput id s.value [ HP.type_ HP.InputNumber ] ]
-                ]
-            , renderErrorLabel id error
-            ]
+        renderNumberInput format ("value-" <> name) name s case _ of
+          CV.Empty -> "Required."
+          CV.Invalid -> "Must by a number."
     }
 
 templateInputsSection
-  :: forall w i. Icon -> String -> HH.HTML w i
-templateInputsSection icon' heading = HH.h3
-  [ classNames
-      [ "flex"
-      , "gap-1"
-      , "items-center"
-      , "leading-none"
-      , "text-sm"
-      , "font-semibold"
-      , "pb-2"
-      , "mb-4"
-      , "border-gray"
-      , "border-b"
-      ]
-  ]
-  [ icon icon' [ "text-purple" ]
-  , HH.text heading
-  ]
+  :: forall w i. Icon -> String -> Array (HH.HTML w i) -> HH.HTML w i
+templateInputsSection icon' heading children =
+  HH.fieldset [ classNames [ "space-y-2" ] ] $
+    [ HH.h3
+        [ classNames
+            [ "flex"
+            , "gap-1"
+            , "items-center"
+            , "leading-none"
+            , "text-sm"
+            , "font-semibold"
+            , "pb-2"
+            , "mb-4"
+            , "border-gray"
+            , "border-b"
+            ]
+        ]
+        [ icon icon' [ "text-purple" ]
+        , HH.text heading
+        ]
+    ] <> children
 
 handleFieldMsg
   :: forall a m
