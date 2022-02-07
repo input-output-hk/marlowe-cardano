@@ -1,0 +1,88 @@
+name: "Marlowe-Playground E2E tests"
+env:
+  CACHE_NAME: marlowe-temp
+  ALLOWED_URIS: "https://github.com https://api.github.com"
+  TRUSTED_PUBLIC_KEYS: "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec="
+  SUBSTITUTERS: "https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/ https://marlowe-temp.cachix.org"
+on:
+  schedule:
+  - cron: '0 4 * * *'
+  push:
+    branches: [ SCP-3139/e2e-tests ]
+  workflow_dispatch:
+
+jobs:
+  marlowe-playground-e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: cachix/install-nix-action@v16
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          install_url: https://releases.nixos.org/nix/nix-2.5.1/install
+          extra_nix_config: |
+            allowed-uris = ${{ env.ALLOWED_URIS }}
+            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
+            substituters = ${{ env.SUBSTITUTERS }}
+            experimental-features = nix-command flakes
+      - uses: cachix/cachix-action@v10
+        with:
+          name: ${{ env.CACHE_NAME }}
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '12.12.0'
+      - run: |
+          nix flake lock
+          nix-shell --command "update-client-deps"
+      - name: Setup SSH Keys and known_hosts
+          env:
+              SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+          run: |
+              ssh-agent -a $SSH_AUTH_SOCK > /dev/null
+              ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
+      - name: Run Marlowe Playground Server
+        working-directory: ./
+        env:
+          GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID_GITHUB }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_GITHUB }}
+          JWT_SIGNATURE: ${{ secrets.JWT_SIGNATURE }}
+          FRONTEND_URL: https://localhost:8009
+          GITHUB_CALLBACK_PATH: "/#/gh-oauth-cb"
+          SERVER_PORT: 8080
+        run: |
+          $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
+          while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground client on $SERVER_PORT" && sleep 10; done
+
+      - name: Build Marlowe Playground Client
+        working-directory: ./
+        env:
+          CLIENT_PORT: 8009
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+        run: |
+          cd marlowe-playground-client
+          $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
+          npl install
+          we-playg
+          npm run build:spago
+          npm run build:webpack:dev:vendor
+          npm run build:webpack:dev &
+          while ! echo exit | nc localhost $CLIENT_PORT; do echo "Waiting for playground client on $CLIENT_PORT" && sleep 10; done
+
+      - name: Setup Playwright
+        working-directory: ./e2e-tests/
+        run: |
+          npm install -D @playwright/test
+          npx playwright install
+    
+      - name: Run Tests
+        working-directory: ./e2e-tests/
+        run: |
+          npx playwright test
+    
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v2
+        with:
+          name: html-report
+          path: e2e-tests/html-report/index.html
+          retention-days: 5
