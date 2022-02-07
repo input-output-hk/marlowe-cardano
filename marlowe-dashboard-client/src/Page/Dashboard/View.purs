@@ -25,15 +25,15 @@ import Data.ContractNickname as ContractNickname
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
-import Data.String (take)
-import Data.Tuple.Nested ((/\))
-import Data.Wallet
-  ( WalletDetails
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
   , _assets
   , _pubKeyHash
   , _walletNickname
   )
+import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
+import Data.String (take)
+import Data.Tuple.Nested ((/\))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
@@ -93,9 +93,9 @@ import Store as Store
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
   :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
-dashboardScreen { currentSlot, tzOffset, walletDetails } state =
+dashboardScreen { currentSlot, tzOffset, wallet } state =
   let
-    walletNickname = walletDetails ^. _walletNickname
+    walletNickname = wallet ^. _walletNickname
 
     menuOpen = state ^. _menuOpen
 
@@ -133,7 +133,7 @@ dashboardScreen { currentSlot, tzOffset, walletDetails } state =
                           ( contractScreen
                               { currentSlot
                               , tzOffset
-                              , walletDetails
+                              , wallet
                               , followerAppId
                               }
                           )
@@ -153,12 +153,12 @@ dashboardCard
   => Input
   -> State
   -> ComponentHTML Action ChildSlots m
-dashboardCard { addressBook, walletDetails } state = case view _card state of
+dashboardCard { addressBook, wallet } state = case view _card state of
   Just card ->
     let
       cardOpen = state ^. _cardOpen
 
-      assets = walletDetails ^. _assets
+      assets = wallet ^. _assets
     in
       div
         [ classNames $ Css.sidebarCardOverlay cardOpen ]
@@ -172,9 +172,9 @@ dashboardCard { addressBook, walletDetails } state = case view _card state of
                   [ icon_ Icon.Close ]
               , case card of
                   TutorialsCard -> tutorialsCard
-                  CurrentWalletCard -> currentWalletCard walletDetails
+                  CurrentWalletCard -> currentWalletCard wallet
                   ContactsCard -> renderSubmodule _contactsState ContactsAction
-                    (contactsCard addressBook walletDetails)
+                    (contactsCard addressBook wallet)
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
@@ -668,15 +668,15 @@ contractGrid currentSlot contractFilter contracts =
       currentSlot
       contractState
 
-currentWalletCard :: forall p. WalletDetails -> HTML p Action
-currentWalletCard walletDetails =
+currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
+currentWalletCard wallet =
   let
-    walletNickname = view _walletNickname walletDetails
+    walletNickname = view _walletNickname wallet
 
     address = view (_pubKeyHash <<< _PaymentPubKeyHash)
-      walletDetails
+      wallet
 
-    assets = view _assets walletDetails
+    assets = view _assets wallet
 
     copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard <<< A.toString
   in

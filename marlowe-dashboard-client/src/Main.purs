@@ -83,17 +83,21 @@ main args = do
   addressBookJson <- getItem addressBookLocalStorageKey
   -- TODO this is for dev purposes only. The need for this should go away when
   -- we have proper wallet integration with a full node or light wallet.
-  walletJson <- getItem walletLocalStorageKey
+  -- FIXME-3208
+  -- walletJson <- getItem walletLocalStorageKey
   let
     addressBook =
       fromMaybe AddressBook.empty $ hush <<< parseDecodeJson =<< addressBookJson
-    wallet = hush <<< parseDecodeJson =<< walletJson
+  -- FIXME-3208
+  -- wallet = hush <<< parseDecodeJson =<< walletJson
 
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
     env <- liftEffect $ mkEnv pollingInterval wsManager webpackBuildMode
     let
-      store = mkStore addressBook wallet
+      -- FIXME-3208
+      -- store = mkStore addressBook wallet
+      store = mkStore addressBook Nothing
     body <- awaitBody
     rootComponent <- runAppM env store mkMainFrame
     driver <- runUI rootComponent { tzOffset } body

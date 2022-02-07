@@ -12,9 +12,14 @@ import Data.ContractNickname (ContractNickname)
 import Data.Lens (_Just, (.~))
 import Data.Map (Map)
 import Data.Map as Map
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
+  , _assets
+  , _companionAppId
+  , _marloweAppId
+  )
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
-import Data.Wallet (WalletDetails, _assets, _companionAppId, _marloweAppId)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -26,7 +31,7 @@ type Store =
   { addressBook :: AddressBook
   , currentSlot :: Slot
   , toast :: Maybe ToastMessage
-  , wallet :: Maybe WalletDetails
+  , wallet :: Maybe PABConnectedWallet
   , newContracts :: Map UUID (ContractNickname /\ MetaData)
   , syncedContracts :: Map MarloweParams Execution.State
   -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
@@ -35,7 +40,7 @@ type Store =
   , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
   }
 
-mkStore :: AddressBook -> Maybe WalletDetails -> Store
+mkStore :: AddressBook -> Maybe PABConnectedWallet -> Store
 mkStore addressBook wallet =
   { addressBook
   , currentSlot: zero
@@ -54,7 +59,7 @@ data Action
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
   -- Wallet
   | ModifyAddressBook (AddressBook -> AddressBook)
-  | ActivateWallet WalletDetails
+  | ActivateWallet PABConnectedWallet
   | ChangePlutusScript MarloweContract PlutusAppId
   | UpdateAssets Assets
   | DeactivateWallet

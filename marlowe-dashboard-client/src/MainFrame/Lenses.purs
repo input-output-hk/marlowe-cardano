@@ -3,12 +3,12 @@ module MainFrame.Lenses where
 import Prologue
 
 import Data.AddressBook (AddressBook)
-import Data.Lens (Lens', _2)
+import Data.Lens (Lens')
 import Data.Lens.AffineTraversal (AffineTraversal')
 import Data.Lens.Prism.Either (_Left, _Right)
 import Data.Lens.Record (prop)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
-import Data.Wallet (WalletDetails)
 import MainFrame.Types (State, WebSocketStatus)
 import Marlowe.Semantics (Slot)
 import Page.Dashboard.Types (State) as Dashboard
@@ -30,13 +30,14 @@ _tzOffset = prop (Proxy :: _ "tzOffset")
 _subState :: Lens'
   State
   ( Either
-      (Tuple (Maybe WalletDetails) Welcome.State)
-      (Tuple WalletDetails Dashboard.State)
+      Welcome.State
+      (Tuple PABConnectedWallet Dashboard.State)
   )
 _subState = prop (Proxy :: _ "subState")
 
 _welcomeState :: AffineTraversal' State Welcome.State
-_welcomeState = _subState <<< _Left <<< _2
+_welcomeState = _subState <<< _Left
 
-_dashboardState :: AffineTraversal' State (Tuple WalletDetails Dashboard.State)
+_dashboardState :: AffineTraversal' State
+  (Tuple PABConnectedWallet Dashboard.State)
 _dashboardState = _subState <<< _Right

@@ -1,8 +1,6 @@
 module Data.Wallet
   ( WalletDetails
   , _assets
-  , _companionAppId
-  , _marloweAppId
   , _pubKeyHash
   , _walletId
   , _walletNickname
@@ -18,16 +16,12 @@ import Data.Lens.Record (prop)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics (Assets)
 import Type.Proxy (Proxy(..))
 
 type WalletDetailsFields =
   { walletNickname :: WalletNickname
-  -- FIXME-3208: Put the plutusAppId under a Connected/Disconnected
-  , companionAppId :: PlutusAppId
-  , marloweAppId :: PlutusAppId
   , walletInfo :: WalletInfo
   , assets :: Assets
   }
@@ -40,14 +34,11 @@ derive instance Eq WalletDetails
 derive newtype instance EncodeJson WalletDetails
 derive newtype instance DecodeJson WalletDetails
 
--- FIXME-3208: We should factor out the PlutusAppId from this constructor.
 mkWalletDetails
-  :: WalletNickname -> PlutusAppId -> PlutusAppId -> WalletInfo -> WalletDetails
-mkWalletDetails walletNickname companionAppId marloweAppId walletInfo =
+  :: WalletNickname -> WalletInfo -> WalletDetails
+mkWalletDetails walletNickname walletInfo =
   WalletDetails
     { walletNickname
-    , companionAppId
-    , marloweAppId
     , walletInfo
     , assets: mempty
     }
@@ -60,12 +51,6 @@ _WalletDetails = iso
 ------------------------------------------------------------
 _walletNickname :: Lens' WalletDetails WalletNickname
 _walletNickname = _WalletDetails <<< prop (Proxy :: _ "walletNickname")
-
-_companionAppId :: Lens' WalletDetails PlutusAppId
-_companionAppId = _WalletDetails <<< prop (Proxy :: _ "companionAppId")
-
-_marloweAppId :: Lens' WalletDetails PlutusAppId
-_marloweAppId = _WalletDetails <<< prop (Proxy :: _ "marloweAppId")
 
 _assets :: Lens' WalletDetails Assets
 _assets = _WalletDetails <<< prop (Proxy :: _ "assets")

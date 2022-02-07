@@ -17,6 +17,7 @@ import Prologue
 import Analytics (class IsEvent, defaultEvent)
 import Data.ContractNickname (ContractNickname)
 import Data.Map (Map)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
 import Data.Wallet (WalletDetails)
@@ -103,7 +104,7 @@ derive instance eqTab :: Eq Tab
 type Input =
   { currentSlot :: Slot
   , tzOffset :: Minutes
-  , walletDetails :: WalletDetails
+  , wallet :: PABConnectedWallet
   , followerAppId :: PlutusAppId
   }
 

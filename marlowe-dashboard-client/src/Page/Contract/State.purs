@@ -61,6 +61,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Newtype (unwrap)
 import Data.Ord (abs)
+import Data.PABConnectedWallet (PABConnectedWallet, _assets, _pubKeyHash)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (_PubKeyHash)
 import Data.Set (Set)
@@ -69,7 +70,6 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.Unfoldable as Unfoldable
-import Data.Wallet (WalletDetails, _assets, _pubKeyHash)
 import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
@@ -183,8 +183,12 @@ mkPlaceholderState nickname metaData =
 -- contract is given a role in it, and gets the MarloweParams at the same time as they hear about
 -- everything else
 mkInitialState
-  :: WalletDetails -> Slot -> ContractNickname -> ContractHistory -> Maybe State
-mkInitialState walletDetails currentSlot nickname contractHistory =
+  :: PABConnectedWallet
+  -> Slot
+  -> ContractNickname
+  -> ContractHistory
+  -> Maybe State
+mkInitialState wallet currentSlot nickname contractHistory =
   let
     chParams = view _chParams contractHistory
   in
@@ -212,7 +216,7 @@ mkInitialState walletDetails currentSlot nickname contractHistory =
               , selectedStep: 0
               , metadata: template.metaData
               , participants: getParticipants contract
-              , userParties: getUserParties walletDetails marloweParams
+              , userParties: getUserParties wallet marloweParams
               , namedActions: mempty
               }
 
@@ -251,7 +255,7 @@ getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
 
 -- TODO: SCP-3208 Move contract state to halogen store
 updateState
-  :: WalletDetails
+  :: PABConnectedWallet
   -> MarloweParams
   -> MarloweData
   -> Slot
@@ -259,7 +263,7 @@ updateState
   -> State
   -> State
 updateState
-  walletDetails
+  wallet
   marloweParams
   marloweData
   currentSlot
@@ -281,7 +285,7 @@ updateState
           , selectedStep: 0
           , metadata
           , participants
-          , userParties: getUserParties walletDetails marloweParams
+          , userParties: getUserParties wallet marloweParams
           , namedActions: []
           }
       Started s -> s
@@ -315,15 +319,15 @@ updateState
 -- This function creates a Set of the different Contract `Party` a `logged-user`
 -- may hold. It is the sum of the role tokens we hold for the contract and any
 -- direct usage through the PK (Public Key) constructor
-getUserParties :: WalletDetails -> MarloweParams -> Set Party
-getUserParties walletDetails marloweParams =
+getUserParties :: PABConnectedWallet -> MarloweParams -> Set Party
+getUserParties wallet marloweParams =
   let
     -- the Payment PubKeyHash of the `logged-user`
     pubKeyHash = view
       (_pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
-      walletDetails
+      wallet
 
-    assets = view _assets walletDetails
+    assets = view _assets wallet
 
     rolesCurrency = view _rolesCurrency marloweParams
 
@@ -366,14 +370,14 @@ handleAction { followerAppId } (SetNickname nickname) =
     insertIntoContractNicknames followerAppId nickname
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
-handleAction { currentSlot, walletDetails } (ConfirmAction namedAction) =
+handleAction { currentSlot, wallet } (ConfirmAction namedAction) =
   withStarted \started@{ executionState, marloweParams } -> do
     let
       contractInput = toInput namedAction
 
       txInput = mkTx currentSlot (executionState ^. _contract)
         (Unfoldable.fromMaybe contractInput)
-    ajaxApplyInputs <- applyTransactionInput walletDetails marloweParams txInput
+    ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput
     case ajaxApplyInputs of
       Left ajaxError -> do
         void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult

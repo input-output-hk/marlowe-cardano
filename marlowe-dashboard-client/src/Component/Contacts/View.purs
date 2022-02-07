@@ -21,8 +21,8 @@ import Data.AddressBook as AddressBook
 import Data.Array (singleton) as Array
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(..))
+import Data.PABConnectedWallet (PABConnectedWallet, _walletNickname)
 import Data.Tuple.Nested ((/\))
-import Data.Wallet (WalletDetails, _walletNickname)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
@@ -52,7 +52,7 @@ contactsCard
    . MonadAff m
   => MonadRec m
   => AddressBook
-  -> WalletDetails
+  -> PABConnectedWallet
   -> State
   -> ComponentHTML Action ChildSlots m
 contactsCard addressBook currentWallet state =
@@ -170,7 +170,7 @@ addressBookCard addressBook =
 
 contactDetailsCard
   :: forall p
-   . WalletDetails
+   . PABConnectedWallet
   -> WalletNickname
   -> Address
   -> Array (HTML p Action)

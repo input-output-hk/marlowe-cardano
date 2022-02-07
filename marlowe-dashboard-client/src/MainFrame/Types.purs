@@ -11,8 +11,10 @@ import Component.Tooltip.Types (ReferenceId)
 import Data.AddressBook (AddressBook)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.Wallet (WalletDetails)
+import Data.WalletId (WalletId)
 import Halogen (SubscriptionId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
@@ -29,7 +31,7 @@ import WebSocket.Support (FromSocket) as WS
 
 type Slice =
   { addressBook :: AddressBook
-  , wallet :: Maybe WalletDetails
+  , wallet :: Maybe PABConnectedWallet
   }
 
 type Input =
@@ -49,8 +51,8 @@ type State =
   -- TODO clean this mess up by making Welcome and Dashboard proper components.
   , subState ::
       Either
-        (Tuple (Maybe WalletDetails) Welcome.State)
-        (Tuple WalletDetails Dashboard.State)
+        Welcome.State
+        (Tuple PABConnectedWallet Dashboard.State)
   , pollingSubscription :: Maybe SubscriptionId
   }
 
@@ -94,13 +96,13 @@ data Msg
 
 ------------------------------------------------------------
 data Action
-  = EnterWelcomeState WalletDetails (Map PlutusAppId Contract.State)
+  = EnterWelcomeState PABConnectedWallet (Map PlutusAppId Contract.State)
   | EnterDashboardState WalletDetails
   | WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
   | Receive (Connected Slice Input)
   | Init
-  | OnPoll WalletDetails
+  | OnPoll WalletId
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.

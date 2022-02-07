@@ -57,18 +57,18 @@ render state =
             [ renderSubmodule
                 _dashboardState
                 DashboardAction
-                ( \(Tuple walletDetails dashboardState) ->
+                ( \(Tuple wallet dashboardState) ->
                     dashboardScreen
-                      { addressBook, currentSlot, tzOffset, walletDetails }
+                      { addressBook, currentSlot, tzOffset, wallet }
                       dashboardState
                 )
                 state
             , renderSubmodule
                 _dashboardState
                 DashboardAction
-                ( \(Tuple walletDetails dashboardState) ->
+                ( \(Tuple wallet dashboardState) ->
                     dashboardCard
-                      { addressBook, currentSlot, tzOffset, walletDetails }
+                      { addressBook, currentSlot, tzOffset, wallet }
                       dashboardState
                 )
                 state
