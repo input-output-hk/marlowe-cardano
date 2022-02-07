@@ -1,4 +1,4 @@
-module Halogen.Form.Types where
+module Halogen.Form.FieldState where
 
 import Prologue
 

@@ -27,8 +27,8 @@ import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
+import Halogen.Form.FieldState (FieldState(..))
 import Halogen.Form.Injective (inject)
-import Halogen.Form.Types (FieldState(..))
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata

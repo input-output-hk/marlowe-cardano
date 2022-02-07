@@ -20,7 +20,7 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Symbol (class IsSymbol)
 import Data.Traversable (class Traversable, traverse)
-import Halogen.Form.Types (FieldState(..), _Complete)
+import Halogen.Form.FieldState (FieldState(..), _Complete)
 import Prim.Row as Row
 import Prim.RowList (class RowToList, RowList)
 import Prim.RowList as RL

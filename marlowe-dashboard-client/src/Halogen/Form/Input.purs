@@ -21,14 +21,14 @@ import Data.Maybe (maybe)
 import Effect.Class (class MonadEffect)
 import Halogen (RefLabel(..))
 import Halogen as H
-import Halogen.Form.Types as HF
+import Halogen.Form.FieldState as FS
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Web.Event.Event (Event)
 import Web.HTML.HTMLElement as HTMLElement
 import Web.UIEvent.FocusEvent (FocusEvent)
 
-type FieldState = HF.FieldState String
+type FieldState = FS.FieldState String
 
 data Query a
   = Focus a
@@ -152,9 +152,9 @@ initialState { focused, visited } { fieldState, format, validate, render } =
   }
   where
   { result, value } = case fieldState of
-    HF.Blank -> { value: "", result: validate "" }
-    HF.Incomplete input -> { value: input, result: validate input }
-    HF.Complete output -> { value: format output, result: Right output }
+    FS.Blank -> { value: "", result: validate "" }
+    FS.Incomplete input -> { value: input, result: validate input }
+    FS.Complete output -> { value: format output, result: Right output }
 
 modifyWithFormat
   :: forall pa error output slots m
@@ -193,8 +193,8 @@ setValue f = do
         }
   let
     toFieldState v r = case r of
-      Left _ -> HF.Incomplete v
-      Right output -> HF.Complete output
+      Left _ -> FS.Incomplete v
+      Right output -> FS.Complete output
     oldState = toFieldState oldValue oldResult
     newState = toFieldState value result
 
@@ -229,8 +229,8 @@ handleAction = case _ of
       , validate = validate
       }
     setValue $ \oldValue -> case fieldState of
-      HF.Blank -> ""
-      HF.Incomplete v -> v
+      FS.Blank -> ""
+      FS.Incomplete v -> v
       _ -> oldValue
   OnUpdate newValue -> setValue $ const newValue
   OnEmit action -> H.raise $ Emit action

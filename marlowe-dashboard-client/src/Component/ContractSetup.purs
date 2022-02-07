@@ -40,10 +40,10 @@ import Data.WalletNickname as WN
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.Form.FieldState as FS
 import Halogen.Form.Injective (project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
-import Halogen.Form.Types as HF
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Events.Extra (onClick_)
@@ -162,9 +162,9 @@ initialState
       }
   }
   where
-  mkRoleField name _ = fromMaybe HF.Blank $ Map.lookup name fields.roles
-  mkTimeoutField _ value = HF.Complete value
-  mkValueField name _ = fromMaybe HF.Blank $ Map.lookup name fields.values
+  mkRoleField name _ = fromMaybe FS.Blank $ Map.lookup name fields.roles
+  mkTimeoutField _ value = FS.Complete value
+  mkValueField name _ = fromMaybe FS.Blank $ Map.lookup name fields.values
 
 render :: forall m. MonadEffect m => State -> ComponentHTML m
 render state = do
