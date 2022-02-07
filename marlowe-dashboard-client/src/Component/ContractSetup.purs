@@ -2,6 +2,7 @@ module Component.ContractSetup where
 
 import Prologue
 
+import Component.Autocomplete as Autocomplete
 import Component.ContractSetup.Types
   ( Component
   , ContractFields
@@ -19,7 +20,9 @@ import Component.Icons as Icon
 import Css as Css
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
-import Data.AddressBook as AddressBook
+import Data.Bifunctor (lmap)
+import Data.Bimap (Bimap)
+import Data.Bimap as Bimap
 import Data.Compactable (compact)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as CN
@@ -27,16 +30,18 @@ import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
-import Data.Either (note)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens (over, set)
 import Data.Lens.Record (prop)
 import Data.List as List
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, isJust, maybe)
+import Data.Maybe (fromMaybe, isJust)
+import Data.Newtype (unwrap)
 import Data.Set as Set
+import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
@@ -58,9 +63,10 @@ import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
 data Action
-  = OnReceive (Connected AddressBook Input)
+  = OnInit
+  | OnReceive (Connected AddressBook Input)
   | OnNicknameMsg (Input.Msg Action ContractNickname)
-  | OnRoleMsg TokenName (Input.Msg Action Address)
+  | OnRoleMsg TokenName (Autocomplete.Msg Address)
   | OnTimeoutMsg TokenName (Input.Msg Action ContractTimeout)
   | OnValueMsg TokenName (Input.Msg Action ContractValue)
   | OnFormSubmit Event
@@ -68,7 +74,7 @@ data Action
   | OnReview ContractParams
 
 type State =
-  { addressBook :: AddressBook
+  { addressBook :: Bimap String Address
   , templateValues :: Map String NumberFormat
   , templateName :: String
   , fields :: ContractFields
@@ -85,7 +91,7 @@ _result = Proxy :: Proxy "result"
 
 type ChildSlots =
   ( nickname :: Input.Slot Action ContractNickname Unit
-  , roles :: Input.Slot Action Address TokenName
+  , roles :: Autocomplete.Slot Address TokenName
   , timeouts :: Input.Slot Action ContractTimeout String
   , values :: Input.Slot Action ContractValue String
   )
@@ -101,7 +107,7 @@ _contractSetup = Proxy
 
 component
   :: forall m
-   . MonadEffect m
+   . MonadAff m
   => MonadStore Store.Action Store.Store m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
@@ -109,6 +115,7 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
   , eval: H.mkEval $ H.defaultEval
       { handleAction = handleAction
       , receive = Just <<< OnReceive
+      , initialize = Just OnInit
       }
   , render
   }
@@ -124,7 +131,10 @@ initialState
       , fields
       }
   } =
-  { addressBook: context
+  { addressBook: Bimap.fromFoldable $ map (lmap WN.toString) $
+      ( Bimap.toUnfoldable
+          $ unwrap context :: Array (Tuple WalletNickname Address)
+      )
   , result: project fields
   , templateValues
   , templateName
@@ -139,7 +149,12 @@ initialState
   mkTimeoutField _ value = FS.Complete value
   mkValueField name _ = fromMaybe FS.Blank $ Map.lookup name fields.values
 
-render :: forall m. MonadEffect m => State -> ComponentHTML m
+render
+  :: forall m
+   . MonadAff m
+  => MonadStore Store.Action Store.Store m
+  => State
+  -> ComponentHTML m
 render state = do
   let
     { templateName
@@ -210,40 +225,34 @@ nicknameInput
 nicknameInput fieldState =
   HH.slot _nickname unit Input.component input OnNicknameMsg
   where
+  id = "contract-nickname"
+  label = "Contract title"
   input =
     { fieldState
     , format: CN.toString
     , validate: CN.fromString
-    , render: \s ->
-        renderTextInput "contract-nickname" "Contract title" s case _ of
+    , render: \{ error, value } ->
+        renderTextInput id label error (Input.setInputProps value []) case _ of
           CN.Empty -> "Required."
     }
 
 roleInput
   :: forall m
-   . MonadEffect m
+   . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => State
   -> TokenName
   -> FieldState Address
   -> ComponentHTML m
 roleInput state name fieldState =
-  HH.slot _roles name Input.component input $ OnRoleMsg name
+  HH.slot _roles name Autocomplete.component input $ OnRoleMsg name
   where
   { addressBook } = state
   input =
-    { fieldState
-    , format: \addr ->
-        maybe "" WN.toString $ AddressBook.lookupNickname addr state.addressBook
-    , validate:
-        note WN.DoesNotExist
-          <<< flip AddressBook.lookupAddress addressBook
-          <=< WN.fromString
-    , render: \s ->
-        renderTextInput ("role-" <> name) name s case _ of
-          WN.Empty -> "Required."
-          WN.Exists -> "Already exists."
-          WN.DoesNotExist -> "Not found."
-          WN.ContainsNonAlphaNumeric -> "Can only contain letters and digits."
+    { id: "role-" <> name
+    , label: name
+    , fieldState
+    , options: addressBook
     }
 
 timeoutInput
@@ -255,15 +264,22 @@ timeoutInput
 timeoutInput name fieldState =
   HH.slot _timeouts name Input.component input $ OnTimeoutMsg name
   where
+  id = "timeout-" <> name
   input =
     { fieldState
     , format: CT.toString
     , validate: CT.fromString
-    , render: \s ->
-        renderNumberInput TimeFormat ("timeout-" <> name) name s case _ of
-          CT.Empty -> "Required."
-          CT.Past -> "Must be in the future."
-          CT.Invalid -> "Must be a number of slots from contract start."
+    , render: \{ error, value } ->
+        renderNumberInput
+          TimeFormat
+          id
+          name
+          error
+          (Input.setInputProps value [])
+          case _ of
+            CT.Empty -> "Required."
+            CT.Past -> "Must be in the future."
+            CT.Invalid -> "Must be a number of slots from contract start."
     }
 
 valueInput
@@ -278,16 +294,18 @@ valueInput state name fieldState =
   where
   { templateValues } = state
   format = fromMaybe DefaultFormat $ Map.lookup name templateValues
+  id = "value-" <> name
   input =
     { fieldState
     , format: CV.toString
     , validate: case format of
         DecimalFormat d cs -> CV.currencyFromString cs d
         _ -> CV.fromString
-    , render: \s ->
-        renderNumberInput format ("value-" <> name) name s case _ of
-          CV.Empty -> "Required."
-          CV.Invalid -> "Must by a number."
+    , render: \{ error, value } ->
+        renderNumberInput format id name error (Input.setInputProps value [])
+          case _ of
+            CV.Empty -> "Required."
+            CV.Invalid -> "Must by a number."
     }
 
 templateInputsSection
@@ -333,14 +351,16 @@ handleFieldMsg set = case _ of
 
 handleAction :: forall m. MonadEffect m => Action -> DSL m Unit
 handleAction = case _ of
+  OnInit -> do
+    H.tell _nickname unit $ Input.Focus
   OnReceive input -> do
     oldState <- H.get
     let newState = initialState input
     when (oldState /= newState) $ H.put newState
   OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
-  OnRoleMsg name msg -> handleFieldMsg
+  OnRoleMsg name (Autocomplete.Updated field) -> handleFieldMsg
     (over (prop _roles) <<< Map.insert name)
-    msg
+    (Input.Updated field)
   OnTimeoutMsg name msg -> handleFieldMsg
     (over (prop _timeouts) <<< Map.insert name)
     msg

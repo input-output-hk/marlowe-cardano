@@ -593,6 +593,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "halogen-nselect" = pkgs.stdenv.mkDerivation {
+        name = "halogen-nselect";
+        version = "v1.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/jhbertra/purescript-halogen-nselect";
+          rev = "1ad05b27a433a0909e9c9eb0fba0be4e33f29997";
+          sha256 = "035rw49viv3kq21mgmz4wbw26bi5layc8s58armf88bix2x0s0aa";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "halogen-store" = pkgs.stdenv.mkDerivation {
         name = "halogen-store";
         version = "v0.2.0";

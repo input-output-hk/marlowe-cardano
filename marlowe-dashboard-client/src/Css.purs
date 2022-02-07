@@ -64,7 +64,6 @@ inputBox error =
   , "gap-1"
   , "items-baseline"
   , "p-4"
-  , "relative"
   , "rounded-sm"
   , "transition-all"
   , "w-full"

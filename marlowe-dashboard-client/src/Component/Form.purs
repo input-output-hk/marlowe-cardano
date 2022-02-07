@@ -6,11 +6,9 @@ import Css as Css
 import DOM.HTML.Indexed (HTMLinput)
 import Data.Maybe (fromMaybe, maybe)
 import Halogen.Css (classNames)
-import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Marlowe.Extended.Metadata (NumberFormat(..))
-import Marlowe.Semantics (CurrencySymbol)
 
 renderLabel :: forall w i. String -> String -> HH.HTML w i
 renderLabel id label =
@@ -25,53 +23,58 @@ renderErrorLabel id error = HH.label
   [ HH.text $ fromMaybe "Valid" error ]
 
 renderInputBox
-  :: forall w error i. Maybe error -> Array (HH.HTML w i) -> HH.HTML w i
-renderInputBox error =
-  HH.div [ classNames $ Css.inputBox error ]
+  :: forall w error i
+   . Maybe error
+  -> Array String
+  -> Array (HH.HTML w i)
+  -> HH.HTML w i
+renderInputBox error classes =
+  HH.div [ classNames $ Css.inputBox error <> classes ]
 
 renderInput
-  :: forall pa error output slots m
+  :: forall w i
    . String
-  -> String
-  -> Array (HP.IProp HTMLinput (Input.Action pa error output slots m))
-  -> Input.ComponentHTML pa error output slots m
-renderInput id value props = HH.input
-  ( Input.setInputProps value $ props <> [ HP.id id, classNames Css.inputText ]
+  -> Array (HP.IProp HTMLinput i)
+  -> HH.HTML w i
+renderInput id props = HH.input
+  ( props <> [ HP.id id, classNames Css.inputText ]
   )
 
 renderTextInput
-  :: forall pa error output slots m
+  :: forall error w i
    . String
   -> String
-  -> Input.State error output
+  -> Maybe error
+  -> Array (HP.IProp HTMLinput i)
   -> (error -> String)
-  -> Input.ComponentHTML pa error output slots m
-renderTextInput id label state renderError =
+  -> HH.HTML w i
+renderTextInput id label error props renderError =
   HH.div [ classNames [ "relative" ] ]
     [ renderLabel id label
-    , renderInputBox state.error [ renderInput id state.value [] ]
-    , renderErrorLabel id $ renderError <$> state.error
+    , renderInputBox error [] [ renderInput id props ]
+    , renderErrorLabel id $ renderError <$> error
     ]
 
 renderNumberInput
-  :: forall pa error output slots m
+  :: forall error w i
    . NumberFormat
   -> String
   -> String
-  -> Input.State error output
+  -> Maybe error
+  -> Array (HP.IProp HTMLinput i)
   -> (error -> String)
-  -> Input.ComponentHTML pa error output slots m
-renderNumberInput format id label state renderError =
+  -> HH.HTML w i
+renderNumberInput format id label error props renderError =
   HH.div [ classNames [ "relative" ] ]
     [ renderLabel id label
-    , renderInputBox state.error $ join
+    , renderInputBox error [] $ join
         [ case format of
             DecimalFormat _ symbol -> [ HH.span_ [ HH.text symbol ] ]
             _ -> []
-        , [ renderInput id state.value [ HP.type_ HP.InputNumber ] ]
+        , [ renderInput id $ props <> [ HP.type_ HP.InputNumber ] ]
         , case format of
             TimeFormat -> [ HH.span_ [ HH.text "minutes" ] ]
             _ -> []
         ]
-    , renderErrorLabel id $ renderError <$> state.error
+    , renderErrorLabel id $ renderError <$> error
     ]

@@ -38,6 +38,10 @@ type Store =
   -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
   -- really has changed anything
   , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
+  -- This is to make sure only one dropdown at a time is open, in order to
+  -- overcome a limitation of nselect that prevents it from closing the
+  -- dropdown on blur.
+  , openDropdown :: Maybe String
   }
 
 mkStore :: AddressBook -> Store
@@ -49,6 +53,7 @@ mkStore addressBook =
   , syncedContracts: Map.empty
   , wallet: Nothing
   , previousCompanionAppState: Nothing
+  , openDropdown: Nothing
   }
 
 data Action
@@ -66,6 +71,9 @@ data Action
   -- Toast
   | ShowToast ToastMessage
   | ClearToast
+  -- Dropdown
+  | DropdownOpened String
+  | DropdownClosed
 
 reduce :: Store -> Action -> Store
 reduce store = case _ of
@@ -93,3 +101,6 @@ reduce store = case _ of
   -- Toast
   ShowToast msg -> store { toast = Just msg }
   ClearToast -> store { toast = Nothing }
+  -- Dropdown
+  DropdownOpened dropdown -> store { openDropdown = Just dropdown }
+  DropdownClosed -> store { openDropdown = Nothing }

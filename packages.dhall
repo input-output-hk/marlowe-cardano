@@ -252,5 +252,5 @@ in  upstream
         , "web-html"
         , "web-uievents"
         ]
-        "https://github.com/input-output-hk/purescript-halogen-nselect"
-        "5e88b528ed332562d5bc8bfbbc80f00fa435a620"
+        "https://github.com/jhbertra/purescript-halogen-nselect"
+        "v1.0.0"
