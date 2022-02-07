@@ -8,7 +8,7 @@ on:
   schedule:
   - cron: '0 4 * * *'
   push:
-    branches: [ SCP-3139/e2e-tests ]
+    branches: [ SCP-3139/e2e-tests-2 ]
   workflow_dispatch:
 
 jobs:
