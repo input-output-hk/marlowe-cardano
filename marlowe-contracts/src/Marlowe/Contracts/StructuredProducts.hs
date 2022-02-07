@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Marlowe.Contracts.ReverseConvertible where
+module Marlowe.Contracts.StructuredProducts where
 
 import Language.Marlowe
 import Marlowe.Contracts.Options

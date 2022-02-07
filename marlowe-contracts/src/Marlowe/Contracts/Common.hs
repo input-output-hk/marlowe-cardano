@@ -10,8 +10,8 @@ oracle = Role "kraken"
 
 -- |Exchange rates
 dirRate, invRate :: ChoiceId
-dirRate = ChoiceId "dir-adausd" oracle -- USC/ADA
-invRate = ChoiceId "inv-adausd" oracle -- ADA/UCS
+dirRate = ChoiceId "dir-adausd" oracle -- USD/ADA
+invRate = ChoiceId "inv-adausd" oracle -- ADA/USD
 
 -- |Oracle input
 oracleInput ::
@@ -49,14 +49,14 @@ pay from to (token, value) =
 
 -- |Deposit
 deposit ::
-     Party                      -- ^ Payer
-  -> Party                      -- ^ Payee
+     Party                      -- ^ Party to receive the deposit
+  -> Party                      -- ^ Party that deposits
   -> (Token, Value Observation) -- ^ Token and Value
   -> Timeout                    -- ^ Timeout for deposit
   -> Contract                   -- ^ Continuation Contract in case of timeout of deposit
   -> Contract                   -- ^ Continuation Contract after deposit
   -> Contract                   -- ^ Combined Contract
-deposit from to (token, value) timeout timeoutContinuation continuation =
+deposit to from (token, value) timeout timeoutContinuation continuation =
   When
     [ Case
         (Deposit to from token value)
@@ -65,19 +65,15 @@ deposit from to (token, value) timeout timeoutContinuation continuation =
     timeout
     timeoutContinuation
 
--- |Transfer
+-- |Transfer, i.e. Deposit and Pay
 transfer ::
      Party                      -- ^ Payer
   -> Party                      -- ^ Payee
-  -> (Token, Value Observation) -- ^ Value
+  -> (Token, Value Observation) -- ^ Token and Value
   -> Timeout                    -- ^ Timeout for transfer
+  -> Contract                   -- ^ Continuation Contract in case of timeout of deposit
   -> Contract                   -- ^ Continuation Contract
   -> Contract                   -- ^ Combined Contract
-transfer from to (token, value) timeout continuation =
-  When
-    [ Case
-        (Deposit from from token value)
-        (Pay from (Party to) token value continuation)
-    ]
-    timeout
-    Close
+transfer from to tokenValue timeout timeoutContinuation continuation =
+    deposit from from tokenValue timeout timeoutContinuation
+  $ pay from to tokenValue continuation
