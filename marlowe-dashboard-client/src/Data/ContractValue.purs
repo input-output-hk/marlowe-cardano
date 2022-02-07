@@ -1,21 +1,16 @@
 module Data.ContractValue
-  ( ContractValue
+  ( ContractValue(..)
   , ContractValueError(..)
-  , fromBigInt
+  , currencyFromString
   , fromString
   , toString
-  , toBigInt
+  , _value
+  , _decimals
+  , _currencySymbol
   ) where
 
 import Prologue
 
-import Data.Argonaut
-  ( class DecodeJson
-  , class EncodeJson
-  , JsonDecodeError(..)
-  , decodeJson
-  )
-import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -30,17 +25,16 @@ import Data.Enum.Generic
   )
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
+import Data.Lens (Lens', lens)
+import Data.Lens.AffineTraversal (AffineTraversal', affineTraversal)
 import Data.Ord as Ring
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.String.Extra (leftPadTo, rightPadTo)
-import Marlowe.Extended.Metadata (NumberFormat(..))
+import Marlowe.Semantics (CurrencySymbol)
 
-data ContractValueError
-  = Empty
-  | Negative
-  | Invalid
+data ContractValueError = Empty | Invalid
 
 derive instance genericContractValueError :: Generic ContractValueError _
 derive instance eqContractValueError :: Eq ContractValueError
@@ -49,8 +43,6 @@ derive instance ordContractValueError :: Ord ContractValueError
 instance semigroupContractValueError :: Semigroup ContractValueError where
   append Empty _ = Empty
   append _ Empty = Empty
-  append Negative _ = Negative
-  append _ Negative = Negative
   append Invalid Invalid = Invalid
 
 instance boundedContractValueError :: Bounded ContractValueError where
@@ -69,32 +61,34 @@ instance boundedEnumContractValueError :: BoundedEnum ContractValueError where
 instance showContractValueError :: Show ContractValueError where
   show = genericShow
 
-newtype ContractValue = ContractValue BigInt
+data ContractValue
+  = Currency CurrencySymbol Int BigInt
+  | Normal BigInt
 
+derive instance Generic ContractValue _
 derive instance Eq ContractValue
 derive instance Ord ContractValue
-derive newtype instance Show ContractValue
-derive newtype instance EncodeJson ContractValue
+instance Show ContractValue where
+  show = genericShow
 
-instance DecodeJson ContractValue where
-  decodeJson =
-    lmap (const $ TypeMismatch "ContractValue") <<< fromString DefaultFormat
-      <=< decodeJson
+fromString'
+  :: (String -> Either ContractValueError BigInt)
+  -> (BigInt -> ContractValue)
+  -> String
+  -> Either ContractValueError ContractValue
+fromString' parse wrap s
+  | String.null s = Right $ wrap zero
+  | otherwise = wrap <$> parse s
 
-fromString :: NumberFormat -> String -> Either ContractValueError ContractValue
-fromString format s
-  | String.null s = Right $ ContractValue zero
-  | otherwise = ContractValue <$> case format of
-      DefaultFormat -> fromStringDefault s
-      DecimalFormat decimals _ -> fromStringDecimal decimals s
-      TimeFormat -> fromStringTime s
+currencyFromString
+  :: CurrencySymbol -> Int -> String -> Either ContractValueError ContractValue
+currencyFromString cs d = fromString' (fromStringDecimal d) $ Currency cs d
+
+fromString :: String -> Either ContractValueError ContractValue
+fromString = fromString' fromStringDefault Normal
 
 fromStringDefault :: String -> Either ContractValueError BigInt
 fromStringDefault = note Invalid <<< BigInt.fromString
-
-fromStringTime :: String -> Either ContractValueError BigInt
-fromStringTime =
-  note Invalid <<< map (mul (BigInt.fromInt 60)) <<< BigInt.fromString
 
 fromStringDecimal :: Int -> String -> Either ContractValueError BigInt
 fromStringDecimal decimals value = do
@@ -117,16 +111,33 @@ fromStringDecimal decimals value = do
     note Invalid $ BigInt.fromString $ String.take decimals $ normalizedFrac
   pure $ signum * multiplier * whole + frac
 
-fromBigInt :: BigInt -> Either ContractValueError ContractValue
-fromBigInt i
-  | i < zero = Left Negative
-  | otherwise = Right $ ContractValue i
+_value :: Lens' ContractValue BigInt
+_value = lens get set
+  where
+  get (Currency _ _ value) = value
+  get (Normal value) = value
+  set (Currency cs d _) value = Currency cs d value
+  set (Normal _) value = Normal value
 
-toString :: NumberFormat -> ContractValue -> String
-toString DefaultFormat (ContractValue value) = BigInt.toString value
-toString TimeFormat (ContractValue value) = BigInt.toString $ value /
-  BigInt.fromInt 60
-toString (DecimalFormat decimals _) (ContractValue value) =
+_decimals :: AffineTraversal' ContractValue Int
+_decimals = affineTraversal set pre
+  where
+  set (Currency cs _ value) d = Currency cs d value
+  set (Normal value) _ = Normal value
+  pre (Currency _ d _) = Right d
+  pre (Normal value) = Left $ Normal value
+
+_currencySymbol :: AffineTraversal' ContractValue CurrencySymbol
+_currencySymbol = affineTraversal set pre
+  where
+  set (Currency _ d value) cs = Currency cs d value
+  set (Normal value) _ = Normal value
+  pre (Currency cs _ _) = Right cs
+  pre (Normal value) = Left $ Normal value
+
+toString :: ContractValue -> String
+toString (Normal value) = BigInt.toString value
+toString (Currency _ decimals value) =
   let
     signum = Ring.signum value
     absoluteValue = Ring.abs value
@@ -142,6 +153,3 @@ toString (DecimalFormat decimals _) (ContractValue value) =
     suffix = if decimals > zero then "." <> fracPart else ""
   in
     prefix <> wholePart <> suffix
-
-toBigInt :: ContractValue -> BigInt
-toBigInt (ContractValue i) = i

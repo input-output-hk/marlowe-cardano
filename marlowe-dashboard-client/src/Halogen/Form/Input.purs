@@ -2,7 +2,6 @@ module Halogen.Form.Input
   ( Action
   , ComponentHTML
   , FieldState
-  , InitializeField
   , Input
   , Msg(..)
   , Query(..)
@@ -10,14 +9,12 @@ module Halogen.Form.Input
   , Slot
   , State
   , component
-  , defaultHandlers
   , setInputProps
   ) where
 
 import Prologue
 
 import Control.Alternative (guard)
-import Data.Bifunctor (class Bifunctor)
 import Data.Either (either, hush)
 import Data.Foldable (traverse_)
 import Data.Maybe (maybe)
@@ -32,26 +29,18 @@ import Web.HTML.HTMLElement as HTMLElement
 import Web.UIEvent.FocusEvent (FocusEvent)
 
 type FieldState = HF.FieldState String
-type InitializeField = HF.InitializeField String
 
-data Query output a
-  = Initialize (InitializeField output) a
-  | Focus a
+data Query a
+  = Focus a
   | Blur a
 
-derive instance Functor (Query output)
-
-instance Bifunctor Query where
-  bimap f g = case _ of
-    Initialize initialize a -> Initialize (f <$> initialize) $ g a
-    Focus a -> Focus $ g a
-    Blur a -> Blur $ g a
+derive instance Functor Query
 
 type Render pa error output slots m =
   State error output -> ComponentHTML pa error output slots m
 
 type Input pa error output slots m =
-  { initialize :: InitializeField output
+  { fieldState :: FieldState output
   , format :: output -> String
   , validate :: String -> Either error output
   , render :: Render pa error output slots m
@@ -74,7 +63,7 @@ data Action pa error output slots m
 type ComponentHTML pa error output slots m =
   H.ComponentHTML (Action pa error output slots m) slots m
 
-type Slot pa output = H.Slot (Query output) (Msg pa output)
+type Slot pa output = H.Slot Query (Msg pa output)
 
 type DSL pa error output slots m a = H.HalogenM
   (InternalState pa error output slots m)
@@ -105,7 +94,7 @@ refLabel :: RefLabel
 refLabel = RefLabel "Component.Input.input"
 
 type Component pa error output slots m =
-  H.Component (Query output) (Input pa error output slots m) (Msg pa output) m
+  H.Component Query (Input pa error output slots m) (Msg pa output) m
 
 type InputProps r =
   ( onInput :: Event
@@ -130,7 +119,8 @@ setInputProps value props = props <>
 
 component
   :: forall pa error output slots m
-   . MonadEffect m
+   . Eq output
+  => MonadEffect m
   => Component pa error output slots m
 component = H.mkComponent
   { initialState: initialState { focused: false, visited: false }
@@ -143,26 +133,6 @@ component = H.mkComponent
       }
   }
 
-type InputOptions :: forall k1 k2 k3. k1 -> Type -> Type -> k2 -> k3 -> Type
-type InputOptions pa error output slots m =
-  { initialize :: InitializeField output
-  , format :: output -> String
-  , validate :: String -> Either error output
-  }
-
-type Handlers action =
-  { blurred :: Maybe action
-  , focused :: Maybe action
-  , valueUpdated :: Maybe (String -> action)
-  }
-
-defaultHandlers :: forall action. Handlers action
-defaultHandlers =
-  { blurred: Nothing
-  , focused: Nothing
-  , valueUpdated: Nothing
-  }
-
 initialState
   :: forall pa error output slots m r
    . { focused :: Boolean
@@ -171,23 +141,20 @@ initialState
      }
   -> Input pa error output slots m
   -> InternalState pa error output slots m
-initialState
-  { focused, visited }
-  { initialize, format, validate, render } =
+initialState { focused, visited } { fieldState, format, validate, render } =
   { format
   , validate
   , render
-  , value: newValue
-  , result: newResult
+  , value
+  , result
   , focused
   , visited
   }
   where
-  initialize' = case _ of
-    HF.FromBlank -> initialize' $ HF.FromInput ""
-    HF.FromInput input -> { newValue: input, newResult: validate input }
-    HF.FromOutput output -> { newValue: format output, newResult: Right output }
-  { newResult, newValue } = initialize' initialize
+  { result, value } = case fieldState of
+    HF.Blank -> { value: "", result: validate "" }
+    HF.Incomplete input -> { value: input, result: validate input }
+    HF.Complete output -> { value: format output, result: Right output }
 
 modifyWithFormat
   :: forall pa error output slots m
@@ -203,6 +170,36 @@ modifyWithFormat f = formatIfNotFocuesd <<< f
     | otherwise = case state.result of
         Right result -> state { value = state.format result }
         _ -> state
+
+setValue
+  :: forall pa error output slots m
+   . Eq output
+  => (String -> String)
+  -> DSL pa error output slots m Unit
+setValue f = do
+  { value: oldValue, result: oldResult } <- H.get
+  let newValue = f oldValue
+  { value, result } <- H.modify \s ->
+    let
+      newResult = s.validate newValue
+    in
+      s
+        { result = newResult
+        , value =
+            if s.focused then newValue
+            else case newResult of
+              Right output -> s.format output
+              _ -> newValue
+        }
+  let
+    toFieldState v r = case r of
+      Left _ -> HF.Incomplete v
+      Right output -> HF.Complete output
+    oldState = toFieldState oldValue oldResult
+    newState = toFieldState value result
+
+  when (newState /= oldState) do
+    H.raise $ Updated newState
 
 render'
   :: forall pa error output slots m
@@ -220,26 +217,25 @@ render' { result, format, render, value, focused, visited } =
 
 handleAction
   :: forall pa error output slots m
-   . Action pa error output slots m
+   . Eq output
+  => Action pa error output slots m
   -> DSL pa error output slots m Unit
 handleAction = case _ of
-  OnInit -> do
-    { value, result } <- H.get
-    H.raise $ Updated $ HF.FieldState value $ hush result
-  OnUpdate newValue -> do
-    oldValue <- H.gets _.value
-    when (newValue /= oldValue) do
-      { value, result } <- H.modify $ modifyWithFormat \s -> s
-        { result = s.validate newValue, value = newValue }
-      H.raise $ Updated $ HF.FieldState value $ hush result
+  OnInit -> setValue identity
+  OnReceive { fieldState, render, format, validate } -> do
+    H.modify_ $ \s -> s
+      { render = render
+      , format = format
+      , validate = validate
+      }
+    setValue $ \oldValue -> case fieldState of
+      HF.Blank -> ""
+      HF.Incomplete v -> v
+      _ -> oldValue
+  OnUpdate newValue -> setValue $ const newValue
   OnEmit action -> H.raise $ Emit action
   OnFocus -> setFocus true
   OnBlur -> setFocus false
-  OnReceive { render, format, validate } -> H.modify_ $ modifyWithFormat _
-    { render = render
-    , format = format
-    , validate = validate
-    }
   where
   setFocus focused = do
     currentFocused <- H.gets _.focused
@@ -250,17 +246,14 @@ handleAction = case _ of
           , visited = (s.focused && not focused) || s.visited
           }
       H.raise if focused then Focused else Blurred
+      setValue identity
 
 handleQuery
   :: forall pa error output slots m a
    . MonadEffect m
-  => Query output a
+  => Query a
   -> DSL pa error output slots m (Maybe a)
 handleQuery = case _ of
-  Initialize initialize a -> do
-    H.modify_ \s@{ format, validate, render } ->
-      initialState s { initialize, format, validate, render }
-    pure $ Just a
   Focus a -> do
     element <- H.getHTMLElementRef refLabel
     H.liftEffect $ traverse_ HTMLElement.focus element

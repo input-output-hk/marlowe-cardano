@@ -7,11 +7,11 @@ module Component.Template.State
 
 import Prologue
 
-import Component.ContractSetup.Types (ContractParams)
+import Component.ContractSetup.Types (ContractFields, ContractParams)
 import Component.ContractSetup.Types as CS
 import Component.Template.Types (Action(..), State(..))
 import Data.ContractTimeout as CT
-import Data.ContractValue as CV
+import Data.ContractValue (_value)
 import Data.Either (hush)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens (view)
@@ -27,8 +27,8 @@ import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
-import Halogen.Form.Projective (blank)
-import Halogen.Form.Types as HF
+import Halogen.Form.Injective (inject)
+import Halogen.Form.Types (FieldState(..))
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata
@@ -53,29 +53,23 @@ dummyState = initialState
 initialState :: State
 initialState = Start
 
-setup :: ContractTemplate -> Maybe ContractParams -> State
-setup { metaData, extendedContract } params = do
-  Setup
-    { metaData, extendedContract }
-    { templateRoles
-    , templateTimeouts
-    , templateValues
-    , templateName: metaData.contractName
-    , initialize:
-        { nickname: HF.fromMaybe $ _.nickname <$> params
-        , roles: mapWithIndex (const <<< HF.fromMaybe <<< lookupRole)
-            $ Set.toMap templateRoles
-        , timeouts: HF.FromOutput <$> templateTimeouts
-        , values: mapWithIndex (const <<< HF.fromMaybe <<< lookupValue)
-            templateValues
-        }
-    }
-    blank
+setup :: ContractTemplate -> Maybe ContractFields -> State
+setup { metaData, extendedContract } mFields = Setup
+  { metaData, extendedContract }
+  { templateRoles: getParties extendedContract # Set.mapMaybe case _ of
+      Role name -> Just name
+      _ -> Nothing
+  , templateTimeouts: Map.mapMaybeWithKey getTimeout slotContent
+  , templateValues: mapWithIndex getValue valueContent
+  , templateName: metaData.contractName
+  , fields: mFields # fromMaybe
+      { nickname: Blank
+      , roles: Map.empty
+      , timeouts: Map.empty
+      , values: Map.empty
+      }
+  }
   where
-  lookupRole tokenName = Map.lookup tokenName =<< _.roles <$> params
-  lookupValue name = Map.lookup name =<< _.values <$> params
-  partyToRole (Role tokenName) = Just tokenName
-  partyToRole _ = Nothing
   TemplateContent { slotContent, valueContent } =
     initializeTemplateContent $ getPlaceholderIds extendedContract
   defaultSlotContent = case metaData.contractType of
@@ -92,9 +86,6 @@ setup { metaData, extendedContract } params = do
       hush $ CT.fromBigInt bigIntValue
   getValue key _ = maybe DefaultFormat _.valueParameterFormat
     $ OMap.lookup key metaData.valueParameterInfo
-  templateRoles = Set.mapMaybe partyToRole $ getParties extendedContract
-  templateTimeouts = Map.mapMaybeWithKey getTimeout slotContent
-  templateValues = mapWithIndex getValue valueContent
 
 handleAction
   :: forall m
@@ -105,10 +96,9 @@ handleAction OnReset = do
   H.put Start
 
 handleAction (OnTemplateChosen template) = do
-  H.put $ Overview template
+  H.put $ Overview template Nothing
 
-handleAction (OnSetup template params) = do
-  H.put $ setup template params
+handleAction (OnSetup template fields) = H.put $ setup template fields
 
 handleAction (OpenCreateWalletCard _) = pure unit -- handled in Dashboard.State (see note [State] in MainFrame.State)
 
@@ -116,20 +106,20 @@ handleAction (OnStartContract _ _) = pure unit -- handled in Dashboard.State (se
 
 handleAction OnBack = H.modify_ case _ of
   Start -> Start
-  Overview _ -> Start
-  Setup template _ _ -> Overview template
-  Review template params -> setup template (Just params)
+  Overview _ _ -> Start
+  Setup template { fields } -> Overview template (Just fields)
+  Review template params -> setup template (Just $ inject params)
 
 handleAction (OnContractSetupMsg CS.BackClicked) = handleAction OnBack
 
 handleAction (OnContractSetupMsg (CS.ReviewClicked params)) =
   H.get >>= case _ of
-    Setup template _ _ -> H.put $ Review template params
+    Setup template _ -> H.put $ Review template params
     _ -> pure unit
 
 handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
   H.modify_ case _ of
-    Setup template input _ -> Setup template input fields
+    Setup template input -> Setup template input { fields = fields }
     s -> s
 
 instantiateExtendedContract
@@ -143,7 +133,7 @@ instantiateExtendedContract currentSlot template params =
 
     slotContent = CT.toBigInt <$> timeouts
 
-    valueContent = CV.toBigInt <$> values
+    valueContent = view _value <$> values
 
     templateContent = TemplateContent { slotContent, valueContent }
 

@@ -6,10 +6,8 @@ import Component.ContractSetup.Types
   ( Component
   , ContractFields
   , ContractParams
-  , InitializeContractFields
   , Input
   , Msg(..)
-  , Query(..)
   , _nickname
   , _roles
   , _timeouts
@@ -37,16 +35,15 @@ import Data.List as List
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, isJust, maybe)
-import Data.Set (Set)
 import Data.Set as Set
 import Data.WalletNickname as WN
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.Form.Injective (project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
-import Halogen.Form.Projective (blank, project)
-import Halogen.Form.Types (InitializeField(..))
+import Halogen.Form.Types as HF
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Events.Extra (onClick_)
@@ -61,7 +58,8 @@ import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
 data Action
-  = OnNicknameMsg (Input.Msg Action ContractNickname)
+  = OnReceive (Connected AddressBook Input)
+  | OnNicknameMsg (Input.Msg Action ContractNickname)
   | OnRoleMsg TokenName (Input.Msg Action Address)
   | OnTimeoutMsg TokenName (Input.Msg Action ContractTimeout)
   | OnValueMsg TokenName (Input.Msg Action ContractValue)
@@ -71,12 +69,9 @@ data Action
 
 type State =
   { addressBook :: AddressBook
-  , templateRoles :: Set TokenName
-  , templateTimeouts :: Map String ContractTimeout
   , templateValues :: Map String NumberFormat
   , templateName :: String
   , fields :: ContractFields
-  , initialize :: InitializeContractFields
   , result :: Maybe ContractParams
   }
 
@@ -140,7 +135,7 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
   { initialState
   , eval: H.mkEval $ H.defaultEval
       { handleAction = handleAction
-      , handleQuery = handleQuery
+      , receive = Just <<< OnReceive
       }
   , render
   }
@@ -153,27 +148,30 @@ initialState
       , templateTimeouts
       , templateValues
       , templateName
-      , initialize
+      , fields
       }
   } =
   { addressBook: context
-  , result: project initialize
-  , templateRoles
-  , templateTimeouts
+  , result: project fields
   , templateValues
   , templateName
-  , initialize
-  , fields: blank
+  , fields: fields
+      { roles = mapWithIndex mkRoleField $ Set.toMap templateRoles
+      , timeouts = mapWithIndex mkTimeoutField templateTimeouts
+      , values = mapWithIndex mkValueField templateValues
+      }
   }
+  where
+  mkRoleField name _ = fromMaybe HF.Blank $ Map.lookup name fields.roles
+  mkTimeoutField _ value = HF.Complete value
+  mkValueField name _ = fromMaybe HF.Blank $ Map.lookup name fields.values
 
 render :: forall m. MonadEffect m => State -> ComponentHTML m
 render state = do
   let
     { templateName
-    , templateRoles
-    , templateTimeouts
-    , templateValues
     , result
+    , fields
     } = state
   HH.div [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
     [ HH.form
@@ -189,22 +187,25 @@ render state = do
         [ HH.h2
             [ classNames [ "text-lg", "font-semibold", "mb-2" ] ]
             [ HH.text $ templateName <> " setup" ]
-        , nicknameInput state
+        , nicknameInput fields.nickname
         , templateInputsSection Icon.Roles "Roles"
         , HH.fieldset [ classNames [ "space-y-2" ] ]
-            $ map (roleInput state)
-            $ Set.toUnfoldable templateRoles
+            $ List.toUnfoldable
+            $ Map.values
+            $ mapWithIndex (roleInput state)
+            $ fields.roles
         , templateInputsSection Icon.Terms "Terms"
-        , HH.fieldset [ classNames [ "space-y-2" ] ] $
-            ( List.toUnfoldable
-                $ Map.values
-                $ mapWithIndex timeoutInput templateTimeouts
-            )
-              <>
-                ( List.toUnfoldable
-                    $ Map.values
-                    $ mapWithIndex (valueInput state) templateValues
-                )
+        , HH.fieldset [ classNames [ "space-y-2" ] ]
+            $
+              ( List.toUnfoldable
+                  $ Map.values
+                  $ mapWithIndex timeoutInput fields.timeouts
+              )
+                <>
+                  ( List.toUnfoldable
+                      $ Map.values
+                      $ mapWithIndex (valueInput state) fields.values
+                  )
         ]
     , HH.div
         [ classNames
@@ -234,18 +235,18 @@ render state = do
         ]
     ]
 
-nicknameInput :: forall m. MonadEffect m => State -> ComponentHTML m
-nicknameInput state =
+nicknameInput
+  :: forall m. MonadEffect m => FieldState ContractNickname -> ComponentHTML m
+nicknameInput fieldState =
   HH.slot _nickname unit Input.component input OnNicknameMsg
   where
-  { initialize: { nickname } } = state
-  id = "contract-nickname"
   input =
-    { initialize: nickname
+    { fieldState
     , format: CN.toString
     , validate: CN.fromString
     , render: \s ->
         let
+          id = "contract-nickname"
           mkError = case _ of
             CN.Empty -> "Required."
           error = mkError <$> s.error
@@ -258,14 +259,18 @@ nicknameInput state =
     }
 
 roleInput
-  :: forall m. MonadEffect m => State -> TokenName -> ComponentHTML m
-roleInput state name =
+  :: forall m
+   . MonadEffect m
+  => State
+  -> TokenName
+  -> FieldState Address
+  -> ComponentHTML m
+roleInput state name fieldState =
   HH.slot _roles name Input.component input $ OnRoleMsg name
   where
-  { initialize: { roles }, addressBook } = state
-  id = "role-" <> name
+  { addressBook } = state
   input =
-    { initialize: fromMaybe FromBlank $ Map.lookup name roles
+    { fieldState
     , format: \addr ->
         maybe "" WN.toString $ AddressBook.lookupNickname addr state.addressBook
     , validate:
@@ -274,6 +279,7 @@ roleInput state name =
           <=< WN.fromString
     , render: \s ->
         let
+          id = "role-" <> name
           mkError = case _ of
             WN.Empty -> "Required."
             WN.Exists -> "Already exists."
@@ -290,17 +296,21 @@ roleInput state name =
     }
 
 timeoutInput
-  :: forall m. MonadEffect m => String -> ContractTimeout -> ComponentHTML m
-timeoutInput name timeout =
+  :: forall m
+   . MonadEffect m
+  => String
+  -> FieldState ContractTimeout
+  -> ComponentHTML m
+timeoutInput name fieldState =
   HH.slot _timeouts name Input.component input $ OnTimeoutMsg name
   where
-  id = "timeout-" <> name
   input =
-    { initialize: FromOutput timeout
+    { fieldState
     , format: CT.toString
     , validate: CT.fromString
     , render: \s ->
         let
+          id = "timeout-" <> name
           mkError = case _ of
             CT.Empty -> "Required."
             CT.Past -> "Must be in the future."
@@ -310,7 +320,8 @@ timeoutInput name timeout =
           HH.div [ classNames [ "relative" ] ]
             [ renderLabel id name
             , renderInputBox error
-                [ renderInput id s.value [ HP.type_ HP.InputNumber ]
+                [ renderInput id s.value
+                    [ HP.type_ HP.InputNumber, HP.readOnly true ]
                 , HH.span_ [ HH.text "minutes" ]
                 ]
             , renderErrorLabel id error
@@ -322,22 +333,24 @@ valueInput
    . MonadEffect m
   => State
   -> String
-  -> NumberFormat
+  -> FieldState ContractValue
   -> ComponentHTML m
-valueInput state name format =
+valueInput state name fieldState =
   HH.slot _values name Input.component input $ OnValueMsg name
   where
-  { initialize: { values } } = state
-  id = "value-" <> name
+  { templateValues } = state
+  format = fromMaybe DefaultFormat $ Map.lookup name templateValues
   input =
-    { initialize: fromMaybe FromBlank $ Map.lookup name values
-    , format: CV.toString format
-    , validate: CV.fromString format
+    { fieldState
+    , format: CV.toString
+    , validate: case format of
+        DecimalFormat d cs -> CV.currencyFromString cs d
+        _ -> CV.fromString
     , render: \s ->
         let
+          id = "value-" <> name
           mkError = case _ of
             CV.Empty -> "Required."
-            CV.Negative -> "Must by positive."
             CV.Invalid -> "Must by a number."
           error = mkError <$> s.error
         in
@@ -393,6 +406,10 @@ handleFieldMsg set = case _ of
 
 handleAction :: forall m. MonadEffect m => Action -> DSL m Unit
 handleAction = case _ of
+  OnReceive input -> do
+    oldState <- H.get
+    let newState = initialState input
+    when (oldState /= newState) $ H.put newState
   OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
   OnRoleMsg name msg -> handleFieldMsg
     (over (prop _roles) <<< Map.insert name)
@@ -406,18 +423,3 @@ handleAction = case _ of
   OnFormSubmit event -> H.liftEffect $ preventDefault event
   OnBack -> H.raise BackClicked
   OnReview params -> H.raise $ ReviewClicked params
-
-handleQuery :: forall m a. MonadEffect m => Query a -> DSL m (Maybe a)
-handleQuery = case _ of
-  InitializeNickname init a -> do
-    H.tell _nickname unit $ Input.Initialize init
-    pure $ Just a
-  InitializeRole name init a -> do
-    H.tell _roles name $ Input.Initialize init
-    pure $ Just a
-  InitializeTimeout name init a -> do
-    H.tell _timeouts name $ Input.Initialize init
-    pure $ Just a
-  InitializeValue name init a -> do
-    H.tell _values name $ Input.Initialize init
-    pure $ Just a

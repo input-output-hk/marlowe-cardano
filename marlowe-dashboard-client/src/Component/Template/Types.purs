@@ -12,8 +12,8 @@ import Marlowe.Semantics (TokenName)
 
 data State
   = Start
-  | Overview ContractTemplate
-  | Setup ContractTemplate ContractSetup.Input ContractFields
+  | Overview ContractTemplate (Maybe ContractFields)
+  | Setup ContractTemplate ContractSetup.Input
   | Review ContractTemplate ContractParams
 
 derive instance Eq State
@@ -22,7 +22,7 @@ data Action
   = OnReset
   | OnBack
   | OnTemplateChosen ContractTemplate
-  | OnSetup ContractTemplate (Maybe ContractParams)
+  | OnSetup ContractTemplate (Maybe ContractFields)
   | OpenCreateWalletCard TokenName
   | OnStartContract ContractTemplate ContractParams
   | OnContractSetupMsg ContractSetup.Msg

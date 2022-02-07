@@ -5,7 +5,7 @@ import Prologue hiding (Either(..), div)
 import Component.Contacts.State (adaToken, getAda)
 import Component.ContractSetup (_contractSetup)
 import Component.ContractSetup as ContractSetup
-import Component.ContractSetup.Types (ContractParams)
+import Component.ContractSetup.Types (ContractFields, ContractParams)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -53,7 +53,6 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
   , MetaData
-  , NumberFormat(..)
   , ValueParameterInfo
   , _metaData
   , _slotParameterDescriptions
@@ -87,8 +86,8 @@ contractTemplateCard assets state =
     , contractTemplateBreadcrumb state
     , case state of
         Start -> contractSelection
-        Overview template -> contractOverview template
-        Setup _ input _ -> HH.slot
+        Overview template fields -> contractOverview template fields
+        Setup _ input -> HH.slot
           _contractSetup
           unit
           ContractSetup.component
@@ -115,26 +114,25 @@ contractTemplateBreadcrumb contractSetupStage =
     ]
     case contractSetupStage of
       Start -> [ activeItem "Templates" ]
-      Overview template ->
-        [ previousItem "Templates" OnReset
+      Overview template _ ->
+        [ previousItem "Templates" OnBack
         , arrow
         , activeItem template.metaData.contractName
         ]
-      Setup template _ _ ->
+      Setup template _ ->
         [ previousItem "Templates" OnReset
         , arrow
-        , previousItem template.metaData.contractName
-            $ OnTemplateChosen template
+        , previousItem template.metaData.contractName OnBack
         , arrow
         , activeItem "Setup"
         ]
-      Review template params ->
+      Review template _ ->
         [ previousItem "Templates" OnReset
         , arrow
         , previousItem template.metaData.contractName
             $ OnTemplateChosen template
         , arrow
-        , previousItem "Setup" $ OnSetup template (Just params)
+        , previousItem "Setup" OnBack
         , arrow
         , activeItem "Review and pay"
         ]
@@ -209,8 +207,9 @@ contractSelection =
       , icon_ Icon.Next
       ]
 
-contractOverview :: forall p. ContractTemplate -> HTML p Action
-contractOverview contractTemplate =
+contractOverview
+  :: forall p. ContractTemplate -> Maybe ContractFields -> HTML p Action
+contractOverview contractTemplate fields =
   div
     [ classNames [ "h-full", "grid", "grid-rows-1fr-auto" ] ]
     [ div
@@ -244,7 +243,7 @@ contractOverview contractTemplate =
         , button
             [ classNames $ Css.primaryButton <> [ "flex-1", "text-left" ] <>
                 Css.withIcon Icon.ArrowRight
-            , onClick_ $ OnSetup contractTemplate Nothing
+            , onClick_ $ OnSetup contractTemplate fields
             ]
             [ text "Setup" ]
         ]
@@ -378,12 +377,10 @@ valueParameter infoMap (key /\ value) =
   let
     info = OMap.lookup key infoMap
 
-    format = maybe DefaultFormat _.valueParameterFormat info
-
     description =
       maybe "no description available" _.valueParameterDescription info
 
-    formattedValue = CV.toString format value
+    formattedValue = CV.toString value
   in
     parameter key description formattedValue
 
