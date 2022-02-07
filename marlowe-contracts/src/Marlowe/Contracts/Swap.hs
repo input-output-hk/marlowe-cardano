@@ -14,7 +14,7 @@ swap ::
   -> Value Observation -- ^ Value B
   -> Timeout           -- ^ Deposit timeout
   -> Contract          -- ^ Continuation
-  -> Contract          -- ^ Swap Cotnract
+  -> Contract          -- ^ Swap Contract
 swap partyA tokenA valueA partyB tokenB valueB timeout continuation =
     deposit partyA partyA (tokenA, valueA) timeout Close
   $ deposit partyB partyB (tokenB, valueB) timeout Close

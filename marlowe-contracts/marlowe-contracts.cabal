@@ -44,11 +44,13 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
-    Marlowe.Contracts.Common
     Marlowe.Contracts.Futures
     Marlowe.Contracts.Options
     Marlowe.Contracts.StructuredProducts
+    Marlowe.Contracts.Swap
     Marlowe.Contracts.ZeroCouponBond
+  other-modules:
+    Marlowe.Contracts.Common
   build-depends:
     base >= 4.9 && < 5,
     marlowe -any

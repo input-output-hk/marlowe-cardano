@@ -1,24 +1,35 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Marlowe.Contracts.Options where
+module Marlowe.Contracts.Options
+  ( option
+  , OptionType(..)
+  , ExerciseType(..)
+
+  -- option strategies
+  , callSpread
+  , coveredCall
+  , strangle
+  , straddle
+  )
+where
 
 import Language.Marlowe
 import Marlowe.Contracts.Common
 
--- = Options
-
+-- |Option type
 data OptionType =
       Call -- ^ Call, the right to buy the Option
     | Put  -- ^ Put, the right to sell the Option
   deriving Show
 
+-- |Exercise type
 data ExerciseType =
       European -- ^ Execution at expiry
     | American -- ^ Execution anytime before expiry
   deriving Show
 
--- |"The term option refers to a financial instrument that is based on the value of underlying
--- securities such as stocks. An options contract offers the buyer the opportunity to buy or
--- sell - depending on the type of contract they hold - the underlying asset" -- investopedia
+-- |An /option/ is a financial instrument that is based on the value of underlying
+-- securities. An options contract offers the buyer the opportunity but not
+-- the obligation to buy or sell the underlying asset.
 option ::
      ExerciseType               -- ^ Exercise Type
   -> OptionType                 -- ^ Type of Option
@@ -93,9 +104,7 @@ choose choiceId cont =
         cont
     )
 
--- = Options Strategies
-
--- |A Covered Call is an option strategie constructed by writing a call on a token
+-- |A /Covered Call/ is an option strategie constructed by writing a call on a token
 -- and in addition providing the token as cover/collateral as part of the contract
 coveredCall ::
      Party             -- ^ Buyer
@@ -112,9 +121,8 @@ coveredCall buyer seller currency underlying strike ratio issue maturity settlem
     deposit buyer buyer (underlying, ratio) issue Close
   $ option European Call seller buyer (currency, strike) (underlying, ratio) maturity settlement
 
--- |"A straddle is a neutral options strategy that involves simultaneously buying both
--- a put option and a call option for the underlying security with the same strike price
--- and the same expiration date." -- investopedia
+-- |A /Straddle/ involves simultaneously buying a call and a put option
+-- for the same underlying with the same strike and the same expiry.
 straddle ::
      Party             -- ^ Buyer
   -> Party             -- ^ Seller
@@ -130,9 +138,8 @@ straddle buyer seller currency underlying ratio strike maturity settlement =
       p = option European Put  buyer seller (currency, strike) (underlying, ratio) maturity settlement
    in c `both` p
 
--- |"A strangle is an options strategy in which the investor holds a position in both
--- a call and a put option with different strike prices, but with the same expiration
--- date and underlying asset." -- investopedia
+-- |A /Strangle/ involves simultaneously buying a call and a put option
+-- for the same underlying with different strikes, but with the same expiry.
 strangle ::
      Party             -- ^ Buyer
   -> Party             -- ^ Seller
@@ -149,9 +156,8 @@ strangle buyer seller currency underlying ratio strike1 strike2 maturity settlem
       p = option European Put  buyer seller (currency, strike2) (underlying, ratio) maturity settlement
    in c `both` p
 
--- |"A bull call spread is an options trading strategy designed to benefit from a stock's
--- limited increase in price. The strategy uses two call options to create a range consisting
--- of a lower strike price and an upper strike price." -- investopedia
+-- |A /Call Spread/ involves simultaneously buying two call options
+-- for the same underlying with different strikes, but with the same expiry.
 callSpread ::
      Party             -- ^ Buyer
   -> Party             -- ^ Seller
