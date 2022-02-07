@@ -2,11 +2,8 @@ module Capability.MarloweStorage
   ( class ManageMarloweStorage
   , addressBookLocalStorageKey
   , clearAllLocalStorage
-  , getAllWalletRoleContracts
   , getContractNicknames
-  , getWalletRoleContracts
   , insertIntoContractNicknames
-  , insertWalletRoleContracts
   , modifyAddressBook
   , modifyAddressBook_
   , walletLocalStorageKey
@@ -20,7 +17,7 @@ import Data.AddressBook (AddressBook)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.ContractNickname (ContractNickname)
 import Data.Either (hush)
-import Data.Map (Map, insert, lookup)
+import Data.Map (Map, insert)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Effect.Class (liftEffect)
@@ -28,7 +25,6 @@ import Halogen (HalogenM)
 import Halogen.Store.Monad (getStore, updateStore)
 import LocalStorage (Key(..), getItem, removeItem, setItem)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweData, MarloweParams)
 import Store (Action(..))
 
 addressBookLocalStorageKey :: Key
@@ -52,9 +48,6 @@ class
   -- contract nicknames
   getContractNicknames :: m (Map PlutusAppId ContractNickname)
   insertIntoContractNicknames :: PlutusAppId -> ContractNickname -> m Unit
-  getAllWalletRoleContracts :: m (Map String (Map MarloweParams MarloweData))
-  getWalletRoleContracts :: String -> m (Map MarloweParams MarloweData)
-  insertWalletRoleContracts :: String -> MarloweParams -> MarloweData -> m Unit
 
 modifyAddressBook_
   :: forall m
@@ -89,25 +82,6 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       updatedContractNicknames = insert plutusAppId nickname contractNicknames
     liftEffect $ setItem contractNicknamesLocalStorageKey $ encodeStringifyJson
       updatedContractNicknames
-  getAllWalletRoleContracts = do
-    mAllWalletRoleContracts <- liftEffect $ getItem
-      walletRoleContractsLocalStorageKey
-    pure $ fromMaybe Map.empty $ hush <<< parseDecodeJson =<<
-      mAllWalletRoleContracts
-  getWalletRoleContracts walletId = do
-    allWalletRoleContracts <- getAllWalletRoleContracts
-    pure $ fromMaybe Map.empty $ lookup walletId allWalletRoleContracts
-  insertWalletRoleContracts walletId marloweParams marloweData = do
-    allWalletRoleContracts <- getAllWalletRoleContracts
-    walletRoleContracts <- getWalletRoleContracts walletId
-    let
-      newWalletRoleContracts = insert marloweParams marloweData
-        walletRoleContracts
-
-      newAllWalletRoleContracts = insert walletId newWalletRoleContracts
-        allWalletRoleContracts
-    void $ liftEffect $ setItem walletRoleContractsLocalStorageKey
-      $ encodeStringifyJson newAllWalletRoleContracts
 
 instance manageMarloweStorageHalogenM ::
   ManageMarloweStorage m =>
@@ -117,7 +91,3 @@ instance manageMarloweStorageHalogenM ::
   getContractNicknames = lift getContractNicknames
   insertIntoContractNicknames plutusAppId nickname = lift $
     insertIntoContractNicknames plutusAppId nickname
-  getAllWalletRoleContracts = lift getAllWalletRoleContracts
-  getWalletRoleContracts = lift <<< getWalletRoleContracts
-  insertWalletRoleContracts walletId marloweParams marloweData = lift $
-    insertWalletRoleContracts walletId marloweParams marloweData
