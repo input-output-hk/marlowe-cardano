@@ -12,7 +12,7 @@ sys.path.insert(0, abspath(join(dirname(__file__))))
 sys.path.append(os.path.abspath('exts'))
 
 # -- Doc config values
-marlowe_playground_url = "https://alpha.marlowe.iohkdev.io/"
+marlowe_playground_url = "https://play.marlowe-finance.io/"
 
 rst_epilog = """
 .. _Marlowe Playground: {0}
