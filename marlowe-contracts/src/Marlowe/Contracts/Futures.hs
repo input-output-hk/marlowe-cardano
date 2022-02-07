@@ -1,12 +1,12 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
-module Marlowe.Contracts.Futures where
+module Marlowe.Contracts.Futures
+  ( future )
+where
 
 import Data.String (IsString (..))
 import Language.Marlowe
 import Marlowe.Contracts.Common
-
--- = Futures
 
 -- |Future on the exchange rate of USD/ADA
 future ::
