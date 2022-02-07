@@ -57,7 +57,6 @@ jobs:
       - name: Build Marlowe Playground Client
         working-directory: ./
         run: |
-          nix-shell
           cd marlowe-playground-client
           $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
       - name: Run Marlowe Playground Client
@@ -66,7 +65,6 @@ jobs:
           CLIENT_PORT: 8009
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
-          nix-shell
           cd marlowe-playground-client
           npm install
           npm run build:spago
