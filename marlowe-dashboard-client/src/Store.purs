@@ -40,14 +40,14 @@ type Store =
   , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
   }
 
-mkStore :: AddressBook -> Maybe PABConnectedWallet -> Store
-mkStore addressBook wallet =
+mkStore :: AddressBook -> Store
+mkStore addressBook =
   { addressBook
   , currentSlot: zero
   , toast: Nothing
   , newContracts: Map.empty
   , syncedContracts: Map.empty
-  , wallet
+  , wallet: Nothing
   , previousCompanionAppState: Nothing
   }
 

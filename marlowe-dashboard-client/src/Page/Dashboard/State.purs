@@ -119,28 +119,28 @@ mkInitialState
   -> Map PlutusAppId ContractNickname
   -> Slot
   -> State
-mkInitialState wallet contractNicknames currentSlot =
-  let
-    -- FIXME-3208: Find another way to set the names
-    mkInitialContractState followerAppId contractHistory =
-      let
-        nickname = fromMaybe ContractNickname.unknown $ lookup followerAppId
-          contractNicknames
-      in
-        Contract.mkInitialState wallet currentSlot nickname
-          contractHistory
-  in
-    { contactsState: Contacts.initialState
-    , walletCompanionStatus: FirstUpdatePending
-    , menuOpen: false
-    , card: Nothing
-    , cardOpen: false
-    -- FIXME-3208: Refactor in progress, remove...
-    , contracts: Map.empty
-    , contractFilter: Running
-    , selectedContractFollowerAppId: Nothing
-    , templateState: Template.dummyState
-    }
+-- mkInitialState wallet contractNicknames currentSlot =
+mkInitialState _ _ _ =
+  -- FIXME-3208: Find another way to set the names and revisit the signature of this fn
+  -- mkInitialContractState followerAppId contractHistory =
+  --   let
+  --     nickname = fromMaybe ContractNickname.unknown $ lookup followerAppId
+  --       contractNicknames
+  --   in
+  --     Contract.mkInitialState wallet currentSlot nickname
+  --       contractHistory
+  { contactsState: Contacts.initialState
+  -- FIXME-3208: probably remove...
+  , walletCompanionStatus: FirstUpdatePending
+  , menuOpen: false
+  , card: Nothing
+  , cardOpen: false
+  -- FIXME-3208: remove...
+  , contracts: Map.empty
+  , contractFilter: Running
+  , selectedContractFollowerAppId: Nothing
+  , templateState: Template.dummyState
+  }
 
 handleAction
   :: forall m

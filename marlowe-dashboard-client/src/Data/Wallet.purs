@@ -9,7 +9,6 @@ module Data.Wallet
 
 import Prologue
 
-import Data.Argonaut (class DecodeJson, class EncodeJson)
 import Data.Lens (Lens', iso)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
@@ -29,10 +28,6 @@ type WalletDetailsFields =
 newtype WalletDetails = WalletDetails WalletDetailsFields
 
 derive instance Eq WalletDetails
-
--- FIXME-3208: We should probably not have these instances
-derive newtype instance EncodeJson WalletDetails
-derive newtype instance DecodeJson WalletDetails
 
 mkWalletDetails
   :: WalletNickname -> WalletInfo -> WalletDetails

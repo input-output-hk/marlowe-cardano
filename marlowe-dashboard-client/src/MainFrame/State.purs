@@ -16,6 +16,8 @@ import Capability.Marlowe
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , getContractNicknames
+  , getWallet
+  , updateWallet
   )
 import Capability.PAB (class ManagePAB)
 import Capability.PAB as PAB
@@ -406,18 +408,21 @@ handleAction Init = do
   if we have some wallet details in the local storage, we try to enter the dashboard
   state with it.
   -}
-  -- FIXME-3208 restore wallet on init but by fetching the details
-  -- mWalletDetails <- peruse $ _subState <<< _Left <<< _1 <<< _Just
-  -- traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
-  -- handleWalletChange mWalletDetails
+  mWalletDetails <- getWallet
+  traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
   pure unit
 
 handleAction (Receive input) = do
   modify_ $ flip deriveState input
-  -- FIXME-3208: restore this logic
-  -- liftEffect case input.context.wallet of
-  --   Nothing -> removeItem walletLocalStorageKey
-  --   Just wallet -> setItem walletLocalStorageKey $ encodeStringifyJson wallet
+  -- Persist the wallet details so that when we Init, we can try to recover it
+  updateWallet
+    $ map
+        ( \wallet ->
+            (wallet ^. Connected._walletNickname)
+              /\ (wallet ^. Connected._walletId)
+              /\ (wallet ^. Connected._pubKeyHash)
+        )
+        input.context.wallet
   handleWalletChange input.context.wallet
 
 handleAction (OnPoll wallet) = updateTotalFunds wallet
