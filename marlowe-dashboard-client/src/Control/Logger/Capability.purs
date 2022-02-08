@@ -54,10 +54,10 @@ debug :: forall m msg. MonadLogger msg m => msg -> m Unit
 debug msg = log $ LogMessage { _logLevel: Debug, _logMessageContent: msg }
 
 info :: forall m msg. MonadLogger msg m => msg -> m Unit
-info msg = log $ LogMessage { _logLevel: Debug, _logMessageContent: msg }
+info msg = log $ LogMessage { _logLevel: Info, _logMessageContent: msg }
 
 warning :: forall m msg. MonadLogger msg m => msg -> m Unit
-warning msg = log $ LogMessage { _logLevel: Debug, _logMessageContent: msg }
+warning msg = log $ LogMessage { _logLevel: Warning, _logMessageContent: msg }
 
 error :: forall m msg. MonadLogger msg m => msg -> m Unit
-error msg = log $ LogMessage { _logLevel: Debug, _logMessageContent: msg }
+error msg = log $ LogMessage { _logLevel: Error, _logMessageContent: msg }

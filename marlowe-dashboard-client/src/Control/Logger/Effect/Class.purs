@@ -32,7 +32,9 @@ log'
   => MonadReader { logger :: Logger msg | ctx } m
   => LogMessage msg
   -> m Unit
-log' logMsg = asks _.logger >>= flip log logMsg >>> liftEffect
+log' logMsg = do
+  logger <- asks _.logger
+  liftEffect $ log logger logMsg
 
 debug'
   :: forall ctx m msg

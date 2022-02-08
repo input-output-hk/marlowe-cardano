@@ -1,3 +1,3 @@
 "use strict";
 
-exports._debug = (msg) => () => console.debug(msg);
+exports.debugImpl = (msg) => console.debug(msg);
