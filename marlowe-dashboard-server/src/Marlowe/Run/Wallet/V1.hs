@@ -10,7 +10,7 @@
 
 module Marlowe.Run.Wallet.V1 where
 
-import Cardano.Prelude hiding (Handler)
+import Cardano.Prelude hiding (Handler, state)
 import qualified Cardano.Wallet.Api.Types as WBE (ApiT (..), ApiWallet (..), ApiWalletAssetsBalance (..),
                                                   ApiWalletBalance (..))
 import Cardano.Wallet.Primitive.SyncProgress (SyncProgress (..))
@@ -54,11 +54,10 @@ getTotalFunds ::
     m GetTotalFundsResponse
 getTotalFunds getWallet walletId = do
     wallet <- getWallet walletId
-    let WBE.ApiT walletId = WBE.id wallet
     let balance = WBE.balance wallet
     let WBE.ApiT state = WBE.state wallet
-    let assets = WBE.assets wallet
-    let WBE.ApiT tokenMap = WBE.total (assets :: WBE.ApiWalletAssetsBalance)
+    let walletAssets = WBE.assets wallet
+    let WBE.ApiT tokenMap = WBE.total (walletAssets :: WBE.ApiWalletAssetsBalance)
     let assetsAsValues = wbeTokenMapToLedgerValue tokenMap
     let adaValue = Ledger.lovelaceValueOf $ naturalToInteger $ getQuantity $ WBE.total (balance :: WBE.ApiWalletBalance)
     let

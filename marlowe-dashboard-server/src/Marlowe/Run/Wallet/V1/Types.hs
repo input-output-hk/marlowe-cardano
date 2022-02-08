@@ -23,8 +23,8 @@ instance Aeson.FromJSON WalletId where
     parseJSON value = do
         walletIdText <- Aeson.parseJSON value
         case fromText walletIdText of
-          Left e         -> parseFail $ getTextDecodingError e
-          Right walletId -> pure $ WalletId walletId
+          Left e   -> parseFail $ getTextDecodingError e
+          Right id -> pure $ WalletId id
 
 instance FromHttpApiData WalletId where
     parseUrlPiece = bimap (T.pack . getTextDecodingError) WalletId . fromText

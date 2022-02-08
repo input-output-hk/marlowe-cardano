@@ -31,7 +31,7 @@ handle logAction pending = liftIO $ do
   withPingThread connection 30 (pure ()) $ handleRequest logAction connection uuid
 
 handleRequest :: LogAction IO Message -> Connection -> UUID -> IO ()
-handleRequest logAction connection uuid = forever $ do
+handleRequest logAction connection _ = forever $ do
   msg <- receiveData connection
   print msg
   v <- case JSON.eitherDecode msg of
