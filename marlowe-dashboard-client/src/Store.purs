@@ -17,9 +17,11 @@ import Data.PABConnectedWallet
   , _assets
   , _companionAppId
   , _marloweAppId
+  , _syncStatus
   )
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
+import Data.Wallet (SyncStatus)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -62,11 +64,13 @@ data Action
   | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
   -- Contract
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
-  -- Wallet
+  -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
+  -- Wallet
   | ActivateWallet PABConnectedWallet
   | ChangePlutusScript MarloweContract PlutusAppId
   | UpdateAssets Assets
+  | UpdateWalletSyncStatus SyncStatus
   | DeactivateWallet
   -- Toast
   | ShowToast ToastMessage
@@ -87,8 +91,9 @@ reduce store = case _ of
     { newContracts = Map.insert reqId (contractNickname /\ metadata)
         store.newContracts
     }
-  -- Wallet
+  -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
+  -- Wallet
   ActivateWallet wallet -> store { wallet = Just wallet }
   ChangePlutusScript MarloweApp plutusAppId ->
     store { wallet = store.wallet # _Just <<< _marloweAppId .~ plutusAppId }
@@ -97,6 +102,8 @@ reduce store = case _ of
   ChangePlutusScript MarloweFollower _ -> store
   UpdateAssets assets ->
     store { wallet = store.wallet # _Just <<< _assets .~ assets }
+  UpdateWalletSyncStatus sync ->
+    store { wallet = store.wallet # _Just <<< _syncStatus .~ sync }
   DeactivateWallet -> store { wallet = Nothing }
   -- Toast
   ShowToast msg -> store { toast = Just msg }

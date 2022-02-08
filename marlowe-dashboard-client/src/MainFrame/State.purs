@@ -28,22 +28,37 @@ import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.Rec.Class (class MonadRec, forever)
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (modify_)
 import Data.AddressBook as AB
 import Data.Argonaut (decodeJson, stringify)
 import Data.Array (filter, find) as Array
+import Data.Filterable (filter)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (_2, assign, lens, preview, set, use, view, (^.))
+import Data.Lens
+  ( _1
+  , _2
+  , _Just
+  , assign
+  , lens
+  , preview
+  , set
+  , use
+  , view
+  , (^.)
+  , (^?)
+  )
 import Data.Lens.Extra (peruse)
 import Data.Map (keys)
 import Data.Maybe (fromMaybe, maybe)
-import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
+import Data.PABConnectedWallet (connectWallet)
 import Data.PABConnectedWallet as Connected
 import Data.Set (toUnfoldable) as Set
-import Data.Time.Duration (Minutes(..))
+import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
+import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet (SyncStatus(..))
 import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
 import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
@@ -358,28 +373,6 @@ handleQuery (MainFrameActionQuery action next) = do
   handleAction action
   pure $ Just next
 
-handleWalletChange
-  :: forall m
-   . MonadAsk Env m
-  => MonadLogger String m
-  => Maybe PABConnectedWallet
-  -> HalogenM State Action ChildSlots Msg m Unit
-handleWalletChange mWallet = do
-  currentSubscription <- H.gets _.pollingSubscription
-  traverse_ H.unsubscribe currentSubscription
-  pollingInterval <- asks $ view _pollingInterval
-  newSubscription <- for mWallet \wallet -> do
-    let
-      walletId = wallet ^. Connected._walletId
-    Logger.info $ "Subscribing to polling subscription at an interval of "
-      <> show pollingInterval
-    H.subscribe $ HS.makeEmitter \push -> do
-      fibre <- launchAff $ forever do
-        delay pollingInterval
-        liftEffect $ push $ OnPoll walletId
-      pure $ launchAff_ $ killFiber (error "Unsubscribing") fibre
-  H.modify_ _ { pollingSubscription = newSubscription }
-
 -- Note [State]: Some actions belong logically in one part of the state, but
 -- from the user's point of view in another. For example, the action of picking
 -- up a wallet belongs logically in the MainFrame state (because it modifies
@@ -410,9 +403,13 @@ handleAction Init = do
   -}
   mWalletDetails <- getWallet
   traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
+  traverse_ (handleAction <<< OnPoll <<< view Disconnected._walletId)
+    mWalletDetails
   pure unit
 
 handleAction (Receive input) = do
+  oldWallet <- peruse $ _dashboardState <<< _1
+  let newWallet = input.context.wallet
   modify_ $ flip deriveState input
   -- Persist the wallet details so that when we Init, we can try to recover it
   updateWallet
@@ -422,10 +419,28 @@ handleAction (Receive input) = do
               /\ (wallet ^. Connected._walletId)
               /\ (wallet ^. Connected._pubKeyHash)
         )
-        input.context.wallet
-  handleWalletChange input.context.wallet
+        newWallet
+  let oldWalletId = oldWallet ^? _Just <<< Connected._walletId
+  let newWalletId = newWallet ^? _Just <<< Connected._walletId
+  traverse_ (handleAction <<< OnPoll)
+    $ filter (notEq oldWalletId <<< Just)
+    $ newWalletId
 
-handleAction (OnPoll wallet) = updateTotalFunds wallet
+handleAction (OnPoll walletId) = do
+  syncStatus <- updateTotalFunds walletId
+  currentSubscription <- H.gets _.pollingSubscription
+  traverse_ H.unsubscribe currentSubscription
+  pollingInterval <- case syncStatus of
+    -- We poll more frequently when the wallet backend is synchronizing so we
+    -- get more rapid feedback.
+    Just (Synchronizing _) -> pure $ Milliseconds 500.0
+    _ -> asks $ view _pollingInterval
+  newSubscription <- H.subscribe $ HS.makeEmitter \push -> do
+    fibre <- launchAff do
+      delay pollingInterval
+      liftEffect $ push $ OnPoll walletId
+    pure $ launchAff_ $ killFiber (error "Unsubscribing") fibre
+  H.modify_ _ { pollingSubscription = Just newSubscription }
 
 {- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just

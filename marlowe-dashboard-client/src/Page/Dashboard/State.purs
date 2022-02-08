@@ -28,6 +28,7 @@ import Data.Address as A
 import Data.Array (null)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
+import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens
   ( _Just
@@ -60,6 +61,7 @@ import Data.Set (delete, fromFoldable, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
@@ -177,7 +179,7 @@ handleAction { wallet } (OpenCard card) = do
   -- See note [polling updateTotalFunds]
   let
     walletId = wallet ^. _walletId
-  updateTotalFunds walletId
+  _ <- updateTotalFunds walletId
   -- Then we set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
@@ -299,7 +301,7 @@ handleAction
   -- been a change in the role tokens.
   -- There is a chance that the data is not fully synced
   -- See note [polling updateTotalFunds]
-  updateTotalFunds walletId
+  _ <- updateTotalFunds walletId
   -- if the chParams have not yet been set, we can't do anything; that's fine though, we'll get
   -- another notification through the websocket as soon as they are set
   for_ chParams \(marloweParams /\ marloweData) -> do
@@ -513,11 +515,14 @@ updateTotalFunds
   => ManageWallet m
   => MonadStore Store.Action Store.Store m
   => WalletId
-  -> m Unit
+  -> m (Maybe SyncStatus)
 updateTotalFunds walletId = do
   response <- getWalletTotalFunds walletId
-  for_ response \(GetTotalFundsResponse { assets }) ->
+  hush <$> for response \(GetTotalFundsResponse { assets, sync }) -> do
     updateStore $ Store.UpdateAssets $ toFront assets
+    let syncStatus = syncStatusFromNumber sync
+    updateStore $ Store.UpdateWalletSyncStatus syncStatus
+    pure syncStatus
 
 toContacts
   :: forall m msg slots
