@@ -55,8 +55,7 @@ jobs:
         run: |
           cd marlowe-playground-client
           $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &
-          pid=$!
-          wait $pid
+          until [ -f purs]; do echo "Waiting for purs files to build" && sleep 10; done
       - name: Run Marlowe Playground Client
         working-directory: ./
         env:
@@ -64,7 +63,6 @@ jobs:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
           cd marlowe-playground-client
-          npm install spago
           npm install
           npm run build:spago
           npm run build:webpack:dev:vendor
