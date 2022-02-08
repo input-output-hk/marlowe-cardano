@@ -1,7 +1,7 @@
-module Data.ContractManager
-  ( ContractManager
+module Store.Contracts
+  ( ContractStore
   , addStartingContract
-  , emptyContractManager
+  , emptyContractStore
   , followerContractExists
   ) where
 
@@ -22,11 +22,9 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import Type.Proxy (Proxy(..))
 
--- This data type contains information on all the contract a user have
+newtype ContractStore = ContractStore ContractStoreFields
 
-newtype ContractManager = ContractManager ContractManagerFields
-
-type ContractManagerFields
+type ContractStoreFields
   =
   {
     -- This map lets you now the status of a contract that is synced with the PAB.
@@ -43,23 +41,23 @@ type ContractManagerFields
   }
 
 ------------------------------------------------------------
-_ContractManager :: Lens' ContractManager ContractManagerFields
-_ContractManager = iso
-  (\(ContractManager fields) -> fields)
-  (\fields -> ContractManager fields)
+_ContractStore :: Lens' ContractStore ContractStoreFields
+_ContractStore = iso
+  (\(ContractStore fields) -> fields)
+  (\fields -> ContractStore fields)
 
--- _syncedContracts :: Lens' ContractManager (Map MarloweParams Execution.State)
--- _syncedContracts = _ContractManager <<< prop (Proxy :: _ "syncedContracts")
+-- _syncedContracts :: Lens' ContractStore (Map MarloweParams Execution.State)
+-- _syncedContracts = _ContractStore <<< prop (Proxy :: _ "syncedContracts")
 
-_newContracts :: Lens' ContractManager (Map UUID (ContractNickname /\ MetaData))
-_newContracts = _ContractManager <<< prop (Proxy :: _ "newContracts")
+_newContracts :: Lens' ContractStore (Map UUID (ContractNickname /\ MetaData))
+_newContracts = _ContractStore <<< prop (Proxy :: _ "newContracts")
 
-_contractIndex :: Lens' ContractManager (Bimap MarloweParams PlutusAppId)
-_contractIndex = _ContractManager <<< prop (Proxy :: _ "contractIndex")
+_contractIndex :: Lens' ContractStore (Bimap MarloweParams PlutusAppId)
+_contractIndex = _ContractStore <<< prop (Proxy :: _ "contractIndex")
 
 ------------------------------------------------------------
-emptyContractManager :: ContractManager
-emptyContractManager = ContractManager
+emptyContractStore :: ContractStore
+emptyContractStore = ContractStore
   { syncedContracts: Map.empty
   , newContracts: Map.empty
   , contractIndex: Bimap.empty
@@ -67,12 +65,12 @@ emptyContractManager = ContractManager
 
 addStartingContract
   :: (UUID /\ ContractNickname /\ MetaData)
-  -> ContractManager
-  -> ContractManager
+  -> ContractStore
+  -> ContractStore
 addStartingContract (reqId /\ contractNickname /\ metadata) =
   over _newContracts $ Map.insert reqId (contractNickname /\ metadata)
 
-followerContractExists :: MarloweParams -> ContractManager -> Boolean
+followerContractExists :: MarloweParams -> ContractStore -> Boolean
 followerContractExists marloweParams = view
   (_contractIndex <<< to (Bimap.memberL marloweParams))
 

@@ -8,11 +8,6 @@ module Store
 import Prologue
 
 import Data.AddressBook (AddressBook)
-import Data.ContractManager
-  ( ContractManager
-  , addStartingContract
-  , emptyContractManager
-  )
 import Data.ContractNickname (ContractNickname)
 import Data.Lens (_Just, (.~))
 import Data.Map (Map)
@@ -26,11 +21,15 @@ import Data.PABConnectedWallet
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
-
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
 import MarloweContract (MarloweContract(..))
+import Store.Contracts
+  ( ContractStore
+  , addStartingContract
+  , emptyContractStore
+  )
 import Toast.Types (ToastMessage)
 
 type Store =
@@ -38,7 +37,7 @@ type Store =
     addressBook :: AddressBook
   , wallet :: Maybe PABConnectedWallet
   -- # Contracts
-  , contractManager :: ContractManager
+  , contracts :: ContractStore
   -- # Backend Notifications
   -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
   -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
@@ -59,7 +58,7 @@ mkStore addressBook =
     addressBook
   , wallet: Nothing
   -- # Contracts
-  , contractManager: emptyContractManager
+  , contracts: emptyContractStore
   -- # Backend Notifications
   , previousCompanionAppState: Nothing
   , currentSlot: zero
@@ -97,8 +96,8 @@ reduce store = case _ of
     store { previousCompanionAppState = Just state }
   -- Contract
   AddStartingContract startingContractInfo -> store
-    { contractManager = addStartingContract startingContractInfo
-        store.contractManager
+    { contracts = addStartingContract startingContractInfo
+        store.contracts
     }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
