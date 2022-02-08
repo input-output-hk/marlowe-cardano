@@ -55,17 +55,6 @@ library
     base >= 4.9 && < 5,
     marlowe -any
 
-executable marlowe-contracts-exe
-  import: lang
-  hs-source-dirs: app
-  main-is: Main.hs
-  build-depends:
-    base >= 4.9 && < 5,
-    marlowe -any,
-    marlowe-contracts -any
-  ghc-options:
-    -threaded
-
 test-suite marlowe-contracts-test
     import: lang
     hs-source-dirs: test
