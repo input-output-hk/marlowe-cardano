@@ -21,15 +21,19 @@ $ cabal run marlowe-dashboard-server:marlowe-dashboard-server -- webserver -c ./
 
 # To have a fast compile loop
 $ ghcid --command "cabal new-repl lib:marlowe-dashboard-server"
+
+# You can run similar ide for the whole app (`ghcid` is going to crash if `lib` part does not compile)
+$ ghcid --command "cabal new-repl exe:marlowe-dashboard-server"
 ```
 
 ## Configuring
 
-This application is configured via a JSON file with the following structure.
+This application is configured via a JSON file with the following structure (where `verbosity` is optional field ranging from 0 to 3):
 
 ```json
 {
   "wbeConfig": { "host": "localhost", "port": 8090 },
-  "staticPath": "../marlowe-dashboard-client/static"
+  "staticPath": "../marlowe-dashboard-client/static",
+  "verbosity": 3
 }
 ```

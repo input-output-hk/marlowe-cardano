@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo       #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,13 +9,17 @@ module Main
   )
 where
 
+import Prelude hiding (toEnum)
+
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logInfoN, runStderrLoggingT)
 import qualified Data.Text as Text
 import Network.Wai.Handler.Warp (HostPreference, defaultSettings, setHost, setPort)
-import Options.Applicative (CommandFields, Mod, Parser, auto, command, customExecParser, disambiguate, fullDesc, help,
-                            helper, idm, info, long, option, prefs, short, showDefault, showHelpOnEmpty,
-                            showHelpOnError, strOption, subparser, value)
+import Options.Applicative (CommandFields, Mod, Parser, ReadM, auto, command, customExecParser, disambiguate, fullDesc,
+                            help, helper, idm, info, long, option, prefs, readerError, short, showDefault,
+                            showHelpOnEmpty, showHelpOnError, strOption, subparser, value)
+import Prelude.SafeEnum as SafeEnum
+import Verbosity (Verbosity (..))
 import qualified Webserver
 
 -- | You might wonder why we don't stick everything in `Config`. The
@@ -26,9 +31,10 @@ import qualified Webserver
 -- config file makes development easier.
 data Command
   = Run
-      { _host   :: !HostPreference,
-        _port   :: !Int,
-        _config :: !FilePath
+      { _host      :: !HostPreference,
+        _port      :: !Int,
+        _config    :: !FilePath,
+        _verbosity :: !(Maybe Verbosity)
       }
   deriving (Show, Eq)
 
@@ -52,6 +58,19 @@ webserverCommandParser =
               <> showDefault
               <> value 8080
           )
+      _verbosity <-
+        option
+          ( do
+              i <- (auto :: ReadM Int)
+              case toEnum i of
+                Just v  -> pure $ Just v
+                Nothing -> readerError "Verbosity level should be an int from 0 up to 3."
+          )
+          ( short 'v' <> long "verbosity" <> help "Verbosity level from 0 to 3"
+              <> showDefault
+              <> value (Nothing :: Maybe Verbosity)
+          )
+
       _config <-
         strOption
           ( short 'c' <> long "config" <> help "Location of the configuration file"
@@ -59,7 +78,7 @@ webserverCommandParser =
       pure Run {..}
 
 runCommand :: (MonadIO m, MonadLogger m) => Command -> m ()
-runCommand Run {..} = liftIO $ Webserver.run _config settings
+runCommand Run {..} = liftIO $ Webserver.run _config settings _verbosity
   where
     settings = setHost _host . setPort _port $ defaultSettings
 
