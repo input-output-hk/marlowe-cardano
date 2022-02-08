@@ -50,7 +50,7 @@ render state =
             , renderSubmodule
                 _welcomeState
                 WelcomeAction
-                (welcomeCard addressBook)
+                welcomeCard
                 state
             ]
           Right _ ->

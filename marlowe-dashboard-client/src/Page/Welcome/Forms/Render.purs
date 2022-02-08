@@ -10,6 +10,8 @@ import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Bifunctor (lmap)
 import Data.Foldable (foldMap)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.MnemonicPhrase as MP
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Halogen.Css (classNames)
@@ -100,3 +102,21 @@ mkNicknameInput addressBook fieldState =
   notInAddressBook nickname
     | AddressBook.containsNickname nickname addressBook = Left $ Right unit
     | otherwise = Right nickname
+
+mkMnemonicInput
+  :: forall action m
+   . FieldState MnemonicPhrase
+  -> Input.Input action MP.MnemonicPhraseError MnemonicPhrase () m
+mkMnemonicInput fieldState =
+  { fieldState
+  , format: MP.toString
+  , validate: MP.fromString
+  , render: \{ error, value } ->
+      renderTextInput id label error (Input.setInputProps value []) case _ of
+        MP.Empty -> "Required."
+        MP.WrongWordCount -> "24 words required."
+        MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
+  }
+  where
+  id = "restore-wallet-mnemonic"
+  label = "Mnemonic phrase"

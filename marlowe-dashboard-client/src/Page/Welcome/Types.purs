@@ -1,17 +1,14 @@
-module Page.Welcome.Types
-  ( Action(..)
-  , Card(..)
-  , CreateWalletStep(..)
-  , NewWalletDetails
-  , State
-  ) where
+module Page.Welcome.Types where
 
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
-import Clipboard (Action) as Clipboard
-import Data.MnemonicPhrase (MnemonicPhrase)
+import Capability.Marlowe (NewWalletDetails)
 import Data.Wallet (WalletDetails)
+import Page.Welcome.ConfirmMnemonic.Types (ConfirmMnemonicFields)
+import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
+import Page.Welcome.CreateWallet.Types (CreateWalletFields)
+import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.RestoreWallet.Types (RestoreWalletFields)
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 
@@ -29,19 +26,13 @@ type State =
   -- from the right) - and that's much easier to do with media queries.
   , cardOpen :: Boolean
   , enteringDashboardState :: Boolean
-  , restoreFields :: RestoreWalletFields
-  }
-
-type NewWalletDetails =
-  { mnemonic :: MnemonicPhrase
-  , walletDetails :: WalletDetails
   }
 
 -- This type is probably not testnet specific.
 data CreateWalletStep
-  = CreateWalletSetWalletName
+  = CreateWalletSetWalletName CreateWalletFields
   | CreateWalletPresentMnemonic NewWalletDetails
-  | CreateWalletConfirmMnemonic NewWalletDetails
+  | CreateWalletConfirmMnemonic ConfirmMnemonicFields NewWalletDetails
 
 derive instance Eq CreateWalletStep
 
@@ -51,24 +42,23 @@ data Card
   = GetStartedHelpCard
   | CreateWalletHelpCard
   | CreateWalletCard CreateWalletStep
-  | RestoreWalletCard
-  | LocalWalletMissingCard
+  | RestoreWalletCard RestoreWalletFields
 
 derive instance eqCard :: Eq Card
 
 data Action
-  = OpenCard Card
+  = OnCreateWallet
+  | OnCreateWalletHelp
+  | OnGetStartedHelp
+  | OnRestoreWallet
+  | OnAcknowledgeMnemonic NewWalletDetails
   | CloseCard
   | ConnectWallet WalletDetails
-  | ClearLocalStorage
-  | ClipboardAction Clipboard.Action
   | OnRestoreWalletMsg RestoreWallet.Msg
+  | OnCreateWalletMsg CreateWallet.Msg
+  | OnConfirmMnemonicMsg ConfirmMnemonic.Msg
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent (OpenCard _) = Nothing
-  toEvent CloseCard = Nothing
   toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
-  toEvent ClearLocalStorage = Just $ defaultEvent "ClearLocalStorage"
-  toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
-  toEvent (OnRestoreWalletMsg _) = Nothing
+  toEvent _ = Nothing

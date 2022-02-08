@@ -1,19 +1,16 @@
-module Page.Welcome.RestoreWallet (component, _restoreWallet) where
+module Page.Welcome.CreateWallet (component, _createWallet) where
 
 import Prologue
 
 import AppM (passphrase) as AppM
-import Capability.Marlowe (class ManageMarlowe, restoreWallet)
-import Component.ContractSetup.Types (_nickname)
+import Capability.Marlowe (class ManageMarlowe, NewWalletDetails, createWallet)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
 import Data.Lens (is, set, (^?))
 import Data.Lens.Record (prop)
 import Data.Maybe (fromMaybe)
-import Data.MnemonicPhrase (MnemonicPhrase)
-import Data.Variant (default, on) as Variant
-import Data.Wallet (WalletDetails)
+import Data.Variant (match) as Variant
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
@@ -28,15 +25,15 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Network.RemoteData (RemoteData(..), _Failure, _Loading)
-import Page.Welcome.Forms.Render (mkMnemonicInput, mkNicknameInput, renderForm)
-import Page.Welcome.RestoreWallet.Types
+import Page.Welcome.CreateWallet.Types
   ( Component
+  , CreateWalletFields
+  , CreateWalletParams
   , Input
   , Msg(..)
-  , RestoreWalletFields
-  , RestoreWalletParams
-  , _mnemonic
+  , _nickname
   )
+import Page.Welcome.Forms.Render (mkNicknameInput, renderForm)
 import Store as Store
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
@@ -45,21 +42,19 @@ data Action
   = OnInit
   | OnReceive (Connected AddressBook Input)
   | OnNicknameMsg (Input.Msg Action WalletNickname)
-  | OnMnemonicMsg (Input.Msg Action MnemonicPhrase)
   | OnFormSubmit Event
   | OnCancel
-  | OnRestore RestoreWalletParams
+  | OnCreate WalletNickname
 
 type State =
   { addressBook :: AddressBook
-  , fields :: RestoreWalletFields
-  , result :: Maybe RestoreWalletParams
-  , walletDetails :: RemoteData String WalletDetails
+  , fields :: CreateWalletFields
+  , result :: Maybe CreateWalletParams
+  , newWalletDetails :: RemoteData String NewWalletDetails
   }
 
 type ChildSlots =
   ( nickname :: Input.Slot Action WalletNickname Unit
-  , mnemonic :: Input.Slot Action MnemonicPhrase Unit
   )
 
 type ComponentHTML m =
@@ -68,7 +63,7 @@ type ComponentHTML m =
 type DSL m a =
   H.HalogenM State Action ChildSlots Msg m a
 
-_restoreWallet = Proxy :: Proxy "restoreWallet"
+_createWallet = Proxy :: Proxy "createWallet"
 
 component
   :: forall m
@@ -91,7 +86,7 @@ initialState { context, input: { fields } } =
   { addressBook: context
   , fields
   , result: project fields
-  , walletDetails: NotAsked
+  , newWalletDetails: NotAsked
   }
 
 handleFieldMsg
@@ -99,7 +94,7 @@ handleFieldMsg
    . MonadEffect m
   => ManageMarlowe m
   => Eq a
-  => (FieldState a -> RestoreWalletFields -> RestoreWalletFields)
+  => (FieldState a -> CreateWalletFields -> CreateWalletFields)
   -> Input.Msg Action a
   -> DSL m Unit
 handleFieldMsg set = case _ of
@@ -123,27 +118,28 @@ handleAction = case _ of
     let newState = initialState input
     when (oldState /= newState) $ H.put newState
   OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
-  OnMnemonicMsg msg -> handleFieldMsg (set (prop _mnemonic)) msg
   OnFormSubmit event -> H.liftEffect $ preventDefault event
   OnCancel -> H.raise CancelClicked
-  OnRestore { nickname, mnemonic } -> do
-    H.modify_ _ { walletDetails = Loading }
-    response <- lift $ restoreWallet nickname mnemonic AppM.passphrase
+  OnCreate nickname -> do
+    H.modify_ _ { newWalletDetails = Loading }
+    response <- lift $ createWallet nickname AppM.passphrase
     case response of
       Left err -> do
         H.modify_ _
-          { walletDetails = err
+          { newWalletDetails = err
               #
-                ( Variant.default "Error from server."
-                    # Variant.on
-                        (Proxy :: Proxy "invalidMnemonic")
-                        (const "Invalid mnemonic phrase.")
+                ( Variant.match
+                    { serverError: const
+                        "We have encountered some serious problem. Please try again later."
+                    , clientServerError: const
+                        "Unable to connect to server. Please check your internet connection."
+                    }
                 )
               # Failure
           }
-      Right walletDetails -> do
-        H.modify_ _ { walletDetails = Success walletDetails }
-        H.raise $ WalletRestored walletDetails
+      Right newWalletDetails -> do
+        H.modify_ _ { newWalletDetails = Success newWalletDetails }
+        H.raise $ WalletCreated newWalletDetails
 
 render
   :: forall m
@@ -151,28 +147,22 @@ render
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
-render { addressBook, result, fields, walletDetails } = do
-  let serverError = fromMaybe "" $ walletDetails ^? _Failure
-  let inProgress = is _Loading walletDetails
+render state = do
+  let
+    { addressBook
+    , result
+    , fields
+    , newWalletDetails
+    } = state
+  let serverError = fromMaybe "" $ newWalletDetails ^? _Failure
+  let inProgress = is _Loading newWalletDetails
   renderForm
     { body:
         [ HH.form
             [ HE.onSubmit OnFormSubmit
-            , classNames
-                [ "overflow-y-auto"
-                , "p-4"
-                , "flex"
-                , "flex-col"
-                , "gap-2"
-                ]
+            , classNames [ "relative", "space-y-4" ]
             ]
             [ nicknameInput addressBook fields.nickname
-            , mnemonicInput fields.mnemonic
-            ]
-        , HH.p_
-            [ HH.b_ [ HH.text "IMPORTANT:" ]
-            -- FIXME: as part of SCP-3173, Write a section in the Marlowe Run documentation and add a link to it
-            , HH.text "Do not use a real wallet phrase <read more>"
             ]
         -- TODO replace with progress buttons when refactored.
         , HH.p [ classNames Css.inputError ] [ HH.text serverError ]
@@ -184,10 +174,10 @@ render { addressBook, result, fields, walletDetails } = do
         }
     , onSkip: Nothing
     , onSubmit:
-        { action: OnRestore <$> result
-        , label: "Restore wallet"
+        { action: OnCreate <<< _.nickname <$> result
+        , label: "Create wallet"
         }
-    , title: "Restore testnet wallet"
+    , title: "Create testnet wallet"
     }
 
 nicknameInput
@@ -203,13 +193,3 @@ nicknameInput addressBook fieldState =
     Input.component
     (mkNicknameInput addressBook fieldState)
     OnNicknameMsg
-
-mnemonicInput
-  :: forall m. MonadEffect m => FieldState MnemonicPhrase -> ComponentHTML m
-mnemonicInput fieldState =
-  HH.slot
-    _mnemonic
-    unit
-    Input.component
-    (mkMnemonicInput fieldState)
-    OnMnemonicMsg

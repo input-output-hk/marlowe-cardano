@@ -12,8 +12,6 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
-import Data.AddressBook (AddressBook)
-import Data.AddressBook as AddressBook
 import Data.Lens ((^.))
 import Data.List (foldMap)
 import Data.MnemonicPhrase (toString) as MnemonicPhrase
@@ -35,7 +33,6 @@ import Halogen.HTML
   , p_
   , section
   , slot
-  , span_
   , text
   )
 import Halogen.HTML.Events.Extra (onClick_)
@@ -43,15 +40,16 @@ import Halogen.HTML.Properties (href, src, title)
 import Halogen.Store.Monad (class MonadStore)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
-import Page.Welcome.Forms.ConfirmMnemonicForm (component) as ConfirmMnemonicForm
-import Page.Welcome.Forms.CreateWalletForm (component) as CreateWalletForm
-import Page.Welcome.Lenses (_card, _cardOpen, _restoreFields)
+import Page.Welcome.ConfirmMnemonic (_confirmMnemonic)
+import Page.Welcome.ConfirmMnemonic as ConfirmMnemonic
+import Page.Welcome.CreateWallet (_createWallet)
+import Page.Welcome.CreateWallet as CreateWallet
+import Page.Welcome.Lenses (_card, _cardOpen)
 import Page.Welcome.RestoreWallet (_restoreWallet)
 import Page.Welcome.RestoreWallet as RestoreWallet
 import Page.Welcome.RestoreWallet.Types (RestoreWalletFields)
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
 import Store as Store
-import Type.Proxy (Proxy(..))
 
 welcomeScreen :: forall p. State -> HTML p Action
 welcomeScreen _ =
@@ -80,16 +78,13 @@ welcomeCard
   => MonadStore Store.Action Store.Store m
   => MonadRec m
   => ManageMarlowe m
-  => AddressBook
-  -> State
+  => State
   -> ComponentHTML Action ChildSlots m
-welcomeCard addressBook state =
+welcomeCard state =
   let
     card = state ^. _card
 
     cardOpen = state ^. _cardOpen
-
-    restoreFields = state ^. _restoreFields
 
     cardClasses =
       if card == Just GetStartedHelpCard then Css.videoCard else Css.card
@@ -101,9 +96,8 @@ welcomeCard addressBook state =
           $ (flip foldMap card) \cardType -> case cardType of
               GetStartedHelpCard -> getStartedHelpCard
               CreateWalletHelpCard -> createWalletHelpCard
-              CreateWalletCard res -> createWalletCard addressBook res
-              RestoreWalletCard -> restoreWalletCard restoreFields
-              LocalWalletMissingCard -> localWalletMissingCard
+              CreateWalletCard res -> createWalletCard res
+              RestoreWalletCard fields -> restoreWalletCard fields
       ]
 
 ------------------------------------------------------------
@@ -138,17 +132,17 @@ useWalletBox =
         ]
     , B.button
         B.Primary
-        (Just $ OpenCard $ CreateWalletCard $ CreateWalletSetWalletName)
+        (Just $ OnCreateWallet)
         [ "w-full", "text-center" ]
         [ text "Generate testnet wallet" ]
     , B.button
         B.Secondary
-        (Just $ OpenCard RestoreWalletCard)
+        (Just $ OnRestoreWallet)
         [ "w-full", "text-center" ]
         [ text "Restore testnet wallet" ]
     , a
         [ classNames [ "block", "text-purple", "text-center", "font-semibold" ]
-        , onClick_ $ OpenCard CreateWalletHelpCard
+        , onClick_ OnCreateWalletHelp
         ]
         [ text "Why do I need to do this?" ]
     , hr [ classNames [ "max-w-xs", "mx-auto" ] ]
@@ -188,7 +182,7 @@ gettingStartedBox =
     ]
     [ a
         [ classNames [ "text-purple", "text-center", "lg:hidden" ]
-        , onClick_ $ OpenCard GetStartedHelpCard
+        , onClick_ OnGetStartedHelp
         ]
         [ icon Icon.Play $ Css.bgBlueGradient <>
             [ "text-3xl", "text-white", "rounded-full" ]
@@ -208,7 +202,7 @@ gettingStartedBox =
                 , "w-full"
                 , "h-welcome-box"
                 ]
-            , onClick_ $ OpenCard GetStartedHelpCard
+            , onClick_ OnGetStartedHelp
             ]
             [ icon Icon.Play $ Css.bgBlueGradient <>
                 [ "absolute"
@@ -276,26 +270,23 @@ createWalletCard
   :: forall m
    . MonadAff m
   => MonadRec m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
-  => AddressBook
-  -> CreateWalletStep
+  => CreateWalletStep
   -> Array (ComponentHTML Action ChildSlots m)
-
-createWalletCard addressBook = case _ of
-  CreateWalletSetWalletName -> do
-    let
-      nicknames = AddressBook.nicknames addressBook
+createWalletCard = case _ of
+  CreateWalletSetWalletName fields -> do
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
         , onClick_ CloseCard
         ]
         [ icon_ Icon.Close ]
     , slot
-        (Proxy :: _ "createWalletForm")
+        _createWallet
         unit
-        CreateWalletForm.component
-        nicknames
-        identity
+        CreateWallet.component
+        { fields }
+        OnCreateWalletMsg
     ]
   CreateWalletPresentMnemonic r@{ mnemonic } ->
     [ div
@@ -312,21 +303,20 @@ createWalletCard addressBook = case _ of
                 [ text $ MnemonicPhrase.toString mnemonic ]
             , B.button
                 B.Primary
-                ( Just $ OpenCard $ CreateWalletCard $
-                    CreateWalletConfirmMnemonic r
+                ( Just $ OnAcknowledgeMnemonic r
                 )
                 [ "flex-1", "w-full" ]
                 [ text "Ok" ]
             ]
         ]
     ]
-  CreateWalletConfirmMnemonic newWalletDetails ->
+  CreateWalletConfirmMnemonic fields newWalletDetails ->
     [ slot
-        (Proxy :: _ "confirmMnemonicForm")
+        _confirmMnemonic
         unit
-        ConfirmMnemonicForm.component
-        newWalletDetails
-        identity
+        ConfirmMnemonic.component
+        { fields, newWalletDetails }
+        OnConfirmMnemonicMsg
     ]
 
 restoreWalletCard
@@ -348,38 +338,4 @@ restoreWalletCard fields =
       RestoreWallet.component
       { fields }
       OnRestoreWalletMsg
-  ]
-
-localWalletMissingCard :: forall p. Array (HTML p Action)
-localWalletMissingCard =
-  [ div
-      [ classNames $ Css.card true ]
-      [ a
-          [ classNames [ "absolute", "top-4", "right-4" ]
-          , onClick_ CloseCard
-          ]
-          [ icon_ Icon.Close ]
-      , div
-          [ classNames
-              [ "flex", "font-semibold", "gap-2", "px-5", "py-4", "bg-gray" ]
-          ]
-          [ icon Icon.ErrorOutline []
-          , span_ [ text "Wallet not found" ]
-          ]
-      , div
-          [ classNames [ "p-5", "pb-6", "lg:pb-8", "space-y-4" ] ]
-          [ p_
-              [ text
-                  "A wallet that you have previously used is no longer available in our demo server. This is probably because the demo server has been updated. (Note that this demo is in continuous development, and data is not preserved between updates.) We recommend that you use the button below to clear your browser's cache for this site and start again."
-              ]
-          , div
-              [ classNames [ "flex", "justify-center" ] ]
-              [ B.button
-                  B.Primary
-                  (Just ClearLocalStorage)
-                  []
-                  [ text "Clear Cache" ]
-              ]
-          ]
-      ]
   ]

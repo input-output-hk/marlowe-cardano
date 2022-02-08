@@ -1,5 +1,6 @@
 module Capability.Marlowe
   ( class ManageMarlowe
+  , NewWalletDetails
   , createWallet
   , restoreWallet
   , followContract
@@ -79,13 +80,17 @@ import Marlowe.Semantics
   , TransactionInput
   )
 import MarloweContract (MarloweContract(..))
-import Page.Welcome.Types (NewWalletDetails)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToServer(..)
   , ContractInstanceClientState
   )
 import Types (AjaxResponse, DecodedAjaxResponse)
 import WebSocket.Support as WS
+
+type NewWalletDetails =
+  { mnemonic :: MnemonicPhrase
+  , walletDetails :: WalletDetails
+  }
 
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
 -- capabilities with functions specific to Marlowe.

@@ -9,39 +9,40 @@ import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , clearAllLocalStorage
   , modifyAddressBook_
   )
-import Capability.Toast (class Toast, addToast)
+import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
-import Clipboard (handleAction) as Clipboard
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
 import Data.AddressBook as AddressBook
-import Data.Lens (assign, view)
+import Data.Lens (_1, _Just, assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.Wallet (_pubKeyHash, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
-import Halogen (HalogenM, liftEffect, modify_)
+import Halogen (HalogenM, modify_)
 import Halogen.Form.FieldState (FieldState(..))
-import Halogen.Query.HalogenM (mapAction)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
-import Page.Welcome.Lenses (_enteringDashboardState, _restoreFields)
+import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
+import Page.Welcome.CreateWallet.Types as CreateWallet
+import Page.Welcome.Lenses
+  ( _CreateWalletCard
+  , _CreateWalletConfirmMnemonic
+  , _CreateWalletSetWalletName
+  , _RestoreWalletCard
+  , _card
+  , _enteringDashboardState
+  )
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
-import Page.Welcome.Types (Action(..), State)
-import Toast.Types (successToast)
-import Web.HTML (window)
-import Web.HTML.Location (reload)
-import Web.HTML.Window (location)
+import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
 
 initialState :: State
 initialState =
   { card: Nothing
   , cardOpen: false
   , enteringDashboardState: false
-  , restoreFields: { nickname: Blank, mnemonic: Blank }
   }
 
 -- Some actions are handled in `MainFrame.State` because they involve
@@ -57,8 +58,21 @@ handleAction
   => MonadClipboard m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction (OpenCard card) =
-  modify_ _ { card = Just card, cardOpen = true }
+handleAction OnCreateWalletHelp =
+  openCard CreateWalletHelpCard
+
+handleAction OnGetStartedHelp =
+  openCard GetStartedHelpCard
+
+handleAction OnCreateWallet =
+  openCard $ CreateWalletCard $ CreateWalletSetWalletName { nickname: Blank }
+
+handleAction OnRestoreWallet =
+  openCard $ RestoreWalletCard { nickname: Blank, mnemonic: Blank }
+
+handleAction (OnAcknowledgeMnemonic details) =
+  openCard $ CreateWalletCard $ CreateWalletConfirmMnemonic { mnemonic: Blank }
+    details
 
 handleAction CloseCard =
   modify_ _ { enteringDashboardState = false, cardOpen = false }
@@ -90,18 +104,39 @@ handleAction (ConnectWallet walletDetails) = do
     (AddressBook.insert walletNickname $ A.fromPubKeyHash pubKeyHash)
   callMainFrameAction $ MainFrame.EnterDashboardState walletDetails
 
-handleAction ClearLocalStorage = do
-  clearAllLocalStorage
-  liftEffect do
-    location_ <- location =<< window
-    reload location_
-
-handleAction (ClipboardAction clipboardAction) = do
-  mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
-  addToast $ successToast "Copied to clipboard"
-
 handleAction (OnRestoreWalletMsg msg) = case msg of
   RestoreWallet.CancelClicked -> handleAction CloseCard
   RestoreWallet.WalletRestored walletDetails ->
     handleAction $ ConnectWallet walletDetails
-  RestoreWallet.FieldsUpdated fields -> assign _restoreFields fields
+  RestoreWallet.FieldsUpdated fields -> do
+    assign (_card <<< _Just <<< _RestoreWalletCard) fields
+
+handleAction (OnCreateWalletMsg msg) = case msg of
+  CreateWallet.CancelClicked -> handleAction CloseCard
+  CreateWallet.WalletCreated details ->
+    handleAction $ ConnectWallet details.walletDetails
+  CreateWallet.FieldsUpdated fields -> do
+    assign
+      (_card <<< _Just <<< _CreateWalletCard <<< _CreateWalletSetWalletName)
+      fields
+
+handleAction (OnConfirmMnemonicMsg msg) = case msg of
+  ConfirmMnemonic.BackClicked details ->
+    openCard
+      $ CreateWalletCard
+      $ CreateWalletPresentMnemonic details
+  ConfirmMnemonic.MnemonicConfirmed details ->
+    openCard $ CreateWalletCard $ CreateWalletPresentMnemonic details
+  ConfirmMnemonic.FieldsUpdated fields -> do
+    assign
+      ( _card
+          <<< _Just
+          <<< _CreateWalletCard
+          <<< _CreateWalletConfirmMnemonic
+          <<< _1
+      )
+      fields
+
+openCard :: forall m. Card -> HalogenM State Action ChildSlots Msg m Unit
+openCard card =
+  modify_ _ { card = Just card, cardOpen = true }
