@@ -62,6 +62,7 @@ jobs:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
           cd marlowe-playground-client
+          npm install spago
           npm install
           npm run build:spago
           npm run build:webpack:dev:vendor
