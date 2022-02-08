@@ -67,7 +67,7 @@ jobs:
       - name: Setup Playwright
         working-directory: ./marlowe-playground-client/e2e-tests/
         run: |
-          npm install -D @playwright/test
+          npm install
           npx playwright install
     
       - name: Run Tests
