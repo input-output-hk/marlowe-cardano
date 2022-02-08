@@ -50,6 +50,13 @@ jobs:
           $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
           while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground server on $SERVER_PORT" && sleep 10; done
 
+      - name: Build Marlowe Playground Client
+        working-directory: ./
+        run: |
+          cd marlowe-playground-client
+          $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &
+          pid=$!
+          wait $pid
       - name: Run Marlowe Playground Client
         working-directory: ./
         env:
@@ -57,7 +64,6 @@ jobs:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
           cd marlowe-playground-client
-          $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &
           npm install spago
           npm install
           npm run build:spago
