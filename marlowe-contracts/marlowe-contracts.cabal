@@ -72,6 +72,7 @@ test-suite marlowe-contracts-test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
+        Spec.Marlowe.Analysis
         Spec.Marlowe.Contracts
     build-depends:
         base >=4.9 && <5,

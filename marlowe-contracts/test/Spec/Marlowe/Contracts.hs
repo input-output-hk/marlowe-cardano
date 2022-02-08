@@ -61,12 +61,14 @@ zeroCouponBondTest = checkPredicateOptions
     let params = defaultMarloweParams
     let zcb =
           zeroCouponBond
+            w1Pk
+            w2Pk
             (Slot 100)
             (Slot 200)
             (Constant 75_000_000)
             (Constant 90_000_000)
-            w1Pk
-            w2Pk
+            ada
+            Close
 
     w1Hdl <- activateContractWallet w1 marlowePlutusContract
     w2Hdl <- activateContractWallet w2 marlowePlutusContract
@@ -94,20 +96,24 @@ zeroCouponBondCombinationTest = checkPredicateOptions
     let params = defaultMarloweParams
     let zcb1 =
           zeroCouponBond
+            w1Pk
+            w2Pk
             (Slot 100)
             (Slot 200)
             (Constant 75_000_000)
             (Constant 90_000_000)
-            w1Pk
-            w2Pk
+            ada
+            Close
     let zcb2 =
           zeroCouponBond
+            w2Pk
+            w1Pk
             (Slot 100)
             (Slot 200)
             (Constant 75_000_000)
             (Constant 90_000_000)
-            w2Pk
-            w1Pk
+            ada
+            Close
 
     w1Hdl <- activateContractWallet w1 marlowePlutusContract
     w2Hdl <- activateContractWallet w2 marlowePlutusContract
