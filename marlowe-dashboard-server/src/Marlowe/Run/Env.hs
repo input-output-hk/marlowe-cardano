@@ -5,8 +5,6 @@
 
 module Marlowe.Run.Env where
 
--- import Control.Monad.Freer.Extras.Log as Log
-
 import Colog (HasLog (..), LogAction, Message, WithLog, cmap, fmtMessage, logDebug, logInfo, logTextStdout, logWarning,
               usingLoggerT)
 import Control.Monad.IO.Class (MonadIO, liftIO)

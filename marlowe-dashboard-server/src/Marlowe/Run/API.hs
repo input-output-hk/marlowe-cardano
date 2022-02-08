@@ -14,7 +14,6 @@ type API = WebSocketAPI
 type HTTPAPI = "api" :>
     ("version" :> Get '[PlainText, JSON] Text
     :<|> "wallet" :> "v1" :> Wallet.API
-    -- :<|> "log" :> Post `[JSON] Unit
     )
 
 type WebSocketAPI = "ws" :> WebSocketPending
