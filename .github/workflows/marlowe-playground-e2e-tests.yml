@@ -55,8 +55,7 @@ jobs:
         working-directory: ./
         run: |
           cd marlowe-playground-client
-          $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs &
-          until [ -f purs ]; do echo "Waiting for purs files to build" && sleep 10; done
+          $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
       - name: Run Marlowe Playground Client
         working-directory: ./
         env:
