@@ -22,6 +22,7 @@ import Css as Css
 import Data.Address as A
 import Data.Compactable (compact)
 import Data.ContractNickname as ContractNickname
+import Data.Int (round)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
@@ -29,11 +30,13 @@ import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _assets
   , _pubKeyHash
+  , _syncStatus
   , _walletNickname
   )
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
@@ -678,6 +681,8 @@ currentWalletCard wallet =
 
     assets = view _assets wallet
 
+    syncStatus = view _syncStatus wallet
+
     copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard <<< A.toString
   in
     div
@@ -708,6 +713,23 @@ currentWalletCard wallet =
               , p
                   [ classNames Css.funds ]
                   [ text $ humanizeValue adaToken $ getAda assets ]
+              ]
+          , div [ classNames [ "space-y-2" ] ]
+              [ h4
+                  [ classNames [ "font-semibold" ] ]
+                  [ text "Status:" ]
+              , case syncStatus of
+                  OutOfSync ->
+                    p [ classNames [ "text-red" ] ] [ text "Out of sync" ]
+                  Synchronizing progress ->
+                    p []
+                      [ text "Syncrhonizing ("
+                      , text $ show $ round $ progress * 100.0
+                      , text "%)"
+                      ]
+                  Synchronized ->
+                    p [ classNames [ "text-green" ] ]
+                      [ text "Syncrhonized" ]
               ]
           ]
       , div
