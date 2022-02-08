@@ -92,14 +92,14 @@ main args = do
     body <- awaitBody
     rootComponent <- runAppM env store mkMainFrame
     driver <- runUI rootComponent { tzOffset } body
-    -- void
-    --   $ forkAff
-    --   $ WS.runWebSocketManager
-    --       (WS.URI "/pab/ws")
-    --       ( \msg -> void $ forkAff $ driver.query $ ReceiveWebSocketMessage msg
-    --           unit
-    --       )
-    --       wsManager
+    void
+      $ forkAff
+      $ WS.runWebSocketManager
+          (WS.URI "/pab/ws")
+          ( \msg -> void $ forkAff $ driver.query $ ReceiveWebSocketMessage msg
+              unit
+          )
+          wsManager
     -- This handler allows us to call an action in the MainFrame from a child component
     -- (more info in the MainFrameLoop capability)
     void

@@ -13,7 +13,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
-import Data.Wallet (WalletDetails)
+import Data.Wallet (SyncStatus, WalletDetails)
 import Data.WalletId (WalletId)
 import Halogen (SubscriptionId)
 import Halogen as H
@@ -102,7 +102,7 @@ data Action
   | DashboardAction Dashboard.Action
   | Receive (Connected Slice Input)
   | Init
-  | OnPoll WalletId
+  | OnPoll SyncStatus WalletId
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
@@ -111,6 +111,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (EnterDashboardState _) = Just $ defaultEvent "EnterDashboardState"
   toEvent (Receive _) = Just $ defaultEvent "Receive"
   toEvent Init = Just $ defaultEvent "Init"
-  toEvent (OnPoll _) = Nothing
+  toEvent (OnPoll _ _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction

@@ -56,7 +56,6 @@ import Data.PABConnectedWallet as Connected
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
-import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.Wallet (SyncStatus(..))
 import Data.Wallet as Disconnected
@@ -112,6 +111,7 @@ import Toast.Types
   ( ajaxErrorToast
   , decodingErrorToast
   , errorToast
+  , infoToast
   , successToast
   )
 import Types (AjaxResponse)
@@ -403,7 +403,8 @@ handleAction Init = do
   -}
   mWalletDetails <- getWallet
   traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
-  traverse_ (handleAction <<< OnPoll <<< view Disconnected._walletId)
+  traverse_
+    (handleAction <<< OnPoll OutOfSync <<< view Disconnected._walletId)
     mWalletDetails
   pure unit
 
@@ -422,25 +423,34 @@ handleAction (Receive input) = do
         newWallet
   let oldWalletId = oldWallet ^? _Just <<< Connected._walletId
   let newWalletId = newWallet ^? _Just <<< Connected._walletId
-  traverse_ (handleAction <<< OnPoll)
+  let
+    currentSyncStatus =
+      fromMaybe OutOfSync $ oldWallet ^? _Just <<< Connected._syncStatus
+  traverse_ (handleAction <<< OnPoll currentSyncStatus)
     $ filter (notEq oldWalletId <<< Just)
     $ newWalletId
 
-handleAction (OnPoll walletId) = do
-  syncStatus <- updateTotalFunds walletId
-  currentSubscription <- H.gets _.pollingSubscription
-  traverse_ H.unsubscribe currentSubscription
-  pollingInterval <- case syncStatus of
-    -- We poll more frequently when the wallet backend is synchronizing so we
-    -- get more rapid feedback.
-    Just (Synchronizing _) -> pure $ Milliseconds 500.0
-    _ -> asks $ view _pollingInterval
-  newSubscription <- H.subscribe $ HS.makeEmitter \push -> do
-    fibre <- launchAff do
-      delay pollingInterval
-      liftEffect $ push $ OnPoll walletId
-    pure $ launchAff_ $ killFiber (error "Unsubscribing") fibre
-  H.modify_ _ { pollingSubscription = Just newSubscription }
+handleAction (OnPoll lastSyncStatus walletId) =
+  updateTotalFunds walletId >>= traverse_ \syncStatus -> do
+    case lastSyncStatus, syncStatus of
+      Synchronizing _, Synchronized -> addToast $ successToast
+        "Wallet backend in sync."
+      OutOfSync, Synchronizing _ -> addToast $ infoToast
+        "Wallet backend synchronizing..."
+      _, _ -> pure unit
+    currentSubscription <- H.gets _.pollingSubscription
+    traverse_ H.unsubscribe currentSubscription
+    pollingInterval <- case syncStatus of
+      -- We poll more frequently when the wallet backend is synchronizing so we
+      -- get more rapid feedback.
+      Synchronizing _ -> pure $ Milliseconds 500.0
+      _ -> asks $ view _pollingInterval
+    newSubscription <- H.subscribe $ HS.makeEmitter \push -> do
+      fibre <- launchAff do
+        delay pollingInterval
+        liftEffect $ push $ OnPoll syncStatus walletId
+      pure $ launchAff_ $ killFiber (error "Unsubscribing") fibre
+    H.modify_ _ { pollingSubscription = Just newSubscription }
 
 {- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just

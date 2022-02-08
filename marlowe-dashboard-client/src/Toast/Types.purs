@@ -3,6 +3,7 @@ module Toast.Types
   , Action(..)
   , ToastState
   , State
+  , infoToast
   , successToast
   , errorToast
   , ajaxErrorToast
@@ -62,6 +63,17 @@ successToast shortDescription =
   , longDescription: Nothing
   , icon: DoneWithCircle
   , iconColor: "text-lightgreen"
+  , textColor: "text-white"
+  , bgColor: "bg-black"
+  , timeout: 2500.0
+  }
+
+infoToast :: String -> ToastMessage
+infoToast shortDescription =
+  { shortDescription
+  , longDescription: Nothing
+  , icon: Info
+  , iconColor: "text-lightpurple"
   , textColor: "text-white"
   , bgColor: "bg-black"
   , timeout: 2500.0
