@@ -1,8 +1,6 @@
 # Development Environment for Marlowe Run
 
-
 ## Install Prerequisites
-
 
 ### Marlowe PAB and WBE
 
@@ -67,11 +65,11 @@ nix-build marlowe-cardano/default.nix -A marlowe-dashboard.marlowe-run-backend-i
 cat > marlowe-run.json << EOI
 {
   "wbeConfig": { "host": "localhost", "port": 8090 },
-  "staticPath": "/var/empty"
+  "staticPath": "/var/empty",
+  "verbosity": 3
 }
 EOI
 ```
-
 
 ### Cardano Node
 
@@ -126,14 +124,12 @@ patch marlowe-cardano/bitte/node/config/config.json << EOI
 EOI
 ```
 
-
 ### Cardano CLI
 
 ```
 # Build the cardano-cli tool.
 nix-build cardano-node/default.nix -A cardano-cli -o build-cli
 ```
-
 
 ### Cardano Wallet
 
@@ -144,7 +140,6 @@ git clone git@github.com:input-output-hk/cardano-wallet.git -b v2022-01-18
 # Build the executable.
 nix-build cardano-wallet/default.nix -A cardano-wallet -o build-wallet
 ```
-
 
 ### Cardano Chain Index
 
@@ -273,7 +268,6 @@ NETWORK=alonzo_purple nix-shell shell.nix --argstr nodeImplementation cardano --
 popd
 ```
 
-
 ## Setup Wallet(s)
 
 For each wallet, generate a seed phrase:
@@ -299,7 +293,7 @@ In a terminal for the node, run the following:
 
 You should see log messages appear as the node synchronizes.
 
-*Initially and after each hard fork,* retrieve the protocol parameters.
+_Initially and after each hard fork,_ retrieve the protocol parameters.
 
 ```bash
 CARDANO_NODE_SOCKET_PATH=node.socket ./build-cli/bin/cardano-cli query protocol-parameters        \
@@ -320,7 +314,6 @@ In a terminal for the wallet, run the following:
 
 You should see log messages appear as the wallet synchronizes.
 
-
 ### Cardano Chain Index
 
 In a terminal for the chain index, run the following:
@@ -332,10 +325,9 @@ In a terminal for the chain index, run the following:
                                                    --port 9083
 ```
 
-
 ### Marlowe PAB
 
-*Initially and after removing the database `marlowe-pab.db`*, recreate the PAB database.
+_Initially and after removing the database `marlowe-pab.db`_, recreate the PAB database.
 
 ```bash
 rm marlowe-pab.db
@@ -364,7 +356,6 @@ In a terminal for the dashboard server, run the following:
 
 The server is generally silent, except for a few messages like when wallets are created.
 
-
 ### Marlowe Dashboard Client
 
 In a terminal for the dashboard client, run the following:
@@ -375,10 +366,10 @@ nix-shell marlowe-cardano/shell.nix --run "cd marlowe-cardano/marlowe-dashboard-
 
 Compilation and other messages will appear. Visit http://localhost:8009.
 
-
 ### Daedalus
 
 Optionally, run Daedalus:
+
 ```bash
 pushd daedalus
 NETWORK=alonzo_purple nix-shell shell.nix --argstr nodeImplementation cardano --argstr cluster alonzo_purple --command 'yarn start; exit'
@@ -389,24 +380,23 @@ popd
 
 ![Marlowe Run Deployment on Private Testnet](testnet-deployment.svg)
 
-
 ## Notes and Troubleshooting
 
-*   Cardano Node
-    1.  The node is very reliable, but check the log file if it fails.
-    2.  The log will show when transactions are added to and removed from the memory pool.
-*   Cardano Wallet
-    1.  The wallet will only start syncing after the node is syncing. If the wallet is started prematurely, it will report that it cannot connect to the node, but once the node is available the messages will go away.
-    2.  HTTP API documentation is available at https://input-output-hk.github.io/cardano-wallet/api/edge.
-    3.  The log file will show wallet restoration, transaction creation and submission, and detection of transactions.
-*   Cardano Chain Sync
-    1.  Syncing with the private testnet is fast, but it takes ~2 days on the public testnet and ~7 days on mainnet.
-    2.  A Swagger UI is available at http://localhost:9083/swagger/swagger-ui/.
-    4.  Use `curl -H 'accept: application/json;charset=utf-8' http://localhost:9083/tip` to check whether the chain index is synchronized with the node. Its slot value should be close to that reported by the node.
-*   Marlowe PAB
-    1.  The PAB sometimes resets and restarts at the genesis block.
-    2.  The PAB sometimes creates wildly invalid transactions.
-    3.  It is critically important that the time slot parameters in the PAB configuration file match those in `MarloweParams`.
-    4.  The passphrase of the PAB should match the passphrase used by Marlowe Run in its communication with the wallet.
-    5.  A Swagger UI is available at http://localhost:9080/swagger/swagger-ui/.
-    6.  The log file will show all of the contract, transaction, and wallet operations, including ledger, Plutus, and contract errors.
+- Cardano Node
+  1.  The node is very reliable, but check the log file if it fails.
+  2.  The log will show when transactions are added to and removed from the memory pool.
+- Cardano Wallet
+  1.  The wallet will only start syncing after the node is syncing. If the wallet is started prematurely, it will report that it cannot connect to the node, but once the node is available the messages will go away.
+  2.  HTTP API documentation is available at https://input-output-hk.github.io/cardano-wallet/api/edge.
+  3.  The log file will show wallet restoration, transaction creation and submission, and detection of transactions.
+- Cardano Chain Sync
+  1.  Syncing with the private testnet is fast, but it takes ~2 days on the public testnet and ~7 days on mainnet.
+  2.  A Swagger UI is available at http://localhost:9083/swagger/swagger-ui/.
+  3.  Use `curl -H 'accept: application/json;charset=utf-8' http://localhost:9083/tip` to check whether the chain index is synchronized with the node. Its slot value should be close to that reported by the node.
+- Marlowe PAB
+  1.  The PAB sometimes resets and restarts at the genesis block.
+  2.  The PAB sometimes creates wildly invalid transactions.
+  3.  It is critically important that the time slot parameters in the PAB configuration file match those in `MarloweParams`.
+  4.  The passphrase of the PAB should match the passphrase used by Marlowe Run in its communication with the wallet.
+  5.  A Swagger UI is available at http://localhost:9080/swagger/swagger-ui/.
+  6.  The log file will show all of the contract, transaction, and wallet operations, including ledger, Plutus, and contract errors.
