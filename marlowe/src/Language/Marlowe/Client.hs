@@ -53,7 +53,7 @@ import Ledger (CurrencySymbol, Datum (..), PaymentPubKeyHash (..), PubKeyHash, S
                TxOutRef, dataHash, txOutValue)
 import qualified Ledger
 import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
-import Ledger.Address (pubKeyHashAddress, scriptHashAddress)
+import Ledger.Address (Address, pubKeyHashAddress, scriptHashAddress)
 import Ledger.Constraints
 import qualified Ledger.Constraints as Constraints
 import Ledger.Constraints.OffChain (UnbalancedTx (..))
@@ -63,6 +63,7 @@ import Ledger.Scripts (datumHash, unitRedeemer)
 import Ledger.TimeSlot (SlotConfig (..), slotRangeToPOSIXTimeRange)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
+import qualified Ledger.Typed.Scripts as Typed
 import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
 import Plutus.ChainIndex (ChainIndexTx (..), _ValidTx, citxOutputs)
@@ -132,6 +133,7 @@ data ContractHistory =
     ContractHistory
         { chParams  :: First (MarloweParams, MarloweData)
         , chHistory :: [TransactionInput]
+        , chAddress :: First Address
         }
         deriving stock (Show, Generic)
         deriving anyclass (FromJSON, ToJSON)
@@ -150,7 +152,11 @@ data WaitingResult t
 
 
 created :: MarloweParams -> MarloweData -> ContractHistory
-created p d = mempty{chParams = First (Just (p, d)) }
+created p d = mempty
+              {
+                chParams = First (Just (p, d)),
+                chAddress = First . Just . Typed.validatorAddress $ mkMarloweTypedValidator p
+              }
 
 transition :: TransactionInput -> ContractHistory
 transition i = mempty{chHistory = [i] }
