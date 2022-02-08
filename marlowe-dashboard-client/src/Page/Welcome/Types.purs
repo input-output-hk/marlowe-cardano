@@ -12,6 +12,8 @@ import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Wallet (WalletDetails)
+import Page.Welcome.RestoreWallet.Types (RestoreWalletFields)
+import Page.Welcome.RestoreWallet.Types as RestoreWallet
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so
@@ -27,6 +29,7 @@ type State =
   -- from the right) - and that's much easier to do with media queries.
   , cardOpen :: Boolean
   , enteringDashboardState :: Boolean
+  , restoreFields :: RestoreWalletFields
   }
 
 type NewWalletDetails =
@@ -59,6 +62,7 @@ data Action
   | ConnectWallet WalletDetails
   | ClearLocalStorage
   | ClipboardAction Clipboard.Action
+  | OnRestoreWalletMsg RestoreWallet.Msg
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
@@ -67,3 +71,4 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
   toEvent ClearLocalStorage = Just $ defaultEvent "ClearLocalStorage"
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
+  toEvent (OnRestoreWalletMsg _) = Nothing

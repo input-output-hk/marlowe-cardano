@@ -10,7 +10,6 @@ import Component.Button.Types (Variant(..)) as B
 import Component.Button.View (button) as B
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
-import Component.RestoreWalletForm as RestoreWalletForm
 import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.AddressBook (AddressBook)
@@ -41,12 +40,17 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, src, title)
+import Halogen.Store.Monad (class MonadStore)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
 import Page.Welcome.Forms.ConfirmMnemonicForm (component) as ConfirmMnemonicForm
 import Page.Welcome.Forms.CreateWalletForm (component) as CreateWalletForm
-import Page.Welcome.Lenses (_card, _cardOpen)
+import Page.Welcome.Lenses (_card, _cardOpen, _restoreFields)
+import Page.Welcome.RestoreWallet (_restoreWallet)
+import Page.Welcome.RestoreWallet as RestoreWallet
+import Page.Welcome.RestoreWallet.Types (RestoreWalletFields)
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
+import Store as Store
 import Type.Proxy (Proxy(..))
 
 welcomeScreen :: forall p. State -> HTML p Action
@@ -73,6 +77,7 @@ welcomeScreen _ =
 welcomeCard
   :: forall m
    . MonadAff m
+  => MonadStore Store.Action Store.Store m
   => MonadRec m
   => ManageMarlowe m
   => AddressBook
@@ -84,6 +89,8 @@ welcomeCard addressBook state =
 
     cardOpen = state ^. _cardOpen
 
+    restoreFields = state ^. _restoreFields
+
     cardClasses =
       if card == Just GetStartedHelpCard then Css.videoCard else Css.card
   in
@@ -94,9 +101,8 @@ welcomeCard addressBook state =
           $ (flip foldMap card) \cardType -> case cardType of
               GetStartedHelpCard -> getStartedHelpCard
               CreateWalletHelpCard -> createWalletHelpCard
-              CreateWalletCard res -> createWalletCard addressBook
-                res
-              RestoreWalletCard -> restoreWalletCard addressBook
+              CreateWalletCard res -> createWalletCard addressBook res
+              RestoreWalletCard -> restoreWalletCard restoreFields
               LocalWalletMissingCard -> localWalletMissingCard
       ]
 
@@ -326,26 +332,23 @@ createWalletCard addressBook = case _ of
 restoreWalletCard
   :: forall m
    . MonadAff m
-  => MonadRec m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
-  => AddressBook
+  => RestoreWalletFields
   -> Array (ComponentHTML Action ChildSlots m)
-restoreWalletCard addressBook =
-  let
-    nicknames = AddressBook.nicknames addressBook
-  in
-    [ a
-        [ classNames [ "absolute", "top-4", "right-4" ]
-        , onClick_ CloseCard
-        ]
-        [ icon_ Icon.Close ]
-    , slot
-        (Proxy :: _ "restoreWalletForm")
-        unit
-        RestoreWalletForm.component
-        nicknames
-        identity
-    ]
+restoreWalletCard fields =
+  [ a
+      [ classNames [ "absolute", "top-4", "right-4" ]
+      , onClick_ CloseCard
+      ]
+      [ icon_ Icon.Close ]
+  , slot
+      _restoreWallet
+      unit
+      RestoreWallet.component
+      { fields }
+      OnRestoreWalletMsg
+  ]
 
 localWalletMissingCard :: forall p. Array (HTML p Action)
 localWalletMissingCard =

@@ -1,4 +1,4 @@
-module Component.ContractSetup where
+module Component.ContractSetup (component, _contractSetup) where
 
 import Prologue
 
@@ -80,14 +80,6 @@ type State =
   , fields :: ContractFields
   , result :: Maybe ContractParams
   }
-
-_input = Proxy :: Proxy "input"
-
-_fields = Proxy :: Proxy "fields"
-
-_addressBook = Proxy :: Proxy "addressBook"
-
-_result = Proxy :: Proxy "result"
 
 type ChildSlots =
   ( nickname :: Input.Slot Action ContractNickname Unit

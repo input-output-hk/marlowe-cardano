@@ -3,6 +3,7 @@ module Data.MnemonicPhrase
   , MnemonicPhraseError(..)
   , MnenonicPhraseErrorRow
   , dual
+  , fromString
   , fromStrings
   , fromWords
   , toString

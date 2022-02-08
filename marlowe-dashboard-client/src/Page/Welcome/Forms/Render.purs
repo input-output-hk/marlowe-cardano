@@ -4,9 +4,17 @@ import Prologue
 
 import Component.Button.Types as Button
 import Component.Button.View (button)
+import Component.Form (renderTextInput)
 import Component.Progress.Circular as Progress
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AddressBook
+import Data.Bifunctor (lmap)
 import Data.Foldable (foldMap)
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
 import Halogen.Css (classNames)
+import Halogen.Form.Input (FieldState)
+import Halogen.Form.Input as Input
 import Halogen.HTML (HTML)
 import Halogen.HTML as HH
 
@@ -29,8 +37,9 @@ type RenderOpts widget action =
   , title :: String
   }
 
-render :: forall action widget. RenderOpts widget action -> HTML widget action
-render { body, inProgress, onCancel, onSkip, onSubmit, title } =
+renderForm
+  :: forall action widget. RenderOpts widget action -> HTML widget action
+renderForm { body, inProgress, onCancel, onSkip, onSubmit, title } =
   HH.div
     [ classNames [ "p-5", "lg:p-6", "space-y-2" ] ]
     $
@@ -68,3 +77,26 @@ render { body, inProgress, onCancel, onSkip, onSubmit, title } =
                     [ HH.text label ]
 
           ]
+
+mkNicknameInput
+  :: forall action m
+   . AddressBook
+  -> FieldState WalletNickname
+  -> Input.Input action (Either WN.WalletNicknameError Unit) WalletNickname () m
+mkNicknameInput addressBook fieldState =
+  { fieldState
+  , format: WN.toString
+  , validate: notInAddressBook <=< lmap Left <<< WN.fromString
+  , render: \{ error, value } ->
+      renderTextInput id label error (Input.setInputProps value []) case _ of
+        Left WN.Empty -> "Required."
+        Left WN.ContainsNonAlphaNumeric ->
+          "Can only contain letters and digits."
+        _ -> "Already exists."
+  }
+  where
+  id = "restore-wallet-nickname"
+  label = "Wallet nickname"
+  notInAddressBook nickname
+    | AddressBook.containsNickname nickname addressBook = Left $ Right unit
+    | otherwise = Right nickname

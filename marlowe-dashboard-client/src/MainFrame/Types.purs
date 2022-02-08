@@ -23,6 +23,7 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Slot)
 import Page.Contract.Types (State) as Contract
 import Page.Dashboard.Types (Action, State) as Dashboard
+import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Type.Proxy (Proxy(..))
@@ -78,7 +79,7 @@ type ChildSlots =
   , expandSlot :: Expand.Slot Void String
   , confirmMnemonicForm :: forall q. H.Slot q Welcome.Action Unit
   , createWalletForm :: forall query. H.Slot query Welcome.Action Unit
-  , restoreWalletForm :: forall query. H.Slot query Welcome.Action Unit
+  , restoreWallet :: RestoreWallet.Slot Unit
   , toaster :: forall q m. H.Slot q m Unit
   , contractSetup :: ContractSetup.Slot Unit
   )

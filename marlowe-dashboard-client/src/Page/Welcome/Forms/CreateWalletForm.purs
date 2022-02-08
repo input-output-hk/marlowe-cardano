@@ -20,7 +20,7 @@ import Halogen.Form.Component as FC
 import Halogen.HTML as HH
 import Halogen.Hooks as Hooks
 import Halogen.Hooks.Extra.Hooks (usePutState)
-import Page.Welcome.Forms.Render (render)
+import Page.Welcome.Forms.Render (renderForm)
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..))
 import Page.Welcome.Types as Welcome
 import Type.Proxy (Proxy(..))
@@ -72,7 +72,7 @@ component = Hooks.component \{ outputToken } used -> Hooks.do
         Right newWalletDetails ->
           Hooks.raise outputToken $ OpenCard $ CreateWalletCard $
             CreateWalletPresentMnemonic newWalletDetails
-  Hooks.pure $ render
+  Hooks.pure $ renderForm
     { body:
         [ HH.slot (Proxy :: _ "form") unit form initialInput case _ of
             FC.Updated res -> putResult res

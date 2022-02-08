@@ -16,7 +16,7 @@ import Halogen.Form (mkForm) as Form
 import Halogen.Form.Component as FC
 import Halogen.HTML as HH
 import Halogen.Hooks as Hooks
-import Page.Welcome.Forms.Render (render) as Welcome.Forms
+import Page.Welcome.Forms.Render as Welcome.Forms
 import Page.Welcome.Types
   ( Action(..)
   , Card(..)
@@ -71,7 +71,7 @@ component = Hooks.component
       let
         connectWallet = Hooks.raise outputToken $ Welcome.ConnectWallet
           walletDetails
-      Hooks.pure $ Welcome.Forms.render
+      Hooks.pure $ Welcome.Forms.renderForm
         { body:
             [ HH.slot (Proxy :: _ "form") unit form "" case _ of
                 FC.Updated res -> Hooks.put resultId res
