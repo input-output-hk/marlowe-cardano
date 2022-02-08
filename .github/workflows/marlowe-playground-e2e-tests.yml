@@ -61,6 +61,7 @@ jobs:
           CLIENT_PORT: 8009
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
+          nix-shell
           cd marlowe-playground-client
           npm install spago
           npm install
