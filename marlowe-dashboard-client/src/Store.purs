@@ -8,10 +8,14 @@ module Store
 import Prologue
 
 import Data.AddressBook (AddressBook)
+import Data.ContractManager
+  ( ContractManager
+  , addStartingContract
+  , emptyContractManager
+  )
 import Data.ContractNickname (ContractNickname)
 import Data.Lens (_Just, (.~))
 import Data.Map (Map)
-import Data.Map as Map
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _assets
@@ -19,10 +23,10 @@ import Data.PABConnectedWallet
   , _marloweAppId
   , _syncStatus
   )
-import Data.Tuple.Nested (type (/\), (/\))
+import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
-import Marlowe.Execution.Types as Execution
+
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
@@ -30,32 +34,38 @@ import MarloweContract (MarloweContract(..))
 import Toast.Types (ToastMessage)
 
 type Store =
-  { addressBook :: AddressBook
-  , currentSlot :: Slot
-  , toast :: Maybe ToastMessage
+  { -- # Wallet
+    addressBook :: AddressBook
   , wallet :: Maybe PABConnectedWallet
-  , newContracts :: Map UUID (ContractNickname /\ MetaData)
-  , syncedContracts :: Map MarloweParams Execution.State
+  -- # Contracts
+  , contractManager :: ContractManager
+  -- # Backend Notifications
   -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
   -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
   -- really has changed anything
   , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
+  , currentSlot :: Slot
+  -- # System wide components
   -- This is to make sure only one dropdown at a time is open, in order to
   -- overcome a limitation of nselect that prevents it from closing the
   -- dropdown on blur.
   , openDropdown :: Maybe String
+  , toast :: Maybe ToastMessage
   }
 
 mkStore :: AddressBook -> Store
 mkStore addressBook =
-  { addressBook
-  , currentSlot: zero
-  , toast: Nothing
-  , newContracts: Map.empty
-  , syncedContracts: Map.empty
+  { -- # Wallet
+    addressBook
   , wallet: Nothing
+  -- # Contracts
+  , contractManager: emptyContractManager
+  -- # Backend Notifications
   , previousCompanionAppState: Nothing
+  , currentSlot: zero
+  -- # System wide components
   , openDropdown: Nothing
+  , toast: Nothing
   }
 
 data Action
@@ -72,10 +82,9 @@ data Action
   | UpdateAssets Assets
   | UpdateWalletSyncStatus SyncStatus
   | DeactivateWallet
-  -- Toast
+  -- System wide components
   | ShowToast ToastMessage
   | ClearToast
-  -- Dropdown
   | DropdownOpened String
   | DropdownClosed
 
@@ -87,9 +96,9 @@ reduce store = case _ of
   NewCompanionAppStateObserved state ->
     store { previousCompanionAppState = Just state }
   -- Contract
-  AddStartingContract (reqId /\ contractNickname /\ metadata) -> store
-    { newContracts = Map.insert reqId (contractNickname /\ metadata)
-        store.newContracts
+  AddStartingContract startingContractInfo -> store
+    { contractManager = addStartingContract startingContractInfo
+        store.contractManager
     }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
