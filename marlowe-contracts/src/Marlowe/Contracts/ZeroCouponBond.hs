@@ -17,7 +17,7 @@ zeroCouponBond ::
   -> Token             -- ^ Token
   -> Contract          -- ^ Continuation
   -> Contract          -- ^ Zero-Coupon Bond Contract
-zeroCouponBond investor issuer fixing maturity discounted notional token continuation =
+zeroCouponBond investor issuer fixing maturity discounted face token continuation =
     transfer investor issuer (token, discounted) fixing Close
-  $ deposit investor issuer (token, notional) maturity Close
+  $ deposit investor issuer (token, face) maturity Close
     continuation

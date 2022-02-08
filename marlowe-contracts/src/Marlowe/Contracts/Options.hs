@@ -1,12 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.Options
-  ( option
+  (
+  -- * Options
+    option
   , OptionType(..)
   , ExerciseType(..)
-
-  -- option strategies
-  , callSpread
+  -- * Option Strategies
+  -- ** Fully collateralized
   , coveredCall
+  -- ** Partially collateralized
+  , callSpread
+  -- ** Not collateralized
   , strangle
   , straddle
   )
@@ -119,7 +123,7 @@ coveredCall ::
   -> Contract          -- ^ Covered Call Contract
 coveredCall buyer seller currency underlying strike ratio issue maturity settlement =
     deposit buyer buyer (underlying, ratio) issue Close
-  $ option European Call seller buyer (currency, strike) (underlying, ratio) maturity settlement
+  $ option European Call seller buyer (underlying, ratio) (currency, strike) maturity settlement
 
 -- |A /Straddle/ involves simultaneously buying a call and a put option
 -- for the same underlying with the same strike and the same expiry.
@@ -134,8 +138,8 @@ straddle ::
   -> Timeout           -- ^ Settlement Date
   -> Contract          -- ^ Straddle Contract
 straddle buyer seller currency underlying ratio strike maturity settlement =
-  let c = option European Call buyer seller (currency, strike) (underlying, ratio) maturity settlement
-      p = option European Put  buyer seller (currency, strike) (underlying, ratio) maturity settlement
+  let c = option European Call buyer seller (underlying, ratio) (currency, strike) maturity settlement
+      p = option European Put  buyer seller (underlying, ratio) (currency, strike) maturity settlement
    in c `both` p
 
 -- |A /Strangle/ involves simultaneously buying a call and a put option
@@ -152,8 +156,8 @@ strangle ::
   -> Timeout           -- ^ Settlement Date
   -> Contract          -- ^ Straddle Contract
 strangle buyer seller currency underlying ratio strike1 strike2 maturity settlement =
-  let c = option European Call buyer seller (currency, strike1) (underlying, ratio) maturity settlement
-      p = option European Put  buyer seller (currency, strike2) (underlying, ratio) maturity settlement
+  let c = option European Call buyer seller (underlying, ratio) (currency, strike1) maturity settlement
+      p = option European Put  buyer seller (underlying, ratio) (currency, strike2) maturity settlement
    in c `both` p
 
 -- |A /Call Spread/ involves simultaneously buying two call options
@@ -170,6 +174,6 @@ callSpread ::
   -> Timeout           -- ^ Settlement Date
   -> Contract          -- ^ Call Spread Contract
 callSpread buyer seller currency underlying strike1 strike2 ratio maturity settlement =
-  let s = option European Call buyer seller (currency, strike1) (underlying, ratio) maturity settlement
-      l = option European Call seller buyer (currency, strike2) (underlying, ratio) maturity settlement
-   in s `both` l
+  let l = option European Call buyer seller (underlying, ratio) (currency, strike1) maturity settlement
+      s = option European Call seller buyer (underlying, ratio) (currency, strike2) maturity settlement
+   in l `both` s

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
+import qualified Spec.Marlowe.Analysis
 import qualified Spec.Marlowe.Contracts
 
 import Test.Tasty
@@ -10,5 +11,6 @@ main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Marlowe"
-    [ testGroup "Contracts" [ Spec.Marlowe.Contracts.tests ]
-    ]
+  [ testGroup "Contracts" [ Spec.Marlowe.Contracts.tests ]
+  , testGroup "Static analysis" [ Spec.Marlowe.Analysis.tests ]
+  ]
