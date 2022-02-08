@@ -3,8 +3,8 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
 
 module Marlowe.Run.Wallet.V1.Server where
 
@@ -18,7 +18,6 @@ import qualified Marlowe.Run.Wallet.V1.CentralizedTestnet.Server as CentralizedT
 import Marlowe.Run.Wallet.V1.Client (callWBE)
 import Marlowe.Run.Wallet.V1.Types (WalletId (WalletId))
 import Servant (ServerError, ServerT, err404, (:<|>) ((:<|>)))
-import Servant.Client (ClientEnv)
 
 handlers ::
     MonadIO m =>

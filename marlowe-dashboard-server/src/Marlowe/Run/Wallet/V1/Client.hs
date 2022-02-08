@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE MonoLocalBinds    #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Wallet.V1.Client
@@ -13,7 +15,7 @@ import Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString.Lazy as BL
 import Marlowe.Run.Env (HasEnv, envClientEnv)
-import Servant.Client (ClientEnv, ClientError, ClientM, runClientM)
+import Servant.Client (ClientError, ClientM, runClientM)
 
 callWBE :: MonadIO m => HasEnv m => ClientM a -> m (Either ClientError a)
 callWBE client = do

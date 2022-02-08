@@ -29,7 +29,7 @@ import Data.String as S
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
 import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
-import Marlowe.Run.Env (Env, HasEnv)
+import Marlowe.Run.Env (HasEnv)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.API (API)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData (..), CreateResponse (..), RestoreError (..),
                                                        RestorePostData (..))
