@@ -51,11 +51,6 @@ jobs:
           $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
           while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground server on $SERVER_PORT" && sleep 10; done
 
-      - name: Build Marlowe Playground Client
-        working-directory: ./
-        run: |
-          cd marlowe-playground-client
-          $(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
       - name: Run Marlowe Playground Client
         working-directory: ./
         env:
@@ -70,13 +65,13 @@ jobs:
           while ! echo exit | nc localhost $CLIENT_PORT; do echo "Waiting for playground client on $CLIENT_PORT" && sleep 10; done
 
       - name: Setup Playwright
-        working-directory: ./e2e-tests/
+        working-directory: ./marlowe-playground-client/e2e-tests/
         run: |
           npm install -D @playwright/test
           npx playwright install
     
       - name: Run Tests
-        working-directory: ./e2e-tests/
+        working-directory: ./marlowe-playground-client/e2e-tests/
         run: |
           npx playwright test
     
