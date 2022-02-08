@@ -32,6 +32,7 @@ import Language.Marlowe.CLI.Command.PAB (PabCommand, parsePabCommand, runPabComm
 import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
 import Language.Marlowe.CLI.Command.Template (TemplateCommand, parseTemplateCommand, runTemplateCommand)
+import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.Types (CliError (..))
@@ -59,6 +60,8 @@ data Command =
   | TransactionCommand TransactionCommand
     -- | Miscellaneous commands.
   | UtilCommand UtilCommand
+    -- | Test-related commands.
+  | TestCommand TestCommand
 
 
 -- | Main entry point for Marlowe CLI tool.
@@ -83,6 +86,7 @@ runCommand :: MonadError CliError m
 runCommand (RunCommand         command) = runRunCommand         command
 runCommand (PabCommand         command) = runPabCommand         command
 runCommand (ContractCommand    command) = runContractCommand    command
+runCommand (TestCommand        command) = runTestCommand        command
 runCommand (InputCommand       command) = runInputCommand       command
 runCommand (RoleCommand        command) = runRoleCommand        command
 runCommand (TemplateCommand    command) = runTemplateCommand    command
@@ -106,6 +110,7 @@ parseCommand version =
                 <> O.command "run"         (O.info (RunCommand      <$> parseRunCommand     ) $ O.progDesc "Run a contract."                   )
                 <> O.command "pab"         (O.info (PabCommand      <$> parsePabCommand     ) $ O.progDesc "Run a contract via the PAB."       )
                 <> O.command "template"    (O.info (TemplateCommand <$> parseTemplateCommand) $ O.progDesc "Create a contract from a template.")
+                <> O.command "test"        (O.info (TestCommand     <$> parseTestCommand    ) $ O.progDesc "Test contracts."                   )
               )
           , O.hsubparser
               (

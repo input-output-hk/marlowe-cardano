@@ -53,6 +53,7 @@ library
     Language.Marlowe.CLI.Command.Role
     Language.Marlowe.CLI.Command.Run
     Language.Marlowe.CLI.Command.Template
+    Language.Marlowe.CLI.Command.Test
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
     Language.Marlowe.CLI.Examples
@@ -66,6 +67,10 @@ library
     Language.Marlowe.CLI.PAB
     Language.Marlowe.CLI.Run
     Language.Marlowe.CLI.Transaction
+    Language.Marlowe.CLI.Test
+    Language.Marlowe.CLI.Test.PAB
+    Language.Marlowe.CLI.Test.Script
+    Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Types
     Language.Marlowe.Contract
     Paths_marlowe_cli
@@ -75,6 +80,7 @@ library
     aeson-pretty,
     base16-bytestring,
     bytestring,
+    cardano-addresses,
     cardano-api,
     cardano-ledger-alonzo,
     cardano-wallet-core,
@@ -82,7 +88,9 @@ library
     data-default,
     freer-simple,
     http-client,
+    lens,
     marlowe,
+    memory,
     mtl,
     network,
     openapi3,
@@ -95,6 +103,7 @@ library
     plutus-pab,
     plutus-tx,
     prettyprinter,
+    QuickCheck,
     regex-posix,
     serialise,
     servant-client,
@@ -102,7 +111,8 @@ library
     text,
     unordered-containers,
     uuid,
-    websockets
+    websockets,
+    yaml,
 
 executable marlowe-cli
   import: lang

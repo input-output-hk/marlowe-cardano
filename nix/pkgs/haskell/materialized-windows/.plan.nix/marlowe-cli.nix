@@ -38,6 +38,7 @@
           (hsPkgs."aeson-pretty" or (errorHandler.buildDepError "aeson-pretty"))
           (hsPkgs."base16-bytestring" or (errorHandler.buildDepError "base16-bytestring"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
@@ -45,7 +46,9 @@
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
           (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
+          (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
@@ -58,6 +61,7 @@
           (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
+          (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
           (hsPkgs."regex-posix" or (errorHandler.buildDepError "regex-posix"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
@@ -66,6 +70,7 @@
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
           (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
+          (hsPkgs."yaml" or (errorHandler.buildDepError "yaml"))
           ];
         buildable = true;
         modules = [
@@ -77,6 +82,7 @@
           "Language/Marlowe/CLI/Command/Role"
           "Language/Marlowe/CLI/Command/Run"
           "Language/Marlowe/CLI/Command/Template"
+          "Language/Marlowe/CLI/Command/Test"
           "Language/Marlowe/CLI/Command/Transaction"
           "Language/Marlowe/CLI/Command/Util"
           "Language/Marlowe/CLI/Examples"
@@ -90,6 +96,10 @@
           "Language/Marlowe/CLI/PAB"
           "Language/Marlowe/CLI/Run"
           "Language/Marlowe/CLI/Transaction"
+          "Language/Marlowe/CLI/Test"
+          "Language/Marlowe/CLI/Test/PAB"
+          "Language/Marlowe/CLI/Test/Script"
+          "Language/Marlowe/CLI/Test/Types"
           "Language/Marlowe/CLI/Types"
           "Language/Marlowe/Contract"
           "Paths_marlowe_cli"

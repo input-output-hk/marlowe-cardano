@@ -26,6 +26,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildContinuing
 , buildOutgoing
 , buildClean
+, buildFaucet
 -- * Submitting
 , submit
 -- * Low-Level Functions
@@ -56,9 +57,9 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), Balan
                     ValidityLowerBoundSupportedInEra (..), ValidityNoUpperBoundSupportedInEra (..),
                     ValidityUpperBoundSupportedInEra (..), Value, WitCtxTxIn, Witness (..), anyAddressInEra,
                     castVerificationKey, getTxId, getVerificationKey, hashScriptData, lovelaceToValue,
-                    makeTransactionBodyAutoBalance, queryNodeLocalState, readFileTextEnvelope, serialiseToCBOR,
-                    signShelleyTransaction, submitTxToNodeLocal, txOutValueToValue, valueFromList, valueToList,
-                    valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
+                    makeTransactionBodyAutoBalance, negateValue, queryNodeLocalState, readFileTextEnvelope,
+                    selectLovelace, serialiseToCBOR, signShelleyTransaction, submitTxToNodeLocal, txOutValueToValue,
+                    valueFromList, valueToList, valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
@@ -112,7 +113,7 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
       $ getTxId body
 
 
--- | Build a non-Marlowe transaction.
+-- | Build a non-Marlowe transaction that cleans an address.
 buildClean :: MonadError CliError m
            => MonadIO m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
@@ -156,6 +157,50 @@ buildClean connection signingKeyFiles lovelace changeAddress bodyFile timeout =
       $ writeFileTextEnvelope bodyFile Nothing body
     forM_ timeout
       $ submitBody connection body signingKeys
+    pure
+      $ getTxId body
+
+
+-- | Build a non-Marlowe transaction that fills and address from a faucet.
+buildFaucet :: MonadError CliError m
+            => MonadIO m
+            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+            -> Value                             -- ^ The value to be sent to the funded addresses.
+            -> AddressAny                        -- ^ The funded address.
+            -> AddressAny                        -- ^ The faucet address.
+            -> SomePaymentSigningKey             -- ^ The required signing key.
+            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> m TxId                            -- ^ Action to build the transaction body.
+buildFaucet connection value fundedAddress changeAddress signingKey timeout =
+  do
+    utxos <-
+      fmap (M.toList . unUTxO)
+        .  queryAlonzo connection
+        . QueryUTxO
+        . QueryUTxOByAddress
+        . S.singleton
+        $ changeAddress
+    let
+      inputs = fst <$> utxos
+      extractValue (TxOut _ v _) = txOutValueToValue v
+      total = mconcat $ extractValue . snd <$> utxos
+      lovelace = lovelaceToValue . toEnum . (`div` 2) . fromEnum $ selectLovelace total
+      outputs =
+        [
+          (fundedAddress, Nothing, value)
+        , (changeAddress, Nothing, total <> negateValue value <> negateValue lovelace)
+        ]
+    body <-
+      buildBody connection
+        []
+        Nothing
+        inputs outputs Nothing changeAddress
+        Nothing
+        []
+        False
+        False
+    forM_ timeout
+      $ submitBody connection body [signingKey]
     pure
       $ getTxId body
 

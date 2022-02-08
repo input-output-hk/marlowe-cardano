@@ -24,14 +24,16 @@ module Language.Marlowe.CLI.PAB (
 , WsRunner
 -- * Contracts
 , runApp
-, callCreate
-, callApplyInputs
-, callRedeem
-, callFollow
 , runFollower
 , runCompanion
 , stop
 -- * Endpoints
+, callCreate
+, callApplyInputs
+, callRedeem
+, callFollow
+-- * Utilities
+, receiveStatus
 ) where
 
 
@@ -46,7 +48,7 @@ import Data.Proxy (Proxy (..))
 import Data.Text.Encoding (encodeUtf8Builder)
 import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
-import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)
+import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, maybeWriteJson)
 import Language.Marlowe.CLI.Types (CliError (..))
 import Language.Marlowe.Client (CompanionState, ContractHistory, EndpointResponse (..), MarloweClientInput,
                                 MarloweContractState, MarloweEndpointResult (CreateResponse), MarloweError)
@@ -74,7 +76,7 @@ type ApiRunner m a = ClientM a -> m a
 type WsRunner m a = ContractInstanceId -> (Connection -> ExceptT CliError IO a) -> m a
 
 
--- | Run the MarloweFollower contract.
+-- | Run the MarloweApp contract.
 runApp :: MonadError CliError m
        => MonadIO m
        => Maybe FilePath                      -- ^ The output file for the Marlowe parameters.
@@ -106,7 +108,7 @@ reportAppStatus paramsFile loop p s =
     finish <- reportStatus p s
     case s of
       NewObservableState s' -> do
-                                 state <- liftEither . first CliError $ parseEither parseJSON s'
+                                 state <- liftCli $ parseEither parseJSON s'
                                  case state :: Maybe (EndpointResponse MarloweEndpointResult MarloweError) of
                                    Just (EndpointSuccess _ (CreateResponse params)) -> do
                                                                                          maybeWriteJson paramsFile params
@@ -141,7 +143,7 @@ runCompanion :: MonadError CliError m
 runCompanion = runContract WalletCompanion (Proxy :: Proxy CompanionState) reportStatus
 
 
--- | Run the MarloweCompanion contract.
+-- | Run a Marlowe contract.
 runContract :: MonadError CliError m
             => MonadIO m
             => MarloweContract                     -- ^ The contract.
@@ -267,7 +269,7 @@ callApplyInputs :: MonadError CliError m
                 -> [MarloweClientInput]                -- ^ The inputs to the contract.
                 -> SlotNo                              -- ^ The first valid slot for the transaction.
                 -> SlotNo                              -- ^ The last valid slot for the transaction.
-                -> m ()                                -- ^ Action for calling the "create" endpoint.
+                -> m ()                                -- ^ Action for calling the "apply-inputs" endpoint.
 callApplyInputs pabClient runApi instanceFile paramsFile inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
   do
     params <- decodeFileStrict paramsFile
@@ -287,7 +289,7 @@ callRedeem :: MonadError CliError m
            -> FilePath                            -- ^ File containing the contract instance ID.
            -> FilePath                            -- ^ The JSON file containing the Marlowe parameters.
            -> (TokenName, PubKeyHash)             -- ^ The contract role name and their owner's public key hash.
-           -> m ()                                -- ^ Action for calling the "create" endpoint.
+           -> m ()                                -- ^ Action for calling the "redeem" endpoint.
 callRedeem pabClient runApi instanceFile paramsFile (ownerName, ownerHash) =
   do
     params <- decodeFileStrict paramsFile
@@ -306,7 +308,7 @@ callFollow :: MonadError CliError m
            -> (forall a. ApiRunner m a)           -- ^ The HTTP runner.
            -> FilePath                            -- ^ File containing the contract instance ID.
            -> FilePath                            -- ^ The JSON file containing the Marlowe parameters.
-           -> m ()                                -- ^ Action for calling the "create" endpoint.
+           -> m ()                                -- ^ Action for calling the "follow" endpoint.
 callFollow pabClient runApi instanceFile paramsFile =
   do
     params <- decodeFileStrict paramsFile
@@ -324,7 +326,7 @@ call :: MonadError CliError m
      -> FilePath                            -- ^ File containing the contract instance ID.
      -> String                              -- ^ The name of the endpoint.
      -> (UUID -> a)                         -- ^ Function for populating the arguments to the endpoint.
-     -> m ()                                -- ^ Action for calling the "create" endpoint.
+     -> m ()                                -- ^ Action for calling the endpoint.
 call PabClient{..} runApi instanceFile endpoint arguments =
   do
     instanceId <- decodeFileStrict instanceFile
