@@ -5,11 +5,8 @@ import Prologue
 import Analytics (class IsEvent, defaultEvent)
 import Capability.Marlowe (NewWalletDetails)
 import Data.Wallet (WalletDetails)
-import Page.Welcome.ConfirmMnemonic.Types (ConfirmMnemonicFields)
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
-import Page.Welcome.CreateWallet.Types (CreateWalletFields)
 import Page.Welcome.CreateWallet.Types as CreateWallet
-import Page.Welcome.RestoreWallet.Types (RestoreWalletFields)
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
@@ -30,9 +27,9 @@ type State =
 
 -- This type is probably not testnet specific.
 data CreateWalletStep
-  = CreateWalletSetWalletName CreateWalletFields
+  = CreateWalletSetWalletName
   | CreateWalletPresentMnemonic NewWalletDetails
-  | CreateWalletConfirmMnemonic ConfirmMnemonicFields NewWalletDetails
+  | CreateWalletConfirmMnemonic NewWalletDetails
 
 derive instance Eq CreateWalletStep
 
@@ -42,7 +39,7 @@ data Card
   = GetStartedHelpCard
   | CreateWalletHelpCard
   | CreateWalletCard CreateWalletStep
-  | RestoreWalletCard RestoreWalletFields
+  | RestoreWalletCard
 
 derive instance eqCard :: Eq Card
 

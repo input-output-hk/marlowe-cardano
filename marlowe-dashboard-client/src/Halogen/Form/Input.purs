@@ -15,7 +15,7 @@ module Halogen.Form.Input
 import Prologue
 
 import Control.Alternative (guard)
-import Data.Either (either, hush)
+import Data.Either (either, hush, isRight)
 import Data.Foldable (traverse_)
 import Data.Maybe (maybe)
 import Effect.Class (class MonadEffect)
@@ -190,6 +190,7 @@ setValue f = do
             else case newResult of
               Right output -> s.format output
               _ -> newValue
+        , visited = s.visited || isRight newResult
         }
   let
     toFieldState v r = case r of

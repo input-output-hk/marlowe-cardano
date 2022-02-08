@@ -7,8 +7,7 @@ import Capability.Marlowe (class ManageMarlowe, NewWalletDetails, createWallet)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
-import Data.Lens (is, set, (^?))
-import Data.Lens.Record (prop)
+import Data.Lens (is, (^?))
 import Data.Maybe (fromMaybe)
 import Data.Variant (match) as Variant
 import Data.WalletNickname (WalletNickname)
@@ -16,6 +15,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.Form.FieldState (FieldState(..)) as HF
 import Halogen.Form.Injective (project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
@@ -82,42 +82,27 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
   }
 
 initialState :: Connected AddressBook Input -> State
-initialState { context, input: { fields } } =
+initialState { context } =
   { addressBook: context
-  , fields
-  , result: project fields
+  , fields: { nickname: HF.Blank }
+  , result: Nothing
   , newWalletDetails: NotAsked
   }
-
-handleFieldMsg
-  :: forall a m
-   . MonadEffect m
-  => ManageMarlowe m
-  => Eq a
-  => (FieldState a -> CreateWalletFields -> CreateWalletFields)
-  -> Input.Msg Action a
-  -> DSL m Unit
-handleFieldMsg set = case _ of
-  Input.Updated field -> do
-    { fields } <- H.get
-    { fields: newFields } <- H.modify _ { fields = set field fields }
-    H.modify_ _ { result = project newFields }
-    when (fields /= newFields) do
-      H.raise $ FieldsUpdated newFields
-  Input.Blurred -> pure unit
-  Input.Focused -> pure unit
-  Input.Emit action -> handleAction action
 
 handleAction
   :: forall m. MonadEffect m => ManageMarlowe m => Action -> DSL m Unit
 handleAction = case _ of
   OnInit -> do
     H.tell _nickname unit $ Input.Focus
-  OnReceive input -> do
-    oldState <- H.get
-    let newState = initialState input
-    when (oldState /= newState) $ H.put newState
-  OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
+  OnReceive input -> H.modify_ _ { addressBook = input.context }
+  OnNicknameMsg msg -> case msg of
+    Input.Updated field -> do
+      { fields: newFields } <- H.modify \s -> s
+        { fields = s.fields { nickname = field } }
+      H.modify_ _ { result = project newFields }
+    Input.Blurred -> pure unit
+    Input.Focused -> pure unit
+    Input.Emit action -> handleAction action
   OnFormSubmit event -> H.liftEffect $ preventDefault event
   OnCancel -> H.raise CancelClicked
   OnCreate nickname -> do

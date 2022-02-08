@@ -4,24 +4,19 @@ import Prologue
 
 import Capability.Marlowe (class ManageMarlowe, NewWalletDetails)
 import Component.Form (renderTextInput)
-import Data.AddressBook (AddressBook)
 import Data.Bifunctor (lmap)
-import Data.Lens (set)
-import Data.Lens.Record (prop)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.Form.FieldState as HF
 import Halogen.Form.Injective (project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore)
-import Halogen.Store.Select (selectEq)
 import Page.Welcome.ConfirmMnemonic.Types
   ( Component
   , ConfirmMnemonicFields
@@ -31,21 +26,19 @@ import Page.Welcome.ConfirmMnemonic.Types
   , _mnemonic
   )
 import Page.Welcome.Forms.Render (renderForm)
-import Store as Store
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
 data Action
   = OnInit
-  | OnReceive (Connected AddressBook Input)
+  | OnReceive Input
   | OnMnemonicMsg (Input.Msg Action MnemonicPhrase)
   | OnFormSubmit Event
-  | OnCancel
+  | OnBack
   | OnCreate NewWalletDetails
 
 type State =
-  { addressBook :: AddressBook
-  , fields :: ConfirmMnemonicFields
+  { fields :: ConfirmMnemonicFields
   , result :: Maybe ConfirmMnemonicParams
   , newWalletDetails :: NewWalletDetails
   }
@@ -66,9 +59,8 @@ component
   :: forall m
    . MonadAff m
   => ManageMarlowe m
-  => MonadStore Store.Action Store.Store m
   => Component m
-component = connect (selectEq _.addressBook) $ H.mkComponent
+component = H.mkComponent
   { initialState
   , eval: H.mkEval $ H.defaultEval
       { handleAction = handleAction
@@ -78,32 +70,12 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
   , render
   }
 
-initialState :: Connected AddressBook Input -> State
-initialState { context, input: { fields, newWalletDetails } } =
-  { addressBook: context
-  , fields
-  , result: project fields
+initialState :: Input -> State
+initialState { newWalletDetails } =
+  { fields: { mnemonic: HF.Blank }
+  , result: Nothing
   , newWalletDetails
   }
-
-handleFieldMsg
-  :: forall a m
-   . MonadEffect m
-  => ManageMarlowe m
-  => Eq a
-  => (FieldState a -> ConfirmMnemonicFields -> ConfirmMnemonicFields)
-  -> Input.Msg Action a
-  -> DSL m Unit
-handleFieldMsg set = case _ of
-  Input.Updated field -> do
-    { fields } <- H.get
-    { fields: newFields } <- H.modify _ { fields = set field fields }
-    H.modify_ _ { result = project newFields }
-    when (fields /= newFields) do
-      H.raise $ FieldsUpdated newFields
-  Input.Blurred -> pure unit
-  Input.Focused -> pure unit
-  Input.Emit action -> handleAction action
 
 handleAction
   :: forall m. MonadEffect m => ManageMarlowe m => Action -> DSL m Unit
@@ -114,15 +86,21 @@ handleAction = case _ of
     oldState <- H.get
     let newState = initialState input
     when (oldState /= newState) $ H.put newState
-  OnMnemonicMsg msg -> handleFieldMsg (set (prop _mnemonic)) msg
+  OnMnemonicMsg msg -> case msg of
+    Input.Updated field -> do
+      { fields: newFields } <- H.modify \s -> s
+        { fields = s.fields { mnemonic = field } }
+      H.modify_ _ { result = project newFields }
+    Input.Blurred -> pure unit
+    Input.Focused -> pure unit
+    Input.Emit action -> handleAction action
   OnFormSubmit event -> H.liftEffect $ preventDefault event
-  OnCancel -> H.raise <<< BackClicked =<< H.gets _.newWalletDetails
+  OnBack -> H.raise <<< BackClicked =<< H.gets _.newWalletDetails
   OnCreate newWalletDetails -> H.raise $ MnemonicConfirmed newWalletDetails
 
 render
   :: forall m
    . MonadEffect m
-  => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
 render { result, fields, newWalletDetails } = do
@@ -142,8 +120,8 @@ render { result, fields, newWalletDetails } = do
         ]
     , inProgress: false
     , onCancel:
-        { action: Just OnCancel
-        , label: "Cancel"
+        { action: Just OnBack
+        , label: "Back"
         }
     , onSkip: Nothing
     , onSubmit:
@@ -177,5 +155,5 @@ mnemonicInput mnemonic fieldState =
           (Left _) -> "Given mnemonic differs from your new wallet mnemonic."
     }
   matches m
-    | m == mnemonic = Left $ Left unit
+    | m /= mnemonic = Left $ Left unit
     | otherwise = Right m

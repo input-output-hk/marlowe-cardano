@@ -7,14 +7,12 @@ import Halogen.Form.Input (FieldState)
 import Type.Proxy (Proxy(..))
 
 type Input =
-  { fields :: ConfirmMnemonicFields
-  , newWalletDetails :: NewWalletDetails
+  { newWalletDetails :: NewWalletDetails
   }
 
 data Msg
   = BackClicked NewWalletDetails
   | MnemonicConfirmed NewWalletDetails
-  | FieldsUpdated ConfirmMnemonicFields
 
 data Query (a :: Type)
 

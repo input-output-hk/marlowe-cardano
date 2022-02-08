@@ -8,13 +8,12 @@ import Halogen.Form.Input (FieldState)
 import Type.Proxy (Proxy(..))
 
 type Input =
-  { fields :: RestoreWalletFields
+  {
   }
 
 data Msg
   = CancelClicked
   | WalletRestored WalletDetails
-  | FieldsUpdated RestoreWalletFields
 
 data Query (a :: Type)
 

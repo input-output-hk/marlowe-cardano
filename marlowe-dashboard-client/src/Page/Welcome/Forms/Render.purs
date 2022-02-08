@@ -43,7 +43,7 @@ renderForm
   :: forall action widget. RenderOpts widget action -> HTML widget action
 renderForm { body, inProgress, onCancel, onSkip, onSubmit, title } =
   HH.div
-    [ classNames [ "p-5", "lg:p-6", "space-y-2" ] ]
+    [ classNames [ "p-5", "lg:p-6", "space-y-4" ] ]
     $
       [ HH.h2
           [ classNames [ "font-bold" ] ]

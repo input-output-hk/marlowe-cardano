@@ -19,6 +19,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
+import Halogen.Form.FieldState as HF
 import Halogen.Form.Injective (project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
@@ -87,10 +88,10 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
   }
 
 initialState :: Connected AddressBook Input -> State
-initialState { context, input: { fields } } =
+initialState { context } =
   { addressBook: context
-  , fields
-  , result: project fields
+  , fields: { nickname: HF.Blank, mnemonic: HF.Blank }
+  , result: Nothing
   , walletDetails: NotAsked
   }
 
@@ -104,11 +105,8 @@ handleFieldMsg
   -> DSL m Unit
 handleFieldMsg set = case _ of
   Input.Updated field -> do
-    { fields } <- H.get
-    { fields: newFields } <- H.modify _ { fields = set field fields }
+    { fields: newFields } <- H.modify \s -> s { fields = set field s.fields }
     H.modify_ _ { result = project newFields }
-    when (fields /= newFields) do
-      H.raise $ FieldsUpdated newFields
   Input.Blurred -> pure unit
   Input.Focused -> pure unit
   Input.Emit action -> handleAction action
@@ -118,10 +116,7 @@ handleAction
 handleAction = case _ of
   OnInit -> do
     H.tell _nickname unit $ Input.Focus
-  OnReceive input -> do
-    oldState <- H.get
-    let newState = initialState input
-    when (oldState /= newState) $ H.put newState
+  OnReceive input -> H.modify_ _ { addressBook = input.context }
   OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
   OnMnemonicMsg msg -> handleFieldMsg (set (prop _mnemonic)) msg
   OnFormSubmit event -> H.liftEffect $ preventDefault event
@@ -158,13 +153,7 @@ render { addressBook, result, fields, walletDetails } = do
     { body:
         [ HH.form
             [ HE.onSubmit OnFormSubmit
-            , classNames
-                [ "overflow-y-auto"
-                , "p-4"
-                , "flex"
-                , "flex-col"
-                , "gap-2"
-                ]
+            , classNames [ "relative", "space-y-4" ]
             ]
             [ nicknameInput addressBook fields.nickname
             , mnemonicInput fields.mnemonic

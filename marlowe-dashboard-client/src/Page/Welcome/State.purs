@@ -16,25 +16,17 @@ import Clipboard (class MonadClipboard)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
 import Data.AddressBook as AddressBook
-import Data.Lens (_1, _Just, assign, view)
+import Data.Lens (assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.Wallet (_pubKeyHash, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
-import Halogen.Form.FieldState (FieldState(..))
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
 import Page.Welcome.CreateWallet.Types as CreateWallet
-import Page.Welcome.Lenses
-  ( _CreateWalletCard
-  , _CreateWalletConfirmMnemonic
-  , _CreateWalletSetWalletName
-  , _RestoreWalletCard
-  , _card
-  , _enteringDashboardState
-  )
+import Page.Welcome.Lenses (_enteringDashboardState)
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
 
@@ -58,21 +50,17 @@ handleAction
   => MonadClipboard m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction OnCreateWalletHelp =
-  openCard CreateWalletHelpCard
+handleAction OnCreateWalletHelp = openCard CreateWalletHelpCard
 
-handleAction OnGetStartedHelp =
-  openCard GetStartedHelpCard
+handleAction OnGetStartedHelp = openCard GetStartedHelpCard
 
 handleAction OnCreateWallet =
-  openCard $ CreateWalletCard $ CreateWalletSetWalletName { nickname: Blank }
+  openCard $ CreateWalletCard $ CreateWalletSetWalletName
 
-handleAction OnRestoreWallet =
-  openCard $ RestoreWalletCard { nickname: Blank, mnemonic: Blank }
+handleAction OnRestoreWallet = openCard RestoreWalletCard
 
 handleAction (OnAcknowledgeMnemonic details) =
-  openCard $ CreateWalletCard $ CreateWalletConfirmMnemonic { mnemonic: Blank }
-    details
+  openCard $ CreateWalletCard $ CreateWalletConfirmMnemonic details
 
 handleAction CloseCard =
   modify_ _ { enteringDashboardState = false, cardOpen = false }
@@ -108,17 +96,11 @@ handleAction (OnRestoreWalletMsg msg) = case msg of
   RestoreWallet.CancelClicked -> handleAction CloseCard
   RestoreWallet.WalletRestored walletDetails ->
     handleAction $ ConnectWallet walletDetails
-  RestoreWallet.FieldsUpdated fields -> do
-    assign (_card <<< _Just <<< _RestoreWalletCard) fields
 
 handleAction (OnCreateWalletMsg msg) = case msg of
   CreateWallet.CancelClicked -> handleAction CloseCard
   CreateWallet.WalletCreated details ->
-    handleAction $ ConnectWallet details.walletDetails
-  CreateWallet.FieldsUpdated fields -> do
-    assign
-      (_card <<< _Just <<< _CreateWalletCard <<< _CreateWalletSetWalletName)
-      fields
+    openCard $ CreateWalletCard $ CreateWalletPresentMnemonic details
 
 handleAction (OnConfirmMnemonicMsg msg) = case msg of
   ConfirmMnemonic.BackClicked details ->
@@ -126,16 +108,7 @@ handleAction (OnConfirmMnemonicMsg msg) = case msg of
       $ CreateWalletCard
       $ CreateWalletPresentMnemonic details
   ConfirmMnemonic.MnemonicConfirmed details ->
-    openCard $ CreateWalletCard $ CreateWalletPresentMnemonic details
-  ConfirmMnemonic.FieldsUpdated fields -> do
-    assign
-      ( _card
-          <<< _Just
-          <<< _CreateWalletCard
-          <<< _CreateWalletConfirmMnemonic
-          <<< _1
-      )
-      fields
+    handleAction $ ConnectWallet details.walletDetails
 
 openCard :: forall m. Card -> HalogenM State Action ChildSlots Msg m Unit
 openCard card =

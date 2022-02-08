@@ -47,7 +47,6 @@ import Page.Welcome.CreateWallet as CreateWallet
 import Page.Welcome.Lenses (_card, _cardOpen)
 import Page.Welcome.RestoreWallet (_restoreWallet)
 import Page.Welcome.RestoreWallet as RestoreWallet
-import Page.Welcome.RestoreWallet.Types (RestoreWalletFields)
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
 import Store as Store
 
@@ -97,7 +96,7 @@ welcomeCard state =
               GetStartedHelpCard -> getStartedHelpCard
               CreateWalletHelpCard -> createWalletHelpCard
               CreateWalletCard res -> createWalletCard res
-              RestoreWalletCard fields -> restoreWalletCard fields
+              RestoreWalletCard -> restoreWalletCard
       ]
 
 ------------------------------------------------------------
@@ -275,7 +274,7 @@ createWalletCard
   => CreateWalletStep
   -> Array (ComponentHTML Action ChildSlots m)
 createWalletCard = case _ of
-  CreateWalletSetWalletName fields -> do
+  CreateWalletSetWalletName -> do
     [ a
         [ classNames [ "absolute", "top-4", "right-4" ]
         , onClick_ CloseCard
@@ -285,7 +284,7 @@ createWalletCard = case _ of
         _createWallet
         unit
         CreateWallet.component
-        { fields }
+        {}
         OnCreateWalletMsg
     ]
   CreateWalletPresentMnemonic r@{ mnemonic } ->
@@ -310,12 +309,12 @@ createWalletCard = case _ of
             ]
         ]
     ]
-  CreateWalletConfirmMnemonic fields newWalletDetails ->
+  CreateWalletConfirmMnemonic newWalletDetails ->
     [ slot
         _confirmMnemonic
         unit
         ConfirmMnemonic.component
-        { fields, newWalletDetails }
+        { newWalletDetails }
         OnConfirmMnemonicMsg
     ]
 
@@ -324,9 +323,8 @@ restoreWalletCard
    . MonadAff m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
-  => RestoreWalletFields
-  -> Array (ComponentHTML Action ChildSlots m)
-restoreWalletCard fields =
+  => Array (ComponentHTML Action ChildSlots m)
+restoreWalletCard =
   [ a
       [ classNames [ "absolute", "top-4", "right-4" ]
       , onClick_ CloseCard
@@ -336,6 +334,6 @@ restoreWalletCard fields =
       _restoreWallet
       unit
       RestoreWallet.component
-      { fields }
+      {}
       OnRestoreWalletMsg
   ]

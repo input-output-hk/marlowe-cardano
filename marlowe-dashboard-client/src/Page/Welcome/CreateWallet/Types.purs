@@ -7,13 +7,12 @@ import Halogen.Form.Input (FieldState)
 import Type.Proxy (Proxy(..))
 
 type Input =
-  { fields :: CreateWalletFields
+  {
   }
 
 data Msg
   = CancelClicked
   | WalletCreated NewWalletDetails
-  | FieldsUpdated CreateWalletFields
 
 data Query (a :: Type)
 
