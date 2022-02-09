@@ -4,7 +4,7 @@ module Marlowe.Contracts.Swap where
 import Language.Marlowe
 import Marlowe.Contracts.Common
 
--- |Swap tokens between two parties A and B
+-- |Swap tokens between two parties
 swap ::
      Party             -- ^ Party A
   -> Token             -- ^ Token A
