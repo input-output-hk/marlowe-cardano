@@ -90,6 +90,7 @@
           "Example"
           "Swap"
           "ZeroCouponBond"
+          "Option"
           ];
         hsSourceDirs = [ "src" "contracts" ];
         };
