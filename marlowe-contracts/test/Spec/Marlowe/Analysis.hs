@@ -19,7 +19,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 tests :: TestTree
-tests = testGroup "Marlowe"
+tests = testGroup "Marlowe Contract"
     [ testCase "Swap test" swapTest
     , testCase "Sequentially Swap twice test" sequentiallySwapTwiceTest
     , testCase "Concurrently Swap twice test" concurrentlySwapTwiceTest
