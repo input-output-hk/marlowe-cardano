@@ -4,7 +4,6 @@ import Prologue
 
 import AppM (passphrase) as AppM
 import Capability.Marlowe (class ManageMarlowe, restoreWallet)
-import Component.ContractSetup.Types (_nickname)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
@@ -37,6 +36,7 @@ import Page.Welcome.RestoreWallet.Types
   , RestoreWalletFields
   , RestoreWalletParams
   , _mnemonic
+  , _nickname
   )
 import Store as Store
 import Type.Proxy (Proxy(..))
