@@ -27,8 +27,7 @@ import Data.WalletNickname as WN
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form.FieldState as HF
-import Halogen.Form.Injective (project)
+import Halogen.Form.Injective (blank, project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
 import Halogen.HTML as HH
@@ -86,7 +85,7 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
 initialState :: Connected AddressBook Input -> State
 initialState { context } =
   { addressBook: context
-  , fields: { nickname: HF.Blank, address: HF.Blank }
+  , fields: blank
   , result: Nothing
   }
 

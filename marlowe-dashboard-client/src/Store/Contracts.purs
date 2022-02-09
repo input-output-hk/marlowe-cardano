@@ -28,8 +28,7 @@ import Type.Proxy (Proxy(..))
 
 newtype ContractStore = ContractStore ContractStoreFields
 
-type ContractStoreFields
-  =
+type ContractStoreFields =
   {
     -- This map lets you now the status of a contract that is synced with the PAB.
     -- This is what eventually is shown as cards in the Dashboard or as steps

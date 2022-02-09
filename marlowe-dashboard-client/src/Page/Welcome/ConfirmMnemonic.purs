@@ -11,18 +11,12 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form.FieldState as HF
-import Halogen.Form.Injective (project)
+import Halogen.Form.Injective (blank, project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-import Page.Welcome.ConfirmMnemonic.Types
-  ( Component
-  , Input
-  , Msg(..)
-  , _mnemonic
-  )
+import Page.Welcome.ConfirmMnemonic.Types (Component, Input, Msg(..), _mnemonic)
 import Page.Welcome.Forms.Render (renderForm)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
@@ -69,7 +63,7 @@ component = H.mkComponent
 
 initialState :: Input -> State
 initialState { newWalletDetails } =
-  { fieldState: HF.Blank
+  { fieldState: blank
   , newWalletDetails
   }
 

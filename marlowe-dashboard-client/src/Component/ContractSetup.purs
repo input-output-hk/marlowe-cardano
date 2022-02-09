@@ -46,8 +46,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
-import Halogen.Form.FieldState as FS
-import Halogen.Form.Injective (project)
+import Halogen.Form.Injective (blank, inject, project)
 import Halogen.Form.Input (FieldState)
 import Halogen.Form.Input as Input
 import Halogen.HTML as HH
@@ -135,9 +134,9 @@ initialState
       }
   }
   where
-  mkRoleField name _ = fromMaybe FS.Blank $ Map.lookup name fields.roles
-  mkTimeoutField _ value = FS.Complete value
-  mkValueField name _ = fromMaybe FS.Blank $ Map.lookup name fields.values
+  mkRoleField name _ = fromMaybe blank $ Map.lookup name fields.roles
+  mkTimeoutField _ value = inject value
+  mkValueField name _ = fromMaybe blank $ Map.lookup name fields.values
 
 adaptInput
   :: forall a

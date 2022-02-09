@@ -27,8 +27,7 @@ import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
-import Halogen.Form.FieldState (FieldState(..))
-import Halogen.Form.Injective (inject)
+import Halogen.Form.Injective (blank, inject)
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata
@@ -62,12 +61,7 @@ setup { metaData, extendedContract } mFields = Setup
   , templateTimeouts: Map.mapMaybeWithKey getTimeout slotContent
   , templateValues: mapWithIndex getValue valueContent
   , templateName: metaData.contractName
-  , fields: mFields # fromMaybe
-      { nickname: Blank
-      , roles: Map.empty
-      , timeouts: Map.empty
-      , values: Map.empty
-      }
+  , fields: fromMaybe blank mFields
   }
   where
   TemplateContent { slotContent, valueContent } =
