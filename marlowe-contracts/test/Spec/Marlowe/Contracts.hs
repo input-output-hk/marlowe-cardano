@@ -10,16 +10,15 @@ where
 import Control.Monad (void)
 import Data.UUID (UUID)
 import qualified Data.UUID as UUID
-import Language.Marlowe.Client
-import Language.Marlowe.SemanticsTypes
-import Language.Marlowe.Util
-import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot (..))
-import Ledger.Ada (lovelaceValueOf)
+import Language.Marlowe
+import Ledger (PaymentPubKeyHash (..), PubKeyHash)
+import Ledger.Ada
 import Marlowe.Contracts.Options
+import Marlowe.Contracts.Swap
 import Marlowe.Contracts.ZeroCouponBond
-import Plutus.Contract.Test hiding ((.&&.))
-import qualified Plutus.Contract.Test as T
+import Plutus.Contract.Test as T
 import Plutus.Trace.Emulator as Trace
+import Plutus.V1.Ledger.Value
 import qualified PlutusTx.AssocMap as AssocMap
 import Test.Tasty
 
@@ -29,6 +28,7 @@ tests = testGroup "Marlowe"
     , zeroCouponBondCombinationTest
     , americanCallOptionTest
     , europeanCallOptionTest
+    , swapIdentityTest
     ]
 
 reqId :: UUID
@@ -199,6 +199,48 @@ europeanCallOptionTest = checkPredicateOptions
     void $ waitNSlots 100
 
     callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0])
+    void $ waitNSlots 2
+
+    callEndpoint @"close" w1Hdl reqId
+    callEndpoint @"close" w2Hdl reqId
+    void $ waitNSlots 2
+
+swapIdentityTest :: TestTree
+swapIdentityTest = checkPredicateOptions
+  (changeInitialWalletValue w2 (\v -> v <> singleton "" "testcoin" 300) defaultCheckOptions)
+  "Swap and swap back Contract"
+  (assertNoFailedTransactions
+    T..&&. assertDone marlowePlutusContract (walletInstanceTag w1) (const True) "contract should close"
+    T..&&. assertDone marlowePlutusContract (walletInstanceTag w2) (const True) "contract should close"
+    T..&&. walletFundsChange w1 mempty -- (singleton "" "testcoin" 30 <> lovelaceValueOf (-10_000_000))
+    T..&&. walletFundsChange w2 mempty
+    T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w1) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+    T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w2) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+  )
+  $ do
+    let params = defaultMarloweParams
+    let tok = Token "" "testcoin"
+
+    let contract =
+          swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (Slot 100) $
+          swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (Slot 200) Close
+
+    w1Hdl <- activateContractWallet w1 marlowePlutusContract
+    w2Hdl <- activateContractWallet w2 marlowePlutusContract
+
+    callEndpoint @"create" w1Hdl (reqId, AssocMap.empty, contract)
+    void $ waitNSlots 2
+
+    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w1Pk ada 10_000_000])
+    void $ waitNSlots 2
+
+    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w2Pk w2Pk tok 30])
+    void $ waitNSlots 100
+
+    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w2Pk w2Pk ada 10_000_000])
+    void $ waitNSlots 2
+
+    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w1Pk tok 30])
     void $ waitNSlots 2
 
     callEndpoint @"close" w1Hdl reqId
