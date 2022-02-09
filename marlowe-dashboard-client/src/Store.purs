@@ -1,43 +1,32 @@
-module Store
-  ( Action(..)
-  , Store
-  , mkStore
-  , reduce
-  ) where
+module Store where
 
 import Prologue
 
 import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
-import Data.Lens (_Just, (.~))
+import Data.Lens (Lens')
+import Data.Lens.Record (prop)
 import Data.Map (Map)
-import Data.PABConnectedWallet
-  ( PABConnectedWallet
-  , _assets
-  , _companionAppId
-  , _marloweAppId
-  , _syncStatus
-  )
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
-import Data.Wallet (SyncStatus)
 import Marlowe.Client (ContractHistory)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
-import MarloweContract (MarloweContract(..))
+import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
   , emptyContractStore
   )
+import Store.Wallet (WalletAction, WalletStore)
+import Store.Wallet as Wallet
 import Toast.Types (ToastMessage)
+import Type.Proxy (Proxy(..))
 
 type Store =
-  { -- # Wallet
-    addressBook :: AddressBook
-  , wallet :: Maybe PABConnectedWallet
+  { addressBook :: AddressBook
+  , wallet :: WalletStore
   -- # Contracts
   , contracts :: ContractStore
   -- # Backend Notifications
@@ -54,11 +43,14 @@ type Store =
   , toast :: Maybe ToastMessage
   }
 
+_wallet :: forall r a. Lens' { wallet :: a | r } a
+_wallet = prop (Proxy :: _ "wallet")
+
 mkStore :: AddressBook -> Store
 mkStore addressBook =
   { -- # Wallet
     addressBook
-  , wallet: Nothing
+  , wallet: Wallet.Disconnected
   -- # Contracts
   , contracts: emptyContractStore
   -- # Backend Notifications
@@ -79,11 +71,7 @@ data Action
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
-  | ActivateWallet PABConnectedWallet
-  | ChangePlutusScript MarloweContract PlutusAppId
-  | UpdateAssets Assets
-  | UpdateWalletSyncStatus SyncStatus
-  | DeactivateWallet
+  | Wallet WalletAction
   -- System wide components
   | ShowToast ToastMessage
   | ClearToast
@@ -109,17 +97,7 @@ reduce store = case _ of
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
   -- Wallet
-  ActivateWallet wallet -> store { wallet = Just wallet }
-  ChangePlutusScript MarloweApp plutusAppId ->
-    store { wallet = store.wallet # _Just <<< _marloweAppId .~ plutusAppId }
-  ChangePlutusScript WalletCompanion plutusAppId ->
-    store { wallet = store.wallet # _Just <<< _companionAppId .~ plutusAppId }
-  ChangePlutusScript MarloweFollower _ -> store
-  UpdateAssets assets ->
-    store { wallet = store.wallet # _Just <<< _assets .~ assets }
-  UpdateWalletSyncStatus sync ->
-    store { wallet = store.wallet # _Just <<< _syncStatus .~ sync }
-  DeactivateWallet -> store { wallet = Nothing }
+  Wallet action -> store { wallet = Wallet.reduce store.wallet action }
   -- Toast
   ShowToast msg -> store { toast = Just msg }
   ClearToast -> store { toast = Nothing }

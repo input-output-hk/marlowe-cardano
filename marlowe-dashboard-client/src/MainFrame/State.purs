@@ -33,43 +33,30 @@ import Clipboard (class MonadClipboard)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
+import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.State (modify_)
 import Data.AddressBook as AB
+import Data.AddressBook as AddressBook
 import Data.Argonaut (decodeJson, stringify)
 import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
 import Data.Either (hush)
-import Data.Filterable (filter)
 import Data.Foldable (for_, traverse_)
-import Data.Lens
-  ( _1
-  , _2
-  , _Just
-  , assign
-  , lens
-  , preview
-  , set
-  , use
-  , view
-  , (^.)
-  , (^?)
-  )
+import Data.Lens (assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
-import Data.Map (keys)
+import Data.Map (Map, keys)
 import Data.Maybe (fromMaybe, maybe)
-import Data.PABConnectedWallet (connectWallet)
+import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.Wallet (SyncStatus(..))
+import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
-import Effect.Aff (delay, error, killFiber, launchAff, launchAff_)
+import Effect.Aff (delay)
 import Effect.Aff.Class (class MonadAff)
-import Effect.Class (liftEffect)
 import Env (Env, _pollingInterval)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
@@ -78,12 +65,12 @@ import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
-import Halogen.Subscription as HS
 import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import MainFrame.Lenses
   ( _addressBook
   , _currentSlot
   , _dashboardState
+  , _store
   , _subState
   , _tzOffset
   , _webSocketStatus
@@ -103,6 +90,7 @@ import MainFrame.View (render)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract(..))
+import Page.Contract.Types as Contract
 import Page.Dashboard.Lenses (_contracts)
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.State (updateTotalFunds)
@@ -114,7 +102,11 @@ import Plutus.PAB.Webserver.Types
   , ContractInstanceClientState
   , InstanceStatusToClient(..)
   )
+import Store (_wallet)
 import Store as Store
+import Store.Wallet (WalletStore(..), _Connected, _connectedWallet)
+import Store.Wallet as Wallet
+import Store.Wallet as WalletStore
 import Toast.Types
   ( ajaxErrorToast
   , decodingErrorToast
@@ -167,17 +159,16 @@ emptyState =
   , webSocketStatus: WebSocketClosed Nothing
   , currentSlot: zero -- this will be updated as soon as the websocket connection is working
   , subState: Left Welcome.initialState
-  , pollingSubscription: Nothing
+  , store: { addressBook: AddressBook.empty, wallet: Disconnected }
   }
 
 deriveState :: State -> Connected Slice Input -> State
 deriveState state { context, input } = state
-  { addressBook = context.addressBook
-  , subState = case context.wallet, state.subState of
-      Just wallet, Right (Tuple _ ds) -> Right (Tuple wallet ds)
-      Nothing, _ -> Left Welcome.initialState
-      _, Left ws -> Left ws
+  { subState = case state.subState of
+      Right ds -> Right ds
+      Left ws -> Left ws
   , tzOffset = input.tzOffset
+  , store = { addressBook: context.addressBook, wallet: context.wallet }
   }
 
 handleQuery
@@ -198,10 +189,10 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       assign _webSocketStatus WebSocketOpen
       -- potentially renew websocket subscriptions
       mDashboardState <- peruse _dashboardState
-      for_ mDashboardState \(Tuple walletDetails dashboardState) -> do
+      mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
+      let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
+      for_ walletIdXDashboardState \(Tuple walletId dashboardState) -> do
         let
-          walletId = view Connected._walletId walletDetails
-
           followAppIds :: Array PlutusAppId
           followAppIds =
             Set.toUnfoldable $ keys $ view _contracts dashboardState
@@ -240,10 +231,11 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
             -- does not seem very likely. Still, it might be worth considering guarding against this
             -- possibility by e.g. keeping a list/array of updates and having a subscription that
             -- handles them synchronously in the order in which they arrive.
-            mDashboardState <- peruse _dashboardState
+            mWallet <-
+              peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
             -- these updates should only ever be coming when we are in the Dashboard state (and if
             -- we're not, we don't care about them _)
-            for_ mDashboardState \(Tuple wallet _) ->
+            for_ mWallet \wallet ->
               let
                 walletCompanionAppId = view Connected._companionAppId wallet
                 marloweAppId = view Connected._marloweAppId wallet
@@ -340,20 +332,22 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       handleAction $ DashboardAction $ Dashboard.RedeemPayments
                         plutusAppId
           NewActiveEndpoints activeEndpoints -> do
-            mDashboardState <- peruse _dashboardState
+            mWallet <-
+              peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
             -- these updates should only ever be coming when we are in the Dashboard state (and if
             -- we're not, we don't care about them anyway)
-            for_ mDashboardState \(Tuple walletDetails _) -> do
+            for_ mWallet \wallet -> do
               let
-                marloweAppId = view Connected._marloweAppId walletDetails
+                marloweAppId = view Connected._marloweAppId wallet
               when (plutusAppId == marloweAppId) $
                 MarloweApp.onNewActiveEndpoints activeEndpoints
           -- If one of the control apps closes unexpectedly we re-activate them
           ContractFinished mVal -> do
-            mDashboardState <- peruse _dashboardState
+            mWallet <-
+              peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
             -- these updates should only ever be coming when we are in the Dashboard state (and if
             -- we're not, we don't care about them _)
-            for_ mDashboardState \(Tuple walletDetails _) ->
+            for_ mWallet \walletDetails ->
               let
                 walletId = view Connected._walletId walletDetails
                 walletCompanionAppId = view Connected._companionAppId
@@ -366,7 +360,9 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                     <> maybe "" stringify mVal
                   mNewAppId <- PAB.activateContract contractType walletId
                   for_ mNewAppId
-                    (updateStore <<< Store.ChangePlutusScript contractType)
+                    ( updateStore <<< Store.Wallet <<<
+                        Wallet.OnPlutusScriptChanged contractType
+                    )
               in
                 if (plutusAppId == walletCompanionAppId) then
                   reActivatePlutusScript WalletCompanion
@@ -408,18 +404,21 @@ handleAction Init = do
   if we have some wallet details in the local storage, we try to enter the dashboard
   state with it.
   -}
-  Logger.error "TEST"
   mWalletDetails <- getWallet
-  traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
   traverse_
-    (handleAction <<< OnPoll OutOfSync <<< view Disconnected._walletId)
+    (updateStore <<< Store.Wallet <<< WalletStore.OnConnect)
+    mWalletDetails
+  traverse_
+    ( \w -> handleAction $ OnPoll
+        (view Disconnected._syncStatus w)
+        (view Disconnected._walletId w)
+    )
     mWalletDetails
   pure unit
 
 handleAction (Receive input) = do
-  oldWallet <- peruse $ _dashboardState <<< _1
-  let newWallet = input.context.wallet
-  modify_ $ flip deriveState input
+  oldStore <- use _store
+  { store } <- H.modify $ flip deriveState input
   -- Persist the wallet details so that when we Init, we can try to recover it
   updateWallet
     $ map
@@ -428,17 +427,29 @@ handleAction (Receive input) = do
               /\ (wallet ^. Connected._walletId)
               /\ (wallet ^. Connected._pubKeyHash)
         )
-        newWallet
-  let oldWalletId = oldWallet ^? _Just <<< Connected._walletId
-  let newWalletId = newWallet ^? _Just <<< Connected._walletId
-  let
-    currentSyncStatus =
-      fromMaybe OutOfSync $ oldWallet ^? _Just <<< Connected._syncStatus
-  traverse_ (handleAction <<< OnPoll currentSyncStatus)
-    $ filter (notEq oldWalletId <<< Just)
-    $ newWalletId
+    $ store ^? _wallet <<< _connectedWallet
+  -- React to changes in the wallet store
+  case oldStore.wallet, store.wallet of
+    Disconnected, Connecting details -> enterDashboardState details
+    Connecting _, Connected connectedWallet -> do
+      -- We now have all the running contracts for this wallet, but if new role tokens have been
+      -- given to the wallet since we last connected it, we'll need to create some more. Since
+      -- we've just subscribed to this wallet's WalletCompanion app, however, the creation of new
+      -- MarloweFollower apps will be triggered by the initial WebSocket status notification.
+      currentSlot <- use _currentSlot
+      contractNicknames <- getContractNicknames
+      assign _subState $ Right $ Dashboard.mkInitialState
+        connectedWallet
+        contractNicknames
+        currentSlot
+      handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
+    Connected _, Disconnecting connectedWallet contracts ->
+      enterWelcomeState connectedWallet contracts
+    Disconnecting _ _, Disconnected ->
+      assign _subState $ Left Welcome.initialState
+    _, _ -> pure unit
 
-handleAction (OnPoll lastSyncStatus walletId) =
+handleAction (OnPoll lastSyncStatus walletId) = do
   updateTotalFunds walletId >>= traverse_ \syncStatus -> do
     case lastSyncStatus, syncStatus of
       Synchronizing _, Synchronized -> addToast $ successToast
@@ -446,25 +457,42 @@ handleAction (OnPoll lastSyncStatus walletId) =
       OutOfSync, Synchronizing _ -> addToast $ infoToast
         "Wallet backend synchronizing..."
       _, _ -> pure unit
-    currentSubscription <- H.gets _.pollingSubscription
-    traverse_ H.unsubscribe currentSubscription
+    updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
     pollingInterval <- case syncStatus of
       -- We poll more frequently when the wallet backend is synchronizing so we
       -- get more rapid feedback.
       Synchronizing _ -> pure $ Milliseconds 500.0
       _ -> asks $ view _pollingInterval
-    newSubscription <- H.subscribe $ HS.makeEmitter \push -> do
-      fibre <- launchAff do
-        delay pollingInterval
-        liftEffect $ push $ OnPoll syncStatus walletId
-      pure $ launchAff_ $ killFiber (error "Unsubscribing") fibre
-    H.modify_ _ { pollingSubscription = Just newSubscription }
+    H.liftAff $ delay pollingInterval
+    newWalletId <-
+      peruse $ _store <<< _wallet <<< _Connected <<< Connected._walletId
+    when (Just walletId == newWalletId) do
+      void $ H.subscribe $ pure $ OnPoll syncStatus walletId
+
+handleAction (WelcomeAction wa) = do
+  mWelcomeState <- peruse _welcomeState
+  for_ mWelcomeState \ws -> toWelcome ws $ Welcome.handleAction wa
+
+handleAction (DashboardAction da) = void $ runMaybeT $ do
+  currentSlot <- H.lift $ use _currentSlot
+  tzOffset <- H.lift $ use _tzOffset
+  addressBook <- H.lift $ use _addressBook
+  dashboardState <- MaybeT $ peruse _dashboardState
+  wallet <- MaybeT $ peruse $ _store <<< _wallet <<< _connectedWallet
+  H.lift $ toDashboard dashboardState
+    $ Dashboard.handleAction { addressBook, currentSlot, tzOffset, wallet } da
 
 {- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
 need to unsubscribe from all the apps related to the wallet that was previously connected.
 -}
-handleAction (EnterWelcomeState walletDetails followerApps) = do
+enterWelcomeState
+  :: forall m
+   . ManageMarlowe m
+  => PABConnectedWallet
+  -> Map PlutusAppId Contract.State
+  -> HalogenM State Action ChildSlots Msg m Unit
+enterWelcomeState walletDetails followerApps = do
   let
     followerAppIds :: Array PlutusAppId
     followerAppIds = Set.toUnfoldable $ keys followerApps
@@ -472,8 +500,7 @@ handleAction (EnterWelcomeState walletDetails followerApps) = do
   unsubscribeFromPlutusApp $ view Connected._companionAppId walletDetails
   unsubscribeFromPlutusApp $ view Connected._marloweAppId walletDetails
   for_ followerAppIds unsubscribeFromPlutusApp
-  assign _subState $ Left Welcome.initialState
-  updateStore Store.DeactivateWallet
+  updateStore $ Store.Wallet $ WalletStore.OnDisconnected
 
 {- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
@@ -485,11 +512,18 @@ finished loading them yet) is a bit convoluted - follow the trail of workflow co
 it works.
 -}
 -- FIXME-3208: Change comments
-handleAction (EnterDashboardState disconnectedWallet) = do
+enterDashboardState
+  :: forall m
+   . ManagePAB m
+  => MonadLogger String m
+  => ManageMarlowe m
+  => Toast m
+  => WalletDetails
+  -> HalogenM State Action ChildSlots Msg m Unit
+enterDashboardState disconnectedWallet = do
   let
     walletId = view Disconnected._walletId disconnectedWallet
   ajaxPlutusApps <- PAB.getWalletContractInstances walletId
-
   -- TODO: Refactor with runExceptT
   case ajaxPlutusApps of
     Left ajaxError -> addToast $ ajaxErrorToast
@@ -526,34 +560,7 @@ handleAction (EnterDashboardState disconnectedWallet) = do
             subscribeToPlutusApp followerAppId
             updateStore $ Store.AddFollowerContract currentSlot followerAppId
               contractHistory
-          -- We now have all the running contracts for this wallet, but if new role tokens have been
-          -- given to the wallet since we last connected it, we'll need to create some more. Since
-          -- we've just subscribed to this wallet's WalletCompanion app, however, the creation of new
-          -- MarloweFollower apps will be triggered by the initial WebSocket status notification.
-          contractNicknames <- getContractNicknames
-          assign _subState
-            $ Right
-            $ Tuple connectedWallet
-            $ Dashboard.mkInitialState
-                connectedWallet
-                contractNicknames
-                currentSlot
-          updateStore $ Store.ActivateWallet connectedWallet
-
-handleAction (WelcomeAction wa) = do
-  mWelcomeState <- peruse _welcomeState
-  for_ mWelcomeState \ws -> toWelcome ws $ Welcome.handleAction wa
-
-handleAction (DashboardAction da) = do
-  currentSlot <- use _currentSlot
-  tzOffset <- use _tzOffset
-  addressBook <- use _addressBook
-  mDashboardState <- peruse _dashboardState
-  for_ mDashboardState \(Tuple wallet ds) ->
-    toDashboard ds
-      $ Dashboard.handleAction
-          { addressBook, currentSlot, tzOffset, wallet }
-          da
+          updateStore $ Store.Wallet $ Wallet.OnConnected connectedWallet
 
 ------------------------------------------------------------
 filterFollowerApps
@@ -633,5 +640,5 @@ toDashboard
   -> HalogenM State Action slots msg m Unit
 toDashboard s = mapAction DashboardAction <<< imapState (lens getter setter)
   where
-  getter = fromMaybe s <<< preview (_dashboardState <<< _2)
-  setter = flip $ set (_dashboardState <<< _2)
+  getter = fromMaybe s <<< preview _dashboardState
+  setter = flip $ set _dashboardState

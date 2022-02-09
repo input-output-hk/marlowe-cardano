@@ -56,6 +56,8 @@ data PastAction
   = InputAction
   | TimeoutAction TimeoutInfo
 
+derive instance Eq PastAction
+
 type PastState =
   { balancesAtStart :: Accounts
   , action :: PastAction

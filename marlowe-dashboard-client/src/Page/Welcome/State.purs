@@ -5,7 +5,6 @@ module Page.Welcome.State
 
 import Prologue
 
-import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
@@ -22,13 +21,15 @@ import Data.Wallet (_pubKeyHash, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
-import MainFrame.Types (Action(..)) as MainFrame
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
 import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.Lenses (_enteringDashboardState)
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
+import Store as Store
+import Store.Wallet as WalletStore
 
 initialState :: State
 initialState =
@@ -43,7 +44,7 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => MainFrameLoop m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
@@ -90,7 +91,7 @@ handleAction (ConnectWallet walletDetails) = do
 
   modifyAddressBook_
     (AddressBook.insert walletNickname $ A.fromPubKeyHash pubKeyHash)
-  callMainFrameAction $ MainFrame.EnterDashboardState walletDetails
+  updateStore $ Store.Wallet $ WalletStore.OnConnect walletDetails
 
 handleAction (OnRestoreWalletMsg msg) = case msg of
   RestoreWallet.CancelClicked -> handleAction CloseCard

@@ -7,7 +7,7 @@ module Page.Dashboard.State
 import Prologue
 
 import Bridge (toFront)
-import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
+import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
   , createContract
@@ -73,7 +73,6 @@ import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (imapState, mapSubmodule)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
-import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (_chHistory, _chParams)
 import Marlowe.Execution.State (getAllPayments)
@@ -114,6 +113,8 @@ import Page.Dashboard.Types
   )
 import Store as Store
 import Store.Contracts (followerContractExists)
+import Store.Wallet as Wallet
+import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 {- [Workflow 2][4] Connect a wallet
@@ -153,9 +154,9 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => MainFrameLoop m
   => ManageMarloweStorage m
   => ManageMarlowe m
+  => MainFrameLoop m
   => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
@@ -165,7 +166,7 @@ handleAction
 {- [UC-WALLET-3][0] Disconnect a wallet -}
 handleAction { wallet } DisconnectWallet = do
   contracts <- use _contracts
-  callMainFrameAction $ MainFrame.EnterWelcomeState wallet contracts
+  updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet contracts
 
 handleAction _ (ContactsAction contactsAction) =
   case contactsAction of
@@ -520,9 +521,9 @@ updateTotalFunds
 updateTotalFunds walletId = do
   response <- getWalletTotalFunds walletId
   hush <$> for response \(GetTotalFundsResponse { assets, sync }) -> do
-    updateStore $ Store.UpdateAssets $ toFront assets
+    updateStore $ Store.Wallet $ Wallet.OnAssetsChanged $ toFront assets
     let syncStatus = syncStatusFromNumber sync
-    updateStore $ Store.UpdateWalletSyncStatus syncStatus
+    updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
     pure syncStatus
 
 toContacts

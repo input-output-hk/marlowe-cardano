@@ -41,6 +41,8 @@ data State
   = Starting StartingState
   | Started StartedState
 
+derive instance Eq State
+
 type StartingState =
   { nickname :: ContractNickname
   , metadata :: MetaData
@@ -93,6 +95,8 @@ type TimeoutInfo =
 data PreviousStepState
   = TransactionStep TransactionInput
   | TimeoutStep TimeoutInfo
+
+derive instance Eq PreviousStepState
 
 data Tab
   = Tasks
