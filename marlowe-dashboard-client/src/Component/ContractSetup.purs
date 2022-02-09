@@ -31,7 +31,8 @@ import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Lens (over, set)
+import Data.Lens (Setter', set)
+import Data.Lens.At (class At, at)
 import Data.Lens.Record (prop)
 import Data.List as List
 import Data.Map (Map)
@@ -65,10 +66,7 @@ import Web.Event.Event (Event, preventDefault)
 data Action
   = OnInit
   | OnReceive (Connected AddressBook Input)
-  | OnNicknameMsg (Input.Msg Action ContractNickname)
-  | OnRoleMsg TokenName (Autocomplete.Msg Address)
-  | OnTimeoutMsg TokenName (Input.Msg Action ContractTimeout)
-  | OnValueMsg TokenName (Input.Msg Action ContractValue)
+  | OnUpdate (ContractFields -> ContractFields)
   | OnFormSubmit Event
   | OnBack
   | OnReview ContractParams
@@ -140,6 +138,30 @@ initialState
   mkRoleField name _ = fromMaybe FS.Blank $ Map.lookup name fields.roles
   mkTimeoutField _ value = FS.Complete value
   mkValueField name _ = fromMaybe FS.Blank $ Map.lookup name fields.values
+
+adaptInput
+  :: forall a
+   . Setter' ContractFields (FieldState a)
+  -> Input.Msg Action a
+  -> Action
+adaptInput optic = case _ of
+  Input.Updated field -> OnUpdate $ set optic field
+  Input.Blurred -> OnUpdate identity
+  Input.Focused -> OnUpdate identity
+  Input.Emit a -> a
+
+adaptIndexedInput
+  :: forall m index a
+   . At m index (FieldState a)
+  => Setter' ContractFields m
+  -> index
+  -> Input.Msg Action a
+  -> Action
+adaptIndexedInput optic index = case _ of
+  Input.Updated field -> OnUpdate $ set (optic <<< at index) $ Just field
+  Input.Blurred -> OnUpdate identity
+  Input.Focused -> OnUpdate identity
+  Input.Emit a -> a
 
 render
   :: forall m
@@ -215,7 +237,7 @@ render state = do
 nicknameInput
   :: forall m. MonadEffect m => FieldState ContractNickname -> ComponentHTML m
 nicknameInput fieldState =
-  HH.slot _nickname unit Input.component input OnNicknameMsg
+  HH.slot _nickname unit Input.component input $ adaptInput $ prop _nickname
   where
   id = "contract-nickname"
   label = "Contract title"
@@ -237,7 +259,9 @@ roleInput
   -> FieldState Address
   -> ComponentHTML m
 roleInput state name fieldState =
-  HH.slot _roles name Autocomplete.component input $ OnRoleMsg name
+  HH.slot _roles name Autocomplete.component input case _ of
+    Autocomplete.Updated field ->
+      OnUpdate $ set (prop _roles <<< at name) $ Just field
   where
   { addressBook } = state
   input =
@@ -254,7 +278,8 @@ timeoutInput
   -> FieldState ContractTimeout
   -> ComponentHTML m
 timeoutInput name fieldState =
-  HH.slot _timeouts name Input.component input $ OnTimeoutMsg name
+  HH.slot _timeouts name Input.component input
+    $ adaptIndexedInput (prop _timeouts) name
   where
   id = "timeout-" <> name
   input =
@@ -282,7 +307,8 @@ valueInput
   -> FieldState ContractValue
   -> ComponentHTML m
 valueInput state name fieldState =
-  HH.slot _values name Input.component input $ OnValueMsg name
+  HH.slot _values name Input.component input
+    $ adaptIndexedInput (prop _values) name
   where
   { templateValues } = state
   format = fromMaybe DefaultFormat $ Map.lookup name templateValues
@@ -323,24 +349,6 @@ templateInputsSection icon' heading children =
         ]
     ] <> children
 
-handleFieldMsg
-  :: forall a m
-   . MonadEffect m
-  => Eq a
-  => (FieldState a -> ContractFields -> ContractFields)
-  -> Input.Msg Action a
-  -> DSL m Unit
-handleFieldMsg set = case _ of
-  Input.Updated field -> do
-    { fields } <- H.get
-    { fields: newFields } <- H.modify _ { fields = set field fields }
-    H.modify_ _ { result = project newFields }
-    when (fields /= newFields) do
-      H.raise $ FieldsUpdated newFields
-  Input.Blurred -> pure unit
-  Input.Focused -> pure unit
-  Input.Emit action -> handleAction action
-
 handleAction :: forall m. MonadEffect m => Action -> DSL m Unit
 handleAction = case _ of
   OnInit -> do
@@ -349,16 +357,15 @@ handleAction = case _ of
     oldState <- H.get
     let newState = initialState input
     when (oldState /= newState) $ H.put newState
-  OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
-  OnRoleMsg name (Autocomplete.Updated field) -> handleFieldMsg
-    (over (prop _roles) <<< Map.insert name)
-    (Input.Updated field)
-  OnTimeoutMsg name msg -> handleFieldMsg
-    (over (prop _timeouts) <<< Map.insert name)
-    msg
-  OnValueMsg name msg -> handleFieldMsg
-    (over (prop _values) <<< Map.insert name)
-    msg
+  OnUpdate update -> do
+    old <- H.get
+    new <- H.modify \s ->
+      let
+        newFields = update s.fields
+      in
+        s { fields = newFields, result = project newFields }
+    when (old.fields /= new.fields) do
+      H.raise $ FieldsUpdated new.fields
   OnFormSubmit event -> H.liftEffect $ preventDefault event
   OnBack -> H.raise BackClicked
   OnReview params -> H.raise $ ReviewClicked params

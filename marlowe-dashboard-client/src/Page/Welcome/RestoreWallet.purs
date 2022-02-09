@@ -7,7 +7,7 @@ import Capability.Marlowe (class ManageMarlowe, restoreWallet)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
-import Data.Lens (is, set, (^?))
+import Data.Lens (Setter', is, set, (^?))
 import Data.Lens.Record (prop)
 import Data.Maybe (fromMaybe)
 import Data.MnemonicPhrase (MnemonicPhrase)
@@ -45,8 +45,7 @@ import Web.Event.Event (Event, preventDefault)
 data Action
   = OnInit
   | OnReceive (Connected AddressBook Input)
-  | OnNicknameMsg (Input.Msg Action WalletNickname)
-  | OnMnemonicMsg (Input.Msg Action MnemonicPhrase)
+  | OnUpdate (RestoreWalletFields -> RestoreWalletFields)
   | OnFormSubmit Event
   | OnCancel
   | OnRestore RestoreWalletParams
@@ -95,21 +94,16 @@ initialState { context } =
   , walletDetails: NotAsked
   }
 
-handleFieldMsg
-  :: forall a m
-   . MonadEffect m
-  => ManageMarlowe m
-  => Eq a
-  => (FieldState a -> RestoreWalletFields -> RestoreWalletFields)
+adaptInput
+  :: forall a
+   . Setter' RestoreWalletFields (FieldState a)
   -> Input.Msg Action a
-  -> DSL m Unit
-handleFieldMsg set = case _ of
-  Input.Updated field -> do
-    { fields: newFields } <- H.modify \s -> s { fields = set field s.fields }
-    H.modify_ _ { result = project newFields }
-  Input.Blurred -> pure unit
-  Input.Focused -> pure unit
-  Input.Emit action -> handleAction action
+  -> Action
+adaptInput optic = case _ of
+  Input.Updated field -> OnUpdate $ set optic field
+  Input.Blurred -> OnUpdate identity
+  Input.Focused -> OnUpdate identity
+  Input.Emit a -> a
 
 handleAction
   :: forall m. MonadEffect m => ManageMarlowe m => Action -> DSL m Unit
@@ -117,8 +111,9 @@ handleAction = case _ of
   OnInit -> do
     H.tell _nickname unit $ Input.Focus
   OnReceive input -> H.modify_ _ { addressBook = input.context }
-  OnNicknameMsg msg -> handleFieldMsg (set (prop _nickname)) msg
-  OnMnemonicMsg msg -> handleFieldMsg (set (prop _mnemonic)) msg
+  OnUpdate update -> do
+    { fields: newFields } <- H.modify \s -> s { fields = update s.fields }
+    H.modify_ _ { result = project newFields }
   OnFormSubmit event -> H.liftEffect $ preventDefault event
   OnCancel -> H.raise CancelClicked
   OnRestore { nickname, mnemonic } -> do
@@ -191,7 +186,8 @@ nicknameInput addressBook fieldState =
     unit
     Input.component
     (mkNicknameInput addressBook fieldState)
-    OnNicknameMsg
+    $ adaptInput
+    $ prop _nickname
 
 mnemonicInput
   :: forall m. MonadEffect m => FieldState MnemonicPhrase -> ComponentHTML m
@@ -201,4 +197,5 @@ mnemonicInput fieldState =
     unit
     Input.component
     (mkMnemonicInput fieldState)
-    OnMnemonicMsg
+    $ adaptInput
+    $ prop _mnemonic

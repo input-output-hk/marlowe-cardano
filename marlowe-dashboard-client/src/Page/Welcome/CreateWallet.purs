@@ -25,14 +25,7 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Network.RemoteData (RemoteData(..), _Failure, _Loading)
-import Page.Welcome.CreateWallet.Types
-  ( Component
-  , CreateWalletFields
-  , CreateWalletParams
-  , Input
-  , Msg(..)
-  , _nickname
-  )
+import Page.Welcome.CreateWallet.Types (Component, Input, Msg(..), _nickname)
 import Page.Welcome.Forms.Render (mkNicknameInput, renderForm)
 import Store as Store
 import Type.Proxy (Proxy(..))
@@ -48,8 +41,7 @@ data Action
 
 type State =
   { addressBook :: AddressBook
-  , fields :: CreateWalletFields
-  , result :: Maybe CreateWalletParams
+  , fieldState :: FieldState WalletNickname
   , newWalletDetails :: RemoteData String NewWalletDetails
   }
 
@@ -84,8 +76,7 @@ component = connect (selectEq _.addressBook) $ H.mkComponent
 initialState :: Connected AddressBook Input -> State
 initialState { context } =
   { addressBook: context
-  , fields: { nickname: HF.Blank }
-  , result: Nothing
+  , fieldState: HF.Blank
   , newWalletDetails: NotAsked
   }
 
@@ -96,10 +87,7 @@ handleAction = case _ of
     H.tell _nickname unit $ Input.Focus
   OnReceive input -> H.modify_ _ { addressBook = input.context }
   OnNicknameMsg msg -> case msg of
-    Input.Updated field -> do
-      { fields: newFields } <- H.modify \s -> s
-        { fields = s.fields { nickname = field } }
-      H.modify_ _ { result = project newFields }
+    Input.Updated fieldState -> H.modify_ _ { fieldState = fieldState }
     Input.Blurred -> pure unit
     Input.Focused -> pure unit
     Input.Emit action -> handleAction action
@@ -135,8 +123,7 @@ render
 render state = do
   let
     { addressBook
-    , result
-    , fields
+    , fieldState
     , newWalletDetails
     } = state
   let serverError = fromMaybe "" $ newWalletDetails ^? _Failure
@@ -147,7 +134,7 @@ render state = do
             [ HE.onSubmit OnFormSubmit
             , classNames [ "relative", "space-y-4" ]
             ]
-            [ nicknameInput addressBook fields.nickname
+            [ nicknameInput addressBook fieldState
             ]
         -- TODO replace with progress buttons when refactored.
         , HH.p [ classNames Css.inputError ] [ HH.text serverError ]
@@ -159,7 +146,7 @@ render state = do
         }
     , onSkip: Nothing
     , onSubmit:
-        { action: OnCreate <<< _.nickname <$> result
+        { action: OnCreate <$> project fieldState
         , label: "Create wallet"
         }
     , title: "Create testnet wallet"

@@ -19,8 +19,6 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Page.Welcome.ConfirmMnemonic.Types
   ( Component
-  , ConfirmMnemonicFields
-  , ConfirmMnemonicParams
   , Input
   , Msg(..)
   , _mnemonic
@@ -38,8 +36,7 @@ data Action
   | OnCreate NewWalletDetails
 
 type State =
-  { fields :: ConfirmMnemonicFields
-  , result :: Maybe ConfirmMnemonicParams
+  { fieldState :: FieldState MnemonicPhrase
   , newWalletDetails :: NewWalletDetails
   }
 
@@ -72,8 +69,7 @@ component = H.mkComponent
 
 initialState :: Input -> State
 initialState { newWalletDetails } =
-  { fields: { mnemonic: HF.Blank }
-  , result: Nothing
+  { fieldState: HF.Blank
   , newWalletDetails
   }
 
@@ -87,10 +83,7 @@ handleAction = case _ of
     let newState = initialState input
     when (oldState /= newState) $ H.put newState
   OnMnemonicMsg msg -> case msg of
-    Input.Updated field -> do
-      { fields: newFields } <- H.modify \s -> s
-        { fields = s.fields { mnemonic = field } }
-      H.modify_ _ { result = project newFields }
+    Input.Updated fieldState -> H.modify_ _ { fieldState = fieldState }
     Input.Blurred -> pure unit
     Input.Focused -> pure unit
     Input.Emit action -> handleAction action
@@ -103,14 +96,14 @@ render
    . MonadEffect m
   => State
   -> ComponentHTML m
-render { result, fields, newWalletDetails } = do
+render { fieldState, newWalletDetails } = do
   renderForm
     { body:
         [ HH.form
             [ HE.onSubmit OnFormSubmit
             , classNames [ "relative", "space-y-4" ]
             ]
-            [ mnemonicInput newWalletDetails.mnemonic fields.mnemonic
+            [ mnemonicInput newWalletDetails.mnemonic fieldState
             ]
         , HH.p
             [ classNames [ "pb-4" ] ]
@@ -125,7 +118,7 @@ render { result, fields, newWalletDetails } = do
         }
     , onSkip: Nothing
     , onSubmit:
-        { action: OnCreate newWalletDetails <$ result
+        { action: OnCreate newWalletDetails <$ project fieldState
         , label: "Ok"
         }
     , title: "Confirm mnemonic"

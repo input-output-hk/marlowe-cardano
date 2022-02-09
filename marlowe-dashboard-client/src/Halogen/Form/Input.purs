@@ -52,6 +52,8 @@ data Msg pa output
   | Focused
   | Emit pa
 
+derive instance Functor (Msg pa)
+
 data Action pa error output slots m
   = OnUpdate String
   | OnEmit pa
