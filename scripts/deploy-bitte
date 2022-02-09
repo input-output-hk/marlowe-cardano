@@ -26,6 +26,7 @@ fi
 declare -A ref_env_mapping=(
     [production]=production
     [main]=staging
+    [sprint-*]=currentSprintMarlowe
     [deploy-hernan]=hernan
     [deploy-pablo]=pablo
     [shlevy]=shlevy
