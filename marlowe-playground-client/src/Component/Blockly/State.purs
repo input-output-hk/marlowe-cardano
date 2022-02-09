@@ -1,19 +1,20 @@
 module Component.Blockly.State (blocklyComponent) where
 
 import Prologue hiding (div)
+
 import Blockly.Dom (explainError, getDom)
-import Blockly.Events (fromEvent, newParentId, oldParentId, newElementId)
+import Blockly.Events (fromEvent, newElementId, newParentId, oldParentId)
 import Blockly.Internal
   ( BlockDefinition
   , ElementId(..)
+  , addChangeListener
   , centerOnBlock
   , getBlockById
   , getBlockType
   , newBlock
+  , removeChangeListener
   , select
   , updateToolbox
-  , addChangeListener
-  , removeChangeListener
   )
 import Blockly.Internal as Blockly
 import Blockly.Toolbox (Toolbox)
@@ -67,7 +68,7 @@ import Halogen as H
 import Halogen.ElementResize (elementResize)
 import Halogen.Subscription as HS
 import Marlowe.Blockly (buildBlocks)
-import Marlowe.Holes (Term(..), Location(..))
+import Marlowe.Holes (Location(..), Term(..))
 import Marlowe.Linter (_location)
 import Marlowe.Parser as Parser
 import Text.Extra as Text

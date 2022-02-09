@@ -1,6 +1,7 @@
 module Marlowe.Holes.TemplateTest where
 
 import Prologue
+
 import Data.Map as Map
 import Data.Maybe (isNothing)
 import Data.Set as Set
@@ -8,7 +9,7 @@ import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Gen (genBigInt, genContract, GenerationOptions(..))
+import Marlowe.Gen (GenerationOptions(..), genBigInt, genContract)
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (fromTerm)
 import Marlowe.Semantics as S

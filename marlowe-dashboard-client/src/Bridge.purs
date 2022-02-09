@@ -7,26 +7,19 @@ module Bridge
 
 import Prologue
 
-import Cardano.Wallet.Mock.Types (WalletInfo(..)) as Back
-import Component.Contacts.Types (WalletId(..), WalletInfo(..)) as Front
-import Data.Address (Address)
-import Data.Address as A
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
-import Data.Either (fromRight)
 import Data.Lens (Iso', iso)
 import Data.Map (Map, fromFoldable, toUnfoldable) as Front
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Ledger.Address (PaymentPubKeyHash(..)) as Back
 import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Semantics (Assets(..), Slot(..)) as Front
 import Network.RemoteData (RemoteData)
-import Plutus.V1.Ledger.Crypto (PubKey(..), PubKeyHash(..)) as Back
+import Plutus.V1.Ledger.Crypto (PubKey(..)) as Back
 import Plutus.V1.Ledger.Slot (Slot(..)) as Back
 import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value(..)) as Back
 import PlutusTx.AssocMap (Map(..)) as Back
-import Wallet.Emulator.Wallet (Wallet(..)) as Back
 import Wallet.Types (ContractInstanceId(..))
 
 {-
@@ -126,29 +119,6 @@ instance tokenNameBridge :: Bridge Back.TokenName String where
 instance currencySymbolBridge :: Bridge Back.CurrencySymbol String where
   toFront (Back.CurrencySymbol { unCurrencySymbol }) = unCurrencySymbol
   toBack unCurrencySymbol = Back.CurrencySymbol { unCurrencySymbol }
-
--- FIXME: @bwbush, Is this correct?
-instance walletInfoBridge :: Bridge Back.WalletInfo Front.WalletInfo where
-  toFront (Back.WalletInfo { wiWallet, wiPaymentPubKeyHash }) =
-    let
-      Back.PaymentPubKeyHash { unPaymentPubKeyHash } = wiPaymentPubKeyHash
-    in
-      Front.WalletInfo
-        { walletId: toFront wiWallet, pubKeyHash: toFront unPaymentPubKeyHash }
-  toBack (Front.WalletInfo { walletId, pubKeyHash }) = Back.WalletInfo
-    { wiWallet: toBack walletId
-    , wiPaymentPubKeyHash: Back.PaymentPubKeyHash
-        { unPaymentPubKeyHash: toBack pubKeyHash }
-    }
-
-instance walletBridge :: Bridge Back.Wallet Front.WalletId where
-  toFront (Back.Wallet { getWalletId }) = Front.WalletId getWalletId
-  toBack (Front.WalletId getWalletId) = Back.Wallet { getWalletId }
-
-instance bridgeAddress :: Bridge Back.PubKeyHash Address where
-  toFront (Back.PubKeyHash { getPubKeyHash }) =
-    fromRight A.empty $ A.fromString mempty getPubKeyHash
-  toBack address = Back.PubKeyHash { getPubKeyHash: A.toString address }
 
 instance bridgePlutusAppId :: Bridge ContractInstanceId PlutusAppId where
   toFront (ContractInstanceId { unContractInstanceId }) = PlutusAppId

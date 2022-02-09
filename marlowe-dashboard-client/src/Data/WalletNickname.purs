@@ -1,11 +1,15 @@
 module Data.WalletNickname
   ( WalletNickname
   , WalletNicknameError(..)
-  , dual
+  , dualExclusive
+  , dualInclusive
   , fromFoldable
+  , fromStringExclusive
+  , fromStringInclusive
   , fromString
   , new
-  , validator
+  , validatorExclusive
+  , validatorInclusive
   , toString
   ) where
 
@@ -47,6 +51,7 @@ data WalletNicknameError
   = Empty
   | ContainsNonAlphaNumeric
   | Exists
+  | DoesNotExist
 
 derive instance genericWalletNicknameError :: Generic WalletNicknameError _
 derive instance eqWalletNicknameError :: Eq WalletNicknameError
@@ -57,7 +62,9 @@ instance semigroupWalletNicknameError :: Semigroup WalletNicknameError where
   append _ Empty = Empty
   append ContainsNonAlphaNumeric _ = ContainsNonAlphaNumeric
   append _ ContainsNonAlphaNumeric = ContainsNonAlphaNumeric
-  append Exists Exists = Exists
+  append Exists _ = Exists
+  append _ Exists = Exists
+  append DoesNotExist DoesNotExist = DoesNotExist
 
 instance boundedWalletNicknameError :: Bounded WalletNicknameError where
   bottom = genericBottom
@@ -84,8 +91,7 @@ derive newtype instance EncodeJson WalletNickname
 
 instance DecodeJson WalletNickname where
   decodeJson =
-    lmap (const $ TypeMismatch "WalletId") <<< fromString Set.empty
-      <=< decodeJson
+    lmap (const $ TypeMismatch "WalletNickname") <<< fromString <=< decodeJson
 
 nicknameRegex :: Regex
 nicknameRegex = unsafeRegex "^[a-z0-9]+$" ignoreCase
@@ -96,13 +102,23 @@ new = WalletNickname "newWallet"
 fromFoldable :: forall f. Foldable f => f String -> Set WalletNickname
 fromFoldable = Set.map WalletNickname <<< Set.fromFoldable
 
-fromString
-  :: Set WalletNickname -> String -> Either WalletNicknameError WalletNickname
-fromString used s
+fromString :: String -> Either WalletNicknameError WalletNickname
+fromString s
   | null s = Left Empty
+  | not $ Regex.test nicknameRegex s = Left ContainsNonAlphaNumeric
+  | otherwise = Right $ WalletNickname s
+
+fromStringInclusive
+  :: Set WalletNickname -> String -> Either WalletNicknameError WalletNickname
+fromStringInclusive used s
+  | Set.member (WalletNickname s) used = fromString s
+  | otherwise = Left DoesNotExist
+
+fromStringExclusive
+  :: Set WalletNickname -> String -> Either WalletNicknameError WalletNickname
+fromStringExclusive used s
   | Set.member (WalletNickname s) used = Left Exists
-  | Regex.test nicknameRegex s = Right $ WalletNickname s
-  | otherwise = Left ContainsNonAlphaNumeric
+  | otherwise = fromString s
 
 toString :: WalletNickname -> String
 toString (WalletNickname s) = s
@@ -111,16 +127,30 @@ toString (WalletNickname s) = s
 -- Polyform adapters
 -------------------------------------------------------------------------------
 
-validator
+validatorExclusive
   :: forall m
    . Applicative m
   => Set WalletNickname
   -> Validator m WalletNicknameError String WalletNickname
-validator used = liftFnV \s -> V $ fromString used s
+validatorExclusive used = liftFnV \s -> V $ fromStringExclusive used s
 
-dual
+dualExclusive
   :: forall m
    . Applicative m
   => Set WalletNickname
   -> Dual m WalletNicknameError String WalletNickname
-dual used = Dual.dual (validator used) (pure <<< toString)
+dualExclusive used = Dual.dual (validatorExclusive used) (pure <<< toString)
+
+validatorInclusive
+  :: forall m
+   . Applicative m
+  => Set WalletNickname
+  -> Validator m WalletNicknameError String WalletNickname
+validatorInclusive used = liftFnV \s -> V $ fromStringInclusive used s
+
+dualInclusive
+  :: forall m
+   . Applicative m
+  => Set WalletNickname
+  -> Dual m WalletNicknameError String WalletNickname
+dualInclusive used = Dual.dual (validatorInclusive used) (pure <<< toString)

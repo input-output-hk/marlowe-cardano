@@ -2,13 +2,14 @@
 module Page.Simulation.Types where
 
 import Prologue
+
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.List.Types (NonEmptyList)
+import Data.Show.Generic (genericShow)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
 import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input, Slot)

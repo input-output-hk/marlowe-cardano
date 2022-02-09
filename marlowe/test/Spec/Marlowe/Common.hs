@@ -7,10 +7,8 @@ module Spec.Marlowe.Common where
 import Data.Map.Strict (Map)
 
 import Language.Marlowe
-import Language.Marlowe.SemanticsSerialisation (contractToByteString)
 import Ledger (PaymentPubKeyHash (..), pubKeyHash)
 import qualified Ledger
-import PlutusTx.Builtins (sha2_256)
 import qualified PlutusTx.Ratio as P
 import Test.QuickCheck
 import Wallet (PubKey (..))
@@ -263,8 +261,7 @@ shrinkAction action = case action of
 
 caseRelGenSized :: Int -> Integer -> Gen (Case Contract)
 caseRelGenSized s bn = frequency [ (9, Case <$> actionGenSized s <*> contractRelGenSized s bn)
-                                 , (1, MerkleizedCase <$> actionGenSized s <*>
-                                                          (sha2_256 . contractToByteString <$> contractRelGenSized s bn))
+                                 , (1, merkleizedCase <$> actionGenSized s <*> contractRelGenSized s bn)
                                  ]
 
 shrinkCase :: Case Contract -> [Case Contract]

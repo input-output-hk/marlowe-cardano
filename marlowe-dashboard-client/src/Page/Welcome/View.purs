@@ -6,16 +6,15 @@ module Page.Welcome.View
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
-import Componenet.RestoreWalletForm (Msg(..))
 import Componenet.RestoreWalletForm as RestoreWalletForm
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
+import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Lens ((^.))
 import Data.List (foldMap)
-import Data.MnemonicPhrase (class CheckMnemonic)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -70,7 +69,7 @@ welcomeScreen _ =
 welcomeCard
   :: forall m
    . MonadAff m
-  => CheckMnemonic m
+  => MonadRec m
   => ManageMarlowe m
   => AddressBook
   -> State
@@ -147,7 +146,7 @@ useWalletBox =
         [ classNames [ "pt-2", "flex", "justify-between" ] ]
         [ a
             [ classNames [ "flex", "font-bold" ]
-            , href "https://staging.marlowe-web.iohkdev.io"
+            , href "https://marlowe-finance.io"
             ]
             [ icon_ Icon.Previous
             , text "Back to home page"
@@ -266,7 +265,7 @@ generateWalletHelpCard =
 restoreTestnetWalletCard
   :: forall m
    . MonadAff m
-  => CheckMnemonic m
+  => MonadRec m
   => ManageMarlowe m
   => AddressBook
   -> Array (ComponentHTML Action ChildSlots m)
@@ -284,10 +283,7 @@ restoreTestnetWalletCard addressBook =
         unit
         RestoreWalletForm.component
         nicknames
-        case _ of
-          Closed -> CloseCard
-          Restored nickname walletDetails ->
-            ConnectWallet nickname walletDetails
+        identity
     ]
 
 localWalletMissingCard :: forall p. Array (HTML p Action)

@@ -11,6 +11,7 @@ module Simulator.State
   ) where
 
 import Prologue
+
 import Control.Bind (bindFlipped)
 import Control.Monad.State (class MonadState)
 import Data.Array (fromFoldable, mapMaybe, snoc, sort, toUnfoldable, uncons)

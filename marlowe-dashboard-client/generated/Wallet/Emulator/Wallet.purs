@@ -4,11 +4,11 @@ module Wallet.Emulator.Wallet where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -24,24 +24,24 @@ import Type.Proxy (Proxy(Proxy))
 
 newtype Wallet = Wallet { getWalletId :: String }
 
-derive instance eqWallet :: Eq Wallet
+derive instance Eq Wallet
 
-instance showWallet :: Show Wallet where
+instance Show Wallet where
   show a = genericShow a
 
-instance encodeJsonWallet :: EncodeJson Wallet where
+instance EncodeJson Wallet where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { getWalletId: E.value :: _ String }
     )
 
-instance decodeJsonWallet :: DecodeJson Wallet where
+instance DecodeJson Wallet where
   decodeJson = defer \_ -> D.decode $
     (Wallet <$> D.record "Wallet" { getWalletId: D.value :: _ String })
 
-derive instance genericWallet :: Generic Wallet _
+derive instance Generic Wallet _
 
-derive instance newtypeWallet :: Newtype Wallet _
+derive instance Newtype Wallet _
 
 --------------------------------------------------------------------------------
 

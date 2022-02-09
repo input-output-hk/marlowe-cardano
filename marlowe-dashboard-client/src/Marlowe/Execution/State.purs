@@ -12,6 +12,7 @@ module Marlowe.Execution.State
   ) where
 
 import Prologue
+
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromInt)
 import Data.Lens (view, (^.))

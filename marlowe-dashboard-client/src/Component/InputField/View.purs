@@ -1,6 +1,7 @@
 module Component.InputField.View (renderInput) where
 
 import Prologue hiding (div, min)
+
 import Component.Input.Types (InputType(..)) as Input
 import Component.Input.View (renderWithChildren) as Input
 import Component.InputField.Lenses

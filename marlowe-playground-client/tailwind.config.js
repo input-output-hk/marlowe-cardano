@@ -5,7 +5,6 @@ module.exports = {
     "src/**/*.purs",
     process.env.WEB_COMMON_SRC + "/**/*.purs",
     process.env.WEB_COMMON_MARLOWE_SRC + "/**/*.purs",
-    process.env.WEB_COMMON_PLAYGROUND_SRC + "/**/*.purs",
   ],
   darkMode: false, // or 'media' or 'class'
   theme: {

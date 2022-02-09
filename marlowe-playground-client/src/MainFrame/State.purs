@@ -1,9 +1,10 @@
 module MainFrame.State (component) where
 
 import Prologue hiding (div)
+
 import Auth (AuthRole(..), authStatusAuthRole, _GithubUser)
 import Component.Blockly.Types as Blockly
-import Component.BottomPanel.Types as BP
+import Component.BottomPanel.Types (Action(..)) as BP
 import Component.ConfirmUnsavedNavigation.Types (Action(..)) as ConfirmUnsavedNavigation
 import Component.Demos.Types (Action(..), Demo(..)) as Demos
 import Component.MetadataTab.State (carryMetadataAction)
@@ -14,21 +15,20 @@ import Component.Projects.Types (Lang(..))
 import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk)
 import Control.Monad.State (modify_)
+import Data.Argonaut (printJsonDecodeError, stringify)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (either, hush, note)
 import Data.Foldable (fold, for_)
-import Data.Lens (assign, has, preview, set, use, view, (^.))
+import Data.Lens (_Right, assign, has, preview, set, use, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
-import Data.Newtype (unwrap)
+import Data.Newtype (un, unwrap)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
-import Env (Env)
 import Gist (Gist, _GistId, gistDescription, gistId)
 import Gists.Types (GistAction(..))
 import Gists.Types (parseGistUrl) as Gists
@@ -40,12 +40,13 @@ import Halogen.Monaco (KeyBindings(DefaultBindings))
 import Halogen.Monaco as Monaco
 import Halogen.Query (HalogenM)
 import Halogen.Query.Event (eventListener)
-import LoginPopup (openLoginPopup, informParentAndClose)
+import LoginPopup (informParentAndClose, openLoginPopup)
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
   , ModalView(..)
   , Query(..)
+  , Session(..)
   , State
   , View(..)
   , _authStatus
@@ -71,12 +72,11 @@ import MainFrame.Types
   , stateToSession
   )
 import MainFrame.View (render)
-import Marlowe (getApiGistsByGistId)
+import Marlowe (Api, getApiGistsByGistId)
 import Marlowe as Server
 import Marlowe.Extended.Metadata (emptyContractMetadata, getHintsFromMetadata)
 import Marlowe.Gists (PlaygroundFiles, mkNewGist, playgroundFiles)
-import Network.RemoteData (RemoteData(..), _Success)
-import Network.RemoteData as RemoteData
+import Network.RemoteData (RemoteData(..), _Success, fromEither)
 import Page.BlocklyEditor.State as BlocklyEditor
 import Page.BlocklyEditor.Types (_marloweCode)
 import Page.BlocklyEditor.Types as BE
@@ -108,12 +108,11 @@ import Router as Router
 import Routing.Duplex as RD
 import Routing.Hash as Routing
 import SaveAs.State (handleAction) as SaveAs
-import SaveAs.Types (Action(..), State, _status, _projectName, emptyState) as SaveAs
-import Servant.PureScript (AjaxError, printAjaxError)
+import SaveAs.Types (Action(..), State, _projectName, _status, emptyState) as SaveAs
+import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import StaticData (gistIdLocalStorageKey)
 import StaticData as StaticData
-import Types (WebData)
 import Web.HTML (window) as Web
 import Web.HTML.HTMLDocument (toEventTarget)
 import Web.HTML.Window (document) as Web
@@ -152,7 +151,7 @@ initialState =
 component
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Component Query Unit Void m
 component =
   H.mkComponent
@@ -228,7 +227,7 @@ toSaveAs = mapSubmodule _saveAs SaveAsAction
 handleSubRoute
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => SubRoute
   -> HalogenM State Action ChildSlots Void m Unit
 handleSubRoute Router.Home = selectView HomePage
@@ -246,22 +245,20 @@ handleSubRoute Router.Blockly = selectView BlocklyEditor
 -- This route is supposed to be called by the github oauth flow after a succesful login flow
 -- It is supposed to be run inside a popup window
 handleSubRoute Router.GithubAuthCallback = do
-  authResult <- runAjax Server.getApiOauthStatus
+  authResult <- lift $ Server.getApiOauthStatus
   case authResult of
-    (Success authStatus) -> liftEffect $ informParentAndClose $ view
+    (Right authStatus) -> liftEffect $ informParentAndClose $ view
       authStatusAuthRole
       authStatus
     -- TODO: is it worth showing a particular view for Failure, NotAsked and Loading?
     -- Modifying this will mean to also modify the render function in the mainframe to be able to draw without
     -- the headers/footers as this is supposed to be a dialog/popup
-    (Failure _) -> pure unit
-    NotAsked -> pure unit
-    Loading -> pure unit
+    _ -> pure unit
 
 handleRoute
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Route
   -> HalogenM State Action ChildSlots Void m Unit
 handleRoute { gistId: (Just gistId), subroute } = do
@@ -274,7 +271,7 @@ handleRoute { subroute } = handleSubRoute subroute
 handleQuery
   :: forall m a
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Query a
   -> HalogenM State Action ChildSlots Void m (Maybe a)
 handleQuery (ChangeRoute route next) = do
@@ -288,7 +285,7 @@ handleQuery (ChangeRoute route next) = do
 fullHandleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 fullHandleAction =
@@ -300,7 +297,7 @@ fullHandleAction =
 handleActionWithoutNavigationGuard
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleActionWithoutNavigationGuard =
@@ -315,7 +312,7 @@ handleActionWithoutNavigationGuard =
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction Init = do
@@ -335,12 +332,11 @@ handleAction Init = do
           StaticData.sessionStorageKey
         session <- hoistMaybe $ hush $ parseDecodeJson sessionJSON
         let
-          metadataHints =
-            (getHintsFromMetadata (unwrap session).contractMetadata)
+          contractMetadata = un Session session # _.contractMetadata
+          metadataHints = getHintsFromMetadata contractMetadata
         H.modify_ $ sessionToState session
           <<< set (_haskellState <<< HE._metadataHintInfo) metadataHints
-          <<< set (_javascriptState <<< JS._metadataHintInfo)
-            (getHintsFromMetadata (unwrap session).contractMetadata)
+          <<< set (_javascriptState <<< JS._metadataHintInfo) metadataHints
 
 handleAction (HandleKey _ ev)
   | KE.key ev == "Escape" = assign _showModal Nothing
@@ -448,7 +444,7 @@ handleAction (ProjectsAction action@(Projects.LoadProject lang gistId)) = do
   res <-
     runExceptT
       $ do
-          gist <- getApiGistsByGistId gistId
+          gist <- ExceptT $ lift $ getApiGistsByGistId gistId
           lift $ loadGist gist
           pure gist
   case res of
@@ -618,7 +614,7 @@ handleAction (ConfirmUnsavedNavigationAction intendedAction modalAction) =
 sendToSimulation
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => String
   -> HalogenM State Action ChildSlots Void m Unit
 sendToSimulation contract = do
@@ -651,28 +647,22 @@ viewToRoute = case _ of
   JSEditor -> Router.JSEditor
   BlocklyEditor -> Router.Blockly
 
-runAjax
-  :: forall m a
-   . ExceptT AjaxError (HalogenM State Action ChildSlots Void m) a
-  -> HalogenM State Action ChildSlots Void m (WebData a)
-runAjax action = RemoteData.fromEither <$> runExceptT action
-
 ------------------------------------------------------------
 checkAuthStatus
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => HalogenM State Action ChildSlots Void m Unit
 checkAuthStatus = do
   assign _authStatus Loading
-  authResult <- runAjax Server.getApiOauthStatus
-  assign _authStatus authResult
+  authResult <- lift Server.getApiOauthStatus
+  assign _authStatus $ fromEither authResult
 
 ------------------------------------------------------------
 createFiles
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => HalogenM State Action ChildSlots Void m PlaygroundFiles
 createFiles = do
   let
@@ -708,7 +698,7 @@ createFiles = do
 handleGistAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => GistAction
   -> HalogenM State Action ChildSlots Void m Unit
 handleGistAction PublishOrUpdateGist = do
@@ -722,12 +712,12 @@ handleGistAction PublishOrUpdateGist = do
         assign _createGistResult Loading
         newResult <-
           lift
+            $ lift
             $ case mGist of
-                Nothing -> runAjax $ Server.postApiGists newGist
-                Just gistId -> runAjax $ Server.postApiGistsByGistId newGist
-                  gistId
-        assign _createGistResult newResult
-        gistId <- hoistMaybe $ preview (_Success <<< gistId) newResult
+                Nothing -> Server.postApiGists newGist
+                Just gistId -> Server.postApiGistsByGistId newGist gistId
+        assign _createGistResult $ fromEither newResult
+        gistId <- hoistMaybe $ preview (_Right <<< gistId) newResult
         modify_
           ( set _gistId (Just gistId)
               <<< set _loadGistResult (Right NotAsked)
@@ -758,14 +748,17 @@ handleGistAction LoadGist = do
       $ do
           eGistId <- ExceptT $ note "Gist Id not set." <$> use _gistId
           assign _loadGistResult $ Right Loading
-          aGist <- lift $ runAjax $ Server.getApiGistsByGistId eGistId
-          assign _loadGistResult $ Right aGist
-          gist <- ExceptT $ pure $ toEither (Left "Gist not loaded.") $ lmap
-            printAjaxError
-            aGist
+          aGist <- lift $ lift $ Server.getApiGistsByGistId eGistId
+          assign _loadGistResult $ Right $ fromEither aGist
+          gist <-
+            ExceptT
+              $ pure
+              $ toEither (Left "Gist not loaded.")
+              $ lmap (printAjaxError stringify printJsonDecodeError)
+              $ fromEither aGist
           lift $ loadGist gist
           pure aGist
-  assign _loadGistResult res
+  assign _loadGistResult $ map fromEither res
   where
   toEither :: forall e a. Either e a -> RemoteData e a -> Either e a
   toEither _ (Success a) = Right a
@@ -782,7 +775,7 @@ handleGistAction _ = pure unit
 loadGist
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Gist
   -> HalogenM State Action ChildSlots Void m Unit
 loadGist gist = do
@@ -825,7 +818,7 @@ loadGist gist = do
 handleConfirmUnsavedNavigationAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> ConfirmUnsavedNavigation.Action
   -> HalogenM State Action ChildSlots Void m Unit
@@ -861,7 +854,7 @@ setUnsavedChangesForLanguage lang value = do
 withAccidentalNavigationGuard
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => (Action -> HalogenM State Action ChildSlots Void m Unit)
   -> Action
   -> HalogenM State Action ChildSlots Void m Unit

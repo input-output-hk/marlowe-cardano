@@ -7,6 +7,7 @@
 , haskellNix
 , checkMaterialization ? false
 , enableHaskellProfiling ? false
+, source-repo-override
 }:
 let
   ownOverlays =
@@ -39,7 +40,7 @@ let
     config = haskellNix.nixpkgsArgs.config // config;
   };
 
-  marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling sources; };
+  marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling sources source-repo-override; };
 
 in
 {

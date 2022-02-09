@@ -3,8 +3,8 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Lens (view, (^.))
-import Data.MnemonicPhrase (class CheckMnemonic)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -29,8 +29,8 @@ import Toast.State as Toast
 render
   :: forall m
    . MonadAff m
+  => MonadRec m
   => MonadStore Store.Action Store.Store m
-  => CheckMnemonic m
   => ManageMarlowe m
   => State
   -> ComponentHTML Action ChildSlots m
@@ -57,12 +57,20 @@ render state =
             [ renderSubmodule
                 _dashboardState
                 DashboardAction
-                (dashboardScreen { addressBook, currentSlot, tzOffset })
+                ( \(Tuple walletDetails dashboardState) ->
+                    dashboardScreen
+                      { addressBook, currentSlot, tzOffset, walletDetails }
+                      dashboardState
+                )
                 state
             , renderSubmodule
                 _dashboardState
                 DashboardAction
-                (dashboardCard addressBook)
+                ( \(Tuple walletDetails dashboardState) ->
+                    dashboardCard
+                      { addressBook, currentSlot, tzOffset, walletDetails }
+                      dashboardState
+                )
                 state
             ]
           <> [ H.slot_ _toaster unit Toast.component unit ]

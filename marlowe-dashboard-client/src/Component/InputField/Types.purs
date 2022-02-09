@@ -7,6 +7,7 @@ module Component.InputField.Types
   ) where
 
 import Prologue
+
 import Analytics (class IsEvent)
 import Halogen.HTML (HTML)
 import Marlowe.Extended.Metadata (NumberFormat)

@@ -2,15 +2,16 @@ module Capability.MarloweStorage
   ( class ManageMarloweStorage
   , addressBookLocalStorageKey
   , clearAllLocalStorage
+  , getAllWalletRoleContracts
+  , getContractNicknames
+  , getContracts
+  , getWalletRoleContracts
+  , insertContract
+  , insertIntoContractNicknames
+  , insertWalletRoleContracts
   , modifyAddressBook
   , modifyAddressBook_
-  , getContractNicknames
-  , insertIntoContractNicknames
-  , getContracts
-  , insertContract
-  , getAllWalletRoleContracts
-  , getWalletRoleContracts
-  , insertWalletRoleContracts
+  , walletLocalStorageKey
   ) where
 
 import Prologue
@@ -33,6 +34,9 @@ import Store (Action(..))
 
 addressBookLocalStorageKey :: Key
 addressBookLocalStorageKey = Key "addressBook"
+
+walletLocalStorageKey :: Key
+walletLocalStorageKey = Key "wallet"
 
 contractNicknamesLocalStorageKey :: Key
 contractNicknamesLocalStorageKey = Key "contractNicknames"

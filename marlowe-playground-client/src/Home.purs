@@ -1,6 +1,7 @@
 module Home where
 
 import Prologue hiding (div)
+
 import Auth (_GithubUser, authStatusAuthRole)
 import Component.NewProject.Types as NewProject
 import Component.Projects.Types (Lang(..))

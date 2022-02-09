@@ -12,7 +12,9 @@ import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Ledger (Slot (..))
 import Ledger.Ada (adaSymbol, adaToken)
+import Ledger.Scripts (dataHash)
 import qualified Ledger.Value as Val
+import qualified PlutusTx
 import qualified PlutusTx.Prelude as P
 
 instance IsString Party where
@@ -136,3 +138,7 @@ both a@(When cases1 (Slot timeout1) cont1) b@(When cases2 (Slot timeout2) cont2)
 both a@(When _ _ _) b = advanceTillWhenAndThen b (both a)
 both a b = advanceTillWhenAndThen a (`both` b)
 
+merkleizedCase :: Action -> Contract -> Case Contract
+merkleizedCase action continuation = let
+    hash = dataHash (PlutusTx.toBuiltinData continuation)
+    in MerkleizedCase action hash

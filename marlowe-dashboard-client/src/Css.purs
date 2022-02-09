@@ -30,6 +30,7 @@ module Css
   ) where
 
 import Prologue
+
 import Component.Icons (Icon, iconClass)
 import Halogen.Css (applyWhen)
 

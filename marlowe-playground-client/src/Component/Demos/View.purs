@@ -1,6 +1,7 @@
 module Component.Demos.View where
 
 import Prologue hiding (div)
+
 import Component.Demos.Types (Action(..), Demo)
 import Component.Modal.ViewHelpers (modalHeader)
 import Component.Projects.Types (Lang(..))

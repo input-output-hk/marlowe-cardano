@@ -15,11 +15,9 @@ import Data.Default (Default (def))
 import qualified Data.OpenApi as OpenApi
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Client as Marlowe
-import Language.PureScript.Bridge (argonaut, equal, genericShow, mkSumType, order)
 import Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (contractHandler), HasDefinitions (..),
                                             SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
-import Plutus.PAB.Run.PSGenerator (HasPSTypes (psTypes))
 import Plutus.PAB.Simulator (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator as Simulator
 import Prettyprinter (Pretty (..), viaShow)
@@ -44,9 +42,6 @@ instance HasDefinitions MarloweContract where
         MarloweApp      -> SomeBuiltin Marlowe.marlowePlutusContract
         WalletCompanion -> SomeBuiltin Marlowe.marloweCompanionContract
         MarloweFollower -> SomeBuiltin Marlowe.marloweFollowContract
-
-instance HasPSTypes MarloweContract where
-    psTypes = [ order . equal . genericShow . argonaut $ mkSumType @MarloweContract ]
 
 handlers :: SimulatorEffectHandlers (Builtin MarloweContract)
 handlers =

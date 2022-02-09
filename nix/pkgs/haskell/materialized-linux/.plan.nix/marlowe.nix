@@ -37,7 +37,6 @@
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-          (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
@@ -60,17 +59,13 @@
         buildable = true;
         modules = [
           "Language/Marlowe"
-          "Language/Marlowe/Deserialisation"
           "Language/Marlowe/Extended"
           "Language/Marlowe/Semantics"
-          "Language/Marlowe/SemanticsDeserialisation"
-          "Language/Marlowe/SemanticsSerialisation"
           "Language/Marlowe/SemanticsTypes"
           "Language/Marlowe/Client"
           "Language/Marlowe/Util"
           "Language/Marlowe/ParserUtil"
           "Language/Marlowe/Scripts"
-          "Language/Marlowe/Serialisation"
           "Language/Marlowe/Pretty"
           "Language/Marlowe/Analysis/FSSemantics"
           ];
@@ -126,7 +121,7 @@
             (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
             ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"));
           buildable = true;
-          modules = [ "SetupParser" "MarloweContract" ];
+          modules = [ "SetupParser" ];
           hsSourceDirs = [ "pab" ];
           mainPath = ([
             "Setup.hs"

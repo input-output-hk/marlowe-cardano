@@ -8,6 +8,7 @@ module Marlowe.Gists
   ) where
 
 import Prologue
+
 import Blockly.Internal (XML)
 import Data.Array (catMaybes)
 import Data.Lens (has, view)

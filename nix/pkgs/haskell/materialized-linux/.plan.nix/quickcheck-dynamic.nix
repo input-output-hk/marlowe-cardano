@@ -43,6 +43,7 @@
           "Test/QuickCheck/DynamicLogic/CanGenerate"
           "Test/QuickCheck/DynamicLogic/Monad"
           "Test/QuickCheck/DynamicLogic/Quantify"
+          "Test/QuickCheck/DynamicLogic/SmartShrinking"
           "Test/QuickCheck/StateModel"
           ];
         hsSourceDirs = [ "src" ];
@@ -68,11 +69,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "18";
+      url = "0";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "18";
+      url = "0";
       rev = "minimal";
       sha256 = "";
       };

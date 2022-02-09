@@ -12,10 +12,9 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logInfoN, runStderrLoggingT)
 import qualified Data.Text as Text
 import Network.Wai.Handler.Warp (HostPreference, defaultSettings, setHost, setPort)
-import Options.Applicative (CommandFields, Mod, Parser, argument, auto, command, customExecParser, disambiguate,
-                            fullDesc, help, helper, idm, info, long, metavar, option, prefs, progDesc, short,
-                            showDefault, showHelpOnEmpty, showHelpOnError, str, strOption, subparser, value)
-import qualified PSGenerator
+import Options.Applicative (CommandFields, Mod, Parser, auto, command, customExecParser, disambiguate, fullDesc, help,
+                            helper, idm, info, long, option, prefs, short, showDefault, showHelpOnEmpty,
+                            showHelpOnError, strOption, subparser, value)
 import qualified Webserver
 
 -- | You might wonder why we don't stick everything in `Config`. The
@@ -26,28 +25,15 @@ import qualified Webserver
 -- line. The answer is for flags that rarely change, putting them in a
 -- config file makes development easier.
 data Command
-  = Webserver
+  = Run
       { _host   :: !HostPreference,
         _port   :: !Int,
         _config :: !FilePath
       }
-  | PSGenerator {_outputDir :: !FilePath}
   deriving (Show, Eq)
 
 commandParser :: Parser Command
-commandParser = subparser $ webserverCommandParser <> psGeneratorCommandParser
-
-psGeneratorCommandParser :: Mod CommandFields Command
-psGeneratorCommandParser =
-  command "psgenerator" $
-    flip info (fullDesc <> progDesc "Generate the frontend's PureScript files.") $ do
-      _outputDir <-
-        argument
-          str
-          ( metavar "OUTPUT_DIR"
-              <> help "Output directory to write PureScript files to."
-          )
-      pure PSGenerator {..}
+commandParser = subparser webserverCommandParser
 
 webserverCommandParser :: Mod CommandFields Command
 webserverCommandParser =
@@ -70,13 +56,12 @@ webserverCommandParser =
         strOption
           ( short 'c' <> long "config" <> help "Location of the configuration file"
           )
-      pure Webserver {..}
+      pure Run {..}
 
 runCommand :: (MonadIO m, MonadLogger m) => Command -> m ()
-runCommand Webserver {..} = liftIO $ Webserver.run _config settings
+runCommand Run {..} = liftIO $ Webserver.run _config settings
   where
     settings = setHost _host . setPort _port $ defaultSettings
-runCommand PSGenerator {..} = liftIO $ PSGenerator.generate _outputDir
 
 main :: IO ()
 main = do

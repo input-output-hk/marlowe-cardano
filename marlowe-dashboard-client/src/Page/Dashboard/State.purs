@@ -6,7 +6,6 @@ module Page.Dashboard.State
 import Prologue
 
 import Bridge (toFront)
-import Capability.Contract (class ManageContract)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe
   ( class ManageMarlowe
@@ -50,6 +49,7 @@ import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State) as Template
 import Component.Template.Types (ContractSetupStage(..))
 import Control.Monad.Reader (class MonadAsk)
+import Data.Address as A
 import Data.AddressBook as AB
 import Data.Array (null)
 import Data.Either (hush)
@@ -60,7 +60,9 @@ import Data.Lens
   , assign
   , elemOf
   , filtered
+  , lens
   , modifying
+  , preview
   , set
   , use
   , view
@@ -90,7 +92,9 @@ import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
-import Halogen.Extra (mapMaybeSubmodule, mapSubmodule)
+import Halogen.Extra (imapState, mapSubmodule)
+import Halogen.Query.HalogenM (mapAction)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
@@ -98,7 +102,7 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Execution.State (getAllPayments)
 import Marlowe.Extended.Metadata (_metaData)
 import Marlowe.PAB (PlutusAppId, transactionFee)
-import Marlowe.Run.Webserver.Wallet.Types (GetTotalFunds(..))
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
   ( MarloweData
   , MarloweParams
@@ -111,8 +115,7 @@ import Marlowe.Semantics
 import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
 import Page.Contract.State (applyTimeout)
 import Page.Contract.State
-  ( dummyState
-  , handleAction
+  ( handleAction
   , mkInitialState
   , mkPlaceholderState
   , updateState
@@ -130,7 +133,6 @@ import Page.Dashboard.Lenses
   , _selectedContractFollowerAppId
   , _templateState
   , _walletCompanionStatus
-  , _walletDetails
   )
 import Page.Dashboard.Types
   ( Action(..)
@@ -140,6 +142,7 @@ import Page.Dashboard.Types
   , State
   , WalletCompanionStatus(..)
   )
+import Store as Store
 import Toast.Types
   ( ajaxErrorToast
   , decodedAjaxErrorToast
@@ -167,7 +170,6 @@ mkInitialState walletDetails contracts contractNicknames currentSlot =
           contractHistory
   in
     { contactsState: Contacts.initialState
-    , walletDetails
     , walletCompanionStatus: FirstUpdatePending
     , menuOpen: false
     , card: Nothing
@@ -183,24 +185,23 @@ handleAction
    . MonadAff m
   => MonadAsk Env m
   => MainFrameLoop m
-  => ManageContract m
   => ManageMarloweStorage m
   => ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
 {- [Workflow 3][0] Disconnect a wallet -}
-handleAction _ DisconnectWallet = do
-  walletDetails <- use _walletDetails
+handleAction { walletDetails } DisconnectWallet = do
   contracts <- use _contracts
   callMainFrameAction $ MainFrame.EnterWelcomeState walletDetails contracts
 
-handleAction { addressBook } (ContactsAction contactsAction) =
+handleAction _ (ContactsAction contactsAction) =
   case contactsAction of
     Contacts.CancelNewContactForRole -> assign _card $ Just ContractTemplateCard
-    _ -> toContacts $ Contacts.handleAction addressBook contactsAction
+    _ -> toContacts $ Contacts.handleAction contactsAction
 
 handleAction _ ToggleMenu = modifying _menuOpen not
 
@@ -208,11 +209,11 @@ handleAction _ (ClipboardAction action) = do
   Clipboard.handleAction action
   addToast $ successToast "Copied to clipboard"
 
-handleAction _ (OpenCard card) = do
+handleAction { walletDetails } (OpenCard card) = do
   -- Most cards requires to show the assets of the current wallet, so we update the funds
   -- before opening a card.
   -- See note [polling updateTotalFunds]
-  updateTotalFunds
+  updateTotalFunds walletDetails
   -- Then we set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
@@ -256,9 +257,8 @@ So here we need to check whether there is an existing `MarloweFollower` app with
 If someone else started the contract, and gave us a role, we will have no placeholder
 `MarloweFollower` app, and so we simply create a new one and start following immediately.
 -}
-handleAction _ (UpdateFollowerApps companionAppState) = do
+handleAction { walletDetails } (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
-  walletDetails <- use _walletDetails
   existingContracts <- use _contracts
   let
     contractExists marloweParams =
@@ -322,7 +322,7 @@ about its initial state through the WebSocket. We potentially use that to change
 -}
 {- [Workflow 5][2] Move a contract forward -}
 handleAction
-  input@{ currentSlot }
+  input@{ currentSlot, walletDetails }
   (UpdateContract followerAppId contractHistory) = do
   let
     chParams = view _chParams contractHistory
@@ -330,11 +330,10 @@ handleAction
   -- been a change in the role tokens.
   -- There is a chance that the data is not fully synced
   -- See note [polling updateTotalFunds]
-  updateTotalFunds
+  updateTotalFunds walletDetails
   -- if the chParams have not yet been set, we can't do anything; that's fine though, we'll get
   -- another notification through the websocket as soon as they are set
   for_ chParams \(marloweParams /\ marloweData) -> do
-    walletDetails <- use _walletDetails
     contracts <- use _contracts
     case lookup followerAppId contracts of
       Just contractState -> do
@@ -388,8 +387,7 @@ we thought it would be more user-friendly for now to trigger this automatically 
 integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
 manually (and sign the transaction). So this will almost certainly have to change.
 -}
-handleAction _ (RedeemPayments followerAppId) = do
-  walletDetails <- use _walletDetails
+handleAction { walletDetails } (RedeemPayments followerAppId) = do
   mStartedContract <- peruse $ _contracts <<< ix followerAppId <<< _Started
   for_ mStartedContract \{ executionState, marloweParams, userParties } ->
     let
@@ -417,8 +415,9 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
         <<< _Started
         <<< filtered
           ( \contract ->
-              contract.executionState.mNextTimeout /= Nothing &&
-                contract.executionState.mNextTimeout <= Just currentSlot
+              contract.executionState.mNextTimeout /= Nothing
+                && contract.executionState.mNextTimeout
+                  <= Just currentSlot
           )
     )
     (applyTimeout currentSlot)
@@ -438,7 +437,9 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
       handleAction input $ ContractAction followerAppId $
         Contract.CancelConfirmation
 
-handleAction input@{ currentSlot, addressBook } (TemplateAction templateAction) =
+handleAction
+  input@{ currentSlot, addressBook, walletDetails }
+  (TemplateAction templateAction) =
   case templateAction of
     Template.OpenCreateWalletCard tokenName -> do
       modify_
@@ -457,14 +458,14 @@ handleAction input@{ currentSlot, addressBook } (TemplateAction templateAction) 
             "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
         Just contract -> do
           -- the user enters wallet nicknames for roles; here we convert these into pubKeyHashes
-          walletDetails <- use _walletDetails
           roleWalletInputs <- use (_templateState <<< _roleWalletInputs)
           let
             roleWallets =
-              filterMap (hush <<< WN.fromString mempty <<< view _value)
+              filterMap (hush <<< WN.fromString <<< view _value)
                 roleWalletInputs
 
-            roles = mapMaybe (flip AB.lookupAddress addressBook) roleWallets
+            roles = A.toPubKeyHash
+              <$> mapMaybe (flip AB.lookupAddress addressBook) roleWallets
           ajaxCreateContract <- createContract walletDetails roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
@@ -519,13 +520,16 @@ handleAction input (SetContactForRole tokenName walletNickname) = do
   assign _card $ Just ContractTemplateCard
 
 handleAction
-  input@{ currentSlot, tzOffset }
+  input@{ walletDetails, currentSlot, tzOffset }
   (ContractAction followerAppId contractAction) = do
-  walletDetails <- use _walletDetails
-  startedState <- peruse $ _contracts <<< at followerAppId <<< _Just <<<
-    _Started
+  startedState <- peruse
+    $ _contracts
+        <<< at followerAppId
+        <<< _Just
+        <<< _Started
   let
     contractInput = { currentSlot, walletDetails, followerAppId, tzOffset }
+  mContractState <- peruse $ _contract followerAppId
   case contractAction of
     Contract.AskConfirmation action ->
       for_ startedState \contractState ->
@@ -539,13 +543,11 @@ handleAction
               , userNickname: walletDetails ^. _walletNickname
               , walletBalance: getAda $ walletDetails ^. _assets
               }
-    Contract.ConfirmAction _ -> do
-      void $ toContract followerAppId $ Contract.handleAction contractInput
-        contractAction
-      handleAction input CloseCard
     Contract.CancelConfirmation -> handleAction input CloseCard
-    _ -> toContract followerAppId $ Contract.handleAction contractInput
-      contractAction
+    _ -> for_ mContractState \s -> toContract
+      followerAppId
+      s
+      (Contract.handleAction contractInput contractAction)
 
 ------------------------------------------------------------
 -- Note [polling updateTotalFunds]
@@ -563,13 +565,14 @@ updateTotalFunds
   :: forall m slots msg
    . MonadAff m
   => ManageWallet m
-  => HalogenM State Action slots msg m Unit
-updateTotalFunds = do
-  walletId <- use (_walletDetails <<< _walletInfo <<< _walletId)
+  => MonadStore Store.Action Store.Store m
+  => WalletDetails
+  -> HalogenM State Action slots msg m Unit
+updateTotalFunds walletDetails = do
+  let walletId = walletDetails ^. _walletInfo <<< _walletId
   response <- getWalletTotalFunds walletId
-  for_ response \(GetTotalFunds { assets }) ->
-    modify_
-      $ set (_walletDetails <<< _assets) (toFront assets)
+  for_ response \(GetTotalFundsResponse { assets }) ->
+    updateStore $ Store.UpdateAssets $ toFront assets
 
 toContacts
   :: forall m msg slots
@@ -590,8 +593,11 @@ toContract
   :: forall m msg slots
    . Functor m
   => PlutusAppId
+  -> Contract.State
   -> HalogenM Contract.State Contract.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-toContract followerAppId = mapMaybeSubmodule (_contract followerAppId)
-  (ContractAction followerAppId)
-  Contract.dummyState
+toContract followerAppId s =
+  mapAction (ContractAction followerAppId)
+    <<< imapState (lens (fromMaybe s <<< preview trav) (flip (set trav)))
+  where
+  trav = _contract followerAppId

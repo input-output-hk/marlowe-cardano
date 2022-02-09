@@ -4,6 +4,7 @@
 , config ? { allowUnfreePredicate = (import ../lib/unfree.nix).unfreePredicate; }
 , sources
 , enableHaskellProfiling
+, source-repo-override
 }:
 let
   inherit (pkgs) stdenv;
@@ -14,6 +15,7 @@ let
   haskell = pkgs.callPackage ./haskell {
     inherit gitignore-nix sources;
     inherit checkMaterialization enableHaskellProfiling;
+    inherit source-repo-override;
     inherit (sources) actus-tests;
 
     # This ensures that the utility scripts produced in here will run on the current system, not
@@ -56,8 +58,9 @@ let
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-linux)
     $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-darwin)
   '';
-  updateClientDeps = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/update-client-deps") {
-    inherit purs spago spago2nix;
+
+  updateClientDeps = pkgs.callPackage ./update-client-deps.nix {
+    inherit purs spago spago2nix writeShellScriptBinInRepoRoot;
   };
 
   #
@@ -74,6 +77,11 @@ let
     inherit (sources) nixpkgs;
   });
 
+  writeShellScriptBinInRepoRoot = name: script: pkgs.writeShellScriptBin name ''
+    cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
+    ${script}
+  '';
+
   # easy-purescript-nix has some kind of wacky internal IFD
   # usage that breaks the logic that makes source fetchers
   # use native dependencies. This isn't easy to fix, since
@@ -87,7 +95,7 @@ let
 
   # We pull out some packages from easyPS that are a pain to get otherwise.
   # This does mean we can't as easily control the version we get, though.
-  inherit (easyPS) purs-tidy purs spago spago2nix psa purescript-language-server;
+  inherit (easyPS) purs-tidy purs spago spago2nix psa purescript-language-server pscid;
 
   # sphinx haddock support
   sphinxcontrib-haddock = pkgs.callPackage (sources.sphinxcontrib-haddock) { pythonPackages = pkgs.python3Packages; };
@@ -96,6 +104,11 @@ let
   web-ghc = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/web-ghc") { inherit haskell; extraPackagesFun = ps: [ ps.marlowe ]; };
 
   webCommon = pkgs.callPackage sources.web-common { inherit gitignore-nix; };
+
+  formatting = pkgs.callPackage ./formatting.nix {
+    inherit easyPS writeShellScriptBinInRepoRoot;
+  };
+
 
   # combined haddock documentation for all public plutus libraries
   plutus-haddock-combined =
@@ -131,11 +144,11 @@ in
   inherit sphinx-markdown-tables sphinxemoji sphinxcontrib-haddock;
   inherit nix-pre-commit-hooks;
   inherit haskell cabal-install cardano-repo-tool stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-cli cardano-node;
-  inherit purs-tidy purs spago spago2nix psa purescript-language-server;
-  inherit fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps;
+  inherit purs-tidy purs spago spago2nix psa purescript-language-server pscid;
+  inherit fixStylishHaskell fixPngOptimization updateMaterialized updateClientDeps writeShellScriptBinInRepoRoot;
   inherit web-ghc;
   inherit easyPS plutus-haddock-combined;
   inherit lib;
   inherit webCommon;
-  inherit (webCommon.flake.defaultNix.packages.${builtins.currentSystem}) fix-prettier prettier-hook fix-purs-tidy purs-tidy-hook;
+  inherit (formatting) fix-prettier fix-purs-tidy fix-dhall purs-tidy-hook dhall-hook;
 }

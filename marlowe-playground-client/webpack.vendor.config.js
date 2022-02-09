@@ -12,10 +12,6 @@ module.exports = {
     "bootstrap",
     "decimal.js",
     "json-bigint",
-    "monaco-editor",
-    "monaco-emacs",
-    "monaco-vim",
-    "moo",
     "nearley",
     "safe-eval",
     // Most heavy libs: `du -hs output/* | sort -h`

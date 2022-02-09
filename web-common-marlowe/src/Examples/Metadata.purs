@@ -1,17 +1,18 @@
 module Examples.Metadata where
 
 import Prelude
+
 import Data.Map as Map
+import Data.Map.Ordered.OMap as OMap
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended (ContractType(..))
 import Marlowe.Extended.Metadata
-  ( NumberFormat(..)
-  , MetaData
+  ( MetaData
+  , NumberFormat(..)
   , emptyContractMetadata
   , lovelaceFormat
   , oracleRatioFormat
   )
-import Data.Map.Ordered.OMap as OMap
 
 example :: MetaData
 example = emptyContractMetadata

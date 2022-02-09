@@ -4,11 +4,11 @@ module Webghc.Server where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -26,7 +26,7 @@ newtype CompileRequest = CompileRequest
   , implicitPrelude :: Boolean
   }
 
-instance encodeJsonCompileRequest :: EncodeJson CompileRequest where
+instance EncodeJson CompileRequest where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { code: E.value :: _ String
@@ -34,7 +34,7 @@ instance encodeJsonCompileRequest :: EncodeJson CompileRequest where
         }
     )
 
-instance decodeJsonCompileRequest :: DecodeJson CompileRequest where
+instance DecodeJson CompileRequest where
   decodeJson = defer \_ -> D.decode $
     ( CompileRequest <$> D.record "CompileRequest"
         { code: D.value :: _ String
@@ -42,9 +42,9 @@ instance decodeJsonCompileRequest :: DecodeJson CompileRequest where
         }
     )
 
-derive instance genericCompileRequest :: Generic CompileRequest _
+derive instance Generic CompileRequest _
 
-derive instance newtypeCompileRequest :: Newtype CompileRequest _
+derive instance Newtype CompileRequest _
 
 --------------------------------------------------------------------------------
 

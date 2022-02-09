@@ -4,11 +4,11 @@ module Ledger.Index where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -27,7 +27,6 @@ import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Plutus.V1.Ledger.Ada (Ada)
 import Plutus.V1.Ledger.Crypto (PubKey, PubKeyHash, Signature)
 import Plutus.V1.Ledger.Scripts
   ( DatumHash
@@ -40,28 +39,120 @@ import Plutus.V1.Ledger.Tx (RedeemerPtr, Tx, TxIn, TxOut, TxOutRef)
 import Plutus.V1.Ledger.Value (Value)
 import Type.Proxy (Proxy(Proxy))
 
-newtype UtxoIndex = UtxoIndex { getIndex :: Map TxOutRef TxOut }
+data ScriptType
+  = ValidatorScript Validator String
+  | MintingPolicyScript MintingPolicy
 
-derive instance eqUtxoIndex :: Eq UtxoIndex
+derive instance Eq ScriptType
 
-instance showUtxoIndex :: Show UtxoIndex where
+instance Show ScriptType where
   show a = genericShow a
 
-instance encodeJsonUtxoIndex :: EncodeJson UtxoIndex where
+instance EncodeJson ScriptType where
+  encodeJson = defer \_ -> case _ of
+    ValidatorScript a b -> E.encodeTagged "ValidatorScript" (a /\ b)
+      (E.tuple (E.value >/\< E.value))
+    MintingPolicyScript a -> E.encodeTagged "MintingPolicyScript" a E.value
+
+instance DecodeJson ScriptType where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "ScriptType"
+    $ Map.fromFoldable
+        [ "ValidatorScript" /\ D.content
+            (D.tuple $ ValidatorScript </$\> D.value </*\> D.value)
+        , "MintingPolicyScript" /\ D.content (MintingPolicyScript <$> D.value)
+        ]
+
+derive instance Generic ScriptType _
+
+--------------------------------------------------------------------------------
+
+_ValidatorScript :: Prism' ScriptType { a :: Validator, b :: String }
+_ValidatorScript = prism' (\{ a, b } -> (ValidatorScript a b)) case _ of
+  (ValidatorScript a b) -> Just { a, b }
+  _ -> Nothing
+
+_MintingPolicyScript :: Prism' ScriptType MintingPolicy
+_MintingPolicyScript = prism' MintingPolicyScript case _ of
+  (MintingPolicyScript a) -> Just a
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype ScriptValidationEvent = ScriptValidationEvent
+  { sveScript :: String
+  , sveResult :: Either ScriptError (Tuple RawJson (Array String))
+  , sveRedeemer :: String
+  , sveType :: ScriptType
+  }
+
+derive instance Eq ScriptValidationEvent
+
+instance Show ScriptValidationEvent where
+  show a = genericShow a
+
+instance EncodeJson ScriptValidationEvent where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { sveScript: E.value :: _ String
+        , sveResult:
+            (E.either E.value (E.tuple (E.value >/\< E.value))) :: _
+              (Either ScriptError (Tuple RawJson (Array String)))
+        , sveRedeemer: E.value :: _ String
+        , sveType: E.value :: _ ScriptType
+        }
+    )
+
+instance DecodeJson ScriptValidationEvent where
+  decodeJson = defer \_ -> D.decode $
+    ( ScriptValidationEvent <$> D.record "ScriptValidationEvent"
+        { sveScript: D.value :: _ String
+        , sveResult:
+            (D.either D.value (D.tuple (D.value </\> D.value))) :: _
+              (Either ScriptError (Tuple RawJson (Array String)))
+        , sveRedeemer: D.value :: _ String
+        , sveType: D.value :: _ ScriptType
+        }
+    )
+
+derive instance Generic ScriptValidationEvent _
+
+derive instance Newtype ScriptValidationEvent _
+
+--------------------------------------------------------------------------------
+
+_ScriptValidationEvent :: Iso' ScriptValidationEvent
+  { sveScript :: String
+  , sveResult :: Either ScriptError (Tuple RawJson (Array String))
+  , sveRedeemer :: String
+  , sveType :: ScriptType
+  }
+_ScriptValidationEvent = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype UtxoIndex = UtxoIndex { getIndex :: Map TxOutRef TxOut }
+
+derive instance Eq UtxoIndex
+
+instance Show UtxoIndex where
+  show a = genericShow a
+
+instance EncodeJson UtxoIndex where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { getIndex: (E.dictionary E.value E.value) :: _ (Map TxOutRef TxOut) }
     )
 
-instance decodeJsonUtxoIndex :: DecodeJson UtxoIndex where
+instance DecodeJson UtxoIndex where
   decodeJson = defer \_ -> D.decode $
     ( UtxoIndex <$> D.record "UtxoIndex"
         { getIndex: (D.dictionary D.value D.value) :: _ (Map TxOutRef TxOut) }
     )
 
-derive instance genericUtxoIndex :: Generic UtxoIndex _
+derive instance Generic UtxoIndex _
 
-derive instance newtypeUtxoIndex :: Newtype UtxoIndex _
+derive instance Newtype UtxoIndex _
 
 --------------------------------------------------------------------------------
 
@@ -79,7 +170,7 @@ data ValidationError
   | InvalidSignature PubKey Signature
   | ValueNotPreserved Value Value
   | NegativeValue Tx
-  | ValueContainsLessThanMinAda Tx Ada
+  | ValueContainsLessThanMinAda Tx TxOut
   | NonAdaFees Tx
   | ScriptFailure ScriptError
   | CurrentSlotOutOfRange Slot
@@ -87,12 +178,12 @@ data ValidationError
   | MintWithoutScript String
   | TransactionFeeTooLow Value Value
 
-derive instance eqValidationError :: Eq ValidationError
+derive instance Eq ValidationError
 
-instance showValidationError :: Show ValidationError where
+instance Show ValidationError where
   show a = genericShow a
 
-instance encodeJsonValidationError :: EncodeJson ValidationError where
+instance EncodeJson ValidationError where
   encodeJson = defer \_ -> case _ of
     InOutTypeMismatch a b -> E.encodeTagged "InOutTypeMismatch" (a /\ b)
       (E.tuple (E.value >/\< E.value))
@@ -119,7 +210,7 @@ instance encodeJsonValidationError :: EncodeJson ValidationError where
     TransactionFeeTooLow a b -> E.encodeTagged "TransactionFeeTooLow" (a /\ b)
       (E.tuple (E.value >/\< E.value))
 
-instance decodeJsonValidationError :: DecodeJson ValidationError where
+instance DecodeJson ValidationError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ValidationError"
     $ Map.fromFoldable
@@ -148,7 +239,7 @@ instance decodeJsonValidationError :: DecodeJson ValidationError where
             (D.tuple $ TransactionFeeTooLow </$\> D.value </*\> D.value)
         ]
 
-derive instance genericValidationError :: Generic ValidationError _
+derive instance Generic ValidationError _
 
 --------------------------------------------------------------------------------
 
@@ -192,7 +283,7 @@ _NegativeValue = prism' NegativeValue case _ of
   (NegativeValue a) -> Just a
   _ -> Nothing
 
-_ValueContainsLessThanMinAda :: Prism' ValidationError { a :: Tx, b :: Ada }
+_ValueContainsLessThanMinAda :: Prism' ValidationError { a :: Tx, b :: TxOut }
 _ValueContainsLessThanMinAda = prism'
   (\{ a, b } -> (ValueContainsLessThanMinAda a b))
   case _ of
@@ -236,26 +327,26 @@ data ValidationPhase
   = Phase1
   | Phase2
 
-derive instance eqValidationPhase :: Eq ValidationPhase
+derive instance Eq ValidationPhase
 
-derive instance ordValidationPhase :: Ord ValidationPhase
+derive instance Ord ValidationPhase
 
-instance showValidationPhase :: Show ValidationPhase where
+instance Show ValidationPhase where
   show a = genericShow a
 
-instance encodeJsonValidationPhase :: EncodeJson ValidationPhase where
+instance EncodeJson ValidationPhase where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonValidationPhase :: DecodeJson ValidationPhase where
+instance DecodeJson ValidationPhase where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericValidationPhase :: Generic ValidationPhase _
+derive instance Generic ValidationPhase _
 
-instance enumValidationPhase :: Enum ValidationPhase where
+instance Enum ValidationPhase where
   succ = genericSucc
   pred = genericPred
 
-instance boundedValidationPhase :: Bounded ValidationPhase where
+instance Bounded ValidationPhase where
   bottom = genericBottom
   top = genericTop
 
@@ -269,96 +360,4 @@ _Phase1 = prism' (const Phase1) case _ of
 _Phase2 :: Prism' ValidationPhase Unit
 _Phase2 = prism' (const Phase2) case _ of
   Phase2 -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype ScriptValidationEvent = ScriptValidationEvent
-  { sveScript :: String
-  , sveResult :: Either ScriptError (Tuple RawJson (Array String))
-  , sveRedeemer :: String
-  , sveType :: ScriptType
-  }
-
-derive instance eqScriptValidationEvent :: Eq ScriptValidationEvent
-
-instance showScriptValidationEvent :: Show ScriptValidationEvent where
-  show a = genericShow a
-
-instance encodeJsonScriptValidationEvent :: EncodeJson ScriptValidationEvent where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { sveScript: E.value :: _ String
-        , sveResult:
-            (E.either E.value (E.tuple (E.value >/\< E.value))) :: _
-              (Either ScriptError (Tuple RawJson (Array String)))
-        , sveRedeemer: E.value :: _ String
-        , sveType: E.value :: _ ScriptType
-        }
-    )
-
-instance decodeJsonScriptValidationEvent :: DecodeJson ScriptValidationEvent where
-  decodeJson = defer \_ -> D.decode $
-    ( ScriptValidationEvent <$> D.record "ScriptValidationEvent"
-        { sveScript: D.value :: _ String
-        , sveResult:
-            (D.either D.value (D.tuple (D.value </\> D.value))) :: _
-              (Either ScriptError (Tuple RawJson (Array String)))
-        , sveRedeemer: D.value :: _ String
-        , sveType: D.value :: _ ScriptType
-        }
-    )
-
-derive instance genericScriptValidationEvent :: Generic ScriptValidationEvent _
-
-derive instance newtypeScriptValidationEvent :: Newtype ScriptValidationEvent _
-
---------------------------------------------------------------------------------
-
-_ScriptValidationEvent :: Iso' ScriptValidationEvent
-  { sveScript :: String
-  , sveResult :: Either ScriptError (Tuple RawJson (Array String))
-  , sveRedeemer :: String
-  , sveType :: ScriptType
-  }
-_ScriptValidationEvent = _Newtype
-
---------------------------------------------------------------------------------
-
-data ScriptType
-  = ValidatorScript Validator String
-  | MintingPolicyScript MintingPolicy
-
-derive instance eqScriptType :: Eq ScriptType
-
-instance showScriptType :: Show ScriptType where
-  show a = genericShow a
-
-instance encodeJsonScriptType :: EncodeJson ScriptType where
-  encodeJson = defer \_ -> case _ of
-    ValidatorScript a b -> E.encodeTagged "ValidatorScript" (a /\ b)
-      (E.tuple (E.value >/\< E.value))
-    MintingPolicyScript a -> E.encodeTagged "MintingPolicyScript" a E.value
-
-instance decodeJsonScriptType :: DecodeJson ScriptType where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "ScriptType"
-    $ Map.fromFoldable
-        [ "ValidatorScript" /\ D.content
-            (D.tuple $ ValidatorScript </$\> D.value </*\> D.value)
-        , "MintingPolicyScript" /\ D.content (MintingPolicyScript <$> D.value)
-        ]
-
-derive instance genericScriptType :: Generic ScriptType _
-
---------------------------------------------------------------------------------
-
-_ValidatorScript :: Prism' ScriptType { a :: Validator, b :: String }
-_ValidatorScript = prism' (\{ a, b } -> (ValidatorScript a b)) case _ of
-  (ValidatorScript a b) -> Just { a, b }
-  _ -> Nothing
-
-_MintingPolicyScript :: Prism' ScriptType MintingPolicy
-_MintingPolicyScript = prism' MintingPolicyScript case _ of
-  (MintingPolicyScript a) -> Just a
   _ -> Nothing

@@ -1,6 +1,7 @@
 module Page.BlocklyEditor.Types where
 
 import Prologue
+
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.Blockly.Types as Blockly
@@ -8,14 +9,14 @@ import Component.BottomPanel.Types as BottomPanel
 import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Linter (Warning)
 import Marlowe.Template (IntegerTemplateType)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
+import Type.Proxy (Proxy(..))
 
 data Action
   = HandleBlocklyMessage Blockly.Message

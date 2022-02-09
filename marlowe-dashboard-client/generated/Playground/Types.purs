@@ -4,11 +4,11 @@ module Playground.Types where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -28,98 +28,6 @@ import Plutus.V1.Ledger.Value (TokenName, Value)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (EndpointDescription)
 
-newtype FunctionSchema a = FunctionSchema
-  { endpointDescription :: EndpointDescription
-  , argument :: a
-  }
-
-derive instance functorFunctionSchema :: Functor FunctionSchema
-
-instance showFunctionSchema :: (Show a) => Show (FunctionSchema a) where
-  show a = genericShow a
-
-derive instance eqFunctionSchema :: (Eq a) => Eq (FunctionSchema a)
-
-instance encodeJsonFunctionSchema ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (FunctionSchema a) where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { endpointDescription: E.value :: _ EndpointDescription
-        , argument: E.value :: _ a
-        }
-    )
-
-instance decodeJsonFunctionSchema ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (FunctionSchema a) where
-  decodeJson = defer \_ -> D.decode $
-    ( FunctionSchema <$> D.record "FunctionSchema"
-        { endpointDescription: D.value :: _ EndpointDescription
-        , argument: D.value :: _ a
-        }
-    )
-
-derive instance genericFunctionSchema :: Generic (FunctionSchema a) _
-
-derive instance newtypeFunctionSchema :: Newtype (FunctionSchema a) _
-
---------------------------------------------------------------------------------
-
-_FunctionSchema
-  :: forall a
-   . Iso' (FunctionSchema a)
-       { endpointDescription :: EndpointDescription, argument :: a }
-_FunctionSchema = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype KnownCurrency = KnownCurrency
-  { hash :: String
-  , friendlyName :: String
-  , knownTokens :: NonEmptyList TokenName
-  }
-
-instance showKnownCurrency :: Show KnownCurrency where
-  show a = genericShow a
-
-derive instance eqKnownCurrency :: Eq KnownCurrency
-
-instance encodeJsonKnownCurrency :: EncodeJson KnownCurrency where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { hash: E.value :: _ String
-        , friendlyName: E.value :: _ String
-        , knownTokens: E.value :: _ (NonEmptyList TokenName)
-        }
-    )
-
-instance decodeJsonKnownCurrency :: DecodeJson KnownCurrency where
-  decodeJson = defer \_ -> D.decode $
-    ( KnownCurrency <$> D.record "KnownCurrency"
-        { hash: D.value :: _ String
-        , friendlyName: D.value :: _ String
-        , knownTokens: D.value :: _ (NonEmptyList TokenName)
-        }
-    )
-
-derive instance genericKnownCurrency :: Generic KnownCurrency _
-
-derive instance newtypeKnownCurrency :: Newtype KnownCurrency _
-
---------------------------------------------------------------------------------
-
-_KnownCurrency :: Iso' KnownCurrency
-  { hash :: String
-  , friendlyName :: String
-  , knownTokens :: NonEmptyList TokenName
-  }
-_KnownCurrency = _Newtype
-
---------------------------------------------------------------------------------
-
 data ContractCall a
   = CallEndpoint
       { caller :: WalletNumber
@@ -133,12 +41,12 @@ data ContractCall a
       , amount :: Value
       }
 
-instance showContractCall :: (Show a) => Show (ContractCall a) where
+instance (Show a) => Show (ContractCall a) where
   show a = genericShow a
 
-derive instance eqContractCall :: (Eq a) => Eq (ContractCall a)
+derive instance (Eq a) => Eq (ContractCall a)
 
-instance encodeJsonContractCall :: (EncodeJson a) => EncodeJson (ContractCall a) where
+instance (EncodeJson a) => EncodeJson (ContractCall a) where
   encodeJson = defer \_ -> case _ of
     CallEndpoint { caller, argumentValues } -> encodeJson
       { tag: "CallEndpoint"
@@ -160,7 +68,7 @@ instance encodeJsonContractCall :: (EncodeJson a) => EncodeJson (ContractCall a)
       , amount: flip E.encode amount E.value
       }
 
-instance decodeJsonContractCall :: (DecodeJson a) => DecodeJson (ContractCall a) where
+instance (DecodeJson a) => DecodeJson (ContractCall a) where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ContractCall"
     $ Map.fromFoldable
@@ -185,7 +93,7 @@ instance decodeJsonContractCall :: (DecodeJson a) => DecodeJson (ContractCall a)
             )
         ]
 
-derive instance genericContractCall :: Generic (ContractCall a) _
+derive instance Generic (ContractCall a) _
 
 --------------------------------------------------------------------------------
 
@@ -214,3 +122,89 @@ _PayToWallet
 _PayToWallet = prism' PayToWallet case _ of
   (PayToWallet a) -> Just a
   _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype FunctionSchema a = FunctionSchema
+  { endpointDescription :: EndpointDescription
+  , argument :: a
+  }
+
+derive instance Functor FunctionSchema
+
+instance (Show a) => Show (FunctionSchema a) where
+  show a = genericShow a
+
+derive instance (Eq a) => Eq (FunctionSchema a)
+
+instance (EncodeJson a) => EncodeJson (FunctionSchema a) where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { endpointDescription: E.value :: _ EndpointDescription
+        , argument: E.value :: _ a
+        }
+    )
+
+instance (DecodeJson a) => DecodeJson (FunctionSchema a) where
+  decodeJson = defer \_ -> D.decode $
+    ( FunctionSchema <$> D.record "FunctionSchema"
+        { endpointDescription: D.value :: _ EndpointDescription
+        , argument: D.value :: _ a
+        }
+    )
+
+derive instance Generic (FunctionSchema a) _
+
+derive instance Newtype (FunctionSchema a) _
+
+--------------------------------------------------------------------------------
+
+_FunctionSchema
+  :: forall a
+   . Iso' (FunctionSchema a)
+       { endpointDescription :: EndpointDescription, argument :: a }
+_FunctionSchema = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype KnownCurrency = KnownCurrency
+  { hash :: String
+  , friendlyName :: String
+  , knownTokens :: NonEmptyList TokenName
+  }
+
+instance Show KnownCurrency where
+  show a = genericShow a
+
+derive instance Eq KnownCurrency
+
+instance EncodeJson KnownCurrency where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { hash: E.value :: _ String
+        , friendlyName: E.value :: _ String
+        , knownTokens: E.value :: _ (NonEmptyList TokenName)
+        }
+    )
+
+instance DecodeJson KnownCurrency where
+  decodeJson = defer \_ -> D.decode $
+    ( KnownCurrency <$> D.record "KnownCurrency"
+        { hash: D.value :: _ String
+        , friendlyName: D.value :: _ String
+        , knownTokens: D.value :: _ (NonEmptyList TokenName)
+        }
+    )
+
+derive instance Generic KnownCurrency _
+
+derive instance Newtype KnownCurrency _
+
+--------------------------------------------------------------------------------
+
+_KnownCurrency :: Iso' KnownCurrency
+  { hash :: String
+  , friendlyName :: String
+  , knownTokens :: NonEmptyList TokenName
+  }
+_KnownCurrency = _Newtype

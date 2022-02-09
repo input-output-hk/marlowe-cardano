@@ -4,13 +4,13 @@ module Page.MarloweEditor.State
   ) where
 
 import Prologue hiding (div)
+
 import CloseAnalysis (analyseClose)
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State) as BottomPanel
 import Control.Monad.Except (lift)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk)
 import Data.Array as Array
 import Data.Either (hush)
 import Data.Foldable (for_)
@@ -21,13 +21,13 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.String (Pattern(..), codePointFromChar, contains)
 import Data.String as String
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Env (Env)
 import Examples.Marlowe.Contracts (example) as ME
 import Halogen (HalogenM, liftEffect, modify_, query)
 import Halogen as H
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import MainFrame.Types (ChildSlots, _marloweEditorPageSlot)
+import Marlowe (Api)
 import Marlowe.Extended as Extended
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Holes as Holes
@@ -52,6 +52,7 @@ import Page.MarloweEditor.Types
   , _selectedHole
   , _showErrorDetail
   )
+import Servant.PureScript (class MonadAjax)
 import SessionStorage as SessionStorage
 import StaticAnalysis.Reachability
   ( analyseReachability
@@ -84,7 +85,7 @@ toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction DoNothing = pure unit

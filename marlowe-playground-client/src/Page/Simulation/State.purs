@@ -6,14 +6,15 @@ module Page.Simulation.State
   ) where
 
 import Prologue hiding (div)
+
 import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State, initialState) as BottomPanel
-import Control.Monad.Except (lift, runExcept, runExceptT)
+import Control.Monad.Except (lift, runExcept)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk)
+import Data.Argonaut (printJsonDecodeError, stringify)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt, fromString)
-import Data.Decimal (truncated, fromNumber)
+import Data.Decimal (fromNumber, truncated)
 import Data.Decimal as Decimal
 import Data.Either (hush)
 import Data.Foldable (for_)
@@ -31,7 +32,6 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Console (log)
-import Env (Env)
 import Foreign.Generic (ForeignError, decode)
 import Foreign.JSON (parseJSON)
 import Halogen (HalogenM, get, query, tell)
@@ -39,6 +39,7 @@ import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
 import MainFrame.Types (ChildSlots, _simulatorEditorSlot)
+import Marlowe (Api)
 import Marlowe as Server
 import Marlowe.Holes (Location(..), getLocation)
 import Marlowe.Monaco as MM
@@ -54,7 +55,7 @@ import Page.Simulation.Lenses
   , _showRightPanel
   )
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
-import Servant.PureScript (printAjaxError)
+import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses
   ( _SimulationNotStarted
@@ -116,7 +117,7 @@ toBottomPanel = mapSubmodule _bottomPanelState BottomPanelAction
 handleAction
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Action
   -> HalogenM State Action ChildSlots Void m Unit
 handleAction (HandleEditorMessage Monaco.EditorReady) = do
@@ -234,7 +235,7 @@ stripPair pair = case splitAt 4 pair of
 setOraclePrice
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => HalogenM State Action ChildSlots Void m Unit
 setOraclePrice = do
   execState <- use (_currentMarloweState <<< _executionState)
@@ -263,20 +264,20 @@ type Resp
 getPrice
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Boolean
   -> String
   -> String
   -> HalogenM State Action ChildSlots Void m BigInt
 getPrice inverse exchange pair = do
-  result <- RemoteData.fromEither <$> runExceptT
-    (Server.getApiOracleByExchangeByPair exchange pair)
+  result <- lift $ RemoteData.fromEither
+    <$> Server.getApiOracleByExchangeByPair exchange pair
   calculatedPrice <-
     liftEffect case result of
       NotAsked -> pure "0"
       Loading -> pure "0"
       Failure e -> do
-        log $ "Failure" <> printAjaxError e
+        log $ "Failure" <> printAjaxError stringify printJsonDecodeError e
         pure "0"
       Success (RawJson json) -> do
         let
@@ -352,7 +353,7 @@ editorGetValue = query _simulatorEditorSlot unit (Monaco.GetText identity)
 updateOracleAndContractEditor
   :: forall m
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => HalogenM State Action ChildSlots Void m Unit
 updateOracleAndContractEditor = do
   mContract <- peruse _currentContract

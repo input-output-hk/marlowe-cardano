@@ -1,6 +1,7 @@
 module Pretty where
 
 import Prologue
+
 import Data.Array (concat, drop, dropWhile, length, replicate, take)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
@@ -10,7 +11,7 @@ import Data.String as String
 import Data.String.CodeUnits (fromCharArray, toCharArray)
 import Halogen.HTML (HTML, abbr, text)
 import Halogen.HTML.Properties (title)
-import Marlowe.Extended.Metadata (NumberFormat(..), MetaData)
+import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
 import Marlowe.Semantics (Party(..), Payee(..), Token(..))
 
 renderPrettyToken :: forall p i. Token -> HTML p i

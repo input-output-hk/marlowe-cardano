@@ -1,7 +1,8 @@
 module Toast.View (renderToast) where
 
 import Prologue hiding (div)
-import Component.Icons (Icon(..), icon_, icon)
+
+import Component.Icons (Icon(..), icon, icon_)
 import Css as Css
 import Data.Lens (preview)
 import Data.Maybe (fromMaybe)

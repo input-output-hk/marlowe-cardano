@@ -17,13 +17,14 @@
       stackage = sources.stackage-nix;
     };
   }
-, packages ? import ./nix { inherit system sources crossSystem config sourcesOverride haskellNix checkMaterialization enableHaskellProfiling; }
+, packages ? import ./nix { inherit system sources crossSystem config sourcesOverride haskellNix checkMaterialization enableHaskellProfiling source-repo-override; }
   # An explicit git rev to use, passed when we are in Hydra
   # Whether to check that the pinned shas for haskell.nix are correct. We want this to be
   # false, generally, since it does more work, but we set it to true in the CI
 , checkMaterialization ? false
   # Whether to build our Haskell packages (and their dependencies) with profiling enabled.
 , enableHaskellProfiling ? false
+, source-repo-override ? { }
 }:
 let
   inherit (packages) pkgs marlowe sources;
@@ -33,24 +34,21 @@ let
   inherit (haskell.packages.marlowe-dashboard-server.components.exes) marlowe-dashboard-server;
 in
 rec {
-  inherit pkgs marlowe;
+  inherit pkgs marlowe cardano-wallet plutus-chain-index;
 
-  inherit (marlowe) webCommon web-ghc;
+  inherit (marlowe) webCommon web-ghc cardano-node cardano-cli;
 
   inherit (haskell.packages.marlowe.components.exes) marlowe-pab;
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
 
-  # TODO This stuff should probably be exposed as an overlay in the plutus-apps if
-  # we switch to flakes.
-  webCommonPlayground = pkgs.callPackage (sources.plutus-apps + "/web-common-playground") { inherit (marlowe.lib) gitignore-nix; };
   webCommonMarlowe = pkgs.callPackage ./web-common-marlowe { inherit (marlowe.lib) gitignore-nix; };
 
   marlowe-playground = pkgs.recurseIntoAttrs rec {
     inherit (pkgs.callPackage ./marlowe-playground-client {
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
-      inherit haskell webCommon webCommonMarlowe webCommonPlayground;
-      inherit (marlowe) purs-tidy;
+      inherit haskell webCommon webCommonMarlowe;
+      inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
     }) client server generated-purescript generate-purescript start-backend;
   };
@@ -60,9 +58,9 @@ rec {
       inherit haskell;
       inherit (marlowe.lib) buildPursPackage buildNodeModules filterNpm gitignore-nix;
       inherit webCommon webCommonMarlowe;
-      inherit (marlowe) purs-tidy;
+      inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
-    }) client marlowe-setup-invoker marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend;
+    }) client marlowe-invoker marlowe-run-backend-invoker generated-purescript generate-purescript start-backend build-client;
   };
 
   tests = import ./nix/tests/default.nix {

@@ -8,7 +8,7 @@ module StaticAnalysis.Reachability
   ) where
 
 import Prologue hiding (div)
-import Control.Monad.Reader (class MonadAsk)
+
 import Control.Monad.State as CMS
 import Data.Lens (assign, use)
 import Data.List (List(..), any, catMaybes, fromFoldable, null)
@@ -18,13 +18,14 @@ import Data.Map as Map
 import Data.Set (singleton, union)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
-import Env (Env)
 import Halogen (HalogenM)
+import Marlowe (Api)
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Template (fillTemplate)
 import Marlowe.Semantics (Contract(..), Observation(..), emptyState)
 import Marlowe.Semantics as S
+import Marlowe.Template (fillTemplate)
+import Servant.PureScript (class MonadAjax)
 import StaticAnalysis.StaticTools
   ( closeZipperContract
   , startMultiStageAnalysis
@@ -47,7 +48,7 @@ import StaticAnalysis.Types
 analyseReachability
   :: forall m state action slots
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => EM.Contract
   -> HalogenM { analysisState :: AnalysisState | state } action slots Void m
        Unit
@@ -99,7 +100,7 @@ reachabilityAnalysisDef =
 startReachabilityAnalysis
   :: forall m state action slots
    . MonadAff m
-  => MonadAsk Env m
+  => MonadAjax Api m
   => Contract
   -> S.State
   -> HalogenM { analysisState :: AnalysisState | state } action slots Void m

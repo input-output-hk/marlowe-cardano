@@ -1,6 +1,7 @@
 module Page.MarloweEditor.Types where
 
 import Prologue
+
 import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
@@ -8,16 +9,16 @@ import Component.MetadataTab.Types (MetadataAction, showConstructor)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
 import Data.Lens (Lens', to, view)
 import Data.Lens.Record (prop)
-import Type.Proxy (Proxy(..))
+import Data.Show.Generic (genericShow)
 import Halogen.Monaco (KeyBindings(..))
 import Halogen.Monaco as Monaco
 import Marlowe.Extended.Metadata (MetadataHintInfo)
 import Marlowe.Template (IntegerTemplateType)
 import Monaco (IMarkerData)
 import StaticAnalysis.Types (AnalysisState, initAnalysisState)
+import Type.Proxy (Proxy(..))
 import Web.HTML.Event.DragEvent (DragEvent)
 
 type Pos

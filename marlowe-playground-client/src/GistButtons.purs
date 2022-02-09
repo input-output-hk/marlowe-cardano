@@ -1,6 +1,7 @@
 module GistButtons (authButton) where
 
 import Prologue hiding (div)
+
 import Auth (AuthRole(..), authStatusAuthRole)
 import Component.Modal.ViewHelpers (modalHeader)
 import Data.Lens (to, view, (^.))

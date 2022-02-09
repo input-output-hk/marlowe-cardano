@@ -41,14 +41,13 @@ data State
   | Started StartedState
 
 type StartingState =
-  -- TODO fix primitive obsession
   { nickname :: String
   , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
+  -- TODO: add marlowe params
   }
 
 type StartedState =
-  -- TODO fix primitive obsession
   { nickname :: String
   , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State

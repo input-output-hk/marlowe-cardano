@@ -8,6 +8,7 @@ module Marlowe.LinterText
   ) where
 
 import Prologue
+
 import Data.Array (catMaybes, take)
 import Data.Array as Array
 import Data.Array.NonEmpty (index)

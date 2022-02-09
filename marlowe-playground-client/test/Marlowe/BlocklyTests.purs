@@ -1,9 +1,10 @@
 module Marlowe.BlocklyTests where
 
 import Prologue
+
 import Blockly.Dom (explainError, getDom)
 import Blockly.Headless as Headless
-import Blockly.Internal (getInputWithName, inputList, getBlockById)
+import Blockly.Internal (getBlockById, getInputWithName, inputList)
 import Blockly.Internal as Blockly
 import Blockly.Types (BlocklyState)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
@@ -18,7 +19,7 @@ import Marlowe.Blockly
   , rootBlockName
   , toBlockly
   )
-import Marlowe.Gen (genContract, genTerm, GenerationOptions(..))
+import Marlowe.Gen (GenerationOptions(..), genContract, genTerm)
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (Contract, Term)
 import Marlowe.Parser as Parser

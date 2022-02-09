@@ -3,6 +3,7 @@ module Component.Modal.View
   ) where
 
 import Prologue hiding (div)
+
 import Component.ConfirmUnsavedNavigation.View (render) as ConfirmUnsavedNavigation
 import Component.Demos.View (render) as Demos
 import Component.NewProject.View (render) as NewProject

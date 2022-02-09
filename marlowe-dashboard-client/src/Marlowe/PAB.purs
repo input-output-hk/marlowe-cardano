@@ -1,16 +1,19 @@
 module Marlowe.PAB
-  ( transactionFee
+  ( PlutusAppId(..)
   , contractCreationFee
-  , PlutusAppId(..)
+  , fromContractInstanceId
+  , transactionFee
   ) where
 
 import Prologue
+
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Generic.Rep (class Generic)
 import Data.Newtype (class Newtype)
 import Data.UUID.Argonaut (UUID)
+import Wallet.Types (ContractInstanceId(..))
 
 -- In the Marlowe PAB, transactions have a fixed cost of 10 lovelace; in the real node, transaction
 -- fees will vary, but this will serve as an approximation for now.
@@ -42,3 +45,7 @@ derive instance genericPlutusAppId :: Generic PlutusAppId _
 derive newtype instance encodeJsonPlutusAppId :: EncodeJson PlutusAppId
 
 derive newtype instance decodeJsonPlutusAppId :: DecodeJson PlutusAppId
+
+fromContractInstanceId :: ContractInstanceId -> PlutusAppId
+fromContractInstanceId (ContractInstanceId { unContractInstanceId }) =
+  PlutusAppId unContractInstanceId

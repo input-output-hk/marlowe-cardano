@@ -1,17 +1,18 @@
 module Language.Javascript.Interpreter where
 
 import Prologue
+
 import Control.Promise (Promise, toAffE)
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype)
-import Type.Proxy (Proxy(..))
 import Effect.Aff (Aff)
 import Effect.Uncurried (EffectFn3, runEffectFn3)
 import Marlowe.Extended (Contract)
 import Monaco (ITextModel)
+import Type.Proxy (Proxy(..))
 
 data CompilationError
   = RawError String

@@ -4,11 +4,11 @@ module Language.Marlowe.ACTUS.Domain.ContractTerms where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
@@ -26,1147 +26,103 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
 
-newtype ContractTermsPoly a = ContractTermsPoly
-  { contractId :: String
-  , contractType :: CT
-  , contractStructure :: Array (ContractStructure a)
-  , contractRole :: CR
-  , settlementCurrency :: Maybe String
-  , initialExchangeDate :: Maybe String
-  , dayCountConvention :: Maybe DCC
-  , scheduleConfig :: ScheduleConfig
-  , statusDate :: String
-  , contractPerformance :: Maybe PRF
-  , creditEventTypeCovered :: Maybe CETC
-  , coverageOfCreditEnhancement :: Maybe a
-  , guaranteedExposure :: Maybe CEGE
-  , cycleOfFee :: Maybe Cycle
-  , cycleAnchorDateOfFee :: Maybe String
-  , feeAccrued :: Maybe a
-  , feeBasis :: Maybe FEB
-  , feeRate :: Maybe a
-  , cycleAnchorDateOfInterestPayment :: Maybe String
-  , cycleOfInterestPayment :: Maybe Cycle
-  , accruedInterest :: Maybe a
-  , capitalizationEndDate :: Maybe String
-  , cycleAnchorDateOfInterestCalculationBase :: Maybe String
-  , cycleOfInterestCalculationBase :: Maybe Cycle
-  , interestCalculationBase :: Maybe IPCB
-  , interestCalculationBaseA :: Maybe a
-  , nominalInterestRate :: Maybe a
-  , nominalInterestRate2 :: Maybe a
-  , interestScalingMultiplier :: Maybe a
-  , maturityDate :: Maybe String
-  , amortizationDate :: Maybe String
-  , exerciseDate :: Maybe String
-  , notionalPrincipal :: Maybe a
-  , premiumDiscountAtIED :: Maybe a
-  , cycleAnchorDateOfPrincipalRedemption :: Maybe String
-  , cycleOfPrincipalRedemption :: Maybe Cycle
-  , nextPrincipalRedemptionPayment :: Maybe a
-  , purchaseDate :: Maybe String
-  , priceAtPurchaseDate :: Maybe a
-  , terminationDate :: Maybe String
-  , priceAtTerminationDate :: Maybe a
-  , quantity :: Maybe a
-  , scalingIndexAtStatusDate :: Maybe a
-  , cycleAnchorDateOfScalingIndex :: Maybe String
-  , cycleOfScalingIndex :: Maybe Cycle
-  , scalingEffect :: Maybe SCEF
-  , scalingIndexAtContractDealDate :: Maybe a
-  , marketObjectCodeOfScalingIndex :: Maybe String
-  , notionalScalingMultiplier :: Maybe a
-  , cycleOfOptionality :: Maybe Cycle
-  , cycleAnchorDateOfOptionality :: Maybe String
-  , optionType :: Maybe OPTP
-  , optionStrike1 :: Maybe a
-  , optionExerciseType :: Maybe OPXT
-  , settlementPeriod :: Maybe Cycle
-  , deliverySettlement :: Maybe DS
-  , exerciseAmount :: Maybe a
-  , futuresPrice :: Maybe a
-  , penaltyRate :: Maybe a
-  , penaltyType :: Maybe PYTP
-  , prepaymentEffect :: Maybe PPEF
-  , cycleOfRateReset :: Maybe Cycle
-  , cycleAnchorDateOfRateReset :: Maybe String
-  , nextResetRate :: Maybe a
-  , rateSpread :: Maybe a
-  , rateMultiplier :: Maybe a
-  , periodFloor :: Maybe a
-  , periodCap :: Maybe a
-  , lifeCap :: Maybe a
-  , lifeFloor :: Maybe a
-  , marketObjectCodeOfRateReset :: Maybe String
-  , cycleOfDividend :: Maybe Cycle
-  , cycleAnchorDateOfDividend :: Maybe String
-  , nextDividendPaymentAmount :: Maybe a
-  , enableSettlement :: Boolean
-  , constraints :: Maybe Assertions
+newtype Assertion = NpvAssertionAgainstZeroRiskBond
+  { zeroRiskInterest :: Number
+  , expectedNpv :: Number
   }
 
-instance encodeJsonContractTermsPoly ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (ContractTermsPoly a) where
+instance EncodeJson Assertion where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { contractId: E.value :: _ String
-        , contractType: E.value :: _ CT
-        , contractStructure: E.value :: _ (Array (ContractStructure a))
-        , contractRole: E.value :: _ CR
-        , settlementCurrency: (E.maybe E.value) :: _ (Maybe String)
-        , initialExchangeDate: (E.maybe E.value) :: _ (Maybe String)
-        , dayCountConvention: (E.maybe E.value) :: _ (Maybe DCC)
-        , scheduleConfig: E.value :: _ ScheduleConfig
-        , statusDate: E.value :: _ String
-        , contractPerformance: (E.maybe E.value) :: _ (Maybe PRF)
-        , creditEventTypeCovered: (E.maybe E.value) :: _ (Maybe CETC)
-        , coverageOfCreditEnhancement: (E.maybe E.value) :: _ (Maybe a)
-        , guaranteedExposure: (E.maybe E.value) :: _ (Maybe CEGE)
-        , cycleOfFee: (E.maybe E.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfFee: (E.maybe E.value) :: _ (Maybe String)
-        , feeAccrued: (E.maybe E.value) :: _ (Maybe a)
-        , feeBasis: (E.maybe E.value) :: _ (Maybe FEB)
-        , feeRate: (E.maybe E.value) :: _ (Maybe a)
-        , cycleAnchorDateOfInterestPayment:
-            (E.maybe E.value) :: _ (Maybe String)
-        , cycleOfInterestPayment: (E.maybe E.value) :: _ (Maybe Cycle)
-        , accruedInterest: (E.maybe E.value) :: _ (Maybe a)
-        , capitalizationEndDate: (E.maybe E.value) :: _ (Maybe String)
-        , cycleAnchorDateOfInterestCalculationBase:
-            (E.maybe E.value) :: _ (Maybe String)
-        , cycleOfInterestCalculationBase: (E.maybe E.value) :: _ (Maybe Cycle)
-        , interestCalculationBase: (E.maybe E.value) :: _ (Maybe IPCB)
-        , interestCalculationBaseA: (E.maybe E.value) :: _ (Maybe a)
-        , nominalInterestRate: (E.maybe E.value) :: _ (Maybe a)
-        , nominalInterestRate2: (E.maybe E.value) :: _ (Maybe a)
-        , interestScalingMultiplier: (E.maybe E.value) :: _ (Maybe a)
-        , maturityDate: (E.maybe E.value) :: _ (Maybe String)
-        , amortizationDate: (E.maybe E.value) :: _ (Maybe String)
-        , exerciseDate: (E.maybe E.value) :: _ (Maybe String)
-        , notionalPrincipal: (E.maybe E.value) :: _ (Maybe a)
-        , premiumDiscountAtIED: (E.maybe E.value) :: _ (Maybe a)
-        , cycleAnchorDateOfPrincipalRedemption:
-            (E.maybe E.value) :: _ (Maybe String)
-        , cycleOfPrincipalRedemption: (E.maybe E.value) :: _ (Maybe Cycle)
-        , nextPrincipalRedemptionPayment: (E.maybe E.value) :: _ (Maybe a)
-        , purchaseDate: (E.maybe E.value) :: _ (Maybe String)
-        , priceAtPurchaseDate: (E.maybe E.value) :: _ (Maybe a)
-        , terminationDate: (E.maybe E.value) :: _ (Maybe String)
-        , priceAtTerminationDate: (E.maybe E.value) :: _ (Maybe a)
-        , quantity: (E.maybe E.value) :: _ (Maybe a)
-        , scalingIndexAtStatusDate: (E.maybe E.value) :: _ (Maybe a)
-        , cycleAnchorDateOfScalingIndex: (E.maybe E.value) :: _ (Maybe String)
-        , cycleOfScalingIndex: (E.maybe E.value) :: _ (Maybe Cycle)
-        , scalingEffect: (E.maybe E.value) :: _ (Maybe SCEF)
-        , scalingIndexAtContractDealDate: (E.maybe E.value) :: _ (Maybe a)
-        , marketObjectCodeOfScalingIndex: (E.maybe E.value) :: _ (Maybe String)
-        , notionalScalingMultiplier: (E.maybe E.value) :: _ (Maybe a)
-        , cycleOfOptionality: (E.maybe E.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfOptionality: (E.maybe E.value) :: _ (Maybe String)
-        , optionType: (E.maybe E.value) :: _ (Maybe OPTP)
-        , optionStrike1: (E.maybe E.value) :: _ (Maybe a)
-        , optionExerciseType: (E.maybe E.value) :: _ (Maybe OPXT)
-        , settlementPeriod: (E.maybe E.value) :: _ (Maybe Cycle)
-        , deliverySettlement: (E.maybe E.value) :: _ (Maybe DS)
-        , exerciseAmount: (E.maybe E.value) :: _ (Maybe a)
-        , futuresPrice: (E.maybe E.value) :: _ (Maybe a)
-        , penaltyRate: (E.maybe E.value) :: _ (Maybe a)
-        , penaltyType: (E.maybe E.value) :: _ (Maybe PYTP)
-        , prepaymentEffect: (E.maybe E.value) :: _ (Maybe PPEF)
-        , cycleOfRateReset: (E.maybe E.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfRateReset: (E.maybe E.value) :: _ (Maybe String)
-        , nextResetRate: (E.maybe E.value) :: _ (Maybe a)
-        , rateSpread: (E.maybe E.value) :: _ (Maybe a)
-        , rateMultiplier: (E.maybe E.value) :: _ (Maybe a)
-        , periodFloor: (E.maybe E.value) :: _ (Maybe a)
-        , periodCap: (E.maybe E.value) :: _ (Maybe a)
-        , lifeCap: (E.maybe E.value) :: _ (Maybe a)
-        , lifeFloor: (E.maybe E.value) :: _ (Maybe a)
-        , marketObjectCodeOfRateReset: (E.maybe E.value) :: _ (Maybe String)
-        , cycleOfDividend: (E.maybe E.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfDividend: (E.maybe E.value) :: _ (Maybe String)
-        , nextDividendPaymentAmount: (E.maybe E.value) :: _ (Maybe a)
-        , enableSettlement: E.value :: _ Boolean
-        , constraints: (E.maybe E.value) :: _ (Maybe Assertions)
+        { zeroRiskInterest: E.value :: _ Number
+        , expectedNpv: E.value :: _ Number
         }
     )
 
-instance decodeJsonContractTermsPoly ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (ContractTermsPoly a) where
+instance DecodeJson Assertion where
   decodeJson = defer \_ -> D.decode $
-    ( ContractTermsPoly <$> D.record "ContractTermsPoly"
-        { contractId: D.value :: _ String
-        , contractType: D.value :: _ CT
-        , contractStructure: D.value :: _ (Array (ContractStructure a))
-        , contractRole: D.value :: _ CR
-        , settlementCurrency: (D.maybe D.value) :: _ (Maybe String)
-        , initialExchangeDate: (D.maybe D.value) :: _ (Maybe String)
-        , dayCountConvention: (D.maybe D.value) :: _ (Maybe DCC)
-        , scheduleConfig: D.value :: _ ScheduleConfig
-        , statusDate: D.value :: _ String
-        , contractPerformance: (D.maybe D.value) :: _ (Maybe PRF)
-        , creditEventTypeCovered: (D.maybe D.value) :: _ (Maybe CETC)
-        , coverageOfCreditEnhancement: (D.maybe D.value) :: _ (Maybe a)
-        , guaranteedExposure: (D.maybe D.value) :: _ (Maybe CEGE)
-        , cycleOfFee: (D.maybe D.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfFee: (D.maybe D.value) :: _ (Maybe String)
-        , feeAccrued: (D.maybe D.value) :: _ (Maybe a)
-        , feeBasis: (D.maybe D.value) :: _ (Maybe FEB)
-        , feeRate: (D.maybe D.value) :: _ (Maybe a)
-        , cycleAnchorDateOfInterestPayment:
-            (D.maybe D.value) :: _ (Maybe String)
-        , cycleOfInterestPayment: (D.maybe D.value) :: _ (Maybe Cycle)
-        , accruedInterest: (D.maybe D.value) :: _ (Maybe a)
-        , capitalizationEndDate: (D.maybe D.value) :: _ (Maybe String)
-        , cycleAnchorDateOfInterestCalculationBase:
-            (D.maybe D.value) :: _ (Maybe String)
-        , cycleOfInterestCalculationBase: (D.maybe D.value) :: _ (Maybe Cycle)
-        , interestCalculationBase: (D.maybe D.value) :: _ (Maybe IPCB)
-        , interestCalculationBaseA: (D.maybe D.value) :: _ (Maybe a)
-        , nominalInterestRate: (D.maybe D.value) :: _ (Maybe a)
-        , nominalInterestRate2: (D.maybe D.value) :: _ (Maybe a)
-        , interestScalingMultiplier: (D.maybe D.value) :: _ (Maybe a)
-        , maturityDate: (D.maybe D.value) :: _ (Maybe String)
-        , amortizationDate: (D.maybe D.value) :: _ (Maybe String)
-        , exerciseDate: (D.maybe D.value) :: _ (Maybe String)
-        , notionalPrincipal: (D.maybe D.value) :: _ (Maybe a)
-        , premiumDiscountAtIED: (D.maybe D.value) :: _ (Maybe a)
-        , cycleAnchorDateOfPrincipalRedemption:
-            (D.maybe D.value) :: _ (Maybe String)
-        , cycleOfPrincipalRedemption: (D.maybe D.value) :: _ (Maybe Cycle)
-        , nextPrincipalRedemptionPayment: (D.maybe D.value) :: _ (Maybe a)
-        , purchaseDate: (D.maybe D.value) :: _ (Maybe String)
-        , priceAtPurchaseDate: (D.maybe D.value) :: _ (Maybe a)
-        , terminationDate: (D.maybe D.value) :: _ (Maybe String)
-        , priceAtTerminationDate: (D.maybe D.value) :: _ (Maybe a)
-        , quantity: (D.maybe D.value) :: _ (Maybe a)
-        , scalingIndexAtStatusDate: (D.maybe D.value) :: _ (Maybe a)
-        , cycleAnchorDateOfScalingIndex: (D.maybe D.value) :: _ (Maybe String)
-        , cycleOfScalingIndex: (D.maybe D.value) :: _ (Maybe Cycle)
-        , scalingEffect: (D.maybe D.value) :: _ (Maybe SCEF)
-        , scalingIndexAtContractDealDate: (D.maybe D.value) :: _ (Maybe a)
-        , marketObjectCodeOfScalingIndex: (D.maybe D.value) :: _ (Maybe String)
-        , notionalScalingMultiplier: (D.maybe D.value) :: _ (Maybe a)
-        , cycleOfOptionality: (D.maybe D.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfOptionality: (D.maybe D.value) :: _ (Maybe String)
-        , optionType: (D.maybe D.value) :: _ (Maybe OPTP)
-        , optionStrike1: (D.maybe D.value) :: _ (Maybe a)
-        , optionExerciseType: (D.maybe D.value) :: _ (Maybe OPXT)
-        , settlementPeriod: (D.maybe D.value) :: _ (Maybe Cycle)
-        , deliverySettlement: (D.maybe D.value) :: _ (Maybe DS)
-        , exerciseAmount: (D.maybe D.value) :: _ (Maybe a)
-        , futuresPrice: (D.maybe D.value) :: _ (Maybe a)
-        , penaltyRate: (D.maybe D.value) :: _ (Maybe a)
-        , penaltyType: (D.maybe D.value) :: _ (Maybe PYTP)
-        , prepaymentEffect: (D.maybe D.value) :: _ (Maybe PPEF)
-        , cycleOfRateReset: (D.maybe D.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfRateReset: (D.maybe D.value) :: _ (Maybe String)
-        , nextResetRate: (D.maybe D.value) :: _ (Maybe a)
-        , rateSpread: (D.maybe D.value) :: _ (Maybe a)
-        , rateMultiplier: (D.maybe D.value) :: _ (Maybe a)
-        , periodFloor: (D.maybe D.value) :: _ (Maybe a)
-        , periodCap: (D.maybe D.value) :: _ (Maybe a)
-        , lifeCap: (D.maybe D.value) :: _ (Maybe a)
-        , lifeFloor: (D.maybe D.value) :: _ (Maybe a)
-        , marketObjectCodeOfRateReset: (D.maybe D.value) :: _ (Maybe String)
-        , cycleOfDividend: (D.maybe D.value) :: _ (Maybe Cycle)
-        , cycleAnchorDateOfDividend: (D.maybe D.value) :: _ (Maybe String)
-        , nextDividendPaymentAmount: (D.maybe D.value) :: _ (Maybe a)
-        , enableSettlement: D.value :: _ Boolean
-        , constraints: (D.maybe D.value) :: _ (Maybe Assertions)
+    ( NpvAssertionAgainstZeroRiskBond <$> D.record
+        "NpvAssertionAgainstZeroRiskBond"
+        { zeroRiskInterest: D.value :: _ Number
+        , expectedNpv: D.value :: _ Number
         }
     )
 
-derive instance genericContractTermsPoly :: Generic (ContractTermsPoly a) _
+derive instance Generic Assertion _
 
-derive instance newtypeContractTermsPoly :: Newtype (ContractTermsPoly a) _
-
---------------------------------------------------------------------------------
-
-_ContractTermsPoly
-  :: forall a
-   . Iso' (ContractTermsPoly a)
-       { contractId :: String
-       , contractType :: CT
-       , contractStructure :: Array (ContractStructure a)
-       , contractRole :: CR
-       , settlementCurrency :: Maybe String
-       , initialExchangeDate :: Maybe String
-       , dayCountConvention :: Maybe DCC
-       , scheduleConfig :: ScheduleConfig
-       , statusDate :: String
-       , contractPerformance :: Maybe PRF
-       , creditEventTypeCovered :: Maybe CETC
-       , coverageOfCreditEnhancement :: Maybe a
-       , guaranteedExposure :: Maybe CEGE
-       , cycleOfFee :: Maybe Cycle
-       , cycleAnchorDateOfFee :: Maybe String
-       , feeAccrued :: Maybe a
-       , feeBasis :: Maybe FEB
-       , feeRate :: Maybe a
-       , cycleAnchorDateOfInterestPayment :: Maybe String
-       , cycleOfInterestPayment :: Maybe Cycle
-       , accruedInterest :: Maybe a
-       , capitalizationEndDate :: Maybe String
-       , cycleAnchorDateOfInterestCalculationBase :: Maybe String
-       , cycleOfInterestCalculationBase :: Maybe Cycle
-       , interestCalculationBase :: Maybe IPCB
-       , interestCalculationBaseA :: Maybe a
-       , nominalInterestRate :: Maybe a
-       , nominalInterestRate2 :: Maybe a
-       , interestScalingMultiplier :: Maybe a
-       , maturityDate :: Maybe String
-       , amortizationDate :: Maybe String
-       , exerciseDate :: Maybe String
-       , notionalPrincipal :: Maybe a
-       , premiumDiscountAtIED :: Maybe a
-       , cycleAnchorDateOfPrincipalRedemption :: Maybe String
-       , cycleOfPrincipalRedemption :: Maybe Cycle
-       , nextPrincipalRedemptionPayment :: Maybe a
-       , purchaseDate :: Maybe String
-       , priceAtPurchaseDate :: Maybe a
-       , terminationDate :: Maybe String
-       , priceAtTerminationDate :: Maybe a
-       , quantity :: Maybe a
-       , scalingIndexAtStatusDate :: Maybe a
-       , cycleAnchorDateOfScalingIndex :: Maybe String
-       , cycleOfScalingIndex :: Maybe Cycle
-       , scalingEffect :: Maybe SCEF
-       , scalingIndexAtContractDealDate :: Maybe a
-       , marketObjectCodeOfScalingIndex :: Maybe String
-       , notionalScalingMultiplier :: Maybe a
-       , cycleOfOptionality :: Maybe Cycle
-       , cycleAnchorDateOfOptionality :: Maybe String
-       , optionType :: Maybe OPTP
-       , optionStrike1 :: Maybe a
-       , optionExerciseType :: Maybe OPXT
-       , settlementPeriod :: Maybe Cycle
-       , deliverySettlement :: Maybe DS
-       , exerciseAmount :: Maybe a
-       , futuresPrice :: Maybe a
-       , penaltyRate :: Maybe a
-       , penaltyType :: Maybe PYTP
-       , prepaymentEffect :: Maybe PPEF
-       , cycleOfRateReset :: Maybe Cycle
-       , cycleAnchorDateOfRateReset :: Maybe String
-       , nextResetRate :: Maybe a
-       , rateSpread :: Maybe a
-       , rateMultiplier :: Maybe a
-       , periodFloor :: Maybe a
-       , periodCap :: Maybe a
-       , lifeCap :: Maybe a
-       , lifeFloor :: Maybe a
-       , marketObjectCodeOfRateReset :: Maybe String
-       , cycleOfDividend :: Maybe Cycle
-       , cycleAnchorDateOfDividend :: Maybe String
-       , nextDividendPaymentAmount :: Maybe a
-       , enableSettlement :: Boolean
-       , constraints :: Maybe Assertions
-       }
-_ContractTermsPoly = _Newtype
+derive instance Newtype Assertion _
 
 --------------------------------------------------------------------------------
 
-data PYTP
-  = PYTP_A
-  | PYTP_N
-  | PYTP_I
-  | PYTP_O
-
-derive instance eqPYTP :: Eq PYTP
-
-derive instance ordPYTP :: Ord PYTP
-
-instance showPYTP :: Show PYTP where
-  show a = genericShow a
-
-instance encodeJsonPYTP :: EncodeJson PYTP where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPYTP :: DecodeJson PYTP where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPYTP :: Generic PYTP _
-
-instance enumPYTP :: Enum PYTP where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPYTP :: Bounded PYTP where
-  bottom = genericBottom
-  top = genericTop
+_NpvAssertionAgainstZeroRiskBond :: Iso' Assertion
+  { zeroRiskInterest :: Number, expectedNpv :: Number }
+_NpvAssertionAgainstZeroRiskBond = _Newtype
 
 --------------------------------------------------------------------------------
 
-_PYTP_A :: Prism' PYTP Unit
-_PYTP_A = prism' (const PYTP_A) case _ of
-  PYTP_A -> Just unit
-  _ -> Nothing
-
-_PYTP_N :: Prism' PYTP Unit
-_PYTP_N = prism' (const PYTP_N) case _ of
-  PYTP_N -> Just unit
-  _ -> Nothing
-
-_PYTP_I :: Prism' PYTP Unit
-_PYTP_I = prism' (const PYTP_I) case _ of
-  PYTP_I -> Just unit
-  _ -> Nothing
-
-_PYTP_O :: Prism' PYTP Unit
-_PYTP_O = prism' (const PYTP_O) case _ of
-  PYTP_O -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data PPEF
-  = PPEF_N
-  | PPEF_A
-  | PPEF_M
-
-derive instance eqPPEF :: Eq PPEF
-
-derive instance ordPPEF :: Ord PPEF
-
-instance showPPEF :: Show PPEF where
-  show a = genericShow a
-
-instance encodeJsonPPEF :: EncodeJson PPEF where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPPEF :: DecodeJson PPEF where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPPEF :: Generic PPEF _
-
-instance enumPPEF :: Enum PPEF where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPPEF :: Bounded PPEF where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_PPEF_N :: Prism' PPEF Unit
-_PPEF_N = prism' (const PPEF_N) case _ of
-  PPEF_N -> Just unit
-  _ -> Nothing
-
-_PPEF_A :: Prism' PPEF Unit
-_PPEF_A = prism' (const PPEF_A) case _ of
-  PPEF_A -> Just unit
-  _ -> Nothing
-
-_PPEF_M :: Prism' PPEF Unit
-_PPEF_M = prism' (const PPEF_M) case _ of
-  PPEF_M -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data SCEF
-  = SE_OOO
-  | SE_IOO
-  | SE_ONO
-  | SE_OOM
-  | SE_INO
-  | SE_ONM
-  | SE_IOM
-  | SE_INM
-
-derive instance eqSCEF :: Eq SCEF
-
-derive instance ordSCEF :: Ord SCEF
-
-instance showSCEF :: Show SCEF where
-  show a = genericShow a
-
-instance encodeJsonSCEF :: EncodeJson SCEF where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonSCEF :: DecodeJson SCEF where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericSCEF :: Generic SCEF _
-
-instance enumSCEF :: Enum SCEF where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedSCEF :: Bounded SCEF where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_SE_OOO :: Prism' SCEF Unit
-_SE_OOO = prism' (const SE_OOO) case _ of
-  SE_OOO -> Just unit
-  _ -> Nothing
-
-_SE_IOO :: Prism' SCEF Unit
-_SE_IOO = prism' (const SE_IOO) case _ of
-  SE_IOO -> Just unit
-  _ -> Nothing
-
-_SE_ONO :: Prism' SCEF Unit
-_SE_ONO = prism' (const SE_ONO) case _ of
-  SE_ONO -> Just unit
-  _ -> Nothing
-
-_SE_OOM :: Prism' SCEF Unit
-_SE_OOM = prism' (const SE_OOM) case _ of
-  SE_OOM -> Just unit
-  _ -> Nothing
-
-_SE_INO :: Prism' SCEF Unit
-_SE_INO = prism' (const SE_INO) case _ of
-  SE_INO -> Just unit
-  _ -> Nothing
-
-_SE_ONM :: Prism' SCEF Unit
-_SE_ONM = prism' (const SE_ONM) case _ of
-  SE_ONM -> Just unit
-  _ -> Nothing
-
-_SE_IOM :: Prism' SCEF Unit
-_SE_IOM = prism' (const SE_IOM) case _ of
-  SE_IOM -> Just unit
-  _ -> Nothing
-
-_SE_INM :: Prism' SCEF Unit
-_SE_INM = prism' (const SE_INM) case _ of
-  SE_INM -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data OPTP
-  = OPTP_C
-  | OPTP_P
-  | OPTP_CP
-
-derive instance eqOPTP :: Eq OPTP
-
-derive instance ordOPTP :: Ord OPTP
-
-instance showOPTP :: Show OPTP where
-  show a = genericShow a
-
-instance encodeJsonOPTP :: EncodeJson OPTP where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonOPTP :: DecodeJson OPTP where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericOPTP :: Generic OPTP _
-
-instance enumOPTP :: Enum OPTP where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedOPTP :: Bounded OPTP where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_OPTP_C :: Prism' OPTP Unit
-_OPTP_C = prism' (const OPTP_C) case _ of
-  OPTP_C -> Just unit
-  _ -> Nothing
-
-_OPTP_P :: Prism' OPTP Unit
-_OPTP_P = prism' (const OPTP_P) case _ of
-  OPTP_P -> Just unit
-  _ -> Nothing
-
-_OPTP_CP :: Prism' OPTP Unit
-_OPTP_CP = prism' (const OPTP_CP) case _ of
-  OPTP_CP -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data OPXT
-  = OPXT_E
-  | OPXT_B
-  | OPXT_A
-
-derive instance eqOPXT :: Eq OPXT
-
-derive instance ordOPXT :: Ord OPXT
-
-instance showOPXT :: Show OPXT where
-  show a = genericShow a
-
-instance encodeJsonOPXT :: EncodeJson OPXT where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonOPXT :: DecodeJson OPXT where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericOPXT :: Generic OPXT _
-
-instance enumOPXT :: Enum OPXT where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedOPXT :: Bounded OPXT where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_OPXT_E :: Prism' OPXT Unit
-_OPXT_E = prism' (const OPXT_E) case _ of
-  OPXT_E -> Just unit
-  _ -> Nothing
-
-_OPXT_B :: Prism' OPXT Unit
-_OPXT_B = prism' (const OPXT_B) case _ of
-  OPXT_B -> Just unit
-  _ -> Nothing
-
-_OPXT_A :: Prism' OPXT Unit
-_OPXT_A = prism' (const OPXT_A) case _ of
-  OPXT_A -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data DS
-  = DS_S
-  | DS_D
-
-derive instance eqDS :: Eq DS
-
-derive instance ordDS :: Ord DS
-
-instance showDS :: Show DS where
-  show a = genericShow a
-
-instance encodeJsonDS :: EncodeJson DS where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonDS :: DecodeJson DS where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericDS :: Generic DS _
-
-instance enumDS :: Enum DS where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedDS :: Bounded DS where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_DS_S :: Prism' DS Unit
-_DS_S = prism' (const DS_S) case _ of
-  DS_S -> Just unit
-  _ -> Nothing
-
-_DS_D :: Prism' DS Unit
-_DS_D = prism' (const DS_D) case _ of
-  DS_D -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype Cycle = Cycle
-  { n :: BigInt
-  , p :: Period
-  , stub :: Stub
-  , includeEndDay :: Boolean
+newtype AssertionContext = AssertionContext
+  { rrmoMin :: Number
+  , rrmoMax :: Number
   }
 
-instance encodeJsonCycle :: EncodeJson Cycle where
+instance EncodeJson AssertionContext where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { n: E.value :: _ BigInt
-        , p: E.value :: _ Period
-        , stub: E.value :: _ Stub
-        , includeEndDay: E.value :: _ Boolean
+        { rrmoMin: E.value :: _ Number
+        , rrmoMax: E.value :: _ Number
         }
     )
 
-instance decodeJsonCycle :: DecodeJson Cycle where
+instance DecodeJson AssertionContext where
   decodeJson = defer \_ -> D.decode $
-    ( Cycle <$> D.record "Cycle"
-        { n: D.value :: _ BigInt
-        , p: D.value :: _ Period
-        , stub: D.value :: _ Stub
-        , includeEndDay: D.value :: _ Boolean
+    ( AssertionContext <$> D.record "AssertionContext"
+        { rrmoMin: D.value :: _ Number
+        , rrmoMax: D.value :: _ Number
         }
     )
 
-derive instance genericCycle :: Generic Cycle _
+derive instance Generic AssertionContext _
 
-derive instance newtypeCycle :: Newtype Cycle _
-
---------------------------------------------------------------------------------
-
-_Cycle :: Iso' Cycle
-  { n :: BigInt, p :: Period, stub :: Stub, includeEndDay :: Boolean }
-_Cycle = _Newtype
+derive instance Newtype AssertionContext _
 
 --------------------------------------------------------------------------------
 
-data Period
-  = P_D
-  | P_W
-  | P_M
-  | P_Q
-  | P_H
-  | P_Y
-
-derive instance eqPeriod :: Eq Period
-
-derive instance ordPeriod :: Ord Period
-
-instance showPeriod :: Show Period where
-  show a = genericShow a
-
-instance encodeJsonPeriod :: EncodeJson Period where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPeriod :: DecodeJson Period where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPeriod :: Generic Period _
-
-instance enumPeriod :: Enum Period where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPeriod :: Bounded Period where
-  bottom = genericBottom
-  top = genericTop
+_AssertionContext :: Iso' AssertionContext
+  { rrmoMin :: Number, rrmoMax :: Number }
+_AssertionContext = _Newtype
 
 --------------------------------------------------------------------------------
 
-_P_D :: Prism' Period Unit
-_P_D = prism' (const P_D) case _ of
-  P_D -> Just unit
-  _ -> Nothing
-
-_P_W :: Prism' Period Unit
-_P_W = prism' (const P_W) case _ of
-  P_W -> Just unit
-  _ -> Nothing
-
-_P_M :: Prism' Period Unit
-_P_M = prism' (const P_M) case _ of
-  P_M -> Just unit
-  _ -> Nothing
-
-_P_Q :: Prism' Period Unit
-_P_Q = prism' (const P_Q) case _ of
-  P_Q -> Just unit
-  _ -> Nothing
-
-_P_H :: Prism' Period Unit
-_P_H = prism' (const P_H) case _ of
-  P_H -> Just unit
-  _ -> Nothing
-
-_P_Y :: Prism' Period Unit
-_P_Y = prism' (const P_Y) case _ of
-  P_Y -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data Stub
-  = ShortStub
-  | LongStub
-
-derive instance eqStub :: Eq Stub
-
-derive instance ordStub :: Ord Stub
-
-instance showStub :: Show Stub where
-  show a = genericShow a
-
-instance encodeJsonStub :: EncodeJson Stub where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonStub :: DecodeJson Stub where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericStub :: Generic Stub _
-
-instance enumStub :: Enum Stub where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedStub :: Bounded Stub where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_ShortStub :: Prism' Stub Unit
-_ShortStub = prism' (const ShortStub) case _ of
-  ShortStub -> Just unit
-  _ -> Nothing
-
-_LongStub :: Prism' Stub Unit
-_LongStub = prism' (const LongStub) case _ of
-  LongStub -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype ScheduleConfig = ScheduleConfig
-  { calendar :: Maybe Calendar
-  , endOfMonthConvention :: Maybe EOMC
-  , businessDayConvention :: Maybe BDC
+newtype Assertions = Assertions
+  { context :: AssertionContext
+  , assertions :: Array Assertion
   }
 
-instance encodeJsonScheduleConfig :: EncodeJson ScheduleConfig where
+instance EncodeJson Assertions where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { calendar: (E.maybe E.value) :: _ (Maybe Calendar)
-        , endOfMonthConvention: (E.maybe E.value) :: _ (Maybe EOMC)
-        , businessDayConvention: (E.maybe E.value) :: _ (Maybe BDC)
+        { context: E.value :: _ AssertionContext
+        , assertions: E.value :: _ (Array Assertion)
         }
     )
 
-instance decodeJsonScheduleConfig :: DecodeJson ScheduleConfig where
+instance DecodeJson Assertions where
   decodeJson = defer \_ -> D.decode $
-    ( ScheduleConfig <$> D.record "ScheduleConfig"
-        { calendar: (D.maybe D.value) :: _ (Maybe Calendar)
-        , endOfMonthConvention: (D.maybe D.value) :: _ (Maybe EOMC)
-        , businessDayConvention: (D.maybe D.value) :: _ (Maybe BDC)
+    ( Assertions <$> D.record "Assertions"
+        { context: D.value :: _ AssertionContext
+        , assertions: D.value :: _ (Array Assertion)
         }
     )
 
-derive instance genericScheduleConfig :: Generic ScheduleConfig _
+derive instance Generic Assertions _
 
-derive instance newtypeScheduleConfig :: Newtype ScheduleConfig _
-
---------------------------------------------------------------------------------
-
-_ScheduleConfig :: Iso' ScheduleConfig
-  { calendar :: Maybe Calendar
-  , endOfMonthConvention :: Maybe EOMC
-  , businessDayConvention :: Maybe BDC
-  }
-_ScheduleConfig = _Newtype
+derive instance Newtype Assertions _
 
 --------------------------------------------------------------------------------
 
-newtype ContractStructure a = ContractStructure
-  { reference :: Reference a
-  , referenceType :: ReferenceType
-  , referenceRole :: ReferenceRole
-  }
-
-instance encodeJsonContractStructure ::
-  ( EncodeJson a
-  ) =>
-  EncodeJson (ContractStructure a) where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { reference: E.value :: _ (Reference a)
-        , referenceType: E.value :: _ ReferenceType
-        , referenceRole: E.value :: _ ReferenceRole
-        }
-    )
-
-instance decodeJsonContractStructure ::
-  ( DecodeJson a
-  ) =>
-  DecodeJson (ContractStructure a) where
-  decodeJson = defer \_ -> D.decode $
-    ( ContractStructure <$> D.record "ContractStructure"
-        { reference: D.value :: _ (Reference a)
-        , referenceType: D.value :: _ ReferenceType
-        , referenceRole: D.value :: _ ReferenceRole
-        }
-    )
-
-derive instance genericContractStructure :: Generic (ContractStructure a) _
-
-derive instance newtypeContractStructure :: Newtype (ContractStructure a) _
-
---------------------------------------------------------------------------------
-
-_ContractStructure
-  :: forall a
-   . Iso' (ContractStructure a)
-       { reference :: Reference a
-       , referenceType :: ReferenceType
-       , referenceRole :: ReferenceRole
-       }
-_ContractStructure = _Newtype
-
---------------------------------------------------------------------------------
-
-data ReferenceType
-  = CNT
-  | CID
-  | MOC
-  | EID
-  | CST
-
-derive instance eqReferenceType :: Eq ReferenceType
-
-derive instance ordReferenceType :: Ord ReferenceType
-
-instance showReferenceType :: Show ReferenceType where
-  show a = genericShow a
-
-instance encodeJsonReferenceType :: EncodeJson ReferenceType where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonReferenceType :: DecodeJson ReferenceType where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericReferenceType :: Generic ReferenceType _
-
-instance enumReferenceType :: Enum ReferenceType where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedReferenceType :: Bounded ReferenceType where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CNT :: Prism' ReferenceType Unit
-_CNT = prism' (const CNT) case _ of
-  CNT -> Just unit
-  _ -> Nothing
-
-_CID :: Prism' ReferenceType Unit
-_CID = prism' (const CID) case _ of
-  CID -> Just unit
-  _ -> Nothing
-
-_MOC :: Prism' ReferenceType Unit
-_MOC = prism' (const MOC) case _ of
-  MOC -> Just unit
-  _ -> Nothing
-
-_EID :: Prism' ReferenceType Unit
-_EID = prism' (const EID) case _ of
-  EID -> Just unit
-  _ -> Nothing
-
-_CST :: Prism' ReferenceType Unit
-_CST = prism' (const CST) case _ of
-  CST -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data ReferenceRole
-  = UDL
-  | FIL
-  | SEL
-  | COVE
-  | COVI
-
-derive instance eqReferenceRole :: Eq ReferenceRole
-
-derive instance ordReferenceRole :: Ord ReferenceRole
-
-instance showReferenceRole :: Show ReferenceRole where
-  show a = genericShow a
-
-instance encodeJsonReferenceRole :: EncodeJson ReferenceRole where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonReferenceRole :: DecodeJson ReferenceRole where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericReferenceRole :: Generic ReferenceRole _
-
-instance enumReferenceRole :: Enum ReferenceRole where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedReferenceRole :: Bounded ReferenceRole where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_UDL :: Prism' ReferenceRole Unit
-_UDL = prism' (const UDL) case _ of
-  UDL -> Just unit
-  _ -> Nothing
-
-_FIL :: Prism' ReferenceRole Unit
-_FIL = prism' (const FIL) case _ of
-  FIL -> Just unit
-  _ -> Nothing
-
-_SEL :: Prism' ReferenceRole Unit
-_SEL = prism' (const SEL) case _ of
-  SEL -> Just unit
-  _ -> Nothing
-
-_COVE :: Prism' ReferenceRole Unit
-_COVE = prism' (const COVE) case _ of
-  COVE -> Just unit
-  _ -> Nothing
-
-_COVI :: Prism' ReferenceRole Unit
-_COVI = prism' (const COVI) case _ of
-  COVI -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-newtype Identifier = Identifier
-  { marketObjectCode :: Maybe String
-  , contractIdentifier :: Maybe String
-  }
-
-derive instance eqIdentifier :: Eq Identifier
-
-derive instance ordIdentifier :: Ord Identifier
-
-instance showIdentifier :: Show Identifier where
-  show a = genericShow a
-
-instance encodeJsonIdentifier :: EncodeJson Identifier where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { marketObjectCode: (E.maybe E.value) :: _ (Maybe String)
-        , contractIdentifier: (E.maybe E.value) :: _ (Maybe String)
-        }
-    )
-
-instance decodeJsonIdentifier :: DecodeJson Identifier where
-  decodeJson = defer \_ -> D.decode $
-    ( Identifier <$> D.record "Identifier"
-        { marketObjectCode: (D.maybe D.value) :: _ (Maybe String)
-        , contractIdentifier: (D.maybe D.value) :: _ (Maybe String)
-        }
-    )
-
-derive instance genericIdentifier :: Generic Identifier _
-
-derive instance newtypeIdentifier :: Newtype Identifier _
-
---------------------------------------------------------------------------------
-
-_Identifier :: Iso' Identifier
-  { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
-_Identifier = _Newtype
-
---------------------------------------------------------------------------------
-
-data Reference a
-  = ReferenceTerms (ContractTermsPoly a)
-  | ReferenceId Identifier
-
-instance encodeJsonReference :: (EncodeJson a) => EncodeJson (Reference a) where
-  encodeJson = defer \_ -> case _ of
-    ReferenceTerms a -> E.encodeTagged "ReferenceTerms" a E.value
-    ReferenceId a -> E.encodeTagged "ReferenceId" a E.value
-
-instance decodeJsonReference :: (DecodeJson a) => DecodeJson (Reference a) where
-  decodeJson = defer \_ -> D.decode
-    $ D.sumType "Reference"
-    $ Map.fromFoldable
-        [ "ReferenceTerms" /\ D.content (ReferenceTerms <$> D.value)
-        , "ReferenceId" /\ D.content (ReferenceId <$> D.value)
-        ]
-
-derive instance genericReference :: Generic (Reference a) _
-
---------------------------------------------------------------------------------
-
-_ReferenceTerms :: forall a. Prism' (Reference a) (ContractTermsPoly a)
-_ReferenceTerms = prism' ReferenceTerms case _ of
-  (ReferenceTerms a) -> Just a
-  _ -> Nothing
-
-_ReferenceId :: forall a. Prism' (Reference a) Identifier
-_ReferenceId = prism' ReferenceId case _ of
-  (ReferenceId a) -> Just a
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data DCC
-  = DCC_A_AISDA
-  | DCC_A_360
-  | DCC_A_365
-  | DCC_E30_360ISDA
-  | DCC_E30_360
-  | DCC_B_252
-
-derive instance eqDCC :: Eq DCC
-
-derive instance ordDCC :: Ord DCC
-
-instance showDCC :: Show DCC where
-  show a = genericShow a
-
-instance encodeJsonDCC :: EncodeJson DCC where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonDCC :: DecodeJson DCC where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericDCC :: Generic DCC _
-
-instance enumDCC :: Enum DCC where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedDCC :: Bounded DCC where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_DCC_A_AISDA :: Prism' DCC Unit
-_DCC_A_AISDA = prism' (const DCC_A_AISDA) case _ of
-  DCC_A_AISDA -> Just unit
-  _ -> Nothing
-
-_DCC_A_360 :: Prism' DCC Unit
-_DCC_A_360 = prism' (const DCC_A_360) case _ of
-  DCC_A_360 -> Just unit
-  _ -> Nothing
-
-_DCC_A_365 :: Prism' DCC Unit
-_DCC_A_365 = prism' (const DCC_A_365) case _ of
-  DCC_A_365 -> Just unit
-  _ -> Nothing
-
-_DCC_E30_360ISDA :: Prism' DCC Unit
-_DCC_E30_360ISDA = prism' (const DCC_E30_360ISDA) case _ of
-  DCC_E30_360ISDA -> Just unit
-  _ -> Nothing
-
-_DCC_E30_360 :: Prism' DCC Unit
-_DCC_E30_360 = prism' (const DCC_E30_360) case _ of
-  DCC_E30_360 -> Just unit
-  _ -> Nothing
-
-_DCC_B_252 :: Prism' DCC Unit
-_DCC_B_252 = prism' (const DCC_B_252) case _ of
-  DCC_B_252 -> Just unit
-  _ -> Nothing
+_Assertions :: Iso' Assertions
+  { context :: AssertionContext, assertions :: Array Assertion }
+_Assertions = _Newtype
 
 --------------------------------------------------------------------------------
 
@@ -1181,26 +137,26 @@ data BDC
   | BDC_CSP
   | BDC_CSMP
 
-derive instance eqBDC :: Eq BDC
+derive instance Eq BDC
 
-derive instance ordBDC :: Ord BDC
+derive instance Ord BDC
 
-instance showBDC :: Show BDC where
+instance Show BDC where
   show a = genericShow a
 
-instance encodeJsonBDC :: EncodeJson BDC where
+instance EncodeJson BDC where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonBDC :: DecodeJson BDC where
+instance DecodeJson BDC where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericBDC :: Generic BDC _
+derive instance Generic BDC _
 
-instance enumBDC :: Enum BDC where
+instance Enum BDC where
   succ = genericSucc
   pred = genericPred
 
-instance boundedBDC :: Bounded BDC where
+instance Bounded BDC where
   bottom = genericBottom
   top = genericTop
 
@@ -1253,96 +209,43 @@ _BDC_CSMP = prism' (const BDC_CSMP) case _ of
 
 --------------------------------------------------------------------------------
 
-data EOMC
-  = EOMC_EOM
-  | EOMC_SD
+data CEGE
+  = CEGE_NO
+  | CEGE_NI
 
-derive instance eqEOMC :: Eq EOMC
+derive instance Eq CEGE
 
-derive instance ordEOMC :: Ord EOMC
+derive instance Ord CEGE
 
-instance showEOMC :: Show EOMC where
+instance Show CEGE where
   show a = genericShow a
 
-instance encodeJsonEOMC :: EncodeJson EOMC where
+instance EncodeJson CEGE where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonEOMC :: DecodeJson EOMC where
+instance DecodeJson CEGE where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericEOMC :: Generic EOMC _
+derive instance Generic CEGE _
 
-instance enumEOMC :: Enum EOMC where
+instance Enum CEGE where
   succ = genericSucc
   pred = genericPred
 
-instance boundedEOMC :: Bounded EOMC where
+instance Bounded CEGE where
   bottom = genericBottom
   top = genericTop
 
 --------------------------------------------------------------------------------
 
-_EOMC_EOM :: Prism' EOMC Unit
-_EOMC_EOM = prism' (const EOMC_EOM) case _ of
-  EOMC_EOM -> Just unit
+_CEGE_NO :: Prism' CEGE Unit
+_CEGE_NO = prism' (const CEGE_NO) case _ of
+  CEGE_NO -> Just unit
   _ -> Nothing
 
-_EOMC_SD :: Prism' EOMC Unit
-_EOMC_SD = prism' (const EOMC_SD) case _ of
-  EOMC_SD -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data PRF
-  = PRF_PF
-  | PRF_DL
-  | PRF_DQ
-  | PRF_DF
-
-derive instance eqPRF :: Eq PRF
-
-derive instance ordPRF :: Ord PRF
-
-instance showPRF :: Show PRF where
-  show a = genericShow a
-
-instance encodeJsonPRF :: EncodeJson PRF where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPRF :: DecodeJson PRF where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPRF :: Generic PRF _
-
-instance enumPRF :: Enum PRF where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPRF :: Bounded PRF where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_PRF_PF :: Prism' PRF Unit
-_PRF_PF = prism' (const PRF_PF) case _ of
-  PRF_PF -> Just unit
-  _ -> Nothing
-
-_PRF_DL :: Prism' PRF Unit
-_PRF_DL = prism' (const PRF_DL) case _ of
-  PRF_DL -> Just unit
-  _ -> Nothing
-
-_PRF_DQ :: Prism' PRF Unit
-_PRF_DQ = prism' (const PRF_DQ) case _ of
-  PRF_DQ -> Just unit
-  _ -> Nothing
-
-_PRF_DF :: Prism' PRF Unit
-_PRF_DF = prism' (const PRF_DF) case _ of
-  PRF_DF -> Just unit
+_CEGE_NI :: Prism' CEGE Unit
+_CEGE_NI = prism' (const CEGE_NI) case _ of
+  CEGE_NI -> Just unit
   _ -> Nothing
 
 --------------------------------------------------------------------------------
@@ -1352,26 +255,26 @@ data CETC
   | CETC_DQ
   | CETC_DF
 
-derive instance eqCETC :: Eq CETC
+derive instance Eq CETC
 
-derive instance ordCETC :: Ord CETC
+derive instance Ord CETC
 
-instance showCETC :: Show CETC where
+instance Show CETC where
   show a = genericShow a
 
-instance encodeJsonCETC :: EncodeJson CETC where
+instance EncodeJson CETC where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonCETC :: DecodeJson CETC where
+instance DecodeJson CETC where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericCETC :: Generic CETC _
+derive instance Generic CETC _
 
-instance enumCETC :: Enum CETC where
+instance Enum CETC where
   succ = genericSucc
   pred = genericPred
 
-instance boundedCETC :: Bounded CETC where
+instance Bounded CETC where
   bottom = genericBottom
   top = genericTop
 
@@ -1394,135 +297,6 @@ _CETC_DF = prism' (const CETC_DF) case _ of
 
 --------------------------------------------------------------------------------
 
-data CEGE
-  = CEGE_NO
-  | CEGE_NI
-
-derive instance eqCEGE :: Eq CEGE
-
-derive instance ordCEGE :: Ord CEGE
-
-instance showCEGE :: Show CEGE where
-  show a = genericShow a
-
-instance encodeJsonCEGE :: EncodeJson CEGE where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonCEGE :: DecodeJson CEGE where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericCEGE :: Generic CEGE _
-
-instance enumCEGE :: Enum CEGE where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedCEGE :: Bounded CEGE where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_CEGE_NO :: Prism' CEGE Unit
-_CEGE_NO = prism' (const CEGE_NO) case _ of
-  CEGE_NO -> Just unit
-  _ -> Nothing
-
-_CEGE_NI :: Prism' CEGE Unit
-_CEGE_NI = prism' (const CEGE_NI) case _ of
-  CEGE_NI -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data FEB
-  = FEB_A
-  | FEB_N
-
-derive instance eqFEB :: Eq FEB
-
-derive instance ordFEB :: Ord FEB
-
-instance showFEB :: Show FEB where
-  show a = genericShow a
-
-instance encodeJsonFEB :: EncodeJson FEB where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonFEB :: DecodeJson FEB where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericFEB :: Generic FEB _
-
-instance enumFEB :: Enum FEB where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedFEB :: Bounded FEB where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_FEB_A :: Prism' FEB Unit
-_FEB_A = prism' (const FEB_A) case _ of
-  FEB_A -> Just unit
-  _ -> Nothing
-
-_FEB_N :: Prism' FEB Unit
-_FEB_N = prism' (const FEB_N) case _ of
-  FEB_N -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data IPCB
-  = IPCB_NT
-  | IPCB_NTIED
-  | IPCB_NTL
-
-derive instance eqIPCB :: Eq IPCB
-
-derive instance ordIPCB :: Ord IPCB
-
-instance showIPCB :: Show IPCB where
-  show a = genericShow a
-
-instance encodeJsonIPCB :: EncodeJson IPCB where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonIPCB :: DecodeJson IPCB where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericIPCB :: Generic IPCB _
-
-instance enumIPCB :: Enum IPCB where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedIPCB :: Bounded IPCB where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_IPCB_NT :: Prism' IPCB Unit
-_IPCB_NT = prism' (const IPCB_NT) case _ of
-  IPCB_NT -> Just unit
-  _ -> Nothing
-
-_IPCB_NTIED :: Prism' IPCB Unit
-_IPCB_NTIED = prism' (const IPCB_NTIED) case _ of
-  IPCB_NTIED -> Just unit
-  _ -> Nothing
-
-_IPCB_NTL :: Prism' IPCB Unit
-_IPCB_NTL = prism' (const IPCB_NTL) case _ of
-  IPCB_NTL -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 data CR
   = CR_RPA
   | CR_RPL
@@ -1538,26 +312,26 @@ data CR
   | CR_RF
   | CR_PF
 
-derive instance eqCR :: Eq CR
+derive instance Eq CR
 
-derive instance ordCR :: Ord CR
+derive instance Ord CR
 
-instance showCR :: Show CR where
+instance Show CR where
   show a = genericShow a
 
-instance encodeJsonCR :: EncodeJson CR where
+instance EncodeJson CR where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonCR :: DecodeJson CR where
+instance DecodeJson CR where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericCR :: Generic CR _
+derive instance Generic CR _
 
-instance enumCR :: Enum CR where
+instance Enum CR where
   succ = genericSucc
   pred = genericPred
 
-instance boundedCR :: Bounded CR where
+instance Bounded CR where
   bottom = genericBottom
   top = genericTop
 
@@ -1645,26 +419,26 @@ data CT
   | CEG
   | CEC
 
-derive instance eqCT :: Eq CT
+derive instance Eq CT
 
-derive instance ordCT :: Ord CT
+derive instance Ord CT
 
-instance showCT :: Show CT where
+instance Show CT where
   show a = genericShow a
 
-instance encodeJsonCT :: EncodeJson CT where
+instance EncodeJson CT where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonCT :: DecodeJson CT where
+instance DecodeJson CT where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericCT :: Generic CT _
+derive instance Generic CT _
 
-instance enumCT :: Enum CT where
+instance Enum CT where
   succ = genericSucc
   pred = genericPred
 
-instance boundedCT :: Bounded CT where
+instance Bounded CT where
   bottom = genericBottom
   top = genericTop
 
@@ -1741,26 +515,26 @@ data Calendar
   = CLDR_MF
   | CLDR_NC
 
-derive instance eqCalendar :: Eq Calendar
+derive instance Eq Calendar
 
-derive instance ordCalendar :: Ord Calendar
+derive instance Ord Calendar
 
-instance showCalendar :: Show Calendar where
+instance Show Calendar where
   show a = genericShow a
 
-instance encodeJsonCalendar :: EncodeJson Calendar where
+instance EncodeJson Calendar where
   encodeJson = defer \_ -> E.encode E.enum
 
-instance decodeJsonCalendar :: DecodeJson Calendar where
+instance DecodeJson Calendar where
   decodeJson = defer \_ -> D.decode D.enum
 
-derive instance genericCalendar :: Generic Calendar _
+derive instance Generic Calendar _
 
-instance enumCalendar :: Enum Calendar where
+instance Enum Calendar where
   succ = genericSucc
   pred = genericPred
 
-instance boundedCalendar :: Bounded Calendar where
+instance Bounded Calendar where
   bottom = genericBottom
   top = genericTop
 
@@ -1778,100 +552,1314 @@ _CLDR_NC = prism' (const CLDR_NC) case _ of
 
 --------------------------------------------------------------------------------
 
-newtype Assertion = NpvAssertionAgainstZeroRiskBond
-  { zeroRiskInterest :: Number
-  , expectedNpv :: Number
+newtype ContractStructure a = ContractStructure
+  { reference :: Reference a
+  , referenceType :: ReferenceType
+  , referenceRole :: ReferenceRole
   }
 
-instance encodeJsonAssertion :: EncodeJson Assertion where
+instance (EncodeJson a) => EncodeJson (ContractStructure a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { zeroRiskInterest: E.value :: _ Number
-        , expectedNpv: E.value :: _ Number
+        { reference: E.value :: _ (Reference a)
+        , referenceType: E.value :: _ ReferenceType
+        , referenceRole: E.value :: _ ReferenceRole
         }
     )
 
-instance decodeJsonAssertion :: DecodeJson Assertion where
+instance (DecodeJson a) => DecodeJson (ContractStructure a) where
   decodeJson = defer \_ -> D.decode $
-    ( NpvAssertionAgainstZeroRiskBond <$> D.record
-        "NpvAssertionAgainstZeroRiskBond"
-        { zeroRiskInterest: D.value :: _ Number
-        , expectedNpv: D.value :: _ Number
+    ( ContractStructure <$> D.record "ContractStructure"
+        { reference: D.value :: _ (Reference a)
+        , referenceType: D.value :: _ ReferenceType
+        , referenceRole: D.value :: _ ReferenceRole
         }
     )
 
-derive instance genericAssertion :: Generic Assertion _
+derive instance Generic (ContractStructure a) _
 
-derive instance newtypeAssertion :: Newtype Assertion _
-
---------------------------------------------------------------------------------
-
-_NpvAssertionAgainstZeroRiskBond :: Iso' Assertion
-  { zeroRiskInterest :: Number, expectedNpv :: Number }
-_NpvAssertionAgainstZeroRiskBond = _Newtype
+derive instance Newtype (ContractStructure a) _
 
 --------------------------------------------------------------------------------
 
-newtype Assertions = Assertions
-  { context :: AssertionContext
-  , assertions :: Array Assertion
+_ContractStructure
+  :: forall a
+   . Iso' (ContractStructure a)
+       { reference :: Reference a
+       , referenceType :: ReferenceType
+       , referenceRole :: ReferenceRole
+       }
+_ContractStructure = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype ContractTermsPoly a = ContractTermsPoly
+  { contractId :: String
+  , contractType :: CT
+  , contractStructure :: Array (ContractStructure a)
+  , contractRole :: CR
+  , settlementCurrency :: Maybe String
+  , initialExchangeDate :: Maybe String
+  , dayCountConvention :: Maybe DCC
+  , scheduleConfig :: ScheduleConfig
+  , statusDate :: String
+  , contractPerformance :: Maybe PRF
+  , creditEventTypeCovered :: Maybe CETC
+  , coverageOfCreditEnhancement :: Maybe a
+  , guaranteedExposure :: Maybe CEGE
+  , cycleOfFee :: Maybe Cycle
+  , cycleAnchorDateOfFee :: Maybe String
+  , feeAccrued :: Maybe a
+  , feeBasis :: Maybe FEB
+  , feeRate :: Maybe a
+  , cycleAnchorDateOfInterestPayment :: Maybe String
+  , cycleOfInterestPayment :: Maybe Cycle
+  , accruedInterest :: Maybe a
+  , capitalizationEndDate :: Maybe String
+  , cycleAnchorDateOfInterestCalculationBase :: Maybe String
+  , cycleOfInterestCalculationBase :: Maybe Cycle
+  , interestCalculationBase :: Maybe IPCB
+  , interestCalculationBaseA :: Maybe a
+  , nominalInterestRate :: Maybe a
+  , nominalInterestRate2 :: Maybe a
+  , interestScalingMultiplier :: Maybe a
+  , maturityDate :: Maybe String
+  , amortizationDate :: Maybe String
+  , exerciseDate :: Maybe String
+  , notionalPrincipal :: Maybe a
+  , premiumDiscountAtIED :: Maybe a
+  , cycleAnchorDateOfPrincipalRedemption :: Maybe String
+  , cycleOfPrincipalRedemption :: Maybe Cycle
+  , nextPrincipalRedemptionPayment :: Maybe a
+  , purchaseDate :: Maybe String
+  , priceAtPurchaseDate :: Maybe a
+  , terminationDate :: Maybe String
+  , priceAtTerminationDate :: Maybe a
+  , quantity :: Maybe a
+  , scalingIndexAtStatusDate :: Maybe a
+  , cycleAnchorDateOfScalingIndex :: Maybe String
+  , cycleOfScalingIndex :: Maybe Cycle
+  , scalingEffect :: Maybe SCEF
+  , scalingIndexAtContractDealDate :: Maybe a
+  , marketObjectCodeOfScalingIndex :: Maybe String
+  , notionalScalingMultiplier :: Maybe a
+  , cycleOfOptionality :: Maybe Cycle
+  , cycleAnchorDateOfOptionality :: Maybe String
+  , optionType :: Maybe OPTP
+  , optionStrike1 :: Maybe a
+  , optionExerciseType :: Maybe OPXT
+  , settlementPeriod :: Maybe Cycle
+  , deliverySettlement :: Maybe DS
+  , exerciseAmount :: Maybe a
+  , futuresPrice :: Maybe a
+  , penaltyRate :: Maybe a
+  , penaltyType :: Maybe PYTP
+  , prepaymentEffect :: Maybe PPEF
+  , cycleOfRateReset :: Maybe Cycle
+  , cycleAnchorDateOfRateReset :: Maybe String
+  , nextResetRate :: Maybe a
+  , rateSpread :: Maybe a
+  , rateMultiplier :: Maybe a
+  , periodFloor :: Maybe a
+  , periodCap :: Maybe a
+  , lifeCap :: Maybe a
+  , lifeFloor :: Maybe a
+  , marketObjectCodeOfRateReset :: Maybe String
+  , cycleOfDividend :: Maybe Cycle
+  , cycleAnchorDateOfDividend :: Maybe String
+  , nextDividendPaymentAmount :: Maybe a
+  , enableSettlement :: Boolean
+  , constraints :: Maybe Assertions
   }
 
-instance encodeJsonAssertions :: EncodeJson Assertions where
+instance (EncodeJson a) => EncodeJson (ContractTermsPoly a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { context: E.value :: _ AssertionContext
-        , assertions: E.value :: _ (Array Assertion)
+        { contractId: E.value :: _ String
+        , contractType: E.value :: _ CT
+        , contractStructure: E.value :: _ (Array (ContractStructure a))
+        , contractRole: E.value :: _ CR
+        , settlementCurrency: (E.maybe E.value) :: _ (Maybe String)
+        , initialExchangeDate: (E.maybe E.value) :: _ (Maybe String)
+        , dayCountConvention: (E.maybe E.value) :: _ (Maybe DCC)
+        , scheduleConfig: E.value :: _ ScheduleConfig
+        , statusDate: E.value :: _ String
+        , contractPerformance: (E.maybe E.value) :: _ (Maybe PRF)
+        , creditEventTypeCovered: (E.maybe E.value) :: _ (Maybe CETC)
+        , coverageOfCreditEnhancement: (E.maybe E.value) :: _ (Maybe a)
+        , guaranteedExposure: (E.maybe E.value) :: _ (Maybe CEGE)
+        , cycleOfFee: (E.maybe E.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfFee: (E.maybe E.value) :: _ (Maybe String)
+        , feeAccrued: (E.maybe E.value) :: _ (Maybe a)
+        , feeBasis: (E.maybe E.value) :: _ (Maybe FEB)
+        , feeRate: (E.maybe E.value) :: _ (Maybe a)
+        , cycleAnchorDateOfInterestPayment:
+            (E.maybe E.value) :: _ (Maybe String)
+        , cycleOfInterestPayment: (E.maybe E.value) :: _ (Maybe Cycle)
+        , accruedInterest: (E.maybe E.value) :: _ (Maybe a)
+        , capitalizationEndDate: (E.maybe E.value) :: _ (Maybe String)
+        , cycleAnchorDateOfInterestCalculationBase:
+            (E.maybe E.value) :: _ (Maybe String)
+        , cycleOfInterestCalculationBase: (E.maybe E.value) :: _ (Maybe Cycle)
+        , interestCalculationBase: (E.maybe E.value) :: _ (Maybe IPCB)
+        , interestCalculationBaseA: (E.maybe E.value) :: _ (Maybe a)
+        , nominalInterestRate: (E.maybe E.value) :: _ (Maybe a)
+        , nominalInterestRate2: (E.maybe E.value) :: _ (Maybe a)
+        , interestScalingMultiplier: (E.maybe E.value) :: _ (Maybe a)
+        , maturityDate: (E.maybe E.value) :: _ (Maybe String)
+        , amortizationDate: (E.maybe E.value) :: _ (Maybe String)
+        , exerciseDate: (E.maybe E.value) :: _ (Maybe String)
+        , notionalPrincipal: (E.maybe E.value) :: _ (Maybe a)
+        , premiumDiscountAtIED: (E.maybe E.value) :: _ (Maybe a)
+        , cycleAnchorDateOfPrincipalRedemption:
+            (E.maybe E.value) :: _ (Maybe String)
+        , cycleOfPrincipalRedemption: (E.maybe E.value) :: _ (Maybe Cycle)
+        , nextPrincipalRedemptionPayment: (E.maybe E.value) :: _ (Maybe a)
+        , purchaseDate: (E.maybe E.value) :: _ (Maybe String)
+        , priceAtPurchaseDate: (E.maybe E.value) :: _ (Maybe a)
+        , terminationDate: (E.maybe E.value) :: _ (Maybe String)
+        , priceAtTerminationDate: (E.maybe E.value) :: _ (Maybe a)
+        , quantity: (E.maybe E.value) :: _ (Maybe a)
+        , scalingIndexAtStatusDate: (E.maybe E.value) :: _ (Maybe a)
+        , cycleAnchorDateOfScalingIndex: (E.maybe E.value) :: _ (Maybe String)
+        , cycleOfScalingIndex: (E.maybe E.value) :: _ (Maybe Cycle)
+        , scalingEffect: (E.maybe E.value) :: _ (Maybe SCEF)
+        , scalingIndexAtContractDealDate: (E.maybe E.value) :: _ (Maybe a)
+        , marketObjectCodeOfScalingIndex: (E.maybe E.value) :: _ (Maybe String)
+        , notionalScalingMultiplier: (E.maybe E.value) :: _ (Maybe a)
+        , cycleOfOptionality: (E.maybe E.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfOptionality: (E.maybe E.value) :: _ (Maybe String)
+        , optionType: (E.maybe E.value) :: _ (Maybe OPTP)
+        , optionStrike1: (E.maybe E.value) :: _ (Maybe a)
+        , optionExerciseType: (E.maybe E.value) :: _ (Maybe OPXT)
+        , settlementPeriod: (E.maybe E.value) :: _ (Maybe Cycle)
+        , deliverySettlement: (E.maybe E.value) :: _ (Maybe DS)
+        , exerciseAmount: (E.maybe E.value) :: _ (Maybe a)
+        , futuresPrice: (E.maybe E.value) :: _ (Maybe a)
+        , penaltyRate: (E.maybe E.value) :: _ (Maybe a)
+        , penaltyType: (E.maybe E.value) :: _ (Maybe PYTP)
+        , prepaymentEffect: (E.maybe E.value) :: _ (Maybe PPEF)
+        , cycleOfRateReset: (E.maybe E.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfRateReset: (E.maybe E.value) :: _ (Maybe String)
+        , nextResetRate: (E.maybe E.value) :: _ (Maybe a)
+        , rateSpread: (E.maybe E.value) :: _ (Maybe a)
+        , rateMultiplier: (E.maybe E.value) :: _ (Maybe a)
+        , periodFloor: (E.maybe E.value) :: _ (Maybe a)
+        , periodCap: (E.maybe E.value) :: _ (Maybe a)
+        , lifeCap: (E.maybe E.value) :: _ (Maybe a)
+        , lifeFloor: (E.maybe E.value) :: _ (Maybe a)
+        , marketObjectCodeOfRateReset: (E.maybe E.value) :: _ (Maybe String)
+        , cycleOfDividend: (E.maybe E.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfDividend: (E.maybe E.value) :: _ (Maybe String)
+        , nextDividendPaymentAmount: (E.maybe E.value) :: _ (Maybe a)
+        , enableSettlement: E.value :: _ Boolean
+        , constraints: (E.maybe E.value) :: _ (Maybe Assertions)
         }
     )
 
-instance decodeJsonAssertions :: DecodeJson Assertions where
+instance (DecodeJson a) => DecodeJson (ContractTermsPoly a) where
   decodeJson = defer \_ -> D.decode $
-    ( Assertions <$> D.record "Assertions"
-        { context: D.value :: _ AssertionContext
-        , assertions: D.value :: _ (Array Assertion)
+    ( ContractTermsPoly <$> D.record "ContractTermsPoly"
+        { contractId: D.value :: _ String
+        , contractType: D.value :: _ CT
+        , contractStructure: D.value :: _ (Array (ContractStructure a))
+        , contractRole: D.value :: _ CR
+        , settlementCurrency: (D.maybe D.value) :: _ (Maybe String)
+        , initialExchangeDate: (D.maybe D.value) :: _ (Maybe String)
+        , dayCountConvention: (D.maybe D.value) :: _ (Maybe DCC)
+        , scheduleConfig: D.value :: _ ScheduleConfig
+        , statusDate: D.value :: _ String
+        , contractPerformance: (D.maybe D.value) :: _ (Maybe PRF)
+        , creditEventTypeCovered: (D.maybe D.value) :: _ (Maybe CETC)
+        , coverageOfCreditEnhancement: (D.maybe D.value) :: _ (Maybe a)
+        , guaranteedExposure: (D.maybe D.value) :: _ (Maybe CEGE)
+        , cycleOfFee: (D.maybe D.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfFee: (D.maybe D.value) :: _ (Maybe String)
+        , feeAccrued: (D.maybe D.value) :: _ (Maybe a)
+        , feeBasis: (D.maybe D.value) :: _ (Maybe FEB)
+        , feeRate: (D.maybe D.value) :: _ (Maybe a)
+        , cycleAnchorDateOfInterestPayment:
+            (D.maybe D.value) :: _ (Maybe String)
+        , cycleOfInterestPayment: (D.maybe D.value) :: _ (Maybe Cycle)
+        , accruedInterest: (D.maybe D.value) :: _ (Maybe a)
+        , capitalizationEndDate: (D.maybe D.value) :: _ (Maybe String)
+        , cycleAnchorDateOfInterestCalculationBase:
+            (D.maybe D.value) :: _ (Maybe String)
+        , cycleOfInterestCalculationBase: (D.maybe D.value) :: _ (Maybe Cycle)
+        , interestCalculationBase: (D.maybe D.value) :: _ (Maybe IPCB)
+        , interestCalculationBaseA: (D.maybe D.value) :: _ (Maybe a)
+        , nominalInterestRate: (D.maybe D.value) :: _ (Maybe a)
+        , nominalInterestRate2: (D.maybe D.value) :: _ (Maybe a)
+        , interestScalingMultiplier: (D.maybe D.value) :: _ (Maybe a)
+        , maturityDate: (D.maybe D.value) :: _ (Maybe String)
+        , amortizationDate: (D.maybe D.value) :: _ (Maybe String)
+        , exerciseDate: (D.maybe D.value) :: _ (Maybe String)
+        , notionalPrincipal: (D.maybe D.value) :: _ (Maybe a)
+        , premiumDiscountAtIED: (D.maybe D.value) :: _ (Maybe a)
+        , cycleAnchorDateOfPrincipalRedemption:
+            (D.maybe D.value) :: _ (Maybe String)
+        , cycleOfPrincipalRedemption: (D.maybe D.value) :: _ (Maybe Cycle)
+        , nextPrincipalRedemptionPayment: (D.maybe D.value) :: _ (Maybe a)
+        , purchaseDate: (D.maybe D.value) :: _ (Maybe String)
+        , priceAtPurchaseDate: (D.maybe D.value) :: _ (Maybe a)
+        , terminationDate: (D.maybe D.value) :: _ (Maybe String)
+        , priceAtTerminationDate: (D.maybe D.value) :: _ (Maybe a)
+        , quantity: (D.maybe D.value) :: _ (Maybe a)
+        , scalingIndexAtStatusDate: (D.maybe D.value) :: _ (Maybe a)
+        , cycleAnchorDateOfScalingIndex: (D.maybe D.value) :: _ (Maybe String)
+        , cycleOfScalingIndex: (D.maybe D.value) :: _ (Maybe Cycle)
+        , scalingEffect: (D.maybe D.value) :: _ (Maybe SCEF)
+        , scalingIndexAtContractDealDate: (D.maybe D.value) :: _ (Maybe a)
+        , marketObjectCodeOfScalingIndex: (D.maybe D.value) :: _ (Maybe String)
+        , notionalScalingMultiplier: (D.maybe D.value) :: _ (Maybe a)
+        , cycleOfOptionality: (D.maybe D.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfOptionality: (D.maybe D.value) :: _ (Maybe String)
+        , optionType: (D.maybe D.value) :: _ (Maybe OPTP)
+        , optionStrike1: (D.maybe D.value) :: _ (Maybe a)
+        , optionExerciseType: (D.maybe D.value) :: _ (Maybe OPXT)
+        , settlementPeriod: (D.maybe D.value) :: _ (Maybe Cycle)
+        , deliverySettlement: (D.maybe D.value) :: _ (Maybe DS)
+        , exerciseAmount: (D.maybe D.value) :: _ (Maybe a)
+        , futuresPrice: (D.maybe D.value) :: _ (Maybe a)
+        , penaltyRate: (D.maybe D.value) :: _ (Maybe a)
+        , penaltyType: (D.maybe D.value) :: _ (Maybe PYTP)
+        , prepaymentEffect: (D.maybe D.value) :: _ (Maybe PPEF)
+        , cycleOfRateReset: (D.maybe D.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfRateReset: (D.maybe D.value) :: _ (Maybe String)
+        , nextResetRate: (D.maybe D.value) :: _ (Maybe a)
+        , rateSpread: (D.maybe D.value) :: _ (Maybe a)
+        , rateMultiplier: (D.maybe D.value) :: _ (Maybe a)
+        , periodFloor: (D.maybe D.value) :: _ (Maybe a)
+        , periodCap: (D.maybe D.value) :: _ (Maybe a)
+        , lifeCap: (D.maybe D.value) :: _ (Maybe a)
+        , lifeFloor: (D.maybe D.value) :: _ (Maybe a)
+        , marketObjectCodeOfRateReset: (D.maybe D.value) :: _ (Maybe String)
+        , cycleOfDividend: (D.maybe D.value) :: _ (Maybe Cycle)
+        , cycleAnchorDateOfDividend: (D.maybe D.value) :: _ (Maybe String)
+        , nextDividendPaymentAmount: (D.maybe D.value) :: _ (Maybe a)
+        , enableSettlement: D.value :: _ Boolean
+        , constraints: (D.maybe D.value) :: _ (Maybe Assertions)
         }
     )
 
-derive instance genericAssertions :: Generic Assertions _
+derive instance Generic (ContractTermsPoly a) _
 
-derive instance newtypeAssertions :: Newtype Assertions _
-
---------------------------------------------------------------------------------
-
-_Assertions :: Iso' Assertions
-  { context :: AssertionContext, assertions :: Array Assertion }
-_Assertions = _Newtype
+derive instance Newtype (ContractTermsPoly a) _
 
 --------------------------------------------------------------------------------
 
-newtype AssertionContext = AssertionContext
-  { rrmoMin :: Number
-  , rrmoMax :: Number
+_ContractTermsPoly
+  :: forall a
+   . Iso' (ContractTermsPoly a)
+       { contractId :: String
+       , contractType :: CT
+       , contractStructure :: Array (ContractStructure a)
+       , contractRole :: CR
+       , settlementCurrency :: Maybe String
+       , initialExchangeDate :: Maybe String
+       , dayCountConvention :: Maybe DCC
+       , scheduleConfig :: ScheduleConfig
+       , statusDate :: String
+       , contractPerformance :: Maybe PRF
+       , creditEventTypeCovered :: Maybe CETC
+       , coverageOfCreditEnhancement :: Maybe a
+       , guaranteedExposure :: Maybe CEGE
+       , cycleOfFee :: Maybe Cycle
+       , cycleAnchorDateOfFee :: Maybe String
+       , feeAccrued :: Maybe a
+       , feeBasis :: Maybe FEB
+       , feeRate :: Maybe a
+       , cycleAnchorDateOfInterestPayment :: Maybe String
+       , cycleOfInterestPayment :: Maybe Cycle
+       , accruedInterest :: Maybe a
+       , capitalizationEndDate :: Maybe String
+       , cycleAnchorDateOfInterestCalculationBase :: Maybe String
+       , cycleOfInterestCalculationBase :: Maybe Cycle
+       , interestCalculationBase :: Maybe IPCB
+       , interestCalculationBaseA :: Maybe a
+       , nominalInterestRate :: Maybe a
+       , nominalInterestRate2 :: Maybe a
+       , interestScalingMultiplier :: Maybe a
+       , maturityDate :: Maybe String
+       , amortizationDate :: Maybe String
+       , exerciseDate :: Maybe String
+       , notionalPrincipal :: Maybe a
+       , premiumDiscountAtIED :: Maybe a
+       , cycleAnchorDateOfPrincipalRedemption :: Maybe String
+       , cycleOfPrincipalRedemption :: Maybe Cycle
+       , nextPrincipalRedemptionPayment :: Maybe a
+       , purchaseDate :: Maybe String
+       , priceAtPurchaseDate :: Maybe a
+       , terminationDate :: Maybe String
+       , priceAtTerminationDate :: Maybe a
+       , quantity :: Maybe a
+       , scalingIndexAtStatusDate :: Maybe a
+       , cycleAnchorDateOfScalingIndex :: Maybe String
+       , cycleOfScalingIndex :: Maybe Cycle
+       , scalingEffect :: Maybe SCEF
+       , scalingIndexAtContractDealDate :: Maybe a
+       , marketObjectCodeOfScalingIndex :: Maybe String
+       , notionalScalingMultiplier :: Maybe a
+       , cycleOfOptionality :: Maybe Cycle
+       , cycleAnchorDateOfOptionality :: Maybe String
+       , optionType :: Maybe OPTP
+       , optionStrike1 :: Maybe a
+       , optionExerciseType :: Maybe OPXT
+       , settlementPeriod :: Maybe Cycle
+       , deliverySettlement :: Maybe DS
+       , exerciseAmount :: Maybe a
+       , futuresPrice :: Maybe a
+       , penaltyRate :: Maybe a
+       , penaltyType :: Maybe PYTP
+       , prepaymentEffect :: Maybe PPEF
+       , cycleOfRateReset :: Maybe Cycle
+       , cycleAnchorDateOfRateReset :: Maybe String
+       , nextResetRate :: Maybe a
+       , rateSpread :: Maybe a
+       , rateMultiplier :: Maybe a
+       , periodFloor :: Maybe a
+       , periodCap :: Maybe a
+       , lifeCap :: Maybe a
+       , lifeFloor :: Maybe a
+       , marketObjectCodeOfRateReset :: Maybe String
+       , cycleOfDividend :: Maybe Cycle
+       , cycleAnchorDateOfDividend :: Maybe String
+       , nextDividendPaymentAmount :: Maybe a
+       , enableSettlement :: Boolean
+       , constraints :: Maybe Assertions
+       }
+_ContractTermsPoly = _Newtype
+
+--------------------------------------------------------------------------------
+
+newtype Cycle = Cycle
+  { n :: BigInt
+  , p :: Period
+  , stub :: Stub
+  , includeEndDay :: Boolean
   }
 
-instance encodeJsonAssertionContext :: EncodeJson AssertionContext where
+instance EncodeJson Cycle where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { rrmoMin: E.value :: _ Number
-        , rrmoMax: E.value :: _ Number
+        { n: E.value :: _ BigInt
+        , p: E.value :: _ Period
+        , stub: E.value :: _ Stub
+        , includeEndDay: E.value :: _ Boolean
         }
     )
 
-instance decodeJsonAssertionContext :: DecodeJson AssertionContext where
+instance DecodeJson Cycle where
   decodeJson = defer \_ -> D.decode $
-    ( AssertionContext <$> D.record "AssertionContext"
-        { rrmoMin: D.value :: _ Number
-        , rrmoMax: D.value :: _ Number
+    ( Cycle <$> D.record "Cycle"
+        { n: D.value :: _ BigInt
+        , p: D.value :: _ Period
+        , stub: D.value :: _ Stub
+        , includeEndDay: D.value :: _ Boolean
         }
     )
 
-derive instance genericAssertionContext :: Generic AssertionContext _
+derive instance Generic Cycle _
 
-derive instance newtypeAssertionContext :: Newtype AssertionContext _
+derive instance Newtype Cycle _
 
 --------------------------------------------------------------------------------
 
-_AssertionContext :: Iso' AssertionContext
-  { rrmoMin :: Number, rrmoMax :: Number }
-_AssertionContext = _Newtype
+_Cycle :: Iso' Cycle
+  { n :: BigInt, p :: Period, stub :: Stub, includeEndDay :: Boolean }
+_Cycle = _Newtype
+
+--------------------------------------------------------------------------------
+
+data DCC
+  = DCC_A_AISDA
+  | DCC_A_360
+  | DCC_A_365
+  | DCC_E30_360ISDA
+  | DCC_E30_360
+  | DCC_B_252
+
+derive instance Eq DCC
+
+derive instance Ord DCC
+
+instance Show DCC where
+  show a = genericShow a
+
+instance EncodeJson DCC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson DCC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic DCC _
+
+instance Enum DCC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded DCC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_DCC_A_AISDA :: Prism' DCC Unit
+_DCC_A_AISDA = prism' (const DCC_A_AISDA) case _ of
+  DCC_A_AISDA -> Just unit
+  _ -> Nothing
+
+_DCC_A_360 :: Prism' DCC Unit
+_DCC_A_360 = prism' (const DCC_A_360) case _ of
+  DCC_A_360 -> Just unit
+  _ -> Nothing
+
+_DCC_A_365 :: Prism' DCC Unit
+_DCC_A_365 = prism' (const DCC_A_365) case _ of
+  DCC_A_365 -> Just unit
+  _ -> Nothing
+
+_DCC_E30_360ISDA :: Prism' DCC Unit
+_DCC_E30_360ISDA = prism' (const DCC_E30_360ISDA) case _ of
+  DCC_E30_360ISDA -> Just unit
+  _ -> Nothing
+
+_DCC_E30_360 :: Prism' DCC Unit
+_DCC_E30_360 = prism' (const DCC_E30_360) case _ of
+  DCC_E30_360 -> Just unit
+  _ -> Nothing
+
+_DCC_B_252 :: Prism' DCC Unit
+_DCC_B_252 = prism' (const DCC_B_252) case _ of
+  DCC_B_252 -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data DS
+  = DS_S
+  | DS_D
+
+derive instance Eq DS
+
+derive instance Ord DS
+
+instance Show DS where
+  show a = genericShow a
+
+instance EncodeJson DS where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson DS where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic DS _
+
+instance Enum DS where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded DS where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_DS_S :: Prism' DS Unit
+_DS_S = prism' (const DS_S) case _ of
+  DS_S -> Just unit
+  _ -> Nothing
+
+_DS_D :: Prism' DS Unit
+_DS_D = prism' (const DS_D) case _ of
+  DS_D -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data EOMC
+  = EOMC_EOM
+  | EOMC_SD
+
+derive instance Eq EOMC
+
+derive instance Ord EOMC
+
+instance Show EOMC where
+  show a = genericShow a
+
+instance EncodeJson EOMC where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson EOMC where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic EOMC _
+
+instance Enum EOMC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded EOMC where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_EOMC_EOM :: Prism' EOMC Unit
+_EOMC_EOM = prism' (const EOMC_EOM) case _ of
+  EOMC_EOM -> Just unit
+  _ -> Nothing
+
+_EOMC_SD :: Prism' EOMC Unit
+_EOMC_SD = prism' (const EOMC_SD) case _ of
+  EOMC_SD -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data FEB
+  = FEB_A
+  | FEB_N
+
+derive instance Eq FEB
+
+derive instance Ord FEB
+
+instance Show FEB where
+  show a = genericShow a
+
+instance EncodeJson FEB where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson FEB where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic FEB _
+
+instance Enum FEB where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded FEB where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_FEB_A :: Prism' FEB Unit
+_FEB_A = prism' (const FEB_A) case _ of
+  FEB_A -> Just unit
+  _ -> Nothing
+
+_FEB_N :: Prism' FEB Unit
+_FEB_N = prism' (const FEB_N) case _ of
+  FEB_N -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data IPCB
+  = IPCB_NT
+  | IPCB_NTIED
+  | IPCB_NTL
+
+derive instance Eq IPCB
+
+derive instance Ord IPCB
+
+instance Show IPCB where
+  show a = genericShow a
+
+instance EncodeJson IPCB where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson IPCB where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic IPCB _
+
+instance Enum IPCB where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded IPCB where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_IPCB_NT :: Prism' IPCB Unit
+_IPCB_NT = prism' (const IPCB_NT) case _ of
+  IPCB_NT -> Just unit
+  _ -> Nothing
+
+_IPCB_NTIED :: Prism' IPCB Unit
+_IPCB_NTIED = prism' (const IPCB_NTIED) case _ of
+  IPCB_NTIED -> Just unit
+  _ -> Nothing
+
+_IPCB_NTL :: Prism' IPCB Unit
+_IPCB_NTL = prism' (const IPCB_NTL) case _ of
+  IPCB_NTL -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype Identifier = Identifier
+  { marketObjectCode :: Maybe String
+  , contractIdentifier :: Maybe String
+  }
+
+derive instance Eq Identifier
+
+derive instance Ord Identifier
+
+instance Show Identifier where
+  show a = genericShow a
+
+instance EncodeJson Identifier where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { marketObjectCode: (E.maybe E.value) :: _ (Maybe String)
+        , contractIdentifier: (E.maybe E.value) :: _ (Maybe String)
+        }
+    )
+
+instance DecodeJson Identifier where
+  decodeJson = defer \_ -> D.decode $
+    ( Identifier <$> D.record "Identifier"
+        { marketObjectCode: (D.maybe D.value) :: _ (Maybe String)
+        , contractIdentifier: (D.maybe D.value) :: _ (Maybe String)
+        }
+    )
+
+derive instance Generic Identifier _
+
+derive instance Newtype Identifier _
+
+--------------------------------------------------------------------------------
+
+_Identifier :: Iso' Identifier
+  { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
+_Identifier = _Newtype
+
+--------------------------------------------------------------------------------
+
+data OPTP
+  = OPTP_C
+  | OPTP_P
+  | OPTP_CP
+
+derive instance Eq OPTP
+
+derive instance Ord OPTP
+
+instance Show OPTP where
+  show a = genericShow a
+
+instance EncodeJson OPTP where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson OPTP where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic OPTP _
+
+instance Enum OPTP where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded OPTP where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_OPTP_C :: Prism' OPTP Unit
+_OPTP_C = prism' (const OPTP_C) case _ of
+  OPTP_C -> Just unit
+  _ -> Nothing
+
+_OPTP_P :: Prism' OPTP Unit
+_OPTP_P = prism' (const OPTP_P) case _ of
+  OPTP_P -> Just unit
+  _ -> Nothing
+
+_OPTP_CP :: Prism' OPTP Unit
+_OPTP_CP = prism' (const OPTP_CP) case _ of
+  OPTP_CP -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data OPXT
+  = OPXT_E
+  | OPXT_B
+  | OPXT_A
+
+derive instance Eq OPXT
+
+derive instance Ord OPXT
+
+instance Show OPXT where
+  show a = genericShow a
+
+instance EncodeJson OPXT where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson OPXT where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic OPXT _
+
+instance Enum OPXT where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded OPXT where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_OPXT_E :: Prism' OPXT Unit
+_OPXT_E = prism' (const OPXT_E) case _ of
+  OPXT_E -> Just unit
+  _ -> Nothing
+
+_OPXT_B :: Prism' OPXT Unit
+_OPXT_B = prism' (const OPXT_B) case _ of
+  OPXT_B -> Just unit
+  _ -> Nothing
+
+_OPXT_A :: Prism' OPXT Unit
+_OPXT_A = prism' (const OPXT_A) case _ of
+  OPXT_A -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data PPEF
+  = PPEF_N
+  | PPEF_A
+  | PPEF_M
+
+derive instance Eq PPEF
+
+derive instance Ord PPEF
+
+instance Show PPEF where
+  show a = genericShow a
+
+instance EncodeJson PPEF where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson PPEF where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic PPEF _
+
+instance Enum PPEF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PPEF where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_PPEF_N :: Prism' PPEF Unit
+_PPEF_N = prism' (const PPEF_N) case _ of
+  PPEF_N -> Just unit
+  _ -> Nothing
+
+_PPEF_A :: Prism' PPEF Unit
+_PPEF_A = prism' (const PPEF_A) case _ of
+  PPEF_A -> Just unit
+  _ -> Nothing
+
+_PPEF_M :: Prism' PPEF Unit
+_PPEF_M = prism' (const PPEF_M) case _ of
+  PPEF_M -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data PRF
+  = PRF_PF
+  | PRF_DL
+  | PRF_DQ
+  | PRF_DF
+
+derive instance Eq PRF
+
+derive instance Ord PRF
+
+instance Show PRF where
+  show a = genericShow a
+
+instance EncodeJson PRF where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson PRF where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic PRF _
+
+instance Enum PRF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PRF where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_PRF_PF :: Prism' PRF Unit
+_PRF_PF = prism' (const PRF_PF) case _ of
+  PRF_PF -> Just unit
+  _ -> Nothing
+
+_PRF_DL :: Prism' PRF Unit
+_PRF_DL = prism' (const PRF_DL) case _ of
+  PRF_DL -> Just unit
+  _ -> Nothing
+
+_PRF_DQ :: Prism' PRF Unit
+_PRF_DQ = prism' (const PRF_DQ) case _ of
+  PRF_DQ -> Just unit
+  _ -> Nothing
+
+_PRF_DF :: Prism' PRF Unit
+_PRF_DF = prism' (const PRF_DF) case _ of
+  PRF_DF -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data PYTP
+  = PYTP_A
+  | PYTP_N
+  | PYTP_I
+  | PYTP_O
+
+derive instance Eq PYTP
+
+derive instance Ord PYTP
+
+instance Show PYTP where
+  show a = genericShow a
+
+instance EncodeJson PYTP where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson PYTP where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic PYTP _
+
+instance Enum PYTP where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PYTP where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_PYTP_A :: Prism' PYTP Unit
+_PYTP_A = prism' (const PYTP_A) case _ of
+  PYTP_A -> Just unit
+  _ -> Nothing
+
+_PYTP_N :: Prism' PYTP Unit
+_PYTP_N = prism' (const PYTP_N) case _ of
+  PYTP_N -> Just unit
+  _ -> Nothing
+
+_PYTP_I :: Prism' PYTP Unit
+_PYTP_I = prism' (const PYTP_I) case _ of
+  PYTP_I -> Just unit
+  _ -> Nothing
+
+_PYTP_O :: Prism' PYTP Unit
+_PYTP_O = prism' (const PYTP_O) case _ of
+  PYTP_O -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data Period
+  = P_D
+  | P_W
+  | P_M
+  | P_Q
+  | P_H
+  | P_Y
+
+derive instance Eq Period
+
+derive instance Ord Period
+
+instance Show Period where
+  show a = genericShow a
+
+instance EncodeJson Period where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson Period where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic Period _
+
+instance Enum Period where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Period where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_P_D :: Prism' Period Unit
+_P_D = prism' (const P_D) case _ of
+  P_D -> Just unit
+  _ -> Nothing
+
+_P_W :: Prism' Period Unit
+_P_W = prism' (const P_W) case _ of
+  P_W -> Just unit
+  _ -> Nothing
+
+_P_M :: Prism' Period Unit
+_P_M = prism' (const P_M) case _ of
+  P_M -> Just unit
+  _ -> Nothing
+
+_P_Q :: Prism' Period Unit
+_P_Q = prism' (const P_Q) case _ of
+  P_Q -> Just unit
+  _ -> Nothing
+
+_P_H :: Prism' Period Unit
+_P_H = prism' (const P_H) case _ of
+  P_H -> Just unit
+  _ -> Nothing
+
+_P_Y :: Prism' Period Unit
+_P_Y = prism' (const P_Y) case _ of
+  P_Y -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data Reference a
+  = ReferenceTerms (ContractTermsPoly a)
+  | ReferenceId Identifier
+
+instance (EncodeJson a) => EncodeJson (Reference a) where
+  encodeJson = defer \_ -> case _ of
+    ReferenceTerms a -> E.encodeTagged "ReferenceTerms" a E.value
+    ReferenceId a -> E.encodeTagged "ReferenceId" a E.value
+
+instance (DecodeJson a) => DecodeJson (Reference a) where
+  decodeJson = defer \_ -> D.decode
+    $ D.sumType "Reference"
+    $ Map.fromFoldable
+        [ "ReferenceTerms" /\ D.content (ReferenceTerms <$> D.value)
+        , "ReferenceId" /\ D.content (ReferenceId <$> D.value)
+        ]
+
+derive instance Generic (Reference a) _
+
+--------------------------------------------------------------------------------
+
+_ReferenceTerms :: forall a. Prism' (Reference a) (ContractTermsPoly a)
+_ReferenceTerms = prism' ReferenceTerms case _ of
+  (ReferenceTerms a) -> Just a
+  _ -> Nothing
+
+_ReferenceId :: forall a. Prism' (Reference a) Identifier
+_ReferenceId = prism' ReferenceId case _ of
+  (ReferenceId a) -> Just a
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data ReferenceRole
+  = UDL
+  | FIL
+  | SEL
+  | COVE
+  | COVI
+
+derive instance Eq ReferenceRole
+
+derive instance Ord ReferenceRole
+
+instance Show ReferenceRole where
+  show a = genericShow a
+
+instance EncodeJson ReferenceRole where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson ReferenceRole where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic ReferenceRole _
+
+instance Enum ReferenceRole where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded ReferenceRole where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_UDL :: Prism' ReferenceRole Unit
+_UDL = prism' (const UDL) case _ of
+  UDL -> Just unit
+  _ -> Nothing
+
+_FIL :: Prism' ReferenceRole Unit
+_FIL = prism' (const FIL) case _ of
+  FIL -> Just unit
+  _ -> Nothing
+
+_SEL :: Prism' ReferenceRole Unit
+_SEL = prism' (const SEL) case _ of
+  SEL -> Just unit
+  _ -> Nothing
+
+_COVE :: Prism' ReferenceRole Unit
+_COVE = prism' (const COVE) case _ of
+  COVE -> Just unit
+  _ -> Nothing
+
+_COVI :: Prism' ReferenceRole Unit
+_COVI = prism' (const COVI) case _ of
+  COVI -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data ReferenceType
+  = CNT
+  | CID
+  | MOC
+  | EID
+  | CST
+
+derive instance Eq ReferenceType
+
+derive instance Ord ReferenceType
+
+instance Show ReferenceType where
+  show a = genericShow a
+
+instance EncodeJson ReferenceType where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson ReferenceType where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic ReferenceType _
+
+instance Enum ReferenceType where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded ReferenceType where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_CNT :: Prism' ReferenceType Unit
+_CNT = prism' (const CNT) case _ of
+  CNT -> Just unit
+  _ -> Nothing
+
+_CID :: Prism' ReferenceType Unit
+_CID = prism' (const CID) case _ of
+  CID -> Just unit
+  _ -> Nothing
+
+_MOC :: Prism' ReferenceType Unit
+_MOC = prism' (const MOC) case _ of
+  MOC -> Just unit
+  _ -> Nothing
+
+_EID :: Prism' ReferenceType Unit
+_EID = prism' (const EID) case _ of
+  EID -> Just unit
+  _ -> Nothing
+
+_CST :: Prism' ReferenceType Unit
+_CST = prism' (const CST) case _ of
+  CST -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+data SCEF
+  = SE_OOO
+  | SE_IOO
+  | SE_ONO
+  | SE_OOM
+  | SE_INO
+  | SE_ONM
+  | SE_IOM
+  | SE_INM
+
+derive instance Eq SCEF
+
+derive instance Ord SCEF
+
+instance Show SCEF where
+  show a = genericShow a
+
+instance EncodeJson SCEF where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson SCEF where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic SCEF _
+
+instance Enum SCEF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded SCEF where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_SE_OOO :: Prism' SCEF Unit
+_SE_OOO = prism' (const SE_OOO) case _ of
+  SE_OOO -> Just unit
+  _ -> Nothing
+
+_SE_IOO :: Prism' SCEF Unit
+_SE_IOO = prism' (const SE_IOO) case _ of
+  SE_IOO -> Just unit
+  _ -> Nothing
+
+_SE_ONO :: Prism' SCEF Unit
+_SE_ONO = prism' (const SE_ONO) case _ of
+  SE_ONO -> Just unit
+  _ -> Nothing
+
+_SE_OOM :: Prism' SCEF Unit
+_SE_OOM = prism' (const SE_OOM) case _ of
+  SE_OOM -> Just unit
+  _ -> Nothing
+
+_SE_INO :: Prism' SCEF Unit
+_SE_INO = prism' (const SE_INO) case _ of
+  SE_INO -> Just unit
+  _ -> Nothing
+
+_SE_ONM :: Prism' SCEF Unit
+_SE_ONM = prism' (const SE_ONM) case _ of
+  SE_ONM -> Just unit
+  _ -> Nothing
+
+_SE_IOM :: Prism' SCEF Unit
+_SE_IOM = prism' (const SE_IOM) case _ of
+  SE_IOM -> Just unit
+  _ -> Nothing
+
+_SE_INM :: Prism' SCEF Unit
+_SE_INM = prism' (const SE_INM) case _ of
+  SE_INM -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype ScheduleConfig = ScheduleConfig
+  { calendar :: Maybe Calendar
+  , endOfMonthConvention :: Maybe EOMC
+  , businessDayConvention :: Maybe BDC
+  }
+
+instance EncodeJson ScheduleConfig where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { calendar: (E.maybe E.value) :: _ (Maybe Calendar)
+        , endOfMonthConvention: (E.maybe E.value) :: _ (Maybe EOMC)
+        , businessDayConvention: (E.maybe E.value) :: _ (Maybe BDC)
+        }
+    )
+
+instance DecodeJson ScheduleConfig where
+  decodeJson = defer \_ -> D.decode $
+    ( ScheduleConfig <$> D.record "ScheduleConfig"
+        { calendar: (D.maybe D.value) :: _ (Maybe Calendar)
+        , endOfMonthConvention: (D.maybe D.value) :: _ (Maybe EOMC)
+        , businessDayConvention: (D.maybe D.value) :: _ (Maybe BDC)
+        }
+    )
+
+derive instance Generic ScheduleConfig _
+
+derive instance Newtype ScheduleConfig _
+
+--------------------------------------------------------------------------------
+
+_ScheduleConfig :: Iso' ScheduleConfig
+  { calendar :: Maybe Calendar
+  , endOfMonthConvention :: Maybe EOMC
+  , businessDayConvention :: Maybe BDC
+  }
+_ScheduleConfig = _Newtype
+
+--------------------------------------------------------------------------------
+
+data Stub
+  = ShortStub
+  | LongStub
+
+derive instance Eq Stub
+
+derive instance Ord Stub
+
+instance Show Stub where
+  show a = genericShow a
+
+instance EncodeJson Stub where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson Stub where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic Stub _
+
+instance Enum Stub where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Stub where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_ShortStub :: Prism' Stub Unit
+_ShortStub = prism' (const ShortStub) case _ of
+  ShortStub -> Just unit
+  _ -> Nothing
+
+_LongStub :: Prism' Stub Unit
+_LongStub = prism' (const LongStub) case _ of
+  LongStub -> Just unit
+  _ -> Nothing

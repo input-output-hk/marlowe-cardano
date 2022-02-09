@@ -13,6 +13,7 @@ module Humanize
   ) where
 
 import Prologue
+
 import Data.BigInt.Argonaut (BigInt, toNumber)
 import Data.DateTime (DateTime, adjust)
 import Data.Formatter.DateTime (FormatterCommand(..), format) as DateTime

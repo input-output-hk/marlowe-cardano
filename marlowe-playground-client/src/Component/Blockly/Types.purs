@@ -1,6 +1,7 @@
 module Component.Blockly.Types where
 
 import Prologue hiding (div)
+
 import Blockly.Dom (Block)
 import Blockly.Internal (BlockDefinition, XML)
 import Blockly.Toolbox (Toolbox)
@@ -8,9 +9,9 @@ import Blockly.Types as BT
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.List (List)
-import Type.Proxy (Proxy(..))
 import Halogen (RefLabel(..), SubscriptionId)
 import Marlowe.Linter (Warning)
+import Type.Proxy (Proxy(..))
 
 type State
   =

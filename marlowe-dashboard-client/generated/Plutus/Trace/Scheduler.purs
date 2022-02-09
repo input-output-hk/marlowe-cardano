@@ -4,11 +4,11 @@ module Plutus.Trace.Scheduler where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -26,6 +26,53 @@ import Data.Tuple.Nested ((/\))
 import Plutus.Trace.Tag (Tag)
 import Type.Proxy (Proxy(Proxy))
 
+data Priority
+  = Normal
+  | Sleeping
+  | Frozen
+
+derive instance Eq Priority
+
+derive instance Ord Priority
+
+instance Show Priority where
+  show a = genericShow a
+
+instance EncodeJson Priority where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson Priority where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic Priority _
+
+instance Enum Priority where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Priority where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_Normal :: Prism' Priority Unit
+_Normal = prism' (const Normal) case _ of
+  Normal -> Just unit
+  _ -> Nothing
+
+_Sleeping :: Prism' Priority Unit
+_Sleeping = prism' (const Sleeping) case _ of
+  Sleeping -> Just unit
+  _ -> Nothing
+
+_Frozen :: Prism' Priority Unit
+_Frozen = prism' (const Frozen) case _ of
+  Frozen -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
 newtype SchedulerLog = SchedulerLog
   { slEvent :: ThreadEvent
   , slThread :: ThreadId
@@ -33,12 +80,12 @@ newtype SchedulerLog = SchedulerLog
   , slPrio :: Priority
   }
 
-derive instance eqSchedulerLog :: Eq SchedulerLog
+derive instance Eq SchedulerLog
 
-instance showSchedulerLog :: Show SchedulerLog where
+instance Show SchedulerLog where
   show a = genericShow a
 
-instance encodeJsonSchedulerLog :: EncodeJson SchedulerLog where
+instance EncodeJson SchedulerLog where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { slEvent: E.value :: _ ThreadEvent
@@ -48,7 +95,7 @@ instance encodeJsonSchedulerLog :: EncodeJson SchedulerLog where
         }
     )
 
-instance decodeJsonSchedulerLog :: DecodeJson SchedulerLog where
+instance DecodeJson SchedulerLog where
   decodeJson = defer \_ -> D.decode $
     ( SchedulerLog <$> D.record "SchedulerLog"
         { slEvent: D.value :: _ ThreadEvent
@@ -58,9 +105,9 @@ instance decodeJsonSchedulerLog :: DecodeJson SchedulerLog where
         }
     )
 
-derive instance genericSchedulerLog :: Generic SchedulerLog _
+derive instance Generic SchedulerLog _
 
-derive instance newtypeSchedulerLog :: Newtype SchedulerLog _
+derive instance Newtype SchedulerLog _
 
 --------------------------------------------------------------------------------
 
@@ -74,6 +121,47 @@ _SchedulerLog = _Newtype
 
 --------------------------------------------------------------------------------
 
+data StopReason
+  = ThreadDone
+  | ThreadExit
+
+derive instance Eq StopReason
+
+derive instance Ord StopReason
+
+instance Show StopReason where
+  show a = genericShow a
+
+instance EncodeJson StopReason where
+  encodeJson = defer \_ -> E.encode E.enum
+
+instance DecodeJson StopReason where
+  decodeJson = defer \_ -> D.decode D.enum
+
+derive instance Generic StopReason _
+
+instance Enum StopReason where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded StopReason where
+  bottom = genericBottom
+  top = genericTop
+
+--------------------------------------------------------------------------------
+
+_ThreadDone :: Prism' StopReason Unit
+_ThreadDone = prism' (const ThreadDone) case _ of
+  ThreadDone -> Just unit
+  _ -> Nothing
+
+_ThreadExit :: Prism' StopReason Unit
+_ThreadExit = prism' (const ThreadExit) case _ of
+  ThreadExit -> Just unit
+  _ -> Nothing
+
+--------------------------------------------------------------------------------
+
 data ThreadEvent
   = Stopped StopReason
   | Resumed
@@ -81,12 +169,12 @@ data ThreadEvent
   | Started
   | Thawed
 
-derive instance eqThreadEvent :: Eq ThreadEvent
+derive instance Eq ThreadEvent
 
-instance showThreadEvent :: Show ThreadEvent where
+instance Show ThreadEvent where
   show a = genericShow a
 
-instance encodeJsonThreadEvent :: EncodeJson ThreadEvent where
+instance EncodeJson ThreadEvent where
   encodeJson = defer \_ -> case _ of
     Stopped a -> E.encodeTagged "Stopped" a E.value
     Resumed -> encodeJson { tag: "Resumed", contents: jsonNull }
@@ -94,7 +182,7 @@ instance encodeJsonThreadEvent :: EncodeJson ThreadEvent where
     Started -> encodeJson { tag: "Started", contents: jsonNull }
     Thawed -> encodeJson { tag: "Thawed", contents: jsonNull }
 
-instance decodeJsonThreadEvent :: DecodeJson ThreadEvent where
+instance DecodeJson ThreadEvent where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "ThreadEvent"
     $ Map.fromFoldable
@@ -105,7 +193,7 @@ instance decodeJsonThreadEvent :: DecodeJson ThreadEvent where
         , "Thawed" /\ pure Thawed
         ]
 
-derive instance genericThreadEvent :: Generic ThreadEvent _
+derive instance Generic ThreadEvent _
 
 --------------------------------------------------------------------------------
 
@@ -138,114 +226,26 @@ _Thawed = prism' (const Thawed) case _ of
 
 newtype ThreadId = ThreadId { unThreadId :: Int }
 
-derive instance eqThreadId :: Eq ThreadId
+derive instance Eq ThreadId
 
-instance showThreadId :: Show ThreadId where
+instance Show ThreadId where
   show a = genericShow a
 
-instance encodeJsonThreadId :: EncodeJson ThreadId where
+instance EncodeJson ThreadId where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unThreadId: E.value :: _ Int }
     )
 
-instance decodeJsonThreadId :: DecodeJson ThreadId where
+instance DecodeJson ThreadId where
   decodeJson = defer \_ -> D.decode $
     (ThreadId <$> D.record "ThreadId" { unThreadId: D.value :: _ Int })
 
-derive instance genericThreadId :: Generic ThreadId _
+derive instance Generic ThreadId _
 
-derive instance newtypeThreadId :: Newtype ThreadId _
+derive instance Newtype ThreadId _
 
 --------------------------------------------------------------------------------
 
 _ThreadId :: Iso' ThreadId { unThreadId :: Int }
 _ThreadId = _Newtype
-
---------------------------------------------------------------------------------
-
-data Priority
-  = Normal
-  | Sleeping
-  | Frozen
-
-derive instance eqPriority :: Eq Priority
-
-derive instance ordPriority :: Ord Priority
-
-instance showPriority :: Show Priority where
-  show a = genericShow a
-
-instance encodeJsonPriority :: EncodeJson Priority where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonPriority :: DecodeJson Priority where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericPriority :: Generic Priority _
-
-instance enumPriority :: Enum Priority where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedPriority :: Bounded Priority where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_Normal :: Prism' Priority Unit
-_Normal = prism' (const Normal) case _ of
-  Normal -> Just unit
-  _ -> Nothing
-
-_Sleeping :: Prism' Priority Unit
-_Sleeping = prism' (const Sleeping) case _ of
-  Sleeping -> Just unit
-  _ -> Nothing
-
-_Frozen :: Prism' Priority Unit
-_Frozen = prism' (const Frozen) case _ of
-  Frozen -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
-data StopReason
-  = ThreadDone
-  | ThreadExit
-
-derive instance eqStopReason :: Eq StopReason
-
-derive instance ordStopReason :: Ord StopReason
-
-instance showStopReason :: Show StopReason where
-  show a = genericShow a
-
-instance encodeJsonStopReason :: EncodeJson StopReason where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance decodeJsonStopReason :: DecodeJson StopReason where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance genericStopReason :: Generic StopReason _
-
-instance enumStopReason :: Enum StopReason where
-  succ = genericSucc
-  pred = genericPred
-
-instance boundedStopReason :: Bounded StopReason where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_ThreadDone :: Prism' StopReason Unit
-_ThreadDone = prism' (const ThreadDone) case _ of
-  ThreadDone -> Just unit
-  _ -> Nothing
-
-_ThreadExit :: Prism' StopReason Unit
-_ThreadExit = prism' (const ThreadExit) case _ of
-  ThreadExit -> Just unit
-  _ -> Nothing

@@ -3,7 +3,7 @@ module Page.BlocklyEditor.BottomPanel
   ) where
 
 import Prologue hiding (div)
-import Component.MetadataTab.View (metadataView)
+import Component.MetadataTab (render) as MetadataTab
 import Data.Array as Array
 import Data.Lens (to, (^.))
 import Effect.Aff.Class (class MonadAff)
@@ -53,10 +53,12 @@ panelContents
   -> MetaData
   -> BottomPanelView
   -> ComponentHTML Action ChildSlots m
-panelContents state metadata MetadataView = metadataView
-  (state ^. _metadataHintInfo)
-  metadata
-  MetadataAction
+panelContents state metadata MetadataView =
+  MetadataTab.render
+    { metadataHintInfo: state ^. _metadataHintInfo
+    , metadata
+    }
+    MetadataAction
 
 panelContents state metadata StaticAnalysisView =
   section [ classes [ flex, flexCol ] ]

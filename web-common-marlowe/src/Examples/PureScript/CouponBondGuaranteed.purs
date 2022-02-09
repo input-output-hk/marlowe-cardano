@@ -5,6 +5,7 @@ module Examples.PureScript.CouponBondGuaranteed
   ) where
 
 import Prelude
+
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Examples.Metadata as Metadata
 import Marlowe.Extended
@@ -15,7 +16,7 @@ import Marlowe.Extended
   , Timeout(..)
   , Value(..)
   )
-import Marlowe.Extended.Metadata (MetaData, ContractTemplate)
+import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics (Party(..), Token(..))
 
 contractTemplate :: ContractTemplate

@@ -18,19 +18,20 @@ source-repository head
 library
     default-extensions: NoImplicitPrelude
     exposed-modules:
-        Marlowe.Run.Webserver.Server
-        Marlowe.Run.Webserver.API
-        Marlowe.Run.Webserver.WebSocket
-        Marlowe.Run.Webserver.Types
-        Marlowe.Run.Webserver.Wallet.Types
-        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Types
-        Marlowe.Run.Webserver.Wallet.Client
+        Marlowe.Run.API
+        Marlowe.Run.Server
+        Marlowe.Run.Wallet.V1.API
+        Marlowe.Run.Wallet.V1.Types
+        Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
+        Marlowe.Run.Wallet.V1.Client
+        Marlowe.Run.WebSocket
     other-modules:
+        Marlowe.Run
+        Marlowe.Run.Wallet.V1
+        Marlowe.Run.Wallet.V1.CentralizedTestnet.API
+        Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
+        Marlowe.Run.Wallet.V1.Server
         Paths_marlowe_dashboard_server
-        Marlowe.Run.Webserver.Wallet.API
-        Marlowe.Run.Webserver.Wallet.Server
-        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.API
-        Marlowe.Run.Webserver.Wallet.CentralizedTestnet.Server
     hs-source-dirs:
         src
     default-language: Haskell2010
@@ -39,6 +40,7 @@ library
         aeson -any,
         base >=4.7 && <5,
         bytestring -any,
+        containers -any,
         cardano-addresses -any,
         cardano-wallet-core -any,
         cardano-prelude -any,
@@ -60,6 +62,7 @@ library
         servant-websockets -any,
         text -any,
         text-class -any,
+        transformers -any,
         wai-app-static -any,
         wai-cors -any,
         websockets -any,
@@ -69,29 +72,52 @@ executable marlowe-dashboard-server
     main-is: Main.hs
     other-modules:
         Webserver
-        PSGenerator
     hs-source-dirs: app
     default-language: Haskell2010
     ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
                  -Wincomplete-uni-patterns -Wincomplete-record-updates
     build-depends:
-        aeson -any,
-        base -any,
-        http-client -any,
-        http-types -any,
-        lens -any,
-        marlowe-dashboard-server -any,
-        monad-logger -any,
-        playground-common -any,
-        plutus-ledger-api -any,
-        purescript-bridge -any,
-        optparse-applicative -any,
-        servant-client -any,
-        servant-purescript -any,
-        servant-server -any,
-        text -any,
-        wai -any,
-        warp -any
+        aeson,
+        base,
+        http-client,
+        http-types,
+        marlowe,
+        marlowe-dashboard-server,
+        monad-logger,
+        optparse-applicative,
+        servant-client,
+        servant-server,
+        text,
+        wai,
+        warp
+
+executable psgenerator
+    main-is: PSGenerator.hs
+    hs-source-dirs:
+        tools,
+        ../marlowe/pab
+    other-modules:
+        MarloweContract
+    default-language: Haskell2010
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+                 -Wincomplete-uni-patterns -Wincomplete-record-updates
+    build-depends:
+        aeson,
+        base,
+        data-default,
+        freer-simple,
+        lens,
+        marlowe,
+        marlowe-dashboard-server,
+        optparse-applicative,
+        openapi3,
+        playground-common,
+        plutus-pab,
+        plutus-pab-executables,
+        prettyprinter,
+        purescript-bridge,
+        servant-purescript,
+        text
 
 test-suite marlowe-dashboard-server-test
     type: exitcode-stdio-1.0

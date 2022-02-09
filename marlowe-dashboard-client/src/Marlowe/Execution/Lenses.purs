@@ -15,10 +15,10 @@ module Marlowe.Execution.Lenses
   ) where
 
 import Prologue
+
 import Data.Lens (Lens', Traversal', _Just, traversed)
 import Data.Lens.Record (prop)
 import Data.List (List)
-import Type.Proxy (Proxy(..))
 import Marlowe.Execution.Types
   ( ContractAndState
   , PastState
@@ -26,8 +26,9 @@ import Marlowe.Execution.Types
   , State
   , TimeoutInfo
   )
-import Marlowe.Semantics (Contract, Payment, Slot, TransactionInput, Accounts)
+import Marlowe.Semantics (Accounts, Contract, Payment, Slot, TransactionInput)
 import Marlowe.Semantics (State) as Semantic
+import Type.Proxy (Proxy(..))
 
 _semanticState :: Lens' State Semantic.State
 _semanticState = prop (Proxy :: _ "semanticState")

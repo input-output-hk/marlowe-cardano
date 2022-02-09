@@ -1,10 +1,11 @@
 module Component.LoadingSubmitButton.Types where
 
 import Prologue
-import Type.Proxy (Proxy(..))
+
 import Data.Time.Duration (Milliseconds)
 import Halogen (RefLabel(..))
 import Network.RemoteData (RemoteData)
+import Type.Proxy (Proxy(..))
 
 _submitButtonSlot :: Proxy "submitButtonSlot"
 _submitButtonSlot = Proxy

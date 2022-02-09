@@ -36,6 +36,7 @@
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
@@ -57,6 +58,7 @@
           (hsPkgs."servant-websockets" or (errorHandler.buildDepError "servant-websockets"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."text-class" or (errorHandler.buildDepError "text-class"))
+          (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."wai-app-static" or (errorHandler.buildDepError "wai-app-static"))
           (hsPkgs."wai-cors" or (errorHandler.buildDepError "wai-cors"))
           (hsPkgs."websockets" or (errorHandler.buildDepError "websockets"))
@@ -64,18 +66,19 @@
           ];
         buildable = true;
         modules = [
+          "Marlowe/Run"
+          "Marlowe/Run/Wallet/V1"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/Server"
+          "Marlowe/Run/Wallet/V1/Server"
           "Paths_marlowe_dashboard_server"
-          "Marlowe/Run/Webserver/Wallet/API"
-          "Marlowe/Run/Webserver/Wallet/Server"
-          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/API"
-          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/Server"
-          "Marlowe/Run/Webserver/Server"
-          "Marlowe/Run/Webserver/API"
-          "Marlowe/Run/Webserver/WebSocket"
-          "Marlowe/Run/Webserver/Types"
-          "Marlowe/Run/Webserver/Wallet/Types"
-          "Marlowe/Run/Webserver/Wallet/CentralizedTestnet/Types"
-          "Marlowe/Run/Webserver/Wallet/Client"
+          "Marlowe/Run/API"
+          "Marlowe/Run/Server"
+          "Marlowe/Run/Wallet/V1/API"
+          "Marlowe/Run/Wallet/V1/Types"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/Types"
+          "Marlowe/Run/Wallet/V1/Client"
+          "Marlowe/Run/WebSocket"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -86,24 +89,44 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-types" or (errorHandler.buildDepError "http-types"))
-            (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-dashboard-server" or (errorHandler.buildDepError "marlowe-dashboard-server"))
             (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
-            (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
-            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-            (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
-            (hsPkgs."servant-purescript" or (errorHandler.buildDepError "servant-purescript"))
             (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
             (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
             ];
           buildable = true;
-          modules = [ "Webserver" "PSGenerator" ];
+          modules = [ "Webserver" ];
           hsSourceDirs = [ "app" ];
           mainPath = [ "Main.hs" ];
+          };
+        "psgenerator" = {
+          depends = [
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
+            (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
+            (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-dashboard-server" or (errorHandler.buildDepError "marlowe-dashboard-server"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
+            (hsPkgs."playground-common" or (errorHandler.buildDepError "playground-common"))
+            (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
+            (hsPkgs."plutus-pab-executables" or (errorHandler.buildDepError "plutus-pab-executables"))
+            (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
+            (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))
+            (hsPkgs."servant-purescript" or (errorHandler.buildDepError "servant-purescript"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            ];
+          buildable = true;
+          modules = [ "MarloweContract" ];
+          hsSourceDirs = [ "tools" "../marlowe/pab" ];
+          mainPath = [ "PSGenerator.hs" ];
           };
         };
       tests = {

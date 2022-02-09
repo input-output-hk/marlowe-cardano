@@ -4,11 +4,11 @@ module Ledger.Constraints.OffChain where
 import Prelude
 
 import Control.Lazy (defer)
-import Data.Argonaut.Core (jsonNull)
+import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
@@ -26,8 +26,7 @@ import Ledger.Typed.Tx (ConnectionError)
 import Plutus.V1.Ledger.Interval (Interval)
 import Plutus.V1.Ledger.Scripts (DatumHash)
 import Plutus.V1.Ledger.Time (POSIXTime)
-import Plutus.V1.Ledger.Tx (Tx, TxOutRef)
-import Plutus.V1.Ledger.Value (Value)
+import Plutus.V1.Ledger.Tx (Tx, TxOut, TxOutRef)
 import Type.Proxy (Proxy(Proxy))
 
 data MkTxError
@@ -42,12 +41,12 @@ data MkTxError
   | DatumWrongHash DatumHash String
   | CannotSatisfyAny
 
-derive instance eqMkTxError :: Eq MkTxError
+derive instance Eq MkTxError
 
-instance showMkTxError :: Show MkTxError where
+instance Show MkTxError where
   show a = genericShow a
 
-instance encodeJsonMkTxError :: EncodeJson MkTxError where
+instance EncodeJson MkTxError where
   encodeJson = defer \_ -> case _ of
     TypeCheckFailed a -> E.encodeTagged "TypeCheckFailed" a E.value
     TxOutRefNotFound a -> E.encodeTagged "TxOutRefNotFound" a E.value
@@ -64,7 +63,7 @@ instance encodeJsonMkTxError :: EncodeJson MkTxError where
     CannotSatisfyAny -> encodeJson
       { tag: "CannotSatisfyAny", contents: jsonNull }
 
-instance decodeJsonMkTxError :: DecodeJson MkTxError where
+instance DecodeJson MkTxError where
   decodeJson = defer \_ -> D.decode
     $ D.sumType "MkTxError"
     $ Map.fromFoldable
@@ -83,7 +82,7 @@ instance decodeJsonMkTxError :: DecodeJson MkTxError where
         , "CannotSatisfyAny" /\ pure CannotSatisfyAny
         ]
 
-derive instance genericMkTxError :: Generic MkTxError _
+derive instance Generic MkTxError _
 
 --------------------------------------------------------------------------------
 
@@ -143,16 +142,16 @@ newtype UnbalancedTx = UnbalancedTx
   { unBalancedTxTx :: Tx
   , unBalancedTxRequiredSignatories ::
       Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
+  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
   , unBalancedTxValidityTimeRange :: Interval POSIXTime
   }
 
-derive instance eqUnbalancedTx :: Eq UnbalancedTx
+derive instance Eq UnbalancedTx
 
-instance showUnbalancedTx :: Show UnbalancedTx where
+instance Show UnbalancedTx where
   show a = genericShow a
 
-instance encodeJsonUnbalancedTx :: EncodeJson UnbalancedTx where
+instance EncodeJson UnbalancedTx where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unBalancedTxTx: E.value :: _ Tx
@@ -160,12 +159,12 @@ instance encodeJsonUnbalancedTx :: EncodeJson UnbalancedTx where
             (E.dictionary E.value (E.maybe E.value)) :: _
               (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
-            (E.dictionary E.value E.value) :: _ (Map TxOutRef ScriptOutput)
+            (E.dictionary E.value E.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
         }
     )
 
-instance decodeJsonUnbalancedTx :: DecodeJson UnbalancedTx where
+instance DecodeJson UnbalancedTx where
   decodeJson = defer \_ -> D.decode $
     ( UnbalancedTx <$> D.record "UnbalancedTx"
         { unBalancedTxTx: D.value :: _ Tx
@@ -173,14 +172,14 @@ instance decodeJsonUnbalancedTx :: DecodeJson UnbalancedTx where
             (D.dictionary D.value (D.maybe D.value)) :: _
               (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
-            (D.dictionary D.value D.value) :: _ (Map TxOutRef ScriptOutput)
+            (D.dictionary D.value D.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)
         }
     )
 
-derive instance genericUnbalancedTx :: Generic UnbalancedTx _
+derive instance Generic UnbalancedTx _
 
-derive instance newtypeUnbalancedTx :: Newtype UnbalancedTx _
+derive instance Newtype UnbalancedTx _
 
 --------------------------------------------------------------------------------
 
@@ -188,51 +187,7 @@ _UnbalancedTx :: Iso' UnbalancedTx
   { unBalancedTxTx :: Tx
   , unBalancedTxRequiredSignatories ::
       Map PaymentPubKeyHash (Maybe PaymentPubKey)
-  , unBalancedTxUtxoIndex :: Map TxOutRef ScriptOutput
+  , unBalancedTxUtxoIndex :: Map TxOutRef TxOut
   , unBalancedTxValidityTimeRange :: Interval POSIXTime
   }
 _UnbalancedTx = _Newtype
-
---------------------------------------------------------------------------------
-
-newtype ScriptOutput = ScriptOutput
-  { scriptOutputValidatorHash :: String
-  , scriptOutputValue :: Value
-  , scriptOutputDatumHash :: DatumHash
-  }
-
-derive instance eqScriptOutput :: Eq ScriptOutput
-
-instance showScriptOutput :: Show ScriptOutput where
-  show a = genericShow a
-
-instance encodeJsonScriptOutput :: EncodeJson ScriptOutput where
-  encodeJson = defer \_ -> E.encode $ unwrap >$<
-    ( E.record
-        { scriptOutputValidatorHash: E.value :: _ String
-        , scriptOutputValue: E.value :: _ Value
-        , scriptOutputDatumHash: E.value :: _ DatumHash
-        }
-    )
-
-instance decodeJsonScriptOutput :: DecodeJson ScriptOutput where
-  decodeJson = defer \_ -> D.decode $
-    ( ScriptOutput <$> D.record "ScriptOutput"
-        { scriptOutputValidatorHash: D.value :: _ String
-        , scriptOutputValue: D.value :: _ Value
-        , scriptOutputDatumHash: D.value :: _ DatumHash
-        }
-    )
-
-derive instance genericScriptOutput :: Generic ScriptOutput _
-
-derive instance newtypeScriptOutput :: Newtype ScriptOutput _
-
---------------------------------------------------------------------------------
-
-_ScriptOutput :: Iso' ScriptOutput
-  { scriptOutputValidatorHash :: String
-  , scriptOutputValue :: Value
-  , scriptOutputDatumHash :: DatumHash
-  }
-_ScriptOutput = _Newtype

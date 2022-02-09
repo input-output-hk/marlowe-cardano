@@ -1,6 +1,7 @@
 module Component.ConfirmUnsavedNavigation.Types where
 
 import Prologue
+
 import Analytics (class IsEvent, defaultEvent)
 
 data Action

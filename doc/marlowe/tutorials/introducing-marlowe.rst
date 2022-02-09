@@ -195,7 +195,7 @@ Systems
    repository <https://github.com/input-output-hk/marlowe>`_ from which
    you can download Marlowe.
 
--  `The Marlowe Website <https://staging.marlowe-web.iohkdev.io>`_ landing page for all things Marlowe.
+-  `The Marlowe Website <https://marlowe-finance.io>`_ landing page for all things Marlowe.
 
 
 Videos
