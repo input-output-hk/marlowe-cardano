@@ -11,6 +11,6 @@ main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Marlowe"
-  [ testGroup "Contracts" [ Spec.Marlowe.Contracts.tests ]
+  [ testGroup "Marlowe unit tests" [ Spec.Marlowe.Contracts.tests ]
   , testGroup "Static analysis" [ Spec.Marlowe.Analysis.tests ]
   ]
