@@ -21,7 +21,7 @@ import Data.PABConnectedWallet
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
-import Marlowe.Client (ContractHistory(..))
+import Marlowe.Client (ContractHistory)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
