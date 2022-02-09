@@ -754,6 +754,7 @@
         cardano-ledger-pretty = ./.plan.nix/cardano-ledger-pretty.nix;
         marlowe-playground-server = ./.plan.nix/marlowe-playground-server.nix;
         plutus-core = ./.plan.nix/plutus-core.nix;
+        marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         strict-non-empty-containers = ./.plan.nix/strict-non-empty-containers.nix;
         plutus-ledger-api = ./.plan.nix/plutus-ledger-api.nix;
         plutus-contract = ./.plan.nix/plutus-contract.nix;
@@ -889,6 +890,9 @@
           "cardano-ledger-pretty" = { flags = {}; };
           "marlowe-playground-server" = { flags = {}; };
           "plutus-core" = { flags = {}; };
+          "marlowe-contracts" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "strict-non-empty-containers" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
@@ -1340,6 +1344,7 @@
           "openapi3".components.library.planned = lib.mkOverride 900 true;
           "semigroupoids".components.setup.planned = lib.mkOverride 900 true;
           "async".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-contracts".components.tests."marlowe-contracts-test".planned = lib.mkOverride 900 true;
           "microlens-mtl".components.library.planned = lib.mkOverride 900 true;
           "async-timer".components.library.planned = lib.mkOverride 900 true;
           "size-based".components.library.planned = lib.mkOverride 900 true;
@@ -1441,6 +1446,7 @@
           "wai-websockets".components.library.planned = lib.mkOverride 900 true;
           "marlowe-symbolic".components.library.planned = lib.mkOverride 900 true;
           "hspec-discover".components.exes."hspec-discover".planned = lib.mkOverride 900 true;
+          "marlowe-contracts".components.library.planned = lib.mkOverride 900 true;
           "haskell-lexer".components.library.planned = lib.mkOverride 900 true;
           "marlowe".components.exes."marlowe-pab-setup".planned = lib.mkOverride 900 true;
           "singleton-bool".components.library.planned = lib.mkOverride 900 true;
