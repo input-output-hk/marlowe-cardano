@@ -581,18 +581,6 @@ let
         installPhase = "ln -s $src $out";
       };
 
-    "halogen-hooks-extra" = pkgs.stdenv.mkDerivation {
-        name = "halogen-hooks-extra";
-        version = "v0.8.0";
-        src = pkgs.fetchgit {
-          url = "https://github.com/jordanmartinez/purescript-halogen-hooks-extra.git";
-          rev = "c400f9983123f5ce137cce8cda23285ec8062e5e";
-          sha256 = "0clwakcz76636y2z8cc3n6y5x1iqjpj9rv8c9d3731y2fg5n1g4a";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
     "halogen-nselect" = pkgs.stdenv.mkDerivation {
         name = "halogen-nselect";
         version = "v1.0.0";
@@ -972,18 +960,6 @@ let
           url = "https://github.com/felixschl/purescript-pipes.git";
           rev = "42e43f0961ad0fc3f1cef6986fe23ca9f48f6dda";
           sha256 = "0jzgzi34wqqdcfgznbpfv4b8al2prd36yshnndlvkqfv70smx3kh";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
-    "polyform" = pkgs.stdenv.mkDerivation {
-        name = "polyform";
-        version = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
-        src = pkgs.fetchgit {
-          url = "https://github.com/purescript-polyform/polyform.git";
-          rev = "d177fa5e04a29babf0f86cf57561ea6bf2317c36";
-          sha256 = "0n77rmfsq85bzf4klggp004hbfcrj0hlmn80syqca34i1l268hwm";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
