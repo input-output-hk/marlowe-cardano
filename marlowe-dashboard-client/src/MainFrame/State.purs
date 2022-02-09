@@ -410,6 +410,7 @@ handleAction Init = do
   if we have some wallet details in the local storage, we try to enter the dashboard
   state with it.
   -}
+  Logger.error "TEST"
   mWalletDetails <- getWallet
   traverse_ (handleAction <<< EnterDashboardState) mWalletDetails
   traverse_

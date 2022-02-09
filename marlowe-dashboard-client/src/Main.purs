@@ -49,7 +49,7 @@ data WebpackBuildMode = Production | Development
 instance DecodeJson MainArgs where
   decodeJson = decodeJson >=> \obj -> ado
     pollingInterval <- Milliseconds <$> obj .: "pollingInterval"
-    webpackBuildMode <- obj .: "webpackBuildMode" <#>
+    webpackBuildMode <- obj .: "webpackDevelMode" <#>
       if _ then Development
       else Production
     in MainArgs { pollingInterval, webpackBuildMode }

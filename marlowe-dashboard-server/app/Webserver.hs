@@ -11,7 +11,7 @@ import Prelude
 import qualified Colog
 import Control.Applicative ((<|>))
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (parseJSON, (.:))
+import Data.Aeson (parseJSON, (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 import Data.Char (toLower)
@@ -51,7 +51,7 @@ data AppConfig = AppConfig { _appWbeConfig :: WBEConfig, _appVerbosity :: Maybe 
 instance Aeson.FromJSON AppConfig where
     parseJSON (Aeson.Object o) = AppConfig
       <$> o .: "wbeConfig"
-      <*> o .: "verbosity"
+      <*> o .:? "verbosity"
     parseJSON invalid = Aeson.typeMismatch "Object" invalid
 
 run :: FilePath -> Settings -> Maybe Verbosity -> IO ()

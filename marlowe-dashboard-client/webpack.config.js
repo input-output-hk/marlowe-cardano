@@ -107,7 +107,7 @@ module.exports = {
       filename: "[name].[contenthash].css",
     }),
     new webpack.EnvironmentPlugin({
-      WEBPACK_BUILD_MODE: isDevelopment,
+      WEBPACK_DEVEL_MODE: isDevelopment,
       MARLOWE_POLLING_INTERVAL: 5000,
     }),
   ],

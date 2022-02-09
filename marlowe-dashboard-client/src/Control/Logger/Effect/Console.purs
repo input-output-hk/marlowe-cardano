@@ -18,7 +18,7 @@ logger
   :: forall msg
    . (msg -> String)
   -> Logger msg
-logger show = Logger.Logger $ case _ of
+logger show = Logger.Logger case _ of
   LogMessage { _logLevel: Debug, _logMessageContent: msg } -> debug (show msg)
   LogMessage { _logLevel: Info, _logMessageContent: msg } -> info (show msg)
   LogMessage { _logLevel: Notice, _logMessageContent: msg } -> log (show msg)
