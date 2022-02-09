@@ -10,7 +10,6 @@ import Component.Button.Types (Variant(..)) as B
 import Component.Button.View (button) as B
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
-import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Lens ((^.))
 import Data.List (foldMap)
@@ -75,7 +74,6 @@ welcomeCard
   :: forall m
    . MonadAff m
   => MonadStore Store.Action Store.Store m
-  => MonadRec m
   => ManageMarlowe m
   => State
   -> ComponentHTML Action ChildSlots m
@@ -268,7 +266,6 @@ createWalletHelpCard =
 createWalletCard
   :: forall m
    . MonadAff m
-  => MonadRec m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => CreateWalletStep

@@ -3,7 +3,6 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
-import Control.Monad.Rec.Class (class MonadRec)
 import Data.Lens (view, (^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
@@ -29,7 +28,6 @@ import Toast.State as Toast
 render
   :: forall m
    . MonadAff m
-  => MonadRec m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => State

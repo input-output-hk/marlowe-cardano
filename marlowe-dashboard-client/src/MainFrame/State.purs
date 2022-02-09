@@ -34,7 +34,6 @@ import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (modify_)
 import Data.AddressBook as AB
 import Data.Argonaut (decodeJson, stringify)
@@ -142,7 +141,6 @@ mkMainFrame
   => MonadLogger String m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
-  => MonadRec m
   => ManageMarlowe m
   => Toast m
   => MonadClipboard m

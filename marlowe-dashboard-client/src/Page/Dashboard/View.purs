@@ -17,7 +17,6 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
-import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address as A
 import Data.Compactable (compact)
@@ -151,7 +150,6 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
 dashboardCard
   :: forall m
    . MonadAff m
-  => MonadRec m
   => MonadStore Store.Action Store.Store m
   => Input
   -> State
