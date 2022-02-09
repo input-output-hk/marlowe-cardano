@@ -18,7 +18,7 @@ import Marlowe.Contracts.Swap
 import Marlowe.Contracts.ZeroCouponBond
 import Plutus.Contract.Test as T
 import Plutus.Trace.Emulator as Trace
-import Plutus.V1.Ledger.Value
+import Plutus.V1.Ledger.Value as V
 import qualified PlutusTx.AssocMap as AssocMap
 import Test.Tasty
 
@@ -37,13 +37,13 @@ reqId = UUID.nil
 walletPubKeyHash :: Wallet -> PubKeyHash
 walletPubKeyHash = unPaymentPubKeyHash . mockWalletPaymentPubKeyHash
 
-walletAssertions :: Integer -> Integer -> TracePredicate
+walletAssertions :: V.Value -> V.Value -> TracePredicate
 walletAssertions x y =
   assertNoFailedTransactions
     T..&&. assertDone marlowePlutusContract (walletInstanceTag w1) (const True) "contract should close"
     T..&&. assertDone marlowePlutusContract (walletInstanceTag w2) (const True) "contract should close"
-    T..&&. walletFundsChange w1 (lovelaceValueOf x)
-    T..&&. walletFundsChange w2 (lovelaceValueOf y)
+    T..&&. walletFundsChange w1 x
+    T..&&. walletFundsChange w2 y
     T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w1) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
     T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w2) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
 
@@ -56,7 +56,7 @@ zeroCouponBondTest :: TestTree
 zeroCouponBondTest = checkPredicateOptions
   defaultCheckOptions
   "Zero Coupon Bond Contract"
-  (walletAssertions 15_000_000 (-15_000_000))
+  (walletAssertions (lovelaceValueOf 15_000_000) (lovelaceValueOf $ -15_000_000))
   $ do
     let params = defaultMarloweParams
     let zcb =
@@ -91,7 +91,7 @@ zeroCouponBondCombinationTest :: TestTree
 zeroCouponBondCombinationTest = checkPredicateOptions
   defaultCheckOptions
   "Combination of two Zero Coupon Bond Contracts"
-  (walletAssertions 0 0)
+  (walletAssertions mempty mempty)
   $ do
     let params = defaultMarloweParams
     let zcb1 =
@@ -144,7 +144,7 @@ americanCallOptionTest :: TestTree
 americanCallOptionTest = checkPredicateOptions
   defaultCheckOptions
   "American Call Option Contract"
-  (walletAssertions 0 0)
+  (walletAssertions mempty mempty)
   $ do
     let params = defaultMarloweParams
     let americanCall =
@@ -178,7 +178,7 @@ europeanCallOptionTest :: TestTree
 europeanCallOptionTest = checkPredicateOptions
   defaultCheckOptions
   "European Call Option Contract"
-  (walletAssertions 0 0)
+  (walletAssertions mempty mempty)
   $ do
     let params = defaultMarloweParams
     let americanCall =
@@ -209,14 +209,7 @@ swapIdentityTest :: TestTree
 swapIdentityTest = checkPredicateOptions
   (changeInitialWalletValue w2 (\v -> v <> singleton "" "testcoin" 300) defaultCheckOptions)
   "Swap and swap back Contract"
-  (assertNoFailedTransactions
-    T..&&. assertDone marlowePlutusContract (walletInstanceTag w1) (const True) "contract should close"
-    T..&&. assertDone marlowePlutusContract (walletInstanceTag w2) (const True) "contract should close"
-    T..&&. walletFundsChange w1 mempty -- (singleton "" "testcoin" 30 <> lovelaceValueOf (-10_000_000))
-    T..&&. walletFundsChange w2 mempty
-    T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w1) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
-    T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w2) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
-  )
+  (walletAssertions mempty mempty)
   $ do
     let params = defaultMarloweParams
     let tok = Token "" "testcoin"
