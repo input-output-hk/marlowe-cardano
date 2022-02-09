@@ -17,7 +17,9 @@ import Prologue
 import Control.Alternative (guard)
 import Data.Either (either, hush, isRight)
 import Data.Foldable (traverse_)
+import Data.Generic.Rep (class Generic)
 import Data.Maybe (maybe)
+import Data.Show.Generic (genericShow)
 import Effect.Class (class MonadEffect)
 import Halogen (RefLabel(..))
 import Halogen as H
@@ -52,7 +54,10 @@ data Msg pa output
   | Focused
   | Emit pa
 
+derive instance Generic (Msg pa output) _
 derive instance Functor (Msg pa)
+instance (Show output, Show pa) => Show (Msg pa output) where
+  show = genericShow
 
 data Action pa error output slots m
   = OnUpdate String
@@ -201,7 +206,7 @@ setValue f = do
     oldState = toFieldState oldValue oldResult
     newState = toFieldState value result
 
-  when (newState /= oldState) do
+  when (newState /= oldState || oldValue /= value) do
     H.raise $ Updated newState
 
 render'
