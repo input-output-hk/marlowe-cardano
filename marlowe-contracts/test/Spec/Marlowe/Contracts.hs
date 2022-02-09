@@ -1,241 +1,225 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE NumericUnderscores  #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE NamedFieldPuns     #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 module Spec.Marlowe.Contracts
+    (tests)
 where
 
-import Control.Monad (void)
-import Data.UUID (UUID)
-import qualified Data.UUID as UUID
 import Language.Marlowe
-import Ledger (PaymentPubKeyHash (..), PubKeyHash)
 import Ledger.Ada
+import Ledger.Value
+import Marlowe.Contracts.Common
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.Swap
 import Marlowe.Contracts.ZeroCouponBond
-import Plutus.Contract.Test as T
-import Plutus.Trace.Emulator as Trace
-import Plutus.V1.Ledger.Value as V
-import qualified PlutusTx.AssocMap as AssocMap
 import Test.Tasty
+import Test.Tasty.HUnit
 
 tests :: TestTree
-tests = testGroup "Marlowe"
-    [ zeroCouponBondTest
-    , zeroCouponBondCombinationTest
-    , americanCallOptionTest
-    , europeanCallOptionTest
-    , swapIdentityTest
-    ]
-
-reqId :: UUID
-reqId = UUID.nil
-
-walletPubKeyHash :: Wallet -> PubKeyHash
-walletPubKeyHash = unPaymentPubKeyHash . mockWalletPaymentPubKeyHash
-
-walletAssertions :: V.Value -> V.Value -> TracePredicate
-walletAssertions x y =
-  assertNoFailedTransactions
-    T..&&. assertDone marlowePlutusContract (walletInstanceTag w1) (const True) "contract should close"
-    T..&&. assertDone marlowePlutusContract (walletInstanceTag w2) (const True) "contract should close"
-    T..&&. walletFundsChange w1 x
-    T..&&. walletFundsChange w2 y
-    T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w1) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
-    T..&&. assertAccumState marlowePlutusContract (walletInstanceTag w2) ((==) (Just $ EndpointSuccess reqId CloseResponse)) "should be OK"
+tests = testGroup "Marlowe Contract"
+  [ testCase "ZeroCouponBond" zeroCouponBondTest
+  , testCase "Swap Contract" swapContractTest
+  , testCase "American Call Option test" americanCallOptionTest
+  , testCase "American Call Option test - Exercise" americanCallOptionExercisedTest
+  , testCase "European Call Option test" europeanCallOptionTest
+  , testCase "European Call Option test - Exercise" europeanCallOptionExercisedTest
+  ]
 
 w1Pk, w2Pk :: Party
-w1Pk = PK (walletPubKeyHash w1)
-w2Pk = PK (walletPubKeyHash w2)
+w1Pk = Role "party1"
+w2Pk = Role "party2"
 
--- |Zero coupon bond
-zeroCouponBondTest :: TestTree
-zeroCouponBondTest = checkPredicateOptions
-  defaultCheckOptions
-  "Zero Coupon Bond Contract"
-  (walletAssertions (lovelaceValueOf 15_000_000) (lovelaceValueOf $ -15_000_000))
-  $ do
-    let params = defaultMarloweParams
-    let zcb =
-          zeroCouponBond
-            w1Pk
-            w2Pk
-            (Slot 100)
-            (Slot 200)
-            (Constant 75_000_000)
-            (Constant 90_000_000)
-            ada
-            Close
+tok :: Token
+tok = Token "" "testcoin" -- tokSymbol tokName
 
-    w1Hdl <- activateContractWallet w1 marlowePlutusContract
-    w2Hdl <- activateContractWallet w2 marlowePlutusContract
+tokSymbol :: CurrencySymbol
+tokSymbol = ""
 
-    callEndpoint @"create" w1Hdl (reqId, AssocMap.empty, zcb)
-    void $ waitNSlots 2
+tokName :: TokenName
+tokName = "testcoin"
 
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w1Pk ada 75_000_000])
-    void $ waitNSlots 2
+tokValueOf :: Integer -> Money
+tokValueOf = singleton tokSymbol tokName
 
-    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w2Pk ada 90_000_000])
-    void $ waitNSlots 2
+assertTotalPayments :: Party -> [Payment] -> Money -> Assertion
+assertTotalPayments p t x = assertBool "total payments to party" (totalPayments (Party p) t == x)
 
-    callEndpoint @"close" w1Hdl reqId
-    callEndpoint @"close" w2Hdl reqId
-    void $ waitNSlots 2
+assertNoWarnings :: [a] -> Assertion
+assertNoWarnings t = assertBool "No warnings" $ null t
 
--- |Combination of two zero coupon bonds
-zeroCouponBondCombinationTest :: TestTree
-zeroCouponBondCombinationTest = checkPredicateOptions
-  defaultCheckOptions
-  "Combination of two Zero Coupon Bond Contracts"
-  (walletAssertions mempty mempty)
-  $ do
-    let params = defaultMarloweParams
-    let zcb1 =
-          zeroCouponBond
-            w1Pk
-            w2Pk
-            (Slot 100)
-            (Slot 200)
-            (Constant 75_000_000)
-            (Constant 90_000_000)
-            ada
-            Close
-    let zcb2 =
-          zeroCouponBond
-            w2Pk
-            w1Pk
-            (Slot 100)
-            (Slot 200)
-            (Constant 75_000_000)
-            (Constant 90_000_000)
-            ada
-            Close
+assertClose :: Contract -> Assertion
+assertClose = assertBool "Contract is in Close" . (Close==)
 
-    w1Hdl <- activateContractWallet w1 marlowePlutusContract
-    w2Hdl <- activateContractWallet w2 marlowePlutusContract
+totalPayments :: Payee -> [Payment] -> Money
+totalPayments p' = mconcat . map m . filter f
+  where
+    m (Payment _ _ mon) = mon
+    f (Payment _ p _) = p == p'
 
-    callEndpoint @"create" w1Hdl (reqId, AssocMap.empty, zcb1 `both` zcb2)
-    void $ waitNSlots 2
+step :: TransactionInput -> ([TransactionWarning], [Payment], State, Contract) -> Either TransactionError ([TransactionWarning], [Payment], State, Contract)
+step i (_,_,s,c) =
+  case computeTransaction i s c of
+    Error err                     -> Left err
+    (TransactionOutput w p s' c') -> Right (w, p, s', c')
 
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w1Pk ada 75_000_000])
-    void $ waitNSlots 2
+-- |Zero-coupon Bond test
+zeroCouponBondTest :: IO ()
+zeroCouponBondTest =
+  let zcb =
+        zeroCouponBond
+          w1Pk
+          w2Pk
+          (Slot 100)
+          (Slot 200)
+          (Constant 75_000_000)
+          (Constant 90_000_000)
+          ada
+          Close
+   in either left right $
+        step (TransactionInput (0, 0)     [NormalInput $ IDeposit w1Pk w1Pk ada 75_000_000]) ([], [], emptyState 0, zcb)
+    >>= step (TransactionInput (100, 110) [NormalInput $ IDeposit w1Pk w2Pk ada 90_000_000])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w,p,_,c) = do
+      assertClose c
+      assertNoWarnings w
+      assertTotalPayments w1Pk p (lovelaceValueOf 90_000_000)
 
-    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w2Pk ada 90_000_000])
-    void $ waitNSlots 2
+-- |Swap contract test
+swapContractTest :: IO ()
+swapContractTest =
+  let backSwap =
+        swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (Slot 100) $
+        swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (Slot 200) Close
+   in either left right $
+        step (TransactionInput (0, 0)
+              [ NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000
+              , NormalInput $ IDeposit w2Pk w2Pk tok 30
+              , NormalInput $ IDeposit w2Pk w2Pk ada 10_000_000
+              , NormalInput $ IDeposit w1Pk w1Pk tok 30
+              ]) ([], [], emptyState 0, backSwap)
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w,p,_,c) = do
+      assertClose c
+      assertNoWarnings w
+      assertTotalPayments w1Pk p (lovelaceValueOf 10_000_000 <> tokValueOf 30)
+      assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000 <> tokValueOf 30)
 
-    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w2Pk w2Pk ada 75_000_000])
-    void $ waitNSlots 2
+-- |American Call Option test (No exercise)
+americanCallOptionTest :: IO ()
+americanCallOptionTest =
+  let americanCall =
+        option
+          American
+          Call
+          w1Pk
+          w2Pk
+          (tok, Constant 30)
+          (ada, Constant 10_000_000)
+          (Slot 100)
+          (Slot 200)
+   in either left right $
+        step (TransactionInput (0, 0) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0]) ([], [], emptyState 0, americanCall)
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p mempty
+        assertTotalPayments w2Pk p mempty
 
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w2Pk w1Pk ada 90_000_000])
-    void $ waitNSlots 2
+-- |American Call Option test (Exercise)
+americanCallOptionExercisedTest :: IO ()
+americanCallOptionExercisedTest =
+  let americanCall =
+        option
+          American
+          Call
+          w1Pk
+          w2Pk
+          (tok, Constant 30)
+          (ada, Constant 10_000_000)
+          (Slot 100)
+          (Slot 200)
+      contract =
+        deposit
+          w2Pk
+          w2Pk
+          (tok, Constant 30)
+          (Slot 10)
+          Close
+          americanCall
+   in either left right $
+        step (TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]) ([], [], emptyState 0, contract)
+    >>= step (TransactionInput (99, 99)   [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1])
+    >>= step (TransactionInput (101, 101) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p (tokValueOf 30)
+        assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000)
 
-    callEndpoint @"close" w1Hdl reqId
-    callEndpoint @"close" w2Hdl reqId
-    void $ waitNSlots 2
+-- |European Call Option test (No exercise)
+europeanCallOptionTest :: IO ()
+europeanCallOptionTest =
+  let europeanCall =
+        option
+          European
+          Call
+          w1Pk
+          w2Pk
+          (tok, Constant 30)
+          (ada, Constant 10_000_000)
+          (Slot 100)
+          (Slot 200)
+   in either left right $
+        step (TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0]) ([], [], emptyState 0, europeanCall)
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p mempty
+        assertTotalPayments w2Pk p mempty
 
--- |American Call option
---
--- Choose not to Exercise
-americanCallOptionTest :: TestTree
-americanCallOptionTest = checkPredicateOptions
-  defaultCheckOptions
-  "American Call Option Contract"
-  (walletAssertions mempty mempty)
-  $ do
-    let params = defaultMarloweParams
-    let americanCall =
-          option
-            American
-            Call
-            w1Pk
-            w2Pk
-            (ada, Constant 75_000_000)
-            (ada, Constant 90_000_000)
-            (Slot 100)
-            (Slot 200)
-
-    w1Hdl <- activateContractWallet w1 marlowePlutusContract
-    w2Hdl <- activateContractWallet w2 marlowePlutusContract
-
-    callEndpoint @"create" w2Hdl (reqId, AssocMap.empty, americanCall)
-    void $ waitNSlots 2
-
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0])
-    void $ waitNSlots 2
-
-    callEndpoint @"close" w1Hdl reqId
-    callEndpoint @"close" w2Hdl reqId
-    void $ waitNSlots 2
-
--- |European Call option
---
--- Choose not to Exercise
-europeanCallOptionTest :: TestTree
-europeanCallOptionTest = checkPredicateOptions
-  defaultCheckOptions
-  "European Call Option Contract"
-  (walletAssertions mempty mempty)
-  $ do
-    let params = defaultMarloweParams
-    let americanCall =
-          option
-            European
-            Call
-            w1Pk
-            w2Pk
-            (ada, Constant 75_000_000)
-            (ada, Constant 90_000_000)
-            (Slot 100)
-            (Slot 200)
-
-    w1Hdl <- activateContractWallet w1 marlowePlutusContract
-    w2Hdl <- activateContractWallet w2 marlowePlutusContract
-
-    callEndpoint @"create" w2Hdl (reqId, AssocMap.empty, americanCall)
-    void $ waitNSlots 100
-
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0])
-    void $ waitNSlots 2
-
-    callEndpoint @"close" w1Hdl reqId
-    callEndpoint @"close" w2Hdl reqId
-    void $ waitNSlots 2
-
-swapIdentityTest :: TestTree
-swapIdentityTest = checkPredicateOptions
-  (changeInitialWalletValue w2 (\v -> v <> singleton "" "testcoin" 300) defaultCheckOptions)
-  "Swap and swap back Contract"
-  (walletAssertions mempty mempty)
-  $ do
-    let params = defaultMarloweParams
-    let tok = Token "" "testcoin"
-
-    let contract =
-          swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (Slot 100) $
-          swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (Slot 200) Close
-
-    w1Hdl <- activateContractWallet w1 marlowePlutusContract
-    w2Hdl <- activateContractWallet w2 marlowePlutusContract
-
-    callEndpoint @"create" w1Hdl (reqId, AssocMap.empty, contract)
-    void $ waitNSlots 2
-
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w1Pk ada 10_000_000])
-    void $ waitNSlots 2
-
-    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w2Pk w2Pk tok 30])
-    void $ waitNSlots 100
-
-    callEndpoint @"apply-inputs" w2Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w2Pk w2Pk ada 10_000_000])
-    void $ waitNSlots 2
-
-    callEndpoint @"apply-inputs" w1Hdl (reqId, params, Nothing, [ClientInput $ IDeposit w1Pk w1Pk tok 30])
-    void $ waitNSlots 2
-
-    callEndpoint @"close" w1Hdl reqId
-    callEndpoint @"close" w2Hdl reqId
-    void $ waitNSlots 2
+-- |European Call Option test (Exercise)
+europeanCallOptionExercisedTest :: IO ()
+europeanCallOptionExercisedTest =
+  let americanCall =
+        option
+          European
+          Call
+          w1Pk
+          w2Pk
+          (tok, Constant 30)
+          (ada, Constant 10_000_000)
+          (Slot 100)
+          (Slot 200)
+      contract =
+        deposit
+          w2Pk
+          w2Pk
+          (tok, Constant 30)
+          (Slot 10)
+          Close
+          americanCall
+   in either left right $
+        step (TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]) ([], [], emptyState 0, contract)
+    >>= step (TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1])
+    >>= step (TransactionInput (102, 102) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p (tokValueOf 30)
+        assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000)
