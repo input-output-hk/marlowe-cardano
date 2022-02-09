@@ -1,10 +1,8 @@
 module Data.ContractTimeout
   ( ContractTimeout
   , ContractTimeoutError(..)
-  , dual
   , fromBigInt
   , fromString
-  , validator
   , toString
   , toBigInt
   ) where
@@ -32,11 +30,6 @@ import Data.Enum.Generic
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String (null)
-import Data.Validation.Semigroup (V(..))
-import Polyform (Validator)
-import Polyform.Dual as Dual
-import Polyform.Validator (liftFnV)
-import Polyform.Validator.Dual (Dual)
 
 data ContractTimeoutError
   = Empty
@@ -46,13 +39,6 @@ data ContractTimeoutError
 derive instance genericContractTimeoutError :: Generic ContractTimeoutError _
 derive instance eqContractTimeoutError :: Eq ContractTimeoutError
 derive instance ordContractTimeoutError :: Ord ContractTimeoutError
-
-instance semigroupContractTimeoutError :: Semigroup ContractTimeoutError where
-  append Empty _ = Empty
-  append _ Empty = Empty
-  append Past _ = Past
-  append _ Past = Past
-  append Invalid Invalid = Invalid
 
 instance boundedContractTimeoutError :: Bounded ContractTimeoutError where
   bottom = genericBottom
@@ -99,19 +85,3 @@ toString = BigInt.toString <<< (_ / BigInt.fromInt 60) <<< toBigInt
 
 toBigInt :: ContractTimeout -> BigInt
 toBigInt (ContractTimeout i) = i
-
--------------------------------------------------------------------------------
--- Polyform adapters
--------------------------------------------------------------------------------
-
-validator
-  :: forall m
-   . Applicative m
-  => Validator m ContractTimeoutError String ContractTimeout
-validator = liftFnV \s -> V $ fromString s
-
-dual
-  :: forall m
-   . Applicative m
-  => Dual m ContractTimeoutError String ContractTimeout
-dual = Dual.dual validator (pure <<< toString)

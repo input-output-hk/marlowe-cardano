@@ -150,9 +150,8 @@ mnemonicInput mnemonic fieldState =
         renderTextInput id label error (Input.setInputProps value []) case _ of
           (Right MP.Empty) -> "Required."
           (Right MP.WrongWordCount) -> "24 words required."
-          (Right MP.ContainsInvalidWords) ->
-            "Mnemonic phrase contains invalid words."
-          (Left _) -> "Given mnemonic differs from your new wallet mnemonic."
+          (Right MP.ContainsInvalidWords) -> "Contains invalid words."
+          (Left _) -> "Does not match."
     }
   matches m
     | m /= mnemonic = Left $ Left unit

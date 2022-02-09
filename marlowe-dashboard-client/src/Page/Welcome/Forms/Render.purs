@@ -94,7 +94,7 @@ mkNicknameInput addressBook fieldState =
         Left WN.Empty -> "Required."
         Left WN.ContainsNonAlphaNumeric ->
           "Can only contain letters and digits."
-        _ -> "Already exists."
+        Right _ -> "Already exists."
   }
   where
   id = "restore-wallet-nickname"

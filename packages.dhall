@@ -18,47 +18,6 @@ in  upstream
         ]
         "https://git@github.com/Thimoteus/purescript-infinite-lists"
         "v3.2.0"
-  with moldy =
-      mkPackage
-        [ "prelude"
-        , "foldable-traversable"
-        , "strings"
-        , "console"
-        , "psci-support"
-        ]
-        "https://github.com/liamgoodacre/purescript-moldy.git"
-        "v3.0.0"
-  with polyform =
-      mkPackage
-        [ "arrays"
-        , "bifunctors"
-        , "control"
-        , "effect"
-        , "either"
-        , "enums"
-        , "functors"
-        , "identity"
-        , "invariant"
-        , "lists"
-        , "maybe"
-        , "newtype"
-        , "parallel"
-        , "partial"
-        , "prelude"
-        , "profunctor"
-        , "psci-support"
-        , "quickcheck"
-        , "quickcheck-laws"
-        , "record"
-        , "transformers"
-        , "tuples"
-        , "typelevel-prelude"
-        , "unsafe-coerce"
-        , "validation"
-        , "variant"
-        ]
-        "https://github.com/purescript-polyform/polyform.git"
-        "d177fa5e04a29babf0f86cf57561ea6bf2317c36"
   with markdown =
       mkPackage
         [ "arrays"

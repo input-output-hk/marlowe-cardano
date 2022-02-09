@@ -168,7 +168,7 @@ nicknameInput addressBook fieldState =
           Left WN.Empty -> "Required."
           Left WN.ContainsNonAlphaNumeric ->
             "Can only contain letters and digits."
-          _ -> "Already exists."
+          Right _ -> "Already exists."
     }
   notInAddressBook nickname
     | AB.containsNickname nickname addressBook = Left $ Right unit
@@ -188,13 +188,12 @@ addressInput addressBook fieldState =
   input =
     { fieldState
     , format: A.toString
-    , validate: notInAddressBook <=< lmap Left <<< A.fromString mempty
+    , validate: notInAddressBook <=< lmap Left <<< A.fromString
     , render: \{ error, value } ->
         renderTextInput id label error (Input.setInputProps value []) case _ of
           Left A.Empty -> "Required."
           Left A.Invalid -> "Invalid."
           Right nickname -> "Already exists (" <> WN.toString nickname <> ")."
-          _ -> ""
     }
   notInAddressBook address = case AB.lookupNickname address addressBook of
     Nothing -> Right address

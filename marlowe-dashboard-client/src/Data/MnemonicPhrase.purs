@@ -2,13 +2,11 @@ module Data.MnemonicPhrase
   ( MnemonicPhrase
   , MnemonicPhraseError(..)
   , MnenonicPhraseErrorRow
-  , dual
   , fromString
   , fromStrings
   , fromWords
   , toString
   , toWords
-  , validator
   , injErr
   ) where
 
@@ -34,10 +32,6 @@ import Data.String (Pattern(..), joinWith, split)
 import Data.Traversable (traverse)
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
-import Polyform (Validator)
-import Polyform.Dual as Dual
-import Polyform.Validator (liftFnEither)
-import Polyform.Validator.Dual (Dual)
 import Type.Proxy (Proxy(..))
 
 data MnemonicPhraseError
@@ -48,13 +42,6 @@ data MnemonicPhraseError
 derive instance genericMnemonicPhraseError :: Generic MnemonicPhraseError _
 derive instance eqMnemonicPhraseError :: Eq MnemonicPhraseError
 derive instance ordMnemonicPhraseError :: Ord MnemonicPhraseError
-
-instance semigroupMnemonicPhraseError :: Semigroup MnemonicPhraseError where
-  append Empty _ = Empty
-  append _ Empty = Empty
-  append WrongWordCount _ = WrongWordCount
-  append _ WrongWordCount = WrongWordCount
-  append ContainsInvalidWords ContainsInvalidWords = ContainsInvalidWords
 
 instance boundedMnemonicPhraseError :: Bounded MnemonicPhraseError where
   bottom = genericBottom
@@ -240,17 +227,3 @@ toWords
   , w23
   , w24
   ]
-
--------------------------------------------------------------------------------
--- Polyform adapters
--------------------------------------------------------------------------------
-
-validator
-  :: forall m
-   . Applicative m
-  => Validator m MnemonicPhraseError String MnemonicPhrase
-validator = liftFnEither fromString
-
-dual
-  :: forall m. Applicative m => Dual m MnemonicPhraseError String MnemonicPhrase
-dual = Dual.dual validator (pure <<< toString)

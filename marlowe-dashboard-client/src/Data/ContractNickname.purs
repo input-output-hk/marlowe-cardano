@@ -1,10 +1,8 @@
 module Data.ContractNickname
   ( ContractNickname
   , ContractNicknameError(..)
-  , dual
   , fromFoldable
   , fromString
-  , validator
   , toString
   , unknown
   ) where
@@ -33,11 +31,6 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.String (null)
-import Data.Validation.Semigroup (V(..))
-import Polyform (Validator)
-import Polyform.Dual as Dual
-import Polyform.Validator (liftFnV)
-import Polyform.Validator.Dual (Dual)
 
 data ContractNicknameError = Empty
 
@@ -88,23 +81,8 @@ toString :: ContractNickname -> String
 toString (ContractNickname s) = s
 
 -------------------------------------------------------------------------------
--- Polyform adapters
--------------------------------------------------------------------------------
-
-validator
-  :: forall m
-   . Applicative m
-  => Validator m ContractNicknameError String ContractNickname
-validator = liftFnV \s -> V $ fromString s
-
-dual
-  :: forall m
-   . Applicative m
-  => Dual m ContractNicknameError String ContractNickname
-dual = Dual.dual validator (pure <<< toString)
-
--------------------------------------------------------------------------------
 -- Fallback constructor
 -------------------------------------------------------------------------------
+
 unknown :: ContractNickname
 unknown = ContractNickname "Unknown"

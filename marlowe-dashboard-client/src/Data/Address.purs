@@ -1,13 +1,11 @@
 module Data.Address
   ( Address
   , AddressError(..)
-  , dual
   , empty
   , fromString
   , fromPubKeyHash
   , toPubKeyHash
   , toString
-  , validator
   ) where
 
 import Prologue
@@ -31,31 +29,16 @@ import Data.Enum.Generic
 import Data.Generic.Rep (class Generic)
 import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
-import Data.Set (Set)
-import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.String as String
-import Data.Validation.Semigroup (V(..))
-import Polyform (Validator)
-import Polyform.Dual as Dual
-import Polyform.Validator (liftFnV)
-import Polyform.Validator.Dual (Dual)
 
 data AddressError
   = Empty
   | Invalid
-  | Exists
 
 derive instance Generic AddressError _
 derive instance Eq AddressError
 derive instance Ord AddressError
-
-instance Semigroup AddressError where
-  append Empty _ = Empty
-  append _ Empty = Empty
-  append Invalid _ = Invalid
-  append _ Invalid = Invalid
-  append Exists Exists = Exists
 
 instance Bounded AddressError where
   bottom = genericBottom
@@ -83,7 +66,7 @@ derive newtype instance EncodeJson Address
 
 instance DecodeJson Address where
   decodeJson =
-    lmap (const $ TypeMismatch "Address") <<< fromString Set.empty
+    lmap (const $ TypeMismatch "Address") <<< fromString
       <=< decodeJson
 
 empty :: Address
@@ -101,30 +84,11 @@ fromPubKeyHash = Address <<< PKH.toString
 toPubKeyHash :: Address -> PubKeyHash
 toPubKeyHash = PKH.fromString <<< toString
 
-fromString :: Set Address -> String -> Either AddressError Address
-fromString used s
+fromString :: String -> Either AddressError Address
+fromString s
   | String.null s = Left Empty
-  | Set.member (Address s) used = Left Exists
   | String.length s == 56 = Right $ Address s
   | otherwise = Left Invalid
 
 toString :: Address -> String
 toString (Address s) = s
-
--------------------------------------------------------------------------------
--- Polyform adapters
--------------------------------------------------------------------------------
-
-validator
-  :: forall m
-   . Applicative m
-  => Set Address
-  -> Validator m AddressError String Address
-validator used = liftFnV \s -> V $ fromString used s
-
-dual
-  :: forall m
-   . Applicative m
-  => Set Address
-  -> Dual m AddressError String Address
-dual used = Dual.dual (validator used) (pure <<< toString)
