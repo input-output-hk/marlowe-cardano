@@ -16,7 +16,8 @@ then
     error "GITHUB_SHA environment variable not set!"
 fi
 
-readonly ref="${GITHUB_REF_SLUG:-}"
+ref="${GITHUB_REF_SLUG:-}"
+ref="${ref/v[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/vYYYY-MM-DD}"
 
 if [ -z "${ref}" ]
 then
