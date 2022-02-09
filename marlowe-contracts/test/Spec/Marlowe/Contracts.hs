@@ -1,8 +1,5 @@
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
-
 module Spec.Marlowe.Contracts
     (tests)
 where
@@ -12,6 +9,7 @@ import Ledger.Ada
 import Ledger.Value
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.Options
+import Marlowe.Contracts.StructuredProducts
 import Marlowe.Contracts.Swap
 import Marlowe.Contracts.ZeroCouponBond
 import Test.Tasty
@@ -22,9 +20,11 @@ tests = testGroup "Marlowe Contract"
   [ testCase "ZeroCouponBond" zeroCouponBondTest
   , testCase "Swap Contract" swapContractTest
   , testCase "American Call Option test" americanCallOptionTest
-  , testCase "American Call Option test - Exercise" americanCallOptionExercisedTest
+  , testCase "American Call Option (exercised) test" americanCallOptionExercisedTest
   , testCase "European Call Option test" europeanCallOptionTest
-  , testCase "European Call Option test - Exercise" europeanCallOptionExercisedTest
+  , testCase "European Call Option (exercised) test" europeanCallOptionExercisedTest
+  , testCase "Reverse Convertible test" reverseConvertibleTest
+  , testCase "Reverse Convertible (exercised) test" reverseConvertibleExercisedTest
   ]
 
 w1Pk, w2Pk :: Party
@@ -32,7 +32,7 @@ w1Pk = Role "party1"
 w2Pk = Role "party2"
 
 tok :: Token
-tok = Token "" "testcoin" -- tokSymbol tokName
+tok = Token tokSymbol tokName
 
 tokSymbol :: CurrencySymbol
 tokSymbol = ""
@@ -193,7 +193,7 @@ europeanCallOptionTest =
 -- |European Call Option test (Exercise)
 europeanCallOptionExercisedTest :: IO ()
 europeanCallOptionExercisedTest =
-  let americanCall =
+  let europeanCall =
         option
           European
           Call
@@ -208,9 +208,9 @@ europeanCallOptionExercisedTest =
           w2Pk
           w2Pk
           (tok, Constant 30)
-          (Slot 10)
-          Close
-          americanCall
+          (Slot 10) Close Close
+        `both`
+        europeanCall
    in either left right $
         step (TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]) ([], [], emptyState 0, contract)
     >>= step (TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1])
@@ -223,3 +223,58 @@ europeanCallOptionExercisedTest =
         assertNoWarnings w
         assertTotalPayments w1Pk p (tokValueOf 30)
         assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000)
+
+-- |Reverse Convertible test (Exercise)
+reverseConvertibleExercisedTest :: IO ()
+reverseConvertibleExercisedTest =
+  let contract =
+        reverseConvertible
+          w1Pk
+          (Slot 10)
+          (Slot 100)
+          (Slot 200)
+          ada
+          tok
+          (Constant 10_000_000)
+          (Constant 30)
+          (Constant 9_000_000)
+   in either left right $
+        step (TransactionInput (0, 0) [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]) ([], [], emptyState 0, contract)
+    >>= step (TransactionInput (99, 99) [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ])
+    >>= step (TransactionInput (100, 100)
+                [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 1
+                , NormalInput $ IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30
+                ])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p (tokValueOf 30)
+
+-- |Reverse Convertible test (No exercise)
+reverseConvertibleTest :: IO ()
+reverseConvertibleTest =
+  let contract =
+        reverseConvertible
+          w1Pk
+          (Slot 10)
+          (Slot 100)
+          (Slot 200)
+          ada
+          tok
+          (Constant 10_000_000)
+          (Constant 30)
+          (Constant 9_000_000)
+   in either left right $
+        step (TransactionInput (0, 0) [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]) ([], [], emptyState 0, contract)
+    >>= step (TransactionInput (99, 99) [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ])
+    >>= step (TransactionInput (100, 100) [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 0 ])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p (lovelaceValueOf 10_000_000)
