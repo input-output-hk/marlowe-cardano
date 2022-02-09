@@ -21,7 +21,8 @@ import Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "Marlowe"
     [ testCase "Swap test" swapTest
-    , testCase "Double Swap test" doubleSwapTest
+    , testCase "Sequentially Swap twice test" sequentiallySwapTwiceTest
+    , testCase "Concurrently Swap twice test" concurrentlySwapTwiceTest
     , testCase "Covered Call test" coveredCallTest
     , testCase "Option test" optionTest
     ]
@@ -54,13 +55,18 @@ swapTest =
   testNoWarnings $
     swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) Close
 
-doubleSwapTest :: IO ()
-doubleSwapTest =
-  let doubleSwap =
-        let s1 = swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) Close
-            s2 = swap partyB coin (Constant 10) partyA ada (Constant 1) (Slot 10) Close
-         in s1 `both` s2
-   in testNoWarnings doubleSwap
+sequentiallySwapTwiceTest :: IO ()
+sequentiallySwapTwiceTest =
+  testNoWarnings $
+    swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) $
+    swap partyA coin (Constant 10) partyB ada (Constant 1) (Slot 10) Close
+
+concurrentlySwapTwiceTest :: IO ()
+concurrentlySwapTwiceTest =
+  testNoWarnings $
+    let s1 = swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) Close
+        s2 = swap partyA coin (Constant 10) partyB ada (Constant 1) (Slot 10) Close
+     in s1 `both` s2
 
 coveredCallTest :: IO ()
 coveredCallTest =
