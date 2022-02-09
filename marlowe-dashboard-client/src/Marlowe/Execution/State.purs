@@ -1,25 +1,28 @@
 module Marlowe.Execution.State
-  ( mkInitialState
+  ( expandBalances
+  , extractNamedActions
+  , getActionParticipant
+  , getAllPayments
+  , isClosed
+  , mkInitialState
+  , mkTx
   , nextState
   , nextTimeout
-  , mkTx
+  , restoreState
   , timeoutState
-  , isClosed
-  , getActionParticipant
-  , extractNamedActions
-  , expandBalances
-  , getAllPayments
   ) where
 
 import Prologue
 
+import Data.Array (foldl)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromInt)
-import Data.Lens (view, (^.))
+import Data.Lens (_2, view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, fromMaybe')
 import Data.Tuple.Nested ((/\))
+import Marlowe.Client (ContractHistory, _chHistory, _chParams)
 import Marlowe.Execution.Lenses (_resultingPayments)
 import Marlowe.Execution.Types
   ( NamedAction(..)
@@ -45,6 +48,8 @@ import Marlowe.Semantics
   , TransactionInput(..)
   , TransactionOutput(..)
   , _accounts
+  , _marloweContract
+  , _marloweState
   , computeTransaction
   , emptyState
   , evalValue
@@ -62,6 +67,26 @@ mkInitialState currentSlot contract =
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
   }
+
+restoreState :: Slot -> ContractHistory -> State
+restoreState currentSlot history =
+  let
+    contract = view (_chParams <<< _2 <<< _marloweContract) history
+    initialSemanticState = view (_chParams <<< _2 <<< _marloweState) history
+    inputs = view _chHistory history
+    -- Derive the initial params from the Follower Contract params
+    initialState =
+      { semanticState: initialSemanticState
+      , contract
+      , history: mempty
+      , mPendingTimeouts: Nothing
+      , mNextTimeout: nextTimeout contract
+      }
+  in
+    -- Apply all the transaction inputs
+    foldl (flip nextState) initialState inputs
+      -- See if any step has timeouted
+      # timeoutState currentSlot
 
 nextState :: TransactionInput -> State -> State
 nextState txInput { semanticState, contract, history } =

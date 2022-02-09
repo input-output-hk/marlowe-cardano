@@ -190,44 +190,36 @@ mkInitialState
   -> Maybe State
 mkInitialState wallet currentSlot nickname contractHistory =
   let
-    chParams = view _chParams contractHistory
+    marloweParams /\ marloweData = view _chParams contractHistory
+    chHistory = view _chHistory contractHistory
+    contract = view _marloweContract marloweData
+    mTemplate = findTemplate contract
+    minSlot = view (_marloweState <<< _minSlot) marloweData
+    initialExecutionState = Execution.mkInitialState minSlot contract
   in
-    bind chParams \(marloweParams /\ marloweData) ->
+    flip map mTemplate \template ->
       let
-        chHistory = view _chHistory contractHistory
-
-        contract = view _marloweContract marloweData
-
-        mTemplate = findTemplate contract
-
-        minSlot = view (_marloweState <<< _minSlot) marloweData
-
-        initialExecutionState = Execution.mkInitialState minSlot contract
+        initialState =
+          { nickname
+          , tab: Tasks
+          , executionState: initialExecutionState
+          , pendingTransaction: Nothing
+          , previousSteps: mempty
+          , marloweParams
+          , selectedStep: 0
+          , metadata: template.metaData
+          , participants: getParticipants contract
+          , userParties: getUserParties wallet marloweParams
+          , namedActions: mempty
+          }
+        updateExecutionState = over _executionState
+          (applyTransactionInputs chHistory)
       in
-        flip map mTemplate \template ->
-          let
-            initialState =
-              { nickname
-              , tab: Tasks
-              , executionState: initialExecutionState
-              , pendingTransaction: Nothing
-              , previousSteps: mempty
-              , marloweParams
-              , selectedStep: 0
-              , metadata: template.metaData
-              , participants: getParticipants contract
-              , userParties: getUserParties wallet marloweParams
-              , namedActions: mempty
-              }
-
-            updateExecutionState = over _executionState
-              (applyTransactionInputs chHistory)
-          in
-            initialState
-              # updateExecutionState
-              # regenerateStepCards currentSlot
-              # selectLastStep
-              # Started
+        initialState
+          # updateExecutionState
+          # regenerateStepCards currentSlot
+          # selectLastStep
+          # Started
 
 -- Note 1: We filter out PK parties from the participants of the contract. This is because
 -- we don't have a design for displaying them anywhere, and because we are currently only
@@ -253,7 +245,7 @@ getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
     Role _ -> true
     _ -> false
 
--- TODO: SCP-3208 Move contract state to halogen store
+-- FIXME-3208 Move contract state to halogen store
 updateState
   :: PABConnectedWallet
   -> MarloweParams

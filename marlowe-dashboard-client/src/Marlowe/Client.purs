@@ -24,7 +24,7 @@ import Type.Proxy (Proxy(..))
 -- transaction history for a Marlowe contract running on the blockchain.
 newtype ContractHistory
   = ContractHistory
-  { chParams :: Maybe (Tuple MarloweParams MarloweData)
+  { chParams :: Tuple MarloweParams MarloweData
   , chHistory :: Array TransactionInput
   }
 
@@ -38,7 +38,7 @@ instance encodeJsonContractHistory :: EncodeJson ContractHistory where
   encodeJson =
     E.encode $ unwrap
       >$< E.record
-        { chParams: E.maybe E.value :: _ (_ (Tuple MarloweParams MarloweData))
+        { chParams: E.value :: _ (Tuple MarloweParams MarloweData)
         , chHistory: E.value :: _ (Array TransactionInput)
         }
 
@@ -46,11 +46,11 @@ instance decodeJsonContractHistory :: DecodeJson ContractHistory where
   decodeJson =
     D.decode $ ContractHistory
       <$> D.record "ContractHistory"
-        { chParams: D.maybe D.value :: _ (_ (Tuple MarloweParams MarloweData))
+        { chParams: D.value :: _ (Tuple MarloweParams MarloweData)
         , chHistory: D.value :: _ (Array TransactionInput)
         }
 
-_chParams :: Lens' ContractHistory (Maybe (Tuple MarloweParams MarloweData))
+_chParams :: Lens' ContractHistory (Tuple MarloweParams MarloweData)
 _chParams = _Newtype <<< prop (Proxy :: _ "chParams")
 
 _chHistory :: Lens' ContractHistory (Array TransactionInput)

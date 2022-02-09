@@ -1,8 +1,10 @@
 module Store.Contracts
   ( ContractStore
+  , addFollowerContract
   , addStartingContract
   , emptyContractStore
   , followerContractExists
+  , getFollowerContract
   ) where
 
 import Prologue
@@ -10,16 +12,18 @@ import Prologue
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
-import Data.Lens (Lens', iso, over, to, view)
+import Data.Lens (Lens', _1, iso, over, to, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
+import Marlowe.Client (ContractHistory, _chParams)
+import Marlowe.Execution.State as Execution
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams)
+import Marlowe.Semantics (MarloweParams, Slot)
 import Type.Proxy (Proxy(..))
 
 newtype ContractStore = ContractStore ContractStoreFields
@@ -46,8 +50,8 @@ _ContractStore = iso
   (\(ContractStore fields) -> fields)
   (\fields -> ContractStore fields)
 
--- _syncedContracts :: Lens' ContractStore (Map MarloweParams Execution.State)
--- _syncedContracts = _ContractStore <<< prop (Proxy :: _ "syncedContracts")
+_syncedContracts :: Lens' ContractStore (Map MarloweParams Execution.State)
+_syncedContracts = _ContractStore <<< prop (Proxy :: _ "syncedContracts")
 
 _newContracts :: Lens' ContractStore (Map UUID (ContractNickname /\ MetaData))
 _newContracts = _ContractStore <<< prop (Proxy :: _ "newContracts")
@@ -70,7 +74,27 @@ addStartingContract
 addStartingContract (reqId /\ contractNickname /\ metadata) =
   over _newContracts $ Map.insert reqId (contractNickname /\ metadata)
 
+addFollowerContract
+  :: Slot
+  -> PlutusAppId
+  -> ContractHistory
+  -> ContractStore
+  -> ContractStore
+addFollowerContract currentSlot followerId history =
+  let
+    marloweParams = view (_chParams <<< _1) history
+    updateIndexes = over _contractIndex $ Bimap.insert marloweParams followerId
+    updateSyncedContracts = over _syncedContracts $ Map.insert marloweParams
+      $ Execution.restoreState currentSlot history
+  in
+    updateIndexes <<< updateSyncedContracts
+
+------------------------------------------------------------
+
 followerContractExists :: MarloweParams -> ContractStore -> Boolean
 followerContractExists marloweParams = view
   (_contractIndex <<< to (Bimap.memberL marloweParams))
 
+getFollowerContract :: MarloweParams -> ContractStore -> Maybe PlutusAppId
+getFollowerContract marloweParams = view
+  (_contractIndex <<< to (Bimap.lookupL marloweParams))

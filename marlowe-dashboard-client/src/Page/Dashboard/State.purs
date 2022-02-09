@@ -8,7 +8,12 @@ import Prologue
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe (class ManageMarlowe, createContract, redeem)
+import Capability.Marlowe
+  ( class ManageMarlowe
+  , createContract
+  , followContract
+  , redeem
+  )
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -25,7 +30,6 @@ import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
-import Data.Array (null)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
 import Data.Either (hush)
@@ -33,7 +37,6 @@ import Data.Foldable (for_)
 import Data.Lens
   ( _Just
   , assign
-  , elemOf
   , filtered
   , lens
   , modifying
@@ -57,7 +60,7 @@ import Data.PABConnectedWallet
   , _walletId
   , _walletNickname
   )
-import Data.Set (delete, fromFoldable, isEmpty) as Set
+import Data.Set (delete, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -68,7 +71,7 @@ import Env (Env)
 import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (imapState, mapSubmodule)
 import Halogen.Query.HalogenM (mapAction)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (_chHistory, _chParams)
@@ -83,7 +86,7 @@ import Marlowe.Semantics
   , Payment(..)
   , Slot
   )
-import Page.Contract.Lenses (_Started, _marloweParams, _selectedStep)
+import Page.Contract.Lenses (_Started, _selectedStep)
 import Page.Contract.State (applyTimeout)
 import Page.Contract.State (handleAction, mkInitialState, updateState) as Contract
 import Page.Contract.Types (Action(..), State) as Contract
@@ -109,6 +112,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
+import Store.Contracts (followerContractExists)
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 {- [Workflow 2][4] Connect a wallet
@@ -225,29 +229,26 @@ If someone else started the contract, and gave us a role, we will have no placeh
 `MarloweFollower` app, and so we simply create a new one and start following immediately.
 -}
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
-handleAction {} (UpdateFollowerApps companionAppState) = do
+handleAction { wallet } (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
-  existingContracts <- use _contracts
+  -- FIXME-3208: We should use Input here instead of getStore
+  contracts <- _.contracts <$> getStore
   let
-    contractExists marloweParams =
-      elemOf
-        (traversed <<< _Started <<< _marloweParams)
-        marloweParams
-        existingContracts
+    contractExists marloweParams = followerContractExists marloweParams
+      contracts
 
     newContracts = filterKeys (not contractExists) companionAppState
 
     newContractsArray :: Array (Tuple MarloweParams MarloweData)
     newContractsArray = toUnfoldable newContracts
-  if
-    ( walletCompanionStatus /= FirstUpdateComplete &&
-        (not $ null newContractsArray)
-    ) then
-    assign _walletCompanionStatus $ LoadingNewContracts $ Set.fromFoldable $ map
-      fst
-      newContractsArray
-  else
-    assign _walletCompanionStatus FirstUpdateComplete
+  -- FIXME-3208 probably remove walletCompanionStatus
+  when (walletCompanionStatus /= FirstUpdateComplete) $ assign
+    _walletCompanionStatus
+    FirstUpdateComplete
+  -- for_ newContractsArray \(marloweParams /\ marloweData) ->
+  for_ newContractsArray \(marloweParams /\ _) ->
+    followContract wallet marloweParams
+
 -- FIXME-3208: removed to avoid infinite loop
 --   void
 --     $ for newContractsArray \(_ /\ marloweData) -> do
@@ -295,58 +296,55 @@ handleAction
   input@{ currentSlot, wallet }
   (UpdateContract followerAppId contractHistory) = do
   let
-    chParams = view _chParams contractHistory
+    marloweParams /\ marloweData = view _chParams contractHistory
     walletId = view _walletId wallet
   -- Before we update the contract state we need to update the total funds to see if there has
   -- been a change in the role tokens.
   -- There is a chance that the data is not fully synced
   -- See note [polling updateTotalFunds]
   _ <- updateTotalFunds walletId
-  -- if the chParams have not yet been set, we can't do anything; that's fine though, we'll get
-  -- another notification through the websocket as soon as they are set
-  for_ chParams \(marloweParams /\ marloweData) -> do
-    contracts <- use _contracts
-    case lookup followerAppId contracts of
-      Just contractState -> do
-        let
-          chHistory = view _chHistory contractHistory
-        selectedStep <- peruse $ _selectedContract <<< _Started <<<
-          _selectedStep
-        modifying _contracts $ insert followerAppId $ Contract.updateState
-          wallet
-          marloweParams
-          marloweData
-          currentSlot
-          chHistory
-          contractState
-        -- if the modification changed the currently selected step, that means the card for the contract
-        -- that was changed is currently open, so we need to realign the step cards
-        selectedStep' <- peruse $ _selectedContract <<< _Started <<<
-          _selectedStep
-        when (selectedStep /= selectedStep')
-          $ for_ selectedStep'
-              ( handleAction input <<< ContractAction followerAppId <<<
-                  Contract.MoveToStep
-              )
-      Nothing -> for_
-        ( Contract.mkInitialState wallet currentSlot
-            ContractNickname.unknown
-            contractHistory
-        )
-        (modifying _contracts <<< insert followerAppId)
-    -- if we're currently loading the first bunch of contracts, we can report that this one has now been loaded
-    walletCompanionStatus <- use _walletCompanionStatus
-    case walletCompanionStatus of
-      LoadingNewContracts pendingMarloweParams -> do
-        let
-          updatedPendingMarloweParams = Set.delete marloweParams
-            pendingMarloweParams
-        if Set.isEmpty updatedPendingMarloweParams then
-          assign _walletCompanionStatus FirstUpdateComplete
-        else
-          assign _walletCompanionStatus $ LoadingNewContracts
-            updatedPendingMarloweParams
-      _ -> pure unit
+  contracts <- use _contracts
+  case lookup followerAppId contracts of
+    Just contractState -> do
+      let
+        chHistory = view _chHistory contractHistory
+      selectedStep <- peruse $ _selectedContract <<< _Started <<<
+        _selectedStep
+      modifying _contracts $ insert followerAppId $ Contract.updateState
+        wallet
+        marloweParams
+        marloweData
+        currentSlot
+        chHistory
+        contractState
+      -- if the modification changed the currently selected step, that means the card for the contract
+      -- that was changed is currently open, so we need to realign the step cards
+      selectedStep' <- peruse $ _selectedContract <<< _Started <<<
+        _selectedStep
+      when (selectedStep /= selectedStep')
+        $ for_ selectedStep'
+            ( handleAction input <<< ContractAction followerAppId <<<
+                Contract.MoveToStep
+            )
+    Nothing -> for_
+      ( Contract.mkInitialState wallet currentSlot
+          ContractNickname.unknown
+          contractHistory
+      )
+      (modifying _contracts <<< insert followerAppId)
+  -- if we're currently loading the first bunch of contracts, we can report that this one has now been loaded
+  walletCompanionStatus <- use _walletCompanionStatus
+  case walletCompanionStatus of
+    LoadingNewContracts pendingMarloweParams -> do
+      let
+        updatedPendingMarloweParams = Set.delete marloweParams
+          pendingMarloweParams
+      if Set.isEmpty updatedPendingMarloweParams then
+        assign _walletCompanionStatus FirstUpdateComplete
+      else
+        assign _walletCompanionStatus $ LoadingNewContracts
+          updatedPendingMarloweParams
+    _ -> pure unit
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The

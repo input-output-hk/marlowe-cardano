@@ -21,12 +21,14 @@ import Data.PABConnectedWallet
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
+import Marlowe.Client (ContractHistory(..))
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
 import MarloweContract (MarloweContract(..))
 import Store.Contracts
   ( ContractStore
+  , addFollowerContract
   , addStartingContract
   , emptyContractStore
   )
@@ -73,6 +75,7 @@ data Action
   | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
   -- Contract
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
+  | AddFollowerContract Slot PlutusAppId ContractHistory
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -97,6 +100,10 @@ reduce store = case _ of
   -- Contract
   AddStartingContract startingContractInfo -> store
     { contracts = addStartingContract startingContractInfo
+        store.contracts
+    }
+  AddFollowerContract currentSlot followerId history -> store
+    { contracts = addFollowerContract currentSlot followerId history
         store.contracts
     }
   -- Address book

@@ -47,6 +47,7 @@ import Data.Array (filter) as Array
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
+import Data.Maybe (maybe')
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.MnemonicPhrase.Word (toString) as Word
@@ -70,6 +71,7 @@ import Data.WalletId as WI
 import Data.WalletNickname (WalletNickname)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
+import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
@@ -84,6 +86,8 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToServer(..)
   , ContractInstanceClientState
   )
+import Store as Store
+import Store.Contracts (getFollowerContract)
 import Types (AjaxResponse, DecodedAjaxResponse)
 import WebSocket.Support as WS
 
@@ -98,6 +102,7 @@ class
   ( ManagePAB m
   , ManageMarloweStorage m
   , ManageWallet m
+  , MonadStore Store.Action Store.Store m
   ) <=
   ManageMarlowe m where
   createWallet
@@ -164,20 +169,34 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     runExceptT do
       let
         walletId = view _walletId wallet
-      followAppId <- withExceptT Left $ ExceptT $ PAB.activateContract
-        MarloweFollower
-        walletId
-      void $ withExceptT Left $ ExceptT $ PAB.invokeEndpoint followAppId
-        "follow"
-        marloweParams
+      contracts /\ currentSlot <-
+        (\store -> store.contracts /\ store.currentSlot) <$> lift getStore
+
+      let
+        activateNewFollower = do
+          followAppId <- withExceptT Left $ ExceptT $ PAB.activateContract
+            MarloweFollower
+            walletId
+          void $ withExceptT Left $ ExceptT $ PAB.invokeEndpoint followAppId
+            "follow"
+            marloweParams
+          pure followAppId
+      -- If we already have a Follower contract use it, if we don't, activate a new one
+      followAppId <- maybe'
+        (\_ -> activateNewFollower)
+        pure
+        (getFollowerContract marloweParams contracts)
+
       observableStateJson <- withExceptT Left $ ExceptT $
         PAB.getContractInstanceObservableState followAppId
-      observableState <-
+      contractHistory <-
         except
           $ lmap Right
           $ decodeJson
           $ observableStateJson
-      pure $ followAppId /\ observableState
+      lift $ updateStore $ Store.AddFollowerContract currentSlot followAppId
+        contractHistory
+      pure $ followAppId /\ contractHistory
   -- call the "follow" endpoint of a pending MarloweFollower app, and return its PlutusAppId and
   -- observable state (to call this function, we must already know its PlutusAppId, but we return
   -- it anyway because it is convenient to have this function return the same type as

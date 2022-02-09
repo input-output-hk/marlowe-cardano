@@ -2,7 +2,13 @@ module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
 
-import API.Lenses (_cicContract, _cicDefinition, _cicStatus)
+import API.Lenses
+  ( _cicContract
+  , _cicCurrentState
+  , _cicDefinition
+  , _cicStatus
+  , _observableState
+  )
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
@@ -33,6 +39,8 @@ import Control.Monad.State (modify_)
 import Data.AddressBook as AB
 import Data.Argonaut (decodeJson, stringify)
 import Data.Array (filter, find) as Array
+import Data.Array (mapMaybe)
+import Data.Either (hush)
 import Data.Filterable (filter)
 import Data.Foldable (for_, traverse_)
 import Data.Lens
@@ -56,7 +64,7 @@ import Data.PABConnectedWallet as Connected
 import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..))
 import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
@@ -93,6 +101,7 @@ import MainFrame.Types
   , WebSocketStatus(..)
   )
 import MainFrame.View (render)
+import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract(..))
 import Page.Dashboard.Lenses (_contracts)
@@ -505,18 +514,24 @@ handleAction (EnterDashboardState disconnectedWallet) = do
           subscribeToPlutusApp companionAppId
           -- Get notified of the results of our control app
           subscribeToPlutusApp marloweAppId
+          Logger.info $ "Subscribed to companion app " <> show companionAppId
+            <> " and control app "
+            <> show marloweAppId
           -- Get notified on contract changes
           let
             connectedWallet = connectWallet { companionAppId, marloweAppId }
               disconnectedWallet
-            followerAppIds = filterFollowerContracts plutusApps
-          for_ followerAppIds subscribeToPlutusApp
+            followerApps = filterFollowerApps plutusApps
+          currentSlot <- use _currentSlot
+          for_ followerApps \(followerAppId /\ contractHistory) -> do
+            subscribeToPlutusApp followerAppId
+            updateStore $ Store.AddFollowerContract currentSlot followerAppId
+              contractHistory
           -- We now have all the running contracts for this wallet, but if new role tokens have been
           -- given to the wallet since we last connected it, we'll need to create some more. Since
           -- we've just subscribed to this wallet's WalletCompanion app, however, the creation of new
           -- MarloweFollower apps will be triggered by the initial WebSocket status notification.
           contractNicknames <- getContractNicknames
-          currentSlot <- use _currentSlot
           assign _subState
             $ Right
             $ Tuple connectedWallet
@@ -542,30 +557,10 @@ handleAction (DashboardAction da) = do
           da
 
 ------------------------------------------------------------
--- fetchWalletDetails
---   :: forall m r
---    . ManageMarlowe m
---   => { newWallet :: Boolean
---      , walletNickname :: WalletNickname
---      , walletInfo :: WalletInfo
---      }
---   -> ExceptT (Variant (ClientServerErrorRow r)) m WalletDetails
--- fetchWalletDetails { newWallet, walletNickname, walletInfo } = withExceptT
---   clientServerError
---   do
---     let
---       WalletInfo { walletId } = walletInfo
-
---     contracts <-
---       if newWallet then pure []
---       else
---         ExceptT $
---           PAB.getWalletContractInstances walletId
-
---     pure $ mkWalletDetails walletNickname walletInfo
-filterFollowerContracts
-  :: Array (ContractInstanceClientState MarloweContract) -> Array PlutusAppId
-filterFollowerContracts plutusContracts =
+filterFollowerApps
+  :: Array (ContractInstanceClientState MarloweContract)
+  -> Array (PlutusAppId /\ ContractHistory)
+filterFollowerApps plutusContracts =
   let
     isActiveFollowerContract cic =
       let
@@ -573,8 +568,15 @@ filterFollowerContracts plutusContracts =
         status = view _cicStatus cic
       in
         definition == MarloweFollower && status == Active
+    idAndHistory cic =
+      let
+        plutusId = view _cicContract cic
+        observableStateJson = view (_cicCurrentState <<< _observableState) cic
+      in
+        Tuple plutusId <$> (hush $ decodeJson observableStateJson)
   in
-    view _cicContract <$> Array.filter isActiveFollowerContract plutusContracts
+    mapMaybe idAndHistory $ Array.filter isActiveFollowerContract
+      plutusContracts
 
 activateOrRestorePlutusCompanionContracts
   :: forall m
