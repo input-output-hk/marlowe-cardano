@@ -3,7 +3,7 @@ module MainFrame.Types where
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.Contacts.Types (Action) as Contacts
+import Component.AddContact.Types as AddContact
 import Component.ContractSetup.Types as ContractSetup
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
@@ -73,7 +73,7 @@ instance showWebSocketStatus :: Show WebSocketStatus where
 
 ------------------------------------------------------------
 type ChildSlots =
-  ( addContactForm :: forall query. H.Slot query Contacts.Action Unit
+  ( addContact :: AddContact.Slot Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String

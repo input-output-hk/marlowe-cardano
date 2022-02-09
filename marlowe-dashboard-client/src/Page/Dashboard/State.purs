@@ -19,6 +19,7 @@ import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
+import Component.AddContact.Types as AddContact
 import Component.Contacts.Lenses (_cardSection)
 import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, initialState) as Contacts
@@ -168,8 +169,10 @@ handleAction { wallet } DisconnectWallet = do
 
 handleAction _ (ContactsAction contactsAction) =
   case contactsAction of
-    Contacts.CancelNewContactForRole -> assign _card $ Just ContractTemplateCard
-    _ -> toContacts $ Contacts.handleAction contactsAction
+    Contacts.OnAddContactMsg (Just _) AddContact.BackClicked -> do
+      assign _card $ Just ContractTemplateCard
+    _ -> do
+      toContacts $ Contacts.handleAction contactsAction
 
 handleAction _ ToggleMenu = modifying _menuOpen not
 

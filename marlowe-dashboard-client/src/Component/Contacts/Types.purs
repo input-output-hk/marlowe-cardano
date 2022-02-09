@@ -8,6 +8,7 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
+import Component.AddContact.Types as AddContact
 import Data.Address (Address)
 import Data.WalletNickname (WalletNickname)
 
@@ -24,13 +25,11 @@ derive instance eqCardSection :: Eq CardSection
 data Action
   = CloseContactsCard
   | SetCardSection CardSection
-  | SaveWallet (Maybe String) WalletNickname Address
-  | CancelNewContactForRole
+  | OnAddContactMsg (Maybe String) AddContact.Msg
   | ClipboardAction Clipboard.Action
 
 instance actionIsEvent :: IsEvent Action where
   toEvent CloseContactsCard = Just $ defaultEvent "CloseContactsCard"
   toEvent (SetCardSection _) = Just $ defaultEvent "SetCardSection"
-  toEvent (SaveWallet _ _ _) = Just $ defaultEvent "SaveWallet"
-  toEvent CancelNewContactForRole = Nothing
+  toEvent (OnAddContactMsg _ _) = Nothing
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"

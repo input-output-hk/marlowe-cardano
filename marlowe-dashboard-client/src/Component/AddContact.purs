@@ -1,8 +1,7 @@
-module Component.AddContact (component, _restoreWallet) where
+module Component.AddContact (component, _addContact) where
 
 import Prologue
 
-import Capability.Marlowe (class ManageMarlowe)
 import Component.AddContact.Types
   ( AddContactFields
   , Component
@@ -25,7 +24,6 @@ import Data.Lens (Setter', set)
 import Data.Lens.Record (prop)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
-import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.Css (classNames)
@@ -68,12 +66,11 @@ type ComponentHTML m =
 type DSL m a =
   H.HalogenM State Action ChildSlots Msg m a
 
-_restoreWallet = Proxy :: Proxy "restoreWallet"
+_addContact = Proxy :: Proxy "addContact"
 
 component
   :: forall m
-   . MonadAff m
-  => ManageMarlowe m
+   . MonadEffect m
   => MonadStore Store.Action Store.Store m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
@@ -105,7 +102,7 @@ adaptInput optic = case _ of
   Input.Emit a -> a
 
 handleAction
-  :: forall m. MonadEffect m => ManageMarlowe m => Action -> DSL m Unit
+  :: forall m. MonadEffect m => Action -> DSL m Unit
 handleAction = case _ of
   OnInit -> H.tell _nickname unit $ Input.Focus
   OnReceive input -> H.modify_ _ { addressBook = input.context }
