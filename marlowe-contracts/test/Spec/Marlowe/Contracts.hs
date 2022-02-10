@@ -8,6 +8,7 @@ import Language.Marlowe
 import Ledger.Ada
 import Ledger.Value
 import Marlowe.Contracts.Common
+import Marlowe.Contracts.Futures
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.StructuredProducts
 import Marlowe.Contracts.Swap
@@ -19,6 +20,9 @@ tests :: TestTree
 tests = testGroup "Marlowe Contract"
   [ testCase "ZeroCouponBond" zeroCouponBondTest
   , testCase "Swap Contract" swapContractTest
+  , testCase "Future Contract (repayment of initial margin)" futureNoChange
+  , testCase "Future Contract (without margin calls)" futureNoMarginCall
+  , testCase "Future Contract (with margins calls)" futureWithMarinCall
   , testCase "American Call Option test" americanCallOptionTest
   , testCase "American Call Option (exercised) test" americanCallOptionExercisedTest
   , testCase "European Call Option test" europeanCallOptionTest
@@ -31,38 +35,35 @@ w1Pk, w2Pk :: Party
 w1Pk = Role "party1"
 w2Pk = Role "party2"
 
-tok :: Token
-tok = Token tokSymbol tokName
+tokName :: TokenName
+tokName = "testcoin"
 
 tokSymbol :: CurrencySymbol
 tokSymbol = ""
 
-tokName :: TokenName
-tokName = "testcoin"
+tok :: Token
+tok = Token tokSymbol tokName
 
 tokValueOf :: Integer -> Money
 tokValueOf = singleton tokSymbol tokName
 
 assertTotalPayments :: Party -> [Payment] -> Money -> Assertion
-assertTotalPayments p t x = assertBool "total payments to party" (totalPayments (Party p) t == x)
+assertTotalPayments p t x = assertBool "total payments to party" (totalPayments t == x)
+  where
+    totalPayments = mconcat . map (\(Payment _ _ a) -> a) . filter (\(Payment _ a _) -> a == Party p)
 
 assertNoWarnings :: [a] -> Assertion
-assertNoWarnings t = assertBool "No warnings" $ null t
+assertNoWarnings [] = pure ()
+assertNoWarnings t  = assertBool "No warnings" $ null t
 
 assertClose :: Contract -> Assertion
 assertClose = assertBool "Contract is in Close" . (Close==)
 
-totalPayments :: Payee -> [Payment] -> Money
-totalPayments p' = mconcat . map m . filter f
-  where
-    m (Payment _ _ mon) = mon
-    f (Payment _ p _) = p == p'
-
 step :: TransactionInput -> ([TransactionWarning], [Payment], State, Contract) -> Either TransactionError ([TransactionWarning], [Payment], State, Contract)
 step i (_,_,s,c) =
   case computeTransaction i s c of
-    Error err                     -> Left err
-    (TransactionOutput w p s' c') -> Right (w, p, s', c')
+    Error err                   -> Left err
+    TransactionOutput w p s' c' -> Right (w, p, s', c')
 
 -- |Zero-coupon Bond test
 zeroCouponBondTest :: IO ()
@@ -223,6 +224,120 @@ europeanCallOptionExercisedTest =
         assertNoWarnings w
         assertTotalPayments w1Pk p (tokValueOf 30)
         assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000)
+
+-- |Future, scenario repayment of initial margins
+futureNoChange :: IO ()
+futureNoChange =
+  -- At maturity:
+  --        w1 ------  80 ADA -----> w2
+  --        w1 <----- 100 USD ------ w2
+  -- The contract is cash settled, i.e. USD is delivered in ADA
+  -- resp. the difference between 80 ADA and 100 USD in ADA is
+  -- due at maturity
+  let contract =
+        future
+          w1Pk
+          w2Pk
+          (Constant 80_000_000) -- 80 ADA
+          (Constant 8_000_000) -- 8 ADA
+          (Slot 1)
+          [] -- no margin calls
+          (Slot 100) -- maturity
+   in either left right $
+        -- initial margin payments
+        step (TransactionInput (0, 0)
+                [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
+                , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000
+                ]) ([], [], emptyState 0, contract)
+        -- settlement
+    >>= step (TransactionInput (99, 99)
+                [ NormalInput $ IChoice dirRate 125_000_000
+                , NormalInput $ IChoice invRate 80_000_000
+                ])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings $ filter nonZeroPay w
+        -- repayments of inital margins
+        assertTotalPayments w1Pk p (lovelaceValueOf 8_000_000)
+        assertTotalPayments w2Pk p (lovelaceValueOf 8_000_000)
+
+    nonZeroPay (TransactionNonPositivePay _ _ _ i) = i /= 0
+    nonZeroPay _                                   = True
+
+-- |Future, scenario without any margin calls
+futureNoMarginCall :: IO ()
+futureNoMarginCall =
+  let contract =
+        future
+          w1Pk
+          w2Pk
+          (Constant 80_000_000) -- 80 ADA
+          (Constant 8_000_000) -- 8 ADA
+          (Slot 1)
+          [] -- no margin calls
+          (Slot 100) -- maturity
+   in either left right $
+        -- initial margin payments
+        step (TransactionInput (0, 0)
+                [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
+                , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000
+                ]) ([], [], emptyState 0, contract)
+        -- settlement
+    >>= step (TransactionInput (99, 99)
+                [ NormalInput $ IChoice dirRate 133_333_333
+                , NormalInput $ IChoice invRate 75_000_000
+                ])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p (lovelaceValueOf 1_333_333)
+        assertTotalPayments w2Pk p (lovelaceValueOf 14_666_667)
+
+-- |Future, scenario with margin call
+futureWithMarinCall :: IO ()
+futureWithMarinCall =
+  let contract =
+        future
+          w1Pk
+          w2Pk
+          (Constant 80_000_000) -- 80 ADA
+          (Constant 8_000_000) -- 8 ADA
+          (Slot 1)
+          [Slot 50] -- margin call
+          (Slot 100) -- maturity
+   in either left right $
+        -- initial margin payments
+        step (TransactionInput (0, 0)
+                [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
+                , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000
+                ]) ([], [], emptyState 0, contract)
+        -- margin call
+    >>= step (TransactionInput (40, 40)
+                [ NormalInput $ IChoice dirRate 200_000_000
+                , NormalInput $ IChoice invRate 50_000_000
+                ])
+    >>= step (TransactionInput (42, 42)
+                [ NormalInput $ IDeposit w1Pk w1Pk ada 60_000_000
+                ])
+        -- settlement
+    >>= step (TransactionInput (99, 99)
+                [ NormalInput $ IChoice dirRate 133_333_333
+                , NormalInput $ IChoice invRate 75_000_000
+                ])
+  where
+    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
+    right (w, p, _, c) =
+      do
+        assertClose c
+        assertNoWarnings w
+        assertTotalPayments w1Pk p (lovelaceValueOf 61_333_333)
+        assertTotalPayments w2Pk p (lovelaceValueOf 14_666_667)
 
 -- |Reverse Convertible test (Exercise)
 reverseConvertibleExercisedTest :: IO ()
