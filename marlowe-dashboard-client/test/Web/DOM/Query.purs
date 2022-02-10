@@ -67,7 +67,7 @@ type MatcherOptions =
   , suggest :: Boolean
   }
 
-type ByRoleOptions matcher =
+type ByRoleOptions =
   {
     -- | If true includes elements in the query set that are usually excluded from
     -- | the accessibility tree. `role="none"` or `role="presentation"` are included
@@ -97,25 +97,20 @@ type ByRoleOptions matcher =
   -- | For example *ByRole('progressbar', {queryFallbacks: true})` will find <div role="meter progressbar">`.
   , queryFallbacks :: Boolean
   -- | Only considers elements with the specified accessible name.
-  , name :: Maybe matcher
+  , name :: Maybe Matcher
   }
 
-data Match matcher
-  = ByAltText matcher (Maybe MatcherOptions)
-  | ByDisplayValue matcher (Maybe MatcherOptions)
-  | ByLabelText matcher (Maybe MatcherOptions)
-  | ByPlaceholderText matcher (Maybe MatcherOptions)
-  | ByRole ARIARole (Maybe (ByRoleOptions matcher))
-  | ByTestId matcher (Maybe MatcherOptions)
-  | ByText matcher (Maybe MatcherOptions)
-  | ByTitle matcher (Maybe MatcherOptions)
+data Match
+  = ByAltText Matcher (Maybe MatcherOptions)
+  | ByDisplayValue Matcher (Maybe MatcherOptions)
+  | ByLabelText Matcher (Maybe MatcherOptions)
+  | ByPlaceholderText Matcher (Maybe MatcherOptions)
+  | ByRole ARIARole (Maybe ByRoleOptions)
+  | ByTestId Matcher (Maybe MatcherOptions)
+  | ByText Matcher (Maybe MatcherOptions)
+  | ByTitle Matcher (Maybe MatcherOptions)
 
-find
-  :: forall m matcher
-   . IsMatcher matcher
-  => MonadTest m
-  => Match matcher
-  -> m Element
+find :: forall m. MonadTest m => Match -> m Element
 find = case _ of
   ByAltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByAltText matcher options
@@ -138,10 +133,9 @@ find = case _ of
     liftAff <<< toAffE =<< callForeignMatcherFn findByTitle matcher options
 
 findAll
-  :: forall m matcher
-   . IsMatcher matcher
-  => MonadTest m
-  => Match matcher
+  :: forall m
+   . MonadTest m
+  => Match
   -> m (NonEmptyArray Element)
 findAll = case _ of
   ByAltText matcher options ->
@@ -166,10 +160,9 @@ findAll = case _ of
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByTitle matcher options
 
 get
-  :: forall m matcher
-   . IsMatcher matcher
-  => MonadTest m
-  => Match matcher
+  :: forall m
+   . MonadTest m
+  => Match
   -> m Element
 get = case _ of
   ByAltText matcher options ->
@@ -190,10 +183,9 @@ get = case _ of
     liftEffect =<< callForeignMatcherFn getByTitle matcher options
 
 getAll
-  :: forall m matcher
-   . IsMatcher matcher
-  => MonadTest m
-  => Match matcher
+  :: forall m
+   . MonadTest m
+  => Match
   -> m (NonEmptyArray Element)
 getAll = case _ of
   ByAltText matcher options ->
@@ -214,10 +206,9 @@ getAll = case _ of
     liftEffect =<< callForeignMatcherFn getAllByTitle matcher options
 
 query
-  :: forall m matcher
-   . IsMatcher matcher
-  => MonadTest m
-  => Match matcher
+  :: forall m
+   . MonadTest m
+  => Match
   -> m (Maybe Element)
 query = case _ of
   ByAltText matcher options ->
@@ -245,10 +236,9 @@ query = case _ of
       =<< callForeignMatcherFn queryByTitle matcher options
 
 queryAll
-  :: forall m matcher
-   . IsMatcher matcher
-  => MonadTest m
-  => Match matcher
+  :: forall m
+   . MonadTest m
+  => Match
   -> m (Array Element)
 queryAll = case _ of
   ByAltText matcher options ->
@@ -270,11 +260,10 @@ queryAll = case _ of
     liftEffect =<< callForeignMatcherFn queryAllByTitle matcher options
 
 callForeignMatcherFn
-  :: forall m matcher a
-   . IsMatcher matcher
-  => MonadTest m
+  :: forall m a
+   . MonadTest m
   => ForeignMatcherFn a
-  -> matcher
+  -> Matcher
   -> Maybe MatcherOptions
   -> m (Effect a)
 callForeignMatcherFn fn matcher options = do
@@ -283,26 +272,21 @@ callForeignMatcherFn fn matcher options = do
     options
 
 callForeignByRoleFn
-  :: forall m matcher a
-   . IsMatcher matcher
-  => MonadTest m
+  :: forall m a
+   . MonadTest m
   => ForeignByRoleFn a
   -> ARIARole
-  -> Maybe (ByRoleOptions matcher)
+  -> Maybe ByRoleOptions
   -> m (Effect a)
 callForeignByRoleFn fn role options = do
   container <- getContainer
-  pure
-    $ runEffectFn3 fn container (show role)
-    $ toUndefinable
-    $ map (\o -> o { name = toMatcher <$> o.name })
-    $ options
+  pure $ runEffectFn3 fn container (show role) $ toUndefinable options
 
 type ForeignMatcherFn =
   EffectFn3 Element Matcher (Undefinable MatcherOptions)
 
 type ForeignByRoleFn =
-  EffectFn3 Element String (Undefinable (ByRoleOptions Matcher))
+  EffectFn3 Element String (Undefinable ByRoleOptions)
 
 foreign import findAllByAltText
   :: ForeignMatcherFn (Promise (NonEmptyArray Element))

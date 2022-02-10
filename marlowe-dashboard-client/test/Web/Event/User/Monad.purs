@@ -10,12 +10,17 @@ import Control.Monad.Reader (ReaderT, mapReaderT)
 import Control.Monad.State (StateT, mapStateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT, mapWriterT)
+import Test.Web (TestM, hoistTestM)
 import Test.Web.Event.User.Api (UserApi)
 import Test.Web.Event.User.Options (UserOptions)
 
 class Monad m <= MonadUser m where
   api :: m UserApi
   setup :: forall a. UserOptions -> m a -> m a
+
+instance MonadUser m => MonadUser (TestM m) where
+  api = lift api
+  setup options = hoistTestM (setup options)
 
 instance MonadUser m => MonadUser (ReaderT r m) where
   api = lift api
