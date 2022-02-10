@@ -55,19 +55,20 @@ maintenanceMarginCalls buyer seller forwardPrice = flip $ foldl updateMarginAcco
                        (UseValue dirId)
                        (SubValue (UseValue invId) forwardPrice))
                      (MulValue contractSize scale)
+          liquidation a b = pay a b (ada, AvailableMoney a ada) Close
        in oracleInput dirRate timeout Close
         $ oracleInput invRate timeout Close
         $ Let dirId (ChoiceValue dirRate)
         $ Let invId (ChoiceValue invRate)
         $ If (ValueGE (UseValue invId) forwardPrice)
-             (updateMarginAccount seller amount timeout continuation)
-             (updateMarginAccount buyer (NegValue amount) timeout continuation)
+             (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
+             (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
-    updateMarginAccount :: Party -> Value Observation -> Timeout -> Contract -> Contract
-    updateMarginAccount party value timeout continuation =
+    updateMarginAccount :: Party -> Value Observation -> Timeout -> Contract -> Contract -> Contract
+    updateMarginAccount party value timeout liquidation continuation =
       If (ValueGT (AvailableMoney party ada) value)
         continuation
-        (deposit party party (ada, value) timeout Close continuation)
+        (deposit party party (ada, value) timeout liquidation continuation)
 
 toValueId :: String -> Slot -> ValueId
 toValueId label timeout = fromString $ label ++ "@" ++ (show $ getSlot timeout)
