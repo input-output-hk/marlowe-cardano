@@ -18,8 +18,7 @@ import Marlowe.Template (IntegerTemplateType)
 import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)
 
---
-type State
+type StateBase r
   =
   { showRightPanel :: Boolean
   , bottomPanelState :: BottomPanel.State BottomPanelView
@@ -27,9 +26,10 @@ type State
   , helpContext :: HelpContext
   -- List of decoration ids used by the monaco editor to track the running contract
   , decorationIds :: Array String
-  -- Required for download json button to build up file name
-  , projectName :: String
+  | r
   }
+
+type State = StateBase (projectName :: String)
 
 data Action
   = HandleEditorMessage Monaco.Message

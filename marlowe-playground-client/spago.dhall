@@ -42,6 +42,7 @@
   , "node-buffer"
   , "node-fs"
   , "nonempty"
+  , "now"
   , "nullable"
   , "numbers"
   , "ordered-collections"

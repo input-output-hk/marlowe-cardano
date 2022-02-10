@@ -2,7 +2,7 @@ module Page.Simulation.State
   ( handleAction
   , editorGetValue
   , getCurrentContract
-  , mkState
+  , mkStateBase
   ) where
 
 import Prologue hiding (div)
@@ -16,8 +16,9 @@ import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt, fromString)
 import Data.Decimal (fromNumber, truncated)
 import Data.Decimal as Decimal
-import Data.Either (hush)
+import Data.Either (fromRight, hush)
 import Data.Foldable (for_)
+import Data.Formatter.DateTime (formatDateTime)
 import Data.Hashable (hash)
 import Data.Lens (_Just, assign, modifying, use)
 import Data.Lens.Extra (peruse)
@@ -35,6 +36,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Console (log)
+import Effect.Now (nowDateTime)
 import Foreign.Generic (ForeignError, decode)
 import Foreign.JSON (parseJSON)
 import Halogen (HalogenM, get, query, tell)
@@ -64,7 +66,7 @@ import Page.Simulation.Lenses
   , _helpContext
   , _showRightPanel
   )
-import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
+import Page.Simulation.Types (Action(..), BottomPanelView(..), State, StateBase)
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import Simulator.Lenses
@@ -105,14 +107,13 @@ import Web.HTML as Web
 import Web.HTML.HTMLDocument (toDocument)
 import Web.HTML.Window as W
 
-mkState :: State
-mkState =
+mkStateBase :: StateBase ()
+mkStateBase =
   { showRightPanel: true
   , marloweState: NEL.singleton (emptyMarloweState Nothing)
   , helpContext: MarloweHelp
   , bottomPanelState: BottomPanel.initialState CurrentStateView
   , decorationIds: []
-  , projectName: ""
   }
 
 toBottomPanel
@@ -190,14 +191,19 @@ handleAction StartSimulation = do
 
 handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
   Just (contract :: Contract) -> do
+    dateTime <- liftEffect $ nowDateTime
+    projectName <- use _projectName
     let
       contractJson = stringify $ encodeJson contract
       blob = Blob.fromString contractJson applicationJSON
       abs i = if i < 0 then -1 * i else i
       id = abs $ hash contractJson
-    projectName <- use _projectName
+      dateTime' = fromRight "WrongDateFormat" $ formatDateTime
+        "YYYY-MM-DD-HH:mm:ss"
+        dateTime
+      fullName = projectName <> "-" <> dateTime' <> "-" <> show id <> ".json"
     liftEffect do
-      download (FileDownload $ projectName <> "-" <> show id <> ".json") blob
+      download (FileDownload fullName) blob
   Nothing -> pure unit
 
 handleAction (MoveSlot slot) = do

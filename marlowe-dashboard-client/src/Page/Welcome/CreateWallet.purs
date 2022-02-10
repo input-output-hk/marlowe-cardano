@@ -102,9 +102,9 @@ handleAction = case _ of
               #
                 ( Variant.match
                     { serverError: const
-                        "We have encountered some serious problem. Please try again later."
+                        "We have encountered some serious problem which was already reported. Sorry for inconvenience and please try again later."
                     , clientServerError: const
-                        "Unable to connect to server. Please check your internet connection."
+                        "Unable to connect to the server. Please check your internet connection."
                     }
                 )
               # Failure

@@ -2,7 +2,7 @@ module MainFrame.State (component) where
 
 import Prologue hiding (div)
 
-import Auth (AuthRole(..), authStatusAuthRole, _GithubUser)
+import Auth (AuthRole(..), _GithubUser, authStatusAuthRole)
 import Component.Blockly.Types as Blockly
 import Component.BottomPanel.Types (Action(..)) as BP
 import Component.ConfirmUnsavedNavigation.Types (Action(..)) as ConfirmUnsavedNavigation
@@ -21,16 +21,7 @@ import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (either, hush, note)
 import Data.Foldable (fold, for_)
-import Data.Lens
-  ( _Right
-  , assign
-  , has
-  , preview
-  , set
-  , use
-  , view
-  , (^.)
-  )
+import Data.Lens (_Right, assign, has, preview, set, use, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Map as Map
@@ -138,7 +129,7 @@ initialState =
   , javascriptState: JS.initialState
   , marloweEditorState: ME.initialState
   , blocklyEditorState: BE.initialState
-  , simulationState: Simulation.mkState
+  , simulationState: Simulation.mkStateBase
   , jsEditorKeybindings: DefaultBindings
   , activeJSDemo: mempty
   , contractMetadata: emptyContractMetadata
@@ -276,16 +267,6 @@ handleRoute { gistId: (Just gistId), subroute } = do
   handleSubRoute subroute
 
 handleRoute { subroute } = handleSubRoute subroute
-
-assignProjectName
-  :: forall m
-   . MonadAff m
-  => MonadAjax Api m
-  => String
-  -> HalogenM State Action ChildSlots Void m Unit
-assignProjectName projectName = do
-  assign _projectName projectName
-  assign (_simulationState <<< _projectName) projectName
 
 handleQuery
   :: forall m a
@@ -488,7 +469,7 @@ handleAction (ProjectsAction Projects.Cancel) = fullHandleAction CloseModal
 handleAction (ProjectsAction action) = toProjects $ Projects.handleAction action
 
 handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
-  assignProjectName "New Project"
+  assign _projectName "New Project"
   assign _gistId Nothing
   assign _createGistResult NotAsked
   assign _contractMetadata emptyContractMetadata
@@ -523,7 +504,7 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
 handleAction (NewProjectAction NewProject.Cancel) = fullHandleAction CloseModal
 
 handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
-  assignProjectName metadata.contractName
+  assign _projectName metadata.contractName
   assign _showModal Nothing
   assign _workflow (Just lang)
   assign _hasUnsavedChanges false
@@ -558,7 +539,7 @@ handleAction (DemosAction Demos.Cancel) = fullHandleAction CloseModal
 
 handleAction (RenameAction action@Rename.SaveProject) = do
   projectName <- use (_rename <<< _projectName)
-  assignProjectName projectName
+  assign _projectName projectName
   assign _showModal Nothing
   toRename $ Rename.handleAction action
 
@@ -569,7 +550,7 @@ handleAction (SaveAsAction action@SaveAs.SaveProject) = do
   currentGistId <- use _gistId
   projectName <- use (_saveAs <<< _projectName)
 
-  assignProjectName projectName
+  assign _projectName projectName
   assign _gistId Nothing
   assign (_saveAs <<< SaveAs._status) Loading
 
@@ -586,7 +567,7 @@ handleAction (SaveAsAction action@SaveAs.SaveProject) = do
     Nothing -> do
       assign (_saveAs <<< SaveAs._status) (Failure "Could not save project")
       assign _gistId currentGistId
-      assignProjectName currentName
+      assign _projectName currentName
   toSaveAs $ SaveAs.handleAction action
 
 handleAction (SaveAsAction SaveAs.Cancel) = fullHandleAction CloseModal
@@ -819,7 +800,7 @@ loadGist gist = do
     fromMaybe mempty blockly
   assign _contractMetadata metadata
   assign _gistId gistId'
-  assignProjectName description
+  assign _projectName description
 
 ------------------------------------------------------------
 -- Handles the actions fired by the Confirm Unsaved Navigation modal
