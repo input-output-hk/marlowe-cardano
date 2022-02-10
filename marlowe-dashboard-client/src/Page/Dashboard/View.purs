@@ -551,7 +551,7 @@ contractCards
   currentSlot
   { walletCompanionStatus, contractFilter: Running, contracts } =
   case walletCompanionStatus of
-    FirstUpdateComplete ->
+    WalletCompanionSynced ->
       let
         -- FIXME-3208: Change the Dashboard state to include two Maps/List, one for
         --        runningContracts and one for completedContracts
@@ -562,7 +562,7 @@ contractCards
           noContractsMessage Running
         else
           contractGrid currentSlot Running runningContracts
-    _ ->
+    WaitingToSync ->
       div
         [ classNames
             [ "h-full", "flex", "flex-col", "justify-center", "items-center" ]

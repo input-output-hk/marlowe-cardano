@@ -251,7 +251,6 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       -- through the PAB - so until that bug is fixed, this will have to mask it
                       updateStore
                         $ Store.NewCompanionAppStateObserved companionAppState
-                      {- [Workflow 2][5] Connect a wallet -}
                       {- [UC-CONTRACT-1][X] Starting a Marlowe contract
                     When we start a contract, our wallet will initially receive all the role tokens for that contract
                     (before they are paid out to the people we gave those roles to). And if someone else started a
@@ -322,7 +321,6 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       "Failed to parse an update from a contract."
                       decodingError
                     Right contractHistory -> do
-                      {- [Workflow 2][7] Connect a wallet -}
                       {- [UC-CONTRACT-1][3] Start a contract -}
                       {- [UC-CONTRACT-3][1] Apply an input to a contract -}
                       handleAction $ DashboardAction $ Dashboard.UpdateContract

@@ -17,7 +17,6 @@ import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
 import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
-import Data.Set (Set)
 import Data.Time.Duration (Minutes)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.Client (ContractHistory)
@@ -40,10 +39,14 @@ type State =
   , templateState :: Template.State
   }
 
+-- This represents the status of the wallet companion. When we start the application
+-- we are waiting for the wallet companion to tell us of every Marlowe contract that
+-- the user has. While we wait, we show a loading indicator in the dashboard.
+-- After we have the initial status update, we show the state of every contract that
+-- we were following, and we start to follow the new contracts that the user has.
 data WalletCompanionStatus
-  = FirstUpdatePending
-  | LoadingNewContracts (Set MarloweParams)
-  | FirstUpdateComplete
+  = WaitingToSync
+  | WalletCompanionSynced
 
 derive instance eqWalletCompanionStatus :: Eq WalletCompanionStatus
 

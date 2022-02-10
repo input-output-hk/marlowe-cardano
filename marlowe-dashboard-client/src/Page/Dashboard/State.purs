@@ -61,7 +61,6 @@ import Data.PABConnectedWallet
   , _walletId
   , _walletNickname
   )
-import Data.Set (delete, isEmpty) as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -117,10 +116,6 @@ import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
-{- [Workflow 2][4] Connect a wallet
-When we connect a wallet, it has this initial state. Notable is the walletCompanionStatus of
-`FirstUpdatePending`. Follow the trail of worflow comments to see what happens next.
--}
 mkInitialState
   :: PABConnectedWallet
   -- FIXME-3208: Contract nicknames should be indexed by MarloweParams
@@ -138,8 +133,7 @@ mkInitialState _ _ _ =
   --     Contract.mkInitialState wallet currentSlot nickname
   --       contractHistory
   { contactsState: Contacts.initialState
-  -- FIXME-3208: probably remove...
-  , walletCompanionStatus: FirstUpdatePending
+  , walletCompanionStatus: WaitingToSync
   , menuOpen: false
   , card: Nothing
   , cardOpen: false
@@ -209,18 +203,6 @@ handleAction _ (SelectContract mFollowerAppId) = assign
   _selectedContractFollowerAppId
   mFollowerAppId
 
-{- [Workflow 2][6] Connect a wallet
-If we have just connected a wallet (and the walletCompanionStatus is still `FirstUpdatePending`),
-then we know the `MarloweFollower` apps that are running in this wallet, and have just been given
-the current state of its `WalletCompanion` app for the first time since connecting. If the status
-of the `WalletCompanion` app contains a record of `MarloweParams` for any _new_ Marlowe contracts
-(created since the last time we connected this wallet, and for which we therefore have no
-corresponding `MarloweFollowr` apps), we now need to create `MarloweFollower` apps for those new
-contracts.
-In this case, we change the walletCompanionStatus to `LoadingNewContracts`, and subscribe to every
-new `MarloweFollower`. We'll know the loading is finished when we've received the first status
-update for each of these `MarloweFollower` apps through the WebSocket.
--}
 {- [UC-CONTRACT-1][2] Start a Marlowe contract
 -- FIXME-3208 redo comments
 After starting a new Marlowe contract, we should receive a WebSocket notification informing us of
@@ -245,21 +227,13 @@ handleAction { wallet } (UpdateFollowerApps companionAppState) = do
 
     newContractsArray :: Array (Tuple MarloweParams MarloweData)
     newContractsArray = toUnfoldable newContracts
-  -- FIXME-3208 probably remove walletCompanionStatus
-  when (walletCompanionStatus /= FirstUpdateComplete) $ assign
+  when (walletCompanionStatus == WaitingToSync) $ assign
     _walletCompanionStatus
-    FirstUpdateComplete
+    WalletCompanionSynced
   -- for_ newContractsArray \(marloweParams /\ marloweData) ->
   for_ newContractsArray \(marloweParams /\ _) ->
     followContract wallet marloweParams
 
-{- [Workflow 2][8] Connect a wallet
-If this is the first update we are receiving from a new `MarloweFollower` app that was created
-after we connected the wallet, but _before_ the walletCompanionStatus was set to
-`FirstUpdateComplete`, we need to remove the app from the `LoadingNewContracts` set. And if it's
-the last element of that set, we can set the walletCompanionStatus to `FirstUpdateComplete`. This
-(finally!) completes the workflow of connecting a wallet.
--}
 {- [UC-CONTRACT-1][4] Start a contract
    [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
 If we started a contract (or someone else started one and gave us a role in it), we will have
@@ -309,19 +283,6 @@ handleAction
           contractHistory
       )
       (modifying _contracts <<< insert followerAppId)
-  -- if we're currently loading the first bunch of contracts, we can report that this one has now been loaded
-  walletCompanionStatus <- use _walletCompanionStatus
-  case walletCompanionStatus of
-    LoadingNewContracts pendingMarloweParams -> do
-      let
-        updatedPendingMarloweParams = Set.delete marloweParams
-          pendingMarloweParams
-      if Set.isEmpty updatedPendingMarloweParams then
-        assign _walletCompanionStatus FirstUpdateComplete
-      else
-        assign _walletCompanionStatus $ LoadingNewContracts
-          updatedPendingMarloweParams
-    _ -> pure unit
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
