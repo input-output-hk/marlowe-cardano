@@ -27,6 +27,7 @@ import Data.Undefinable (Undefinable, toUndefinable)
 import Effect (Effect)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Uncurried (EffectFn1, runEffectFn1, runEffectFn2, runEffectFn3)
 import Test.Web.Event.User.Api
   ( class IsClipboardData
   , class IsFileOrFiles
@@ -83,22 +84,22 @@ instance MonadEffect m => MonadUser (UserM m) where
   api = UserM $ asks userEventApi
   setup options (UserM r) = UserM do
     user <- ask
-    user' <- liftEffect $ userEventSetup user options
+    user' <- liftEffect $ runEffectFn1 (userEventSetup user) options
     local (const user') r
 
 foreign import data UserEvent :: Type
 
-foreign import _setup :: Undefinable UserOptions -> Effect UserEvent
+foreign import _setup :: EffectFn1 (Undefinable UserOptions) UserEvent
 
 userEventApi :: UserEvent -> UserApi
 userEventApi = unsafeCoerce
 
-userEventSetup :: UserEvent -> UserOptions -> Effect UserEvent
+userEventSetup :: UserEvent -> EffectFn1 UserOptions UserEvent
 userEventSetup = _.setup <<< unsafeCoerce
 
 runUserM :: forall m a. MonadEffect m => Maybe UserOptions -> UserM m a -> m a
 runUserM options (UserM (ReaderT f)) = do
-  user <- liftEffect $ _setup (toUndefinable options)
+  user <- liftEffect $ runEffectFn1 _setup (toUndefinable options)
   f user
 
 withUserApi
@@ -110,28 +111,28 @@ withUserApi
 withUserApi f = liftAff <<< toAffE <<< f =<< api
 
 click :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-click element = withUserApi \api -> api.click element
+click element = withUserApi \api -> runEffectFn1 api.click element
 
 dblClick :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-dblClick element = withUserApi \api -> api.dblClick element
+dblClick element = withUserApi \api -> runEffectFn1 api.dblClick element
 
 tripleClick :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-tripleClick element = withUserApi \api -> api.tripleClick element
+tripleClick element = withUserApi \api -> runEffectFn1 api.tripleClick element
 
 hover :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-hover element = withUserApi \api -> api.hover element
+hover element = withUserApi \api -> runEffectFn1 api.hover element
 
 unhover :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-unhover element = withUserApi \api -> api.unhover element
+unhover element = withUserApi \api -> runEffectFn1 api.unhover element
 
 data ShiftState = ShiftPressed | ShiftNotPressed
 
 tab :: forall m. MonadAff m => MonadUser m => ShiftState -> m Unit
-tab ShiftPressed = withUserApi \api -> api.tab { shift: true }
-tab ShiftNotPressed = withUserApi \api -> api.tab { shift: false }
+tab ShiftPressed = withUserApi \api -> runEffectFn1 api.tab { shift: true }
+tab ShiftNotPressed = withUserApi \api -> runEffectFn1 api.tab { shift: false }
 
 keyboard :: forall m. MonadAff m => MonadUser m => String -> m Unit
-keyboard text = withUserApi \api -> api.keyboard text
+keyboard text = withUserApi \api -> runEffectFn1 api.keyboard text
 
 copy :: forall m. MonadAff m => MonadUser m => m Unit
 copy = withUserApi \api -> api.copy
@@ -147,7 +148,7 @@ paste
   => clipboard
   -> m Unit
 paste clipboard =
-  withUserApi \api -> api.paste $ toClipboardData clipboard
+  withUserApi \api -> runEffectFn1 api.paste $ toClipboardData clipboard
 
 pointer
   :: forall pointer m
@@ -156,10 +157,10 @@ pointer
   => MonadUser m
   => pointer
   -> m Unit
-pointer p = withUserApi \api -> api.pointer $ toPointerInput p
+pointer p = withUserApi \api -> runEffectFn1 api.pointer $ toPointerInput p
 
 clear :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-clear element = withUserApi \api -> api.clear element
+clear element = withUserApi \api -> runEffectFn1 api.clear element
 
 deselectOptions
   :: forall options m
@@ -169,8 +170,8 @@ deselectOptions
   => Element
   -> options
   -> m Unit
-deselectOptions element options =
-  withUserApi \api -> api.selectOptions element $ toSelectOptions options
+deselectOptions element options = withUserApi \api ->
+  runEffectFn2 api.selectOptions element $ toSelectOptions options
 
 selectOptions
   :: forall options m
@@ -180,8 +181,8 @@ selectOptions
   => Element
   -> options
   -> m Unit
-selectOptions element options =
-  withUserApi \api -> api.selectOptions element $ toSelectOptions options
+selectOptions element options = withUserApi \api ->
+  runEffectFn2 api.selectOptions element $ toSelectOptions options
 
 type_
   :: forall m
@@ -192,7 +193,7 @@ type_
   -> Maybe TypeOptions
   -> m Unit
 type_ element text options =
-  withUserApi \api -> api.type element text $ toUndefinable options
+  withUserApi \api -> runEffectFn3 api.type element text $ toUndefinable options
 
 upload
   :: forall files m
@@ -203,4 +204,4 @@ upload
   -> files
   -> m Unit
 upload element files =
-  withUserApi \api -> api.upload element $ toFileOrFiles files
+  withUserApi \api -> runEffectFn2 api.upload element $ toFileOrFiles files

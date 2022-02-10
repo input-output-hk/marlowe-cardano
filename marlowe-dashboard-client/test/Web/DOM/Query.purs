@@ -6,12 +6,28 @@ module Test.Web.DOM.Query
   , MatcherOptions
   , class IsMatcher
   , toMatcher
-  , find
-  , findAll
-  , get
-  , getAll
-  , query
-  , queryAll
+  , findBy
+  , findAllBy
+  , getBy
+  , getAllBy
+  , queryBy
+  , queryAllBy
+  , altText
+  , displayValue
+  , labelText
+  , placeholderText
+  , role
+  , testId
+  , text
+  , title
+  , altText'
+  , displayValue'
+  , labelText'
+  , placeholderText'
+  , role'
+  , testId'
+  , text'
+  , title'
   ) where
 
 import Prelude
@@ -19,7 +35,7 @@ import Prelude
 import Control.Promise (Promise, toAffE)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Function.Uncurried (mkFn2)
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.String.Regex (Regex)
 import Data.Undefinable (Undefinable, toMaybe, toUndefinable)
 import Effect (Effect)
@@ -67,7 +83,7 @@ type MatcherOptions =
   , suggest :: Boolean
   }
 
-type ByRoleOptions =
+type ByRoleOptions matcher =
   {
     -- | If true includes elements in the query set that are usually excluded from
     -- | the accessibility tree. `role="none"` or `role="presentation"` are included
@@ -97,166 +113,223 @@ type ByRoleOptions =
   -- | For example *ByRole('progressbar', {queryFallbacks: true})` will find <div role="meter progressbar">`.
   , queryFallbacks :: Boolean
   -- | Only considers elements with the specified accessible name.
-  , name :: Maybe Matcher
+  , name :: Maybe matcher
   }
 
 data Match
-  = ByAltText Matcher (Maybe MatcherOptions)
-  | ByDisplayValue Matcher (Maybe MatcherOptions)
-  | ByLabelText Matcher (Maybe MatcherOptions)
-  | ByPlaceholderText Matcher (Maybe MatcherOptions)
-  | ByRole ARIARole (Maybe ByRoleOptions)
-  | ByTestId Matcher (Maybe MatcherOptions)
-  | ByText Matcher (Maybe MatcherOptions)
-  | ByTitle Matcher (Maybe MatcherOptions)
+  = AltText Matcher (Maybe MatcherOptions)
+  | DisplayValue Matcher (Maybe MatcherOptions)
+  | LabelText Matcher (Maybe MatcherOptions)
+  | PlaceholderText Matcher (Maybe MatcherOptions)
+  | Role ARIARole (Maybe (ByRoleOptions Matcher))
+  | TestId Matcher (Maybe MatcherOptions)
+  | Text Matcher (Maybe MatcherOptions)
+  | Title Matcher (Maybe MatcherOptions)
 
-find :: forall m. MonadTest m => Match -> m Element
-find = case _ of
-  ByAltText matcher options ->
+altText :: forall matcher. IsMatcher matcher => matcher -> Match
+altText matcher = AltText (toMatcher matcher) Nothing
+
+displayValue :: forall matcher. IsMatcher matcher => matcher -> Match
+displayValue matcher = DisplayValue (toMatcher matcher) Nothing
+
+labelText :: forall matcher. IsMatcher matcher => matcher -> Match
+labelText matcher = LabelText (toMatcher matcher) Nothing
+
+placeholderText :: forall matcher. IsMatcher matcher => matcher -> Match
+placeholderText matcher = PlaceholderText (toMatcher matcher) Nothing
+
+role :: ARIARole -> Match
+role r = Role r Nothing
+
+testId :: forall matcher. IsMatcher matcher => matcher -> Match
+testId matcher = TestId (toMatcher matcher) Nothing
+
+text :: forall matcher. IsMatcher matcher => matcher -> Match
+text matcher = Text (toMatcher matcher) Nothing
+
+title :: forall matcher. IsMatcher matcher => matcher -> Match
+title matcher = Title (toMatcher matcher) Nothing
+
+altText'
+  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+altText' matcher = AltText (toMatcher matcher) <<< Just
+
+displayValue'
+  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+displayValue' matcher = DisplayValue (toMatcher matcher) <<< Just
+
+labelText'
+  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+labelText' matcher = LabelText (toMatcher matcher) <<< Just
+
+placeholderText'
+  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+placeholderText' matcher = PlaceholderText (toMatcher matcher) <<< Just
+
+role'
+  :: forall matcher
+   . IsMatcher matcher
+  => ARIARole
+  -> ByRoleOptions matcher
+  -> Match
+role' r options = Role r $ Just options { name = toMatcher <$> options.name }
+
+testId'
+  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+testId' matcher = TestId (toMatcher matcher) <<< Just
+
+text' :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+text' matcher = Text (toMatcher matcher) <<< Just
+
+title'
+  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
+title' matcher = Title (toMatcher matcher) <<< Just
+
+findBy :: forall m. MonadTest m => Match -> m Element
+findBy = case _ of
+  AltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByAltText matcher options
-  ByDisplayValue matcher options ->
+  DisplayValue matcher options ->
     liftAff <<< toAffE
       =<< callForeignMatcherFn findByDisplayValue matcher options
-  ByLabelText matcher options ->
+  LabelText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByLabelText matcher options
-  ByPlaceholderText matcher options ->
+  PlaceholderText matcher options ->
     liftAff <<< toAffE
       =<< callForeignMatcherFn findByPlaceholderText matcher options
-  ByRole role options ->
-    liftAff <<< toAffE =<< callForeignByRoleFn findByRole role options
-  ByTestId matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findByTestId matcher options
-  ByText matcher options ->
+  Role r options ->
+    liftAff <<< toAffE =<< callForeignByRoleFn findByRole r options
+  TestId matcher options ->
+    liftAff <<< toAffE =<< callForeignMatcherFn findByTestId matcher options
+  Text matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByText matcher options
-  ByTitle matcher options ->
+  Title matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByTitle matcher options
 
-findAll
+findAllBy
   :: forall m
    . MonadTest m
   => Match
   -> m (NonEmptyArray Element)
-findAll = case _ of
-  ByAltText matcher options ->
+findAllBy = case _ of
+  AltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByAltText matcher options
-  ByDisplayValue matcher options ->
+  DisplayValue matcher options ->
     liftAff <<< toAffE
       =<< callForeignMatcherFn findAllByDisplayValue matcher options
-  ByLabelText matcher options ->
+  LabelText matcher options ->
     liftAff <<< toAffE
       =<< callForeignMatcherFn findAllByLabelText matcher options
-  ByPlaceholderText matcher options ->
+  PlaceholderText matcher options ->
     liftAff <<< toAffE
       =<< callForeignMatcherFn findAllByPlaceholderText matcher options
-  ByRole role options ->
-    liftAff <<< toAffE =<< callForeignByRoleFn findAllByRole role options
-  ByTestId matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findAllByTestId matcher options
-  ByText matcher options ->
+  Role r options ->
+    liftAff <<< toAffE =<< callForeignByRoleFn findAllByRole r options
+  TestId matcher options ->
+    liftAff <<< toAffE =<< callForeignMatcherFn findAllByTestId matcher options
+  Text matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByText matcher options
-  ByTitle matcher options ->
+  Title matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByTitle matcher options
 
-get
+getBy
   :: forall m
    . MonadTest m
   => Match
   -> m Element
-get = case _ of
-  ByAltText matcher options ->
+getBy = case _ of
+  AltText matcher options ->
     liftEffect =<< callForeignMatcherFn getByAltText matcher options
-  ByDisplayValue matcher options ->
+  DisplayValue matcher options ->
     liftEffect =<< callForeignMatcherFn getByDisplayValue matcher options
-  ByLabelText matcher options ->
+  LabelText matcher options ->
     liftEffect =<< callForeignMatcherFn getByLabelText matcher options
-  ByPlaceholderText matcher options ->
+  PlaceholderText matcher options ->
     liftEffect =<< callForeignMatcherFn getByPlaceholderText matcher options
-  ByRole role options ->
-    liftEffect =<< callForeignByRoleFn getByRole role options
-  ByTestId matcher options ->
+  Role r options ->
+    liftEffect =<< callForeignByRoleFn getByRole r options
+  TestId matcher options ->
     liftEffect =<< callForeignMatcherFn getByTestId matcher options
-  ByText matcher options ->
+  Text matcher options ->
     liftEffect =<< callForeignMatcherFn getByText matcher options
-  ByTitle matcher options ->
+  Title matcher options ->
     liftEffect =<< callForeignMatcherFn getByTitle matcher options
 
-getAll
+getAllBy
   :: forall m
    . MonadTest m
   => Match
   -> m (NonEmptyArray Element)
-getAll = case _ of
-  ByAltText matcher options ->
+getAllBy = case _ of
+  AltText matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByAltText matcher options
-  ByDisplayValue matcher options ->
+  DisplayValue matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByDisplayValue matcher options
-  ByLabelText matcher options ->
+  LabelText matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByLabelText matcher options
-  ByPlaceholderText matcher options ->
+  PlaceholderText matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByPlaceholderText matcher options
-  ByRole role options ->
-    liftEffect =<< callForeignByRoleFn getAllByRole role options
-  ByTestId matcher options ->
+  Role r options ->
+    liftEffect =<< callForeignByRoleFn getAllByRole r options
+  TestId matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByTestId matcher options
-  ByText matcher options ->
+  Text matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByText matcher options
-  ByTitle matcher options ->
+  Title matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByTitle matcher options
 
-query
+queryBy
   :: forall m
    . MonadTest m
   => Match
   -> m (Maybe Element)
-query = case _ of
-  ByAltText matcher options ->
+queryBy = case _ of
+  AltText matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByAltText matcher options
-  ByDisplayValue matcher options ->
+  DisplayValue matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByDisplayValue matcher options
-  ByLabelText matcher options ->
+  LabelText matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByLabelText matcher options
-  ByPlaceholderText matcher options ->
+  PlaceholderText matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByPlaceholderText matcher options
-  ByRole role options ->
-    map toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole role options
-  ByTestId matcher options ->
+  Role r options ->
+    map toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole r options
+  TestId matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByTestId matcher options
-  ByText matcher options ->
+  Text matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByText matcher options
-  ByTitle matcher options ->
+  Title matcher options ->
     map toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByTitle matcher options
 
-queryAll
+queryAllBy
   :: forall m
    . MonadTest m
   => Match
   -> m (Array Element)
-queryAll = case _ of
-  ByAltText matcher options ->
+queryAllBy = case _ of
+  AltText matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByAltText matcher options
-  ByDisplayValue matcher options ->
+  DisplayValue matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByDisplayValue matcher options
-  ByLabelText matcher options ->
+  LabelText matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByLabelText matcher options
-  ByPlaceholderText matcher options ->
+  PlaceholderText matcher options ->
     liftEffect
       =<< callForeignMatcherFn queryAllByPlaceholderText matcher options
-  ByRole role options ->
-    liftEffect =<< callForeignByRoleFn queryAllByRole role options
-  ByTestId matcher options ->
+  Role r options ->
+    liftEffect =<< callForeignByRoleFn queryAllByRole r options
+  TestId matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByTestId matcher options
-  ByText matcher options ->
+  Text matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByText matcher options
-  ByTitle matcher options ->
+  Title matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByTitle matcher options
 
 callForeignMatcherFn
@@ -276,17 +349,17 @@ callForeignByRoleFn
    . MonadTest m
   => ForeignByRoleFn a
   -> ARIARole
-  -> Maybe ByRoleOptions
+  -> Maybe (ByRoleOptions Matcher)
   -> m (Effect a)
-callForeignByRoleFn fn role options = do
+callForeignByRoleFn fn r options = do
   container <- getContainer
-  pure $ runEffectFn3 fn container (show role) $ toUndefinable options
+  pure $ runEffectFn3 fn container (show r) $ toUndefinable options
 
 type ForeignMatcherFn =
   EffectFn3 Element Matcher (Undefinable MatcherOptions)
 
 type ForeignByRoleFn =
-  EffectFn3 Element String (Undefinable ByRoleOptions)
+  EffectFn3 Element String (Undefinable (ByRoleOptions Matcher))
 
 foreign import findAllByAltText
   :: ForeignMatcherFn (Promise (NonEmptyArray Element))
