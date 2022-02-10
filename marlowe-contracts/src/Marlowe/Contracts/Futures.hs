@@ -8,12 +8,28 @@ import Data.String (IsString (..))
 import Language.Marlowe
 import Marlowe.Contracts.Common
 
--- |Future on the exchange rate of USD/ADA
+-- |Future on the exchange rate of ADA/USD
+--
+-- A Future is an obligation for the parties involed in the
+-- contract to exchange assets at maturity for the predefined
+-- value.
+--
+-- The Future implemented here exchanges ADA for USD. The contract
+-- is cash settled, i.e. USD is delivered in ADA resp. the difference
+-- between the amount of the USD in ADA and the amount of ADA is due
+-- at maturity.
+--
+-- The contract relies on /margin accounts/. The parties are required
+-- to make payments into the margin account, in case the exchange
+-- rate of ADA/USD changes considerably.
+--
+-- An oracle is used to get the exchange rate ADA/USD. As it is
+-- implemented this currently works only in the Marlowe Playground.
 future ::
      Party             -- ^ Buyer
   -> Party             -- ^ Seller
-  -> Value Observation -- ^ Forward price
-  -> Value Observation -- ^ Initial margin requirements
+  -> Value Observation -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
+  -> Value Observation -- ^ Initial margin requirements (in Lovelace)
   -> Timeout           -- ^ Initial margin setup timout
   -> [Timeout]         -- ^ Margin call dates
   -> Timeout           -- ^ Delivery date
@@ -44,34 +60,32 @@ maintenanceMarginCalls ::
   -> [Timeout]         -- ^ Call dates
   -> Contract          -- ^ Continuation contract
   -> Contract          -- ^ Composed contract
-maintenanceMarginCalls buyer seller forwardPrice = flip $ foldl updateMarginAccounts
+maintenanceMarginCalls buyer seller forwardPrice callDates cont =
+    foldl updateMarginAccounts cont callDates
   where
     updateMarginAccounts :: Contract -> Timeout -> Contract
     updateMarginAccounts continuation timeout =
       let invId = toValueId "inv-spot" timeout
           dirId = toValueId "dir-spot" timeout
           amount = DivValue
-                    (DivValue
-                      (MulValue
-                        (UseValue dirId)
-                        (SubValue
-                          (UseValue invId)
-                          (MulValue scale forwardPrice)))
-                      (MulValue scale scale))
-                   contractSize
-       in oracleInput invRate timeout Close
-        $ oracleInput dirRate timeout Close
-        $ Let invId (ChoiceValue invRate)
+                     (MulValue
+                       (UseValue dirId)
+                       (SubValue (UseValue invId) forwardPrice))
+                     (MulValue contractSize scale)
+          liquidation a b = pay a b (ada, AvailableMoney a ada) Close
+       in oracleInput dirRate timeout Close
+        $ oracleInput invRate timeout Close
         $ Let dirId (ChoiceValue dirRate)
-        $ If (ValueGE (UseValue invId) (MulValue scale forwardPrice))
-             (updateMarginAccount seller amount timeout continuation)
-             (updateMarginAccount buyer (NegValue amount) timeout continuation)
+        $ Let invId (ChoiceValue invRate)
+        $ If (ValueGE (UseValue invId) forwardPrice)
+             (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
+             (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
-    updateMarginAccount :: Party -> Value Observation -> Timeout -> Contract -> Contract
-    updateMarginAccount party value timeout continuation =
+    updateMarginAccount :: Party -> Value Observation -> Timeout -> Contract -> Contract -> Contract
+    updateMarginAccount party value timeout liquidation continuation =
       If (ValueGT (AvailableMoney party ada) value)
         continuation
-        (deposit party party (ada, value) timeout Close continuation)
+        (deposit party party (ada, value) timeout liquidation continuation)
 
 toValueId :: String -> Slot -> ValueId
 toValueId label timeout = fromString $ label ++ "@" ++ (show $ getSlot timeout)
@@ -90,19 +104,15 @@ settlement buyer seller forwardPrice deliveryDate continuation =
   let invId = toValueId "inv-spot" deliveryDate
       dirId = toValueId "dir-spot" deliveryDate
       amount = DivValue
-                (DivValue
-                  (MulValue
-                    (UseValue dirId)
-                    (SubValue
-                      (UseValue invId)
-                      (MulValue scale forwardPrice)))
-                  (MulValue scale scale))
-               contractSize
+                (MulValue
+                  (UseValue dirId)
+                  (SubValue (UseValue invId) forwardPrice))
+                (MulValue contractSize scale)
   in oracleInput dirRate deliveryDate Close
    $ oracleInput invRate deliveryDate Close
-   $ Let invId (ChoiceValue invRate)
    $ Let dirId (ChoiceValue dirRate)
-   $ If (ValueGE (UseValue invId) (MulValue scale forwardPrice))
+   $ Let invId (ChoiceValue invRate)
+   $ If (ValueGE (UseValue invId) forwardPrice)
        (pay seller buyer (ada, amount) continuation)
        (pay buyer seller (ada, NegValue amount) continuation)
 

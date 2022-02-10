@@ -27,19 +27,20 @@ tests = testGroup "Marlowe Contract"
     , testCase "Option test" optionTest
     ]
 
-testWarnings :: Bool -> Contract -> IO ()
-testWarnings b contract = do
+hasWarnings :: Contract -> IO Bool
+hasWarnings contract = do
   result <- warningsTrace contract
-  assertBool "Analysis ok" $ isRight result && either (const False) f result
-  where
-    f | b = isJust
-      | otherwise = isNothing
+  case result of
+    Left errDesc -> assertFailure ("Analysis failed: " ++ show errDesc)
+    Right counterExample -> return $ isJust counterExample
 
-testNoWarnings :: Contract -> IO ()
-testNoWarnings = testWarnings False
+testNoWarnings :: Contract -> Assertion
+testNoWarnings contract =
+  assertBool "Has no warnings" =<< not <$> hasWarnings contract
 
-testExpectedWarnings :: Contract -> IO ()
-testExpectedWarnings = testWarnings True
+testExpectedWarnings :: Contract -> Assertion
+testExpectedWarnings contract =
+  assertBool "Has warnings" =<< hasWarnings contract
 
 partyA, partyB :: Party
 partyA = Role "a"
