@@ -8,12 +8,28 @@ import Data.String (IsString (..))
 import Language.Marlowe
 import Marlowe.Contracts.Common
 
--- |Future on the exchange rate of USD/ADA
+-- |Future on the exchange rate of ADA/USD
+--
+-- A Future is an obligation for the parties involed in the
+-- contract to exchange assets at maturity for the predefined
+-- value.
+--
+-- The Future implemented here exchanges ADA for USD. The contract
+-- is cash settled, i.e. USD is delivered in ADA resp. the difference
+-- between the amount of the USD in ADA and the amount of ADA is due
+-- at maturity.
+--
+-- The contract relies on /margin accounts/. The parties are required
+-- to make payments into the margin account, in case the exchange
+-- rate of ADA/USD changes considerably.
+--
+-- An oracle is used to get the exchange rate ADA/USD. As it is
+-- implemented this currently works only in the Marlowe Playground.
 future ::
      Party             -- ^ Buyer
   -> Party             -- ^ Seller
-  -> Value Observation -- ^ Forward price
-  -> Value Observation -- ^ Initial margin requirements
+  -> Value Observation -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
+  -> Value Observation -- ^ Initial margin requirements (in Lovelace)
   -> Timeout           -- ^ Initial margin setup timout
   -> [Timeout]         -- ^ Margin call dates
   -> Timeout           -- ^ Delivery date
