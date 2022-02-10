@@ -51,19 +51,15 @@ maintenanceMarginCalls buyer seller forwardPrice = flip $ foldl updateMarginAcco
       let invId = toValueId "inv-spot" timeout
           dirId = toValueId "dir-spot" timeout
           amount = DivValue
-                    (DivValue
-                      (MulValue
-                        (UseValue dirId)
-                        (SubValue
-                          (UseValue invId)
-                          (MulValue scale forwardPrice)))
-                      (MulValue scale scale))
-                   contractSize
-       in oracleInput invRate timeout Close
-        $ oracleInput dirRate timeout Close
-        $ Let invId (ChoiceValue invRate)
+                     (MulValue
+                       (UseValue dirId)
+                       (SubValue (UseValue invId) forwardPrice))
+                     (MulValue contractSize scale)
+       in oracleInput dirRate timeout Close
+        $ oracleInput invRate timeout Close
         $ Let dirId (ChoiceValue dirRate)
-        $ If (ValueGE (UseValue invId) (MulValue scale forwardPrice))
+        $ Let invId (ChoiceValue invRate)
+        $ If (ValueGE (UseValue invId) forwardPrice)
              (updateMarginAccount seller amount timeout continuation)
              (updateMarginAccount buyer (NegValue amount) timeout continuation)
 
@@ -90,19 +86,15 @@ settlement buyer seller forwardPrice deliveryDate continuation =
   let invId = toValueId "inv-spot" deliveryDate
       dirId = toValueId "dir-spot" deliveryDate
       amount = DivValue
-                (DivValue
-                  (MulValue
-                    (UseValue dirId)
-                    (SubValue
-                      (UseValue invId)
-                      (MulValue scale forwardPrice)))
-                  (MulValue scale scale))
-               contractSize
+                (MulValue
+                  (UseValue dirId)
+                  (SubValue (UseValue invId) forwardPrice))
+                (MulValue contractSize scale)
   in oracleInput dirRate deliveryDate Close
    $ oracleInput invRate deliveryDate Close
-   $ Let invId (ChoiceValue invRate)
    $ Let dirId (ChoiceValue dirRate)
-   $ If (ValueGE (UseValue invId) (MulValue scale forwardPrice))
+   $ Let invId (ChoiceValue invRate)
+   $ If (ValueGE (UseValue invId) forwardPrice)
        (pay seller buyer (ada, amount) continuation)
        (pay buyer seller (ada, NegValue amount) continuation)
 
