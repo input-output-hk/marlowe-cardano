@@ -253,33 +253,6 @@ handleAction { wallet } (UpdateFollowerApps companionAppState) = do
   for_ newContractsArray \(marloweParams /\ _) ->
     followContract wallet marloweParams
 
--- FIXME-3208: removed to avoid infinite loop
---   void
---     $ for newContractsArray \(_ /\ marloweData) -> do
---         let
---           mTemplate = findTemplate $ view _marloweContract marloweData
-
---           isStartingAndMetadataMatches
---             :: Contract.State -> Maybe Contract.StartingState
---           isStartingAndMetadataMatches = case _, mTemplate of
---             Contract.Starting starting@{ metadata }, Just template
---               | template.metaData == metadata -> Just starting
---             _, _ -> Nothing
-
---   mPendingContract = findMin $ mapMaybe isStartingAndMetadataMatches
---     existingContracts
---   ajaxFollowerApp <- case mPendingContract of
---     Just { key: followerAppId } -> followContractWithPendingFollowerApp
---       walletDetails
---       marloweParams
---       followerAppId
---     Nothing -> followContract walletDetails marloweParams
---   case ajaxFollowerApp of
---     Left decodedAjaxError -> addToast $ decodedAjaxErrorToast
---       "Failed to load new contract."
---       decodedAjaxError
---     Right (followerAppId /\ _) -> subscribeToPlutusApp followerAppId
-
 {- [Workflow 2][8] Connect a wallet
 If this is the first update we are receiving from a new `MarloweFollower` app that was created
 after we connected the wallet, but _before_ the walletCompanionStatus was set to

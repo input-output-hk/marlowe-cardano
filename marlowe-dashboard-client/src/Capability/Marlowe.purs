@@ -4,7 +4,6 @@ module Capability.Marlowe
   , createWallet
   , restoreWallet
   , followContract
-  , followContractWithPendingFollowerApp
   , createContract
   , applyTransactionInput
   , redeem
@@ -118,12 +117,6 @@ class
     :: PABConnectedWallet
     -> MarloweParams
     -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
-  -- FIXME-3208: remove
-  followContractWithPendingFollowerApp
-    :: WalletDetails
-    -> MarloweParams
-    -> PlutusAppId
-    -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createContract
     :: PABConnectedWallet
     -> Map TokenName PubKeyHash
@@ -197,24 +190,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       lift $ updateStore $ Store.AddFollowerContract currentSlot followAppId
         contractHistory
       pure $ followAppId /\ contractHistory
-  -- call the "follow" endpoint of a pending MarloweFollower app, and return its PlutusAppId and
-  -- observable state (to call this function, we must already know its PlutusAppId, but we return
-  -- it anyway because it is convenient to have this function return the same type as
-  -- `followContract`)
-  followContractWithPendingFollowerApp _ marloweParams followerAppId =
-    runExceptT do
-      void $ withExceptT Left $ ExceptT $ PAB.invokeEndpoint followerAppId
-        "follow"
-        marloweParams
-      observableStateJson <-
-        withExceptT Left $ ExceptT $ PAB.getContractInstanceObservableState
-          followerAppId
-      observableState <-
-        except
-          $ lmap Right
-          $ decodeJson
-          $ observableStateJson
-      pure $ followerAppId /\ observableState
   -- "create" a Marlowe contract on the blockchain
   -- FIXME: if we want users to be able to follow contracts that they don't have roles in, we need this function
   -- to return the MarloweParams of the created contract - but this isn't currently possible in the PAB
@@ -307,11 +282,6 @@ instance monadMarloweHalogenM ::
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams
-  followContractWithPendingFollowerApp walletDetails marloweParams followAppId =
-    lift $ followContractWithPendingFollowerApp
-      walletDetails
-      marloweParams
-      followAppId
   createContract walletDetails roles contract =
     lift $ createContract walletDetails roles contract
   applyTransactionInput walletDetails marloweParams transactionInput =
