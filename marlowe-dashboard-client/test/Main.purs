@@ -11,7 +11,7 @@ import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
 import Test.Web (runTestMInBody)
-import Test.Web.DOM.Query (Match(..), get)
+import Test.Web.DOM.Query (findBy, getBy, role)
 import Test.Web.Event.User (click, runUserM)
 import Test.Web.Monad (getContainer)
 import Web.ARIA (ARIARole(..))
@@ -29,11 +29,11 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
         body <- getContainer
         toLower (Element.tagName body) `shouldEqual` "body"
         liftEffect $ setupTestApp body
-        paragraph <- get $ ByRole Paragraph Nothing
+        paragraph <- getBy $ role Paragraph
         pid <- liftEffect $ Element.id paragraph
         pid `shouldEqual` "para"
         text <- liftEffect $ textContent $ Element.toNode paragraph
         text `shouldEqual` "Test content"
-        click =<< get (ByRole Button Nothing)
+        click =<< findBy (role Button)
         text' <- liftEffect $ textContent $ Element.toNode paragraph
         text' `shouldEqual` "It worked!"
