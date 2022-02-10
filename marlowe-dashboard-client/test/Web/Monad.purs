@@ -2,14 +2,22 @@ module Test.Web.Monad where
 
 import Prelude
 
+import Control.Monad.Cont (ContT, mapContT)
 import Control.Monad.Error.Class (throwError)
+import Control.Monad.Except (ExceptT, mapExceptT)
+import Control.Monad.Maybe.Trans (MaybeT, mapMaybeT)
+import Control.Monad.RWS (RWST, mapRWST)
+import Control.Monad.Reader (ReaderT, mapReaderT)
+import Control.Monad.State (StateT, mapStateT)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Writer (WriterT, mapWriterT)
 import Data.Either (Either(..))
 import Data.Maybe (maybe)
 import Effect.Aff (Aff, effectCanceler, makeAff, nonCanceler)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Exception (error)
-import Test.Web.Config (Config)
+import Web.DOM (Element)
 import Web.DOM.ParentNode (QuerySelector(..), querySelector)
 import Web.Event.EventTarget
   ( addEventListener
@@ -21,14 +29,40 @@ import Web.HTML.Event.EventTypes as ET
 import Web.HTML.HTMLDocument (readyState)
 import Web.HTML.HTMLDocument as HTMLDocument
 import Web.HTML.HTMLDocument.ReadyState (ReadyState(..))
-import Web.HTML.HTMLElement (HTMLElement)
-import Web.HTML.HTMLElement as HTMLElement
 import Web.HTML.Window as Window
 
 class MonadAff m <= MonadTest m where
-  config :: m Config
-  getContainer :: m HTMLElement
-  withContainer :: forall a. HTMLElement -> m a -> m a
+  -- config :: m Config TODO
+  getContainer :: m Element
+  withContainer :: forall a. Element -> m a -> m a
+
+instance MonadTest m => MonadTest (ReaderT r m) where
+  getContainer = lift getContainer
+  withContainer container = mapReaderT $ withContainer container
+
+instance (Monoid w, MonadTest m) => MonadTest (WriterT w m) where
+  getContainer = lift getContainer
+  withContainer container = mapWriterT $ withContainer container
+
+instance MonadTest m => MonadTest (StateT s m) where
+  getContainer = lift getContainer
+  withContainer container = mapStateT $ withContainer container
+
+instance MonadTest m => MonadTest (ContT r m) where
+  getContainer = lift getContainer
+  withContainer container = mapContT $ withContainer container
+
+instance MonadTest m => MonadTest (ExceptT e m) where
+  getContainer = lift getContainer
+  withContainer container = mapExceptT $ withContainer container
+
+instance MonadTest m => MonadTest (MaybeT m) where
+  getContainer = lift getContainer
+  withContainer container = mapMaybeT $ withContainer container
+
+instance (Monoid w, MonadTest m) => MonadTest (RWST r w s m) where
+  getContainer = lift getContainer
+  withContainer container = mapRWST $ withContainer container
 
 -- | Waits for the document to load.
 -- | Copied from Halogen.Aff.Util
@@ -57,8 +91,5 @@ withBody ma = do
   body <- liftEffect
     $ querySelector (QuerySelector "body")
     $ HTMLDocument.toParentNode document
-  bodyEl <- liftAff $ maybe
-    (throwError (error "Could not find body"))
-    pure
-    (HTMLElement.fromElement =<< body)
+  bodyEl <- liftAff $ maybe (throwError (error "Could not find body")) pure body
   withContainer bodyEl ma

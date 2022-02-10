@@ -1,5 +1,10 @@
 "use strict";
 
+// So that we have a "document"
+require("jsdom-global")(undefined, {
+  url: "https://purescript.org",
+  pretendToBeVisual: true,
+});
 const { query } = require("@testing-library/dom");
 
 exports.findAllByAltText = query.findAllByAltText;

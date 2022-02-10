@@ -41,6 +41,7 @@ import Test.Web.Event.User.Api
   )
 import Test.Web.Event.User.Monad (class MonadUser, api)
 import Test.Web.Event.User.Options (UserOptions)
+import Test.Web.Monad (class MonadTest)
 import Unsafe.Coerce (unsafeCoerce)
 import Web.DOM (Element)
 import Web.HTML (HTMLElement)
@@ -60,6 +61,7 @@ derive newtype instance (Apply m, Semigroup a) => Semigroup (UserM m a)
 derive newtype instance (Applicative m, Monoid a) => Monoid (UserM m a)
 derive newtype instance MonadPlus m => MonadPlus (UserM m)
 derive newtype instance MonadTrans (UserM)
+derive newtype instance MonadAff m => MonadAff (UserM m)
 derive newtype instance MonadEffect m => MonadEffect (UserM m)
 derive newtype instance MonadCont m => MonadCont (UserM m)
 derive newtype instance MonadThrow e m => MonadThrow e (UserM m)
@@ -75,6 +77,7 @@ derive newtype instance MonadTell w m => MonadTell w (UserM m)
 derive newtype instance MonadWriter w m => MonadWriter w (UserM m)
 derive newtype instance Distributive g => Distributive (UserM g)
 derive newtype instance MonadRec m => MonadRec (UserM m)
+derive newtype instance MonadTest m => MonadTest (UserM m)
 
 instance MonadEffect m => MonadUser (UserM m) where
   api = UserM $ asks userEventApi

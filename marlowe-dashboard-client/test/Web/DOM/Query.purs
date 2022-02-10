@@ -30,10 +30,9 @@ import Foreign (Foreign)
 import Test.Web.Monad (class MonadTest, getContainer)
 import Unsafe.Coerce (unsafeCoerce)
 import Web.ARIA (ARIARole)
-import Web.HTML (HTMLElement)
-import Web.HTML.HTMLElement as HTMLElement
+import Web.DOM (Element)
 
-type MatcherFunction = String -> Maybe HTMLElement -> Boolean
+type MatcherFunction = String -> Maybe Element -> Boolean
 
 -- | ```ts
 -- | export type Matcher = MatcherFunction | RegExp | number | string
@@ -59,8 +58,7 @@ instance IsMatcher Regex where
 -- | ) => boolean
 -- | ```
 instance IsMatcher MatcherFunction where
-  toMatcher fn = unsafeCoerce $ mkFn2 \content ->
-    fn content <<< (HTMLElement.fromElement <=< toMaybe)
+  toMatcher fn = unsafeCoerce $ mkFn2 \content -> fn content <<< toMaybe
 
 type MatcherOptions =
   { exact :: Boolean
@@ -117,7 +115,7 @@ find
    . IsMatcher matcher
   => MonadTest m
   => Match matcher
-  -> m HTMLElement
+  -> m Element
 find = case _ of
   ByAltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByAltText matcher options
@@ -144,7 +142,7 @@ findAll
    . IsMatcher matcher
   => MonadTest m
   => Match matcher
-  -> m (NonEmptyArray HTMLElement)
+  -> m (NonEmptyArray Element)
 findAll = case _ of
   ByAltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByAltText matcher options
@@ -172,7 +170,7 @@ get
    . IsMatcher matcher
   => MonadTest m
   => Match matcher
-  -> m HTMLElement
+  -> m Element
 get = case _ of
   ByAltText matcher options ->
     liftEffect =<< callForeignMatcherFn getByAltText matcher options
@@ -196,7 +194,7 @@ getAll
    . IsMatcher matcher
   => MonadTest m
   => Match matcher
-  -> m (NonEmptyArray HTMLElement)
+  -> m (NonEmptyArray Element)
 getAll = case _ of
   ByAltText matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByAltText matcher options
@@ -220,7 +218,7 @@ query
    . IsMatcher matcher
   => MonadTest m
   => Match matcher
-  -> m (Maybe HTMLElement)
+  -> m (Maybe Element)
 query = case _ of
   ByAltText matcher options ->
     map toMaybe $ liftEffect
@@ -251,7 +249,7 @@ queryAll
    . IsMatcher matcher
   => MonadTest m
   => Match matcher
-  -> m (Array HTMLElement)
+  -> m (Array Element)
 queryAll = case _ of
   ByAltText matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByAltText matcher options
@@ -301,78 +299,78 @@ callForeignByRoleFn fn role options = do
     $ options
 
 type ForeignMatcherFn =
-  EffectFn3 HTMLElement Matcher (Undefinable MatcherOptions)
+  EffectFn3 Element Matcher (Undefinable MatcherOptions)
 
 type ForeignByRoleFn =
-  EffectFn3 HTMLElement String (Undefinable (ByRoleOptions Matcher))
+  EffectFn3 Element String (Undefinable (ByRoleOptions Matcher))
 
 foreign import findAllByAltText
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByDisplayValue
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByLabelText
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByPlaceholderText
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByRole
-  :: ForeignByRoleFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignByRoleFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByTestId
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByText
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
 foreign import findAllByTitle
-  :: ForeignMatcherFn (Promise (NonEmptyArray HTMLElement))
+  :: ForeignMatcherFn (Promise (NonEmptyArray Element))
 
-foreign import findByAltText :: ForeignMatcherFn (Promise HTMLElement)
-foreign import findByDisplayValue :: ForeignMatcherFn (Promise HTMLElement)
-foreign import findByLabelText :: ForeignMatcherFn (Promise HTMLElement)
-foreign import findByPlaceholderText :: ForeignMatcherFn (Promise HTMLElement)
-foreign import findByRole :: ForeignByRoleFn (Promise HTMLElement)
-foreign import findByTestId :: ForeignMatcherFn (Promise HTMLElement)
-foreign import findByText :: ForeignMatcherFn (Promise HTMLElement)
-foreign import findByTitle :: ForeignMatcherFn (Promise HTMLElement)
-foreign import getAllByAltText :: ForeignMatcherFn (NonEmptyArray HTMLElement)
+foreign import findByAltText :: ForeignMatcherFn (Promise Element)
+foreign import findByDisplayValue :: ForeignMatcherFn (Promise Element)
+foreign import findByLabelText :: ForeignMatcherFn (Promise Element)
+foreign import findByPlaceholderText :: ForeignMatcherFn (Promise Element)
+foreign import findByRole :: ForeignByRoleFn (Promise Element)
+foreign import findByTestId :: ForeignMatcherFn (Promise Element)
+foreign import findByText :: ForeignMatcherFn (Promise Element)
+foreign import findByTitle :: ForeignMatcherFn (Promise Element)
+foreign import getAllByAltText :: ForeignMatcherFn (NonEmptyArray Element)
 foreign import getAllByDisplayValue
-  :: ForeignMatcherFn (NonEmptyArray HTMLElement)
+  :: ForeignMatcherFn (NonEmptyArray Element)
 
-foreign import getAllByLabelText :: ForeignMatcherFn (NonEmptyArray HTMLElement)
+foreign import getAllByLabelText :: ForeignMatcherFn (NonEmptyArray Element)
 foreign import getAllByPlaceholderText
-  :: ForeignMatcherFn (NonEmptyArray HTMLElement)
+  :: ForeignMatcherFn (NonEmptyArray Element)
 
-foreign import getAllByRole :: ForeignByRoleFn (NonEmptyArray HTMLElement)
-foreign import getAllByTestId :: ForeignMatcherFn (NonEmptyArray HTMLElement)
-foreign import getAllByText :: ForeignMatcherFn (NonEmptyArray HTMLElement)
-foreign import getAllByTitle :: ForeignMatcherFn (NonEmptyArray HTMLElement)
-foreign import getByAltText :: ForeignMatcherFn HTMLElement
-foreign import getByDisplayValue :: ForeignMatcherFn HTMLElement
-foreign import getByLabelText :: ForeignMatcherFn HTMLElement
-foreign import getByPlaceholderText :: ForeignMatcherFn HTMLElement
-foreign import getByRole :: ForeignByRoleFn HTMLElement
-foreign import getByTestId :: ForeignMatcherFn HTMLElement
-foreign import getByText :: ForeignMatcherFn HTMLElement
-foreign import getByTitle :: ForeignMatcherFn HTMLElement
-foreign import queryAllByAltText :: ForeignMatcherFn (Array (HTMLElement))
-foreign import queryAllByDisplayValue :: ForeignMatcherFn (Array HTMLElement)
-foreign import queryAllByLabelText :: ForeignMatcherFn (Array HTMLElement)
-foreign import queryAllByPlaceholderText :: ForeignMatcherFn (Array HTMLElement)
-foreign import queryAllByRole :: ForeignByRoleFn (Array HTMLElement)
-foreign import queryAllByTestId :: ForeignMatcherFn (Array HTMLElement)
-foreign import queryAllByText :: ForeignMatcherFn (Array HTMLElement)
-foreign import queryAllByTitle :: ForeignMatcherFn (Array HTMLElement)
-foreign import queryByAltText :: ForeignMatcherFn (Undefinable HTMLElement)
-foreign import queryByDisplayValue :: ForeignMatcherFn (Undefinable HTMLElement)
-foreign import queryByLabelText :: ForeignMatcherFn (Undefinable HTMLElement)
+foreign import getAllByRole :: ForeignByRoleFn (NonEmptyArray Element)
+foreign import getAllByTestId :: ForeignMatcherFn (NonEmptyArray Element)
+foreign import getAllByText :: ForeignMatcherFn (NonEmptyArray Element)
+foreign import getAllByTitle :: ForeignMatcherFn (NonEmptyArray Element)
+foreign import getByAltText :: ForeignMatcherFn Element
+foreign import getByDisplayValue :: ForeignMatcherFn Element
+foreign import getByLabelText :: ForeignMatcherFn Element
+foreign import getByPlaceholderText :: ForeignMatcherFn Element
+foreign import getByRole :: ForeignByRoleFn Element
+foreign import getByTestId :: ForeignMatcherFn Element
+foreign import getByText :: ForeignMatcherFn Element
+foreign import getByTitle :: ForeignMatcherFn Element
+foreign import queryAllByAltText :: ForeignMatcherFn (Array (Element))
+foreign import queryAllByDisplayValue :: ForeignMatcherFn (Array Element)
+foreign import queryAllByLabelText :: ForeignMatcherFn (Array Element)
+foreign import queryAllByPlaceholderText :: ForeignMatcherFn (Array Element)
+foreign import queryAllByRole :: ForeignByRoleFn (Array Element)
+foreign import queryAllByTestId :: ForeignMatcherFn (Array Element)
+foreign import queryAllByText :: ForeignMatcherFn (Array Element)
+foreign import queryAllByTitle :: ForeignMatcherFn (Array Element)
+foreign import queryByAltText :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByDisplayValue :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByLabelText :: ForeignMatcherFn (Undefinable Element)
 foreign import queryByPlaceholderText
-  :: ForeignMatcherFn (Undefinable HTMLElement)
+  :: ForeignMatcherFn (Undefinable Element)
 
-foreign import queryByRole :: ForeignByRoleFn (Undefinable HTMLElement)
-foreign import queryByTestId :: ForeignMatcherFn (Undefinable HTMLElement)
-foreign import queryByText :: ForeignMatcherFn (Undefinable HTMLElement)
-foreign import queryByTitle :: ForeignMatcherFn (Undefinable HTMLElement)
+foreign import queryByRole :: ForeignByRoleFn (Undefinable Element)
+foreign import queryByTestId :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByText :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByTitle :: ForeignMatcherFn (Undefinable Element)
