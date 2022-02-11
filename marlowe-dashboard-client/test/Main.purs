@@ -26,14 +26,13 @@ import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
 import Test.Web (runTestMInBody)
--- import Test.Web.DOM.Debug (debugElement, debugElements, logTestingPlaygroundURL)
+import Test.Web.DOM.Assertions (shouldHaveId, shouldHaveTagName, shouldHaveText)
 import Test.Web.DOM.Query (byRoleDefault, findBy, getBy, role, role')
 import Test.Web.Event.User (click, runUserM)
 import Test.Web.Monad (getContainer)
 import Web.ARIA (ARIARole(..))
 import Web.DOM (Element)
 import Web.DOM.Element as Element
-import Web.DOM.Node (textContent)
 
 foreign import setupTestApp :: Element -> Effect Unit
 
@@ -46,19 +45,16 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
         toLower (Element.tagName body) `shouldEqual` "body"
         liftEffect $ setupTestApp body
         paragraph <- getBy $ role Paragraph
-        pid <- liftEffect $ Element.id paragraph
-        pid `shouldEqual` "para"
-        text <- liftEffect $ textContent $ Element.toNode paragraph
-        text `shouldEqual` "Test content"
+        paragraph `shouldHaveId` "para"
+        paragraph `shouldHaveTagName` "p"
+        Element.toNode paragraph `shouldHaveText` "Test content"
         click =<< findBy (role Button)
-        text' <- liftEffect $ textContent $ Element.toNode paragraph
-        text' `shouldEqual` "It worked!"
+        Element.toNode paragraph `shouldHaveText` "It worked!"
   describe "purescript-halogen-testing-library" do
     it "Receives the initial input" do
       runUITest counter 10 do
         span <- getBy $ role Textbox
-        text <- liftEffect $ textContent $ Element.toNode span
-        text `shouldEqual` "10"
+        Element.toNode span `shouldHaveText` "10"
     it "Handles user interaction" do
       runUITest counter 0 do
         decrement <- getBy $ role' Button byRoleDefault
@@ -69,10 +65,10 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
           }
         span <- Element.toNode <$> getBy (role Textbox)
         click increment
-        flip shouldEqual "1" =<< liftEffect (textContent span)
+        span `shouldHaveText` "1"
         click decrement
         click decrement
-        flip shouldEqual "-1" =<< liftEffect (textContent span)
+        span `shouldHaveText` "-1"
     it "Sends messages" do
       runUITest counter 0 do
         decrement <- getBy $ role' Button byRoleDefault
@@ -100,7 +96,7 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
         value <- liftAff $ query (H.mkRequest GetValue)
         value `shouldEqual` Just 2
         void $ liftAff $ query (H.mkTell (SetValue 10))
-        flip shouldEqual "10" =<< liftEffect (textContent span)
+        span `shouldHaveText` "10"
 
 --    it "Can be debugged" do
 --      runUITest counter 0 do
