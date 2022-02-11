@@ -2,24 +2,20 @@ module Test.Main where
 
 import Prologue
 
-import Control.Monad.Reader (ask)
 import Control.Monad.State (class MonadState)
-import Data.Array as Array
 import Data.Int (decimal)
 import Data.Int as Int
 import Data.Undefinable (toUndefinable)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
-import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
-import Effect.Ref as Ref
-import Halogen (Component, HalogenIO)
+import Halogen (Component)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties.ARIA as HP
-import Halogen.Subscription as HS
-import Test.Halogen (runUITest)
+import Test.Halogen (expectMessages, runUITest)
+import Test.Halogen as TH
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
@@ -116,13 +112,15 @@ halogenTestingLibrarySpec = do
   describe "halogen-testing-library" do
 
     it "Receives the initial input" do
-      -- runUITest is from purescript-halogen-testing-library. It is similar to
-      -- runUI:
-      --
-      -- driver <- runUI counter 10 element
       runUITest counter 10 do
         span <- getBy $ role Textbox
         span `shouldHaveText` "10"
+
+    it "Receives new input" do
+      runUITest counter 0 do
+        TH.sendInput 20
+        span <- getBy $ role Textbox
+        span `shouldHaveText` "20"
 
     it "Handles user interaction" do
       runUITest counter 0 do
@@ -147,22 +145,11 @@ halogenTestingLibrarySpec = do
         increment <- getBy $ role' Button byRoleDefault
           { name = toUndefinable $ Just "+"
           }
-
-        -- TODO move this to internals of runUITest so this can be rewritten
-        -- as:
-        --
-        -- click increment
-        -- click decrement
-        -- expectMessages [ 1, 0 ]
-        -- click increment
-        -- expectMessages [ 1 ]
-        messagesRef <- liftEffect $ Ref.new []
-        { messages } <- ask
-        void $ liftEffect $ HS.subscribe messages \i ->
-          Ref.modify_ (flip Array.snoc i) messagesRef
         click increment
         click decrement
-        flip shouldEqual [ 1, 0 ] =<< liftEffect (Ref.read messagesRef)
+        expectMessages [ 1, 0 ]
+        click decrement
+        expectMessages [ -1 ]
 
     it "Handles queries" do
       runUITest counter 0 do
@@ -172,16 +159,9 @@ halogenTestingLibrarySpec = do
         span <- getBy (role Textbox)
         click increment
         click increment
-        -- TODO add helper function so we can do this instead:
-        --
-        -- value <- TH.request GetValue
-        { query } :: HalogenIO Query Int Aff <- ask
-        value <- liftAff $ query (H.mkRequest GetValue)
+        value <- TH.request GetValue
         value `shouldEqual` Just 2
-        -- TODO add helper function so we can do this instead:
-        --
-        -- TH.tell $ SetValue 10
-        void $ liftAff $ query (H.mkTell (SetValue 10))
+        TH.tell $ SetValue 10
         span `shouldHaveText` "10"
 
 --     it "Can be debugged" do
