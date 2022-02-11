@@ -24,9 +24,9 @@ import Data.Distributive (class Distributive)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Halogen.Aff (awaitBody)
+import Test.Web.DOM.Element (class IsElement, toElement)
 import Test.Web.Monad (class MonadTest)
 import Web.DOM (Element)
-import Web.HTML.HTMLElement as HTMLElement
 
 type TestEnv =
   { container :: Element
@@ -70,11 +70,10 @@ instance MonadAff m => MonadTest (TestM m) where
     TestM $ local _ { container = container } r
 
 runTestMInBody :: forall m a. MonadAff m => TestM m a -> m a
-runTestMInBody m =
-  flip runTestM m =<< (HTMLElement.toElement <$> liftAff awaitBody)
+runTestMInBody m = flip runTestM m =<< liftAff awaitBody
 
-runTestM :: forall m a. Element -> TestM m a -> m a
-runTestM container (TestM r) = runReaderT r { container }
+runTestM :: forall element m a. IsElement element => element -> TestM m a -> m a
+runTestM container (TestM r) = runReaderT r { container: toElement container }
 
 hoistTestM :: forall m n. (m ~> n) -> TestM m ~> TestM n
 hoistTestM phi (TestM r) = TestM $ mapReaderT phi r

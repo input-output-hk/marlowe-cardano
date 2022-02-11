@@ -62,13 +62,17 @@
   , "unsafe-coerce"
   , "uri"
   , "variant"
+  , "web-clipboard"
   , "web-common"
   , "web-dom"
   , "web-events"
   , "web-file"
   , "web-html"
   , "web-socket"
+  , "web-storage"
+  , "web-touchevents"
   , "web-uievents"
+  , "web-xhr"
   ]
 , packages = ../packages.dhall
 , sources =
