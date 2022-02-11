@@ -109,7 +109,9 @@ instance marloweAppM :: MarloweApp AppM where
         , encodeJson backSlotInterval
         , encodeJson inputs
         ]
-    invokeMutexedEndpoint plutusAppId reqId "apply-inputs" _applyInputs payload
+    invokeMutexedEndpoint plutusAppId reqId "apply-inputs-nonmerkleized"
+      _applyInputs
+      payload
   redeem plutusAppId marloweContractId tokenName pubKeyHash = do
     reqId <- liftEffect genUUID
     let
@@ -263,4 +265,4 @@ onNewActiveEndpoints endpoints = do
         void $ liftAff $ AVar.tryTake mutex
   updateEndpoint "redeem" _redeem
   updateEndpoint "create" _create
-  updateEndpoint "apply-inputs" _applyInputs
+  updateEndpoint "apply-inputs-nonmerkleized" _applyInputs

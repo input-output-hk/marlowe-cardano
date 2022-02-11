@@ -83,6 +83,7 @@ data MarloweClientInput = ClientInput InputContent
 type MarloweSchema =
         Endpoint "create" (UUID, AssocMap.Map Val.TokenName PubKeyHash, Marlowe.Contract)
         .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe SlotInterval, [MarloweClientInput])
+        .\/ Endpoint "apply-inputs-nonmerkleized" (UUID, MarloweParams, Maybe SlotInterval, [InputContent])
         .\/ Endpoint "auto" (UUID, MarloweParams, Party, Slot)
         .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, PubKeyHash)
         .\/ Endpoint "close" UUID
@@ -260,7 +261,7 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
     redeem role payouts, and close.
  -}
 marlowePlutusContract :: Contract MarloweContractState MarloweSchema MarloweError ()
-marlowePlutusContract = selectList [create, apply, auto, redeem, close]
+marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, redeem, close]
   where
     catchError reqId endpointName handler = catching _MarloweError
         (void $ mapError (review _MarloweError) handler)
@@ -295,6 +296,12 @@ marlowePlutusContract = selectList [create, apply, auto, redeem, close]
     apply = endpoint @"apply-inputs" $ \(reqId, params, slotInterval, inputs) -> catchError reqId "apply-inputs" $ do
         let typedValidator = mkMarloweTypedValidator params
         _ <- applyInputs params typedValidator slotInterval inputs
+        tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
+        logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
+        marlowePlutusContract
+    applyNonmerkleized = endpoint @"apply-inputs-nonmerkleized" $ \(reqId, params, slotInterval, inputs) -> catchError reqId "apply-inputs-nonmerkleized" $ do
+        let typedValidator = mkMarloweTypedValidator params
+        _ <- applyInputs params typedValidator slotInterval $ ClientInput <$> inputs
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
         logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         marlowePlutusContract
