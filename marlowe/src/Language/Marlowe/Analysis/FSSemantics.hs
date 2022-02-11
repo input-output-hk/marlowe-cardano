@@ -19,7 +19,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
-import Ledger (Slot (..))
+import Ledger (POSIXTime (..))
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
@@ -120,8 +120,8 @@ mkInitialSymState pt Nothing = do (ls, hs) <- generateSymbolicInterval Nothing
 mkInitialSymState pt (Just State { accounts = accs
                                  , choices = cho
                                  , boundValues = bVal
-                                 , minSlot = ms }) =
-  do (ls, hs) <- generateSymbolicInterval (Just (getSlot ms))
+                                 , minTime = ms }) =
+  do (ls, hs) <- generateSymbolicInterval (Just (getPOSIXTime ms))
      return $ SymState { lowSlot = ls
                        , highSlot = hs
                        , traces = []
@@ -267,7 +267,7 @@ addTransaction newLowSlot newHighSlot Nothing slotTim
                                  , traces = oldTraces
                                  , symInput = prevSymInp
                                  , whenPos = oldPos } pos =
-  do let tim = getSlot slotTim
+  do let tim = getPOSIXTime slotTim
      constrain (newLowSlot .<= newHighSlot)
      let conditions = ((oldHighSlot .< literal tim) .||
                       ((oldLowSlot .== newLowSlot) .&& (oldHighSlot .== newHighSlot))) .&&
@@ -286,7 +286,7 @@ addTransaction newLowSlot newHighSlot newSymInput slotTim
                                  , traces = oldTraces
                                  , symInput = prevSymInp
                                  , whenPos = oldPos } pos =
-  do let tim = getSlot slotTim
+  do let tim = getPOSIXTime slotTim
      constrain (newLowSlot .<= newHighSlot)
      let conditions = (oldHighSlot .< literal tim) .&&
                       (newHighSlot .< literal tim) .&&
@@ -620,7 +620,7 @@ executeAndInterpret sta ((l, h, v, b):t) cont
                                   [caseToInput cases b v] sta cont t
              _ -> error "Cannot interpret result"
          _ -> error "Error reducing contract when interpreting result"
-  where mySlotInterval = (Slot l, Slot h)
+  where mySlotInterval = (POSIXTime l, POSIXTime h)
         env = Environment { slotInterval = mySlotInterval }
         transaction inputs = TransactionInput { txInterval = mySlotInterval
                                               , txInputs = inputs
@@ -629,20 +629,20 @@ executeAndInterpret sta ((l, h, v, b):t) cont
 -- It wraps executeAndInterpret so that it takes an optional State, and also
 -- combines the results of executeAndInterpret in one single tuple.
 interpretResult :: [(Integer, Integer, Integer, Integer)] -> Contract -> Maybe State
-                -> (Slot, [TransactionInput], [TransactionWarning])
+                -> (POSIXTime, [TransactionInput], [TransactionWarning])
 interpretResult [] _ _ = error "Empty result"
-interpretResult t@((l, _, _, _):_) c maybeState = (Slot l, tin, twa)
+interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
    where (tin, twa) = foldl' (\(accInp, accWarn) (elemInp, elemWarn) ->
                                  (accInp ++ elemInp, accWarn ++ elemWarn)) ([], []) $
                              executeAndInterpret initialState t c
          initialState = case maybeState of
-                          Nothing -> emptyState (Slot l)
+                          Nothing -> emptyState (POSIXTime l)
                           Just x  -> x
 
 -- It interprets the counter example found by SBV (SMTModel), given the contract,
 -- and initial state (optional), and the list of variables used.
 extractCounterExample :: SMTModel -> Contract -> Maybe State -> [String]
-                      -> (Slot, [TransactionInput], [TransactionWarning])
+                      -> (POSIXTime, [TransactionInput], [TransactionWarning])
 extractCounterExample smtModel cont maybeState maps = interpretedResult
   where assocs = map (\(a, b) -> (a, fromCV b :: Integer)) $ modelAssocs smtModel
         counterExample = groupResult maps (M.fromList assocs)
@@ -654,7 +654,7 @@ warningsTraceCustom :: Bool
               -> Contract
               -> Maybe State
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTraceCustom onlyAssertions con maybeState =
     do thmRes@(ThmResult result) <- satCommand
        return (case result of
@@ -673,20 +673,20 @@ warningsTraceCustom onlyAssertions con maybeState =
 warningsTraceWithState :: Contract
               -> Maybe State
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTraceWithState = warningsTraceCustom False
 
 -- Like warningsTraceCustom but only checks assertions.
 onlyAssertionsWithState :: Contract
               -> Maybe State
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 onlyAssertionsWithState = warningsTraceCustom True
 
 -- Like warningsTraceWithState but without initialState.
 warningsTrace :: Contract
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTrace con = warningsTraceWithState con Nothing
 
 

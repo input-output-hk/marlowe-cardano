@@ -30,7 +30,6 @@ import Marlowe.Semantics
   , Observation(..)
   , Party(..)
   , Payee(..)
-  , Slot(..)
   , State(..)
   , Token(..)
   , Value(..)
@@ -38,6 +37,7 @@ import Marlowe.Semantics
   )
 import Node.Encoding (Encoding(UTF8))
 import Node.FS.Sync as FS
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (fail, shouldEqual)
 
@@ -112,7 +112,7 @@ serializationTest =
                   )
                   Close
               ]
-              (Slot (fromInt 100))
+              (POSIXTime { getPOSIXTime: fromInt 100 })
               Close
           )
 
@@ -124,7 +124,7 @@ serializationTest =
               [ Tuple (ValueId "x") (fromInt 1)
               , Tuple (ValueId "y") (fromInt 2)
               ]
-          , minSlot: (Slot $ fromInt 123)
+          , minTime: (POSIXTime { getPOSIXTime: fromInt 123 })
           }
 
       json = encodeStringifyJson contract

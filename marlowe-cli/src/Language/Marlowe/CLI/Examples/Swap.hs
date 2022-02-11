@@ -23,8 +23,8 @@ module Language.Marlowe.CLI.Examples.Swap (
 import Language.Marlowe.Semantics (MarloweData (..))
 import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..), State (..),
                                         Token (..), Value (..))
+import Ledger (POSIXTime)
 import Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Slot (Slot)
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
@@ -34,11 +34,11 @@ makeSwapContract :: Integer      -- ^ Lovelace that the first party contributes 
                  -> Party        -- ^ First party.
                  -> Token        -- ^ First party's token.
                  -> Integer      -- ^ Amount of first party's token.
-                 -> Slot         -- ^ Timeout for first party's deposit.
+                 -> POSIXTime         -- ^ Timeout for first party's deposit.
                  -> Party        -- ^ Second party.
                  -> Token        -- ^ Second party's token.
                  -> Integer      -- ^ Amount of second party's token.
-                 -> Slot         -- ^ Timeout for second party's deposit
+                 -> POSIXTime         -- ^ Timeout for second party's deposit
                  -> MarloweData  -- ^ Swap contract and initial state.
 makeSwapContract minAda aParty aToken aAmount aTimeout bParty bToken bAmount bTimeout =
   let
@@ -48,7 +48,7 @@ makeSwapContract minAda aParty aToken aAmount aTimeout bParty bToken bAmount bTi
         accounts    = AM.singleton (aParty, Token adaSymbol adaToken) minAda
       , choices     = AM.empty
       , boundValues = AM.empty
-      , minSlot     = 1
+      , minTime     = 1
       }
     marloweContract =
       When

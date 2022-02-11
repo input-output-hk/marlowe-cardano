@@ -23,6 +23,7 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseNetworkId
 , parseRole
 , parseParty
+, parsePOSIXTime
 , parseSlot
 , parseSlotNo
 , parseStakeAddressReference
@@ -48,6 +49,7 @@ import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.Client (MarloweClientInput (..))
 import Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
+import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot (..))
@@ -85,6 +87,11 @@ parseSlotNo = SlotNo <$> O.auto
 -- | Parser for slot number.
 parseSlot :: O.ReadM Slot
 parseSlot = Slot <$> O.auto
+
+
+-- | Parser for POSIXTime.
+parsePOSIXTime :: O.ReadM POSIXTime
+parsePOSIXTime = POSIXTime <$> O.auto
 
 
 -- | Parser for currency symbol.

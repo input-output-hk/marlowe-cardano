@@ -23,7 +23,7 @@ import Language.Marlowe.Semantics (MarloweParams)
 import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..), Value (..))
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
 import Language.Marlowe.Util (ada)
-import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot)
+import Ledger (POSIXTime, PaymentPubKeyHash (..), PubKeyHash)
 import qualified Ledger.Value as Val
 import MarloweContract (MarloweContract (..))
 import Network.HTTP.Client (defaultManagerSettings, newManager)
@@ -180,11 +180,11 @@ createArgs investor issuer = (UUID.nil, tokenNames, zcb) where
                 (Pay issuerAcc (Account investorAcc) ada (Constant 850)
                     (When
                         [ Case (Deposit issuerAcc investorAcc ada (Constant 1000)) Close
-                        ] (26936589 :: Slot) Close
+                        ] (26936589 :: POSIXTime) Close
                     )
                 )
             ]
-            (26936589 :: Slot) Close
+            (26936589 :: POSIXTime) Close
 
 decodeFromText :: Aeson.FromJSON a => Text.Text -> Maybe a
 decodeFromText = decode . toLazyByteString . encodeUtf8Builder

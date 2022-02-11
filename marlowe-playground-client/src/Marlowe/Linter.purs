@@ -65,6 +65,7 @@ import Marlowe.Holes as Holes
 import Marlowe.Semantics (Slot(..), emptyState, evalValue, makeEnvironment)
 import Marlowe.Semantics as S
 import Monaco (TextEdit)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Pretty (showPrettyMoney, showPrettyParty, showPrettyToken)
 import StaticAnalysis.Reachability (initializePrefixMap, stepPrefixMap)
 import StaticAnalysis.Types (ContractPath, ContractPathStep(..), PrefixMap)
@@ -736,7 +737,7 @@ lintValue env t@(Term (DivValue a b) pos) = do
     (ConstantSimp _ _ v1 /\ ConstantSimp _ _ v2) ->
       let
         evaluated = evalValue (makeEnvironment zero zero)
-          (emptyState (Slot zero))
+          (emptyState (POSIXTime { getPOSIXTime: zero }))
           (S.DivValue (S.Constant v1) (S.Constant v2))
       in
         pure (ConstantSimp pos true evaluated)

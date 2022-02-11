@@ -32,8 +32,9 @@ import Halogen.HTML (HTML, img)
 import Halogen.HTML.Properties (src)
 import Images (cfdIcon, loanIcon, purchaseIcon)
 import Marlowe.Extended (ContractType(..))
-import Marlowe.Semantics (Slot, SlotInterval(..), Token(..))
-import Marlowe.Slot (slotToDateTime)
+import Marlowe.Semantics (SlotInterval(..), Token(..))
+import Marlowe.Slot (posixTimeToDateTime)
+import Plutus.V1.Ledger.Time (POSIXTime)
 
 humanizeDuration :: Seconds -> String
 humanizeDuration (Seconds seconds)
@@ -64,14 +65,10 @@ humanizeDuration (Seconds seconds)
 
 humanizeInterval :: Minutes -> SlotInterval -> String
 humanizeInterval tzOffset (SlotInterval from to) = humanize
-  (formatSlot tzOffset from)
-  (formatSlot tzOffset to)
+  (formatPOSIXTime tzOffset from)
+  (formatPOSIXTime tzOffset to)
   where
-  humanize Nothing _ = "invalid interval"
-
-  humanize _ Nothing = "invalid interval"
-
-  humanize (Just (fromDate /\ fromTime)) (Just (toDate /\ toTime))
+  humanize ((fromDate /\ fromTime)) ((toDate /\ toTime))
     | fromDate == toDate && fromTime == toTime = "on " <> fromDate <> " at " <>
         fromTime
     | fromDate == toDate = "on " <> fromDate <> " between " <> fromTime
@@ -81,14 +78,13 @@ humanizeInterval tzOffset (SlotInterval from to) = humanize
         <> " "
         <> toTime
 
-formatSlot :: Minutes -> Slot -> Maybe (Tuple String String)
-formatSlot tzOffset slot =
-  slotToDateTime slot
-    <#> \slotDT ->
-      let
-        adjustedDt = adjustTimeZone tzOffset slotDT
-      in
-        formatDate' adjustedDt /\ formatTime' adjustedDt
+formatPOSIXTime :: Minutes -> POSIXTime -> (Tuple String String)
+formatPOSIXTime tzOffset time =
+  let
+    dt = posixTimeToDateTime time
+    adjustedDt = adjustTimeZone tzOffset dt
+  in
+    formatDate' adjustedDt /\ formatTime' adjustedDt
 
 -- This is a small wrapper around Now.getTimezoneOffset to be used in conjunction with
 -- adjustTimeZone. We need to negate the value in order to substract when we do the

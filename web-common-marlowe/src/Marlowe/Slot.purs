@@ -6,15 +6,20 @@ module Marlowe.Slot
   , slotToDateTime
   , dateTimeToSlot
   , dateTimeStringToSlot
+  , posixTimeToSlot
+  , slotToPOSIXTime
+  , posixTimeToDateTime
   , secondsDiff
+  , shelleyLaunchPOSIXTime
+  , secondsSinceShelley
   ) where
 
 import Prelude
 
-import Data.BigInt.Argonaut (fromInt)
+import Data.BigInt.Argonaut (BigInt, fromInt, fromNumber)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime, adjust, diff)
-import Data.DateTime.Instant (instant, toDateTime)
+import Data.DateTime.Instant (fromDateTime, instant, toDateTime, unInstant)
 import Data.Either (Either(..))
 import Data.Formatter.DateTime (Formatter, FormatterCommand(..), unformat) as FDT
 import Data.Int (round)
@@ -24,6 +29,7 @@ import Data.Newtype (unwrap)
 import Data.Time.Duration (Milliseconds(..), Seconds(..))
 import Marlowe.Semantics (Slot(..))
 import Partial.Unsafe (unsafePartial)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 -- TODO: When we are integrated with the real Cardano node, we will need to
 -- know the datetime of one slot so that we can convert slots to and from
@@ -47,8 +53,38 @@ shelleyLaunchDate =
   in
     unsafePartial $ fromJust $ toDateTime <$> instant epoch
 
+shelleyLaunchPOSIXTime :: POSIXTime
+shelleyLaunchPOSIXTime = dateTimeToPOSIXTime shelleyLaunchDate
+
+secondsSinceShelley :: Int -> BigInt
+secondsSinceShelley i =
+  ((unwrap shelleyLaunchPOSIXTime).getPOSIXTime + BigInt.fromInt (i * 1000))
+
 secondsDiff :: Slot -> Slot -> Seconds
 secondsDiff a b = Seconds $ BigInt.toNumber $ unwrap $ a - b
+
+posixTimeToSlot :: POSIXTime -> Slot
+posixTimeToSlot = dateTimeToSlot <<< posixTimeToDateTime
+
+slotToPOSIXTime :: Slot -> POSIXTime
+slotToPOSIXTime s =
+  let
+    a = unsafePartial $ fromJust $ slotToDateTime s
+  in
+    dateTimeToPOSIXTime a
+
+posixTimeToDateTime :: POSIXTime -> DateTime
+posixTimeToDateTime (POSIXTime t) = unsafePartial $ fromJust $ toDateTime <$>
+  instant (Milliseconds (BigInt.toNumber t.getPOSIXTime))
+
+dateTimeToPOSIXTime :: DateTime -> POSIXTime
+dateTimeToPOSIXTime dt =
+  let
+    a :: BigInt
+    a = unsafePartial $
+      (fromJust <<< fromNumber <<< unwrap <<< unInstant <<< fromDateTime $ dt)
+  in
+    POSIXTime { getPOSIXTime: a }
 
 slotToDateTime :: Slot -> Maybe DateTime
 slotToDateTime slot =

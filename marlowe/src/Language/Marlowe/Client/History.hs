@@ -46,6 +46,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Ledger (ChainIndexTxOut (..), PaymentPubKeyHash (..), ciTxOutAddress, toTxOut)
+import Ledger.TimeSlot (slotRangeToPOSIXTimeRange)
 import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
 import Ledger.Typed.Scripts (validatorAddress)
 import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
@@ -68,6 +69,7 @@ import qualified Cardano.Ledger.TxIn as Cardano (TxIn (..))
 import qualified Data.ByteString as BS (drop)
 import qualified Data.Map.Strict as M (Map, keys, lookup, toList)
 import qualified Data.Set as S (toList)
+import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 
 
 -- | A transaction-output reference specific to Marlowe.
@@ -319,7 +321,7 @@ txDatums citx =
 txInputs :: ChainIndexTx                    -- ^ The transaction.
          -> [(TxOutRef, TransactionInput)]  -- ^ The inputs that have Marlowe inputs.
 txInputs citx =
-  case citx ^. citxValidRange of
+  case slotRangeToPOSIXTimeRange slotConfig $ citx ^. citxValidRange of
     Interval (LowerBound (Finite l) True) (UpperBound (Finite h) False) ->
       let
         slots = (l, h)
@@ -328,7 +330,8 @@ txInputs citx =
           $ secondM (fmap (TransactionInput slots) . fromBuiltinData . getRedeemer)
           <$> txRedeemers citx
     _ -> []  -- TODO: Should this instead throw an error in an error monad?
-
+  where
+    slotConfig = unsafeGetSlotConfig
 
 -- | Extract transaction inputs with redeemers.
 txRedeemers :: ChainIndexTx            -- ^ The transaction.

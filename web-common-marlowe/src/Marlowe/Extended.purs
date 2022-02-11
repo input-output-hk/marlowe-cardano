@@ -39,6 +39,7 @@ import Marlowe.Template
   , fillTemplate
   , getPlaceholderIds
   )
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Text.Pretty
   ( class Args
   , class Pretty
@@ -188,9 +189,9 @@ instance hasArgsTimeout :: Args Timeout where
   hasNestedArgs (Slot _) = false
   hasNestedArgs x = genericHasNestedArgs x
 
-instance toCoreTimeout :: ToCore Timeout S.Slot where
+instance toCoreTimeout :: ToCore Timeout POSIXTime where
   toCore (SlotParam _) = Nothing
-  toCore (Slot x) = Just (S.Slot x)
+  toCore (Slot x) = Just (POSIXTime { getPOSIXTime: x })
 
 instance templateTimeout :: Template Timeout Placeholders where
   getPlaceholderIds (SlotParam slotParamId) = Placeholders

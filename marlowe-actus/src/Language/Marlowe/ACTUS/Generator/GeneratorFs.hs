@@ -46,7 +46,7 @@ genFsContract' rf ct =
 
       gen :: CashFlowPoly (Value Observation) -> Contract -> Contract
       gen CashFlowPoly {..} cont =
-        let t = Slot $ timeToSlotNumber cashPaymentDay
+        let t = POSIXTime $ timeToSlotNumber cashPaymentDay
             a = reduce $ DivValue amount (Constant marloweFixedPoint)
          in case a of
               Constant x

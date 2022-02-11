@@ -44,6 +44,7 @@ import Data.String (joinWith, toLower)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Foreign.Object (Object)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Text.Pretty
   ( class Args
   , class Pretty
@@ -158,7 +159,7 @@ instance hasArgsParty :: Args Party where
   hasNestedArgs = genericHasNestedArgs
 
 type Timeout
-  = Slot
+  = POSIXTime
 
 type Money
   = Assets
@@ -638,15 +639,15 @@ instance hasArgsObservation :: Args Observation where
 validInterval :: SlotInterval -> Boolean
 validInterval (SlotInterval from to) = from <= to
 
-above :: Slot -> SlotInterval -> Boolean
+above :: POSIXTime -> SlotInterval -> Boolean
 above v (SlotInterval _ to) = v > to
 
-anyWithin :: forall f. Foldable f => Slot -> f SlotInterval -> Boolean
+anyWithin :: forall f. Foldable f => POSIXTime -> f SlotInterval -> Boolean
 anyWithin v = any (\(SlotInterval from to) -> v >= from && v <= to)
 
 -- TODO: extract module
 data SlotInterval
-  = SlotInterval Slot Slot
+  = SlotInterval POSIXTime POSIXTime
 
 derive instance genericSlotInterval :: Generic SlotInterval _
 
@@ -655,7 +656,8 @@ derive instance eqSlotInterval :: Eq SlotInterval
 derive instance ordSlotInterval :: Ord SlotInterval
 
 instance showSlotInterval :: Show SlotInterval where
-  show (SlotInterval from to) = "(Slot " <> show from <> " " <> show to <> ")"
+  show (SlotInterval from to) = "(POSIXTime " <> show from <> " " <> show to <>
+    ")"
 
 instance genericEncodeSlotInterval :: EncodeJson SlotInterval where
   encodeJson (SlotInterval a b) = encodeArray encodeJson [ a, b ]
@@ -663,10 +665,10 @@ instance genericEncodeSlotInterval :: EncodeJson SlotInterval where
 instance genericDecodeJsonSlotInterval :: DecodeJson SlotInterval where
   decodeJson = array "SlotInterval" $ SlotInterval <$> next <*> next
 
-ivFrom :: SlotInterval -> Slot
+ivFrom :: SlotInterval -> POSIXTime
 ivFrom (SlotInterval from _) = from
 
-ivTo :: SlotInterval -> Slot
+ivTo :: SlotInterval -> POSIXTime
 ivTo (SlotInterval _ to) = to
 
 -- TODO: extract module
@@ -941,7 +943,7 @@ newtype State = State
   -- The reason we keep track of it, is so that we can refine transaction intervals.
   -- If in a new transaction we have a lowSlot that is smaller than the minSlot, we can narrow the interval
   -- from [lowSlot, highSlot] to [minSlot, highSlot]
-  , minSlot :: Slot
+  , minTime :: POSIXTime
   }
 
 derive instance genericState :: Generic State _
@@ -949,8 +951,6 @@ derive instance genericState :: Generic State _
 derive instance newtypeState :: Newtype State _
 
 derive instance eqState :: Eq State
-
-derive instance ordState :: Ord State
 
 instance showState :: Show State where
   show v = genericShow v
@@ -968,8 +968,8 @@ _choices = _Newtype <<< prop (Proxy :: _ "choices")
 _boundValues :: Lens' State (Map ValueId BigInt)
 _boundValues = _Newtype <<< prop (Proxy :: _ "boundValues")
 
-_minSlot :: Lens' State Slot
-_minSlot = _Newtype <<< prop (Proxy :: _ "minSlot")
+_minTime :: Lens' State POSIXTime
+_minTime = _Newtype <<< prop (Proxy :: _ "minTime")
 
 newtype Environment
   = Environment { slotInterval :: SlotInterval }
@@ -988,9 +988,10 @@ instance showEnvironment :: Show Environment where
 _slotInterval :: Lens' Environment SlotInterval
 _slotInterval = _Newtype <<< prop (Proxy :: _ "slotInterval")
 
-makeEnvironment :: BigInt -> BigInt -> Environment
+makeEnvironment :: POSIXTime -> POSIXTime -> Environment
 makeEnvironment l h = Environment
-  { slotInterval: SlotInterval (Slot h) (Slot l) }
+  { slotInterval: SlotInterval l h
+  }
 
 data Input
   -- TODO: fix primitive obsession
@@ -1049,7 +1050,7 @@ instance decodeJsonInput :: DecodeJson Input where
 -- Processing of slot interval
 data IntervalError
   = InvalidInterval SlotInterval
-  | IntervalInPastError Slot SlotInterval
+  | IntervalInPastError POSIXTime SlotInterval
 
 derive instance genericIntervalError :: Generic IntervalError _
 
@@ -1087,8 +1088,6 @@ data IntervalResult
 derive instance genericIntervalResult :: Generic IntervalResult _
 
 derive instance eqIntervalResult :: Eq IntervalResult
-
-derive instance ordIntervalResult :: Ord IntervalResult
 
 instance showIntervalResult :: Show IntervalResult where
   show v = genericShow v
@@ -1189,8 +1188,6 @@ data ApplyResult
 derive instance genericApplyResult :: Generic ApplyResult _
 
 derive instance eqApplyResult :: Eq ApplyResult
-
-derive instance ordApplyResult :: Ord ApplyResult
 
 instance showApplyResult :: Show ApplyResult where
   show = genericShow
@@ -1377,14 +1374,17 @@ instance showTransactionInput :: Show TransactionInput where
 instance encodeTransactionInput :: EncodeJson TransactionInput where
   encodeJson
     ( TransactionInput
-        { interval: (SlotInterval (Slot fromSlot) (Slot toSlot))
+        { interval:
+            ( SlotInterval (POSIXTime { getPOSIXTime: from })
+                (POSIXTime { getPOSIXTime: to })
+            )
         , inputs: txInps
         }
     ) =
     encodeJson
       { tx_interval:
-          { from: fromSlot
-          , to: toSlot
+          { from
+          , to
           }
       , tx_inputs: txInps
       }
@@ -1400,8 +1400,8 @@ instance decodeTransactionInput :: DecodeJson TransactionInput where
             $ Just
                 <$>
                   ( SlotInterval
-                      <$> (Slot <$> requireProp "from")
-                      <*> (Slot <$> requireProp "to")
+                      <$> (POSIXTime <$> requireProp "from")
+                      <*> (POSIXTime <$> requireProp "to")
                   )
       pure $ Just $ TransactionInput { interval, inputs: inputs }
 
@@ -1479,13 +1479,13 @@ _rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop
 type ValidatorHash
   = String
 
-emptyState :: Slot -> State
+emptyState :: POSIXTime -> State
 emptyState sn =
   State
     { accounts: Map.empty
     , choices: Map.empty
     , boundValues: Map.empty
-    , minSlot: sn
+    , minTime: sn
     }
 
 inBounds :: ChosenNum -> Array Bound -> Boolean
@@ -1502,19 +1502,19 @@ boundTo (Bound _ to) = to
 fixInterval :: SlotInterval -> State -> IntervalResult
 fixInterval interval@(SlotInterval from to) (State state)
   | (not <<< validInterval) interval = IntervalError (InvalidInterval interval)
-  | state.minSlot `above` interval = IntervalError
-      (IntervalInPastError state.minSlot interval)
+  | state.minTime `above` interval = IntervalError
+      (IntervalInPastError state.minTime interval)
   | otherwise =
       let
         -- newLow is both new "low" and new "minSlot" (the lower bound for slotNum)
-        newLow = max from state.minSlot
+        newLow = max from state.minTime
 
         -- We know high is greater or equal than newLow (prove)
         currentInterval = SlotInterval newLow to
 
         env = Environment { slotInterval: currentInterval }
 
-        newState = State (state { minSlot = newLow })
+        newState = State (state { minTime = newLow })
       in
         IntervalTrimmed env newState
 
@@ -1566,8 +1566,10 @@ evalValue env state value =
                       if qIsEven then q else q + signum n * signum d
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
         (unwrap state).choices
-      SlotIntervalStart -> view (_slotInterval <<< to ivFrom <<< to unwrap) env
-      SlotIntervalEnd -> view (_slotInterval <<< to ivTo <<< to unwrap) env
+      SlotIntervalStart -> -- view (_slotInterval <<< to ivFrom <<< to unwrap) env
+        (unwrap (ivFrom ((unwrap env).slotInterval))).getPOSIXTime
+      SlotIntervalEnd -> -- view (_slotInterval <<< to ivTo <<< to _POSIXTime <<< to unwrap) env
+        (unwrap (ivTo ((unwrap env).slotInterval))).getPOSIXTime
       UseValue valId -> fromMaybe zero $ Map.lookup valId
         (unwrap state).boundValues
       Cond cond thn els ->

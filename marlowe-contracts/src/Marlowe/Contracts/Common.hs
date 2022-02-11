@@ -8,10 +8,10 @@ import Language.Marlowe.Extended
 both :: Contract -> Contract -> Contract
 both Close b = b
 both a Close = a
-both a@(When cases1 (Slot timeout1) cont1) b@(When cases2 (Slot timeout2) cont2)
+both a@(When cases1 (POSIXTime timeout1) cont1) b@(When cases2 (POSIXTime timeout2) cont2)
   = When ([Case a1 (both c1 b) | Case a1 c1 <- cases1] ++
           [Case a2 (both a c2) | Case a2 c2 <- cases2])
-         (Slot (min timeout1 timeout2))
+         (POSIXTime (min timeout1 timeout2))
          (both (if timeout1 > timeout2 then a else cont1)
                (if timeout2 > timeout1 then b else cont2))
 both a@When{} b = advanceTillWhenAndThen b (both a)

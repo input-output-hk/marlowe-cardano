@@ -106,7 +106,6 @@ import Marlowe.Semantics
   , Party(..)
   , Payee(..)
   , Payment(..)
-  , Slot
   , SlotInterval(..)
   , Token(..)
   , TransactionInput(..)
@@ -118,6 +117,7 @@ import Monaco as Monaco
 import Page.Simulation.BottomPanel (panelContents)
 import Page.Simulation.Lenses (_bottomPanelState)
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
+import Plutus.V1.Ledger.Time (POSIXTime)
 import Pretty
   ( renderPrettyParty
   , renderPrettyPayee
@@ -938,7 +938,7 @@ paymentToLine metadata (SlotInterval start end) accountId payee token money =
   , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
   ]
 
-showSlotRange :: Slot -> Slot -> String
+showSlotRange :: POSIXTime -> POSIXTime -> String
 showSlotRange start end =
   if start == end then
     show start

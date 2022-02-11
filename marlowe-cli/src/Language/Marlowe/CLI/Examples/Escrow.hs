@@ -24,8 +24,8 @@ module Language.Marlowe.CLI.Examples.Escrow (
 import Language.Marlowe.Semantics (MarloweData (..))
 import Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..), Party (..),
                                         Payee (..), State (..), Token (..), Value (..))
+import Ledger (POSIXTime)
 import Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Slot (Slot)
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
@@ -36,10 +36,10 @@ makeEscrowContract :: Integer      -- ^ Lovelace in the initial state.
                    -> Party        -- ^ The seller.
                    -> Party        -- ^ The buyer.
                    -> Party        -- ^ The mediator.
-                   -> Slot         -- ^ The deadline for the buyer to pay.
-                   -> Slot         -- ^ The deadline for the buyer to complain.
-                   -> Slot         -- ^ The deadline for the seller to dispute a complaint.
-                   -> Slot         -- ^ The deadline for the mediator to decide.
+                   -> POSIXTime    -- ^ The deadline for the buyer to pay.
+                   -> POSIXTime    -- ^ The deadline for the buyer to complain.
+                   -> POSIXTime    -- ^ The deadline for the seller to dispute a complaint.
+                   -> POSIXTime    -- ^ The deadline for the mediator to decide.
                    -> MarloweData  -- ^ The escrow contract and initial state.
 makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintDeadline disputeDeadline mediationDeadline =
   let
@@ -51,7 +51,7 @@ makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintD
         accounts    = AM.singleton (mediator, ada) minAda
       , choices     = AM.empty
       , boundValues = AM.empty
-      , minSlot     = 1
+      , minTime     = 1
       }
     marloweContract =
       When

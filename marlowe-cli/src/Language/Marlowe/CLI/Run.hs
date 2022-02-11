@@ -40,13 +40,17 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, Local
                     StakeAddressReference (..), TxId, TxIn, TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
                     calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue,
                     writeFileTextEnvelope)
+import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Bifunctor (bimap)
+import Data.Default (def)
 import Data.Function (on)
 import Data.List (groupBy)
+import qualified Data.Map.Strict as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
+import qualified Data.Set as S (singleton)
 import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, buildRoleValidator,
                                     buildValidator)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readSigningKey)
@@ -59,18 +63,14 @@ import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), 
                                    TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
+import Ledger.TimeSlot
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
 import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum, TokenName, toData)
-import Plutus.V1.Ledger.Slot (Slot (..))
 import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
+import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty (..))
 import System.IO (hPutStrLn, stderr)
-
-import qualified Cardano.Api as Api (Value)
-import qualified Data.Map.Strict as M (toList)
-import qualified Data.Set as S (singleton)
-import qualified PlutusTx.AssocMap as AM (toList)
 
 
 -- | Serialise a deposit input to a file.
@@ -236,7 +236,9 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{.
                                    }
                                  )
                                    where
-                                     convertSlot = SlotNo . fromIntegral . getSlot
+                                     slotConfig = def
+                                     convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot slotConfig
+
 
 
 -- | Run a Marlowe transaction.

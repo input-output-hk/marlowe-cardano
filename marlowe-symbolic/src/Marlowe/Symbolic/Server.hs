@@ -20,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (Proxy))
 import Formatting (fprint, (%))
 import Formatting.Clock (timeSpecs)
-import Language.Marlowe (Contract, Slot (Slot), State, TransactionInput, TransactionWarning)
+import Language.Marlowe (Contract, POSIXTime (..), State, TransactionInput, TransactionWarning)
 import Language.Marlowe.Analysis.FSSemantics (warningsTraceCustom)
 import Marlowe.Symbolic.Types.Request (Request (..))
 import Marlowe.Symbolic.Types.Response (Response (..), Result (..))
@@ -33,13 +33,13 @@ import Text.PrettyPrint.Leijen (displayS, renderCompact)
 type API = "api" :> "marlowe-analysis" :> ReqBody '[JSON] Request :> Post '[JSON] Response
 
 makeResult ::
-  Either String (Maybe (Slot, [TransactionInput], [TransactionWarning])) ->
+  Either String (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])) ->
   Result
 makeResult (Left err) = Error (show err)
 makeResult (Right res) =
   case res of
         Nothing -> Valid
-        Just (Slot sn, ti, tw) ->
+        Just (POSIXTime sn, ti, tw) ->
           CounterExample
             { initialSlot = sn
             , transactionList = ti

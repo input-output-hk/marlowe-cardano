@@ -74,8 +74,8 @@ zeroCouponBondTest =
         zeroCouponBond
           w1Pk
           w2Pk
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 100)
+          (POSIXTime 200)
           (Constant 75_000_000)
           (Constant 90_000_000)
           ada
@@ -96,8 +96,8 @@ zeroCouponBondTest =
 swapContractTest :: IO ()
 swapContractTest =
   let Just contract = toCore $
-        swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (Slot 100) $
-        swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (Slot 200) Close
+        swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (POSIXTime 100) $
+        swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (POSIXTime 200) Close
       txIn =
         [ C.TransactionInput (0, 0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000
@@ -126,8 +126,8 @@ americanCallOptionTest =
           w2Pk
           (tok, Constant 30)
           (ada, Constant 10_000_000)
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 100)
+          (POSIXTime 200)
       txIn =
         [ C.TransactionInput (0, 0) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
    in case C.playTrace 0 contract txIn of
@@ -150,14 +150,14 @@ americanCallOptionExercisedTest =
           w2Pk
           (tok, Constant 30)
           (ada, Constant 10_000_000)
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 100)
+          (POSIXTime 200)
       Just contract = toCore $
         deposit
           w2Pk
           w2Pk
           (tok, Constant 30)
-          (Slot 10)
+          (POSIXTime 10)
           Close
           americanCall
       txIn =
@@ -185,8 +185,8 @@ europeanCallOptionTest =
           w2Pk
           (tok, Constant 30)
           (ada, Constant 10_000_000)
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 100)
+          (POSIXTime 200)
       txIn =
         [ C.TransactionInput (101, 101) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
    in case C.playTrace 0 contract txIn of
@@ -209,14 +209,14 @@ europeanCallOptionExercisedTest =
           w2Pk
           (tok, Constant 30)
           (ada, Constant 10_000_000)
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 100)
+          (POSIXTime 200)
       Just contract = toCore $
         deposit
           w2Pk
           w2Pk
           (tok, Constant 30)
-          (Slot 10) Close Close
+          (POSIXTime 10) Close Close
         `both`
         europeanCall
       txIn =
@@ -248,9 +248,9 @@ futureNoChange =
           w2Pk
           (Constant 80_000_000) -- 80 ADA
           (Constant 8_000_000) -- 8 ADA
-          (Slot 1)
+          (POSIXTime 1)
           [] -- no margin calls
-          (Slot 100) -- maturity
+          (POSIXTime 100) -- maturity
       txIn =
         [ C.TransactionInput (0, 0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
@@ -280,9 +280,9 @@ futureNoMarginCall =
           w2Pk
           (Constant 80_000_000) -- 80 ADA
           (Constant 8_000_000) -- 8 ADA
-          (Slot 1)
+          (POSIXTime 1)
           [] -- no margin calls
-          (Slot 100) -- maturity
+          (POSIXTime 100) -- maturity
       txIn =
         [ C.TransactionInput (0, 0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
@@ -309,9 +309,9 @@ futureWithMarinCall =
           w2Pk
           (Constant 80_000_000) -- 80 ADA
           (Constant 8_000_000) -- 8 ADA
-          (Slot 1)
-          [Slot 50] -- margin call
-          (Slot 100) -- maturity
+          (POSIXTime 1)
+          [POSIXTime 50] -- margin call
+          (POSIXTime 100) -- maturity
       txIn =
         [ C.TransactionInput (0, 0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
@@ -340,9 +340,9 @@ reverseConvertibleExercisedTest =
   let Just contract = toCore $
         reverseConvertible
           w1Pk
-          (Slot 10)
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 10)
+          (POSIXTime 100)
+          (POSIXTime 200)
           ada
           tok
           (Constant 10_000_000)
@@ -369,9 +369,9 @@ reverseConvertibleTest =
   let Just contract = toCore $
         reverseConvertible
           w1Pk
-          (Slot 10)
-          (Slot 100)
-          (Slot 200)
+          (POSIXTime 10)
+          (POSIXTime 100)
+          (POSIXTime 200)
           ada
           tok
           (Constant 10_000_000)

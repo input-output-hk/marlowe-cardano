@@ -282,7 +282,7 @@ writePangramJson outputDir = do
                         )
                     , S.Case (S.Notify (S.AndObs (S.SlotIntervalStart `S.ValueLT` S.SlotIntervalEnd) S.TrueObs)) S.Close
                     ]
-                    (S.Slot 100)
+                    (S.POSIXTime 100)
                     S.Close
                 )
         encodedPangram = BS8.pack . Char8.unpack $ encode pangram
@@ -291,7 +291,7 @@ writePangramJson outputDir = do
             { accounts = Map.singleton (alicePk, token) 12
             , choices = Map.singleton choiceId 42
             , boundValues = Map.fromList [ (ValueId "x", 1), (ValueId "y", 2) ]
-            , minSlot = S.Slot 123
+            , minTime = S.POSIXTime 123
             }
         encodedState = BS8.pack . Char8.unpack $ encode state
     createDirectoryIfMissing True (outputDir </> "JSON")

@@ -22,13 +22,13 @@ import Marlowe.Parser (parseContract)
 import Marlowe.Semantics
   ( Input
   , Party(..)
-  , Slot(..)
   , Token(..)
   , TransactionInput
   , emptyState
   )
 import Marlowe.Semantics as S
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (fail, shouldEqual)
 import Text.Pretty (pretty)
@@ -51,7 +51,10 @@ multipleInputs inputs =
 timeout :: BigInt -> TransactionInput
 timeout slot =
   S.TransactionInput
-    { interval: (S.SlotInterval (Slot slot) (Slot slot))
+    { interval:
+        ( S.SlotInterval (POSIXTime { getPOSIXTime: slot })
+            (POSIXTime { getPOSIXTime: slot })
+        )
     , inputs: mempty
     }
 

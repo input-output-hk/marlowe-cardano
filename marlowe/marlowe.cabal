@@ -160,6 +160,7 @@ test-suite marlowe-test
         lens -any,
         bytestring -any,
         freer-simple -any,
+        freer-extras -any,
         tasty -any,
         tasty-hunit -any,
         tasty-quickcheck,

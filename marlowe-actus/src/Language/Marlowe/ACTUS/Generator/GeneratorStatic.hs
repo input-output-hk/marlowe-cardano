@@ -14,7 +14,7 @@ where
 import Data.List as L (foldl')
 import Data.Time (LocalTime)
 import Data.Validation (Validation (..))
-import Language.Marlowe (Contract (..), Slot (..), Value (..))
+import Language.Marlowe (Contract (..), POSIXTime (..), Value (..))
 import Language.Marlowe.ACTUS.Domain.BusinessEvents (EventType (..), RiskFactors)
 import Language.Marlowe.ACTUS.Domain.ContractTerms (ContractTerms, TermValidationError (..))
 import Language.Marlowe.ACTUS.Domain.Schedule (CashFlowPoly (..))
@@ -46,11 +46,11 @@ genStaticContract' rf ct =
             "party"
             "counterparty"
             (Constant $ round amount)
-            (Slot $ timeToSlotNumber cashPaymentDay)
+            (POSIXTime $ timeToSlotNumber cashPaymentDay)
         | otherwise =
           invoice
             "counterparty"
             "party"
             (Constant $ round $ - amount)
-            (Slot $ timeToSlotNumber cashPaymentDay)
+            (POSIXTime $ timeToSlotNumber cashPaymentDay)
    in foldl' (flip gen) Close $ reverse cfs
