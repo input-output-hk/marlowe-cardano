@@ -30,6 +30,7 @@ import Control.Monad.Writer.Class (class MonadTell, class MonadWriter)
 import Control.MonadPlus (class MonadPlus)
 import Control.MonadZero (class MonadZero)
 import Control.Plus (class Plus)
+import Data.Array as Array
 import Data.Coyoneda (liftCoyoneda, unCoyoneda)
 import Data.Distributive (class Distributive)
 import Data.Maybe (Maybe(..), maybe)
@@ -39,9 +40,18 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import Halogen (Component, mkComponent, mkTell, unComponent)
+import Halogen
+  ( Component
+  , Request
+  , Tell
+  , mkComponent
+  , mkRequest
+  , mkTell
+  , unComponent
+  )
 import Halogen.Aff (awaitBody)
 import Halogen.Query.HalogenQ as HQ
+import Halogen.Subscription as HS
 import Halogen.VDom.Driver (HalogenIO, runUI)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Web (TestM, runTestM)
@@ -225,6 +235,26 @@ runHalogenTestM
   -> m a
 runHalogenTestM (HalogenTestM r) = runReaderT r
 
+request
+  :: forall query input output m a
+   . Bind m
+  => MonadHalogenTest query input output m
+  => Request query a
+  -> m (Maybe a)
+request req = do
+  { query } <- getDriver
+  query (mkRequest req)
+
+tell
+  :: forall query input output m
+   . Bind m
+  => MonadHalogenTest query input output m
+  => Tell query
+  -> m Unit
+tell req = do
+  { query } <- getDriver
+  void $ query (mkTell req)
+
 expectMessages
   :: forall query input output m
    . Show output
@@ -254,7 +284,12 @@ runUITest
 runUITest component input test =
   bracket getContainer removeContainer \(Tuple _ container) -> do
     driver <- runUI (wrap component) input container
-    messages <- liftEffect $ Ref.new []
+    messages <- liftEffect do
+      ref <- Ref.new []
+      void
+        $ HS.subscribe driver.messages
+        $ flip Ref.modify_ ref <<< flip Array.snoc
+      pure ref
     runTestM container
       $ runUserM Nothing
       $ runHalogenTestM test

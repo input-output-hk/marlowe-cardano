@@ -25,6 +25,7 @@
   , "foreign"
   , "foreign-object"
   , "formatters"
+  , "free"
   , "functions"
   , "halogen"
   , "halogen-nselect"
