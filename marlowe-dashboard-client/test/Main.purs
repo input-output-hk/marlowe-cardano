@@ -26,6 +26,7 @@ import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
 import Test.Web (runTestMInBody)
+-- import Test.Web.DOM.Debug (debugElement, debugElements, logTestingPlaygroundURL)
 import Test.Web.DOM.Query (byRoleDefault, findBy, getBy, role, role')
 import Test.Web.Event.User (click, runUserM)
 import Test.Web.Monad (getContainer)
@@ -100,9 +101,18 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
         value `shouldEqual` Just 2
         void $ liftAff $ query (H.mkTell (SetValue 10))
         flip shouldEqual "10" =<< liftEffect (textContent span)
-        liftEffect <<< logTestingPlaygroundUrl =<< getContainer
 
-foreign import logTestingPlaygroundUrl :: Element -> Effect Unit
+--    it "Can be debugged" do
+--      runUITest counter 0 do
+--        increment <- getBy $ role' Button byRoleDefault
+--          { name = toUndefinable $ Just "+"
+--          }
+--        span <- getBy (role Textbox)
+--        click increment
+--        click increment
+--        debugElement increment
+--        debugElements [ increment, span ]
+--        logTestingPlaygroundURL
 
 data Query a
   = GetValue (Int -> a)

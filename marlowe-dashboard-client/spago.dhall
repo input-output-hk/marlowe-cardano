@@ -48,6 +48,7 @@
   , "psci-support"
   , "quickcheck"
   , "record"
+  , "refs"
   , "remotedata"
   , "servant-support"
   , "spec"

@@ -7,7 +7,6 @@ import Control.Monad.Reader (class MonadAsk, runReaderT)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, Error, bracket, error)
-import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Halogen (Component)
 import Halogen.Aff (awaitBody)
@@ -31,7 +30,6 @@ runUITest
         . MonadUser m
        => MonadTest m
        => MonadAsk (HalogenIO query output Aff) m
-       => MonadAff m
        => MonadError Error m
        => m Unit
      )
