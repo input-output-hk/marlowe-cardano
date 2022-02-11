@@ -7,26 +7,39 @@ import Data.String (toLower)
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect, liftEffect)
 import Test.Spec.Assertions (shouldEqual)
-import Web.DOM (Element, Node)
+import Test.Web.DOM.Element (class IsElement, toElement)
+import Test.Web.DOM.Node (class IsNode, toNode)
 import Web.DOM.Element as Element
 import Web.DOM.Node (textContent)
 
 shouldHaveText
-  :: forall m. MonadError Error m => MonadEffect m => Node -> String -> m Unit
+  :: forall node m
+   . IsNode node
+  => MonadError Error m
+  => MonadEffect m
+  => node
+  -> String
+  -> m Unit
 shouldHaveText node text =
-  flip shouldEqual text =<< liftEffect (textContent node)
+  flip shouldEqual text =<< liftEffect (textContent $ toNode node)
 
 shouldHaveId
-  :: forall m
+  :: forall element m
    . MonadError Error m
+  => IsElement element
   => MonadEffect m
-  => Element
+  => element
   -> String
   -> m Unit
 shouldHaveId element expected =
-  flip shouldEqual expected =<< liftEffect (Element.id element)
+  flip shouldEqual expected =<< liftEffect (Element.id $ toElement element)
 
 shouldHaveTagName
-  :: forall m. MonadError Error m => Element -> String -> m Unit
+  :: forall element m
+   . MonadError Error m
+  => IsElement element
+  => element
+  -> String
+  -> m Unit
 shouldHaveTagName element expected =
-  toLower expected `shouldEqual` toLower (Element.tagName element)
+  toLower expected `shouldEqual` toLower (Element.tagName $ toElement element)
