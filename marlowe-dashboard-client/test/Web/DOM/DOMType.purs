@@ -1,10 +1,34 @@
 module Test.Web.DOM.DomType where
 
-import Type.Proxy (Proxy(..))
+import Type.Proxy (Proxy)
+import Web.Clipboard.ClipboardEvent (ClipboardEvent)
 import Web.DOM as DOM
+import Web.Event.CustomEvent (CustomEvent)
+import Web.Event.Event (Event)
+import Web.File.FileReader (FileReader)
 import Web.HTML as HTML
+import Web.HTML.Event.BeforeUnloadEvent (BeforeUnloadEvent)
+import Web.HTML.Event.DragEvent (DragEvent)
+import Web.HTML.Event.ErrorEvent (ErrorEvent)
+import Web.HTML.Event.HashChangeEvent (HashChangeEvent)
+import Web.HTML.Event.PageTransitionEvent (PageTransitionEvent)
+import Web.HTML.Event.PopStateEvent (PopStateEvent)
+import Web.HTML.Event.TrackEvent (TrackEvent)
+import Web.Socket.Event.CloseEvent (CloseEvent)
+import Web.Socket.Event.MessageEvent (MessageEvent)
+import Web.Socket.WebSocket (WebSocket)
+import Web.Storage.Event.StorageEvent (StorageEvent)
+import Web.TouchEvent.TouchEvent (TouchEvent)
+import Web.UIEvent.CompositionEvent (CompositionEvent)
+import Web.UIEvent.FocusEvent (FocusEvent)
+import Web.UIEvent.InputEvent (InputEvent)
+import Web.UIEvent.KeyboardEvent (KeyboardEvent)
+import Web.UIEvent.MouseEvent (MouseEvent)
+import Web.UIEvent.UIEvent (UIEvent)
+import Web.UIEvent.WheelEvent (WheelEvent)
+import Web.XHR.ProgressEvent (ProgressEvent)
 
-class DOMType a where
+class DOMType (a :: Type) where
   typeName :: Proxy a -> String
 
 instance DOMType DOM.Node where
@@ -33,6 +57,9 @@ instance DOMType DOM.ProcessingInstruction where
 
 instance DOMType DOM.Text where
   typeName _ = "Text"
+
+instance DOMType FileReader where
+  typeName _ = "FileReader"
 
 instance DOMType HTML.HTMLAnchorElement where
   typeName _ = "HTMLAnchorElement"
@@ -222,3 +249,75 @@ instance DOMType HTML.HTMLUListElement where
 
 instance DOMType HTML.HTMLVideoElement where
   typeName _ = "HTMLVideoElement"
+
+instance DOMType HTML.Window where
+  typeName _ = "Window"
+
+instance DOMType WebSocket where
+  typeName _ = "WebSocket"
+
+instance DOMType Event where
+  typeName _ = "Event"
+
+instance DOMType ClipboardEvent where
+  typeName _ = "ClipboardEvent"
+
+instance DOMType CustomEvent where
+  typeName _ = "CustomEvent"
+
+instance DOMType BeforeUnloadEvent where
+  typeName _ = "BeforeUnloadEvent"
+
+instance DOMType DragEvent where
+  typeName _ = "DragEvent"
+
+instance DOMType ErrorEvent where
+  typeName _ = "ErrorEvent"
+
+instance DOMType HashChangeEvent where
+  typeName _ = "HashChangeEvent"
+
+instance DOMType PageTransitionEvent where
+  typeName _ = "PageTransitionEvent"
+
+instance DOMType PopStateEvent where
+  typeName _ = "PopStateEvent"
+
+instance DOMType TrackEvent where
+  typeName _ = "TrackEvent"
+
+instance DOMType CloseEvent where
+  typeName _ = "CloseEvent"
+
+instance DOMType MessageEvent where
+  typeName _ = "MessageEvent"
+
+instance DOMType StorageEvent where
+  typeName _ = "StorageEvent"
+
+instance DOMType TouchEvent where
+  typeName _ = "TouchEvent"
+
+instance DOMType CompositionEvent where
+  typeName _ = "CompositionEvent"
+
+instance DOMType FocusEvent where
+  typeName _ = "FocusEvent"
+
+instance DOMType InputEvent where
+  typeName _ = "InputEvent"
+
+instance DOMType KeyboardEvent where
+  typeName _ = "KeyboardEvent"
+
+instance DOMType MouseEvent where
+  typeName _ = "MouseEvent"
+
+instance DOMType UIEvent where
+  typeName _ = "UIEvent"
+
+instance DOMType WheelEvent where
+  typeName _ = "WheelEvent"
+
+instance DOMType ProgressEvent where
+  typeName _ = "ProgressEvent"
