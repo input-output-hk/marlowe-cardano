@@ -8,7 +8,11 @@ on:
   schedule:
   - cron: '0 4 * * *'
   push:
-    branches: [ SCP-3139/e2e-tests-2 ]
+    branches:
+      - SCP-3139/e2e-tests-2
+      - sprint-*
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -22,7 +26,6 @@ jobs:
           ssh-agent -a $SSH_AUTH_SOCK > /dev/null
           ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
       - uses: actions/checkout@v2
-      - uses: purescript-contrib/setup-purescript@main
       - uses: cachix/install-nix-action@v16
         with:
           nix_path: nixpkgs=channel:nixos-unstable
@@ -35,36 +38,6 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '12.12.0'
-      - run: |
-          nix flake lock
-          nix-shell --command "update-client-deps"
-      - name: Run Marlowe Playground Server
-        working-directory: ./
-        env:
-          GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID_GITHUB }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_GITHUB }}
-          JWT_SIGNATURE: ${{ secrets.JWT_SIGNATURE }}
-          FRONTEND_URL: https://localhost:8009
-          GITHUB_CALLBACK_PATH: "/#/gh-oauth-cb"
-          SERVER_PORT: 8080
-        run: |
-          $(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver &
-          while ! echo exit | nc localhost $SERVER_PORT; do echo "Waiting for playground server on $SERVER_PORT" && sleep 10; done
-
-      - name: Run Marlowe Playground Client
-        working-directory: ./
-        env:
-          CLIENT_PORT: 8009
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-        run: |
-          cd marlowe-playground-client
-          npm install
-          npm run build:spago
-          npm run build:webpack:dev:vendor
-          npm run build:webpack:dev &
-          while ! echo exit | nc localhost $CLIENT_PORT; do echo "Waiting for playground client on $CLIENT_PORT" && sleep 10; done
-          sleep 120
-
       - name: Setup Playwright
         working-directory: ./marlowe-playground-client/e2e-tests/
         run: |

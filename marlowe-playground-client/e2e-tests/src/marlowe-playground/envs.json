@@ -1,4 +1,3 @@
 [
-  { "name" : "staging",       "url" : "https://marlowe-playground-staging.plutus.aws.iohkdev.io/" },
-  { "name" : "production",    "url" : "https://play.marlowe-finance.io/#/" }
+  { "name" : "staging",       "url" : "https://marlowe-playground-staging.plutus.aws.iohkdev.io/" }
 ]
