@@ -19,7 +19,6 @@ import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype, unwrap)
 import Marlowe.Semantics (MarloweData, MarloweParams, TransactionInput)
 import Plutus.V1.Ledger.Address (Address)
-import Prelude as Data
 import Type.Proxy (Proxy(..))
 
 -- This is the state of the follower contract. Its purpose is to provide us with an up-to-date

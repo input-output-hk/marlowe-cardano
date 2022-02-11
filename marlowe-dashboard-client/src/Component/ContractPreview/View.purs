@@ -15,7 +15,8 @@ import Component.Progress.Circular as Progress
 import Css as Css
 import Data.ContractNickname as ContractNickname
 import Data.Either (fromRight)
-import Data.Lens ((^.))
+import Data.Lens (to, (^.), (^?))
+import Data.Maybe (fromMaybe)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -24,9 +25,10 @@ import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
 import Halogen.HTML.Properties (InputType(..), placeholder, type_, value)
 import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
+import Marlowe.Execution.State as Execution
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
-import Page.Contract.Lenses (_executionState, _stateMetadata, _stateNickname)
+import Page.Contract.Lenses (_Started, _executionState, _stateMetadata)
 import Page.Contract.State (currentStep)
 import Page.Contract.Types (Action(..), State(..))
 
@@ -35,7 +37,10 @@ contractPreviewCard
   :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
 contractPreviewCard currentSlot state =
   let
-    nickname = state ^. _stateNickname
+    -- FIXME-3208: Refactor after changing Starting/Started
+    nickname :: String
+    nickname = fromMaybe "Unknown" $ state ^?
+      (_Started <<< _executionState <<< to Execution.contractName)
 
     contractType = state ^. (_stateMetadata <<< _contractType)
 
@@ -88,7 +93,7 @@ contractPreviewCard currentSlot state =
               , input
                   [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
                   , type_ InputText
-                  , value (ContractNickname.toString nickname)
+                  , value nickname
                   , onValueInput_
                       ( SetNickname <<< fromRight ContractNickname.unknown <<<
                           ContractNickname.fromString

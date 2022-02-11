@@ -31,8 +31,6 @@ import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
-import Data.ContractNickname (ContractNickname)
-import Data.ContractNickname as ContractNickname
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens
@@ -52,15 +50,10 @@ import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Lens.Traversal (traversed)
 import Data.List (filter, fromFoldable) as List
-import Data.Map (Map, filterKeys, insert, lookup, toUnfoldable)
+import Data.Map (filterKeys, insert, lookup, toUnfoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Data.PABConnectedWallet
-  ( PABConnectedWallet
-  , _assets
-  , _walletId
-  , _walletNickname
-  )
+import Data.PABConnectedWallet (_assets, _walletId, _walletNickname)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -83,7 +76,6 @@ import Marlowe.Semantics
   , Party(..)
   , Payee(..)
   , Payment(..)
-  , Slot
   )
 import Page.Contract.Lenses (_Started, _selectedStep)
 import Page.Contract.State (applyTimeout)
@@ -111,27 +103,14 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (followerContractExists)
+import Store.Contracts (followerContractExists, getContractNickname)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 mkInitialState
-  :: PABConnectedWallet
-  -- FIXME-3208: Contract nicknames should be indexed by MarloweParams
-  -> Map PlutusAppId ContractNickname
-  -> Slot
-  -> State
--- mkInitialState wallet contractNicknames currentSlot =
-mkInitialState _ _ _ =
-  -- FIXME-3208: Find another way to set the names and revisit the signature of this fn
-  -- mkInitialContractState followerAppId contractHistory =
-  --   let
-  --     nickname = fromMaybe ContractNickname.unknown $ lookup followerAppId
-  --       contractNicknames
-  --   in
-  --     Contract.mkInitialState wallet currentSlot nickname
-  --       contractHistory
+  :: State
+mkInitialState =
   { contactsState: Contacts.initialState
   , walletCompanionStatus: WaitingToSync
   , menuOpen: false
@@ -255,6 +234,8 @@ handleAction
   -- See note [polling updateTotalFunds]
   _ <- updateTotalFunds walletId
   contracts <- use _contracts
+  mContractNickname <- getContractNickname marloweParams <<< _.contracts <$>
+    getStore
   case lookup followerAppId contracts of
     Just contractState -> do
       let
@@ -279,7 +260,7 @@ handleAction
             )
     Nothing -> for_
       ( Contract.mkInitialState wallet currentSlot
-          ContractNickname.unknown
+          mContractNickname
           contractHistory
       )
       (modifying _contracts <<< insert followerAppId)

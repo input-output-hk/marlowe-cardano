@@ -11,6 +11,7 @@ module Marlowe.Execution.Types
 import Prologue
 
 import Data.BigInt.Argonaut (BigInt)
+import Data.ContractNickname (ContractNickname)
 import Data.List (List)
 import Data.Map (Map)
 import Marlowe.Semantics
@@ -36,11 +37,13 @@ import Marlowe.Semantics (State) as Semantic
 -- transaction input, and for timeouts we store the missed actions. This information is needed
 -- only by the contract carousel (only 1 open at a time), but it's pre-calculated for all
 -- contracts (even the closed ones).
+-- FIXME-3208
 -- At a later point, we might want to refactor the execution state to live outside the component
 -- state, as a global state (using https://github.com/thomashoneyman/purescript-halogen-store),
 -- and minimize the amount of cached information.
 type State =
-  { semanticState :: Semantic.State
+  { contractNickname :: Maybe ContractNickname
+  , semanticState :: Semantic.State
   , contract :: Contract
   , history :: Array PastState
   , mPendingTimeouts :: Maybe PendingTimeouts

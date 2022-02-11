@@ -49,8 +49,7 @@ type StartingState =
   }
 
 type StartedState =
-  { nickname :: ContractNickname
-  , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
+  { tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
   -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
   -- can advance the contract. This enables us to show immediate feedback to the user while we wait.

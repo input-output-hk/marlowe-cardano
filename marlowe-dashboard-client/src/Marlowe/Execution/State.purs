@@ -1,5 +1,6 @@
 module Marlowe.Execution.State
-  ( expandBalances
+  ( contractName
+  , expandBalances
   , extractNamedActions
   , getActionParticipant
   , getAllPayments
@@ -17,10 +18,12 @@ import Prologue
 import Data.Array (foldl)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromInt)
+import Data.ContractNickname (ContractNickname)
+import Data.ContractNickname as ContractNickname
 import Data.Lens (_2, view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, fromMaybe')
+import Data.Maybe (fromMaybe, fromMaybe', maybe)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
 import Marlowe.Execution.Lenses (_resultingPayments)
@@ -59,17 +62,18 @@ import Marlowe.Semantics
   )
 import Marlowe.Semantics (State) as Semantic
 
-mkInitialState :: Slot -> Contract -> State
-mkInitialState currentSlot contract =
+mkInitialState :: Slot -> Maybe ContractNickname -> Contract -> State
+mkInitialState currentSlot contractNickname contract =
   { semanticState: emptyState currentSlot
+  , contractNickname
   , contract
   , history: mempty
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
   }
 
-restoreState :: Slot -> ContractHistory -> State
-restoreState currentSlot history =
+restoreState :: Slot -> Maybe ContractNickname -> ContractHistory -> State
+restoreState currentSlot contractNickname history =
   let
     contract = view (_chParams <<< _2 <<< _marloweContract) history
     initialSemanticState = view (_chParams <<< _2 <<< _marloweState) history
@@ -77,6 +81,7 @@ restoreState currentSlot history =
     -- Derive the initial params from the Follower Contract params
     initialState =
       { semanticState: initialSemanticState
+      , contractNickname
       , contract
       , history: mempty
       , mPendingTimeouts: Nothing
@@ -88,8 +93,16 @@ restoreState currentSlot history =
       -- See if any step has timeouted
       # timeoutState currentSlot
 
+-- Each contract should always have a name, if we
+-- have given a Local nickname, we use that, if not we
+-- show the script address
+contractName :: State -> String
+contractName { contractNickname } = maybe "Unknown-fixme-3208"
+  ContractNickname.toString
+  contractNickname
+
 nextState :: TransactionInput -> State -> State
-nextState txInput { semanticState, contract, history } =
+nextState txInput { semanticState, contract, history, contractNickname } =
   let
     TransactionInput { interval: SlotInterval minSlot _, inputs } = txInput
 
@@ -126,6 +139,7 @@ nextState txInput { semanticState, contract, history } =
       }
   in
     { semanticState: txOutState
+    , contractNickname
     , contract: txOutContract
     , history: Array.snoc history pastState
     , mPendingTimeouts: Nothing
@@ -146,7 +160,13 @@ mkTx currentSlot contract inputs =
 timeoutState :: Slot -> State -> State
 timeoutState
   currentSlot
-  { semanticState, contract, history, mPendingTimeouts, mNextTimeout } =
+  { semanticState
+  , contract
+  , contractNickname
+  , history
+  , mPendingTimeouts
+  , mNextTimeout
+  } =
   let
     -- We start of by getting a PendingTimeout structure from the execution state (because the
     -- contract could already have some timeouts that were "advanced")
@@ -217,6 +237,7 @@ timeoutState
   in
     { semanticState
     , contract
+    , contractNickname
     , history
     , mPendingTimeouts: advancedTimeouts.mPendingTimeouts
     , mNextTimeout: advancedTimeouts.mNextTimeout

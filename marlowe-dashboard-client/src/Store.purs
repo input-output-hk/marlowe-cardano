@@ -6,6 +6,7 @@ import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
+import Data.LocalContractNicknames (LocalContractNicknames)
 import Data.Map (Map)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
@@ -17,7 +18,8 @@ import Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
-  , emptyContractStore
+  , mkContractStore
+  , modifyContractNicknames
   )
 import Store.Wallet (WalletAction, WalletStore)
 import Store.Wallet as Wallet
@@ -46,13 +48,13 @@ type Store =
 _wallet :: forall r a. Lens' { wallet :: a | r } a
 _wallet = prop (Proxy :: _ "wallet")
 
-mkStore :: AddressBook -> Store
-mkStore addressBook =
+mkStore :: AddressBook -> LocalContractNicknames -> Store
+mkStore addressBook contractNicknames =
   { -- # Wallet
     addressBook
   , wallet: Wallet.Disconnected
   -- # Contracts
-  , contracts: emptyContractStore
+  , contracts: mkContractStore contractNicknames
   -- # Backend Notifications
   , previousCompanionAppState: Nothing
   , currentSlot: zero
@@ -68,6 +70,7 @@ data Action
   -- Contract
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
   | AddFollowerContract Slot PlutusAppId ContractHistory
+  | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -81,7 +84,7 @@ data Action
 reduce :: Store -> Action -> Store
 reduce store = case _ of
   -- Backend Notifications
-  -- FIXME: SCP-3208
+  -- FIXME-3208: Need to create and call an advanceToSlot in Store.Contracts
   AdvanceToSlot newSlot -> store { currentSlot = newSlot }
   NewCompanionAppStateObserved state ->
     store { previousCompanionAppState = Just state }
@@ -93,6 +96,9 @@ reduce store = case _ of
   AddFollowerContract currentSlot followerId history -> store
     { contracts = addFollowerContract currentSlot followerId history
         store.contracts
+    }
+  ModifyContractNicknames f -> store
+    { contracts = modifyContractNicknames f store.contracts
     }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }

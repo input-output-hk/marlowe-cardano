@@ -13,14 +13,12 @@ module Page.Contract.Lenses
   , _resultingPayments
   , _selectedStep
   , _stateMetadata
-  , _stateNickname
   , _tab
   , _userParties
   ) where
 
 import Prologue
 
-import Data.ContractNickname (ContractNickname)
 import Data.Lens (Lens', Prism', lens', prism')
 import Data.Lens.Record (prop)
 import Data.Tuple.Nested ((/\))
@@ -48,13 +46,6 @@ _Started =
 
 _nickname :: forall a r. Lens' { nickname :: a | r } a
 _nickname = prop (Proxy :: _ "nickname")
-
-_stateNickname :: Lens' State ContractNickname
-_stateNickname = lens' go
-  where
-  go (Starting s) = s.nickname /\ Starting <<< s { nickname = _ }
-
-  go (Started s) = s.nickname /\ Started <<< s { nickname = _ }
 
 _tab :: forall a r. Lens' { tab :: a | r } a
 _tab = prop (Proxy :: _ "tab")

@@ -21,7 +21,6 @@ import Capability.Marlowe
   )
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , getContractNicknames
   , getWallet
   , updateWallet
   )
@@ -430,16 +429,7 @@ handleAction (Receive input) = do
   case oldStore.wallet, store.wallet of
     Disconnected, Connecting details -> enterDashboardState details
     Connecting _, Connected connectedWallet -> do
-      -- We now have all the running contracts for this wallet, but if new role tokens have been
-      -- given to the wallet since we last connected it, we'll need to create some more. Since
-      -- we've just subscribed to this wallet's WalletCompanion app, however, the creation of new
-      -- MarloweFollower apps will be triggered by the initial WebSocket status notification.
-      currentSlot <- use _currentSlot
-      contractNicknames <- getContractNicknames
       assign _subState $ Right $ Dashboard.mkInitialState
-        connectedWallet
-        contractNicknames
-        currentSlot
       handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
     Connected _, Disconnecting connectedWallet contracts ->
       enterWelcomeState connectedWallet contracts

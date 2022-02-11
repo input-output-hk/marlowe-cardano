@@ -18,7 +18,7 @@ import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , insertIntoContractNicknames
+  , modifyContractNicknames
   )
 import Capability.Toast (class Toast, addToast)
 import Component.Contacts.State (adaToken, getAda)
@@ -57,6 +57,7 @@ import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Lens.Lens.Tuple (_2)
 import Data.List (toUnfoldable)
+import Data.LocalContractNicknames (insertContractNickname)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Newtype (unwrap)
@@ -185,23 +186,22 @@ mkPlaceholderState nickname metaData =
 mkInitialState
   :: PABConnectedWallet
   -> Slot
-  -> ContractNickname
+  -> Maybe ContractNickname
   -> ContractHistory
   -> Maybe State
-mkInitialState wallet currentSlot nickname contractHistory =
+mkInitialState wallet currentSlot mNickname contractHistory =
   let
     marloweParams /\ marloweData = view _chParams contractHistory
     chHistory = view _chHistory contractHistory
     contract = view _marloweContract marloweData
     mTemplate = findTemplate contract
     minSlot = view (_marloweState <<< _minSlot) marloweData
-    initialExecutionState = Execution.mkInitialState minSlot contract
+    initialExecutionState = Execution.mkInitialState minSlot mNickname contract
   in
     flip map mTemplate \template ->
       let
         initialState =
-          { nickname
-          , tab: Tasks
+          { tab: Tasks
           , executionState: initialExecutionState
           , pendingTransaction: Nothing
           , previousSteps: mempty
@@ -268,9 +268,9 @@ updateState
           contract = marloweData ^. _marloweContract
           participants = getParticipants contract
         in
-          { nickname
-          , tab: Tasks
-          , executionState: Execution.mkInitialState currentSlot contract
+          { tab: Tasks
+          , executionState: Execution.mkInitialState currentSlot (Just nickname)
+              contract
           , pendingTransaction: Nothing
           , previousSteps: []
           , marloweParams
@@ -356,10 +356,10 @@ handleAction { followerAppId } SelectSelf = callMainFrameAction
   $ Dashboard.SelectContract
   $ Just followerAppId
 
-handleAction { followerAppId } (SetNickname nickname) =
-  withStarted \started -> do
-    put $ Started started { nickname = nickname }
-    insertIntoContractNicknames followerAppId nickname
+handleAction _ (SetNickname nickname) =
+  withStarted \{ marloweParams } -> do
+    void $ modifyContractNicknames $ insertContractNickname marloweParams
+      nickname
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction { currentSlot, wallet } (ConfirmAction namedAction) =

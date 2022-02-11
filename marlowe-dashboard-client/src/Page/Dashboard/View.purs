@@ -20,7 +20,6 @@ import Component.Tooltip.Types (ReferenceId(..))
 import Css as Css
 import Data.Address as A
 import Data.Compactable (compact)
-import Data.ContractNickname as ContractNickname
 import Data.Int (round)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
@@ -67,9 +66,11 @@ import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
+import Marlowe.Execution.State (contractName) as Execution
+import Marlowe.Execution.Types (State) as Execution
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (PubKey, Slot)
-import Page.Contract.Lenses (_stateNickname)
+import Page.Contract.Lenses (_Started, _executionState)
 import Page.Contract.Types (State) as Contract
 import Page.Contract.View (contractScreen)
 import Page.Dashboard.Lenses
@@ -105,7 +106,9 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
 
     selectedContractFollowerAppId = state ^. _selectedContractFollowerAppId
 
-    selectedContract = preview _selectedContract state
+    selectedContract = preview
+      (_selectedContract <<< _Started <<< _executionState)
+      state
   in
     div
       [ classNames
@@ -335,7 +338,7 @@ mobileMenu menuOpen =
 dashboardBreadcrumb
   :: forall m
    . MonadAff m
-  => (Maybe Contract.State)
+  => (Maybe Execution.State)
   -> ComponentHTML Action ChildSlots m
 dashboardBreadcrumb mSelectedContractState =
   div [ classNames [ "border-b", "border-gray" ] ]
@@ -365,7 +368,7 @@ dashboardBreadcrumb mSelectedContractState =
                     ]
                 ]
                 where
-                nickname = ContractNickname.toString $ state ^. _stateNickname
+                nickname = Execution.contractName state
               Nothing -> []
     ]
 

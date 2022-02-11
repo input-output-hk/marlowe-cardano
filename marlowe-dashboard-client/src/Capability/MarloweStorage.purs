@@ -1,14 +1,14 @@
 module Capability.MarloweStorage
-  ( addressBookLocalStorageKey
-  , class ManageMarloweStorage
+  ( class ManageMarloweStorage
   , clearAllLocalStorage
+  , getAddressBook
   , getContractNicknames
-  , insertIntoContractNicknames
+  , getWallet
   , modifyAddressBook
   , modifyAddressBook_
-  , walletRoleContractsLocalStorageKey
+  , modifyContractNicknames
   , updateWallet
-  , getWallet
+  , walletRoleContractsLocalStorageKey
   ) where
 
 import Prologue
@@ -16,24 +16,27 @@ import Prologue
 import AppM (AppM)
 import Control.Monad.Except (lift)
 import Data.AddressBook (AddressBook)
+import Data.AddressBook as AddressBook
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
-import Data.ContractNickname (ContractNickname)
 import Data.Either (hush)
-import Data.Map (Map, insert)
-import Data.Map as Map
+import Data.LocalContractNicknames
+  ( LocalContractNicknames
+  , emptyLocalContractNicknames
+  )
 import Data.Maybe (fromMaybe)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (WalletDetails, mkWalletDetails)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
+import Effect (Effect)
 import Effect.Class (liftEffect)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (getStore, updateStore)
 import LocalStorage (Key(..), getItem, removeItem, setItem)
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Store (Action(..))
+import Store.Contracts as ContractStore
 
 addressBookLocalStorageKey :: Key
 addressBookLocalStorageKey = Key "addressBook"
@@ -54,8 +57,9 @@ class
   -- Address book
   modifyAddressBook :: (AddressBook -> AddressBook) -> m AddressBook
   -- contract nicknames
-  getContractNicknames :: m (Map PlutusAppId ContractNickname)
-  insertIntoContractNicknames :: PlutusAppId -> ContractNickname -> m Unit
+  modifyContractNicknames
+    :: (LocalContractNicknames -> LocalContractNicknames)
+    -> m LocalContractNicknames
   -- Wallet
   updateWallet
     :: Maybe (WalletNickname /\ WalletId /\ PaymentPubKeyHash) -> m Unit
@@ -67,6 +71,20 @@ modifyAddressBook_
   => (AddressBook -> AddressBook)
   -> m Unit
 modifyAddressBook_ = void <<< modifyAddressBook
+
+getAddressBook :: Effect AddressBook
+getAddressBook = decodeAddressBook <$> getItem addressBookLocalStorageKey
+  where
+  decodeAddressBook mAddressBookJson = fromMaybe AddressBook.empty $
+    hush <<< parseDecodeJson =<< mAddressBookJson
+
+getContractNicknames :: Effect LocalContractNicknames
+getContractNicknames = decodeContractNicknames <$> getItem
+  contractNicknamesLocalStorageKey
+  where
+  decodeContractNicknames mContractNicknames =
+    fromMaybe emptyLocalContractNicknames $ hush <<< parseDecodeJson =<<
+      mContractNicknames
 
 instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
   clearAllLocalStorage =
@@ -82,18 +100,15 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       $ encodeStringifyJson addressBook
     pure addressBook
 
-  -- contract nicknames
-  getContractNicknames = do
-    mContractNicknamesJson <- liftEffect $ getItem
-      contractNicknamesLocalStorageKey
-    pure $ fromMaybe Map.empty $ hush <<< parseDecodeJson =<<
-      mContractNicknamesJson
-  insertIntoContractNicknames plutusAppId nickname = do
-    contractNicknames <- getContractNicknames
-    let
-      updatedContractNicknames = insert plutusAppId nickname contractNicknames
-    liftEffect $ setItem contractNicknamesLocalStorageKey $ encodeStringifyJson
-      updatedContractNicknames
+  modifyContractNicknames f = do
+    updateStore $ ModifyContractNicknames f
+    contractNicknames <- ContractStore.getContractNicknames <<< _.contracts <$>
+      getStore
+    liftEffect
+      $ setItem contractNicknamesLocalStorageKey
+      $ encodeStringifyJson contractNicknames
+    pure contractNicknames
+
   -- Wallet
   updateWallet Nothing = liftEffect $ removeItem walletLocalStorageKey
   updateWallet (Just wallet) = liftEffect $ setItem walletLocalStorageKey $
@@ -115,8 +130,6 @@ instance manageMarloweStorageHalogenM ::
   ManageMarloweStorage (HalogenM state action slots msg m) where
   clearAllLocalStorage = lift clearAllLocalStorage
   modifyAddressBook = lift <<< modifyAddressBook
-  getContractNicknames = lift getContractNicknames
-  insertIntoContractNicknames plutusAppId nickname = lift $
-    insertIntoContractNicknames plutusAppId nickname
+  modifyContractNicknames = lift <<< modifyContractNicknames
   updateWallet = lift <<< updateWallet
   getWallet = lift getWallet
