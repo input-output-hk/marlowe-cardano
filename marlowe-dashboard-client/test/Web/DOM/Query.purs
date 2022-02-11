@@ -5,6 +5,7 @@ module Test.Web.DOM.Query
   , MatcherFunction
   , MatcherOptions
   , class IsMatcher
+  , byRoleDefault
   , toMatcher
   , findBy
   , findAllBy
@@ -88,32 +89,45 @@ type ByRoleOptions matcher =
     -- | If true includes elements in the query set that are usually excluded from
     -- | the accessibility tree. `role="none"` or `role="presentation"` are included
     -- | in either case.
-    hidden :: Boolean
+    hidden :: Undefinable Boolean
   -- | If true only includes elements in the query set that are marked as
   -- | selected in the accessibility tree, i.e., `aria-selected="true"`
-  , selected :: Boolean
+  , selected :: Undefinable Boolean
   -- | If true only includes elements in the query set that are marked as
   -- | checked in the accessibility tree, i.e., `aria-checked="true"`
-  , checked :: Boolean
+  , checked :: Undefinable Boolean
   -- | If true only includes elements in the query set that are marked as
   -- | pressed in the accessibility tree, i.e., `aria-pressed="true"`
-  , pressed :: Boolean
+  , pressed :: Undefinable Boolean
   -- | Filters elements by their `aria-current` state. `true` and `false`
   -- | match `aria-current="true"` and `aria-current="false"` (as well as a
   -- | missing `aria-current` attribute) respectively.
-  , current :: Boolean
+  , current :: Undefinable Boolean
   -- | If true only includes elements in the query set that are marked as
   -- | expanded in the accessibility tree, i.e., `aria-expanded="true"`
-  , expanded :: Boolean
+  , expanded :: Undefinable Boolean
   -- | Includes elements with the `"heading"` role matching the indicated level,
   -- | either by the semantic HTML heading elements `<h1>-<h6>` or matching
   -- | the `aria-level` attribute.
-  , level :: Int
+  , level :: Undefinable Int
   -- | Includes every role used in the `role` attribute
   -- | For example *ByRole('progressbar', {queryFallbacks: true})` will find <div role="meter progressbar">`.
-  , queryFallbacks :: Boolean
+  , queryFallbacks :: Undefinable Boolean
   -- | Only considers elements with the specified accessible name.
-  , name :: Maybe matcher
+  , name :: Undefinable matcher
+  }
+
+byRoleDefault :: forall matcher. ByRoleOptions matcher
+byRoleDefault =
+  { hidden: toUndefinable Nothing
+  , selected: toUndefinable Nothing
+  , checked: toUndefinable Nothing
+  , pressed: toUndefinable Nothing
+  , current: toUndefinable Nothing
+  , expanded: toUndefinable Nothing
+  , level: toUndefinable Nothing
+  , queryFallbacks: toUndefinable Nothing
+  , name: toUndefinable Nothing
   }
 
 data Match
@@ -172,7 +186,8 @@ role'
   => ARIARole
   -> ByRoleOptions matcher
   -> Match
-role' r options = Role r $ Just options { name = toMatcher <$> options.name }
+role' r options = Role r $ Just options
+  { name = toUndefinable $ toMatcher <$> toMaybe options.name }
 
 testId'
   :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
