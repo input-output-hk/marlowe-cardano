@@ -16,7 +16,8 @@ then
     error "GITHUB_SHA environment variable not set!"
 fi
 
-readonly ref="${GITHUB_REF_SLUG:-}"
+ref="${GITHUB_REF_SLUG:-}"
+ref="${ref//[0-9]/}"
 
 if [ -z "${ref}" ]
 then
@@ -26,6 +27,7 @@ fi
 declare -A ref_env_mapping=(
     [production]=production
     [main]=staging
+    [sprint-]=currentSprintMarlowe
     [deploy-hernan]=hernan
     [deploy-pablo]=pablo
     [shlevy]=shlevy
