@@ -4,6 +4,7 @@ import Prelude
 
 import Control.Alt (class Alt)
 import Control.Alternative (class Alternative)
+import Control.Bind (bindFlipped)
 import Control.Monad.Cont.Class (class MonadCont)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow)
 import Control.Monad.Reader (ReaderT(..), asks, mapReaderT)
@@ -28,6 +29,7 @@ import Effect (Effect)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Uncurried (EffectFn1, runEffectFn1, runEffectFn2, runEffectFn3)
+import Test.Web.DOM.Element (class IsElement, toElement)
 import Test.Web.Event.User.Api
   ( class IsClipboardData
   , class IsFileOrFiles
@@ -42,10 +44,9 @@ import Test.Web.Event.User.Api
   )
 import Test.Web.Event.User.Monad (class MonadUser, api)
 import Test.Web.Event.User.Options (UserOptions)
+import Test.Web.HTML.HTMLElement (class IsHTMLElement, toHTMLElement)
 import Test.Web.Monad (class MonadTest)
 import Unsafe.Coerce (unsafeCoerce)
-import Web.DOM (Element)
-import Web.HTML (HTMLElement)
 
 newtype UserM (m :: Type -> Type) a = UserM (ReaderT UserEvent m a)
 
@@ -110,20 +111,98 @@ withUserApi
   -> m a
 withUserApi f = liftAff <<< toAffE <<< f =<< api
 
-click :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-click element = withUserApi \api -> runEffectFn1 api.click element
+click
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => element
+  -> m Unit
+click element = withUserApi \api -> runEffectFn1 api.click $ toElement element
 
-dblClick :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-dblClick element = withUserApi \api -> runEffectFn1 api.dblClick element
+clickM
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> m Unit
+clickM = bindFlipped click
 
-tripleClick :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-tripleClick element = withUserApi \api -> runEffectFn1 api.tripleClick element
+dblClick
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => element
+  -> m Unit
+dblClick element = withUserApi \api ->
+  runEffectFn1 api.dblClick $ toElement element
 
-hover :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-hover element = withUserApi \api -> runEffectFn1 api.hover element
+dblClickM
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> m Unit
+dblClickM = bindFlipped dblClick
 
-unhover :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-unhover element = withUserApi \api -> runEffectFn1 api.unhover element
+tripleClick
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => element
+  -> m Unit
+tripleClick element = withUserApi \api ->
+  runEffectFn1 api.tripleClick $ toElement element
+
+tripleClickM
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> m Unit
+tripleClickM = bindFlipped tripleClick
+
+hover
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => element
+  -> m Unit
+hover element = withUserApi \api -> runEffectFn1 api.hover $ toElement element
+
+hoverM
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> m Unit
+hoverM = bindFlipped hover
+
+unhover
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => element
+  -> m Unit
+unhover element = withUserApi \api ->
+  runEffectFn1 api.unhover $ toElement element
+
+unhoverM
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> m Unit
+unhoverM = bindFlipped unhover
 
 data ShiftState = ShiftPressed | ShiftNotPressed
 
@@ -159,49 +238,114 @@ pointer
   -> m Unit
 pointer p = withUserApi \api -> runEffectFn1 api.pointer $ toPointerInput p
 
-clear :: forall m. MonadAff m => MonadUser m => Element -> m Unit
-clear element = withUserApi \api -> runEffectFn1 api.clear element
-
-deselectOptions
-  :: forall options m
-   . IsSelectOptions options
+clear
+  :: forall element m
+   . IsElement element
   => MonadAff m
   => MonadUser m
-  => Element
+  => element
+  -> m Unit
+clear element = withUserApi \api -> runEffectFn1 api.clear $ toElement element
+
+clearM
+  :: forall element m
+   . IsElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> m Unit
+clearM = bindFlipped clear
+
+deselectOptions
+  :: forall options element m
+   . IsElement element
+  => IsSelectOptions options
+  => MonadAff m
+  => MonadUser m
+  => element
   -> options
   -> m Unit
 deselectOptions element options = withUserApi \api ->
-  runEffectFn2 api.selectOptions element $ toSelectOptions options
+  runEffectFn2 api.selectOptions (toElement element) $ toSelectOptions options
 
-selectOptions
-  :: forall options m
-   . IsSelectOptions options
+deselectOptionsM
+  :: forall options element m
+   . IsElement element
+  => IsSelectOptions options
   => MonadAff m
   => MonadUser m
-  => Element
+  => m element
+  -> options
+  -> m Unit
+deselectOptionsM element options = flip deselectOptions options =<< element
+
+selectOptions
+  :: forall options element m
+   . IsElement element
+  => IsSelectOptions options
+  => MonadAff m
+  => MonadUser m
+  => element
   -> options
   -> m Unit
 selectOptions element options = withUserApi \api ->
-  runEffectFn2 api.selectOptions element $ toSelectOptions options
+  runEffectFn2 api.selectOptions (toElement element) $ toSelectOptions options
+
+selectOptionsM
+  :: forall options element m
+   . IsElement element
+  => IsSelectOptions options
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> options
+  -> m Unit
+selectOptionsM element options = flip selectOptions options =<< element
 
 type_
-  :: forall m
-   . MonadAff m
+  :: forall element m
+   . IsElement element
+  => MonadAff m
   => MonadUser m
-  => Element
+  => element
   -> String
   -> Maybe TypeOptions
   -> m Unit
-type_ element text options =
-  withUserApi \api -> runEffectFn3 api.type element text $ toUndefinable options
+type_ element text options = withUserApi \api ->
+  runEffectFn3 api.type (toElement element) text $ toUndefinable options
 
-upload
-  :: forall files m
-   . IsFileOrFiles files
+typeM
+  :: forall element m
+   . IsElement element
   => MonadAff m
   => MonadUser m
-  => HTMLElement
+  => m element
+  -> String
+  -> Maybe TypeOptions
+  -> m Unit
+typeM mElement text options = do
+  element <- mElement
+  type_ element text options
+
+upload
+  :: forall files element m
+   . IsFileOrFiles files
+  => IsHTMLElement element
+  => MonadAff m
+  => MonadUser m
+  => element
   -> files
   -> m Unit
-upload element files =
-  withUserApi \api -> runEffectFn2 api.upload element $ toFileOrFiles files
+upload element files = withUserApi \api ->
+  runEffectFn2 api.upload (toHTMLElement element) $ toFileOrFiles files
+
+uploadM
+  :: forall files element m
+   . IsFileOrFiles files
+  => IsHTMLElement element
+  => MonadAff m
+  => MonadUser m
+  => m element
+  -> files
+  -> m Unit
+uploadM element files = flip upload files =<< element

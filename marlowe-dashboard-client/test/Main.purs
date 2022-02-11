@@ -23,7 +23,7 @@ import Test.Spec.Runner (runSpec)
 import Test.Web (runTestMInBody)
 import Test.Web.DOM.Assertions (shouldHaveId, shouldHaveTagName, shouldHaveText)
 import Test.Web.DOM.Query (byRoleDefault, findBy, getBy, role, role')
-import Test.Web.Event.User (click, runUserM)
+import Test.Web.Event.User (click, clickM, runUserM)
 import Test.Web.Monad (getContainer)
 import Web.ARIA (ARIARole(..))
 import Web.DOM (Element)
@@ -51,13 +51,8 @@ testingLibrarySpec = do
         paragraph `shouldHaveId` "para"
         paragraph `shouldHaveTagName` "p"
         paragraph `shouldHaveText` "Test content"
-        -- TODO add clickM
-        -- clickM $ findBy $ role Button
-        click =<< findBy (role Button)
+        clickM $ findBy $ role Button
         paragraph `shouldHaveText` "It worked!"
-
--- getBy, findBy, role are from `purescript-testing-library`
--- click is from `purescript-user-event`
 
 -------------------------------------------------------------------------------
 -- Demo tests for halogen-testing-library
