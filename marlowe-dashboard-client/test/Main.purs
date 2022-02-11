@@ -21,7 +21,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties.ARIA as HP
 import Halogen.Subscription as HS
 import Test.Halogen (runUITest)
-import Test.Spec (describe, it)
+import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
@@ -34,11 +34,20 @@ import Web.ARIA (ARIARole(..))
 import Web.DOM (Element)
 import Web.DOM.Element as Element
 
-foreign import setupTestApp :: Element -> Effect Unit
-
 main :: Effect Unit
 main = launchAff_ $ runSpec [ consoleReporter ] do
-  describe "purescript-testing-library" do
+  testingLibrarySpec
+  halogenTestingLibrarySpec
+
+-------------------------------------------------------------------------------
+-- Demo tests for purescript-testing-library
+-------------------------------------------------------------------------------
+
+foreign import setupTestApp :: Element -> Effect Unit
+
+testingLibrarySpec :: Spec Unit
+testingLibrarySpec = do
+  describe "testing-library" do
     it "works with JSDOM" do
       runUserM Nothing $ runTestMInBody do
         body <- getContainer
@@ -50,65 +59,12 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
         Element.toNode paragraph `shouldHaveText` "Test content"
         click =<< findBy (role Button)
         Element.toNode paragraph `shouldHaveText` "It worked!"
-  describe "purescript-halogen-testing-library" do
-    it "Receives the initial input" do
-      runUITest counter 10 do
-        span <- getBy $ role Textbox
-        Element.toNode span `shouldHaveText` "10"
-    it "Handles user interaction" do
-      runUITest counter 0 do
-        decrement <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "-"
-          }
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        span <- Element.toNode <$> getBy (role Textbox)
-        click increment
-        span `shouldHaveText` "1"
-        click decrement
-        click decrement
-        span `shouldHaveText` "-1"
-    it "Sends messages" do
-      runUITest counter 0 do
-        decrement <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "-"
-          }
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        messagesRef <- liftEffect $ Ref.new []
-        { messages } <- ask
-        void $ liftEffect $ HS.subscribe messages \i ->
-          Ref.modify_ (flip Array.snoc i) messagesRef
-        click increment
-        click decrement
-        flip shouldEqual [ 1, 0 ] =<< liftEffect (Ref.read messagesRef)
-    it "Handles queries" do
-      runUITest counter 0 do
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        span <- Element.toNode <$> getBy (role Textbox)
-        { query } :: HalogenIO Query Int Aff <- ask
-        click increment
-        click increment
-        value <- liftAff $ query (H.mkRequest GetValue)
-        value `shouldEqual` Just 2
-        void $ liftAff $ query (H.mkTell (SetValue 10))
-        span `shouldHaveText` "10"
 
---    it "Can be debugged" do
---      runUITest counter 0 do
---        increment <- getBy $ role' Button byRoleDefault
---          { name = toUndefinable $ Just "+"
---          }
---        span <- getBy (role Textbox)
---        click increment
---        click increment
---        debugElement increment
---        debugElements [ increment, span ]
---        logTestingPlaygroundURL
+-------------------------------------------------------------------------------
+-- Demo tests for halogen-testing-library
+-------------------------------------------------------------------------------
+
+-- Simple Counter component
 
 data Query a
   = GetValue (Int -> a)
@@ -149,3 +105,71 @@ handleQuery = case _ of
   SetValue n a -> do
     H.put n
     pure $ Just a
+
+-- Component Spec
+
+halogenTestingLibrarySpec :: Spec Unit
+halogenTestingLibrarySpec = do
+  describe "halogen-testing-library" do
+
+    it "Receives the initial input" do
+      runUITest counter 10 do
+        span <- getBy $ role Textbox
+        Element.toNode span `shouldHaveText` "10"
+
+    it "Handles user interaction" do
+      runUITest counter 0 do
+        decrement <- getBy $ role' Button byRoleDefault
+          { name = toUndefinable $ Just "-"
+          }
+        increment <- getBy $ role' Button byRoleDefault
+          { name = toUndefinable $ Just "+"
+          }
+        span <- Element.toNode <$> getBy (role Textbox)
+        click increment
+        span `shouldHaveText` "1"
+        click decrement
+        click decrement
+        span `shouldHaveText` "-1"
+
+    it "Sends messages" do
+      runUITest counter 0 do
+        decrement <- getBy $ role' Button byRoleDefault
+          { name = toUndefinable $ Just "-"
+          }
+        increment <- getBy $ role' Button byRoleDefault
+          { name = toUndefinable $ Just "+"
+          }
+        messagesRef <- liftEffect $ Ref.new []
+        { messages } <- ask
+        void $ liftEffect $ HS.subscribe messages \i ->
+          Ref.modify_ (flip Array.snoc i) messagesRef
+        click increment
+        click decrement
+        flip shouldEqual [ 1, 0 ] =<< liftEffect (Ref.read messagesRef)
+
+    it "Handles queries" do
+      runUITest counter 0 do
+        increment <- getBy $ role' Button byRoleDefault
+          { name = toUndefinable $ Just "+"
+          }
+        span <- Element.toNode <$> getBy (role Textbox)
+        { query } :: HalogenIO Query Int Aff <- ask
+        click increment
+        click increment
+        value <- liftAff $ query (H.mkRequest GetValue)
+        value `shouldEqual` Just 2
+        void $ liftAff $ query (H.mkTell (SetValue 10))
+        span `shouldHaveText` "10"
+
+--    it "Can be debugged" do
+--      runUITest counter 0 do
+--        increment <- getBy $ role' Button byRoleDefault
+--          { name = toUndefinable $ Just "+"
+--          }
+--        span <- getBy (role Textbox)
+--        click increment
+--        click increment
+--        debugElement increment
+--        debugElements [ increment, span ]
+--        logTestingPlaygroundURL
