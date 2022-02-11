@@ -103,11 +103,12 @@ import Marlowe.Semantics
   , _accounts
   , _marloweContract
   , _marloweState
-  , _minSlot
+  , _minTime
   , _rolesCurrency
   )
 import Marlowe.Semantics (Input(..)) as Semantic
 import Marlowe.Semantics as Semantics
+import Marlowe.Slot (posixTimeToSlot)
 import Page.Contract.Lenses
   ( _Started
   , _executionState
@@ -177,7 +178,7 @@ mkInitialState wallet currentSlot mNickname contractHistory =
     chHistory = view _chHistory contractHistory
     contract = view _marloweContract marloweData
     mTemplate = findTemplate contract
-    minSlot = view (_marloweState <<< _minSlot) marloweData
+    minSlot = posixTimeToSlot (view (_marloweState <<< _minTime) marloweData)
 
   in
     flip map mTemplate \template ->

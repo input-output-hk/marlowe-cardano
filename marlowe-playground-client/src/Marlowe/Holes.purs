@@ -62,6 +62,7 @@ import Marlowe.Template
   , getPlaceholderIds
   )
 import Monaco (IRange)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Text.Pretty
   ( class Args
   , class Pretty
@@ -704,7 +705,9 @@ instance fillableTimeout :: Fillable Timeout TemplateContent where
 
 instance hasTimeoutTimeout :: HasTimeout Timeout where
   timeouts (Slot slot) = Timeouts
-    { maxTime: (S.Slot slot), minTime: Just (S.Slot slot) }
+    { maxTime: (POSIXTime { getPOSIXTime: slot })
+    , minTime: Just (POSIXTime { getPOSIXTime: slot })
+    }
   timeouts (SlotParam _) = Timeouts { maxTime: zero, minTime: Nothing }
 
 instance timeoutFromTerm :: FromTerm Timeout EM.Timeout where
@@ -1505,7 +1508,7 @@ reduceContractStep env state contract = case contract of
     "this function should not be called with slot params"
   When _ (Term (Slot timeout) _) nextContract ->
     let
-      sTimeout = S.Slot timeout
+      sTimeout = POSIXTime { getPOSIXTime: timeout }
 
       startSlot = view (_slotInterval <<< to ivFrom) env
 

@@ -70,8 +70,8 @@ actionShow = escape . showAction
     showAction (Notify obs) = "A notification on " ++ observationShow obs
 
 timeoutShow :: Timeout -> String
-timeoutShow (SlotParam slotId) = show slotId
-timeoutShow (Slot slotNumber)  = show slotNumber ++ " slots after start"
+timeoutShow (SlotParam slotId)     = show slotId
+timeoutShow (POSIXTime slotNumber) = show slotNumber ++ " slots after start"
 
 -- | A concise representation of an Observation for display in a node.
 observationShow :: Observation -> String

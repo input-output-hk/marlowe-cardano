@@ -20,6 +20,7 @@ import Marlowe.Extended as EM
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Market (contractTemplates)
 import Marlowe.Semantics as S
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 class IsInstanceOf a b where
   isInstance :: a -> b -> Boolean
@@ -112,10 +113,10 @@ instance isInstanceOfCase :: IsInstanceOf S.Case EM.Case where
 instance isInstanceOfArrayOfCase :: IsInstanceOf (Array S.Case) (Array EM.Case) where
   isInstance a b = all identity (zipWith isInstance a b)
 
-instance isInstanceOfSlotTimeout :: IsInstanceOf S.Slot EM.Timeout where
+instance isInstanceOfSlotTimeout :: IsInstanceOf POSIXTime EM.Timeout where
   isInstance _ (EM.SlotParam _) = true
   -- we don't check x == y here because then we get false negatives when resolving relative slots to absolutes
-  isInstance (S.Slot _) (EM.Slot _) = true
+  isInstance (POSIXTime _) (EM.Slot _) = true
 
 instance isInstanceOfContract :: IsInstanceOf S.Contract EM.Contract where
   isInstance a b = genericIsInstanceOf a b

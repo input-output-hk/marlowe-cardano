@@ -55,6 +55,7 @@ import Marlowe.Semantics
   , TransactionWarning(..)
   )
 import Marlowe.Semantics as S
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 newtype GenerationOptions
   = GenerationOptions
@@ -90,6 +91,11 @@ genRational = do
 
 genSlot :: forall m. MonadGen m => MonadRec m => m Slot
 genSlot = Slot <$> genBigInt
+
+genPOSIXTime :: forall m. MonadGen m => MonadRec m => m POSIXTime
+genPOSIXTime = do
+  i <- genBigInt
+  pure (POSIXTime { getPOSIXTime: i })
 
 genTimeout
   :: forall m
@@ -155,7 +161,7 @@ genCurrencySymbol :: forall m. MonadGen m => MonadRec m => m CurrencySymbol
 genCurrencySymbol = genBase16
 
 genSlotInterval
-  :: forall m. MonadGen m => MonadRec m => m Slot -> m SlotInterval
+  :: forall m. MonadGen m => MonadRec m => m POSIXTime -> m SlotInterval
 genSlotInterval gen = do
   from <- gen
   to <- suchThat gen (\v -> v > from)
@@ -532,7 +538,7 @@ genTransactionInput
   => MonadRec m
   => m S.TransactionInput
 genTransactionInput = do
-  interval <- genSlotInterval genSlot
+  interval <- genSlotInterval genPOSIXTime
   inputs <- unfoldable genInput
   pure $ TransactionInput { interval, inputs }
 

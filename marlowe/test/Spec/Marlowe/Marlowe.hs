@@ -39,6 +39,7 @@ import qualified Data.Text.IO as T
 import Data.Text.Lazy (toStrict)
 import Data.UUID (UUID)
 import qualified Data.UUID as UUID
+import Debug.Trace
 import Language.Haskell.Interpreter (Extension (OverloadedStrings), MonadInterpreter, OptionVal ((:=)), as, interpret,
                                      languageExtensions, runInterpreter, set, setImports)
 import qualified Language.Marlowe as M ((%))
@@ -48,9 +49,10 @@ import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValid
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Language.Marlowe.Util
-import Ledger (PaymentPubKeyHash (..), PubKeyHash (..), Slot (..), pubKeyHash, validatorHash)
+import Ledger (POSIXTime (..), PaymentPubKeyHash (..), PubKeyHash (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
 import Ledger.Constraints.TxConstraints (TxConstraints)
+import Ledger.TimeSlot (SlotConfig (..))
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
 import qualified Plutus.Contract.StateMachine as SM
@@ -140,12 +142,15 @@ zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond
 
     let params = defaultMarloweParams
 
+    slotCfg <- Trace.getSlotConfig
+    let seconds = secondsSinceShelley slotCfg
+
     let zeroCouponBond = When [ Case
             (Deposit alicePk alicePk ada (Constant 75_000_000))
             (Pay alicePk (Party bobPk) ada (Constant 75_000_000)
                 (When
-                    [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (Slot 200) Close
-                ))] (Slot 100) Close
+                    [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (seconds 200) Close
+                ))] (seconds 100) Close
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
@@ -180,13 +185,16 @@ merkleizedZeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Merkle
 
     let params = defaultMarloweParams
 
+    slotCfg <- Trace.getSlotConfig
+    let seconds = secondsSinceShelley slotCfg
+
     let zeroCouponBondStage1 = When [ merkleizedCase (Deposit alicePk alicePk ada (Constant 75_000_000))
                                                      zeroCouponBondStage2
-                                    ] (Slot 100) Close
+                                    ] (seconds 100) Close
         zeroCouponBondStage2 = Pay alicePk (Party bobPk) ada (Constant 75_000_000)
                                   (When [ merkleizedCase (Deposit alicePk bobPk ada (Constant 90_000_000))
                                                          zeroCouponBondStage3
-                                        ] (Slot 200) Close)
+                                        ] (seconds 200) Close)
         zeroCouponBondStage3 = Close
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
@@ -221,12 +229,15 @@ errorHandlingTest = checkPredicateOptions defaultCheckOptions "Error handling"
 
     let params = defaultMarloweParams
 
+    slotCfg <- Trace.getSlotConfig
+    let seconds = secondsSinceShelley slotCfg
+
     let zeroCouponBond = When [ Case
             (Deposit alicePk alicePk ada (Constant 75_000_000))
             (Pay alicePk (Party bobPk) ada (Constant 75_000_000)
                 (When
-                    [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (Slot 200) Close
-                ))] (Slot 100) Close
+                    [ Case (Deposit alicePk bobPk ada (Constant 90_000_000)) Close] (seconds 200) Close
+                ))] (seconds 100) Close
 
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
@@ -271,6 +282,20 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
     bobCompanionHdl <- Trace.activateContract bob marloweCompanionContract "bob companion"
     bobFollowHdl <- Trace.activateContract bob marloweFollowContract "bob follow"
 
+    slotCfg <- Trace.getSlotConfig
+    let seconds = secondsSinceShelley slotCfg
+
+    let contract = When [
+            Case (Choice chId [Bound 10 90_000_000])
+                (When [Case
+                    (Deposit "alice" "alice" ada (ChoiceValue chId))
+                        (When [Case (Notify (SlotIntervalStart `ValueGE` Constant 15))
+                            (Pay "alice" (Party "bob") ada
+                                (ChoiceValue chId) Close)]
+                        (seconds 40) Close)
+                    ] (seconds 30) Close)
+            ] (seconds 20) Close
+
     Trace.callEndpoint @"create" aliceHdl
         (reqId, AssocMap.fromList [("alice", alicePkh), ("bob", bobPkh)],
         contract)
@@ -302,20 +327,12 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
         bobPk = PK $ walletPubKeyHash bob
         chId = ChoiceId "1" alicePk
 
-        contract = When [
-            Case (Choice chId [Bound 10 90_000_000])
-                (When [Case
-                    (Deposit "alice" "alice" ada (ChoiceValue chId))
-                        (When [Case (Notify (SlotIntervalStart `ValueGE` Constant 15))
-                            (Pay "alice" (Party "bob") ada
-                                (ChoiceValue chId) Close)]
-                        (Slot 40) Close)
-                    ] (Slot 30) Close)
-            ] (Slot 20) Close
+        roles = Set.fromList ["alice", "bob"]
+
         (params, _ :: TxConstraints MarloweInput MarloweData, _) =
             let con = setupMarloweParams @MarloweSchema @MarloweError
                         (AssocMap.fromList [("alice", walletAddress alice), ("bob", walletAddress bob)])
-                        contract
+                        roles
                 fld = Folds.instanceOutcome con (Trace.walletInstanceTag alice)
                 getOutcome (Done a) = a
                 getOutcome e        = error $ "not finished: " <> show e
@@ -378,7 +395,7 @@ checkEqValue = property $ do
 
 doubleNegation :: Property
 doubleNegation = property $ do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     forAll valueGen $ \a -> eval (NegValue (NegValue a)) === eval a
 
 
@@ -389,7 +406,7 @@ valuesFormAbelianGroup = property $ do
             b <- valueGen
             c <- valueGen
             return (a, b, c)
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     forAll gen $ \(a, b, c) ->
         -- associativity of addition
         eval (AddValue (AddValue a b) c) === eval (AddValue a (AddValue b c)) .&&.
@@ -405,7 +422,7 @@ valuesFormAbelianGroup = property $ do
 
 divisionRoundingTest :: Property
 divisionRoundingTest = property $ do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     -- test half-even rounding
     let gen = do
             n <- amount
@@ -418,14 +435,14 @@ divisionRoundingTest = property $ do
 
 mulTest :: Property
 mulTest = property $ do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     forAll valueGen $ \a ->
         eval (MulValue (Constant 0) a) === 0
 
 
 divZeroTest :: Property
 divZeroTest = property $ do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     forAll valueGen $ \a ->
         eval (DivValue (Constant 0) a) === 0 .&&.
         eval (DivValue a (Constant 0)) === 0
@@ -455,7 +472,7 @@ transferBetweenAccountsTest = do
             { accounts = AssocMap.fromList [((Role "alice", Token "" ""), 100)]
             , choices  = AssocMap.empty
             , boundValues = AssocMap.empty
-            , minSlot = 10 }
+            , minTime = 10 }
     let contract = Pay "alice" (Account "bob") (Token "" "") (Constant 100) (When [] 100 Close)
     let txInput = TransactionInput {
                     txInterval = (20, 30),
@@ -478,7 +495,7 @@ divAnalysisTest = do
     result <- warningsTrace (contract 9 2)
     assertBool "Analysis ok" $ isRight result && either (const False) isJust result
 
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2
@@ -489,7 +506,7 @@ divAnalysisTest = do
 
 divTest :: IO ()
 divTest = do
-    let eval = evalValue (Environment (Slot 10, Slot 1000)) (emptyState (Slot 10))
+    let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
     eval (DivValue (Constant 0) (Constant 2)) @=? 0
     eval (DivValue (Constant 1) (Constant 0)) @=? 0
     eval (DivValue (Constant 5) (Constant 2)) @=? 2

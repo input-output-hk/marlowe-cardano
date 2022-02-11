@@ -23,8 +23,8 @@ module Language.Marlowe.CLI.Examples.ZeroCouponBond (
 import Language.Marlowe.Semantics (MarloweData (..))
 import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..), State (..),
                                         Token (..), Value (..))
+import Ledger (POSIXTime)
 import Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Slot (Slot)
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
@@ -35,8 +35,8 @@ makeZeroCouponBond :: Integer      -- ^ Lovelace that the lender contributes to 
                    -> Party        -- ^ The borrower.
                    -> Integer      -- ^ The principal.
                    -> Integer      -- ^ The interest.
-                   -> Slot         -- ^ The lending deadline.
-                   -> Slot         -- ^ The payback deadline.
+                   -> POSIXTime         -- ^ The lending deadline.
+                   -> POSIXTime         -- ^ The payback deadline.
                    -> MarloweData  -- ^ Swap contract and initial state.
 makeZeroCouponBond minAda lender borrower principal interest lendingDeadline paybackDeadline =
   let
@@ -47,7 +47,7 @@ makeZeroCouponBond minAda lender borrower principal interest lendingDeadline pay
         accounts    = AM.singleton (lender, Token adaSymbol adaToken) minAda
       , choices     = AM.empty
       , boundValues = AM.empty
-      , minSlot     = 1
+      , minTime     = 1
       }
     principal' = Constant principal
     interest' = Constant interest

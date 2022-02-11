@@ -56,7 +56,7 @@ import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (
                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
                                         Observation (..), Party, Payee (..), SlotInterval, State (..), Token (..),
                                         Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
-import Ledger (POSIXTime, Slot (..), ValidatorHash)
+import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
@@ -225,14 +225,14 @@ fixInterval interval state =
         (low, high)
           | high < low -> IntervalError (InvalidInterval interval)
           | otherwise -> let
-            curMinSlot = minSlot state
-            -- newLow is both new "low" and new "minSlot" (the lower bound for slotNum)
-            newLow = max low curMinSlot
+            curMinTime = minTime state
+            -- newLow is both new "low" and new "minTime" (the lower bound for slotNum)
+            newLow = max low curMinTime
             -- We know high is greater or equal than newLow (prove)
             curInterval = (newLow, high)
             env = Environment { slotInterval = curInterval }
-            newState = state { minSlot = newLow }
-            in if high < curMinSlot then IntervalError (IntervalInPastError curMinSlot interval)
+            newState = state { minTime = newLow }
+            in if high < curMinTime then IntervalError (IntervalInPastError curMinTime interval)
             else IntervalTrimmed env newState
 
 
@@ -265,8 +265,8 @@ evalValue env state value = let
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
                 Nothing -> 0
-        SlotIntervalStart    -> getSlot (fst (slotInterval env))
-        SlotIntervalEnd      -> getSlot (snd (slotInterval env))
+        SlotIntervalStart    -> getPOSIXTime (fst (slotInterval env))
+        SlotIntervalEnd      -> getPOSIXTime (snd (slotInterval env))
         UseValue valId       ->
             case Map.lookup valId (boundValues state) of
                 Just x  -> x
@@ -574,17 +574,17 @@ playTraceAux TransactionOutput
           Error _ -> transRes
 playTraceAux err@(Error _) _ = err
 
-playTrace :: Slot -> Contract -> [TransactionInput] -> TransactionOutput
-playTrace sl c = playTraceAux TransactionOutput
+playTrace :: POSIXTime -> Contract -> [TransactionInput] -> TransactionOutput
+playTrace minTime c = playTraceAux TransactionOutput
                                  { txOutWarnings = []
                                  , txOutPayments = []
-                                 , txOutState = emptyState sl
+                                 , txOutState = emptyState minTime
                                  , txOutContract = c
                                  }
 
 
 -- | Calculates an upper bound for the maximum lifespan of a contract (assuming is not merkleized)
-contractLifespanUpperBound :: Contract -> Slot
+contractLifespanUpperBound :: Contract -> POSIXTime
 contractLifespanUpperBound contract = case contract of
     Close -> 0
     Pay _ _ _ _ cont -> contractLifespanUpperBound cont
@@ -620,14 +620,14 @@ instance FromJSON TransactionInput where
                      mapM parseJSON (F.toList cl)
                                                       ))
     where parseSlotInterval = withObject "SlotInterval" (\v ->
-            do from <- Slot <$> (withInteger =<< (v .: "from"))
-               to <- Slot <$> (withInteger =<< (v .: "to"))
+            do from <- POSIXTime <$> (withInteger =<< (v .: "from"))
+               to <- POSIXTime <$> (withInteger =<< (v .: "to"))
                return (from, to)
                                                       )
   parseJSON _ = Haskell.fail "TransactionInput must be an object"
 
 instance ToJSON TransactionInput where
-  toJSON (TransactionInput (Slot from, Slot to) txInps) = object
+  toJSON (TransactionInput (POSIXTime from, POSIXTime to) txInps) = object
       [ "tx_interval" .= slotIntervalJSON
       , "tx_inputs" .= toJSONList (map toJSON txInps)
       ]

@@ -43,12 +43,13 @@ import Marlowe.Semantics
   , Case(..)
   , ChoiceId(..)
   , Contract(..)
+  , Environment(..)
   , Input
   , MarloweParams
   , Party
   , Payment
   , ReduceResult(..)
-  , Slot(..)
+  , Slot
   , SlotInterval(..)
   , Timeouts(..)
   , Token
@@ -65,6 +66,8 @@ import Marlowe.Semantics
   , timeouts
   )
 import Marlowe.Semantics (State) as Semantic
+import Marlowe.Slot (posixTimeToSlot, slotToPOSIXTime)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 mkInitialState
   :: Slot
@@ -74,7 +77,7 @@ mkInitialState
   -> Contract
   -> State
 mkInitialState currentSlot contractNickname marloweParams metadata contract =
-  { semanticState: emptyState currentSlot
+  { semanticState: emptyState (slotToPOSIXTime currentSlot)
   , contractNickname
   , contract
   , metadata
@@ -132,7 +135,8 @@ nextState txInput state =
   let
     { semanticState, contract, history } =
       state
-    TransactionInput { interval: SlotInterval minSlot _, inputs } = txInput
+    TransactionInput { interval: SlotInterval minTime _, inputs } = txInput
+    minSlot = posixTimeToSlot minTime
 
     { txOutState, txOutContract, txOutPayments } =
       case computeTransaction txInput semanticState contract of
@@ -182,7 +186,8 @@ nextState txInput state =
       }
 
 nextTimeout :: Contract -> Maybe Slot
-nextTimeout = timeouts >>> \(Timeouts { minTime }) -> minTime
+nextTimeout = timeouts >>> \(Timeouts { minTime }) -> map posixTimeToSlot
+  minTime
 
 mkTx :: Slot -> Contract -> List Input -> TransactionInput
 mkTx currentSlot contract inputs =
@@ -227,9 +232,9 @@ timeoutState
     advanceAllTimeouts (Just timeoutSlot) newTimeouts state' contract'
       | timeoutSlot <= currentSlot =
           let
-            Slot slot = currentSlot
+            time = slotToPOSIXTime currentSlot
 
-            env = makeEnvironment slot slot
+            env = makeEnvironment time time
 
             { txOutState, txOutContract } =
               case reduceContractUntilQuiescent env state' contract' of
@@ -311,10 +316,9 @@ extractActionsFromContract currentSlot semanticState contract@(When cases _ _) =
   where
   toNamedAction (Deposit a p t v) =
     let
-      SlotInterval (Slot minSlot) (Slot maxSlot) = mkInterval currentSlot
-        contract
+      interval = mkInterval currentSlot contract
 
-      env = makeEnvironment minSlot maxSlot
+      env = Environment { slotInterval: interval }
 
       amount = evalValue env semanticState v
     in
@@ -344,14 +348,20 @@ expandBalances participants tokens stateAccounts =
           key /\ (fromMaybe zero $ Map.lookup key stateAccounts)
 
 mkInterval :: Slot -> Contract -> SlotInterval
-mkInterval currentSlot contract = case nextTimeout contract of
-  Nothing -> SlotInterval currentSlot (currentSlot + (Slot $ fromInt 10))
-  Just minTime
-    -- FIXME: We should change this for a Maybe SlotInterval and return Nothing in this case.
-    --        86400 is one day in seconds
-    | minTime < currentSlot -> SlotInterval currentSlot
-        (currentSlot + (Slot $ fromInt 86400))
-    | otherwise -> SlotInterval currentSlot (minTime - (Slot $ fromInt 1))
+mkInterval currentSlot contract =
+  let
+    time = slotToPOSIXTime currentSlot
+  in
+    case nextTimeout contract of
+      Nothing -> SlotInterval time
+        (time + POSIXTime { getPOSIXTime: (fromInt 10) })
+      Just minTime
+        -- FIXME: We should change this for a Maybe SlotInterval and return Nothing in this case.
+        --        86400 is one day in seconds
+        | minTime < currentSlot -> SlotInterval time
+            (time + POSIXTime { getPOSIXTime: (fromInt 86400) })
+        | otherwise -> SlotInterval time
+            (slotToPOSIXTime minTime - POSIXTime { getPOSIXTime: (fromInt 1) })
 
 getAllPayments :: State -> List Payment
 getAllPayments { history } = concat $ fromFoldable $ map

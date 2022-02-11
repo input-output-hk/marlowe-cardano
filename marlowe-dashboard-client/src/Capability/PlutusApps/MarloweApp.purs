@@ -60,7 +60,7 @@ import Marlowe.Semantics
   , TransactionInput(..)
   )
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
-import Plutus.V1.Ledger.Slot (Slot) as Back
+import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Value (TokenName) as Back
 import PlutusTx.AssocMap (Map(..)) as Back
 import Type.Proxy (Proxy(..))
@@ -101,8 +101,8 @@ instance marloweAppM :: MarloweApp AppM where
     (TransactionInput { interval: SlotInterval slotStart slotEnd, inputs }) = do
     reqId <- liftEffect genUUID
     let
-      backSlotInterval :: Back.Slot /\ Back.Slot
-      backSlotInterval = (toBack slotStart) /\ (toBack slotEnd)
+      backSlotInterval :: POSIXTime /\ POSIXTime
+      backSlotInterval = (slotStart) /\ (slotEnd)
 
       payload =
         [ encodeJson reqId

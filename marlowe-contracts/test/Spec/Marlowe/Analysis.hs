@@ -56,29 +56,29 @@ coin = Token "" "coin"
 swapTest :: IO ()
 swapTest =
   testNoWarnings $
-    swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) Close
+    swap partyA ada (Constant 1) partyB coin (Constant 10) (POSIXTime 10) Close
 
 sequentiallySwapTwiceTest :: IO ()
 sequentiallySwapTwiceTest =
   testNoWarnings $
-    swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) $
-    swap partyA coin (Constant 10) partyB ada (Constant 1) (Slot 10) Close
+    swap partyA ada (Constant 1) partyB coin (Constant 10) (POSIXTime 10) $
+    swap partyA coin (Constant 10) partyB ada (Constant 1) (POSIXTime 10) Close
 
 concurrentlySwapTwiceTest :: IO ()
 concurrentlySwapTwiceTest =
   testNoWarnings $
-    let s1 = swap partyA ada (Constant 1) partyB coin (Constant 10) (Slot 10) Close
-        s2 = swap partyA coin (Constant 10) partyB ada (Constant 1) (Slot 10) Close
+    let s1 = swap partyA ada (Constant 1) partyB coin (Constant 10) (POSIXTime 10) Close
+        s2 = swap partyA coin (Constant 10) partyB ada (Constant 1) (POSIXTime 10) Close
      in s1 `both` s2
 
 coveredCallTest :: IO ()
 coveredCallTest =
   testNoWarnings $
-    coveredCall (Role "buyer") (Role "seller") ada coin (Constant 1) (Constant 1) (Slot 10) (Slot 100) (Slot 110)
+    coveredCall (Role "buyer") (Role "seller") ada coin (Constant 1) (Constant 1) (POSIXTime 10) (POSIXTime 100) (POSIXTime 110)
 
 -- |== Test Cases, warnings expected
 
 optionTest :: IO ()
 optionTest =
   testExpectedWarnings $
-    option European Call partyA partyB (ada, Constant 1) (coin, Constant 1) (Slot 100) (Slot 110)
+    option European Call partyA partyB (ada, Constant 1) (coin, Constant 1) (POSIXTime 100) (POSIXTime 110)

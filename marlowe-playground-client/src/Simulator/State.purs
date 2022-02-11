@@ -55,7 +55,7 @@ import Marlowe.Semantics
   , Timeouts(..)
   , TransactionError(..)
   , TransactionInput(..)
-  , _minSlot
+  , _minTime
   , boundFrom
   , emptyState
   , evalValue
@@ -64,6 +64,7 @@ import Marlowe.Semantics
   , timeouts
   )
 import Marlowe.Semantics as S
+import Marlowe.Slot (posixTimeToSlot, slotToPOSIXTime)
 import Marlowe.Template (getPlaceholderIds, initializeTemplateContent)
 import Simulator.Lenses
   ( _SimulationRunning
@@ -100,7 +101,7 @@ emptyExecutionStateWithSlot sn cont =
     , transactionError: Nothing
     , transactionWarnings: mempty
     , log: mempty
-    , state: emptyState sn
+    , state: emptyState (slotToPOSIXTime sn)
     , slot: sn
     , moneyInContract: mempty
     , contract: cont
@@ -136,7 +137,7 @@ minimumBound bnds = case uncons (map boundFrom bnds) of
 actionToActionInput :: State -> Action -> Tuple ActionInputId ActionInput
 actionToActionInput state (Deposit accountId party token value) =
   let
-    minSlot = state ^. _minSlot
+    minSlot = state ^. _minTime
 
     evalResult = evalValue env state value
 
@@ -380,7 +381,9 @@ pendingTransactionInputs executionState =
   let
     slot = executionState ^. _slot
 
-    interval = SlotInterval slot slot
+    time = slotToPOSIXTime slot
+
+    interval = SlotInterval time time
 
     inputs = executionState ^. _pendingInputs
   in
@@ -495,7 +498,7 @@ nextTimeout state = do
     (_executionState <<< _SimulationRunning <<< _contract)
   let
     Timeouts { minTime } = timeouts contract
-  minTime
+  map posixTimeToSlot minTime
 
 mapPartiesActionInput :: (ActionInput -> ActionInput) -> Parties -> Parties
 mapPartiesActionInput f (Parties m) = Parties $ (map <<< map) f m

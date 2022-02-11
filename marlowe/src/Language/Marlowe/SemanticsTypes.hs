@@ -38,7 +38,7 @@ import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Ledger (PubKeyHash (..), Slot (..))
+import Ledger (POSIXTime (..), PubKeyHash (..))
 import Ledger.Value (CurrencySymbol (..), TokenName (..))
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
@@ -71,11 +71,11 @@ instance Haskell.Show Party where
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
 type AccountId = Party
-type Timeout = Slot
+type Timeout = POSIXTime
 type Money = Val.Value
 type ChoiceName = BuiltinByteString
 type ChosenNum = Integer
-type SlotInterval = (Slot, Slot)
+type SlotInterval = (POSIXTime, POSIXTime)
 type Accounts = Map (AccountId, Token) Integer
 
 -- * Data Types
@@ -216,7 +216,7 @@ data Contract = Close
 data State = State { accounts    :: Accounts
                    , choices     :: Map ChoiceId ChosenNum
                    , boundValues :: Map ValueId Integer
-                   , minSlot     :: Slot }
+                   , minTime     :: POSIXTime }
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
 
 {-| Execution environment. Contains a slot interval of a transaction.
@@ -288,14 +288,14 @@ getInputContent :: Input -> InputContent
 getInputContent (NormalInput inputContent)         = inputContent
 getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
-{-| Slot interval errors.
+{-| Time interval errors.
     'InvalidInterval' means @slotStart > slotEnd@, and
     'IntervalInPastError' means slot interval is in the past, relative to the contract.
 
     These errors should never occur, but we are always prepared.
 -}
 data IntervalError = InvalidInterval SlotInterval
-                   | IntervalInPastError Slot SlotInterval
+                   | IntervalInPastError POSIXTime SlotInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -306,13 +306,13 @@ data IntervalResult = IntervalTrimmed Environment State
   deriving stock (Haskell.Show)
 
 
--- | Empty State for a given minimal 'Slot'
-emptyState :: Slot -> State
+-- | Empty State for a given minimal 'POSIXTime'
+emptyState :: POSIXTime -> State
 emptyState sn = State
     { accounts = Map.empty
     , choices  = Map.empty
     , boundValues = Map.empty
-    , minSlot = sn }
+    , minTime = sn }
 
 
 -- | Check if a 'num' is withint a list of inclusive bounds.
@@ -325,18 +325,18 @@ instance FromJSON State where
          State <$> (v .: "accounts")
                <*> (v .: "choices")
                <*> (v .: "boundValues")
-               <*> (Slot <$> (withInteger =<< (v .: "minSlot")))
+               <*> (POSIXTime <$> (withInteger =<< (v .: "minTime")))
                                  )
 
 instance ToJSON State where
   toJSON State { accounts = a
                , choices = c
                , boundValues = bv
-               , minSlot = Slot ms } = object
+               , minTime = POSIXTime ms } = object
         [ "accounts" .= a
         , "choices" .= c
         , "boundValues" .= bv
-        , "minSlot" .= ms ]
+        , "minTime" .= ms ]
 
 instance FromJSON Party where
   parseJSON = withObject "Party" (\v ->
@@ -579,7 +579,7 @@ instance FromJSON Contract where
                    withArray "Case list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                           ))
-              <*> (Slot <$> (withInteger =<< (v .: "timeout")))
+              <*> (POSIXTime <$> (withInteger =<< (v .: "timeout")))
               <*> (v .: "timeout_continuation"))
     <|> (Let <$> (v .: "let")
              <*> (v .: "be")
@@ -604,7 +604,7 @@ instance ToJSON Contract where
       ]
   toJSON (When caseList timeout cont) = object
       [ "when" .= toJSONList (map toJSON caseList)
-      , "timeout" .= getSlot timeout
+      , "timeout" .= getPOSIXTime timeout
       , "timeout_continuation" .= cont
       ]
   toJSON (Let valId value cont) = object
@@ -715,7 +715,7 @@ instance Eq Contract where
 
 instance Eq State where
     {-# INLINABLE (==) #-}
-    l == r = minSlot l == minSlot r
+    l == r = minTime l == minTime r
         && accounts l == accounts r
         && choices l == choices r
         && boundValues l == boundValues r

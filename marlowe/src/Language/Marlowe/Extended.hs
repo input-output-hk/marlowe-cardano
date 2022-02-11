@@ -29,33 +29,33 @@ import GHC.Generics
 import Language.Marlowe.Pretty (Pretty (..), pretty)
 import qualified Language.Marlowe.SemanticsTypes as S
 import Language.Marlowe.Util (ada)
-import qualified Ledger as L (Slot (..))
+import qualified Ledger as L (POSIXTime (..))
 import Ledger.Ada (adaSymbol, adaToken)
 import Text.PrettyPrint.Leijen (parens, text)
 
 
 data Timeout = SlotParam String
-             | Slot Integer
+             | POSIXTime Integer
   deriving stock (Show,Generic)
 
 instance Pretty Timeout where
-    prettyFragment (Slot n)         = prettyFragment n
+    prettyFragment (POSIXTime n)    = prettyFragment n
     prettyFragment sp@(SlotParam _) = parens $ text $ show sp
 
 instance Num Timeout where
-  (+) (Slot a) (Slot b) = Slot (a + b)
-  (+) _ _               = error "Tried to add with templates"
-  (-) (Slot a) (Slot b) = Slot (a - b)
-  (-) _ _               = error "Tried to subtract with templates"
-  (*) (Slot a) (Slot b) = Slot (a * b)
-  (*) _ _               = error "Tried to multiplate with templates"
-  abs (Slot a) = Slot (abs a)
-  abs _        = error "Tried to calculate absolute value of template"
-  signum (Slot a) = Slot (signum a)
-  signum _        = error "Tried to calculate signum of template"
-  fromInteger x = Slot x
-  negate (Slot x) = Slot (-x)
-  negate _        = error "Tried to negate a template"
+  (+) (POSIXTime a) (POSIXTime b) = POSIXTime (a + b)
+  (+) _ _                         = error "Tried to add with templates"
+  (-) (POSIXTime a) (POSIXTime b) = POSIXTime (a - b)
+  (-) _ _                         = error "Tried to subtract with templates"
+  (*) (POSIXTime a) (POSIXTime b) = POSIXTime (a * b)
+  (*) _ _                         = error "Tried to multiplate with templates"
+  abs (POSIXTime a) = POSIXTime (abs a)
+  abs _             = error "Tried to calculate absolute value of template"
+  signum (POSIXTime a) = POSIXTime (signum a)
+  signum _             = error "Tried to calculate signum of template"
+  fromInteger x = POSIXTime x
+  negate (POSIXTime x) = POSIXTime (-x)
+  negate _             = error "Tried to negate a template"
 
 instance Pretty Rational where
     prettyFragment r = text $ "(" ++ show r ++ ")"
@@ -158,9 +158,9 @@ instance ToCore Action S.Action where
   toCore (Choice choId bounds)         = Just $ S.Choice choId bounds
   toCore (Notify obs)                  = S.Notify <$> toCore obs
 
-instance ToCore Timeout L.Slot where
+instance ToCore Timeout L.POSIXTime where
   toCore (SlotParam _) = Nothing
-  toCore (Slot x)      = Just (L.Slot x)
+  toCore (POSIXTime x) = Just (L.POSIXTime x)
 
 instance ToCore Payee S.Payee where
   toCore (Account accId)  = Just $ S.Account accId

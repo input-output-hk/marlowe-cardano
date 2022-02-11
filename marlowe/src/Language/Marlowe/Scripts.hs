@@ -33,7 +33,6 @@ import Ledger.Ada (adaSymbol)
 import Ledger.Constraints.OnChain
 import Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval as Interval
-import qualified Ledger.TimeSlot as TimeSlot
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed, makeLift)
@@ -43,7 +42,7 @@ import PlutusTx.Prelude
 import qualified Prelude as Haskell
 import Unsafe.Coerce
 
-type MarloweSlotRange = (Slot, Slot)
+type MarloweSlotRange = (POSIXTime, POSIXTime)
 type MarloweInput = [MarloweTxInput]
 
 -- Yeah, I know
@@ -91,8 +90,7 @@ smallMarloweValidator
     -> MarloweInput
     -> ScriptContext
     -> Bool
-smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slotConfig =
-    (scSlotLength, scSlotZeroTime)}
+smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     MarloweData{..}
     marloweTxInputs
     ctx@ScriptContext{scriptContextTxInfo} = do
@@ -102,7 +100,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash, slot
             _      -> traceError "I0" {-"Can't find validation input"-}
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
     let interval =
-            case TimeSlot.posixTimeRangeToContainedSlotRange TimeSlot.SlotConfig{..} $ txInfoValidRange scriptContextTxInfo of
+            case txInfoValidRange scriptContextTxInfo of
                 -- FIXME: Recheck this, but it appears that any inclusiveness can appear at either bound when milliseconds
                 --        of POSIX time is converted from slot number.
                 Interval.Interval (Interval.LowerBound (Interval.Finite l) _) (Interval.UpperBound (Interval.Finite h) _) -> (l, h)
@@ -230,8 +228,8 @@ smallUntypedValidator params = let
     in unsafeCoerce (Scripts.unsafeMkTypedValidator typed)
 
 
-defaultTxValidationRange :: Slot
-defaultTxValidationRange = 10
+defaultTxValidationRange :: POSIXTime
+defaultTxValidationRange = 10000
 
 marloweTxInputFromInput :: Input -> MarloweTxInput
 marloweTxInputFromInput (NormalInput i)         = Input i

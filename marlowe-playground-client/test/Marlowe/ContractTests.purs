@@ -26,6 +26,7 @@ import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
 import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
+import Marlowe.Extended (resolveRelativeTimes)
 import Marlowe.Extended as EM
 import Marlowe.Holes (Term(..), fromTerm)
 import Marlowe.Holes as T
@@ -36,10 +37,12 @@ import Marlowe.Semantics
   , Contract(..)
   , Input(..)
   , Party(..)
+  , Slot(..)
   , Token(..)
   , TransactionError
   , TransactionWarning
   )
+import Marlowe.Slot (secondsSinceShelley)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Page.Simulation.State (mkStateBase)
 import Page.Simulation.Types as Simulation
@@ -79,7 +82,7 @@ all =
 -- of these test we print it and parse it.
 toTerm :: EM.Contract -> Term T.Contract
 toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $
-  pretty contract
+  pretty (resolveRelativeTimes (Slot $ secondsSinceShelley 0) contract)
 
 contractToExtended :: String -> Maybe EM.Contract
 contractToExtended = fromTerm <=< hush <<< parseContract
@@ -128,10 +131,10 @@ filledEscrow =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Payment deadline" /\ BigInt.fromInt 10
-                  , "Complaint response deadline" /\ BigInt.fromInt 50
-                  , "Complaint deadline" /\ BigInt.fromInt 100
-                  , "Mediation deadline" /\ BigInt.fromInt 1000
+                  [ "Payment deadline" /\ secondsSinceShelley 10
+                  , "Complaint response deadline" /\ secondsSinceShelley 50
+                  , "Complaint deadline" /\ secondsSinceShelley 100
+                  , "Mediation deadline" /\ secondsSinceShelley 1000
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -165,8 +168,8 @@ filledZeroCouponBond =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Interest" /\ BigInt.fromInt 100
-                  , "Amount" /\ BigInt.fromInt 200
+                  [ "Interest" /\ secondsSinceShelley 100
+                  , "Amount" /\ secondsSinceShelley 200
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -217,12 +220,12 @@ filledContractForDifferences =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInt.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
-                  , "First window beginning" /\ BigInt.fromInt 30
-                  , "First window deadline" /\ BigInt.fromInt 40
-                  , "Second window beginning" /\ BigInt.fromInt 100
-                  , "Second window deadline" /\ BigInt.fromInt 110
+                  [ "Party deposit deadline" /\ secondsSinceShelley 10
+                  , "Counterparty deposit deadline" /\ secondsSinceShelley 20
+                  , "First window beginning" /\ secondsSinceShelley 30
+                  , "First window deadline" /\ secondsSinceShelley 40
+                  , "Second window beginning" /\ secondsSinceShelley 100
+                  , "Second window deadline" /\ secondsSinceShelley 110
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -241,12 +244,12 @@ filledContractForDifferencesWithOracle =
         ( TemplateContent
             { slotContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInt.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
-                  , "First window beginning" /\ BigInt.fromInt 30
-                  , "First window deadline" /\ BigInt.fromInt 40
-                  , "Second window beginning" /\ BigInt.fromInt 100
-                  , "Second window deadline" /\ BigInt.fromInt 110
+                  [ "Party deposit deadline" /\ secondsSinceShelley 10
+                  , "Counterparty deposit deadline" /\ secondsSinceShelley 20
+                  , "First window beginning" /\ secondsSinceShelley 30
+                  , "First window deadline" /\ secondsSinceShelley 40
+                  , "Second window beginning" /\ secondsSinceShelley 100
+                  , "Second window deadline" /\ secondsSinceShelley 110
                   ]
             , valueContent:
                 Map.fromFoldable

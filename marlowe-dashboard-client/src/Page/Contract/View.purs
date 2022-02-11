@@ -61,7 +61,7 @@ import Marlowe.Semantics
   , _accounts
   )
 import Marlowe.Semantics (Input(..)) as S
-import Marlowe.Slot (slotToDateTime)
+import Marlowe.Slot (posixTimeToDateTime, slotToDateTime)
 import Page.Contract.Lenses
   ( _executionState
   , _expandPayments
@@ -422,11 +422,11 @@ renderPartyPastActions { tzOffset } state { inputs, interval, party } =
     -- we don't show a value in the future
     (SlotInterval intervalFrom _) = interval
 
-    mTransactionDateTime = slotToDateTime intervalFrom
+    mTransactionDateTime = posixTimeToDateTime intervalFrom
 
-    transactionDate = maybe "-" (formatDate tzOffset) mTransactionDateTime
+    transactionDate = formatDate tzOffset mTransactionDateTime
 
-    transactionTime = maybe "-" (formatTime tzOffset) mTransactionDateTime
+    transactionTime = formatTime tzOffset mTransactionDateTime
 
     renderPartyHeader =
       div [ classNames [ "flex", "justify-between", "items-center", "p-4" ] ]
