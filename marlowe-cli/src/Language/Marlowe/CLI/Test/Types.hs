@@ -140,6 +140,7 @@ data PabOperation =
     , poMaximumFees :: Lovelace
     , poInstances   :: [RoleName]
     }
+  -- TODO: Check funds at script addresses.
   | ActivateApp
     {
       poOwner    :: RoleName
@@ -175,9 +176,19 @@ data PabOperation =
     {
       poInstance :: InstanceNickname
     }
+  | Follow
+    {
+      poInstance      :: InstanceNickname
+    , poOtherInstance :: InstanceNickname
+    }
   | Stop
     {
       poInstance :: InstanceNickname
+    }
+  | PrintState
+  | PrintWallet
+    {
+      poOwner    :: RoleName
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)

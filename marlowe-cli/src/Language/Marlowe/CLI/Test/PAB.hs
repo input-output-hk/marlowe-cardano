@@ -35,7 +35,7 @@ import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Lens (use, (%=))
 import Control.Monad (unless, void)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, throwError)
-import Control.Monad.State.Strict (MonadState, StateT, execStateT, lift)
+import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String))
 import Data.Aeson.Types (parseEither)
 import Data.UUID.V4 (nextRandom)
@@ -183,7 +183,7 @@ interpret access CallCreate{..} =
     liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show (unContractInstanceId aiInstance) <> " for owners " <> show owners <> "."
 interpret _ AwaitCreate{..} =
   do
-    result <- awaitApp poInstance 1
+    result <- awaitApp poInstance (-1)
     case result of
       CreateResponse params -> do
                                  psAppInstances %=
@@ -201,7 +201,7 @@ interpret access CallApplyInputs{..} =
     liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and slots " <> show poSlots <> "."
 interpret _ AwaitApplyInputs{..} =
   do
-    result <- awaitApp poInstance 0
+    result <- awaitApp poInstance (-1)
     if result == ApplyInputsResponse
       then liftIO . putStrLn $ "[AwaitApplyInputs] Input application confirmed."
       else throwError . CliError $ "[AwaitApplyInputs] received unexpected response " <> show result <> "."
@@ -215,7 +215,7 @@ interpret access CallRedeem{..} =
     liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
 interpret _ AwaitRedeem{..} =
   do
-    result <- awaitApp poInstance 0
+    result <- awaitApp poInstance (-1)
     if result == RedeemResponse
       then liftIO . putStrLn $ "[AwaitRedeem] Redemption confirmed."
       else throwError . CliError $ "[AwaitRedeem] received unexpected response " <> show result <> "."
@@ -227,7 +227,26 @@ interpret PabAccess{..} Stop{..} =
       InstanceClient{..} = instanceClient aiInstance
     lift
       $ runApi stopInstance
+    -- TODO: Update state.
     liftIO . putStrLn $ "[Stop] Instance " <> show (unContractInstanceId aiInstance) <> " stopped."
+interpret _ Follow{..} =
+  do
+    aiThis <- findInstance poInstance
+    aiOther <- findInstance poOtherInstance
+    psAppInstances %=
+      M.adjust
+        (\ai -> ai {aiParams = aiParams aiOther})
+        poInstance
+    liftIO . putStrLn $ "[Follow] Instance " <> show (unContractInstanceId $ aiInstance aiThis) <> " now follows instance " <> show (unContractInstanceId $ aiInstance aiOther) <> "."
+interpret _ PrintState =
+  do
+    ps <- get
+    liftIO . putStrLn $ "[PrintState] " <> show ps <> "."
+interpret access PrintWallet{..} =
+  do
+    WalletInfo{..} <- findOwner poOwner
+    actual <- lift $ totalBalance access wiWalletId
+    liftIO . putStrLn $ "[PrintWallet] Wallet for role " <> show poOwner <> " contains " <> show actual <> "."
 
 
 awaitApp :: MonadError CliError m
@@ -243,6 +262,7 @@ awaitApp nickname nothings =
       go i =
         do
           mcs <- liftIO $ readChan aiChannel
+          -- TODO: Figure out why Nothing is told."
           case mcs of
             Just (EndpointSuccess _ r)     -> pure r
             Just (EndpointException _ _ e) -> throwError . CliError $ "[awaitApp] Received unexpected response " <> show e <> "."
@@ -368,6 +388,7 @@ runContract PabAccess{..} contract walletId =
       go connection =
         do
           status <- receiveStatus connection
+--        liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
