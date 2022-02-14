@@ -18,7 +18,7 @@ let
   start-marlowe-run = writeShellScriptBinInRepoRoot "start-marlowe-run" ''
     cd marlowe-dashboard-client
     ${pkgs.arion}/bin/arion down
-    ${pkgs.arion}/bin/arion up
+    ${pkgs.arion}/bin/arion --nix-arg --system --nix-arg x86_64-linux up
   '';
 
   generate-purescript = writeShellScriptBinInRepoRoot "generate-purescript" ''
