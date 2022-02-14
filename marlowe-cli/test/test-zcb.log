@@ -1,43 +1,55 @@
-marlowe-cli test contracts --testnet-magic 1564                                                             \
-                           --socket-path node.socket                                                        \
-                           --wallet-url http://localhost:8090                                               \
-                           --pab-url http://localhost:9080                                                  \
-                           --faucet-key payment.skey                                                        \
-                           --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
-                           --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7   \
-                           --passphrase pab123456789                                                        \
-                           test-zcb.yaml
-
 ***** Test "Zero-Coupon Bond" *****
-[CreateWallet] Created wallet 79a31e6d810f03effbe59a48cbab053957aee7b9 for role "Lender".
-[FundWallet] Funded wallet 79a31e6d810f03effbe59a48cbab053957aee7b9 for role "Lender" with valueFromList [(AdaAssetId,80000000)].
-[ActivateApp] Activated MarloweApp instance a8fd8565-90c5-4cd1-9651-2511a2d24da0 for role "Lender".
-[CreateWallet] Created wallet f0a93ba9feaf1f510e5ce16d5e82c1d0ddf38f4e for role "Borrower".
-[FundWallet] Funded wallet f0a93ba9feaf1f510e5ce16d5e82c1d0ddf38f4e for role "Borrower" with valueFromList [(AdaAssetId,10000000)].
-[ActivateApp] Activated MarloweApp instance b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d for role "Borrower".
+[CreateWallet] Created wallet 66bd2768095386a7b8f2a45513652e6d4b39e8e4 for role "Lender".
+[FundWallet] Funded wallet 66bd2768095386a7b8f2a45513652e6d4b39e8e4 for role "Lender" with valueFromList [(AdaAssetId,80000000)].
+[ActivateApp] Activated MarloweApp instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 for role "Lender".
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewObservableState Null.
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewYieldedExportTxs [].
+[CreateWallet] Created wallet e5ed0a32eaa5d0e0ac61df4ffec90a13d5c0deef for role "Borrower".
+[FundWallet] Funded wallet e5ed0a32eaa5d0e0ac61df4ffec90a13d5c0deef for role "Borrower" with valueFromList [(AdaAssetId,10000000)].
+[ActivateApp] Activated MarloweApp instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 for role "Borrower".
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewObservableState Null.
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewYieldedExportTxs [].
 [PrintWallet] Wallet for role "Lender" contains valueFromList [(AdaAssetId,80000000)].
 [PrintWallet] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,10000000)].
-[CallCreate] Endpoint "create" called on instance a8fd8565-90c5-4cd1-9651-2511a2d24da0 for owners [("Lender",6f8d6cdf9fba29f25aadea7f0dba4f3ce1ec1e5e02acb1549a62acf9),("Borrower",e88421b62ecebd96181a07953dabc4ed75682b462b24fed1e0c57ac0)].
-[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 67f62a366af66167f8f30aac050717a0198407286e9a8ba74c0fac88, rolesCurrency = 9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7, slotConfig = (1000,POSIXTime {getPOSIXTime = 1638215277000})}.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75515174),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
-[Follow] Instance b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d now follows instance a8fd8565-90c5-4cd1-9651-2511a2d24da0.
-[CallApplyInputs] Endpoint "apply-inputs" called on a8fd8565-90c5-4cd1-9651-2511a2d24da0 for inputs [ClientInput (IDeposit "Lender" "Lender" (Token "" "") 50000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 10000000}).
+[CallCreate] Endpoint "create" called on instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 for owners [("Lender",a39032f243a4278fdb439802132e48831d75105927ec09c34d369ab1),("Borrower",ed11d3986b589b51882cc23714ed2e3051efba2a2de8a4e38dec574f)].
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [].
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewObservableState (Object (fromList [("contents",Array [String "cee23d49-c768-4372-9a8f-b236d540200c",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "48cf54c1cea4d9443841ac7c285ae43529d07da4320d281e3ca27087"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724")])),("slotConfig",Array [Number 1000.0,Number 1.638215277e12])])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 48cf54c1cea4d9443841ac7c285ae43529d07da4320d281e3ca27087, rolesCurrency = f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724, slotConfig = (1000,POSIXTime {getPOSIXTime = 1638215277000})}.
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75515174),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Borrower",1)].
+[Follow] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 now follows instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10.
+[CallApplyInputs] Endpoint "apply-inputs" called on 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 for inputs [ClientInput (IDeposit "Lender" "Lender" (Token "" "") 50000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 100000000}).
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [].
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewObservableState (Object (fromList [("contents",Array [String "6ac512b1-c629-4f85-a3d1-7ac144435afe",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitApplyInputs] Input application confirmed.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,23998539),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
-[CallRedeem] Endpoint "redeem" called on b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d for role "Borrower".
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,23998539),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Borrower",1)].
+[CallRedeem] Endpoint "redeem" called on 9ce896a0-1878-4ec7-aff1-008caf07eed7 for role "Borrower".
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewActiveEndpoints [].
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewObservableState (Object (fromList [("contents",Array [String "fcb2de57-9e51-4a5f-ac24-75050a9bcf6d",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitRedeem] Redemption confirmed.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,23998539),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,61561148),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
-[CallApplyInputs] Endpoint "apply-inputs" called on b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d for inputs [ClientInput (IDeposit "Borrower" "Borrower" (Token "" "") 53000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 10000000}).
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,23998539),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,61561148),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Borrower",1)].
+[CallApplyInputs] Endpoint "apply-inputs" called on 9ce896a0-1878-4ec7-aff1-008caf07eed7 for inputs [ClientInput (IDeposit "Borrower" "Borrower" (Token "" "") 53000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 100000000}).
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewActiveEndpoints [].
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewObservableState (Object (fromList [("contents",Array [String "c2821458-f447-472a-96cc-0d3b2035b702",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitApplyInputs] Input application confirmed.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,25998539),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7208338),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
-[CallRedeem] Endpoint "redeem" called on a8fd8565-90c5-4cd1-9651-2511a2d24da0 for role "Lender".
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,25998539),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7215338),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Borrower",1)].
+[CallRedeem] Endpoint "redeem" called on 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 for role "Lender".
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [].
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewObservableState (Object (fromList [("contents",Array [String "4fcafdea-5148-450d-bf9d-727711eb1428",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitRedeem] Redemption confirmed.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,78466536),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7208338),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
-[Stop] Instance a8fd8565-90c5-4cd1-9651-2511a2d24da0 stopped.
-[Stop] Instance b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d stopped.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,78452600),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7215338),(AssetId "f34dd92fa97cadab81cad6626d5c9db38a312094a174f6990d7cd724" "Borrower",1)].
+[runContract] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 received ContractFinished Nothing.
+[Stop] Instance 7c6be674-5344-4cc8-a8f5-12ffdfe71b10 stopped.
+[Stop] Instance 9ce896a0-1878-4ec7-aff1-008caf07eed7 stopped.
 ***** SUCCEEDED *****

@@ -40,9 +40,9 @@ ptPabOperations:
         - case:
             notify_if: true
           then: close
-        timeout: 99888778
+        timeout: 100000002
         timeout_continuation: close
-    timeout: 99888777
+    timeout: 100000001
     timeout_continuation: close
 
 - tag: AwaitCreate
@@ -65,7 +65,7 @@ ptPabOperations:
       - 15000000
   poSlots:
   - getSlot: 1000000
-  - getSlot: 9999999
+  - getSlot: 100000000
 
 - tag: AwaitApplyInputs
   poInstance: App
@@ -81,7 +81,7 @@ ptPabOperations:
       tag: INotify
   poSlots:
   - getSlot: 1000000
-  - getSlot: 9999999
+  - getSlot: 100000000
 
 - tag: AwaitApplyInputs
   poInstance: App
