@@ -103,14 +103,18 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (followerContractExists, getContractNickname)
+import Store.Contracts
+  ( ContractStore
+  , followerContractExists
+  , getContractNickname
+  )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 mkInitialState
-  :: State
-mkInitialState =
+  :: ContractStore -> State
+mkInitialState contractStore =
   { contactsState: Contacts.initialState
   , walletCompanionStatus: WaitingToSync
   , menuOpen: false
@@ -118,6 +122,7 @@ mkInitialState =
   , cardOpen: false
   -- FIXME-3208: remove...
   , contracts: Map.empty
+  , contractStore
   , contractFilter: Running
   , selectedContractFollowerAppId: Nothing
   , templateState: Template.dummyState

@@ -103,6 +103,7 @@ import Plutus.PAB.Webserver.Types
   )
 import Store (_wallet)
 import Store as Store
+import Store.Contracts (emptyContractStore)
 import Store.Wallet (WalletStore(..), _Connected, _connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
@@ -138,7 +139,10 @@ mkMainFrame
   => MainFrameLoop m
   => Component Query Input Msg m
 mkMainFrame =
-  connect (selectEq \{ addressBook, wallet } -> { addressBook, wallet }) $
+  connect
+    ( selectEq \{ addressBook, wallet, contracts } ->
+        { addressBook, wallet, contracts }
+    ) $
     mkComponent
       { initialState: deriveState emptyState
       , render: render
@@ -158,7 +162,11 @@ emptyState =
   , webSocketStatus: WebSocketClosed Nothing
   , currentSlot: zero -- this will be updated as soon as the websocket connection is working
   , subState: Left Welcome.initialState
-  , store: { addressBook: AddressBook.empty, wallet: Disconnected }
+  , store:
+      { addressBook: AddressBook.empty
+      , wallet: Disconnected
+      , contracts: emptyContractStore
+      }
   }
 
 deriveState :: State -> Connected Slice Input -> State
@@ -167,7 +175,11 @@ deriveState state { context, input } = state
       Right ds -> Right ds
       Left ws -> Left ws
   , tzOffset = input.tzOffset
-  , store = { addressBook: context.addressBook, wallet: context.wallet }
+  , store =
+      { addressBook: context.addressBook
+      , wallet: context.wallet
+      , contracts: context.contracts
+      }
   }
 
 handleQuery
@@ -425,11 +437,13 @@ handleAction (Receive input) = do
               /\ (wallet ^. Connected._pubKeyHash)
         )
     $ store ^? _wallet <<< _connectedWallet
+  let
+    { contracts } = store
   -- React to changes in the wallet store
   case oldStore.wallet, store.wallet of
     Disconnected, Connecting details -> enterDashboardState details
     Connecting _, Connected connectedWallet -> do
-      assign _subState $ Right $ Dashboard.mkInitialState
+      assign _subState $ Right $ Dashboard.mkInitialState contracts
       handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
     Connected _, Disconnecting connectedWallet contracts ->
       enterWelcomeState connectedWallet contracts

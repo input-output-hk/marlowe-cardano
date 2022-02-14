@@ -23,6 +23,7 @@ import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Page.Contract.Types (Action, State) as Contract
+import Store.Contracts (ContractStore)
 
 type State =
   { contactsState :: Contacts.State
@@ -34,6 +35,7 @@ type State =
   -- FIXME-3208: Refactor in progress, remove...
   -- TODO: SCP-3208 Move contract state to halogen store
   , contracts :: Map PlutusAppId Contract.State
+  , contractStore :: ContractStore
   , contractFilter :: ContractFilter
   , selectedContractFollowerAppId :: Maybe PlutusAppId
   , templateState :: Template.State

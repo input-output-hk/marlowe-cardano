@@ -23,6 +23,7 @@ import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
+import Store.Contracts (ContractStore)
 import Store.Wallet (WalletStore)
 import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
@@ -31,6 +32,7 @@ import WebSocket.Support (FromSocket) as WS
 type Slice =
   { addressBook :: AddressBook
   , wallet :: WalletStore
+  , contracts :: ContractStore
   }
 
 type Input =

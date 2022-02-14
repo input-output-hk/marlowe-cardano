@@ -19,6 +19,7 @@ import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
 import Css as Css
 import Data.Address as A
+import Data.Array as Array
 import Data.Compactable (compact)
 import Data.Int (round)
 import Data.Lens (preview, view, (^.))
@@ -92,6 +93,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
+import Store.Contracts (getClosedContracts, getRunningContracts)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
@@ -552,19 +554,20 @@ contractCards
   :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
 contractCards
   currentSlot
-  { walletCompanionStatus, contractFilter: Running, contracts } =
+  { walletCompanionStatus, contractFilter, contractStore } =
   case walletCompanionStatus of
     WalletCompanionSynced ->
       let
-        -- FIXME-3208: Change the Dashboard state to include two Maps/List, one for
-        --        runningContracts and one for completedContracts
-        -- runningContracts = filter (not isContractClosed) contracts
-        runningContracts = filter (const true) contracts
+        filteredContracts =
+          if contractFilter == Running then
+            getRunningContracts contractStore
+          else
+            getClosedContracts contractStore
       in
-        if isEmpty runningContracts then
-          noContractsMessage Running
+        if Array.null filteredContracts then
+          noContractsMessage contractFilter
         else
-          contractGrid currentSlot Running runningContracts
+          contractGrid currentSlot contractFilter filteredContracts
     WaitingToSync ->
       div
         [ classNames
@@ -577,17 +580,6 @@ contractCards
             , text "Checking for new contracts..."
             ]
         ]
-
-contractCards currentSlot { contractFilter: Completed, contracts } =
-  let
-    -- FIXME-3208: Same as `runningContracts`
-    -- completedContracts = filter isContractClosed contracts
-    completedContracts = filter (const false) contracts
-  in
-    if isEmpty completedContracts then
-      noContractsMessage Completed
-    else
-      contractGrid currentSlot Completed completedContracts
 
 noContractsMessage :: forall p. ContractFilter -> HTML p Action
 noContractsMessage contractFilter =
@@ -621,7 +613,7 @@ contractGrid
    . MonadAff m
   => Slot
   -> ContractFilter
-  -> Map PlutusAppId Contract.State
+  -> Array Execution.State
   -> ComponentHTML Action ChildSlots m
 contractGrid currentSlot contractFilter contracts =
   div
@@ -645,7 +637,7 @@ contractGrid currentSlot contractFilter contracts =
       case contractFilter of
         Running -> [ newContractCard ]
         Completed -> []
-        <> (dashboardContractCard <$> toUnfoldable contracts)
+        <> (dashboardContractCard <$> contracts)
   where
   newContractCard =
     a
@@ -667,10 +659,15 @@ contractGrid currentSlot contractFilter contracts =
       , span_ [ text "New smart contract from template" ]
       ]
 
-  dashboardContractCard (followerAppId /\ contractState) =
-    mapComponentAction (ContractAction followerAppId) $ contractPreviewCard
-      currentSlot
-      contractState
+  -- FIXME-3208
+  dashboardContractCard _ = div_ []
+
+-- dashboardContractCard contractState = let
+--   {marloweParams} = contractState
+--  in
+--   mapComponentAction (ContractAction marloweParams) $ contractPreviewCard
+--     currentSlot
+--     contractState
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =

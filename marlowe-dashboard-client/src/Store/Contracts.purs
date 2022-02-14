@@ -4,15 +4,18 @@ module Store.Contracts
   , addStartingContract
   , emptyContractStore
   , followerContractExists
+  , getClosedContracts
   , getContractNickname
   , getContractNicknames
   , getFollowerContract
+  , getRunningContracts
   , mkContractStore
   , modifyContractNicknames
   ) where
 
 import Prologue
 
+import Data.Array (filter)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
@@ -28,7 +31,7 @@ import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory, _chParams)
-import Marlowe.Execution.State (restoreState) as Execution
+import Marlowe.Execution.State as Execution
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -52,6 +55,8 @@ type ContractStoreFields =
   , contractIndex :: Bimap MarloweParams PlutusAppId
   , contractNicknames :: LocalContractNicknames
   }
+
+derive instance Eq ContractStore
 
 ------------------------------------------------------------
 _ContractStore :: Lens' ContractStore ContractStoreFields
@@ -130,3 +135,12 @@ getContractNickname :: MarloweParams -> ContractStore -> Maybe ContractNickname
 getContractNickname marloweParams =
   LocalContractNicknames.getContractNickname marloweParams <<<
     getContractNicknames
+
+getRunningContracts :: ContractStore -> Array Execution.State
+getRunningContracts = filter (not <<< Execution.isClosed) <<< map snd
+  <<< Map.toUnfoldable
+  <<< view _syncedContracts
+
+getClosedContracts :: ContractStore -> Array Execution.State
+getClosedContracts = filter Execution.isClosed <<< map snd <<< Map.toUnfoldable
+  <<< view _syncedContracts
