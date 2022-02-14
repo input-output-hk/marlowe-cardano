@@ -41,7 +41,7 @@ import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (assign, lens, preview, set, use, view, (^.), (^?))
+import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
 import Data.Map (Map, keys)
 import Data.Maybe (fromMaybe, maybe)
@@ -86,8 +86,9 @@ import MainFrame.Types
   , WebSocketStatus(..)
   )
 import MainFrame.View (render)
-import Marlowe.Client (ContractHistory)
+import Marlowe.Client (ContractHistory, _chParams)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Semantics (MarloweParams(..))
 import MarloweContract (MarloweContract(..))
 import Page.Contract.Types as Contract
 import Page.Dashboard.Lenses (_contracts)
@@ -203,12 +204,16 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
       let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
       for_ walletIdXDashboardState \(Tuple walletId dashboardState) -> do
-        let
-          followAppIds :: Array PlutusAppId
-          followAppIds =
-            Set.toUnfoldable $ keys $ view _contracts dashboardState
+        -- FIXME-3208 try to test this, we no longer have a list of plutus app Id,
+        --            what we can do is to query the PAB via rest and to subscribe
+        --            to the active contracts
+        -- let
+        --   followAppIds :: Array PlutusAppId
+        --   followAppIds =
+        --     Set.toUnfoldable $ keys $ view _contracts dashboardState
         subscribeToWallet walletId
-        for followAppIds $ subscribeToPlutusApp
+    -- FIXME-3208
+    -- for followAppIds $ subscribeToPlutusApp
     (WS.WebSocketClosed closeEvent) -> do
       -- TODO: Consider whether we should show an error/warning when this happens. It might be more
       -- confusing than helpful, since the websocket is automatically reopened if it closes for any
@@ -332,14 +337,16 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       "Failed to parse an update from a contract."
                       decodingError
                     Right contractHistory -> do
+                      let
+                        marloweParams = view (_chParams <<< _1) contractHistory
                       {- [UC-CONTRACT-1][3] Start a contract -}
                       {- [UC-CONTRACT-3][1] Apply an input to a contract -}
                       handleAction $ DashboardAction $ Dashboard.UpdateContract
-                        plutusAppId
+                        marloweParams
                         contractHistory
                       {- [UC-CONTRACT-4][0] Redeem payments -}
                       handleAction $ DashboardAction $ Dashboard.RedeemPayments
-                        plutusAppId
+                        marloweParams
           NewActiveEndpoints activeEndpoints -> do
             mWallet <-
               peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
@@ -492,16 +499,17 @@ enterWelcomeState
   :: forall m
    . ManageMarlowe m
   => PABConnectedWallet
-  -> Map PlutusAppId Contract.State
+  -> Map MarloweParams Contract.State
   -> HalogenM State Action ChildSlots Msg m Unit
 enterWelcomeState walletDetails followerApps = do
-  let
-    followerAppIds :: Array PlutusAppId
-    followerAppIds = Set.toUnfoldable $ keys followerApps
+  -- FIXME-3208: check, I think it should not be necesary
+  -- let
+  --   followerAppIds :: Array PlutusAppId
+  --   followerAppIds = Set.toUnfoldable $ keys followerApps
   unsubscribeFromWallet $ view Connected._walletId walletDetails
   unsubscribeFromPlutusApp $ view Connected._companionAppId walletDetails
   unsubscribeFromPlutusApp $ view Connected._marloweAppId walletDetails
-  for_ followerAppIds unsubscribeFromPlutusApp
+  -- for_ followerAppIds unsubscribeFromPlutusApp
   updateStore $ Store.Wallet $ WalletStore.OnDisconnected
 
 {- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet

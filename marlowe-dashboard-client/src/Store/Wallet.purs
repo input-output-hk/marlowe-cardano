@@ -12,13 +12,13 @@ import Data.Wallet (SyncStatus, WalletDetails)
 import Data.Wallet as D
 import Data.WalletId (WalletId)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets)
+import Marlowe.Semantics (Assets, MarloweParams(..))
 import MarloweContract (MarloweContract(..))
 import Page.Contract.Types as Contract
 
 data WalletStore
   = Disconnected
-  | Disconnecting PABConnectedWallet (Map PlutusAppId Contract.State)
+  | Disconnecting PABConnectedWallet (Map MarloweParams Contract.State)
   | Connecting WalletDetails
   | Connected PABConnectedWallet
 
@@ -26,7 +26,7 @@ derive instance Eq WalletStore
 
 _Disconnecting :: Prism'
   WalletStore
-  (Tuple PABConnectedWallet (Map PlutusAppId Contract.State))
+  (Tuple PABConnectedWallet (Map MarloweParams Contract.State))
 _Disconnecting = prism' (uncurry Disconnecting) case _ of
   Disconnecting wallet contracts -> Just $ Tuple wallet contracts
   _ -> Nothing
@@ -104,7 +104,7 @@ _syncStatus = affineTraversal set pre
 
 data WalletAction
   = OnDisconnected
-  | OnDisconnect PABConnectedWallet (Map PlutusAppId Contract.State)
+  | OnDisconnect PABConnectedWallet (Map MarloweParams Contract.State)
   | OnConnect WalletDetails
   | OnConnected PABConnectedWallet
   | OnPlutusScriptChanged MarloweContract PlutusAppId

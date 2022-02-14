@@ -81,7 +81,7 @@ import Page.Dashboard.Lenses
   , _contractFilter
   , _menuOpen
   , _selectedContract
-  , _selectedContractFollowerAppId
+  , _selectedContractMarloweParams
   , _templateState
   )
 import Page.Dashboard.Types
@@ -106,7 +106,7 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
 
     cardOpen = state ^. _cardOpen
 
-    selectedContractFollowerAppId = state ^. _selectedContractFollowerAppId
+    selectedContractMarloweParams = state ^. _selectedContractMarloweParams
 
     selectedContract = preview
       (_selectedContract <<< _Started <<< _executionState)
@@ -132,16 +132,16 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
               [ dashboardBreadcrumb selectedContract
               , main
                   [ classNames [ "relative" ] ]
-                  case selectedContractFollowerAppId of
-                    Just followerAppId ->
+                  case selectedContractMarloweParams of
+                    Just marloweParams ->
                       [ renderSubmodule
                           _selectedContract
-                          (ContractAction followerAppId)
+                          (ContractAction marloweParams)
                           ( contractScreen
                               { currentSlot
                               , tzOffset
                               , wallet
-                              , followerAppId
+                              , marloweParams
                               }
                           )
                           state
@@ -660,14 +660,13 @@ contractGrid currentSlot contractFilter contracts =
       ]
 
   -- FIXME-3208
-  dashboardContractCard _ = div_ []
-
--- dashboardContractCard contractState = let
---   {marloweParams} = contractState
---  in
---   mapComponentAction (ContractAction marloweParams) $ contractPreviewCard
---     currentSlot
---     contractState
+  dashboardContractCard contractState =
+    let
+      { marloweParams } = contractState
+    in
+      mapComponentAction (ContractAction marloweParams) $ contractPreviewCard
+        currentSlot
+        contractState
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =

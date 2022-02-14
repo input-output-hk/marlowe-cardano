@@ -25,7 +25,10 @@ import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
 import Halogen.HTML.Properties (InputType(..), placeholder, type_, value)
 import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
+import Marlowe.Execution.State (numberOfConfirmedTxs)
 import Marlowe.Execution.State as Execution
+import Marlowe.Execution.Types as Execution
+import Marlowe.Extended (ContractType(..))
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
 import Page.Contract.Lenses (_executionState, _metadata)
@@ -37,27 +40,31 @@ contractPreviewCard
   :: forall m
    . MonadAff m
   => Slot
-  -> StartedState
+  -> Execution.State
   -> ComponentHTML Action ChildSlots m
 contractPreviewCard currentSlot state =
   let
-    contractType = state ^. (_metadata <<< _contractType)
+    -- FIXME-3208
+    contractType = Escrow
+    contractName = "fixme"
+    -- contractType = state ^. (_metadata <<< _contractType)
+    -- contractName = state ^. (_metadata <<< _contractName)
 
-    contractName = state ^. (_metadata <<< _contractName)
-    executionState = state ^. _executionState
-    nickname = Execution.contractName executionState
+    nickname = Execution.contractName state
 
     stepPanel =
       div
         [ classNames [ "px-4", "py-2" ] ]
         [ p
             [ classNames [ "text-xs", "font-semibold" ] ]
-            [ text $ "Current step:" <> show (currentStep state + 1) ]
+            [ text $ "Current step:" <> show (numberOfConfirmedTxs state + 1) ]
         , p
             [ classNames [ "font-semibold" ] ]
-            [ text $ timeoutString currentSlot executionState ]
+            [ text $ timeoutString currentSlot state ]
         ]
-    stepActions = currentStepActions state
+    -- FIXME-3208
+    -- stepActions = currentStepActions state
+    stepActions = startingStepActions
   in
     div
       [ classNames

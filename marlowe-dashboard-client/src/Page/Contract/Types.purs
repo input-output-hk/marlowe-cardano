@@ -1,14 +1,14 @@
 module Page.Contract.Types
-  ( State(..)
-  , StartedState
-  , StartingState
-  , StepBalance
-  , TimeoutInfo
+  ( Action(..)
+  , Input
   , PreviousStep
   , PreviousStepState(..)
+  , StartedState
+  , StartingState
+  , State(..)
+  , StepBalance
   , Tab(..)
-  , Input
-  , Action(..)
+  , TimeoutInfo
   , scrollContainerRef
   ) where
 
@@ -25,11 +25,11 @@ import Halogen (RefLabel(..))
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Accounts
   , ChoiceId
   , ChosenNum
+  , MarloweParams
   , Party
   , Payment
   , Slot
@@ -102,7 +102,7 @@ type Input =
   { currentSlot :: Slot
   , tzOffset :: Minutes
   , wallet :: PABConnectedWallet
-  , followerAppId :: PlutusAppId
+  , marloweParams :: MarloweParams
   }
 
 data Action

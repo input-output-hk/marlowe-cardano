@@ -90,7 +90,7 @@ import Page.Dashboard.Lenses
   , _contracts
   , _menuOpen
   , _selectedContract
-  , _selectedContractFollowerAppId
+  , _selectedContractMarloweParams
   , _templateState
   , _walletCompanionStatus
   )
@@ -124,7 +124,7 @@ mkInitialState contractStore =
   , contracts: Map.empty
   , contractStore
   , contractFilter: Running
-  , selectedContractFollowerAppId: Nothing
+  , selectedContractMarloweParams: Nothing
   , templateState: Template.dummyState
   }
 
@@ -184,7 +184,7 @@ handleAction _ (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
 
 handleAction _ (SelectContract mFollowerAppId) = assign
-  _selectedContractFollowerAppId
+  _selectedContractMarloweParams
   mFollowerAppId
 
 {- [UC-CONTRACT-1][2] Start a Marlowe contract
@@ -229,6 +229,7 @@ about its initial state through the WebSocket. We potentially use that to change
 {- [UC-CONTRACT-3][2] Apply an input to a contract -}
 handleAction
   input@{ currentSlot, wallet }
+  -- FIXME-3208 do we still need followerAppId here?
   (UpdateContract followerAppId contractHistory) = do
   let
     marloweParams /\ marloweData = view _chParams contractHistory
@@ -241,13 +242,13 @@ handleAction
   contracts <- use _contracts
   mContractNickname <- getContractNickname marloweParams <<< _.contracts <$>
     getStore
-  case lookup followerAppId contracts of
+  case lookup marloweParams contracts of
     Just contractState -> do
       let
         chHistory = view _chHistory contractHistory
       selectedStep <- peruse $ _selectedContract <<< _Started <<<
         _selectedStep
-      modifying _contracts $ insert followerAppId $ Contract.updateState
+      modifying _contracts $ insert marloweParams $ Contract.updateState
         wallet
         marloweParams
         marloweData
@@ -260,7 +261,7 @@ handleAction
         _selectedStep
       when (selectedStep /= selectedStep')
         $ for_ selectedStep'
-            ( handleAction input <<< ContractAction followerAppId <<<
+            ( handleAction input <<< ContractAction marloweParams <<<
                 Contract.MoveToStep
             )
     Nothing -> for_
@@ -268,7 +269,7 @@ handleAction
           mContractNickname
           contractHistory
       )
-      (modifying _contracts <<< insert followerAppId)
+      (modifying _contracts <<< insert marloweParams)
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -281,8 +282,8 @@ we thought it would be more user-friendly for now to trigger this automatically 
 integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
 manually (and sign the transaction). So this will almost certainly have to change.
 -}
-handleAction { wallet } (RedeemPayments followerAppId) = do
-  mStartedContract <- peruse $ _contracts <<< ix followerAppId <<< _Started
+handleAction { wallet } (RedeemPayments marloweParams) = do
+  mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
   for_ mStartedContract \{ executionState, userParties } ->
     let
       payments = getAllPayments executionState
@@ -315,7 +316,7 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
           )
     )
     (applyTimeout currentSlot)
-  selectedContractFollowerAppId <- use _selectedContractFollowerAppId
+  selectedContractFollowerAppId <- use _selectedContractMarloweParams
   for_ selectedContractFollowerAppId \followerAppId -> do
     -- If the modification changed the currently selected step, that means the screen for the
     -- contract that was changed is currently open, so we need to realign the step cards. We also
@@ -403,21 +404,21 @@ handleAction _ (SetContactForRole _ _) = do
 
 handleAction
   input@{ wallet, currentSlot, tzOffset }
-  (ContractAction followerAppId contractAction) = do
+  (ContractAction marloweParams contractAction) = do
   startedState <- peruse
     $ _contracts
-        <<< at followerAppId
+        <<< at marloweParams
         <<< _Just
         <<< _Started
   let
-    contractInput = { currentSlot, wallet, followerAppId, tzOffset }
-  mContractState <- peruse $ _contract followerAppId
+    contractInput = { currentSlot, wallet, marloweParams, tzOffset }
+  mContractState <- peruse $ _contract marloweParams
   case contractAction of
     Contract.AskConfirmation action ->
       for_ startedState \contractState ->
         handleAction input $ OpenCard
           $ ContractActionConfirmationCard
-              followerAppId
+              marloweParams
               { action
               , contractState
               , currentSlot
@@ -427,7 +428,7 @@ handleAction
               }
     Contract.CancelConfirmation -> handleAction input CloseCard
     _ -> for_ mContractState \s -> toContract
-      followerAppId
+      marloweParams
       s
       (Contract.handleAction contractInput contractAction)
 
@@ -464,12 +465,12 @@ toTemplate = mapSubmodule _templateState TemplateAction
 toContract
   :: forall m msg slots
    . Functor m
-  => PlutusAppId
+  => MarloweParams
   -> Contract.State
   -> HalogenM Contract.State Contract.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-toContract followerAppId s =
-  mapAction (ContractAction followerAppId)
+toContract marloweParams s =
+  mapAction (ContractAction marloweParams)
     <<< imapState (lens (fromMaybe s <<< preview trav) (flip (set trav)))
   where
-  trav = _contract followerAppId
+  trav = _contract marloweParams

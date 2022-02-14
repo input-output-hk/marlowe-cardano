@@ -342,10 +342,10 @@ handleAction
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction { followerAppId } SelectSelf = callMainFrameAction
+handleAction { marloweParams } SelectSelf = callMainFrameAction
   $ MainFrame.DashboardAction
   $ Dashboard.SelectContract
-  $ Just followerAppId
+  $ Just marloweParams
 
 handleAction _ (SetNickname nickname) =
   withStarted \{ executionState: { marloweParams } } -> do

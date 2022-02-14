@@ -9,6 +9,7 @@ module Marlowe.Execution.State
   , mkTx
   , nextState
   , nextTimeout
+  , numberOfConfirmedTxs
   , restoreState
   , setPendingTransaction
   , timeoutState
@@ -16,7 +17,7 @@ module Marlowe.Execution.State
 
 import Prologue
 
-import Data.Array (foldl)
+import Data.Array (foldl, length)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromInt)
 import Data.ContractNickname (ContractNickname)
@@ -109,6 +110,9 @@ contractName :: State -> String
 contractName { contractNickname } = maybe "Unknown"
   ContractNickname.toString
   contractNickname
+
+numberOfConfirmedTxs :: State -> Int
+numberOfConfirmedTxs state = length state.history
 
 setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state

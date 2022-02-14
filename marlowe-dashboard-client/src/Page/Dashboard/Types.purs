@@ -34,10 +34,11 @@ type State =
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
   -- FIXME-3208: Refactor in progress, remove...
   -- TODO: SCP-3208 Move contract state to halogen store
-  , contracts :: Map PlutusAppId Contract.State
+  , contracts :: Map MarloweParams Contract.State
   , contractStore :: ContractStore
   , contractFilter :: ContractFilter
-  , selectedContractFollowerAppId :: Maybe PlutusAppId
+  -- FIXME-3208 remove
+  , selectedContractMarloweParams :: Maybe MarloweParams
   , templateState :: Template.State
   }
 
@@ -57,7 +58,7 @@ data Card
   | CurrentWalletCard
   | ContactsCard
   | ContractTemplateCard
-  | ContractActionConfirmationCard PlutusAppId ConfirmInput.Input
+  | ContractActionConfirmationCard MarloweParams ConfirmInput.Input
 
 data ContractFilter
   = Running
@@ -79,13 +80,13 @@ data Action
   | OpenCard Card
   | CloseCard
   | SetContractFilter ContractFilter
-  | SelectContract (Maybe PlutusAppId)
+  | SelectContract (Maybe MarloweParams)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
-  | UpdateContract PlutusAppId ContractHistory
-  | RedeemPayments PlutusAppId
+  | UpdateContract MarloweParams ContractHistory
+  | RedeemPayments MarloweParams
   | AdvanceTimedoutSteps
   | TemplateAction Template.Action
-  | ContractAction PlutusAppId Contract.Action
+  | ContractAction MarloweParams Contract.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
 
