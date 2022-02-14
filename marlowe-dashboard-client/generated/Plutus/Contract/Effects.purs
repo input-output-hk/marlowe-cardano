@@ -6,6 +6,7 @@ import Prelude
 import Control.Lazy (defer)
 import Control.Monad.Freer.Extras.Pagination (PageQuery)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -28,6 +29,7 @@ import Data.Tuple.Nested ((/\))
 import Ledger.Constraints.OffChain (UnbalancedTx)
 import Ledger.TimeSlot (SlotConversionError)
 import Ledger.Tx (ChainIndexTxOut)
+import Marlowe.PAB (PlutusAppId)
 import Plutus.ChainIndex.Api (IsUtxoResponse, TxosResponse, UtxosResponse)
 import Plutus.ChainIndex.Tx (ChainIndexTx)
 import Plutus.ChainIndex.Types (RollbackState, Tip, TxOutState)
@@ -47,23 +49,20 @@ import Plutus.V1.Ledger.TxId (TxId)
 import Plutus.V1.Ledger.Value (AssetClass)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Error (WalletAPIError)
-import Wallet.Types (ContractInstanceId, EndpointDescription, EndpointValue)
+import Wallet.Types (EndpointDescription, EndpointValue)
 
 newtype ActiveEndpoint = ActiveEndpoint
   { aeDescription :: EndpointDescription
-  , aeMetadata :: Maybe RawJson
+  , aeMetadata :: Maybe Json
   }
 
 derive instance Eq ActiveEndpoint
-
-instance Show ActiveEndpoint where
-  show a = genericShow a
 
 instance EncodeJson ActiveEndpoint where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { aeDescription: E.value :: _ EndpointDescription
-        , aeMetadata: (E.maybe E.value) :: _ (Maybe RawJson)
+        , aeMetadata: (E.maybe E.value) :: _ (Maybe Json)
         }
     )
 
@@ -71,7 +70,7 @@ instance DecodeJson ActiveEndpoint where
   decodeJson = defer \_ -> D.decode $
     ( ActiveEndpoint <$> D.record "ActiveEndpoint"
         { aeDescription: D.value :: _ EndpointDescription
-        , aeMetadata: (D.maybe D.value) :: _ (Maybe RawJson)
+        , aeMetadata: (D.maybe D.value) :: _ (Maybe Json)
         }
     )
 
@@ -82,7 +81,7 @@ derive instance Newtype ActiveEndpoint _
 --------------------------------------------------------------------------------
 
 _ActiveEndpoint :: Iso' ActiveEndpoint
-  { aeDescription :: EndpointDescription, aeMetadata :: Maybe RawJson }
+  { aeDescription :: EndpointDescription, aeMetadata :: Maybe Json }
 _ActiveEndpoint = _Newtype
 
 --------------------------------------------------------------------------------
@@ -429,9 +428,6 @@ data PABReq
 
 derive instance Eq PABReq
 
-instance Show PABReq where
-  show a = genericShow a
-
 instance EncodeJson PABReq where
   encodeJson = defer \_ -> case _ of
     AwaitSlotReq a -> E.encodeTagged "AwaitSlotReq" a E.value
@@ -583,20 +579,17 @@ data PABResp
   | AwaitTxOutStatusChangeResp TxOutRef (RollbackState TxOutState)
   | CurrentSlotResp Slot
   | CurrentTimeResp POSIXTime
-  | OwnContractInstanceIdResp ContractInstanceId
+  | OwnContractInstanceIdResp PlutusAppId
   | OwnPaymentPublicKeyHashResp PaymentPubKeyHash
   | ChainIndexQueryResp ChainIndexResponse
   | BalanceTxResp BalanceTxResponse
   | WriteBalancedTxResp WriteBalancedTxResponse
-  | ExposeEndpointResp EndpointDescription (EndpointValue RawJson)
+  | ExposeEndpointResp EndpointDescription (EndpointValue Json)
   | PosixTimeRangeToContainedSlotRangeResp
       (Either SlotConversionError (Interval Slot))
   | YieldUnbalancedTxResp Unit
 
 derive instance Eq PABResp
-
-instance Show PABResp where
-  show a = genericShow a
 
 instance EncodeJson PABResp where
   encodeJson = defer \_ -> case _ of
@@ -711,7 +704,7 @@ _CurrentTimeResp = prism' CurrentTimeResp case _ of
   (CurrentTimeResp a) -> Just a
   _ -> Nothing
 
-_OwnContractInstanceIdResp :: Prism' PABResp ContractInstanceId
+_OwnContractInstanceIdResp :: Prism' PABResp PlutusAppId
 _OwnContractInstanceIdResp = prism' OwnContractInstanceIdResp case _ of
   (OwnContractInstanceIdResp a) -> Just a
   _ -> Nothing
@@ -737,7 +730,7 @@ _WriteBalancedTxResp = prism' WriteBalancedTxResp case _ of
   _ -> Nothing
 
 _ExposeEndpointResp :: Prism' PABResp
-  { a :: EndpointDescription, b :: EndpointValue RawJson }
+  { a :: EndpointDescription, b :: EndpointValue Json }
 _ExposeEndpointResp = prism' (\{ a, b } -> (ExposeEndpointResp a b)) case _ of
   (ExposeEndpointResp a b) -> Just { a, b }
   _ -> Nothing

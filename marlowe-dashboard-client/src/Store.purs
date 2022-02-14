@@ -1,52 +1,112 @@
-module Store
-  ( Action(..)
-  , Store
-  , reduce
-  ) where
+module Store where
 
 import Prologue
 
-import Component.Contacts.Lenses (_assets)
-import Component.Contacts.Types (WalletDetails)
 import Data.AddressBook (AddressBook)
-import Data.Lens (_Just, (.~))
+import Data.ContractNickname (ContractNickname)
+import Data.Lens (Lens')
+import Data.Lens.Record (prop)
+import Data.LocalContractNicknames (LocalContractNicknames)
 import Data.Map (Map)
-import Marlowe.Semantics (Assets, MarloweData, MarloweParams, Slot)
+import Data.Tuple.Nested (type (/\))
+import Data.UUID.Argonaut (UUID)
+import Marlowe.Client (ContractHistory)
+import Marlowe.Extended.Metadata (MetaData)
+import Marlowe.PAB (PlutusAppId)
+import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
+import Store.Contracts
+  ( ContractStore
+  , addFollowerContract
+  , addStartingContract
+  , mkContractStore
+  , modifyContractNicknames
+  )
+import Store.Wallet (WalletAction, WalletStore)
+import Store.Wallet as Wallet
 import Toast.Types (ToastMessage)
+import Type.Proxy (Proxy(..))
 
 type Store =
   { addressBook :: AddressBook
-  , currentSlot :: Slot
-  , toast :: Maybe ToastMessage
-  , wallet :: Maybe WalletDetails
+  , wallet :: WalletStore
+  -- # Contracts
+  , contracts :: ContractStore
+  -- # Backend Notifications
   -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
   -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
   -- really has changed anything
   , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
+  , currentSlot :: Slot
+  -- # System wide components
+  -- This is to make sure only one dropdown at a time is open, in order to
+  -- overcome a limitation of nselect that prevents it from closing the
+  -- dropdown on blur.
+  , openDropdown :: Maybe String
+  , toast :: Maybe ToastMessage
+  }
+
+_wallet :: forall r a. Lens' { wallet :: a | r } a
+_wallet = prop (Proxy :: _ "wallet")
+
+mkStore :: AddressBook -> LocalContractNicknames -> Store
+mkStore addressBook contractNicknames =
+  { -- # Wallet
+    addressBook
+  , wallet: Wallet.Disconnected
+  -- # Contracts
+  , contracts: mkContractStore contractNicknames
+  -- # Backend Notifications
+  , previousCompanionAppState: Nothing
+  , currentSlot: zero
+  -- # System wide components
+  , openDropdown: Nothing
+  , toast: Nothing
   }
 
 data Action
+  -- Backend Notifications
   = AdvanceToSlot Slot
-  | ShowToast ToastMessage
-  | ModifyAddressBook (AddressBook -> AddressBook)
-  | ActivateWallet WalletDetails
   | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
-  | UpdateAssets Assets
-  | DeactivateWallet
+  -- Contract
+  | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
+  | AddFollowerContract Slot PlutusAppId ContractHistory
+  | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
+  -- Address book
+  | ModifyAddressBook (AddressBook -> AddressBook)
+  -- Wallet
+  | Wallet WalletAction
+  -- System wide components
+  | ShowToast ToastMessage
   | ClearToast
+  | DropdownOpened String
+  | DropdownClosed
 
 reduce :: Store -> Action -> Store
--- TODO: currently we are only setting the currentSlot global variable, but once we
---       refactor contract state to live under the halogen store (SCP-3208) we can also move the
---       logic of AdvanceTimedoutSteps here.
 reduce store = case _ of
+  -- Backend Notifications
+  -- FIXME-3208: Need to create and call an advanceToSlot in Store.Contracts
   AdvanceToSlot newSlot -> store { currentSlot = newSlot }
-  ShowToast msg -> store { toast = Just msg }
-  ClearToast -> store { toast = Nothing }
-  ModifyAddressBook f -> store { addressBook = f store.addressBook }
-  ActivateWallet wallet -> store { wallet = Just wallet }
-  UpdateAssets assets ->
-    store { wallet = store.wallet # _Just <<< _assets .~ assets }
-  DeactivateWallet -> store { wallet = Nothing }
   NewCompanionAppStateObserved state ->
     store { previousCompanionAppState = Just state }
+  -- Contract
+  AddStartingContract startingContractInfo -> store
+    { contracts = addStartingContract startingContractInfo
+        store.contracts
+    }
+  AddFollowerContract currentSlot followerId history -> store
+    { contracts = addFollowerContract currentSlot followerId history
+        store.contracts
+    }
+  ModifyContractNicknames f -> store
+    { contracts = modifyContractNicknames f store.contracts
+    }
+  -- Address book
+  ModifyAddressBook f -> store { addressBook = f store.addressBook }
+  -- Wallet
+  Wallet action -> store { wallet = Wallet.reduce store.wallet action }
+  -- Toast
+  ShowToast msg -> store { toast = Just msg }
+  ClearToast -> store { toast = Nothing }
+  -- Dropdown
+  DropdownOpened dropdown -> store { openDropdown = Just dropdown }
+  DropdownClosed -> store { openDropdown = Nothing }

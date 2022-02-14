@@ -24,6 +24,7 @@ module Language.Marlowe.CLI.IO (
 , maybeWriteJson
 -- * Lifting
 , liftCli
+, liftCliMaybe
 , liftCliIO
 ) where
 
@@ -33,9 +34,10 @@ import Cardano.Api (AsType (..), FromSomeType (..), HasTextEnvelope, ScriptDataJ
 import Cardano.Api.Shelley (toPlutusData)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
-import Data.Aeson (FromJSON (..), ToJSON, eitherDecodeFileStrict)
+import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
+import Data.Yaml (decodeFileEither)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey, SomePaymentVerificationKey)
 import Plutus.V1.Ledger.Api (BuiltinData)
 import PlutusTx (dataToBuiltinData)
@@ -52,6 +54,14 @@ liftCli :: MonadError CliError m
 liftCli = liftEither . first (CliError . show)
 
 
+-- | Lift an 'Maybe' result into the CLI.
+liftCliMaybe :: MonadError CliError m
+             => String   -- ^ The error message.
+             -> Maybe a  -- ^ The result.
+             -> m a      -- ^ The lifted result.
+liftCliMaybe message = liftCli . maybe (Left $ CliError message) Right
+
+
 -- | Lift an 'IO' 'Either' result into the CLI.
 liftCliIO :: MonadError CliError m
           => MonadIO m
@@ -61,16 +71,16 @@ liftCliIO :: MonadError CliError m
 liftCliIO = liftCli <=< liftIO
 
 
--- | Decode a JSON file in an error monad.
+-- | Decode a JSON or YAML file in an error monad.
 decodeFileStrict :: MonadError CliError m
                  => MonadIO m
                  => FromJSON a
-                 => FilePath -- ^ The JSON file.
+                 => FilePath -- ^ The JSON or YAML file.
                  -> m a      -- ^ Action to decode the file.
 decodeFileStrict filePath =
   do
-    result <- liftIO $ eitherDecodeFileStrict filePath
-    liftEither $ first CliError result
+    result <- liftIO $ decodeFileEither filePath
+    liftEither $ first (CliError . show) result
 
 
 -- | Decode, in an error mondad, a JSON file containing built-in data.

@@ -6,30 +6,25 @@ module Component.Contacts.View
 import Prelude hiding (div)
 
 import Clipboard (Action(..)) as Clipboard
-import Component.AddContactForm (component) as AddContactForm
+import Component.AddContact (_addContact)
+import Component.AddContact (component) as AddContact
 import Component.Address.View as Address
-import Component.Contacts.Lenses (_cardSection, _walletNickname)
-import Component.Contacts.Types
-  ( Action(..)
-  , CardSection(..)
-  , State
-  , WalletDetails
-  )
+import Component.Contacts.Lenses (_cardSection)
+import Component.Contacts.Types (Action(..), CardSection(..), State)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
-import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address (Address)
 import Data.Address as A
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
-import Data.Array (singleton) as Array
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(..))
+import Data.PABConnectedWallet (PABConnectedWallet, _walletNickname)
 import Data.Tuple.Nested ((/\))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
-import Effect.Aff.Class (class MonadAff)
+import Effect.Class (class MonadEffect)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
 import Halogen.HTML
@@ -48,15 +43,16 @@ import Halogen.HTML
   , ul
   )
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.Store.Monad (class MonadStore)
 import MainFrame.Types (ChildSlots)
-import Type.Prelude (Proxy(..))
+import Store as Store
 
 contactsCard
   :: forall m
-   . MonadAff m
-  => MonadRec m
+   . MonadEffect m
+  => MonadStore Store.Action Store.Store m
   => AddressBook
-  -> WalletDetails
+  -> PABConnectedWallet
   -> State
   -> ComponentHTML Action ChildSlots m
 contactsCard addressBook currentWallet state =
@@ -82,12 +78,14 @@ contactsCard addressBook currentWallet state =
             Home -> addressBookCard addressBook
             ViewWallet nickname address ->
               contactDetailsCard currentWallet nickname address
-            NewWallet mTokenName -> Array.singleton $ slot
-              (Proxy :: Proxy "addContactForm")
-              unit
-              AddContactForm.component
-              { addressBook, mTokenName }
-              identity
+            NewWallet mTokenName ->
+              [ slot
+                  _addContact
+                  unit
+                  AddContact.component
+                  {} $ OnAddContactMsg
+                  mTokenName
+              ]
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action
 contactsBreadcrumb cardSection =
@@ -174,7 +172,7 @@ addressBookCard addressBook =
 
 contactDetailsCard
   :: forall p
-   . WalletDetails
+   . PABConnectedWallet
   -> WalletNickname
   -> Address
   -> Array (HTML p Action)

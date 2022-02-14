@@ -1,0 +1,43 @@
+marlowe-cli test contracts --testnet-magic 1564                                                             \
+                           --socket-path node.socket                                                        \
+                           --wallet-url http://localhost:8090                                               \
+                           --pab-url http://localhost:9080                                                  \
+                           --faucet-key payment.skey                                                        \
+                           --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
+                           --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7   \
+                           --passphrase pab123456789                                                        \
+                           test-zcb.yaml
+
+***** Test "Zero-Coupon Bond" *****
+[CreateWallet] Created wallet 79a31e6d810f03effbe59a48cbab053957aee7b9 for role "Lender".
+[FundWallet] Funded wallet 79a31e6d810f03effbe59a48cbab053957aee7b9 for role "Lender" with valueFromList [(AdaAssetId,80000000)].
+[ActivateApp] Activated MarloweApp instance a8fd8565-90c5-4cd1-9651-2511a2d24da0 for role "Lender".
+[CreateWallet] Created wallet f0a93ba9feaf1f510e5ce16d5e82c1d0ddf38f4e for role "Borrower".
+[FundWallet] Funded wallet f0a93ba9feaf1f510e5ce16d5e82c1d0ddf38f4e for role "Borrower" with valueFromList [(AdaAssetId,10000000)].
+[ActivateApp] Activated MarloweApp instance b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d for role "Borrower".
+[PrintWallet] Wallet for role "Lender" contains valueFromList [(AdaAssetId,80000000)].
+[PrintWallet] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,10000000)].
+[CallCreate] Endpoint "create" called on instance a8fd8565-90c5-4cd1-9651-2511a2d24da0 for owners [("Lender",6f8d6cdf9fba29f25aadea7f0dba4f3ce1ec1e5e02acb1549a62acf9),("Borrower",e88421b62ecebd96181a07953dabc4ed75682b462b24fed1e0c57ac0)].
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 67f62a366af66167f8f30aac050717a0198407286e9a8ba74c0fac88, rolesCurrency = 9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7, slotConfig = (1000,POSIXTime {getPOSIXTime = 1638215277000})}.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75515174),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
+[Follow] Instance b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d now follows instance a8fd8565-90c5-4cd1-9651-2511a2d24da0.
+[CallApplyInputs] Endpoint "apply-inputs" called on a8fd8565-90c5-4cd1-9651-2511a2d24da0 for inputs [ClientInput (IDeposit "Lender" "Lender" (Token "" "") 50000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 10000000}).
+[AwaitApplyInputs] Input application confirmed.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,23998539),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
+[CallRedeem] Endpoint "redeem" called on b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d for role "Borrower".
+[AwaitRedeem] Redemption confirmed.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,23998539),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,61561148),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
+[CallApplyInputs] Endpoint "apply-inputs" called on b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d for inputs [ClientInput (IDeposit "Borrower" "Borrower" (Token "" "") 53000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 10000000}).
+[AwaitApplyInputs] Input application confirmed.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,25998539),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7208338),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
+[CallRedeem] Endpoint "redeem" called on a8fd8565-90c5-4cd1-9651-2511a2d24da0 for role "Lender".
+[AwaitRedeem] Redemption confirmed.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,78466536),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Lender",1)].
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7208338),(AssetId "9ef3cb2068261af6529ed001ccd50e52562104100e06020e2fe353e7" "Borrower",1)].
+[Stop] Instance a8fd8565-90c5-4cd1-9651-2511a2d24da0 stopped.
+[Stop] Instance b0ea62a3-0bc2-4f53-a36e-1ea7f28d757d stopped.
+***** SUCCEEDED *****

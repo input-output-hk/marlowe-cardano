@@ -1,15 +1,13 @@
-module Page.Welcome.Types
-  ( Action(..)
-  , Card(..)
-  , State
-  ) where
+module Page.Welcome.Types where
 
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
-import Clipboard (Action) as Clipboard
-import Component.Contacts.Types (WalletDetails)
-import Data.WalletNickname (WalletNickname)
+import Capability.Marlowe (NewWalletDetails)
+import Data.Wallet (WalletDetails)
+import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
+import Page.Welcome.CreateWallet.Types as CreateWallet
+import Page.Welcome.RestoreWallet.Types as RestoreWallet
 
 -- TODO (possibly): The Contacts submodule used in the Dashboard has some properties and
 -- functionality that's similar to some of what goes on here. It might be worth generalising it so
@@ -27,31 +25,37 @@ type State =
   , enteringDashboardState :: Boolean
   }
 
+-- This type is probably not testnet specific.
+data CreateWalletStep
+  = CreateWalletSetWalletName
+  | CreateWalletPresentMnemonic NewWalletDetails
+  | CreateWalletConfirmMnemonic NewWalletDetails
+
+derive instance Eq CreateWalletStep
+
 -- TODO: When we implement another wallet connetctor, we should probably move this to
 -- Welcome.Testnet and split the Actions into general wallet logic and Testnet wallet logic
 data Card
   = GetStartedHelpCard
-  | GenerateWalletHelpCard
-  | UseNewWalletCard
-  | UseWalletCard
-  | RestoreTestnetWalletCard
-  | LocalWalletMissingCard
+  | CreateWalletHelpCard
+  | CreateWalletCard CreateWalletStep
+  | RestoreWalletCard
 
 derive instance eqCard :: Eq Card
 
 data Action
-  = OpenCard Card
+  = OnCreateWallet
+  | OnCreateWalletHelp
+  | OnGetStartedHelp
+  | OnRestoreWallet
+  | OnAcknowledgeMnemonic NewWalletDetails
   | CloseCard
-  | GenerateWallet
-  | ConnectWallet WalletNickname WalletDetails
-  | ClearLocalStorage
-  | ClipboardAction Clipboard.Action
+  | ConnectWallet WalletDetails
+  | OnRestoreWalletMsg RestoreWallet.Msg
+  | OnCreateWalletMsg CreateWallet.Msg
+  | OnConfirmMnemonicMsg ConfirmMnemonic.Msg
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent (OpenCard _) = Nothing
-  toEvent CloseCard = Nothing
-  toEvent GenerateWallet = Just $ defaultEvent "GenerateWallet"
-  toEvent (ConnectWallet _ _) = Just $ defaultEvent "ConnectWallet"
-  toEvent ClearLocalStorage = Just $ defaultEvent "ClearLocalStorage"
-  toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
+  toEvent (ConnectWallet _) = Just $ defaultEvent "ConnectWallet"
+  toEvent _ = Nothing

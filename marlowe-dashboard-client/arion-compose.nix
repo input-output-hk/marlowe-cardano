@@ -64,6 +64,7 @@ let
   wallet = {
     service = {
       image = "inputoutput/cardano-wallet:2021.12.15";
+      ports = [ "${wallet-port}:${wallet-port}" ];
       volumes = [
         "cardano-ipc:/ipc"
         "cardano-wallet-data:/data"

@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE MonoLocalBinds    #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Marlowe.Run.Wallet.V1.Client
@@ -12,11 +14,12 @@ import Cardano.Prelude hiding (Handler)
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString.Lazy as BL
-import Servant.Client (ClientEnv, ClientError, ClientM, runClientM)
+import Marlowe.Run.Env (HasEnv, envClientEnv)
+import Servant.Client (ClientError, ClientM, runClientM)
 
-callWBE :: MonadIO m => MonadReader ClientEnv  m => ClientM a -> m (Either ClientError a)
+callWBE :: MonadIO m => HasEnv m => ClientM a -> m (Either ClientError a)
 callWBE client = do
-    clientEnv <- ask
+    clientEnv <- asks envClientEnv
     liftIO $ runClientM client clientEnv
 
 -- NOTE: This was copied from Cardano-wallet/Cardano.Cli

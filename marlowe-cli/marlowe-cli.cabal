@@ -49,9 +49,11 @@ library
     Language.Marlowe.CLI.Command.Contract
     Language.Marlowe.CLI.Command.Input
     Language.Marlowe.CLI.Command.Parse
+    Language.Marlowe.CLI.Command.PAB
     Language.Marlowe.CLI.Command.Role
     Language.Marlowe.CLI.Command.Run
     Language.Marlowe.CLI.Command.Template
+    Language.Marlowe.CLI.Command.Test
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
     Language.Marlowe.CLI.Examples
@@ -62,31 +64,55 @@ library
     Language.Marlowe.CLI.Export
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
+    Language.Marlowe.CLI.PAB
     Language.Marlowe.CLI.Run
     Language.Marlowe.CLI.Transaction
+    Language.Marlowe.CLI.Test
+    Language.Marlowe.CLI.Test.PAB
+    Language.Marlowe.CLI.Test.Script
+    Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Types
+    Language.Marlowe.Contract
     Paths_marlowe_cli
   build-depends:
     base >= 4.9 && < 5,
-    aeson -any,
-    aeson-pretty -any,
-    base16-bytestring -any,
-    bytestring -any,
-    cardano-api -any,
-    cardano-ledger-alonzo -any,
-    containers -any,
-    marlowe -any,
-    mtl -any,
-    optparse-applicative -any,
-    ouroboros-network -any,
-    plutus-ledger -any,
-    plutus-ledger-api -any,
-    plutus-tx -any,
-    regex-posix -any,
-    serialise -any,
-    split -any,
-    text -any,
-    unordered-containers -any,
+    aeson,
+    aeson-pretty,
+    base16-bytestring,
+    bytestring,
+    cardano-addresses,
+    cardano-api,
+    cardano-ledger-alonzo,
+    cardano-wallet-core,
+    containers,
+    data-default,
+    freer-simple,
+    http-client,
+    lens,
+    marlowe,
+    memory,
+    mtl,
+    network,
+    openapi3,
+    optparse-applicative,
+    ouroboros-network,
+    playground-common,
+    plutus-contract,
+    plutus-ledger,
+    plutus-ledger-api,
+    plutus-pab,
+    plutus-tx,
+    prettyprinter,
+    QuickCheck,
+    regex-posix,
+    serialise,
+    servant-client,
+    split,
+    text,
+    unordered-containers,
+    uuid,
+    websockets,
+    yaml,
 
 executable marlowe-cli
   import: lang
@@ -98,8 +124,8 @@ executable marlowe-cli
     Paths_marlowe_cli
   build-depends:
     base >= 4.9 && < 5,
-    cardano-config -any,
-    marlowe-cli -any,
-    text -any,
+    cardano-config,
+    marlowe-cli,
+    text
   ghc-options:
     -threaded

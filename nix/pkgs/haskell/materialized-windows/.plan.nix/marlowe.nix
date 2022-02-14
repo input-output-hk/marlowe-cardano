@@ -36,8 +36,13 @@
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+          (hsPkgs."cardano-binary" or (errorHandler.buildDepError "cardano-binary"))
+          (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
+          (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
+          (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
@@ -46,6 +51,7 @@
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
           (hsPkgs."plutus-core" or (errorHandler.buildDepError "plutus-core"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
+          (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-ledger-constraints" or (errorHandler.buildDepError "plutus-ledger-constraints"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-use-cases" or (errorHandler.buildDepError "plutus-use-cases"))
@@ -63,6 +69,7 @@
           "Language/Marlowe/Semantics"
           "Language/Marlowe/SemanticsTypes"
           "Language/Marlowe/Client"
+          "Language/Marlowe/Client/History"
           "Language/Marlowe/Util"
           "Language/Marlowe/ParserUtil"
           "Language/Marlowe/Scripts"

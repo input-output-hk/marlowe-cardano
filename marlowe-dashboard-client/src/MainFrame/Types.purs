@@ -3,32 +3,34 @@ module MainFrame.Types where
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.Contacts.Types (Action) as Contacts
-import Component.Contacts.Types (WalletDetails)
+import Component.AddContact.Types as AddContact
+import Component.ContractSetup.Types as ContractSetup
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
-import Component.Template.Types as Template
 import Component.Tooltip.Types (ReferenceId)
 import Data.AddressBook (AddressBook)
 import Data.Generic.Rep (class Generic)
-import Data.Map (Map)
 import Data.Time.Duration (Minutes)
+import Data.Wallet (SyncStatus)
+import Data.WalletId (WalletId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Halogen.Store.Connect (Connected)
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Slot)
-import Page.Contract.Types (State) as Contract
 import Page.Dashboard.Types (Action, State) as Dashboard
+import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
+import Page.Welcome.CreateWallet.Types as CreateWallet
+import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
+import Store.Wallet (WalletStore)
 import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
 import WebSocket.Support (FromSocket) as WS
 
 type Slice =
   { addressBook :: AddressBook
-  , wallet :: Maybe WalletDetails
+  , wallet :: WalletStore
   }
 
 type Input =
@@ -45,11 +47,8 @@ type State =
   --       to remove it from here we need to first change the sub-components that use this into proper components
   , currentSlot :: Slot
   , tzOffset :: Minutes
-  -- TODO clean this mess up by making Welcome and Dashboard proper components.
-  , subState ::
-      Either
-        (Tuple (Maybe WalletDetails) Welcome.State)
-        (Tuple WalletDetails Dashboard.State)
+  , store :: Slice
+  , subState :: Either Welcome.State Dashboard.State
   }
 
 data WebSocketStatus
@@ -66,15 +65,17 @@ instance showWebSocketStatus :: Show WebSocketStatus where
 
 ------------------------------------------------------------
 type ChildSlots =
-  ( addContactForm :: forall query. H.Slot query Contacts.Action Unit
+  ( addContact :: AddContact.Slot Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , lifeCycleSlot :: forall query. H.Slot query LifecycleEvent String
   , expandSlot :: Expand.Slot Void String
-  , restoreWalletForm :: forall query. H.Slot query Welcome.Action Unit
+  , confirmMnemonic :: ConfirmMnemonic.Slot Unit
+  , createWallet :: CreateWallet.Slot Unit
+  , restoreWallet :: RestoreWallet.Slot Unit
   , toaster :: forall q m. H.Slot q m Unit
-  , contractSetup :: forall q. H.Slot q Template.Action Unit
+  , contractSetup :: ContractSetup.Slot Unit
   )
 
 _toaster :: Proxy "toaster"
@@ -90,19 +91,17 @@ data Msg
 
 ------------------------------------------------------------
 data Action
-  = EnterWelcomeState WalletDetails (Map PlutusAppId Contract.State)
-  | EnterDashboardState WalletDetails
-  | WelcomeAction Welcome.Action
+  = WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
   | Receive (Connected Slice Input)
   | Init
+  | OnPoll SyncStatus WalletId
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent (EnterWelcomeState _ _) = Just $ defaultEvent "EnterWelcomeState"
-  toEvent (EnterDashboardState _) = Just $ defaultEvent "EnterDashboardState"
   toEvent (Receive _) = Just $ defaultEvent "Receive"
   toEvent Init = Just $ defaultEvent "Init"
+  toEvent (OnPoll _ _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction

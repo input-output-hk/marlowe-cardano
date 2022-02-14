@@ -5,6 +5,7 @@ import Prelude
 
 import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -20,7 +21,6 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Type.Proxy (Proxy(Proxy))
@@ -76,19 +76,16 @@ _CheckpointKey = _Newtype
 --------------------------------------------------------------------------------
 
 newtype CheckpointStore = CheckpointStore
-  { unCheckpointStore :: Map CheckpointKey (CheckpointStoreItem RawJson) }
+  { unCheckpointStore :: Map CheckpointKey (CheckpointStoreItem Json) }
 
 derive instance Eq CheckpointStore
-
-instance Show CheckpointStore where
-  show a = genericShow a
 
 instance EncodeJson CheckpointStore where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unCheckpointStore:
             (E.dictionary E.value E.value) :: _
-              (Map CheckpointKey (CheckpointStoreItem RawJson))
+              (Map CheckpointKey (CheckpointStoreItem Json))
         }
     )
 
@@ -97,7 +94,7 @@ instance DecodeJson CheckpointStore where
     ( CheckpointStore <$> D.record "CheckpointStore"
         { unCheckpointStore:
             (D.dictionary D.value D.value) :: _
-              (Map CheckpointKey (CheckpointStoreItem RawJson))
+              (Map CheckpointKey (CheckpointStoreItem Json))
         }
     )
 
@@ -108,7 +105,7 @@ derive instance Newtype CheckpointStore _
 --------------------------------------------------------------------------------
 
 _CheckpointStore :: Iso' CheckpointStore
-  { unCheckpointStore :: Map CheckpointKey (CheckpointStoreItem RawJson) }
+  { unCheckpointStore :: Map CheckpointKey (CheckpointStoreItem Json) }
 _CheckpointStore = _Newtype
 
 --------------------------------------------------------------------------------

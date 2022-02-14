@@ -2,7 +2,7 @@ module MainFrame.State (component) where
 
 import Prologue hiding (div)
 
-import Auth (AuthRole(..), authStatusAuthRole, _GithubUser)
+import Auth (AuthRole(..), _GithubUser, authStatusAuthRole)
 import Component.Blockly.Types as Blockly
 import Component.BottomPanel.Types (Action(..)) as BP
 import Component.ConfirmUnsavedNavigation.Types (Action(..)) as ConfirmUnsavedNavigation
@@ -102,13 +102,13 @@ import Page.MarloweEditor.Types as ME
 import Page.Simulation.State as Simulation
 import Page.Simulation.Types as ST
 import Rename.State (handleAction) as Rename
-import Rename.Types (Action(..), State, _projectName, emptyState) as Rename
+import Rename.Types (Action(..), State, emptyState) as Rename
 import Router (Route, SubRoute)
 import Router as Router
 import Routing.Duplex as RD
 import Routing.Hash as Routing
 import SaveAs.State (handleAction) as SaveAs
-import SaveAs.Types (Action(..), State, _projectName, _status, emptyState) as SaveAs
+import SaveAs.Types (Action(..), State, _status, emptyState) as SaveAs
 import Servant.PureScript (class MonadAjax, printAjaxError)
 import SessionStorage as SessionStorage
 import StaticData (gistIdLocalStorageKey)
@@ -129,7 +129,7 @@ initialState =
   , javascriptState: JS.initialState
   , marloweEditorState: ME.initialState
   , blocklyEditorState: BE.initialState
-  , simulationState: Simulation.mkState
+  , simulationState: Simulation.mkStateBase
   , jsEditorKeybindings: DefaultBindings
   , activeJSDemo: mempty
   , contractMetadata: emptyContractMetadata
@@ -469,12 +469,11 @@ handleAction (ProjectsAction Projects.Cancel) = fullHandleAction CloseModal
 handleAction (ProjectsAction action) = toProjects $ Projects.handleAction action
 
 handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
-  modify_
-    ( set _projectName "New Project"
-        <<< set _gistId Nothing
-        <<< set _createGistResult NotAsked
-        <<< set _contractMetadata emptyContractMetadata
-    )
+  assign _projectName "New Project"
+  assign _gistId Nothing
+  assign _createGistResult NotAsked
+  assign _contractMetadata emptyContractMetadata
+
   -- TODO: Remove gistIdLocalStorageKey and use global session management (MainFrame.stateToSession)
   liftEffect $ SessionStorage.setItem gistIdLocalStorageKey mempty
   case lang of
@@ -505,14 +504,12 @@ handleAction (NewProjectAction (NewProject.CreateProject lang)) = do
 handleAction (NewProjectAction NewProject.Cancel) = fullHandleAction CloseModal
 
 handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
-  modify_
-    ( set _showModal Nothing
-        <<< set _workflow (Just lang)
-        <<< set _hasUnsavedChanges false
-        <<< set _gistId Nothing
-        <<< set _projectName metadata.contractName
-        <<< set _contractMetadata metadata
-    )
+  assign _projectName metadata.contractName
+  assign _showModal Nothing
+  assign _workflow (Just lang)
+  assign _hasUnsavedChanges false
+  assign _gistId Nothing
+  assign _contractMetadata metadata
   selectView $ selectLanguageView lang
   case lang of
     Haskell ->
@@ -541,11 +538,9 @@ handleAction (DemosAction (Demos.LoadDemo lang (Demos.Demo key))) = do
 handleAction (DemosAction Demos.Cancel) = fullHandleAction CloseModal
 
 handleAction (RenameAction action@Rename.SaveProject) = do
-  projectName <- use (_rename <<< Rename._projectName)
-  modify_
-    ( set _projectName projectName
-        <<< set _showModal Nothing
-    )
+  projectName <- use (_rename <<< _projectName)
+  assign _projectName projectName
+  assign _showModal Nothing
   toRename $ Rename.handleAction action
 
 handleAction (RenameAction action) = toRename $ Rename.handleAction action
@@ -553,12 +548,12 @@ handleAction (RenameAction action) = toRename $ Rename.handleAction action
 handleAction (SaveAsAction action@SaveAs.SaveProject) = do
   currentName <- use _projectName
   currentGistId <- use _gistId
-  projectName <- use (_saveAs <<< SaveAs._projectName)
-  modify_
-    ( set _gistId Nothing
-        <<< set _projectName projectName
-        <<< set (_saveAs <<< SaveAs._status) Loading
-    )
+  projectName <- use (_saveAs <<< _projectName)
+
+  assign _projectName projectName
+  assign _gistId Nothing
+  assign (_saveAs <<< SaveAs._status) Loading
+
   handleGistAction PublishOrUpdateGist
   res <- peruse (_createGistResult <<< _Success)
   case res of
@@ -569,12 +564,10 @@ handleAction (SaveAsAction action@SaveAs.SaveProject) = do
         ( set _showModal Nothing
             <<< set (_saveAs <<< SaveAs._status) NotAsked
         )
-    Nothing ->
-      modify_
-        ( set (_saveAs <<< SaveAs._status) (Failure "Could not save project")
-            <<< set _projectName currentName
-            <<< set _gistId currentGistId
-        )
+    Nothing -> do
+      assign (_saveAs <<< SaveAs._status) (Failure "Could not save project")
+      assign _gistId currentGistId
+      assign _projectName currentName
   toSaveAs $ SaveAs.handleAction action
 
 handleAction (SaveAsAction SaveAs.Cancel) = fullHandleAction CloseModal
@@ -591,14 +584,12 @@ handleAction (OpenModal OpenProject) = do
 
 handleAction (OpenModal RenameProject) = do
   currentName <- use _projectName
-  assign (_rename <<< Rename._projectName) currentName
+  assign (_rename <<< _projectName) currentName
   assign _showModal $ Just RenameProject
 
 handleAction (OpenModal modalView) = assign _showModal $ Just modalView
 
 handleAction CloseModal = assign _showModal Nothing
-
-handleAction (ChangeProjectName name) = assign _projectName name
 
 handleAction (OpenLoginPopup intendedAction) = do
   authRole <- liftAff openLoginPopup
@@ -808,10 +799,8 @@ loadGist gist = do
   toBlocklyEditor $ BlocklyEditor.handleAction $ BE.InitBlocklyProject $
     fromMaybe mempty blockly
   assign _contractMetadata metadata
-  modify_
-    ( set _gistId gistId'
-        <<< set _projectName description
-    )
+  assign _gistId gistId'
+  assign _projectName description
 
 ------------------------------------------------------------
 -- Handles the actions fired by the Confirm Unsaved Navigation modal

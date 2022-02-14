@@ -1,0 +1,111 @@
+ptTestName: Simple Example
+
+ptPabOperations:
+
+  # Create and fund the wallet.
+
+- tag: CreateWallet
+  poOwner: PAB
+
+- tag: FundWallet
+  poOwner: PAB
+  poValue:
+    lovelace: 100000000
+
+  # Activate the Marlowe application.
+
+- tag: ActivateApp
+  poOwner: PAB
+  poInstance: App
+
+  # Create the contract.
+
+- tag: CallCreate
+  poInstance: App
+  poOwners:
+  - PAB
+  poContract:
+    when:
+    - case:
+        party:
+          role_token: PAB
+        deposits: 15000000
+        into_account:
+          role_token: PAB
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+      then:
+        when:
+        - case:
+            notify_if: true
+          then: close
+        timeout: 99888778
+        timeout_continuation: close
+    timeout: 99888777
+    timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: App
+
+  # Deposit funds.
+
+- tag: CallApplyInputs
+  poInstance: App
+  poOwner: PAB
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: IDeposit
+      contents:
+      - role_token: PAB
+      - role_token: PAB
+      - currency_symbol: ''
+        token_name: ''
+      - 15000000
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 9999999
+
+- tag: AwaitApplyInputs
+  poInstance: App
+
+  # Notify.
+
+- tag: CallApplyInputs
+  poInstance: App
+  poOwner: PAB
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: INotify
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 9999999
+
+- tag: AwaitApplyInputs
+  poInstance: App
+
+  # Redeem the funds.
+
+- tag: CallRedeem
+  poInstance: App
+  poOwner: PAB
+
+- tag: AwaitRedeem
+  poInstance: App
+
+  # Stop the application.
+
+- tag: Stop
+  poInstance: App
+
+  # Check the balance.
+
+- tag: CheckFunds
+  poOwner: PAB
+  poValue:
+    lovelace: 100000000
+  poMaximumFees: 4000000
+  poInstances:
+  - App

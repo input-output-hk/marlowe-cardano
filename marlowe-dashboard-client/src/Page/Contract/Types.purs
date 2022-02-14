@@ -15,8 +15,9 @@ module Page.Contract.Types
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
-import Component.Contacts.Types (WalletDetails)
+import Data.ContractNickname (ContractNickname)
 import Data.Map (Map)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set (Set)
 import Data.Time.Duration (Minutes)
 import Data.WalletNickname (WalletNickname)
@@ -40,16 +41,15 @@ data State
   = Starting StartingState
   | Started StartedState
 
+derive instance Eq State
+
 type StartingState =
-  { nickname :: String
+  { nickname :: ContractNickname
   , metadata :: MetaData
-  , participants :: Map Party (Maybe WalletNickname)
-  -- TODO: add marlowe params
   }
 
 type StartedState =
-  { nickname :: String
-  , tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
+  { tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
   -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
   -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
@@ -95,6 +95,8 @@ data PreviousStepState
   = TransactionStep TransactionInput
   | TimeoutStep TimeoutInfo
 
+derive instance Eq PreviousStepState
+
 data Tab
   = Tasks
   | Balances
@@ -104,14 +106,13 @@ derive instance eqTab :: Eq Tab
 type Input =
   { currentSlot :: Slot
   , tzOffset :: Minutes
-  , walletDetails :: WalletDetails
+  , wallet :: PABConnectedWallet
   , followerAppId :: PlutusAppId
   }
 
 data Action
   = SelectSelf
-  -- TODO: fix primitive obsession
-  | SetNickname String
+  | SetNickname ContractNickname
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
   | SelectTab Int Tab

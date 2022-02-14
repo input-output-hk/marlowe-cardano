@@ -5,6 +5,7 @@ import Prelude
 
 import Affjax.RequestHeader (RequestHeader(..))
 import Data.Argonaut (Json, JsonDecodeError)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
@@ -14,8 +15,8 @@ import Data.Either (Either(..))
 import Data.Foldable (fold)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
-import Data.RawJson (RawJson)
 import Data.Tuple (Tuple)
+import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
   ( ContractActivationArgs
@@ -34,7 +35,6 @@ import Servant.PureScript
   , toPathSegment
   )
 import URI (RelativePart(..), RelativeRef(..))
-import Wallet.Types (ContractInstanceId)
 
 data Api = Api
 
@@ -90,7 +90,7 @@ postApiContractActivate
   :: forall m
    . MonadAjax Api m
   => ContractActivationArgs MarloweContract
-  -> m (Either (AjaxError JsonDecodeError Json) ContractInstanceId)
+  -> m (Either (AjaxError JsonDecodeError Json) PlutusAppId)
 postApiContractActivate reqBody =
   request Api req
   where
@@ -115,7 +115,7 @@ postApiContractActivate reqBody =
 getApiContractInstanceByContractinstanceidStatus
   :: forall m
    . MonadAjax Api m
-  => ContractInstanceId
+  => PlutusAppId
   -> m
        ( Either (AjaxError JsonDecodeError Json)
            (ContractInstanceClientState MarloweContract)
@@ -146,7 +146,7 @@ getApiContractInstanceByContractinstanceidStatus contract_instance_id =
 getApiContractInstanceByContractinstanceidSchema
   :: forall m
    . MonadAjax Api m
-  => ContractInstanceId
+  => PlutusAppId
   -> m
        ( Either (AjaxError JsonDecodeError Json)
            (ContractSignatureResponse MarloweContract)
@@ -177,8 +177,8 @@ getApiContractInstanceByContractinstanceidSchema contract_instance_id =
 postApiContractInstanceByContractinstanceidEndpointByEndpointname
   :: forall m
    . MonadAjax Api m
-  => RawJson
-  -> ContractInstanceId
+  => Json
+  -> PlutusAppId
   -> String
   -> m (Either (AjaxError JsonDecodeError Json) Unit)
 postApiContractInstanceByContractinstanceidEndpointByEndpointname
@@ -211,7 +211,7 @@ postApiContractInstanceByContractinstanceidEndpointByEndpointname
 putApiContractInstanceByContractinstanceidStop
   :: forall m
    . MonadAjax Api m
-  => ContractInstanceId
+  => PlutusAppId
   -> m (Either (AjaxError JsonDecodeError Json) Unit)
 putApiContractInstanceByContractinstanceidStop contract_instance_id =
   request Api req

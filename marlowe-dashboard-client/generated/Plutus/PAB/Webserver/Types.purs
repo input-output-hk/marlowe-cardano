@@ -5,6 +5,7 @@ import Prelude
 
 import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -26,6 +27,7 @@ import Data.Show.Generic (genericShow)
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Ledger.Index (UtxoIndex)
+import Marlowe.PAB (PlutusAppId)
 import Playground.Types (FunctionSchema)
 import Plutus.Contract.Effects (ActiveEndpoint, PABReq)
 import Plutus.PAB.Events.ContractInstanceState (PartiallyDecodedResponse)
@@ -36,7 +38,7 @@ import Schema (FormSchema)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Wallet (Wallet)
 import Wallet.Rollup.Types (AnnotatedTx)
-import Wallet.Types (ContractActivityStatus, ContractInstanceId)
+import Wallet.Types (ContractActivityStatus)
 
 newtype ChainReport = ChainReport
   { transactionMap :: Map TxId Tx
@@ -83,11 +85,8 @@ _ChainReport = _Newtype
 --------------------------------------------------------------------------------
 
 data CombinedWSStreamToClient
-  = InstanceUpdate ContractInstanceId InstanceStatusToClient
+  = InstanceUpdate PlutusAppId InstanceStatusToClient
   | SlotChange Slot
-
-instance Show CombinedWSStreamToClient where
-  show a = genericShow a
 
 instance EncodeJson CombinedWSStreamToClient where
   encodeJson = defer \_ -> case _ of
@@ -109,7 +108,7 @@ derive instance Generic CombinedWSStreamToClient _
 --------------------------------------------------------------------------------
 
 _InstanceUpdate :: Prism' CombinedWSStreamToClient
-  { a :: ContractInstanceId, b :: InstanceStatusToClient }
+  { a :: PlutusAppId, b :: InstanceStatusToClient }
 _InstanceUpdate = prism' (\{ a, b } -> (InstanceUpdate a b)) case _ of
   (InstanceUpdate a b) -> Just { a, b }
   _ -> Nothing
@@ -122,8 +121,8 @@ _SlotChange = prism' SlotChange case _ of
 --------------------------------------------------------------------------------
 
 data CombinedWSStreamToServer
-  = Subscribe (Either ContractInstanceId PubKeyHash)
-  | Unsubscribe (Either ContractInstanceId PubKeyHash)
+  = Subscribe (Either PlutusAppId PubKeyHash)
+  | Unsubscribe (Either PlutusAppId PubKeyHash)
 
 instance Show CombinedWSStreamToServer where
   show a = genericShow a
@@ -146,14 +145,12 @@ derive instance Generic CombinedWSStreamToServer _
 
 --------------------------------------------------------------------------------
 
-_Subscribe :: Prism' CombinedWSStreamToServer
-  (Either ContractInstanceId PubKeyHash)
+_Subscribe :: Prism' CombinedWSStreamToServer (Either PlutusAppId PubKeyHash)
 _Subscribe = prism' Subscribe case _ of
   (Subscribe a) -> Just a
   _ -> Nothing
 
-_Unsubscribe :: Prism' CombinedWSStreamToServer
-  (Either ContractInstanceId PubKeyHash)
+_Unsubscribe :: Prism' CombinedWSStreamToServer (Either PlutusAppId PubKeyHash)
 _Unsubscribe = prism' Unsubscribe case _ of
   (Unsubscribe a) -> Just a
   _ -> Nothing
@@ -200,7 +197,7 @@ _ContractActivationArgs = _Newtype
 --------------------------------------------------------------------------------
 
 newtype ContractInstanceClientState a = ContractInstanceClientState
-  { cicContract :: ContractInstanceId
+  { cicContract :: PlutusAppId
   , cicCurrentState :: PartiallyDecodedResponse ActiveEndpoint
   , cicWallet :: Wallet
   , cicDefinition :: a
@@ -208,13 +205,10 @@ newtype ContractInstanceClientState a = ContractInstanceClientState
   , cicYieldedExportTxs :: Array RawJson
   }
 
-instance (Show a) => Show (ContractInstanceClientState a) where
-  show a = genericShow a
-
 instance (EncodeJson a) => EncodeJson (ContractInstanceClientState a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { cicContract: E.value :: _ ContractInstanceId
+        { cicContract: E.value :: _ PlutusAppId
         , cicCurrentState:
             E.value :: _ (PartiallyDecodedResponse ActiveEndpoint)
         , cicWallet: E.value :: _ Wallet
@@ -227,7 +221,7 @@ instance (EncodeJson a) => EncodeJson (ContractInstanceClientState a) where
 instance (DecodeJson a) => DecodeJson (ContractInstanceClientState a) where
   decodeJson = defer \_ -> D.decode $
     ( ContractInstanceClientState <$> D.record "ContractInstanceClientState"
-        { cicContract: D.value :: _ ContractInstanceId
+        { cicContract: D.value :: _ PlutusAppId
         , cicCurrentState:
             D.value :: _ (PartiallyDecodedResponse ActiveEndpoint)
         , cicWallet: D.value :: _ Wallet
@@ -246,7 +240,7 @@ derive instance Newtype (ContractInstanceClientState a) _
 _ContractInstanceClientState
   :: forall a
    . Iso' (ContractInstanceClientState a)
-       { cicContract :: ContractInstanceId
+       { cicContract :: PlutusAppId
        , cicCurrentState :: PartiallyDecodedResponse ActiveEndpoint
        , cicWallet :: Wallet
        , cicDefinition :: a
@@ -260,13 +254,10 @@ _ContractInstanceClientState = _Newtype
 newtype ContractReport a = ContractReport
   { crAvailableContracts :: Array (ContractSignatureResponse a)
   , crActiveContractStates ::
-      Array (Tuple ContractInstanceId (PartiallyDecodedResponse PABReq))
+      Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq))
   }
 
 derive instance (Eq a) => Eq (ContractReport a)
-
-instance (Show a) => Show (ContractReport a) where
-  show a = genericShow a
 
 instance (EncodeJson a) => EncodeJson (ContractReport a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
@@ -275,9 +266,7 @@ instance (EncodeJson a) => EncodeJson (ContractReport a) where
             E.value :: _ (Array (ContractSignatureResponse a))
         , crActiveContractStates:
             E.value :: _
-              ( Array
-                  (Tuple ContractInstanceId (PartiallyDecodedResponse PABReq))
-              )
+              (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
         }
     )
 
@@ -288,9 +277,7 @@ instance (DecodeJson a) => DecodeJson (ContractReport a) where
             D.value :: _ (Array (ContractSignatureResponse a))
         , crActiveContractStates:
             D.value :: _
-              ( Array
-                  (Tuple ContractInstanceId (PartiallyDecodedResponse PABReq))
-              )
+              (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
         }
     )
 
@@ -305,7 +292,7 @@ _ContractReport
    . Iso' (ContractReport a)
        { crAvailableContracts :: Array (ContractSignatureResponse a)
        , crActiveContractStates ::
-           Array (Tuple ContractInstanceId (PartiallyDecodedResponse PABReq))
+           Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq))
        }
 _ContractReport = _Newtype
 
@@ -358,9 +345,6 @@ newtype FullReport a = FullReport
 
 derive instance (Eq a) => Eq (FullReport a)
 
-instance (Show a) => Show (FullReport a) where
-  show a = genericShow a
-
 instance (EncodeJson a) => EncodeJson (FullReport a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
@@ -392,13 +376,10 @@ _FullReport = _Newtype
 --------------------------------------------------------------------------------
 
 data InstanceStatusToClient
-  = NewObservableState RawJson
+  = NewObservableState Json
   | NewActiveEndpoints (Array ActiveEndpoint)
   | NewYieldedExportTxs (Array RawJson)
-  | ContractFinished (Maybe RawJson)
-
-instance Show InstanceStatusToClient where
-  show a = genericShow a
+  | ContractFinished (Maybe Json)
 
 instance EncodeJson InstanceStatusToClient where
   encodeJson = defer \_ -> case _ of
@@ -422,7 +403,7 @@ derive instance Generic InstanceStatusToClient _
 
 --------------------------------------------------------------------------------
 
-_NewObservableState :: Prism' InstanceStatusToClient RawJson
+_NewObservableState :: Prism' InstanceStatusToClient Json
 _NewObservableState = prism' NewObservableState case _ of
   (NewObservableState a) -> Just a
   _ -> Nothing
@@ -437,7 +418,7 @@ _NewYieldedExportTxs = prism' NewYieldedExportTxs case _ of
   (NewYieldedExportTxs a) -> Just a
   _ -> Nothing
 
-_ContractFinished :: Prism' InstanceStatusToClient (Maybe RawJson)
+_ContractFinished :: Prism' InstanceStatusToClient (Maybe Json)
 _ContractFinished = prism' ContractFinished case _ of
   (ContractFinished a) -> Just a
   _ -> Nothing

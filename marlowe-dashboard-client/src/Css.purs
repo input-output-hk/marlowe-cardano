@@ -1,37 +1,9 @@
-module Css
-  ( maxWidthContainer
-  , bgBlueGradient
-  , button
-  , withAnimation
-  , withIcon
-  , withShadow
-  , primaryButton
-  , secondaryButton
-  , whiteButton
-  , input
-  , inputNoFocus
-  , inputNoBorder
-  , pseudoDropdown
-  , unstyledInput
-  , inputError
-  , hasNestedLabel
-  , nestedLabel
-  , cardOverlay
-  , sidebarCardOverlay
-  , card
-  , videoCard
-  , sidebarCard
-  , cardHeader
-  , embeddedVideoContainer
-  , embeddedVideo
-  , iconCircle
-  , fixedBottomRight
-  , funds
-  ) where
+module Css where
 
 import Prologue
 
 import Component.Icons (Icon, iconClass)
+import Data.Maybe (isJust)
 import Halogen.Css (applyWhen)
 
 -- max-width container
@@ -82,6 +54,45 @@ withIcon :: Icon -> Array String
 withIcon icon = [ "with-icon", "with-icon-" <> iconClass icon ]
 
 --- inputs
+
+-- | All box-related styles for inputs.
+inputBox :: forall a. Maybe a -> Array String
+inputBox error =
+  [ "border-2"
+  , "duration-200"
+  , "flex"
+  , "gap-1"
+  , "items-baseline"
+  , "p-4"
+  , "rounded-sm"
+  , "transition-all"
+  , "w-full"
+  , "focus:border-transparent"
+  , "focus:ring-2"
+  , "focus-within:border-transparent"
+  , "focus-within:ring-2"
+  ] <>
+    if isJust error then
+      [ "border-red", "ring-red" ]
+    else
+      [ "border-gray", "ring-purple" ]
+
+-- | All text-related styles for input fields.
+inputText :: Array String
+inputText =
+  [ "border-0"
+  , "duration-200"
+  , "flex-1"
+  , "focus:outline-none"
+  , "focus:ring-0"
+  , "leading-none"
+  , "outline-none"
+  , "p-0"
+  , "ring-0"
+  , "text-black"
+  , "transition-all"
+  ]
+
 inputBase :: Array String
 inputBase =
   [ "block"
@@ -161,6 +172,7 @@ unstyledInput = [ "leading-none", "p-0", "border-0", "focus:ring-0" ]
 inputError :: Array String
 inputError = [ "px-3", "mt-1", "text-red", "text-sm" ]
 
+-- labels
 hasNestedLabel :: Array String
 hasNestedLabel = [ "-mt-4" ]
 
@@ -175,6 +187,21 @@ nestedLabel =
   , "text-xs"
   , "font-semibold"
   ]
+
+labelBox :: Array String
+labelBox =
+  [ "space-x-2"
+  , "leading-none"
+  , "absolute"
+  , "z-10"
+  , "left-2"
+  , "-top-1.5"
+  , "px-2"
+  , "bg-white"
+  ]
+
+labelText :: Array String
+labelText = [ "text-xs" ]
 
 --- cards
 cardOverlay :: Boolean -> Array String

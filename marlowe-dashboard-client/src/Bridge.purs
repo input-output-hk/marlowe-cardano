@@ -13,14 +13,12 @@ import Data.Lens (Iso', iso)
 import Data.Map (Map, fromFoldable, toUnfoldable) as Front
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Semantics (Assets(..), Slot(..)) as Front
 import Network.RemoteData (RemoteData)
 import Plutus.V1.Ledger.Crypto (PubKey(..)) as Back
 import Plutus.V1.Ledger.Slot (Slot(..)) as Back
 import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value(..)) as Back
 import PlutusTx.AssocMap (Map(..)) as Back
-import Wallet.Types (ContractInstanceId(..))
 
 {-
 Note [JSON communication]: To ensure the client and the PAB server understand each other, they have
@@ -119,9 +117,3 @@ instance tokenNameBridge :: Bridge Back.TokenName String where
 instance currencySymbolBridge :: Bridge Back.CurrencySymbol String where
   toFront (Back.CurrencySymbol { unCurrencySymbol }) = unCurrencySymbol
   toBack unCurrencySymbol = Back.CurrencySymbol { unCurrencySymbol }
-
-instance bridgePlutusAppId :: Bridge ContractInstanceId PlutusAppId where
-  toFront (ContractInstanceId { unContractInstanceId }) = PlutusAppId
-    unContractInstanceId
-  toBack (PlutusAppId unContractInstanceId) = ContractInstanceId
-    { unContractInstanceId }

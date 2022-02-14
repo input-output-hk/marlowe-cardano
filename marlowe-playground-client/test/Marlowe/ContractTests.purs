@@ -41,9 +41,10 @@ import Marlowe.Semantics
   , TransactionWarning
   )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
-import Page.Simulation.State (mkState)
+import Page.Simulation.State (mkStateBase)
 import Page.Simulation.Types as Simulation
 import Partial.Unsafe (unsafePartial)
+import Record (insert) as Record
 import Simulator.Lenses
   ( _SimulationRunning
   , _currentContract
@@ -62,6 +63,10 @@ import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.QuickCheck (quickCheck)
 import Text.Pretty (pretty)
+import Type.Prelude (Proxy(..))
+
+mkState :: Simulation.State
+mkState = Record.insert (Proxy :: Proxy "projectName") "Contract" mkStateBase
 
 all :: Spec Unit
 all =

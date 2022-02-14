@@ -360,9 +360,16 @@ startSimulationWidget metadata { initialSlot, templateContent } =
                       (unwrap templateContent).valueContent
                 )
             ]
-        , div [ classes [ ClassName "transaction-btns", flex, justifyCenter ] ]
+        , div [ classNames [ "transaction-btns", "flex", "justify-center" ] ]
             [ button
-                [ classes [ btn, bold ]
+                [ classNames
+                    [ "btn", "bold", "flex-1", "max-w-[15rem]", "mx-2" ]
+                , onClick $ const DownloadAsJson
+                ]
+                [ text "Download as JSON" ]
+            , button
+                [ classNames
+                    [ "btn", "bold", "flex-1", "max-w-[15rem]", "mx-2" ]
                 , onClick $ const StartSimulation
                 ]
                 [ text "Start simulation" ]

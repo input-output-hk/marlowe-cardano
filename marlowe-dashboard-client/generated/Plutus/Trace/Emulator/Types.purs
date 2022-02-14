@@ -5,6 +5,7 @@ import Prelude
 
 import Control.Lazy (defer)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -18,37 +19,29 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.RawJson (RawJson)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Marlowe.PAB (PlutusAppId)
 import Plutus.Contract.Resumable (Request, Response)
 import Plutus.Trace.Scheduler (ThreadId)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Emulator.Error (WalletAPIError)
 import Wallet.Emulator.Wallet (Wallet)
-import Wallet.Types
-  ( ContractInstanceId
-  , EndpointDescription
-  , Notification
-  , NotificationError
-  )
+import Wallet.Types (EndpointDescription, Notification, NotificationError)
 
 newtype ContractInstanceLog = ContractInstanceLog
   { _cilMessage :: ContractInstanceMsg
-  , _cilId :: ContractInstanceId
+  , _cilId :: PlutusAppId
   , _cilTag :: ContractInstanceTag
   }
 
 derive instance Eq ContractInstanceLog
 
-instance Show ContractInstanceLog where
-  show a = genericShow a
-
 instance EncodeJson ContractInstanceLog where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { _cilMessage: E.value :: _ ContractInstanceMsg
-        , _cilId: E.value :: _ ContractInstanceId
+        , _cilId: E.value :: _ PlutusAppId
         , _cilTag: E.value :: _ ContractInstanceTag
         }
     )
@@ -57,7 +50,7 @@ instance DecodeJson ContractInstanceLog where
   decodeJson = defer \_ -> D.decode $
     ( ContractInstanceLog <$> D.record "ContractInstanceLog"
         { _cilMessage: D.value :: _ ContractInstanceMsg
-        , _cilId: D.value :: _ ContractInstanceId
+        , _cilId: D.value :: _ PlutusAppId
         , _cilTag: D.value :: _ ContractInstanceTag
         }
     )
@@ -70,7 +63,7 @@ derive instance Newtype ContractInstanceLog _
 
 _ContractInstanceLog :: Iso' ContractInstanceLog
   { _cilMessage :: ContractInstanceMsg
-  , _cilId :: ContractInstanceId
+  , _cilId :: PlutusAppId
   , _cilTag :: ContractInstanceTag
   }
 _ContractInstanceLog = _Newtype
@@ -78,7 +71,7 @@ _ContractInstanceLog = _Newtype
 cilMessage :: Lens' ContractInstanceLog ContractInstanceMsg
 cilMessage = _Newtype <<< prop (Proxy :: _ "_cilMessage")
 
-cilId :: Lens' ContractInstanceLog ContractInstanceId
+cilId :: Lens' ContractInstanceLog PlutusAppId
 cilId = _Newtype <<< prop (Proxy :: _ "_cilId")
 
 cilTag :: Lens' ContractInstanceLog ContractInstanceTag
@@ -90,14 +83,14 @@ data ContractInstanceMsg
   = Started
   | StoppedNoError
   | StoppedWithError String
-  | ReceiveEndpointCall EndpointDescription RawJson
+  | ReceiveEndpointCall EndpointDescription Json
   | ReceiveEndpointCallSuccess
   | ReceiveEndpointCallFailure NotificationError
   | NoRequestsHandled
-  | HandledRequest (Response RawJson)
-  | CurrentRequests (Array (Request RawJson))
+  | HandledRequest (Response Json)
+  | CurrentRequests (Array (Request Json))
   | InstErr EmulatorRuntimeError
-  | ContractLog RawJson
+  | ContractLog Json
   | SendingNotification Notification
   | NotificationSuccess Notification
   | NotificationFailure NotificationError
@@ -105,9 +98,6 @@ data ContractInstanceMsg
   | Freezing
 
 derive instance Eq ContractInstanceMsg
-
-instance Show ContractInstanceMsg where
-  show a = genericShow a
 
 instance EncodeJson ContractInstanceMsg where
   encodeJson = defer \_ -> case _ of
@@ -177,7 +167,7 @@ _StoppedWithError = prism' StoppedWithError case _ of
   _ -> Nothing
 
 _ReceiveEndpointCall :: Prism' ContractInstanceMsg
-  { a :: EndpointDescription, b :: RawJson }
+  { a :: EndpointDescription, b :: Json }
 _ReceiveEndpointCall = prism' (\{ a, b } -> (ReceiveEndpointCall a b)) case _ of
   (ReceiveEndpointCall a b) -> Just { a, b }
   _ -> Nothing
@@ -198,12 +188,12 @@ _NoRequestsHandled = prism' (const NoRequestsHandled) case _ of
   NoRequestsHandled -> Just unit
   _ -> Nothing
 
-_HandledRequest :: Prism' ContractInstanceMsg (Response RawJson)
+_HandledRequest :: Prism' ContractInstanceMsg (Response Json)
 _HandledRequest = prism' HandledRequest case _ of
   (HandledRequest a) -> Just a
   _ -> Nothing
 
-_CurrentRequests :: Prism' ContractInstanceMsg (Array (Request RawJson))
+_CurrentRequests :: Prism' ContractInstanceMsg (Array (Request Json))
 _CurrentRequests = prism' CurrentRequests case _ of
   (CurrentRequests a) -> Just a
   _ -> Nothing
@@ -213,7 +203,7 @@ _InstErr = prism' InstErr case _ of
   (InstErr a) -> Just a
   _ -> Nothing
 
-_ContractLog :: Prism' ContractInstanceMsg RawJson
+_ContractLog :: Prism' ContractInstanceMsg Json
 _ContractLog = prism' ContractLog case _ of
   (ContractLog a) -> Just a
   _ -> Nothing
@@ -284,17 +274,14 @@ _ContractInstanceTag = _Newtype
 --------------------------------------------------------------------------------
 
 data EmulatorRuntimeError
-  = ThreadIdNotFound ContractInstanceId
+  = ThreadIdNotFound PlutusAppId
   | InstanceIdNotFound Wallet
-  | EmulatorJSONDecodingError String RawJson
+  | EmulatorJSONDecodingError String Json
   | GenericError String
   | EmulatedWalletError WalletAPIError
   | AssertionError String
 
 derive instance Eq EmulatorRuntimeError
-
-instance Show EmulatorRuntimeError where
-  show a = genericShow a
 
 instance EncodeJson EmulatorRuntimeError where
   encodeJson = defer \_ -> case _ of
@@ -324,7 +311,7 @@ derive instance Generic EmulatorRuntimeError _
 
 --------------------------------------------------------------------------------
 
-_ThreadIdNotFound :: Prism' EmulatorRuntimeError ContractInstanceId
+_ThreadIdNotFound :: Prism' EmulatorRuntimeError PlutusAppId
 _ThreadIdNotFound = prism' ThreadIdNotFound case _ of
   (ThreadIdNotFound a) -> Just a
   _ -> Nothing
@@ -335,7 +322,7 @@ _InstanceIdNotFound = prism' InstanceIdNotFound case _ of
   _ -> Nothing
 
 _EmulatorJSONDecodingError :: Prism' EmulatorRuntimeError
-  { a :: String, b :: RawJson }
+  { a :: String, b :: Json }
 _EmulatorJSONDecodingError = prism'
   (\{ a, b } -> (EmulatorJSONDecodingError a b))
   case _ of
@@ -364,9 +351,6 @@ data UserThreadMsg
   | UserLog String
 
 derive instance Eq UserThreadMsg
-
-instance Show UserThreadMsg where
-  show a = genericShow a
 
 instance EncodeJson UserThreadMsg where
   encodeJson = defer \_ -> case _ of

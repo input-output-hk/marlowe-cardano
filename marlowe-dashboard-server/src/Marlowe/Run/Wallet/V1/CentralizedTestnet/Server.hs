@@ -1,10 +1,14 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MonoLocalBinds        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE RecordWildCards       #-}
+
+{-# OPTIONS_GHC -Wno-orphans       #-}
 
 module Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
  ( handlers
@@ -12,7 +16,7 @@ module Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
  where
 
 import Cardano.Mnemonic (SomeMnemonic (..), entropyToMnemonic, genEntropy, mkSomeMnemonic, mnemonicToText)
-import Cardano.Prelude hiding (Handler)
+import Cardano.Prelude hiding (Handler, log)
 import Cardano.Wallet.Api (WalletKeys)
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import Cardano.Wallet.Api.Types (ApiVerificationKeyShelley (..))
@@ -20,11 +24,13 @@ import qualified Cardano.Wallet.Api.Types as WBE
 import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
 import qualified Cardano.Wallet.Primitive.Types as WBE
+import Colog (log, pattern D, pattern E)
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.String as S
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
 import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
+import Marlowe.Run.Env (HasEnv)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.API (API)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData (..), CreateResponse (..), RestoreError (..),
                                                        RestorePostData (..))
@@ -32,19 +38,19 @@ import Marlowe.Run.Wallet.V1.Client (callWBE, decodeError)
 import Marlowe.Run.Wallet.V1.Types (WalletId (WalletId), WalletInfo (..), WalletName (unWalletName))
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
 import Servant (ServerT, (:<|>) ((:<|>)), (:>))
-import Servant.Client (ClientEnv, ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
+import Servant.Client (ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
 import Text.Regex (Regex)
 import qualified Text.Regex as Regex
 
 handlers ::
     MonadIO m =>
-    MonadReader ClientEnv m =>
+    HasEnv m =>
     ServerT API m
 handlers = restoreWallet :<|> createWallet
 
 createWallet ::
      MonadIO m =>
-     MonadReader ClientEnv m =>
+     HasEnv m =>
      CreatePostData ->
      m (Maybe CreateResponse)
 createWallet CreatePostData{..} = runMaybeT $ do
@@ -61,10 +67,10 @@ createWallet CreatePostData{..} = runMaybeT $ do
     $ CreateResponse (mnemonicToText mnemonic)
     $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
 
--- [UC-WALLET-TESTNET-2][1] Restore a testnet wallet
+-- [UC-WALLET-TESTNET-2][2] Restore a testnet wallet
 restoreWallet ::
      MonadIO m =>
-     MonadReader ClientEnv m =>
+     HasEnv m =>
      RestorePostData ->
      m (Either RestoreError WalletInfo)
 restoreWallet RestorePostData{..} = runExceptT $ do
@@ -91,7 +97,7 @@ restoreWallet RestorePostData{..} = runExceptT $ do
 
 getPubKeyHashFromWallet ::
     MonadIO m =>
-    MonadReader ClientEnv m =>
+    HasEnv m =>
     WBE.WalletId ->
     m (Either ClientError PubKeyHash)
 getPubKeyHashFromWallet walletId = do
@@ -116,7 +122,7 @@ getPubKeyHashFromWallet walletId = do
 
 createOrRestoreWallet ::
     MonadIO m =>
-    MonadReader ClientEnv m =>
+    HasEnv m =>
     WBE.WalletName ->
     Passphrase "raw" ->
     SomeMnemonic ->
@@ -146,14 +152,11 @@ createOrRestoreWallet walletName passphrase mnemonic = do
             case mWalletIdFromErr of
                 Just walletId -> pure $ Right walletId
                 Nothing       ->  do
-                    putStrLn "restoreWallet failed"
-                    putStrLn $ "Error: " <> show err
+                    log E $ "restoreWallet failed: " <> show err
                     pure $ Left err
         Left err -> do
-            -- FIXME: Define a better logging mechanism
-            putStrLn "restoreWallet failed"
-            putStrLn $ "Error: " <> show err
+            log E $ "restoreWallet failed: " <> show err
             pure $ Left err
         Right WBE.ApiWallet{WBE.id = WBE.ApiT walletId} -> do
-            putStrLn $ "Restored wallet: " <> show walletId
+            log D $ "Restored wallet: " <> show walletId
             pure $ Right walletId

@@ -41,7 +41,8 @@ let
     cat > marlowe-run.json <<EOF
     {
       "wbeConfig": { "host": "localhost", "port": $NOMAD_PORT_wbe },
-      "staticPath": "/var/empty"
+      "staticPath": "/var/empty",
+      "verbosity": 3
     }
     EOF
     (trap 'kill 0' SIGINT;

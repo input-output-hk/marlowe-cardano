@@ -6,6 +6,7 @@ import Prelude
 import Control.Lazy (defer)
 import Control.Monad.Freer.Extras.Log (LogMessage)
 import Data.Argonaut (encodeJson, jsonNull)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -19,33 +20,28 @@ import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.RawJson (RawJson)
-import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Plutus.Contract.Resumable (Request)
 import Type.Proxy (Proxy(Proxy))
 
 newtype PartiallyDecodedResponse a = PartiallyDecodedResponse
   { hooks :: Array (Request a)
-  , logs :: Array (LogMessage RawJson)
-  , lastLogs :: Array (LogMessage RawJson)
-  , err :: Maybe RawJson
-  , observableState :: RawJson
+  , logs :: Array (LogMessage Json)
+  , lastLogs :: Array (LogMessage Json)
+  , err :: Maybe Json
+  , observableState :: Json
   }
 
 derive instance (Eq a) => Eq (PartiallyDecodedResponse a)
-
-instance (Show a) => Show (PartiallyDecodedResponse a) where
-  show a = genericShow a
 
 instance (EncodeJson a) => EncodeJson (PartiallyDecodedResponse a) where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { hooks: E.value :: _ (Array (Request a))
-        , logs: E.value :: _ (Array (LogMessage RawJson))
-        , lastLogs: E.value :: _ (Array (LogMessage RawJson))
-        , err: (E.maybe E.value) :: _ (Maybe RawJson)
-        , observableState: E.value :: _ RawJson
+        , logs: E.value :: _ (Array (LogMessage Json))
+        , lastLogs: E.value :: _ (Array (LogMessage Json))
+        , err: (E.maybe E.value) :: _ (Maybe Json)
+        , observableState: E.value :: _ Json
         }
     )
 
@@ -53,10 +49,10 @@ instance (DecodeJson a) => DecodeJson (PartiallyDecodedResponse a) where
   decodeJson = defer \_ -> D.decode $
     ( PartiallyDecodedResponse <$> D.record "PartiallyDecodedResponse"
         { hooks: D.value :: _ (Array (Request a))
-        , logs: D.value :: _ (Array (LogMessage RawJson))
-        , lastLogs: D.value :: _ (Array (LogMessage RawJson))
-        , err: (D.maybe D.value) :: _ (Maybe RawJson)
-        , observableState: D.value :: _ RawJson
+        , logs: D.value :: _ (Array (LogMessage Json))
+        , lastLogs: D.value :: _ (Array (LogMessage Json))
+        , err: (D.maybe D.value) :: _ (Maybe Json)
+        , observableState: D.value :: _ Json
         }
     )
 
@@ -70,9 +66,9 @@ _PartiallyDecodedResponse
   :: forall a
    . Iso' (PartiallyDecodedResponse a)
        { hooks :: Array (Request a)
-       , logs :: Array (LogMessage RawJson)
-       , lastLogs :: Array (LogMessage RawJson)
-       , err :: Maybe RawJson
-       , observableState :: RawJson
+       , logs :: Array (LogMessage Json)
+       , lastLogs :: Array (LogMessage Json)
+       , err :: Maybe Json
+       , observableState :: Json
        }
 _PartiallyDecodedResponse = _Newtype

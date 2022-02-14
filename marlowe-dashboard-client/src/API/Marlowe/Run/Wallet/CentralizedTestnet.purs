@@ -18,7 +18,7 @@ import Control.Logger.Capability (class MonadLogger, error)
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (ExceptT(..), except, runExceptT, withExceptT)
 import Data.Bifunctor (lmap)
-import Data.MnemonicPhrase (MnemonicPhrase, MnenonicPhraseErrorRow)
+import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase (fromStrings) as MnemonicPhrase
 import Data.Passpharse (Passphrase)
 import Data.Passpharse (toString) as Passphrase
@@ -92,7 +92,7 @@ restoreWallet { passphrase, walletName, mnemonicPhrase } = runExceptT do
   except $ lmap fromServerErr res
 
 type CreateWalletError = Variant
-  (ClientServerErrorRow + ServerErrorRow Unit + MnenonicPhraseErrorRow + ())
+  (ClientServerErrorRow + ServerErrorRow Unit + ())
 
 type CreateWalletResponse =
   { walletInfo :: WalletInfo, mnemonic :: MnemonicPhrase }

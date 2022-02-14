@@ -168,7 +168,7 @@ initializeTransactionImpl marloweParams costModelParams network stake mtContract
 prepareTransaction :: MonadError CliError m
                => MonadIO m
                => FilePath        -- ^ The JSON file with the Marlowe initial state and initial contract.
-               -> [Input]         -- ^ The JSON files containing the contract's inputs.
+               -> [Input]         -- ^ The contract's inputs.
                -> SlotNo          -- ^ The first valid slot for the transaction.
                -> SlotNo          -- ^ The last valid slot for the transaction.
                -> Maybe FilePath  -- ^ The output JSON file with the results of the computation.

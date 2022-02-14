@@ -1,6 +1,7 @@
 "use strict";
 
 module.exports = {
+  mode: "jit",
   purge: [
     "src/**/*.purs",
     process.env.WEB_COMMON_SRC + "/**/*.purs",

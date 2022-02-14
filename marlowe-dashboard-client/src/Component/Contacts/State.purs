@@ -16,14 +16,9 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses
-  ( _cardSection
-  )
-import Component.Contacts.Types
-  ( Action(..)
-  , CardSection(..)
-  , State
-  )
+import Component.AddContact.Types as AddContact
+import Component.Contacts.Lenses (_cardSection)
+import Component.Contacts.Types (Action(..), CardSection(..), State)
 import Control.Monad.Reader (class MonadAsk)
 import Data.AddressBook as AddressBook
 import Data.BigInt.Argonaut (BigInt)
@@ -61,18 +56,24 @@ handleAction CloseContactsCard = callMainFrameAction
 handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
-handleAction (SaveWallet mTokenName nickname address) = do
-  modifyAddressBook_ (AddressBook.insert nickname address)
-  addToast $ successToast "Contact added"
-  case mTokenName of
-    -- if a tokenName was also passed, we are inside a template contract and we need to update role
-    Just tokenName -> callMainFrameAction $ MainFrame.DashboardAction $
-      Dashboard.SetContactForRole tokenName nickname
-    -- If we don't have a tokenName, then we added the contact from the contact dialog and we should close the panel
-    Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
-      Dashboard.CloseCard
+handleAction
+  (OnAddContactMsg mTokenName (AddContact.SaveClicked { nickname, address })) =
+  do
+    modifyAddressBook_ (AddressBook.insert nickname address)
+    addToast $ successToast "Contact added"
+    case mTokenName of
+      -- if a tokenName was also passed, we are inside a template contract and we need to update role
+      Just tokenName -> callMainFrameAction $ MainFrame.DashboardAction $
+        Dashboard.SetContactForRole tokenName nickname
+      -- If we don't have a tokenName, then we added the contact from the contact dialog and we should close the panel
+      Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
+        Dashboard.CloseCard
 
-handleAction CancelNewContactForRole = pure unit -- handled in Dashboard.State
+handleAction (OnAddContactMsg Nothing AddContact.BackClicked) = do
+  assign _cardSection Home
+
+handleAction (OnAddContactMsg _ AddContact.BackClicked) = do
+  pure unit -- handled in Dashboard.State
 
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
@@ -99,4 +100,3 @@ getAda :: Assets -> BigInt
 getAda assets = fromMaybe zero $ lookup adaTokenName =<< lookup
   adaCurrencySymbol
   (unwrap assets)
-

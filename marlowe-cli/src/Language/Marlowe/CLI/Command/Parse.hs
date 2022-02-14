@@ -18,8 +18,10 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseCurrencySymbol
 , parseInput
 , parseInputContent
+, parseMarloweClientInput
 , parseLovelaceValue
 , parseNetworkId
+, parseRole
 , parseParty
 , parseSlot
 , parseSlotNo
@@ -30,9 +32,9 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseTxIn
 , parseTxIx
 , parseTxOut
+, parseUrl
 , parseValue
-
-
+, parseWalletId
 , readTokenName
 ) where
 
@@ -44,12 +46,15 @@ import Cardano.Api (AddressAny, AsType (AsAddressAny, AsPolicyId, AsStakeAddress
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
+import Language.Marlowe.Client (MarloweClientInput (..))
 import Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
 import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), PubKeyHash (..), TokenName (..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot (..))
+import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
+import Wallet.Emulator.Wallet (WalletId, fromBase16)
 
 import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
@@ -212,9 +217,7 @@ readPartyPkEither :: String               -- ^ The string to be read.
                   -> Either String Party  -- ^ Either the public key hash role or an error message.
 readPartyPkEither s =
   case s =~ "^PK=([[:xdigit:]]{56})$" of
-    [[_, pubKeyHash]] -> case Base16.decode $ BS8.pack pubKeyHash of
-                           Right pubKeyHash' -> Right . PK . PubKeyHash . toBuiltin $ pubKeyHash'
-                           Left  message     -> Left message
+    [[_, pubKeyHash]] -> PK <$> readPubKeyHashEither pubKeyHash
     _                 -> Left "Invalid public key hash for party."
 
 
@@ -269,6 +272,11 @@ parseByteString =
 
 
 -- | Parse input to a contract.
+parseMarloweClientInput :: O.Parser MarloweClientInput
+parseMarloweClientInput = ClientInput <$> parseInputContent
+
+
+-- | Parse input to a contract.
 parseInput :: O.Parser Input
 parseInput = NormalInput <$> parseInputContent
 
@@ -295,3 +303,40 @@ parseInputContent =
       parseNotify =
         INotify
           <$ O.flag' () (O.long "notify" <> O.help "Notify the contract.")
+
+
+-- | Parse a URL.
+parseUrl :: O.ReadM BaseUrl
+parseUrl =
+  O.eitherReader
+    $ either (Left . show) Right
+    . parseBaseUrl
+
+
+-- | Parse a WalletId.
+parseWalletId :: O.ReadM WalletId
+parseWalletId =
+  O.eitherReader
+    $ fromBase16
+    . T.pack
+
+
+-- | Read a public key hash.
+readPubKeyHashEither :: String                    -- ^ The string to be read.
+                     -> Either String PubKeyHash  -- ^ Either the public key hash or an error message.
+readPubKeyHashEither s =
+  case Base16.decode $ BS8.pack s of
+    Right pubKeyHash -> Right . PubKeyHash . toBuiltin $ pubKeyHash
+    Left  message    -> Left message
+
+
+-- | Parse a role.
+parseRole :: O.ReadM (TokenName, PubKeyHash)
+parseRole =
+  O.eitherReader
+    $ \s ->
+      case splitOn "=" s of
+        [name, pkh] -> do
+                         pkh' <- readPubKeyHashEither pkh
+                         pure (readTokenName name, pkh')
+        _           -> Left "Invalid role assigment."

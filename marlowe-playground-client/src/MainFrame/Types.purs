@@ -18,7 +18,7 @@ import Data.Argonaut.Decode ((.:), (.:?))
 import Data.Argonaut.Decode.Decoders (decodeJObject)
 import Data.BigInt.Argonaut (BigInt)
 import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens', has, (^.))
+import Data.Lens (Lens', has, lens, set, view, (^.))
 import Data.Lens.Record (prop)
 import Data.Maybe (maybe)
 import Data.Newtype (class Newtype)
@@ -38,6 +38,7 @@ import Page.JavascriptEditor.Types (CompilationState)
 import Page.JavascriptEditor.Types as JS
 import Page.MarloweEditor.Types as ME
 import Page.Simulation.Types as Simulation
+import Record (delete, get, insert) as Record
 import Rename.Types as Rename
 import Router (Route)
 import SaveAs.Types as SaveAs
@@ -95,7 +96,6 @@ data Action
   | GistAction GistAction
   | OpenModal ModalView
   | CloseModal
-  | ChangeProjectName String
   | OpenLoginPopup Action
 
 -- | Here we decide which top-level queries to track as GA events, and
@@ -123,7 +123,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OpenModal view) = Just $ (defaultEvent (show view))
     { category = Just "OpenModal" }
   toEvent CloseModal = Just $ defaultEvent "CloseModal"
-  toEvent (ChangeProjectName _) = Just $ defaultEvent "ChangeProjectName"
   toEvent (OpenLoginPopup _) = Just $ defaultEvent "OpenLoginPopup"
 
 data View
@@ -193,7 +192,7 @@ type State
   , javascriptState :: JS.State
   , marloweEditorState :: ME.State
   , blocklyEditorState :: BE.State
-  , simulationState :: Simulation.State
+  , simulationState :: Simulation.StateBase ()
   , contractMetadata :: MetaData
   , projects :: Projects.State
   , newProject :: NewProject.State
@@ -242,7 +241,20 @@ _javascriptState :: Lens' State JS.State
 _javascriptState = prop (Proxy :: _ "javascriptState")
 
 _simulationState :: Lens' State Simulation.State
-_simulationState = prop (Proxy :: _ "simulationState")
+_simulationState = do
+  let
+    _simulationStateBase = prop (Proxy :: Proxy "simulationState")
+    _projectNameProxy = Proxy :: Proxy "projectName"
+    get_ s = do
+      let
+        r = view _simulationStateBase s
+        n = view _projectName s
+      Record.insert _projectNameProxy n r
+    set_ s r =
+      set _simulationStateBase (Record.delete _projectNameProxy r)
+        <<< set _projectName (Record.get _projectNameProxy r)
+        $ s
+  lens get_ set_
 
 _contractMetadata :: forall a r. Lens' { contractMetadata :: a | r } a
 _contractMetadata = prop (Proxy :: Proxy "contractMetadata")
@@ -271,7 +283,7 @@ _createGistResult = prop (Proxy :: _ "createGistResult")
 _loadGistResult :: Lens' State (Either String (WebData Gist))
 _loadGistResult = prop (Proxy :: _ "loadGistResult")
 
-_projectName :: Lens' State String
+_projectName :: forall r. Lens' { projectName :: String | r } String
 _projectName = prop (Proxy :: _ "projectName")
 
 _showModal :: Lens' State (Maybe ModalView)

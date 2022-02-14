@@ -5,34 +5,31 @@ module Page.Welcome.State
 
 import Prologue
 
-import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
-  , clearAllLocalStorage
   , modifyAddressBook_
   )
-import Capability.Toast (class Toast, addToast)
+import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
-import Clipboard (handleAction) as Clipboard
-import Component.Contacts.Lenses (_pubKeyHash, _walletInfo, _walletNickname)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Address as A
 import Data.AddressBook as AddressBook
-import Data.Lens (assign, set, view)
+import Data.Lens (assign, view)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
+import Data.Wallet (_pubKeyHash, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
-import Halogen (HalogenM, liftEffect, modify_)
-import Halogen.Query.HalogenM (mapAction)
-import MainFrame.Types (Action(..)) as MainFrame
+import Halogen (HalogenM, modify_)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
+import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
+import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.Lenses (_enteringDashboardState)
-import Page.Welcome.Types (Action(..), State)
-import Toast.Types (successToast)
-import Web.HTML (window)
-import Web.HTML.Location (reload)
-import Web.HTML.Window (location)
+import Page.Welcome.RestoreWallet.Types as RestoreWallet
+import Page.Welcome.Types (Action(..), Card(..), CreateWalletStep(..), State)
+import Store as Store
+import Store.Wallet as WalletStore
 
 initialState :: State
 initialState =
@@ -47,57 +44,73 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => MainFrameLoop m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
   => MonadClipboard m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction (OpenCard card) =
-  modify_ _ { card = Just card, cardOpen = true }
+handleAction OnCreateWalletHelp = openCard CreateWalletHelpCard
+
+handleAction OnGetStartedHelp = openCard GetStartedHelpCard
+
+handleAction OnCreateWallet =
+  openCard $ CreateWalletCard $ CreateWalletSetWalletName
+
+handleAction OnRestoreWallet = openCard RestoreWalletCard
+
+handleAction (OnAcknowledgeMnemonic details) =
+  openCard $ CreateWalletCard $ CreateWalletConfirmMnemonic details
 
 handleAction CloseCard =
   modify_ _ { enteringDashboardState = false, cardOpen = false }
 
 {- [UC-WALLET-TESTNET-1][0] Create a new testnet wallet
-Here we attempt to create a new demo wallet (with everything that entails), and - if successful -
-open up the UseNewWalletCard for connecting the wallet just created.
-Note the `createWallet` function doesn't just create a wallet. It also creates two PAB apps for
-that wallet: a `WalletCompanion` and a `MarloweApp`.
+   [UC-WALLET-TESTNET-2][4a] Restore a testnet wallet
+This action is triggered either after the restore wallet form or create wallet form submit.
+In both cases we receive a fully populated wallet details here so we can add them to the address
+book. Then we enter the dashboard.
+
+Both `createWallet` and `restoreWallet` (performed during respective form submition)
+functions don't just create or restore a wallet.  They also create and attach or just attach to the
+two PAB apps for that wallet: a `WalletCompanion` and a `MarloweApp`.
 - The `WalletCompanion` will watch for any new role tokens paid to this wallet, and then update its
   internal state to include the `MarloweParams` and initial `MarloweData` for the corresponding
   contract.
 - The `MarloweApp` is a control app, used to create Marlowe contracts, apply inputs, and redeem
   payments to this wallet.
 -}
--- TODO: This functionality is disabled, I'll re-enable it as part of SCP-3170.
-handleAction GenerateWallet = pure unit
-
-{- [Workflow 2][2] Connect a wallet
-This action is triggered by clicking the confirmation button on the UseWalletCard or
-UseNewWalletCard. It saves the wallet nickname to LocalStorage, and then calls the
-`MainFrame.EnterDashboardState` action.
--}
-handleAction (ConnectWallet walletNickname walletDetails) = do
+handleAction (ConnectWallet walletDetails) = do
   assign _enteringDashboardState true
   let
-    walletDetailsWithNickname = set _walletNickname walletNickname walletDetails
-
+    walletNickname = view _walletNickname walletDetails
     pubKeyHash = view
-      (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
-      walletDetailsWithNickname
+      (_pubKeyHash <<< _PaymentPubKeyHash)
+      walletDetails
 
   modifyAddressBook_
     (AddressBook.insert walletNickname $ A.fromPubKeyHash pubKeyHash)
-  callMainFrameAction $ MainFrame.EnterDashboardState walletDetailsWithNickname
+  updateStore $ Store.Wallet $ WalletStore.OnConnect walletDetails
 
-handleAction ClearLocalStorage = do
-  clearAllLocalStorage
-  liftEffect do
-    location_ <- location =<< window
-    reload location_
+handleAction (OnRestoreWalletMsg msg) = case msg of
+  RestoreWallet.CancelClicked -> handleAction CloseCard
+  RestoreWallet.WalletRestored walletDetails ->
+    handleAction $ ConnectWallet walletDetails
 
-handleAction (ClipboardAction clipboardAction) = do
-  mapAction ClipboardAction $ Clipboard.handleAction clipboardAction
-  addToast $ successToast "Copied to clipboard"
+handleAction (OnCreateWalletMsg msg) = case msg of
+  CreateWallet.CancelClicked -> handleAction CloseCard
+  CreateWallet.WalletCreated details ->
+    openCard $ CreateWalletCard $ CreateWalletPresentMnemonic details
+
+handleAction (OnConfirmMnemonicMsg msg) = case msg of
+  ConfirmMnemonic.BackClicked details ->
+    openCard
+      $ CreateWalletCard
+      $ CreateWalletPresentMnemonic details
+  ConfirmMnemonic.MnemonicConfirmed details ->
+    handleAction $ ConnectWallet details.walletDetails
+
+openCard :: forall m. Card -> HalogenM State Action ChildSlots Msg m Unit
+openCard card =
+  modify_ _ { card = Just card, cardOpen = true }

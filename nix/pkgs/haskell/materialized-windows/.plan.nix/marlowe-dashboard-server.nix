@@ -40,6 +40,9 @@
           (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
+          (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
+          (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
+          (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
           (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
@@ -50,6 +53,7 @@
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-pab" or (errorHandler.buildDepError "plutus-pab"))
           (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
+          (hsPkgs."prelude-safeenum" or (errorHandler.buildDepError "prelude-safeenum"))
           (hsPkgs."regex-compat" or (errorHandler.buildDepError "regex-compat"))
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
           (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
@@ -73,6 +77,7 @@
           "Marlowe/Run/Wallet/V1/Server"
           "Paths_marlowe_dashboard_server"
           "Marlowe/Run/API"
+          "Marlowe/Run/Env"
           "Marlowe/Run/Server"
           "Marlowe/Run/Wallet/V1/API"
           "Marlowe/Run/Wallet/V1/Types"
@@ -87,12 +92,16 @@
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
+            (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
+            (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-types" or (errorHandler.buildDepError "http-types"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-dashboard-server" or (errorHandler.buildDepError "marlowe-dashboard-server"))
             (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."prelude-safeenum" or (errorHandler.buildDepError "prelude-safeenum"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
             (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -100,7 +109,7 @@
             (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
             ];
           buildable = true;
-          modules = [ "Webserver" ];
+          modules = [ "Webserver" "Verbosity" ];
           hsSourceDirs = [ "app" ];
           mainPath = [ "Main.hs" ];
           };

@@ -1,5 +1,6 @@
 "use strict";
 
+const webpack = require("webpack");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const path = require("path");
@@ -104,6 +105,10 @@ module.exports = {
     }),
     new MiniCssExtractPlugin({
       filename: "[name].[contenthash].css",
+    }),
+    new webpack.EnvironmentPlugin({
+      WEBPACK_DEVEL_MODE: isDevelopment,
+      MARLOWE_POLLING_INTERVAL: 5000,
     }),
   ],
 };

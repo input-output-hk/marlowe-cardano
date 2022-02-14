@@ -1,27 +1,20 @@
 module Data.ContractValue
-  ( ContractValue
+  ( ContractValue(..)
   , ContractValueError(..)
-  , dual
-  , fromBigInt
+  , currencyFromString
   , fromString
-  , validator
   , toString
-  , toBigInt
+  , _value
+  , _decimals
+  , _currencySymbol
   ) where
 
 import Prologue
 
-import Data.Argonaut
-  ( class DecodeJson
-  , class EncodeJson
-  , JsonDecodeError(..)
-  , decodeJson
-  )
-import Data.Array (replicate)
-import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Either (note)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
   ( genericCardinality
@@ -31,20 +24,17 @@ import Data.Enum.Generic
   , genericToEnum
   )
 import Data.Generic.Rep (class Generic)
+import Data.Int as Int
+import Data.Lens (Lens', lens)
+import Data.Lens.AffineTraversal (AffineTraversal', affineTraversal)
+import Data.Ord as Ring
 import Data.Show.Generic (genericShow)
-import Data.String (Pattern(..), null, split)
+import Data.String (Pattern(..))
 import Data.String as String
-import Data.String.CodeUnits (dropRight, fromCharArray)
-import Data.Validation.Semigroup (V(..))
-import Polyform (Validator)
-import Polyform.Dual as Dual
-import Polyform.Validator (liftFnV)
-import Polyform.Validator.Dual (Dual)
+import Data.String.Extra (leftPadTo, rightPadTo)
+import Marlowe.Semantics (CurrencySymbol)
 
-data ContractValueError
-  = Empty
-  | Negative
-  | Invalid
+data ContractValueError = Empty | Invalid
 
 derive instance genericContractValueError :: Generic ContractValueError _
 derive instance eqContractValueError :: Eq ContractValueError
@@ -53,8 +43,6 @@ derive instance ordContractValueError :: Ord ContractValueError
 instance semigroupContractValueError :: Semigroup ContractValueError where
   append Empty _ = Empty
   append _ Empty = Empty
-  append Negative _ = Negative
-  append _ Negative = Negative
   append Invalid Invalid = Invalid
 
 instance boundedContractValueError :: Bounded ContractValueError where
@@ -73,72 +61,95 @@ instance boundedEnumContractValueError :: BoundedEnum ContractValueError where
 instance showContractValueError :: Show ContractValueError where
   show = genericShow
 
-newtype ContractValue = ContractValue BigInt
+data ContractValue
+  = Currency CurrencySymbol Int BigInt
+  | Normal BigInt
 
+derive instance Generic ContractValue _
 derive instance Eq ContractValue
 derive instance Ord ContractValue
-derive newtype instance Show ContractValue
-derive newtype instance EncodeJson ContractValue
+instance Show ContractValue where
+  show = genericShow
 
-instance DecodeJson ContractValue where
-  decodeJson =
-    lmap (const $ TypeMismatch "ContractValue") <<< fromString
-      <=< decodeJson
+fromString'
+  :: (String -> Either ContractValueError BigInt)
+  -> (BigInt -> ContractValue)
+  -> String
+  -> Either ContractValueError ContractValue
+fromString' parse wrap s
+  | String.null s = Right $ wrap zero
+  | otherwise = wrap <$> parse s
+
+currencyFromString
+  :: CurrencySymbol -> Int -> String -> Either ContractValueError ContractValue
+currencyFromString cs d = fromString' (fromStringDecimal d) $ Currency cs d
 
 fromString :: String -> Either ContractValueError ContractValue
-fromString s
-  | null s = Left Empty
-  | otherwise = case split (Pattern ".") s of
-      [ s' ] -> case BigInt.fromString s' of
-        Nothing -> Left Invalid
-        Just i -> fromBigInt $ i * BigInt.fromInt 1000000
-      [ whole, fractional ] ->
-        case BigInt.fromString whole of
-          Nothing -> Left Invalid
-          Just whole' -> fromFractional whole' fractional
-      _ -> Left Invalid
-  | otherwise = Left Invalid
+fromString = fromString' fromStringDefault Normal
 
-fromFractional :: BigInt -> String -> Either ContractValueError ContractValue
-fromFractional whole fractional = case BigInt.fromString normalized of
-  Nothing -> Left Invalid
-  Just fractional' -> Right $ ContractValue
-    (whole * BigInt.fromInt 1000000 + fractional')
+fromStringDefault :: String -> Either ContractValueError BigInt
+fromStringDefault = note Invalid <<< BigInt.fromString
+
+fromStringDecimal :: Int -> String -> Either ContractValueError BigInt
+fromStringDecimal decimals value = do
+  let
+    { signum, absoluteValue } =
+      if String.take 1 value == "-" then
+        { signum: negate one, absoluteValue: String.drop 1 value }
+      else
+        { signum: one, absoluteValue: value }
+  Tuple wholePart fracPart <- case String.split (Pattern ".") absoluteValue of
+    [ s ] -> Right $ Tuple s "0"
+    [ s, t ] -> Right $ Tuple s t
+    _ -> Left Invalid
+
+  -- if zeros have been deleted from the end of the string, the fractional part will be wrong
+  let normalizedFrac = String.take decimals $ rightPadTo decimals "0" fracPart
+  let multiplier = BigInt.fromInt $ Int.pow 10 decimals
+  whole <- note Invalid $ BigInt.fromString wholePart
+  frac <-
+    note Invalid $ BigInt.fromString $ String.take decimals $ normalizedFrac
+  pure $ signum * multiplier * whole + frac
+
+_value :: Lens' ContractValue BigInt
+_value = lens get set
   where
-  normalized = case compare (String.length fractional) 6 of
-    GT -> dropRight (6 - String.length fractional) fractional
-    LT -> pad (String.length fractional - 6) fractional
-    EQ -> fractional
-  pad num value = value <> fromCharArray (replicate num '0')
+  get (Currency _ _ value) = value
+  get (Normal value) = value
+  set (Currency cs d _) value = Currency cs d value
+  set (Normal _) value = Normal value
 
-fromBigInt :: BigInt -> Either ContractValueError ContractValue
-fromBigInt i
-  | i < zero = Left Negative
-  | otherwise = Right $ ContractValue i
+_decimals :: AffineTraversal' ContractValue Int
+_decimals = affineTraversal set pre
+  where
+  set (Currency cs _ value) d = Currency cs d value
+  set (Normal value) _ = Normal value
+  pre (Currency _ d _) = Right d
+  pre (Normal value) = Left $ Normal value
+
+_currencySymbol :: AffineTraversal' ContractValue CurrencySymbol
+_currencySymbol = affineTraversal set pre
+  where
+  set (Currency _ d value) cs = Currency cs d value
+  set (Normal value) _ = Normal value
+  pre (Currency cs _ _) = Right cs
+  pre (Normal value) = Left $ Normal value
 
 toString :: ContractValue -> String
-toString (ContractValue i) =
-  BigInt.toString whole <> "." <> normalized (BigInt.toString fractional)
-  where
-  whole = i / BigInt.fromInt 1000000
-  fractional = i `mod` BigInt.fromInt 1000000
-  normalized s = fromCharArray (replicate (String.length s - 6) '0') <> s
+toString (Normal value) = BigInt.toString value
+toString (Currency _ decimals value) =
+  let
+    signum = Ring.signum value
+    absoluteValue = Ring.abs value
+    string = leftPadTo decimals "0" $ BigInt.toString absoluteValue
+    len = String.length string
 
-toBigInt :: ContractValue -> BigInt
-toBigInt (ContractValue i) = i
+    { before, after: fracPart } = String.splitAt (len - decimals) string
 
--------------------------------------------------------------------------------
--- Polyform adapters
--------------------------------------------------------------------------------
-
-validator
-  :: forall m
-   . Applicative m
-  => Validator m ContractValueError String ContractValue
-validator = liftFnV \s -> V $ fromString s
-
-dual
-  :: forall m
-   . Applicative m
-  => Dual m ContractValueError String ContractValue
-dual = Dual.dual validator (pure <<< toString)
+    wholePart = case before of
+      "" -> "0"
+      _ -> before
+    prefix = if signum < zero then "-" else ""
+    suffix = if decimals > zero then "." <> fracPart else ""
+  in
+    prefix <> wholePart <> suffix

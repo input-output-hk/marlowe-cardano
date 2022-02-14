@@ -8,31 +8,33 @@ import Prologue hiding (Either(..), div)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
 import Component.ConfirmInput.View as ConfirmInput
-import Component.Contacts.Lenses
-  ( _assets
-  , _pubKeyHash
-  , _walletInfo
-  , _walletNickname
-  )
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.Types (WalletDetails)
 import Component.Contacts.View (contactsCard)
+import Component.ContractPreview.View (contractPreviewCard)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
-import Control.Monad.Rec.Class (class MonadRec)
 import Css as Css
 import Data.Address as A
 import Data.Compactable (compact)
+import Data.Int (round)
 import Data.Lens (preview, view, (^.))
 import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
+  , _assets
+  , _pubKeyHash
+  , _syncStatus
+  , _walletNickname
+  )
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
+import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
@@ -60,15 +62,17 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id, src)
+import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
+import Marlowe.Execution.State (contractName) as Execution
+import Marlowe.Execution.Types (State) as Execution
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (PubKey, Slot)
-import Page.Contract.Lenses (_stateNickname)
-import Page.Contract.State (isContractClosed)
+import Page.Contract.Lenses (_Started, _executionState)
 import Page.Contract.Types (State) as Contract
-import Page.Contract.View (contractPreviewCard, contractScreen)
+import Page.Contract.View (contractScreen)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
@@ -87,13 +91,14 @@ import Page.Dashboard.Types
   , State
   , WalletCompanionStatus(..)
   )
+import Store as Store
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
   :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
-dashboardScreen { currentSlot, tzOffset, walletDetails } state =
+dashboardScreen { currentSlot, tzOffset, wallet } state =
   let
-    walletNickname = walletDetails ^. _walletNickname
+    walletNickname = wallet ^. _walletNickname
 
     menuOpen = state ^. _menuOpen
 
@@ -101,7 +106,9 @@ dashboardScreen { currentSlot, tzOffset, walletDetails } state =
 
     selectedContractFollowerAppId = state ^. _selectedContractFollowerAppId
 
-    selectedContract = preview _selectedContract state
+    selectedContract = preview
+      (_selectedContract <<< _Started <<< _executionState)
+      state
   in
     div
       [ classNames
@@ -131,7 +138,7 @@ dashboardScreen { currentSlot, tzOffset, walletDetails } state =
                           ( contractScreen
                               { currentSlot
                               , tzOffset
-                              , walletDetails
+                              , wallet
                               , followerAppId
                               }
                           )
@@ -146,16 +153,16 @@ dashboardScreen { currentSlot, tzOffset, walletDetails } state =
 dashboardCard
   :: forall m
    . MonadAff m
-  => MonadRec m
+  => MonadStore Store.Action Store.Store m
   => Input
   -> State
   -> ComponentHTML Action ChildSlots m
-dashboardCard { addressBook, walletDetails } state = case view _card state of
+dashboardCard { addressBook, wallet } state = case view _card state of
   Just card ->
     let
       cardOpen = state ^. _cardOpen
 
-      assets = walletDetails ^. _assets
+      assets = wallet ^. _assets
     in
       div
         [ classNames $ Css.sidebarCardOverlay cardOpen ]
@@ -169,13 +176,13 @@ dashboardCard { addressBook, walletDetails } state = case view _card state of
                   [ icon_ Icon.Close ]
               , case card of
                   TutorialsCard -> tutorialsCard
-                  CurrentWalletCard -> currentWalletCard walletDetails
+                  CurrentWalletCard -> currentWalletCard wallet
                   ContactsCard -> renderSubmodule _contactsState ContactsAction
-                    (contactsCard addressBook walletDetails)
+                    (contactsCard addressBook wallet)
                     state
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
-                    (contractTemplateCard addressBook assets)
+                    (contractTemplateCard assets)
                     state
                   ContractActionConfirmationCard contractId input ->
                     mapComponentAction
@@ -331,7 +338,7 @@ mobileMenu menuOpen =
 dashboardBreadcrumb
   :: forall m
    . MonadAff m
-  => (Maybe Contract.State)
+  => (Maybe Execution.State)
   -> ComponentHTML Action ChildSlots m
 dashboardBreadcrumb mSelectedContractState =
   div [ classNames [ "border-b", "border-gray" ] ]
@@ -357,13 +364,11 @@ dashboardBreadcrumb mSelectedContractState =
                 [ icon_ Icon.Next
                 , tooltip "Go to dashboard" (RefId "goToDashboard") Bottom
                 , span_
-                    [ text
-                        if nickname == mempty then "My new contract"
-                        else nickname
+                    [ text nickname
                     ]
                 ]
                 where
-                nickname = state ^. _stateNickname
+                nickname = Execution.contractName state
               Nothing -> []
     ]
 
@@ -549,15 +554,18 @@ contractCards
   currentSlot
   { walletCompanionStatus, contractFilter: Running, contracts } =
   case walletCompanionStatus of
-    FirstUpdateComplete ->
+    WalletCompanionSynced ->
       let
-        runningContracts = filter (not isContractClosed) contracts
+        -- FIXME-3208: Change the Dashboard state to include two Maps/List, one for
+        --        runningContracts and one for completedContracts
+        -- runningContracts = filter (not isContractClosed) contracts
+        runningContracts = filter (const true) contracts
       in
         if isEmpty runningContracts then
           noContractsMessage Running
         else
           contractGrid currentSlot Running runningContracts
-    _ ->
+    WaitingToSync ->
       div
         [ classNames
             [ "h-full", "flex", "flex-col", "justify-center", "items-center" ]
@@ -572,7 +580,9 @@ contractCards
 
 contractCards currentSlot { contractFilter: Completed, contracts } =
   let
-    completedContracts = filter isContractClosed contracts
+    -- FIXME-3208: Same as `runningContracts`
+    -- completedContracts = filter isContractClosed contracts
+    completedContracts = filter (const false) contracts
   in
     if isEmpty completedContracts then
       noContractsMessage Completed
@@ -662,15 +672,17 @@ contractGrid currentSlot contractFilter contracts =
       currentSlot
       contractState
 
-currentWalletCard :: forall p. WalletDetails -> HTML p Action
-currentWalletCard walletDetails =
+currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
+currentWalletCard wallet =
   let
-    walletNickname = view _walletNickname walletDetails
+    walletNickname = view _walletNickname wallet
 
-    address = view (_walletInfo <<< _pubKeyHash <<< _PaymentPubKeyHash)
-      walletDetails
+    address = view (_pubKeyHash <<< _PaymentPubKeyHash)
+      wallet
 
-    assets = view _assets walletDetails
+    assets = view _assets wallet
+
+    syncStatus = view _syncStatus wallet
 
     copyAddress = ClipboardAction <<< Clipboard.CopyToClipboard <<< A.toString
   in
@@ -702,6 +714,23 @@ currentWalletCard walletDetails =
               , p
                   [ classNames Css.funds ]
                   [ text $ humanizeValue adaToken $ getAda assets ]
+              ]
+          , div [ classNames [ "space-y-2" ] ]
+              [ h4
+                  [ classNames [ "font-semibold" ] ]
+                  [ text "Status:" ]
+              , case syncStatus of
+                  OutOfSync ->
+                    p [ classNames [ "text-red" ] ] [ text "Out of sync" ]
+                  Synchronizing progress ->
+                    p []
+                      [ text "Syncrhonizing ("
+                      , text $ show $ round $ progress * 100.0
+                      , text "%)"
+                      ]
+                  Synchronized ->
+                    p [ classNames [ "text-green" ] ]
+                      [ text "Syncrhonized" ]
               ]
           ]
       , div
