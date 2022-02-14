@@ -72,7 +72,7 @@
         modules = [
           "Marlowe/Run"
           "Marlowe/Run/Wallet/V1"
-          "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Server"
           "Marlowe/Run/Wallet/V1/Server"
           "Paths_marlowe_dashboard_server"
@@ -80,8 +80,9 @@
           "Marlowe/Run/Env"
           "Marlowe/Run/Server"
           "Marlowe/Run/Wallet/V1/API"
-          "Marlowe/Run/Wallet/V1/Types"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Types"
+          "Marlowe/Run/Wallet/V1/Types"
           "Marlowe/Run/Wallet/V1/Client"
           "Marlowe/Run/WebSocket"
           ];
