@@ -30,7 +30,7 @@ import Language.PureScript.Bridge.SumType (Instance (..), equal, genericShow, mk
 import Language.PureScript.Bridge.TypeParameters (A, E)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestoreError, RestorePostData)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData, CreateResponse, RestorePostData)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Run.WebSocket (StreamToClient, StreamToServer)
 import MarloweContract (MarloweContract)
@@ -66,6 +66,23 @@ walletV1Bridge = do
   typeModule ^== "Marlowe.Run.Wallet.V1.Types"
   walletIdBridge <|> walletNameBridge
 
+psMnemonic :: TypeInfo 'PureScript
+psMnemonic = TypeInfo "" "Data.MnemonicPhrase" "MnemonicPhrase" []
+
+psPassphrase :: TypeInfo 'PureScript
+psPassphrase = TypeInfo "" "Data.Passphrase" "Passphrase" []
+
+mnemonicBridge :: BridgePart
+mnemonicBridge = (typeName ^== "CreateMnemonic" <|> typeName ^== "RestoreMnemonic") $> psMnemonic
+
+passphraseBridge :: BridgePart
+passphraseBridge = (typeName ^== "Passphrase") $> psPassphrase
+
+walletV1CTBridge :: BridgePart
+walletV1CTBridge = do
+  typeModule ^== "Marlowe.Run.Wallet.V1.CentralizedTestnet.Types"
+  mnemonicBridge <|> passphraseBridge
+
 psTransactionError :: TypeInfo 'PureScript
 psTransactionError =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "TransactionError" []
 
@@ -95,7 +112,7 @@ pubKeyHashBridge = do
 
 walletBridge :: BridgePart
 walletBridge = do
-  walletV1Bridge <|> paymentPubKeyHashBridge <|> pubKeyHashBridge
+  walletV1Bridge <|> walletV1CTBridge <|> paymentPubKeyHashBridge <|> pubKeyHashBridge
 
 marloweParamsBridge :: BridgePart
 marloweParamsBridge = typeName ^== "MarloweParams" >> return psMarloweParams
@@ -151,7 +168,6 @@ myTypes = dto <$>
       mkSumType @CreateResponse,
       mkSumType @CreatePostData,
       mkSumType @GetTotalFundsResponse,
-      order $ mkSumType @RestoreError,
       mkSumType @(EndpointResponse A E),
       mkSumType @MarloweError,
       mkSumType @MarloweEndpointResult,

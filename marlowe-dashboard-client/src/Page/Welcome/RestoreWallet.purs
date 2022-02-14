@@ -3,7 +3,8 @@ module Page.Welcome.RestoreWallet (component, _restoreWallet) where
 import Prologue
 
 import AppM (passphrase) as AppM
-import Capability.Marlowe (class ManageMarlowe, restoreWallet)
+import Capability.Toast (class Toast, addToast)
+import Capability.Wallet (class ManageWallet, restoreWallet)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
@@ -11,8 +12,7 @@ import Data.Lens (Setter', is, set, (^?))
 import Data.Lens.Record (prop)
 import Data.Maybe (fromMaybe)
 import Data.MnemonicPhrase (MnemonicPhrase)
-import Data.Variant (default, on) as Variant
-import Data.Wallet (WalletDetails)
+import Data.Wallet (WalletDetails, mkWalletDetails)
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
@@ -38,6 +38,7 @@ import Page.Welcome.RestoreWallet.Types
   , _nickname
   )
 import Store as Store
+import Toast.Types (ajaxErrorToast)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
@@ -72,7 +73,8 @@ _restoreWallet = Proxy :: Proxy "restoreWallet"
 component
   :: forall m
    . MonadAff m
-  => ManageMarlowe m
+  => ManageWallet m
+  => Toast m
   => MonadStore Store.Action Store.Store m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
@@ -105,7 +107,12 @@ adaptInput optic = case _ of
   Input.Emit a -> a
 
 handleAction
-  :: forall m. MonadEffect m => ManageMarlowe m => Action -> DSL m Unit
+  :: forall m
+   . MonadEffect m
+  => Toast m
+  => ManageWallet m
+  => Action
+  -> DSL m Unit
 handleAction = case _ of
   OnInit -> do
     H.tell _nickname unit $ Input.Focus
@@ -117,20 +124,15 @@ handleAction = case _ of
   OnCancel -> H.raise CancelClicked
   OnRestore { nickname, mnemonic } -> do
     H.modify_ _ { walletDetails = Loading }
-    response <- lift $ restoreWallet nickname mnemonic AppM.passphrase
+    response <- lift $ restoreWallet mnemonic nickname AppM.passphrase
     case response of
       Left err -> do
+        addToast $ ajaxErrorToast "Failed to restore wallet" err
         H.modify_ _
-          { walletDetails = err
-              #
-                ( Variant.default "Error from server."
-                    # Variant.on
-                        (Proxy :: Proxy "invalidMnemonic")
-                        (const "Invalid mnemonic phrase.")
-                )
-              # Failure
+          { walletDetails = Failure "Failed to restore wallet"
           }
-      Right walletDetails -> do
+      Right walletInfo -> do
+        let walletDetails = mkWalletDetails nickname walletInfo
         H.modify_ _ { walletDetails = Success walletDetails }
         H.raise $ WalletRestored walletDetails
 

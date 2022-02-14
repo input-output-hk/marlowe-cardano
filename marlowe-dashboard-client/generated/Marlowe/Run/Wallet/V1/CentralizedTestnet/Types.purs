@@ -11,16 +11,15 @@ import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
-import Data.Bounded.Generic (genericBottom, genericTop)
-import Data.Enum (class Enum)
-import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Newtype (class Newtype, unwrap)
+import Data.Passphrase (Passphrase)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Data.WalletNickname (WalletNickname)
@@ -28,7 +27,7 @@ import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Type.Proxy (Proxy(Proxy))
 
 newtype CreatePostData = CreatePostData
-  { getCreatePassphrase :: String
+  { getCreatePassphrase :: Passphrase
   , getCreateWalletName :: WalletNickname
   }
 
@@ -40,7 +39,7 @@ instance Show CreatePostData where
 instance EncodeJson CreatePostData where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { getCreatePassphrase: E.value :: _ String
+        { getCreatePassphrase: E.value :: _ Passphrase
         , getCreateWalletName: E.value :: _ WalletNickname
         }
     )
@@ -48,7 +47,7 @@ instance EncodeJson CreatePostData where
 instance DecodeJson CreatePostData where
   decodeJson = defer \_ -> D.decode $
     ( CreatePostData <$> D.record "CreatePostData"
-        { getCreatePassphrase: D.value :: _ String
+        { getCreatePassphrase: D.value :: _ Passphrase
         , getCreateWalletName: D.value :: _ WalletNickname
         }
     )
@@ -60,13 +59,13 @@ derive instance Newtype CreatePostData _
 --------------------------------------------------------------------------------
 
 _CreatePostData :: Iso' CreatePostData
-  { getCreatePassphrase :: String, getCreateWalletName :: WalletNickname }
+  { getCreatePassphrase :: Passphrase, getCreateWalletName :: WalletNickname }
 _CreatePostData = _Newtype
 
 --------------------------------------------------------------------------------
 
 newtype CreateResponse = CreateResponse
-  { mnemonic :: Array String
+  { mnemonic :: MnemonicPhrase
   , walletInfo :: WalletInfo
   }
 
@@ -78,7 +77,7 @@ instance Show CreateResponse where
 instance EncodeJson CreateResponse where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { mnemonic: E.value :: _ (Array String)
+        { mnemonic: E.value :: _ MnemonicPhrase
         , walletInfo: E.value :: _ WalletInfo
         }
     )
@@ -86,7 +85,7 @@ instance EncodeJson CreateResponse where
 instance DecodeJson CreateResponse where
   decodeJson = defer \_ -> D.decode $
     ( CreateResponse <$> D.record "CreateResponse"
-        { mnemonic: D.value :: _ (Array String)
+        { mnemonic: D.value :: _ MnemonicPhrase
         , walletInfo: D.value :: _ WalletInfo
         }
     )
@@ -98,61 +97,14 @@ derive instance Newtype CreateResponse _
 --------------------------------------------------------------------------------
 
 _CreateResponse :: Iso' CreateResponse
-  { mnemonic :: Array String, walletInfo :: WalletInfo }
+  { mnemonic :: MnemonicPhrase, walletInfo :: WalletInfo }
 _CreateResponse = _Newtype
 
 --------------------------------------------------------------------------------
 
-data RestoreError
-  = InvalidMnemonic
-  | RestoreWalletError
-  | FetchPubKeyHashError
-
-derive instance Eq RestoreError
-
-instance Show RestoreError where
-  show a = genericShow a
-
-instance EncodeJson RestoreError where
-  encodeJson = defer \_ -> E.encode E.enum
-
-instance DecodeJson RestoreError where
-  decodeJson = defer \_ -> D.decode D.enum
-
-derive instance Ord RestoreError
-
-derive instance Generic RestoreError _
-
-instance Enum RestoreError where
-  succ = genericSucc
-  pred = genericPred
-
-instance Bounded RestoreError where
-  bottom = genericBottom
-  top = genericTop
-
---------------------------------------------------------------------------------
-
-_InvalidMnemonic :: Prism' RestoreError Unit
-_InvalidMnemonic = prism' (const InvalidMnemonic) case _ of
-  InvalidMnemonic -> Just unit
-  _ -> Nothing
-
-_RestoreWalletError :: Prism' RestoreError Unit
-_RestoreWalletError = prism' (const RestoreWalletError) case _ of
-  RestoreWalletError -> Just unit
-  _ -> Nothing
-
-_FetchPubKeyHashError :: Prism' RestoreError Unit
-_FetchPubKeyHashError = prism' (const FetchPubKeyHashError) case _ of
-  FetchPubKeyHashError -> Just unit
-  _ -> Nothing
-
---------------------------------------------------------------------------------
-
 newtype RestorePostData = RestorePostData
-  { getRestoreMnemonicPhrase :: Array String
-  , getRestorePassphrase :: String
+  { getRestoreMnemonicPhrase :: MnemonicPhrase
+  , getRestorePassphrase :: Passphrase
   , getRestoreWalletName :: WalletNickname
   }
 
@@ -164,8 +116,8 @@ instance Show RestorePostData where
 instance EncodeJson RestorePostData where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { getRestoreMnemonicPhrase: E.value :: _ (Array String)
-        , getRestorePassphrase: E.value :: _ String
+        { getRestoreMnemonicPhrase: E.value :: _ MnemonicPhrase
+        , getRestorePassphrase: E.value :: _ Passphrase
         , getRestoreWalletName: E.value :: _ WalletNickname
         }
     )
@@ -173,8 +125,8 @@ instance EncodeJson RestorePostData where
 instance DecodeJson RestorePostData where
   decodeJson = defer \_ -> D.decode $
     ( RestorePostData <$> D.record "RestorePostData"
-        { getRestoreMnemonicPhrase: D.value :: _ (Array String)
-        , getRestorePassphrase: D.value :: _ String
+        { getRestoreMnemonicPhrase: D.value :: _ MnemonicPhrase
+        , getRestorePassphrase: D.value :: _ Passphrase
         , getRestoreWalletName: D.value :: _ WalletNickname
         }
     )
@@ -186,8 +138,8 @@ derive instance Newtype RestorePostData _
 --------------------------------------------------------------------------------
 
 _RestorePostData :: Iso' RestorePostData
-  { getRestoreMnemonicPhrase :: Array String
-  , getRestorePassphrase :: String
+  { getRestoreMnemonicPhrase :: MnemonicPhrase
+  , getRestorePassphrase :: Passphrase
   , getRestoreWalletName :: WalletNickname
   }
 _RestorePostData = _Newtype

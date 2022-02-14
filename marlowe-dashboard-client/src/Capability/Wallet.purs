@@ -10,22 +10,21 @@ module Capability.Wallet
 
 import Prologue
 
-import API.Marlowe.Run.Wallet.CentralizedTestnet
-  ( CreateWalletError
-  , CreateWalletResponse
-  , RestoreWalletError
-  , RestoreWalletOptions
-  )
-import API.Marlowe.Run.Wallet.CentralizedTestnet as TestnetAPI
 import AppM (AppM)
 import Control.Monad.Except (lift)
-import Data.Passpharse (Passphrase)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.Passphrase (Passphrase)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen (HalogenM)
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
+  ( CreatePostData(..)
+  , CreateResponse
+  , RestorePostData(..)
+  )
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Plutus.V1.Ledger.Tx (Tx)
 import Types (AjaxResponse)
@@ -34,17 +33,26 @@ class Monad m <= ManageWallet m where
   createWallet
     :: WalletNickname
     -> Passphrase
-    -> m (Either CreateWalletError CreateWalletResponse)
+    -> m (AjaxResponse CreateResponse)
   restoreWallet
-    :: RestoreWalletOptions -> m (Either RestoreWalletError WalletInfo)
+    :: MnemonicPhrase
+    -> WalletNickname
+    -> Passphrase
+    -> m (AjaxResponse WalletInfo)
   submitWalletTransaction :: WalletId -> Tx -> m (AjaxResponse Unit)
   getWalletInfo :: WalletId -> m (AjaxResponse WalletInfo)
   getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFundsResponse)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
 instance monadWalletAppM :: ManageWallet AppM where
-  createWallet wn p = TestnetAPI.createWallet wn p
-  restoreWallet = TestnetAPI.restoreWallet
+  createWallet wn p = MarloweRun.postApiWalletV1CentralizedtestnetCreate
+    $ CreatePostData { getCreateWalletName: wn, getCreatePassphrase: p }
+  restoreWallet mp wn p = MarloweRun.postApiWalletV1CentralizedtestnetRestore
+    $ RestorePostData
+        { getRestoreMnemonicPhrase: mp
+        , getRestoreWalletName: wn
+        , getRestorePassphrase: p
+        }
   submitWalletTransaction _wallet _tx = unsafeThrow "Not implemented"
   getWalletInfo _wallet = unsafeThrow "Not implemented"
   getWalletTotalFunds = MarloweRun.getApiWalletV1ByWalletidTotalfunds
@@ -54,7 +62,7 @@ instance monadWalletHalogenM ::
   ManageWallet m =>
   ManageWallet (HalogenM state action slots msg m) where
   createWallet wn p = lift $ createWallet wn p
-  restoreWallet options = lift $ restoreWallet options
+  restoreWallet mp wn p = lift $ restoreWallet mp wn p
   submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet
   getWalletInfo = lift <<< getWalletInfo
   getWalletTotalFunds = lift <<< getWalletTotalFunds

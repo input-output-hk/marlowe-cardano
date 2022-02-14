@@ -1,8 +1,5 @@
 module Capability.Marlowe
   ( class ManageMarlowe
-  , NewWalletDetails
-  , createWallet
-  , restoreWallet
   , followContract
   , createContract
   , applyTransactionInput
@@ -23,10 +20,6 @@ import API.Lenses
   , _cicDefinition
   , _observableState
   )
-import API.Marlowe.Run.Wallet.CentralizedTestnet
-  ( CreateWalletError
-  , RestoreWalletError
-  )
 import AppM (AppM)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PAB (class ManagePAB)
@@ -38,7 +31,6 @@ import Capability.PAB
   ) as PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
-import Capability.Wallet as Wallet
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
@@ -47,9 +39,6 @@ import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
 import Data.Maybe (maybe')
-import Data.MnemonicPhrase (MnemonicPhrase)
-import Data.MnemonicPhrase as MP
-import Data.MnemonicPhrase.Word (toString) as Word
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _companionAppId
@@ -57,17 +46,14 @@ import Data.PABConnectedWallet
   , _pubKeyHash
   , _walletId
   )
-import Data.Passpharse (Passphrase)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
 import Data.Traversable (traverse)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
-import Data.Wallet (WalletDetails, mkWalletDetails)
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
-import Data.WalletNickname (WalletNickname)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
@@ -90,11 +76,6 @@ import Store.Contracts (getFollowerContract)
 import Types (AjaxResponse, DecodedAjaxResponse)
 import WebSocket.Support as WS
 
-type NewWalletDetails =
-  { mnemonic :: MnemonicPhrase
-  , walletDetails :: WalletDetails
-  }
-
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
 -- capabilities with functions specific to Marlowe.
 class
@@ -104,15 +85,6 @@ class
   , MonadStore Store.Action Store.Store m
   ) <=
   ManageMarlowe m where
-  createWallet
-    :: WalletNickname
-    -> Passphrase
-    -> m (Either CreateWalletError NewWalletDetails)
-  restoreWallet
-    :: WalletNickname
-    -> MnemonicPhrase
-    -> Passphrase
-    -> m (Either RestoreWalletError WalletDetails)
   followContract
     :: PABConnectedWallet
     -> MarloweParams
@@ -141,21 +113,6 @@ class
   unsubscribeFromWallet :: WalletId -> m Unit
 
 instance manageMarloweAppM :: ManageMarlowe AppM where
-  createWallet walletNickname passphrase = runExceptT do
-    -- create the wallet itself
-    { mnemonic, walletInfo } <- ExceptT $ Wallet.createWallet walletNickname
-      passphrase
-    let
-      walletDetails = mkWalletDetails walletNickname walletInfo
-    pure { mnemonic, walletDetails }
-  restoreWallet walletNickname mnemonicPhrase passphrase = runExceptT do
-    walletInfo <- ExceptT $ Wallet.restoreWallet
-      { walletName: walletNickname
-      , mnemonicPhrase: map Word.toString $ MP.toWords mnemonicPhrase
-      , passphrase
-      }
-    pure $ mkWalletDetails walletNickname walletInfo
-
   -- create a MarloweFollower app, call its "follow" endpoint with the given MarloweParams, and then
   -- return its PlutusAppId and observable state
   followContract wallet marloweParams =
@@ -277,8 +234,6 @@ instance monadMarloweHalogenM ::
   ( ManageMarlowe m
   ) =>
   ManageMarlowe (HalogenM state action slots msg m) where
-  createWallet wn p = lift $ createWallet wn p
-  restoreWallet = map (map (map lift)) restoreWallet
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams

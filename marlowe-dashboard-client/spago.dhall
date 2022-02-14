@@ -18,7 +18,6 @@
   , "effect"
   , "either"
   , "enums"
-  , "errors"
   , "exceptions"
   , "filterable"
   , "foldable-traversable"

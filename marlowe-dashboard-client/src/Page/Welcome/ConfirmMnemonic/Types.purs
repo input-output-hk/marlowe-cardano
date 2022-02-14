@@ -1,7 +1,7 @@
 module Page.Welcome.ConfirmMnemonic.Types where
 
-import Capability.Marlowe (NewWalletDetails)
 import Halogen as H
+import Page.Welcome.CreateWallet.Types (NewWalletDetails)
 import Type.Proxy (Proxy(..))
 
 type Input =

@@ -20,8 +20,8 @@ import Data.Lens (Lens', over)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
 import Data.Newtype (un)
-import Data.Passpharse (Passphrase)
-import Data.Passpharse as Passphrase
+import Data.Passphrase (Passphrase)
+import Data.Passphrase as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)

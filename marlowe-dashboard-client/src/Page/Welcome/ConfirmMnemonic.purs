@@ -2,7 +2,7 @@ module Page.Welcome.ConfirmMnemonic (component, _confirmMnemonic) where
 
 import Prologue
 
-import Capability.Marlowe (class ManageMarlowe, NewWalletDetails)
+import Capability.Marlowe (class ManageMarlowe)
 import Component.Form (renderTextInput)
 import Data.Bifunctor (lmap)
 import Data.MnemonicPhrase (MnemonicPhrase)
@@ -17,6 +17,7 @@ import Halogen.Form.Input as Input
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Page.Welcome.ConfirmMnemonic.Types (Component, Input, Msg(..), _mnemonic)
+import Page.Welcome.CreateWallet.Types (NewWalletDetails)
 import Page.Welcome.Forms.Render (renderForm)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)

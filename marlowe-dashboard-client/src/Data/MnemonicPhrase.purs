@@ -13,6 +13,14 @@ module Data.MnemonicPhrase
 import Prologue
 
 import Control.Monad.Except (throwError)
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , JsonDecodeError(..)
+  , decodeJson
+  , encodeJson
+  )
+import Data.Bifunctor (lmap)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Either (note)
 import Data.Enum (class BoundedEnum, class Enum)
@@ -90,6 +98,13 @@ derive instance eqMnemonicPhrase :: Eq MnemonicPhrase
 derive instance ordMnemonicPhrase :: Ord MnemonicPhrase
 instance showMnemonicPhrase :: Show MnemonicPhrase where
   show = show <<< toWords
+
+instance DecodeJson MnemonicPhrase where
+  decodeJson =
+    lmap (const $ TypeMismatch "MnemonicPhrase") <<< fromWords <=< decodeJson
+
+instance EncodeJson MnemonicPhrase where
+  encodeJson = encodeJson <<< toWords
 
 fromString
   :: String

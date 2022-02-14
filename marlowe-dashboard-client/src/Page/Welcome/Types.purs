@@ -3,9 +3,9 @@ module Page.Welcome.Types where
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
-import Capability.Marlowe (NewWalletDetails)
 import Data.Wallet (WalletDetails)
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
+import Page.Welcome.CreateWallet.Types (NewWalletDetails)
 import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 

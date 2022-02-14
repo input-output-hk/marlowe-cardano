@@ -6,6 +6,8 @@ module Page.Welcome.View
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
+import Capability.Toast (class Toast)
+import Capability.Wallet (class ManageWallet)
 import Component.Button.Types (Variant(..)) as B
 import Component.Button.View (button) as B
 import Component.Icons (Icon(..)) as Icon
@@ -75,6 +77,7 @@ welcomeCard
    . MonadAff m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
+  => Toast m
   => State
   -> ComponentHTML Action ChildSlots m
 welcomeCard state =
@@ -268,6 +271,7 @@ createWalletCard
    . MonadAff m
   => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
+  => Toast m
   => CreateWalletStep
   -> Array (ComponentHTML Action ChildSlots m)
 createWalletCard = case _ of
@@ -319,7 +323,8 @@ restoreWalletCard
   :: forall m
    . MonadAff m
   => MonadStore Store.Action Store.Store m
-  => ManageMarlowe m
+  => ManageWallet m
+  => Toast m
   => Array (ComponentHTML Action ChildSlots m)
 restoreWalletCard =
   [ a
