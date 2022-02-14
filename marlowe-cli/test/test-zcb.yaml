@@ -40,7 +40,7 @@ ptPabOperations:
 - tag: PrintWallet
   poOwner: Borrower
 
-  # The lender creates the escrow contract, which was downloaded from Marlowe
+  # The lender creates the ZCB contract, which was downloaded from Marlowe
   # Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
 
 - tag: CallCreate
@@ -95,9 +95,9 @@ ptPabOperations:
                 party:
                   role_token: Lender
               then: close
-          timeout: 100000001
+          timeout: 100000002
           timeout_continuation: close
-    timeout: 100000002
+    timeout: 100000001
     timeout_continuation: close
 
 - tag: AwaitCreate
@@ -149,7 +149,7 @@ ptPabOperations:
       - 50000000
   poSlots:
   - getSlot: 1000000
-  - getSlot: 10000000
+  - getSlot: 100000000
 
 - tag: AwaitApplyInputs
   poInstance: LenderApp
@@ -223,7 +223,7 @@ ptPabOperations:
       - 53000000
   poSlots:
   - getSlot: 1000000
-  - getSlot: 10000000
+  - getSlot: 100000000
 
 - tag: AwaitApplyInputs
   poInstance: BorrowerApp
@@ -270,7 +270,6 @@ ptPabOperations:
   poMaximumFees: 4000000
   poInstances:
   - LenderApp
-
 
   # The borrower's funds are unchanged.
 

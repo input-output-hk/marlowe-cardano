@@ -1,26 +1,31 @@
-marlowe-cli test contracts --testnet-magic 1564                                                             \
-                           --socket-path node.socket                                                        \
-                           --wallet-url http://localhost:8090                                               \
-                           --pab-url http://localhost:9080                                                  \
-                           --faucet-key payment.skey                                                        \
-                           --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
-                           --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7   \
-                           --passphrase pab123456789                                                        \
-                           test-simple.yaml
-
 ***** Test "Simple Example" *****
-[CreateWallet] Created wallet 3cba6c681e7ac2b613fbdd10b6014b8482dd7125 for role "PAB".
-[FundWallet] Funded wallet 3cba6c681e7ac2b613fbdd10b6014b8482dd7125 for role "PAB" with valueFromList [(AdaAssetId,100000000)].
-[ActivateApp] Activated MarloweApp instance 41a566c7-3c02-4b34-b298-d16ef0de4fbe for role "PAB".
-[CallCreate] Endpoint "create" called on instance 41a566c7-3c02-4b34-b298-d16ef0de4fbe for owners [("PAB",61e6a22484fb0072b369fa18bf87b4638a08cdd88e4718e69d5871de)].
-[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 49d69b01ed27e583a6d651714c6da0e99989009f910d51c11327d559, rolesCurrency = 2e9f87bada2fed9f05fc8711370b4183ef62ce47a3c055c0874fcda1, slotConfig = (1000,POSIXTime {getPOSIXTime = 1638215277000})}.
-[CallApplyInputs] Endpoint "apply-inputs" called on 41a566c7-3c02-4b34-b298-d16ef0de4fbe for inputs [ClientInput (IDeposit "PAB" "PAB" (Token "" "") 15000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 9999999}).
+[CreateWallet] Created wallet 9565c622f0cf9bd31a4df6475f633cb6b7173b88 for role "PAB".
+[FundWallet] Funded wallet 9565c622f0cf9bd31a4df6475f633cb6b7173b88 for role "PAB" with valueFromList [(AdaAssetId,100000000)].
+[ActivateApp] Activated MarloweApp instance dbb46441-f941-46fc-8c1b-fd5a8514a747 for role "PAB".
+[CallCreate] Endpoint "create" called on instance dbb46441-f941-46fc-8c1b-fd5a8514a747 for owners [("PAB",7d603d058d36fbdf440046d93bf1017f8d74b68f915ac8c9a46f9657)].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewObservableState Null.
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewYieldedExportTxs [].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewObservableState (Object (fromList [("contents",Array [String "afc33568-d98e-4344-ba30-52bd5de1c992",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "6c2b1c0ac98e864ebb3597c702aaeaba237e0d3923e56a29f3e6fa2a"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "13530e9cc65137ce440ef69f8c1e97a12d5846c7a9bbaf664836e3cd")])),("slotConfig",Array [Number 1000.0,Number 1.638215277e12])])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 6c2b1c0ac98e864ebb3597c702aaeaba237e0d3923e56a29f3e6fa2a, rolesCurrency = 13530e9cc65137ce440ef69f8c1e97a12d5846c7a9bbaf664836e3cd, slotConfig = (1000,POSIXTime {getPOSIXTime = 1638215277000})}.
+[CallApplyInputs] Endpoint "apply-inputs" called on dbb46441-f941-46fc-8c1b-fd5a8514a747 for inputs [ClientInput (IDeposit "PAB" "PAB" (Token "" "") 15000000)] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 9999999}).
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewObservableState (Object (fromList [("contents",Array [String "41bf2d4f-a6e1-42e1-856a-f7a3a69cda2f",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitApplyInputs] Input application confirmed.
-[CallApplyInputs] Endpoint "apply-inputs" called on 41a566c7-3c02-4b34-b298-d16ef0de4fbe for inputs [ClientInput INotify] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 9999999}).
+[CallApplyInputs] Endpoint "apply-inputs" called on dbb46441-f941-46fc-8c1b-fd5a8514a747 for inputs [ClientInput INotify] and slots Just (Slot {getSlot = 1000000},Slot {getSlot = 9999999}).
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewObservableState (Object (fromList [("contents",Array [String "a19a4f34-7c2a-4e0a-ad6a-934303ee2d11",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitApplyInputs] Input application confirmed.
-[CallRedeem] Endpoint "redeem" called on 41a566c7-3c02-4b34-b298-d16ef0de4fbe for role "PAB".
+[CallRedeem] Endpoint "redeem" called on dbb46441-f941-46fc-8c1b-fd5a8514a747 for role "PAB".
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewObservableState (Object (fromList [("contents",Array [String "3e998d07-41e7-4ca8-8cc1-4455fabe3dda",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitRedeem] Redemption confirmed.
-[Stop] Instance 41a566c7-3c02-4b34-b298-d16ef0de4fbe stopped.
-[CheckFunds] Wallet for role "PAB" contains valueFromList [(AdaAssetId,96776416),(AssetId "2e9f87bada2fed9f05fc8711370b4183ef62ce47a3c055c0874fcda1" "PAB",1)].
+[runContract] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 received ContractFinished Nothing.
+[Stop] Instance dbb46441-f941-46fc-8c1b-fd5a8514a747 stopped.
+[CheckFunds] Wallet for role "PAB" contains valueFromList [(AdaAssetId,96803000),(AssetId "13530e9cc65137ce440ef69f8c1e97a12d5846c7a9bbaf664836e3cd" "PAB",1)].
 ***** SUCCEEDED *****
-

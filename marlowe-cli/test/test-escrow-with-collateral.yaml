@@ -1,0 +1,424 @@
+ptTestName: Escrow with Collateral
+
+ptPabOperations:
+
+  # Create the wallet for the buyer, fund it with 90 ADA, and activate the
+  # Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Buyer
+
+- tag: FundWallet
+  poOwner: Buyer
+  poValue:
+    lovelace: 90000000
+
+- tag: ActivateApp
+  poOwner: Buyer
+  poInstance: BuyerApp
+
+  # Create the wallet for the seller, fund it with 25 ADA, and activate the
+  # Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Seller
+
+- tag: FundWallet
+  poOwner: Seller
+  poValue:
+    lovelace: 25000000
+
+- tag: ActivateApp
+  poOwner: Seller
+  poInstance: SellerApp
+
+  # Create the wallet for the mediator, fund it with 20 ADA, and activate the
+  # Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Mediator
+
+- tag: FundWallet
+  poOwner: Mediator
+  poValue:
+    lovelace: 20000000
+
+- tag: ActivateApp
+  poOwner: Mediator
+  poInstance: MediatorApp
+
+  # The mediator creates the escrow contract, which was downloaded from Marlowe
+  # Playground. The purchase price is 50 ADA, and each party must deposit 10 ADA
+  # of collateral.
+
+- tag: CallCreate
+  poInstance: MediatorApp
+  poOwners:
+    - Buyer
+    - Seller
+    - Mediator
+  poContract:
+    when:
+    - case:
+        party:
+          role_token: Seller
+        deposits: 10000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Seller
+      then:
+        when:
+        - case:
+            party:
+              role_token: Buyer
+            deposits: 10000000
+            of_token:
+              currency_symbol: ''
+              token_name: ''
+            into_account:
+              role_token: Buyer
+          then:
+            when:
+            - case:
+                party:
+                  role_token: Buyer
+                deposits: 50000000
+                into_account:
+                  role_token: Seller
+                of_token:
+                  currency_symbol: ''
+                  token_name: ''
+              then:
+                timeout: 100000005
+                timeout_continuation: close
+                when:
+                - case:
+                    choose_between:
+                    - from: 0
+                      to: 0
+                    for_choice:
+                      choice_name: Everything is alright
+                      choice_owner:
+                        role_token: Buyer
+                  then: close
+                - case:
+                    choose_between:
+                    - from: 1
+                      to: 1
+                    for_choice:
+                      choice_name: Report problem
+                      choice_owner:
+                        role_token: Buyer
+                  then:
+                    pay: 50000000
+                    token:
+                      currency_symbol: ''
+                      token_name: ''
+                    from_account:
+                      role_token: Seller
+                    to:
+                      account:
+                        role_token: Buyer
+                    then:
+                      when:
+                      - case:
+                          choose_between:
+                          - from: 1
+                            to: 1
+                          for_choice:
+                            choice_name: Confirm problem
+                            choice_owner:
+                              role_token: Seller
+                        then: close
+                      - case:
+                          choose_between:
+                          - from: 0
+                            to: 0
+                          for_choice:
+                            choice_name: Dispute problem
+                            choice_owner:
+                              role_token: Seller
+                        then:
+                          pay: 10000000
+                          token:
+                            currency_symbol: ''
+                            token_name: ''
+                          from_account:
+                            role_token: Seller
+                          to:
+                            party:
+                              role_token: Seller
+                          then:
+                            pay: 10000000
+                            token:
+                              currency_symbol: ''
+                              token_name: ''
+                            from_account:
+                              role_token: Buyer
+                            to:
+                              party:
+                                role_token: Mediator
+                            then: close
+                      timeout: 100000004
+                      timeout_continuation: close
+            timeout: 100000003
+            timeout_continuation: close
+        timeout: 100000002
+        timeout_continuation: close
+    timeout: 100000001
+    timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: MediatorApp
+
+  # The mediator should have 14 ADA now, since 2 ADA was sent to the script
+  # address when creating the contract and 2 ADA each was sent to the buyer and
+  # seller along with their role tokens, and up to 1 ADA in fees might have been
+  # paid.
+
+- tag: CheckFunds
+  poOwner: Mediator
+  poValue:
+    lovelace: 14000000
+  poMaximumFees: 1000000
+  poInstances:
+  - MediatorApp
+
+  # The buyer and seller should each now have an additional 2 ADA that arrived
+  # with their role token.
+
+- tag: CheckFunds
+  poOwner: Buyer
+  poValue:
+    lovelace: 92000000
+  poMaximumFees: 0
+  poInstances:
+  - MediatorApp
+
+- tag: CheckFunds
+  poOwner: Seller
+  poValue:
+    lovelace: 27000000
+  poMaximumFees: 0
+  poInstances:
+  - MediatorApp
+
+  # The buyer and seller each need to follow the contract created by the
+  # mediator.
+
+- tag: Follow
+  poInstance: BuyerApp
+  poOtherInstance: MediatorApp
+
+- tag: Follow
+  poInstance: SellerApp
+  poOtherInstance: MediatorApp
+
+  # The seller deposits the 10 ADA collateral.
+
+- tag: CallApplyInputs
+  poInstance: SellerApp
+  poOwner: Seller
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: IDeposit
+      contents:
+      - role_token: Seller
+      - role_token: Seller
+      - currency_symbol: ''
+        token_name: ''
+      - 10000000
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 100000000
+
+- tag: AwaitApplyInputs
+  poInstance: SellerApp
+
+  # The seller should have about 17 ADA now, since they paid 10 ADA of
+  # collateral, but there is up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Seller
+  poValue:
+    lovelace: 17000000
+  poMaximumFees: 2000000
+  poInstances:
+  - SellerApp
+
+  # The buyer deposits the 10 ADA collateral.
+
+- tag: CallApplyInputs
+  poInstance: BuyerApp
+  poOwner: Buyer
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: IDeposit
+      contents:
+      - role_token: Buyer
+      - role_token: Buyer
+      - currency_symbol: ''
+        token_name: ''
+      - 10000000
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 100000000
+
+- tag: AwaitApplyInputs
+  poInstance: BuyerApp
+
+  # The buyer should have about 82 ADA now, since they paid 10 ADA of
+  # collateral, but there is up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Buyer
+  poValue:
+    lovelace: 82000000
+  poMaximumFees: 2000000
+  poInstances:
+  - BuyerApp
+
+  # The buyer deposits the 50 ADA purchase price.
+
+- tag: CallApplyInputs
+  poInstance: BuyerApp
+  poOwner: Buyer
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: IDeposit
+      contents:
+      - role_token: Seller
+      - role_token: Buyer
+      - currency_symbol: ''
+        token_name: ''
+      - 50000000
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 100000000
+
+- tag: AwaitApplyInputs
+  poInstance: BuyerApp
+
+  # The buyer should have about 32 ADA now, since they paid 50 ADA for the
+  # purchase, but there is up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Buyer
+  poValue:
+    lovelace: 32000000
+  poMaximumFees: 4000000
+  poInstances:
+  - BuyerApp
+
+  # The buyer receives the purchase and reports that there is a problem.
+
+- tag: CallApplyInputs
+  poInstance: BuyerApp
+  poOwner: Buyer
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: IChoice
+      contents:
+      - choice_name: Report problem
+        choice_owner:
+          role_token: Buyer
+      - 1
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 100000000
+
+- tag: AwaitApplyInputs
+  poInstance: BuyerApp
+
+  # The buyer should have 32 ADA now, but they may have paid up to another 2 ADA
+  # in fees.
+
+- tag: CheckFunds
+  poOwner: Buyer
+  poValue:
+    lovelace: 32000000
+  poMaximumFees: 6000000
+  poInstances:
+  - BuyerApp
+
+  # The seller disputes that there is a problem.
+
+- tag: CallApplyInputs
+  poInstance: SellerApp
+  poOwner: Seller
+  poInputs:
+  - tag: ClientInput
+    contents:
+      tag: IChoice
+      contents:
+      - choice_name: Dispute problem.
+        choice_owner:
+          role_token: Seller
+      - 0
+  poSlots:
+  - getSlot: 1000000
+  - getSlot: 100000000
+
+- tag: AwaitApplyInputs
+  poInstance: SellerApp
+
+  # The seller should still have 5 ADA now, but they may have paid up to another
+  # 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Seller
+  poValue:
+    lovelace: 17000000
+  poMaximumFees: 4000000
+  poInstances:
+  - SellerApp
+
+
+  # The mediator should have 36 ADA now because they received back their
+  # initial 2 ADA that was contributed when creating the contract and they
+  # received all of the collateral, but they did not pay additional fees
+
+- tag: CheckFunds
+  poOwner: Mediator
+  poValue:
+    lovelace: 36000000
+  poMaximumFees: 1000000
+  poInstances:
+  - MediatorApp
+
+  # Now the buyer redeems the 50 ADA from the payout script.
+
+- tag: CallRedeem
+  poInstance: BuyerApp
+  poOwner: Buyer
+
+- tag: AwaitRedeem
+  poInstance: BuyerApp
+
+  # The seller should now have 62 ADA, but they may have paid up to 1 ADA in
+  # fees.
+
+- tag: CheckFunds
+  poOwner: Buyer
+  poValue:
+    lovelace: 82000000
+  poMaximumFees: 7000000
+  poInstances:
+  - BuyerApp
+
+  # Stop the Marlowe application.
+
+- tag: Stop
+  poInstance: BuyerApp
+
+- tag: Stop
+  poInstance: SellerApp
+
+- tag: Stop
+  poInstance: MediatorApp

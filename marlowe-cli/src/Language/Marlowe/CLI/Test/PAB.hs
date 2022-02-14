@@ -153,10 +153,10 @@ interpret access CheckFunds{..} =
       minimumLovelace = maximumLovelace - poMaximumFees
       actualTokens = actual <> negateValue (lovelaceToValue actualLovelace)
       expectedTokens = poValue <> negateValue (lovelaceToValue maximumLovelace)
-    unless (actualLovelace >= minimumLovelace || actualLovelace <= maximumLovelace)
+    unless (actualLovelace >= minimumLovelace && actualLovelace <= maximumLovelace)
       . throwError
       . CliError
-      $ "[CheckFunds]: Wallet for role " <> show poOwner <> " contains " <> show actualLovelace <> ", which is outside the range (" <> show minimumLovelace <> "," <> show maximumLovelace <> "."
+      $ "[CheckFunds]: Wallet for role " <> show poOwner <> " contains " <> show actualLovelace <> ", which is outside the range (" <> show minimumLovelace <> "," <> show maximumLovelace <> ")."
     unless (actualTokens == expectedTokens <> roleTokens)
       . throwError
       . CliError
@@ -388,7 +388,7 @@ runContract PabAccess{..} contract walletId =
       go connection =
         do
           status <- receiveStatus connection
---        liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
+          liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
