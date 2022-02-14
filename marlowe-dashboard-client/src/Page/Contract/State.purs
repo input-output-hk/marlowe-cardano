@@ -196,7 +196,9 @@ mkInitialState wallet currentSlot mNickname contractHistory =
     contract = view _marloweContract marloweData
     mTemplate = findTemplate contract
     minSlot = view (_marloweState <<< _minSlot) marloweData
-    initialExecutionState = Execution.mkInitialState minSlot mNickname contract
+    initialExecutionState = Execution.mkInitialState minSlot mNickname
+      marloweParams
+      contract
   in
     flip map mTemplate \template ->
       let
@@ -205,7 +207,6 @@ mkInitialState wallet currentSlot mNickname contractHistory =
           , executionState: initialExecutionState
           , pendingTransaction: Nothing
           , previousSteps: mempty
-          , marloweParams
           , selectedStep: 0
           , metadata: template.metaData
           , participants: getParticipants contract
@@ -270,10 +271,10 @@ updateState
         in
           { tab: Tasks
           , executionState: Execution.mkInitialState currentSlot (Just nickname)
+              marloweParams
               contract
           , pendingTransaction: Nothing
           , previousSteps: []
-          , marloweParams
           , selectedStep: 0
           , metadata
           , participants
@@ -357,16 +358,16 @@ handleAction { followerAppId } SelectSelf = callMainFrameAction
   $ Just followerAppId
 
 handleAction _ (SetNickname nickname) =
-  withStarted \{ marloweParams } -> do
+  withStarted \{ executionState: { marloweParams } } -> do
     void $ modifyContractNicknames $ insertContractNickname marloweParams
       nickname
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction { currentSlot, wallet } (ConfirmAction namedAction) =
-  withStarted \started@{ executionState, marloweParams } -> do
+  withStarted \started@{ executionState } -> do
     let
       contractInput = toInput namedAction
-
+      { marloweParams } = executionState
       txInput = mkTx currentSlot (executionState ^. _contract)
         (Unfoldable.fromMaybe contractInput)
     ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput

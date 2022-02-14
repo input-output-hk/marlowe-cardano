@@ -283,10 +283,10 @@ manually (and sign the transaction). So this will almost certainly have to chang
 -}
 handleAction { wallet } (RedeemPayments followerAppId) = do
   mStartedContract <- peruse $ _contracts <<< ix followerAppId <<< _Started
-  for_ mStartedContract \{ executionState, marloweParams, userParties } ->
+  for_ mStartedContract \{ executionState, userParties } ->
     let
       payments = getAllPayments executionState
-
+      { marloweParams } = executionState
       isToParty party (Payment _ payee _) = case payee of
         Party p -> p == party
         _ -> false

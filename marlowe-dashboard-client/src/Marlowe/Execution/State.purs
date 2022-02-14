@@ -20,7 +20,7 @@ import Data.Array as Array
 import Data.BigInt.Argonaut (fromInt)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
-import Data.Lens (_2, view, (^.))
+import Data.Lens (_1, _2, view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, fromMaybe', maybe)
@@ -41,6 +41,7 @@ import Marlowe.Semantics
   , ChoiceId(..)
   , Contract(..)
   , Input
+  , MarloweParams(..)
   , Party
   , Payment
   , ReduceResult(..)
@@ -62,11 +63,13 @@ import Marlowe.Semantics
   )
 import Marlowe.Semantics (State) as Semantic
 
-mkInitialState :: Slot -> Maybe ContractNickname -> Contract -> State
-mkInitialState currentSlot contractNickname contract =
+mkInitialState
+  :: Slot -> Maybe ContractNickname -> MarloweParams -> Contract -> State
+mkInitialState currentSlot contractNickname marloweParams contract =
   { semanticState: emptyState currentSlot
   , contractNickname
   , contract
+  , marloweParams
   , history: mempty
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
@@ -76,6 +79,7 @@ restoreState :: Slot -> Maybe ContractNickname -> ContractHistory -> State
 restoreState currentSlot contractNickname history =
   let
     contract = view (_chParams <<< _2 <<< _marloweContract) history
+    marloweParams = view (_chParams <<< _1) history
     initialSemanticState = view (_chParams <<< _2 <<< _marloweState) history
     inputs = view _chHistory history
     -- Derive the initial params from the Follower Contract params
@@ -83,6 +87,7 @@ restoreState currentSlot contractNickname history =
       { semanticState: initialSemanticState
       , contractNickname
       , contract
+      , marloweParams
       , history: mempty
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout contract
@@ -95,14 +100,17 @@ restoreState currentSlot contractNickname history =
 
 -- Each contract should always have a name, if we
 -- have given a Local nickname, we use that, if not we
--- show the script address
+-- show the currency symbol
+-- TODO: SCP-3500 Show the currency symbol when we don't have a nickname
 contractName :: State -> String
-contractName { contractNickname } = maybe "Unknown-fixme-3208"
+contractName { contractNickname } = maybe "Unknown"
   ContractNickname.toString
   contractNickname
 
 nextState :: TransactionInput -> State -> State
-nextState txInput { semanticState, contract, history, contractNickname } =
+nextState
+  txInput
+  { semanticState, contract, marloweParams, history, contractNickname } =
   let
     TransactionInput { interval: SlotInterval minSlot _, inputs } = txInput
 
@@ -141,6 +149,7 @@ nextState txInput { semanticState, contract, history, contractNickname } =
     { semanticState: txOutState
     , contractNickname
     , contract: txOutContract
+    , marloweParams
     , history: Array.snoc history pastState
     , mPendingTimeouts: Nothing
     , mNextTimeout: nextTimeout txOutContract
@@ -162,6 +171,7 @@ timeoutState
   currentSlot
   { semanticState
   , contract
+  , marloweParams
   , contractNickname
   , history
   , mPendingTimeouts
@@ -237,6 +247,7 @@ timeoutState
   in
     { semanticState
     , contract
+    , marloweParams
     , contractNickname
     , history
     , mPendingTimeouts: advancedTimeouts.mPendingTimeouts

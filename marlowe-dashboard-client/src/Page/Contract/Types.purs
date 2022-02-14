@@ -55,7 +55,6 @@ type StartedState =
   -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
   , pendingTransaction :: Maybe TransactionInput
   , previousSteps :: Array PreviousStep
-  , marloweParams :: MarloweParams
   -- Which step is selected. This index is 0 based and should be between [0, previousSteps.length]
   -- (both sides inclusive). This is because the array represent the past steps and the
   -- executionState has the current state and visually we can select any one of them.

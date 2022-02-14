@@ -21,6 +21,7 @@ import Marlowe.Semantics
   , ChoiceId
   , ChosenNum
   , Contract
+  , MarloweParams(..)
   , Observation
   , Party
   , Payment
@@ -45,6 +46,7 @@ type State =
   { contractNickname :: Maybe ContractNickname
   , semanticState :: Semantic.State
   , contract :: Contract
+  , marloweParams :: MarloweParams
   , history :: Array PastState
   , mPendingTimeouts :: Maybe PendingTimeouts
   , mNextTimeout :: Maybe Slot
