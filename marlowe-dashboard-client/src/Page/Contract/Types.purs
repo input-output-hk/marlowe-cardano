@@ -30,7 +30,6 @@ import Marlowe.Semantics
   ( Accounts
   , ChoiceId
   , ChosenNum
-  , MarloweParams
   , Party
   , Payment
   , Slot
@@ -51,9 +50,6 @@ type StartingState =
 type StartedState =
   { tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
   , executionState :: Execution.State
-  -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
-  -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
-  , pendingTransaction :: Maybe TransactionInput
   , previousSteps :: Array PreviousStep
   -- Which step is selected. This index is 0 based and should be between [0, previousSteps.length]
   -- (both sides inclusive). This is because the array represent the past steps and the

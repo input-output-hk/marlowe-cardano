@@ -21,7 +21,7 @@ import Marlowe.Semantics
   , ChoiceId
   , ChosenNum
   , Contract
-  , MarloweParams(..)
+  , MarloweParams
   , Observation
   , Party
   , Payment
@@ -48,6 +48,10 @@ type State =
   , contract :: Contract
   , marloweParams :: MarloweParams
   , history :: Array PastState
+  -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
+  -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
+  , mPendingTransaction :: Maybe TransactionInput
+
   , mPendingTimeouts :: Maybe PendingTimeouts
   , mNextTimeout :: Maybe Slot
   }

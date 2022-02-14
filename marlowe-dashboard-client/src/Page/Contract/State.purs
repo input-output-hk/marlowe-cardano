@@ -86,6 +86,7 @@ import Halogen
   , tell
   , unsubscribe
   )
+import Halogen.Store.Monad (updateStore)
 import Halogen.Subscription as HS
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
@@ -104,6 +105,7 @@ import Marlowe.Execution.State
   , getActionParticipant
   , mkTx
   , nextState
+  , setPendingTransaction
   , timeoutState
   )
 import Marlowe.Execution.State (mkInitialState) as Execution
@@ -132,7 +134,6 @@ import Page.Contract.Lenses
   , _expandPayments
   , _namedActions
   , _participants
-  , _pendingTransaction
   , _previousSteps
   , _selectedStep
   , _userParties
@@ -148,6 +149,7 @@ import Page.Contract.Types
   , scrollContainerRef
   )
 import Page.Dashboard.Types (Action(..)) as Dashboard
+import Store as Store
 import Toast.Types (ajaxErrorToast, successToast)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
@@ -205,7 +207,6 @@ mkInitialState wallet currentSlot mNickname contractHistory =
         initialState =
           { tab: Tasks
           , executionState: initialExecutionState
-          , pendingTransaction: Nothing
           , previousSteps: mempty
           , selectedStep: 0
           , metadata: template.metaData
@@ -273,7 +274,6 @@ updateState
           , executionState: Execution.mkInitialState currentSlot (Just nickname)
               marloweParams
               contract
-          , pendingTransaction: Nothing
           , previousSteps: []
           , selectedStep: 0
           , metadata
@@ -290,20 +290,10 @@ updateState
     newTransactionInputs = difference transactionInputs
       previousTransactionInputs
 
-    -- If there are new transaction inputs to apply, we need to clear the `pendingTransaction`. If
-    -- we wanted to be really careful, we could check that the new transaction input matches the
-    -- pending one, but I can't see how it wouldn't (and I don't think it matters anyway).
-    mClearPendingTransaction =
-      if not $ null newTransactionInputs then
-        set _pendingTransaction Nothing
-      else
-        identity
-
     updateExecutionState = over _executionState
       (applyTransactionInputs newTransactionInputs)
   in
     state'
-      # mClearPendingTransaction
       # updateExecutionState
       # regenerateStepCards currentSlot
       # selectLastStep
@@ -364,7 +354,7 @@ handleAction _ (SetNickname nickname) =
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction { currentSlot, wallet } (ConfirmAction namedAction) =
-  withStarted \started@{ executionState } -> do
+  withStarted \{ executionState } -> do
     let
       contractInput = toInput namedAction
       { marloweParams } = executionState
@@ -378,7 +368,8 @@ handleAction { currentSlot, wallet } (ConfirmAction namedAction) =
           (Left "Error")
         addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
       Right _ -> do
-        put $ Started started { pendingTransaction = Just txInput }
+        updateStore $ Store.ModifySyncedContract marloweParams $
+          setPendingTransaction txInput
         void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult
           (Milliseconds 600.0)
           (Right "")
@@ -459,7 +450,6 @@ applyTimeout currentSlot state =
     updateExecutionState = over _executionState (timeoutState currentSlot)
   in
     state
-      # set _pendingTransaction Nothing
       # updateExecutionState
       # regenerateStepCards currentSlot
       # selectLastStep

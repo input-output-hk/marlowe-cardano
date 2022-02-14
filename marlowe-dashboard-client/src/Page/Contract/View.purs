@@ -67,7 +67,6 @@ import Page.Contract.Lenses
   , _expandPayments
   , _namedActions
   , _participants
-  , _pendingTransaction
   , _previousSteps
   , _resultingPayments
   , _selectedStep
@@ -587,8 +586,8 @@ renderCurrentStep viewInput state =
   let
     stepNumber = currentStep state
 
-    pendingTransaction = state ^. _pendingTransaction
     executionState = state ^. _executionState
+    isPendingTransaction = isJust executionState.mPendingTransaction
     contractIsClosed = isClosed executionState
   in
     [ tabBar state.tab $ Just (SelectTab stepNumber)
@@ -597,7 +596,7 @@ renderCurrentStep viewInput state =
           [ titleBar []
               [ numberedStepTitle stepNumber
               , stepStatus []
-                  $ case contractIsClosed, isJust pendingTransaction of
+                  $ case contractIsClosed, isPendingTransaction of
                       true, _ -> [ stepStatusText "Contract closed" [] ]
                       _, true -> [ stepStatusText "Awaiting confirmation" [] ]
                       _, _ ->
@@ -623,7 +622,7 @@ renderCurrentStep viewInput state =
                     balancesAtStart
 
                   atEnd =
-                    if isJust state.pendingTransaction then Just atStart
+                    if isPendingTransaction then Just atStart
                     else Nothing
                 in
                   cardContent [ "bg-gray" ]

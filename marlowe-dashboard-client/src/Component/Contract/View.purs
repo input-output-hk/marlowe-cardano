@@ -83,7 +83,7 @@ currentStepActions state =
   in
     case
       isClosed executionState,
-      isJust state.pendingTransaction,
+      isJust executionState.mPendingTransaction,
       state.namedActions
       of
       true, _, _ ->

@@ -8,7 +8,6 @@ module Page.Contract.Lenses
   , _namedActions
   , _nickname
   , _participants
-  , _pendingTransaction
   , _previousSteps
   , _resultingPayments
   , _selectedStep
@@ -52,9 +51,6 @@ _tab = prop (Proxy :: _ "tab")
 
 _executionState :: forall a r. Lens' { executionState :: a | r } a
 _executionState = prop (Proxy :: _ "executionState")
-
-_pendingTransaction :: forall a r. Lens' { pendingTransaction :: a | r } a
-_pendingTransaction = prop (Proxy :: _ "pendingTransaction")
 
 _previousSteps :: forall a r. Lens' { previousSteps :: a | r } a
 _previousSteps = prop (Proxy :: _ "previousSteps")

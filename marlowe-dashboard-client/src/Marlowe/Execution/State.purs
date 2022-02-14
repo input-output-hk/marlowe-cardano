@@ -10,6 +10,7 @@ module Marlowe.Execution.State
   , nextState
   , nextTimeout
   , restoreState
+  , setPendingTransaction
   , timeoutState
   ) where
 
@@ -41,7 +42,7 @@ import Marlowe.Semantics
   , ChoiceId(..)
   , Contract(..)
   , Input
-  , MarloweParams(..)
+  , MarloweParams
   , Party
   , Payment
   , ReduceResult(..)
@@ -71,6 +72,7 @@ mkInitialState currentSlot contractNickname marloweParams contract =
   , contract
   , marloweParams
   , history: mempty
+  , mPendingTransaction: Nothing
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
   }
@@ -89,6 +91,7 @@ restoreState currentSlot contractNickname history =
       , contract
       , marloweParams
       , history: mempty
+      , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout contract
       }
@@ -107,11 +110,15 @@ contractName { contractNickname } = maybe "Unknown"
   ContractNickname.toString
   contractNickname
 
+setPendingTransaction :: TransactionInput -> State -> State
+setPendingTransaction txInput state = state
+  { mPendingTransaction = Just txInput }
+
 nextState :: TransactionInput -> State -> State
-nextState
-  txInput
-  { semanticState, contract, marloweParams, history, contractNickname } =
+nextState txInput state =
   let
+    { semanticState, contract, marloweParams, history, contractNickname } =
+      state
     TransactionInput { interval: SlotInterval minSlot _, inputs } = txInput
 
     { txOutState, txOutContract, txOutPayments } =
@@ -138,6 +145,12 @@ nextState
         }
       _ -> InputAction
 
+    mPendingTransaction =
+      if state.mPendingTransaction == Just txInput then
+        Nothing
+      else
+        state.mPendingTransaction
+
     pastState =
       { balancesAtStart: semanticState ^. _accounts
       , action
@@ -151,6 +164,7 @@ nextState
     , contract: txOutContract
     , marloweParams
     , history: Array.snoc history pastState
+    , mPendingTransaction
     , mPendingTimeouts: Nothing
     , mNextTimeout: nextTimeout txOutContract
     }
@@ -250,6 +264,7 @@ timeoutState
     , marloweParams
     , contractNickname
     , history
+    , mPendingTransaction: Nothing
     , mPendingTimeouts: advancedTimeouts.mPendingTimeouts
     , mNextTimeout: advancedTimeouts.mNextTimeout
     }

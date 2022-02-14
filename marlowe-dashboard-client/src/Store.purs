@@ -11,6 +11,7 @@ import Data.Map (Map)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory)
+import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
@@ -19,6 +20,7 @@ import Store.Contracts
   , addFollowerContract
   , addStartingContract
   , mkContractStore
+  , modifyContract
   , modifyContractNicknames
   )
 import Store.Wallet (WalletAction, WalletStore)
@@ -71,6 +73,7 @@ data Action
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
   | AddFollowerContract Slot PlutusAppId ContractHistory
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
+  | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -99,6 +102,9 @@ reduce store = case _ of
     }
   ModifyContractNicknames f -> store
     { contracts = modifyContractNicknames f store.contracts
+    }
+  ModifySyncedContract marloweParams f -> store
+    { contracts = modifyContract marloweParams f store.contracts
     }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }

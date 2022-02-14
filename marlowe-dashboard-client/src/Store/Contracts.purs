@@ -10,6 +10,7 @@ module Store.Contracts
   , getFollowerContract
   , getRunningContracts
   , mkContractStore
+  , modifyContract
   , modifyContractNicknames
   ) where
 
@@ -20,6 +21,7 @@ import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.Lens (Lens', _1, iso, over, to, view)
+import Data.Lens.At (at)
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
   ( LocalContractNicknames
@@ -117,6 +119,14 @@ modifyContractNicknames
   -> ContractStore
   -> ContractStore
 modifyContractNicknames f = over _contractNicknames f
+
+modifyContract
+  :: MarloweParams
+  -> (Execution.State -> Execution.State)
+  -> ContractStore
+  -> ContractStore
+modifyContract marloweParams f =
+  over (_syncedContracts <<< at marloweParams) (map f)
 
 ------------------------------------------------------------
 
