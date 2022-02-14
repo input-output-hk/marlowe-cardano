@@ -75,10 +75,9 @@ timeoutString currentSlot executionState =
 currentStepActions
   :: forall m
    . MonadAff m
-  => Int
-  -> StartedState
+  => StartedState
   -> ComponentHTML Action ChildSlots m
-currentStepActions _ state =
+currentStepActions state =
   let
     executionState = state ^. _executionState
   in

@@ -609,7 +609,7 @@ renderCurrentStep viewInput state =
               ]
           , case state.tab of
               Tasks -> cardContent [ "bg-wite", "p-4" ]
-                [ currentStepActions stepNumber state ]
+                [ currentStepActions state ]
               Balances ->
                 let
                   participants = state ^. _participants

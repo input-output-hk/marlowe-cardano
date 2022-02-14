@@ -57,8 +57,7 @@ contractPreviewCard currentSlot state =
             [ classNames [ "font-semibold" ] ]
             [ text $ timeoutString currentSlot executionState ]
         ]
-    stepActions = currentStepActions (currentStep state + 1)
-      state
+    stepActions = currentStepActions state
   in
     div
       [ classNames
