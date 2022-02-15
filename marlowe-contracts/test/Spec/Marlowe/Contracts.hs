@@ -1,5 +1,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 module Spec.Marlowe.Contracts
     (tests)
 where
@@ -59,16 +60,13 @@ assertNoWarnings t  = assertBool "No warnings" $ null t
 assertClose :: Contract -> Assertion
 assertClose = assertBool "Contract is in Close" . (Close==)
 
-step :: TransactionInput -> ([TransactionWarning], [Payment], State, Contract) -> Either TransactionError ([TransactionWarning], [Payment], State, Contract)
-step i (_,_,s,c) =
-  case computeTransaction i s c of
-    Error err                   -> Left err
-    TransactionOutput w p s' c' -> Right (w, p, s', c')
+assertNoFailedTransactions :: TransactionError -> Assertion
+assertNoFailedTransactions err = assertFailure $ "Transactions are not expected to fail: " ++ show err
 
 -- |Zero-coupon Bond test
 zeroCouponBondTest :: IO ()
 zeroCouponBondTest =
-  let zcb =
+  let contract =
         zeroCouponBond
           w1Pk
           w2Pk
@@ -78,41 +76,45 @@ zeroCouponBondTest =
           (Constant 90_000_000)
           ada
           Close
-   in either left right $
-        step (TransactionInput (0, 0)     [NormalInput $ IDeposit w1Pk w1Pk ada 75_000_000]) ([], [], emptyState 0, zcb)
-    >>= step (TransactionInput (100, 110) [NormalInput $ IDeposit w1Pk w2Pk ada 90_000_000])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w,p,_,c) = do
-      assertClose c
-      assertNoWarnings w
-      assertTotalPayments w1Pk p (lovelaceValueOf 90_000_000)
+      txIn =
+        [ TransactionInput (0, 0)     [NormalInput $ IDeposit w1Pk w1Pk ada 75_000_000]
+        , TransactionInput (100, 110) [NormalInput $ IDeposit w1Pk w2Pk ada 90_000_000]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 90_000_000)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |Swap contract test
 swapContractTest :: IO ()
 swapContractTest =
-  let backSwap =
+  let contract =
         swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (Slot 100) $
         swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (Slot 200) Close
-   in either left right $
-        step (TransactionInput (0, 0)
-              [ NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000
-              , NormalInput $ IDeposit w2Pk w2Pk tok 30
-              , NormalInput $ IDeposit w2Pk w2Pk ada 10_000_000
-              , NormalInput $ IDeposit w1Pk w1Pk tok 30
-              ]) ([], [], emptyState 0, backSwap)
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w,p,_,c) = do
-      assertClose c
-      assertNoWarnings w
-      assertTotalPayments w1Pk p (lovelaceValueOf 10_000_000 <> tokValueOf 30)
-      assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000 <> tokValueOf 30)
+      txIn =
+        [ TransactionInput (0, 0)
+            [ NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000
+            , NormalInput $ IDeposit w2Pk w2Pk tok 30
+            , NormalInput $ IDeposit w2Pk w2Pk ada 10_000_000
+            , NormalInput $ IDeposit w1Pk w1Pk tok 30
+            ]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 10_000_000 <> tokValueOf 30)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 10_000_000 <> tokValueOf 30)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |American Call Option test (No exercise)
 americanCallOptionTest :: IO ()
 americanCallOptionTest =
-  let americanCall =
+  let contract =
         option
           American
           Call
@@ -122,16 +124,16 @@ americanCallOptionTest =
           (ada, Constant 10_000_000)
           (Slot 100)
           (Slot 200)
-   in either left right $
-        step (TransactionInput (0, 0) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0]) ([], [], emptyState 0, americanCall)
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p mempty
-        assertTotalPayments w2Pk p mempty
+      txIn =
+        [ TransactionInput (0, 0) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments mempty
+          assertTotalPayments w2Pk txOutPayments mempty
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |American Call Option test (Exercise)
 americanCallOptionExercisedTest :: IO ()
@@ -154,23 +156,24 @@ americanCallOptionExercisedTest =
           (Slot 10)
           Close
           americanCall
-   in either left right $
-        step (TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]) ([], [], emptyState 0, contract)
-    >>= step (TransactionInput (99, 99)   [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1])
-    >>= step (TransactionInput (101, 101) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p (tokValueOf 30)
-        assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000)
+      txIn =
+        [ TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]
+        , TransactionInput (99, 99)   [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1]
+        , TransactionInput (101, 101) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 10_000_000)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |European Call Option test (No exercise)
 europeanCallOptionTest :: IO ()
 europeanCallOptionTest =
-  let europeanCall =
+  let contract =
         option
           European
           Call
@@ -180,16 +183,16 @@ europeanCallOptionTest =
           (ada, Constant 10_000_000)
           (Slot 100)
           (Slot 200)
-   in either left right $
-        step (TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0]) ([], [], emptyState 0, europeanCall)
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p mempty
-        assertTotalPayments w2Pk p mempty
+      txIn =
+        [ TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments mempty
+          assertTotalPayments w2Pk txOutPayments mempty
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |European Call Option test (Exercise)
 europeanCallOptionExercisedTest :: IO ()
@@ -212,18 +215,19 @@ europeanCallOptionExercisedTest =
           (Slot 10) Close Close
         `both`
         europeanCall
-   in either left right $
-        step (TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]) ([], [], emptyState 0, contract)
-    >>= step (TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1])
-    >>= step (TransactionInput (102, 102) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p (tokValueOf 30)
-        assertTotalPayments w2Pk p (lovelaceValueOf 10_000_000)
+      txIn =
+        [ TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]
+        , TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1]
+        , TransactionInput (102, 102) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 10_000_000)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |Future, scenario repayment of initial margins
 futureNoChange :: IO ()
@@ -243,27 +247,23 @@ futureNoChange =
           (Slot 1)
           [] -- no margin calls
           (Slot 100) -- maturity
-   in either left right $
-        -- initial margin payments
-        step (TransactionInput (0, 0)
-                [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
-                , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000
-                ]) ([], [], emptyState 0, contract)
-        -- settlement
-    >>= step (TransactionInput (99, 99)
-                [ NormalInput $ IChoice dirRate 125_000_000
-                , NormalInput $ IChoice invRate 80_000_000
-                ])
+      txIn =
+        [ TransactionInput (0, 0)
+            [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
+            , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000 ]
+        , TransactionInput (99, 99)
+            [ NormalInput $ IChoice dirRate 125_000_000
+            , NormalInput $ IChoice invRate 80_000_000 ]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings $ filter nonZeroPay txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 8_000_000)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 8_000_000)
+        Error err ->
+          assertNoFailedTransactions err
   where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings $ filter nonZeroPay w
-        -- repayments of inital margins
-        assertTotalPayments w1Pk p (lovelaceValueOf 8_000_000)
-        assertTotalPayments w2Pk p (lovelaceValueOf 8_000_000)
-
     nonZeroPay (TransactionNonPositivePay _ _ _ i) = i /= 0
     nonZeroPay _                                   = True
 
@@ -279,25 +279,22 @@ futureNoMarginCall =
           (Slot 1)
           [] -- no margin calls
           (Slot 100) -- maturity
-   in either left right $
-        -- initial margin payments
-        step (TransactionInput (0, 0)
-                [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
-                , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000
-                ]) ([], [], emptyState 0, contract)
-        -- settlement
-    >>= step (TransactionInput (99, 99)
-                [ NormalInput $ IChoice dirRate 133_333_333
-                , NormalInput $ IChoice invRate 75_000_000
-                ])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p (lovelaceValueOf 1_333_333)
-        assertTotalPayments w2Pk p (lovelaceValueOf 14_666_667)
+      txIn =
+        [ TransactionInput (0, 0)
+            [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
+            , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000 ]
+        , TransactionInput (99, 99)
+            [ NormalInput $ IChoice dirRate 133_333_333
+            , NormalInput $ IChoice invRate 75_000_000 ]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 1_333_333)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |Future, scenario with margin call
 futureWithMarinCall :: IO ()
@@ -311,33 +308,27 @@ futureWithMarinCall =
           (Slot 1)
           [Slot 50] -- margin call
           (Slot 100) -- maturity
-   in either left right $
-        -- initial margin payments
-        step (TransactionInput (0, 0)
-                [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
-                , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000
-                ]) ([], [], emptyState 0, contract)
-        -- margin call
-    >>= step (TransactionInput (40, 40)
-                [ NormalInput $ IChoice dirRate 200_000_000
-                , NormalInput $ IChoice invRate 50_000_000
-                ])
-    >>= step (TransactionInput (42, 42)
-                [ NormalInput $ IDeposit w1Pk w1Pk ada 60_000_000
-                ])
-        -- settlement
-    >>= step (TransactionInput (99, 99)
-                [ NormalInput $ IChoice dirRate 133_333_333
-                , NormalInput $ IChoice invRate 75_000_000
-                ])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p (lovelaceValueOf 61_333_333)
-        assertTotalPayments w2Pk p (lovelaceValueOf 14_666_667)
+      txIn =
+        [ TransactionInput (0, 0)
+            [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
+            , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000 ]
+        , TransactionInput (40, 40)
+            [ NormalInput $ IChoice dirRate 200_000_000
+            , NormalInput $ IChoice invRate 50_000_000 ]
+        , TransactionInput (42, 42)
+            [ NormalInput $ IDeposit w1Pk w1Pk ada 60_000_000 ]
+        , TransactionInput (99, 99)
+            [ NormalInput $ IChoice dirRate 133_333_333
+            , NormalInput $ IChoice invRate 75_000_000 ]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_333)
+          assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |Reverse Convertible test (Exercise)
 reverseConvertibleExercisedTest :: IO ()
@@ -353,20 +344,20 @@ reverseConvertibleExercisedTest =
           (Constant 10_000_000)
           (Constant 30)
           (Constant 9_000_000)
-   in either left right $
-        step (TransactionInput (0, 0) [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]) ([], [], emptyState 0, contract)
-    >>= step (TransactionInput (99, 99) [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ])
-    >>= step (TransactionInput (100, 100)
-                [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 1
-                , NormalInput $ IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30
-                ])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p (tokValueOf 30)
+      txIn =
+        [ TransactionInput (0, 0)   [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]
+        , TransactionInput (99, 99) [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
+        , TransactionInput (100, 100)
+            [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 1
+            , NormalInput $ IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30 ]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
+        Error err ->
+          assertNoFailedTransactions err
 
 -- |Reverse Convertible test (No exercise)
 reverseConvertibleTest :: IO ()
@@ -382,14 +373,15 @@ reverseConvertibleTest =
           (Constant 10_000_000)
           (Constant 30)
           (Constant 9_000_000)
-   in either left right $
-        step (TransactionInput (0, 0) [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]) ([], [], emptyState 0, contract)
-    >>= step (TransactionInput (99, 99) [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ])
-    >>= step (TransactionInput (100, 100) [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 0 ])
-  where
-    left err = assertFailure $ "Transactions are not expected to fail: " ++ show err
-    right (w, p, _, c) =
-      do
-        assertClose c
-        assertNoWarnings w
-        assertTotalPayments w1Pk p (lovelaceValueOf 10_000_000)
+      txIn =
+        [ TransactionInput (0, 0)     [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]
+        , TransactionInput (99, 99)   [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
+        , TransactionInput (100, 100) [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 0 ]
+        ]
+   in case playTrace 0 contract txIn of
+        TransactionOutput {..} -> do
+          assertClose txOutContract
+          assertNoWarnings txOutWarnings
+          assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 10_000_000)
+        Error err ->
+          assertNoFailedTransactions err

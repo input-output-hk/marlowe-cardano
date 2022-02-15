@@ -55,7 +55,7 @@ import Language.Marlowe.Pretty (Pretty (..))
 import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
                                         Observation (..), Party, Payee (..), SlotInterval, State (..), Token (..),
-                                        Value (..), ValueId, getAction, getInputContent, inBounds)
+                                        Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
 import Ledger (POSIXTime, Slot (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val
@@ -554,6 +554,33 @@ computeTransaction tx state contract = let
             ApplyAllAmbiguousSlotIntervalError -> Error TEAmbiguousSlotIntervalError
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
+
+playTraceAux :: TransactionOutput -> [TransactionInput] -> TransactionOutput
+playTraceAux res [] = res
+playTraceAux TransactionOutput
+                { txOutWarnings = warnings
+                , txOutPayments = payments
+                , txOutState = state
+                , txOutContract = cont } (h:t) =
+    let transRes = computeTransaction h state cont
+     in case transRes of
+          TransactionOutput{..} ->
+              playTraceAux TransactionOutput
+                              { txOutPayments = payments ++ txOutPayments
+                              , txOutWarnings = warnings ++ txOutWarnings
+                              , txOutState
+                              , txOutContract
+                              } t
+          Error _ -> transRes
+playTraceAux err@(Error _) _ = err
+
+playTrace :: Slot -> Contract -> [TransactionInput] -> TransactionOutput
+playTrace sl c = playTraceAux TransactionOutput
+                                 { txOutWarnings = []
+                                 , txOutPayments = []
+                                 , txOutState = emptyState sl
+                                 , txOutContract = c
+                                 }
 
 
 -- | Calculates an upper bound for the maximum lifespan of a contract (assuming is not merkleized)
