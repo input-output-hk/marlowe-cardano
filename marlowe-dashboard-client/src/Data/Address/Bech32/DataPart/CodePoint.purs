@@ -145,3 +145,74 @@ toCodePoint = codePointFromChar <<< case _ of
   DPX -> 'x'
   DPY -> 'y'
   DPZ -> 'z'
+
+toByte :: DataPartCodePoint -> Int
+toByte = case _ of
+  DP0 -> 0x0F
+  DP2 -> 0x0A
+  DP3 -> 0x11
+  DP4 -> 0x15
+  DP5 -> 0x14
+  DP6 -> 0x1A
+  DP7 -> 0x1E
+  DP8 -> 0x07
+  DP9 -> 0x05
+  DPA -> 0x1D
+  DPC -> 0x18
+  DPD -> 0x0D
+  DPE -> 0x19
+  DPF -> 0x09
+  DPG -> 0x08
+  DPH -> 0x17
+  DPJ -> 0x12
+  DPK -> 0x16
+  DPL -> 0x1F
+  DPM -> 0x1B
+  DPN -> 0x13
+  DPP -> 0x01
+  DPQ -> 0x00
+  DPR -> 0x03
+  DPS -> 0x10
+  DPT -> 0x0B
+  DPU -> 0x1C
+  DPV -> 0x0C
+  DPW -> 0x0E
+  DPX -> 0x06
+  DPY -> 0x04
+  DPZ -> 0x02
+
+fromByte :: Int -> Maybe DataPartCodePoint
+fromByte n = case n `div` 8, n `mod` 8 of
+  0, 0 -> Just DPQ
+  0, 1 -> Just DPP
+  0, 2 -> Just DPZ
+  0, 3 -> Just DPR
+  0, 4 -> Just DPY
+  0, 5 -> Just DP9
+  0, 6 -> Just DPX
+  0, 7 -> Just DP8
+  1, 0 -> Just DPG
+  1, 1 -> Just DPF
+  1, 2 -> Just DP2
+  1, 3 -> Just DPT
+  1, 4 -> Just DPV
+  1, 5 -> Just DPD
+  1, 6 -> Just DPW
+  1, 7 -> Just DP0
+  2, 0 -> Just DPS
+  2, 1 -> Just DP3
+  2, 2 -> Just DPJ
+  2, 3 -> Just DPN
+  2, 4 -> Just DP5
+  2, 5 -> Just DP4
+  2, 6 -> Just DPK
+  2, 7 -> Just DPH
+  3, 0 -> Just DPC
+  3, 1 -> Just DPE
+  3, 2 -> Just DP6
+  3, 3 -> Just DPM
+  3, 4 -> Just DPU
+  3, 5 -> Just DPA
+  3, 6 -> Just DP7
+  3, 7 -> Just DPL
+  _, _ -> Nothing
