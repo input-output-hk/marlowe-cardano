@@ -443,6 +443,7 @@ handleAction (Receive input) = do
             (wallet ^. Connected._walletNickname)
               /\ (wallet ^. Connected._walletId)
               /\ (wallet ^. Connected._pubKeyHash)
+              /\ (wallet ^. Connected._address)
         )
     $ store ^? _wallet <<< _connectedWallet
   let

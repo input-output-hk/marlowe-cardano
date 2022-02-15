@@ -13,11 +13,9 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
 import Control.Monad.Reader (class MonadAsk)
-import Data.Address as A
 import Data.AddressBook as AddressBook
 import Data.Lens (assign, view)
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
-import Data.Wallet (_pubKeyHash, _walletNickname)
+import Data.Wallet (_address, _walletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_)
@@ -85,12 +83,9 @@ handleAction (ConnectWallet walletDetails) = do
   assign _enteringDashboardState true
   let
     walletNickname = view _walletNickname walletDetails
-    pubKeyHash = view
-      (_pubKeyHash <<< _PaymentPubKeyHash)
-      walletDetails
+    address = view _address walletDetails
 
-  modifyAddressBook_
-    (AddressBook.insert walletNickname $ A.fromPubKeyHash pubKeyHash)
+  modifyAddressBook_ $ AddressBook.insert walletNickname address
   updateStore $ Store.Wallet $ WalletStore.OnConnect walletDetails
 
 handleAction (OnRestoreWalletMsg msg) = case msg of

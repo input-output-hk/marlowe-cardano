@@ -1,7 +1,6 @@
 module Data.Address
   ( Address
   , AddressError(..)
-  , empty
   , fromString
   , fromPubKeyHash
   , toPubKeyHash
@@ -69,9 +68,6 @@ instance DecodeJson Address where
     lmap (const $ TypeMismatch "Address") <<< fromString
       <=< decodeJson
 
-empty :: Address
-empty = Address "00000000000000000000000000000000000000000000000000000000"
-
 -- TODO right now Addresses and pub key hashes are the same... this is
 -- obviously not what we want. This should bech32 encode it and somehow combine
 -- a staking key hash and payment key hash...
@@ -87,8 +83,7 @@ toPubKeyHash = PKH.fromString <<< toString
 fromString :: String -> Either AddressError Address
 fromString s
   | String.null s = Left Empty
-  | String.length s == 56 = Right $ Address s
-  | otherwise = Left Invalid
+  | otherwise = Right $ Address s
 
 toString :: Address -> String
 toString (Address s) = s

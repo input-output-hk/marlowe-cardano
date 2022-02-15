@@ -1,6 +1,7 @@
 module Contrib.Data.Unfoldable where
 
 import Prelude
+
 import Data.Foldable (length)
 import Data.FoldableWithIndex (class FoldableWithIndex, foldrWithIndex)
 import Data.List (List(..), uncons) as List

@@ -42,9 +42,16 @@ instance Aeson.FromJSON WalletName where
           Left e           -> parseFail $ getTextDecodingError e
           Right walletName -> pure $ WalletName walletName
 
+newtype Address = Address { unAddress :: Text }
+    deriving stock (Eq, Show)
+
+instance Aeson.ToJSON Address where
+    toJSON = Aeson.toJSON . unAddress
+
 data WalletInfo = WalletInfo
     { walletId   :: WalletId
     , pubKeyHash :: PaymentPubKeyHash
+    , address    :: Address
     }
     deriving stock (Generic, Eq, Show)
-    deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
+    deriving anyclass (Aeson.ToJSON)

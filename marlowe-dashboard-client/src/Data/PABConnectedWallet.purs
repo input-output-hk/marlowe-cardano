@@ -4,6 +4,7 @@ module Data.PABConnectedWallet
   , _companionAppId
   , _marloweAppId
   , _pubKeyHash
+  , _address
   , _syncStatus
   , _walletId
   , _walletNickname
@@ -12,6 +13,7 @@ module Data.PABConnectedWallet
 
 import Prologue
 
+import Data.Address (Address)
 import Data.Lens (Lens', iso)
 import Data.Lens.Record (prop)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
@@ -69,3 +71,6 @@ _walletId = _Wallet <<< Wallet._walletId
 
 _pubKeyHash :: Lens' PABConnectedWallet PaymentPubKeyHash
 _pubKeyHash = _Wallet <<< Wallet._pubKeyHash
+
+_address :: Lens' PABConnectedWallet Address
+_address = _Wallet <<< Wallet._address

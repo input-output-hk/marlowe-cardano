@@ -27,12 +27,11 @@ import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
+  , _address
   , _assets
-  , _pubKeyHash
   , _syncStatus
   , _walletNickname
   )
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
 import Data.Tuple.Nested ((/\))
 import Data.Wallet (SyncStatus(..))
@@ -673,8 +672,7 @@ currentWalletCard wallet =
   let
     walletNickname = view _walletNickname wallet
 
-    address = view (_pubKeyHash <<< _PaymentPubKeyHash)
-      wallet
+    address = view _address wallet
 
     assets = view _assets wallet
 
@@ -702,7 +700,7 @@ currentWalletCard wallet =
               [ classNames [ "font-semibold", "text-lg" ] ]
               [ text $ WN.toString walletNickname ]
           , copyAddress <$> Address.render
-              (Address.defaultInput $ A.fromPubKeyHash address)
+              (Address.defaultInput address)
           , div_
               [ h4
                   [ classNames [ "font-semibold" ] ]

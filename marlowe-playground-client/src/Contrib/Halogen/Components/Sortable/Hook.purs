@@ -9,7 +9,7 @@ import Contrib.Halogen.Components.Sortable
   , initialState
   , nextVersion
   ) as Sortable
-import Contrib.Halogen.Components.Sortable (OrderingVersion, GenDragHandlers)
+import Contrib.Halogen.Components.Sortable (GenDragHandlers, OrderingVersion)
 import Data.List.Infinite (unfold) as Infinite
 import Data.Maybe (Maybe(..), isJust)
 import Data.Tuple.Nested ((/\))

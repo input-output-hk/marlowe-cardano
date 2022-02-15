@@ -15,6 +15,7 @@ import Prologue
 
 import AppM (AppM)
 import Control.Monad.Except (lift)
+import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
@@ -62,7 +63,8 @@ class
     -> m LocalContractNicknames
   -- Wallet
   updateWallet
-    :: Maybe (WalletNickname /\ WalletId /\ PaymentPubKeyHash) -> m Unit
+    :: Maybe (WalletNickname /\ WalletId /\ PaymentPubKeyHash /\ Address)
+    -> m Unit
   getWallet :: m (Maybe WalletDetails)
 
 modifyAddressBook_
@@ -119,10 +121,10 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       walletLocalStorageKey
     pure do
       walletJson <- mWalletJson
-      walletNickName /\ walletId /\ pubKeyHash <- hush $ parseDecodeJson
-        walletJson
+      walletNickName /\ walletId /\ pubKeyHash /\ address <-
+        hush $ parseDecodeJson walletJson
       let
-        walletInfo = WalletInfo { walletId, pubKeyHash }
+        walletInfo = WalletInfo { walletId, pubKeyHash, address }
       pure $ mkWalletDetails walletNickName walletInfo
 
 instance manageMarloweStorageHalogenM ::
