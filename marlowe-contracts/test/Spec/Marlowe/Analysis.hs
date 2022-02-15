@@ -10,8 +10,9 @@ module Spec.Marlowe.Analysis
 where
 
 import Data.Maybe (isJust)
-import Language.Marlowe
+import qualified Language.Marlowe as C
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
+import Language.Marlowe.Extended
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.Swap
 import Test.Tasty
@@ -26,20 +27,21 @@ tests = testGroup "Marlowe Contract"
     , testCase "Option test" optionTest
     ]
 
-hasWarnings :: Contract -> IO Bool
-hasWarnings contract = do
+hasWarnings :: Maybe C.Contract -> IO Bool
+hasWarnings (Just contract) = do
   result <- warningsTrace contract
   case result of
     Left errDesc         -> assertFailure ("Analysis failed: " ++ show errDesc)
     Right counterExample -> return $ isJust counterExample
+hasWarnings Nothing = assertFailure "Contract conversion failed"
 
 testNoWarnings :: Contract -> Assertion
 testNoWarnings contract =
-  assertBool "Has no warnings" . not =<< hasWarnings contract
+  assertBool "Has no warnings" . not =<< hasWarnings (toCore contract)
 
 testExpectedWarnings :: Contract -> Assertion
 testExpectedWarnings contract =
-  assertBool "Has warnings" =<< hasWarnings contract
+  assertBool "Has warnings" =<< hasWarnings (toCore contract)
 
 partyA, partyB :: Party
 partyA = Role "a"
