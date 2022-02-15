@@ -38,7 +38,7 @@ import Data.Array (filter) as Array
 import Data.Bifunctor (lmap)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
-import Data.Maybe (maybe')
+import Data.Maybe (fromMaybe', maybe')
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _companionAppId
@@ -54,10 +54,12 @@ import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
+import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
-import Marlowe.Client (ContractHistory)
+import Marlowe.Client (ContractHistory, getContract)
+import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
@@ -88,6 +90,7 @@ class
   followContract
     :: PABConnectedWallet
     -> MarloweParams
+    -- FIXME-3208: Change error type
     -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
   createContract
     :: PABConnectedWallet
@@ -144,7 +147,15 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           $ lmap Right
           $ decodeJson
           $ observableStateJson
+
+      let
+        contract = getContract contractHistory
+        mMetadata = _.metaData <$> findTemplate contract
+      metadata <- pure $ fromMaybe'
+        (\_ -> unsafeThrow "FIXME-3208 cant find metadata")
+        mMetadata
       lift $ updateStore $ Store.AddFollowerContract currentSlot followAppId
+        metadata
         contractHistory
       pure $ followAppId /\ contractHistory
   -- "create" a Marlowe contract on the blockchain

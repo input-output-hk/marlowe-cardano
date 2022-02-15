@@ -57,7 +57,6 @@ type StartedState =
   -- TODO: fix primitive obsession - maybe a zipper is a better representation
   -- than an index + the execution state?
   , selectedStep :: Int
-  , metadata :: MetaData
   , participants :: Map Party (Maybe WalletNickname)
   -- These are the roles and PK's that the "logged-in" user has in this contract.
   , userParties :: Set Party

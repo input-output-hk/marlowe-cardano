@@ -198,18 +198,19 @@ mkInitialState wallet currentSlot mNickname contractHistory =
     contract = view _marloweContract marloweData
     mTemplate = findTemplate contract
     minSlot = view (_marloweState <<< _minSlot) marloweData
-    initialExecutionState = Execution.mkInitialState minSlot mNickname
-      marloweParams
-      contract
+
   in
     flip map mTemplate \template ->
       let
+        initialExecutionState = Execution.mkInitialState minSlot mNickname
+          marloweParams
+          template.metaData
+          contract
         initialState =
           { tab: Tasks
           , executionState: initialExecutionState
           , previousSteps: mempty
           , selectedStep: 0
-          , metadata: template.metaData
           , participants: getParticipants contract
           , userParties: getUserParties wallet marloweParams
           , namedActions: mempty
@@ -273,10 +274,10 @@ updateState
           { tab: Tasks
           , executionState: Execution.mkInitialState currentSlot (Just nickname)
               marloweParams
+              metadata
               contract
           , previousSteps: []
           , selectedStep: 0
-          , metadata
           , participants
           , userParties: getUserParties wallet marloweParams
           , namedActions: []

@@ -36,6 +36,7 @@ import Marlowe.Execution.Types
   , State
   , TimeoutInfo
   )
+import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( Accounts
   , Action(..)
@@ -66,11 +67,17 @@ import Marlowe.Semantics
 import Marlowe.Semantics (State) as Semantic
 
 mkInitialState
-  :: Slot -> Maybe ContractNickname -> MarloweParams -> Contract -> State
-mkInitialState currentSlot contractNickname marloweParams contract =
+  :: Slot
+  -> Maybe ContractNickname
+  -> MarloweParams
+  -> MetaData
+  -> Contract
+  -> State
+mkInitialState currentSlot contractNickname marloweParams metadata contract =
   { semanticState: emptyState currentSlot
   , contractNickname
   , contract
+  , metadata
   , marloweParams
   , history: mempty
   , mPendingTransaction: Nothing
@@ -78,8 +85,9 @@ mkInitialState currentSlot contractNickname marloweParams contract =
   , mNextTimeout: nextTimeout contract
   }
 
-restoreState :: Slot -> Maybe ContractNickname -> ContractHistory -> State
-restoreState currentSlot contractNickname history =
+restoreState
+  :: Slot -> Maybe ContractNickname -> MetaData -> ContractHistory -> State
+restoreState currentSlot contractNickname metadata history =
   let
     contract = view (_chParams <<< _2 <<< _marloweContract) history
     marloweParams = view (_chParams <<< _1) history
@@ -90,6 +98,7 @@ restoreState currentSlot contractNickname history =
       { semanticState: initialSemanticState
       , contractNickname
       , contract
+      , metadata
       , marloweParams
       , history: mempty
       , mPendingTransaction: Nothing
@@ -121,7 +130,7 @@ setPendingTransaction txInput state = state
 nextState :: TransactionInput -> State -> State
 nextState txInput state =
   let
-    { semanticState, contract, marloweParams, history, contractNickname } =
+    { semanticState, contract, history } =
       state
     TransactionInput { interval: SlotInterval minSlot _, inputs } = txInput
 
@@ -163,15 +172,14 @@ nextState txInput state =
       , resultingPayments: txOutPayments
       }
   in
-    { semanticState: txOutState
-    , contractNickname
-    , contract: txOutContract
-    , marloweParams
-    , history: Array.snoc history pastState
-    , mPendingTransaction
-    , mPendingTimeouts: Nothing
-    , mNextTimeout: nextTimeout txOutContract
-    }
+    state
+      { semanticState = txOutState
+      , contract = txOutContract
+      , history = Array.snoc history pastState
+      , mPendingTransaction = mPendingTransaction
+      , mPendingTimeouts = Nothing
+      , mNextTimeout = nextTimeout txOutContract
+      }
 
 nextTimeout :: Contract -> Maybe Slot
 nextTimeout = timeouts >>> \(Timeouts { minTime }) -> minTime
@@ -187,15 +195,13 @@ mkTx currentSlot contract inputs =
 timeoutState :: Slot -> State -> State
 timeoutState
   currentSlot
-  { semanticState
-  , contract
-  , marloweParams
-  , contractNickname
-  , history
-  , mPendingTimeouts
-  , mNextTimeout
-  } =
+  state =
   let
+    { semanticState
+    , contract
+    , mPendingTimeouts
+    , mNextTimeout
+    } = state
     -- We start of by getting a PendingTimeout structure from the execution state (because the
     -- contract could already have some timeouts that were "advanced")
     { continuation, timeouts } =
@@ -263,15 +269,11 @@ timeoutState
       continuation.state
       continuation.contract
   in
-    { semanticState
-    , contract
-    , marloweParams
-    , contractNickname
-    , history
-    , mPendingTransaction: Nothing
-    , mPendingTimeouts: advancedTimeouts.mPendingTimeouts
-    , mNextTimeout: advancedTimeouts.mNextTimeout
-    }
+    state
+      { mPendingTransaction = Nothing
+      , mPendingTimeouts = advancedTimeouts.mPendingTimeouts
+      , mNextTimeout = advancedTimeouts.mNextTimeout
+      }
 
 ------------------------------------------------------------
 isClosed :: State -> Boolean

@@ -253,7 +253,7 @@ renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
 
     isActiveParticipant = Set.member party userParties
 
-    metadata = state ^. _metadata
+    metadata = state ^. (_executionState <<< _metadata)
 
     -- NOTE': We could eventually add an heuristic that if the difference between min and max is less
     --        than 10 elements, we could show a `select` instead of a input[number]

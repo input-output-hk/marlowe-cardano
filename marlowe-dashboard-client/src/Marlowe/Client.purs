@@ -13,11 +13,17 @@ import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Generic.Rep (class Generic)
-import Data.Lens (Lens')
+import Data.Lens (Lens', _2, view)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Newtype (class Newtype, unwrap)
-import Marlowe.Semantics (MarloweData, MarloweParams, TransactionInput)
+import Marlowe.Semantics
+  ( Contract
+  , MarloweData
+  , MarloweParams
+  , TransactionInput
+  , _marloweContract
+  )
 import Plutus.V1.Ledger.Address (Address)
 import Type.Proxy (Proxy(..))
 
@@ -62,3 +68,6 @@ _chHistory = _Newtype <<< prop (Proxy :: _ "chHistory")
 
 _chAddress :: Lens' ContractHistory Address
 _chAddress = _Newtype <<< prop (Proxy :: _ "chAddress")
+
+getContract :: ContractHistory -> Contract
+getContract = view $ _chParams <<< _2 <<< _marloweContract

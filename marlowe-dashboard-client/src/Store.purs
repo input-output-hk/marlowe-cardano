@@ -71,7 +71,7 @@ data Action
   | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
   -- Contract
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
-  | AddFollowerContract Slot PlutusAppId ContractHistory
+  | AddFollowerContract Slot PlutusAppId MetaData ContractHistory
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   -- Address book
@@ -96,8 +96,8 @@ reduce store = case _ of
     { contracts = addStartingContract startingContractInfo
         store.contracts
     }
-  AddFollowerContract currentSlot followerId history -> store
-    { contracts = addFollowerContract currentSlot followerId history
+  AddFollowerContract currentSlot followerId metadata history -> store
+    { contracts = addFollowerContract currentSlot followerId metadata history
         store.contracts
     }
   ModifyContractNicknames f -> store

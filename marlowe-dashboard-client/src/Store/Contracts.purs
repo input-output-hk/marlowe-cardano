@@ -101,16 +101,17 @@ addStartingContract (reqId /\ contractNickname /\ metadata) =
 addFollowerContract
   :: Slot
   -> PlutusAppId
+  -> MetaData
   -> ContractHistory
   -> ContractStore
   -> ContractStore
-addFollowerContract currentSlot followerId history store =
+addFollowerContract currentSlot followerId metadata history store =
   let
     marloweParams = view (_chParams <<< _1) history
     mContractNickname = getContractNickname marloweParams store
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams followerId
     updateSyncedContracts = over _syncedContracts $ Map.insert marloweParams
-      $ Execution.restoreState currentSlot mContractNickname history
+      $ Execution.restoreState currentSlot mContractNickname metadata history
   in
     updateIndexes $ updateSyncedContracts store
 

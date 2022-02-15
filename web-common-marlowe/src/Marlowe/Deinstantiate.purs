@@ -120,6 +120,7 @@ instance isInstanceOfSlotTimeout :: IsInstanceOf S.Slot EM.Timeout where
 instance isInstanceOfContract :: IsInstanceOf S.Contract EM.Contract where
   isInstance a b = genericIsInstanceOf a b
 
+-- TODO: As part of SCP-3497 remove this and use another way to share the contract metadata
 findTemplate :: S.Contract -> Maybe ContractTemplate
 findTemplate contract =
   case

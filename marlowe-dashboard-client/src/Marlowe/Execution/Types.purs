@@ -14,6 +14,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.ContractNickname (ContractNickname)
 import Data.List (List)
 import Data.Map (Map)
+import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( AccountId
   , Accounts
@@ -46,6 +47,7 @@ type State =
   { contractNickname :: Maybe ContractNickname
   , semanticState :: Semantic.State
   , contract :: Contract
+  , metadata :: MetaData
   , marloweParams :: MarloweParams
   , history :: Array PastState
   -- When the user submits a transaction, we save it here until we get confirmation from the PAB and

@@ -86,7 +86,8 @@ import MainFrame.Types
   , WebSocketStatus(..)
   )
 import MainFrame.View (render)
-import Marlowe.Client (ContractHistory, _chParams)
+import Marlowe.Client (ContractHistory, _chParams, getContract)
+import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams(..))
 import MarloweContract (MarloweContract(..))
@@ -568,8 +569,15 @@ enterDashboardState disconnectedWallet = do
           currentSlot <- use _currentSlot
           for_ followerApps \(followerAppId /\ contractHistory) -> do
             subscribeToPlutusApp followerAppId
-            updateStore $ Store.AddFollowerContract currentSlot followerAppId
-              contractHistory
+            let
+              contract = getContract contractHistory
+              mMetadata = _.metaData <$> findTemplate contract
+            for_ mMetadata \metadata ->
+              updateStore $ Store.AddFollowerContract
+                currentSlot
+                followerAppId
+                metadata
+                contractHistory
           updateStore $ Store.Wallet $ Wallet.OnConnected connectedWallet
 
 ------------------------------------------------------------

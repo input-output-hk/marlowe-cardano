@@ -11,17 +11,14 @@ module Page.Contract.Lenses
   , _previousSteps
   , _resultingPayments
   , _selectedStep
-  , _stateMetadata
   , _tab
   , _userParties
   ) where
 
 import Prologue
 
-import Data.Lens (Lens', Prism', lens', prism')
+import Data.Lens (Lens', Prism', prism')
 import Data.Lens.Record (prop)
-import Data.Tuple.Nested ((/\))
-import Marlowe.Extended.Metadata (MetaData)
 import Page.Contract.Types (StartedState, StartingState, State(..))
 import Type.Proxy (Proxy(..))
 
@@ -63,13 +60,6 @@ _selectedStep = prop (Proxy :: _ "selectedStep")
 
 _metadata :: forall a r. Lens' { metadata :: a | r } a
 _metadata = prop (Proxy :: _ "metadata")
-
-_stateMetadata :: Lens' State MetaData
-_stateMetadata = lens' go
-  where
-  go (Starting s) = s.metadata /\ Starting <<< s { metadata = _ }
-
-  go (Started s) = s.metadata /\ Started <<< s { metadata = _ }
 
 _participants :: forall a r. Lens' { participants :: a | r } a
 _participants = prop (Proxy :: _ "participants")
