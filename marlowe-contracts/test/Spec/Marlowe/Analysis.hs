@@ -9,8 +9,7 @@
 module Spec.Marlowe.Analysis
 where
 
-import Data.Either (isRight)
-import Data.Maybe (isJust, isNothing)
+import Data.Maybe (isJust)
 import Language.Marlowe
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Marlowe.Contracts.Options
@@ -31,12 +30,12 @@ hasWarnings :: Contract -> IO Bool
 hasWarnings contract = do
   result <- warningsTrace contract
   case result of
-    Left errDesc -> assertFailure ("Analysis failed: " ++ show errDesc)
+    Left errDesc         -> assertFailure ("Analysis failed: " ++ show errDesc)
     Right counterExample -> return $ isJust counterExample
 
 testNoWarnings :: Contract -> Assertion
 testNoWarnings contract =
-  assertBool "Has no warnings" =<< not <$> hasWarnings contract
+  assertBool "Has no warnings" . not =<< hasWarnings contract
 
 testExpectedWarnings :: Contract -> Assertion
 testExpectedWarnings contract =
