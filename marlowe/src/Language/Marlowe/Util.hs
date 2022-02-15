@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Language.Marlowe.Util (ada, addAccountsDiff, both, emptyAccountsDiff, extractNonMerkleizedContractRoles,
+module Language.Marlowe.Util (ada, addAccountsDiff, emptyAccountsDiff, extractNonMerkleizedContractRoles,
                               foldMapNonMerkleizedContract, foldMapContract, getAccountsDiff, isEmptyAccountsDiff,
                               merkleizedCase) where
 import Data.List (foldl')
@@ -11,7 +11,6 @@ import qualified Data.Set as Set
 import Data.String
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
-import Ledger (Slot (..))
 import Ledger.Ada (adaSymbol, adaToken)
 import Ledger.Scripts (dataHash)
 import qualified Ledger.Value as Val
@@ -119,25 +118,6 @@ extractNonMerkleizedContractRoles = foldMapNonMerkleizedContract extract extract
     fromPayee (Party party)   = fromParty party
     fromPayee (Account party) = fromParty party
 
-advanceTillWhenAndThen :: Contract -> (Contract -> Contract) -> Contract
-advanceTillWhenAndThen Close f                      = f Close
-advanceTillWhenAndThen w@(When _ _ _) f             = f w
-advanceTillWhenAndThen (Pay accId p tok val cont) f = Pay accId p tok val (f cont)
-advanceTillWhenAndThen (If obs cont1 cont2) f       = If obs (f cont1) (f cont2)
-advanceTillWhenAndThen (Let vId val cont) f         = Let vId val (f cont)
-advanceTillWhenAndThen (Assert obs cont) f          = Assert obs (f cont)
-
-both :: Contract -> Contract -> Contract
-both Close b = b
-both a Close = a
-both a@(When cases1 (Slot timeout1) cont1) b@(When cases2 (Slot timeout2) cont2)
-  = When ([Case a1 (both c1 b) | Case a1 c1 <- cases1] ++
-          [Case a2 (both a c2) | Case a2 c2 <- cases2])
-         (Slot (min timeout1 timeout2))
-         (both (if timeout1 > timeout2 then a else cont1)
-               (if timeout2 > timeout1 then b else cont2))
-both a@(When _ _ _) b = advanceTillWhenAndThen b (both a)
-both a b = advanceTillWhenAndThen a (`both` b)
 
 merkleizedCase :: Action -> Contract -> Case Contract
 merkleizedCase action continuation = let

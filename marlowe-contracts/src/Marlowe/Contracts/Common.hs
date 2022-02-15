@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Marlowe.Contracts.Common where
 
-import Language.Marlowe
+import Language.Marlowe.Extended
 
 -- |Role for oracle
 oracle :: Party
@@ -35,11 +35,11 @@ waitUntil = When []
 
 -- |Pay
 pay ::
-     Party                      -- ^ Payer
-  -> Party                      -- ^ Payee
-  -> (Token, Value Observation) -- ^ Token and Value
-  -> Contract                   -- ^ Continuation Contract
-  -> Contract                   -- ^ Combined Contract
+     Party          -- ^ Payer
+  -> Party          -- ^ Payee
+  -> (Token, Value) -- ^ Token and Value
+  -> Contract       -- ^ Continuation Contract
+  -> Contract       -- ^ Combined Contract
 pay from to (token, value) =
   Pay
     from
@@ -49,13 +49,13 @@ pay from to (token, value) =
 
 -- |Deposit
 deposit ::
-     Party                      -- ^ Party to receive the deposit
-  -> Party                      -- ^ Party that deposits
-  -> (Token, Value Observation) -- ^ Token and Value
-  -> Timeout                    -- ^ Timeout for deposit
-  -> Contract                   -- ^ Continuation Contract in case of timeout of deposit
-  -> Contract                   -- ^ Continuation Contract after deposit
-  -> Contract                   -- ^ Combined Contract
+     Party          -- ^ Party to receive the deposit
+  -> Party          -- ^ Party that deposits
+  -> (Token, Value) -- ^ Token and Value
+  -> Timeout        -- ^ Timeout for deposit
+  -> Contract       -- ^ Continuation Contract in case of timeout of deposit
+  -> Contract       -- ^ Continuation Contract after deposit
+  -> Contract       -- ^ Combined Contract
 deposit to from (token, value) timeout timeoutContinuation continuation =
   When
     [ Case
@@ -67,13 +67,13 @@ deposit to from (token, value) timeout timeoutContinuation continuation =
 
 -- |Transfer, i.e. Deposit and Pay
 transfer ::
-     Party                      -- ^ Payer
-  -> Party                      -- ^ Payee
-  -> (Token, Value Observation) -- ^ Token and Value
-  -> Timeout                    -- ^ Timeout for transfer
-  -> Contract                   -- ^ Continuation Contract in case of timeout of deposit
-  -> Contract                   -- ^ Continuation Contract
-  -> Contract                   -- ^ Combined Contract
+     Party          -- ^ Payer
+  -> Party          -- ^ Payee
+  -> (Token, Value) -- ^ Token and Value
+  -> Timeout        -- ^ Timeout for transfer
+  -> Contract       -- ^ Continuation Contract in case of timeout of deposit
+  -> Contract       -- ^ Continuation Contract
+  -> Contract       -- ^ Combined Contract
 transfer from to tokenValue timeout timeoutContinuation continuation =
     deposit from from tokenValue timeout timeoutContinuation
   $ pay from to tokenValue continuation

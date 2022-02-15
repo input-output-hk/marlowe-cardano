@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.StructuredProducts where
 
-import Language.Marlowe
+import Language.Marlowe.Extended
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.ZeroCouponBond
 
@@ -68,15 +68,15 @@ import Marlowe.Contracts.ZeroCouponBond
 -- from selling the option, in the example: @Underlying + 100@
 --
 reverseConvertible ::
-     Party             -- ^ Investor
-  -> Timeout           -- ^ Initial fixing
-  -> Timeout           -- ^ Maturity
-  -> Timeout           -- ^ Settlement date
-  -> Token             -- ^ Currency
-  -> Token             -- ^ Underlying
-  -> Value Observation -- ^ Strike
-  -> Value Observation -- ^ Ratio
-  -> Value Observation -- ^ Issue Price
+     Party   -- ^ Investor
+  -> Timeout -- ^ Initial fixing
+  -> Timeout -- ^ Maturity
+  -> Timeout -- ^ Settlement date
+  -> Token   -- ^ Currency
+  -> Token   -- ^ Underlying
+  -> Value   -- ^ Strike
+  -> Value   -- ^ Ratio
+  -> Value   -- ^ Issue Price
   -> Contract          -- ^ Reverse Convertible Contract
 reverseConvertible investor fixing maturity settlement currency underlying strike ratio issuePrice =
   zcb `both` shortCall
