@@ -60,7 +60,8 @@ maintenanceMarginCalls ::
   -> [Timeout]         -- ^ Call dates
   -> Contract          -- ^ Continuation contract
   -> Contract          -- ^ Composed contract
-maintenanceMarginCalls buyer seller forwardPrice = flip $ foldl updateMarginAccounts
+maintenanceMarginCalls buyer seller forwardPrice callDates cont =
+    foldl updateMarginAccounts cont callDates
   where
     updateMarginAccounts :: Contract -> Timeout -> Contract
     updateMarginAccounts continuation timeout =
