@@ -5,7 +5,7 @@ module Marlowe.Contracts.Futures
 where
 
 import Data.String (IsString (..))
-import Language.Marlowe
+import Language.Marlowe.Extended
 import Marlowe.Contracts.Common
 
 -- |Future on the exchange rate of ADA/USD
@@ -26,14 +26,14 @@ import Marlowe.Contracts.Common
 -- An oracle is used to get the exchange rate ADA/USD. As it is
 -- implemented this currently works only in the Marlowe Playground.
 future ::
-     Party             -- ^ Buyer
-  -> Party             -- ^ Seller
-  -> Value Observation -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
-  -> Value Observation -- ^ Initial margin requirements (in Lovelace)
-  -> Timeout           -- ^ Initial margin setup timout
-  -> [Timeout]         -- ^ Margin call dates
-  -> Timeout           -- ^ Delivery date
-  -> Contract          -- ^ Future contract
+     Party     -- ^ Buyer
+  -> Party     -- ^ Seller
+  -> Value     -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
+  -> Value     -- ^ Initial margin requirements (in Lovelace)
+  -> Timeout   -- ^ Initial margin setup timout
+  -> [Timeout] -- ^ Margin call dates
+  -> Timeout   -- ^ Delivery date
+  -> Contract  -- ^ Future contract
 future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate =
     depositInitialMargin buyer seller initialMargin initialFixing
   $ maintenanceMarginCalls buyer seller forwardPrice callDates
@@ -42,24 +42,24 @@ future buyer seller forwardPrice initialMargin initialFixing callDates deliveryD
 
 -- |Initial deposits into margin accounts
 depositInitialMargin ::
-     Party             -- ^ Buyer
-  -> Party             -- ^ Seller
-  -> Value Observation -- ^ Forward price
-  -> Timeout           -- ^ Initial margin call
-  -> Contract          -- ^ Continuation contract
-  -> Contract          -- ^ Composed contract
+     Party    -- ^ Buyer
+  -> Party    -- ^ Seller
+  -> Value    -- ^ Forward price
+  -> Timeout  -- ^ Initial margin call
+  -> Contract -- ^ Continuation contract
+  -> Contract -- ^ Composed contract
 depositInitialMargin buyer seller initalMargin initialFixing continuation =
     deposit buyer buyer (ada, initalMargin) initialFixing Close
   $ deposit seller seller (ada, initalMargin) initialFixing Close continuation
 
 -- |Maintenance of the margin accounts
 maintenanceMarginCalls ::
-     Party             -- ^ Buyer
-  -> Party             -- ^ Seller
-  -> Value Observation -- ^ Forward price
-  -> [Timeout]         -- ^ Call dates
-  -> Contract          -- ^ Continuation contract
-  -> Contract          -- ^ Composed contract
+     Party     -- ^ Buyer
+  -> Party     -- ^ Seller
+  -> Value     -- ^ Forward price
+  -> [Timeout] -- ^ Call dates
+  -> Contract  -- ^ Continuation contract
+  -> Contract  -- ^ Composed contract
 maintenanceMarginCalls buyer seller forwardPrice callDates cont =
     foldl updateMarginAccounts cont callDates
   where
@@ -81,25 +81,25 @@ maintenanceMarginCalls buyer seller forwardPrice callDates cont =
              (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
              (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
-    updateMarginAccount :: Party -> Value Observation -> Timeout -> Contract -> Contract -> Contract
+    updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
       If (ValueGT (AvailableMoney party ada) value)
         continuation
         (deposit party party (ada, value) timeout liquidation continuation)
 
-toValueId :: String -> Slot -> ValueId
-toValueId label timeout = fromString $ label ++ "@" ++ (show $ getSlot timeout)
+toValueId :: String -> Timeout -> ValueId
+toValueId label timeout = fromString $ label ++ "@" ++ show timeout
 
 -- |Settlement of the Future contract
 -- At delivery, if spot price is bigger than forward the seller transfers
 -- the difference to the buyer and vice versa
 settlement ::
-     Party             -- ^ Buyer
-  -> Party             -- ^ Seller
-  -> Value Observation -- ^ Forward price
-  -> Timeout           -- ^ Delivery date
-  -> Contract          -- ^ Continuation contract
-  -> Contract          -- ^ Composed contract
+     Party    -- ^ Buyer
+  -> Party    -- ^ Seller
+  -> Value    -- ^ Forward price
+  -> Timeout  -- ^ Delivery date
+  -> Contract -- ^ Continuation contract
+  -> Contract -- ^ Composed contract
 settlement buyer seller forwardPrice deliveryDate continuation =
   let invId = toValueId "inv-spot" deliveryDate
       dirId = toValueId "dir-spot" deliveryDate
@@ -117,6 +117,6 @@ settlement buyer seller forwardPrice deliveryDate continuation =
        (pay buyer seller (ada, NegValue amount) continuation)
 
 -- |Constants
-scale, contractSize :: Value Observation
+scale, contractSize :: Value
 scale        = Constant 1_000_000
 contractSize = Constant 100

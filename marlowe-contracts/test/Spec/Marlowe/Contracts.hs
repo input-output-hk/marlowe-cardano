@@ -1,11 +1,15 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
+
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
+
 module Spec.Marlowe.Contracts
     (tests)
 where
 
-import Language.Marlowe
+import qualified Language.Marlowe as C
+import Language.Marlowe.Extended
 import Ledger.Ada
 import Ledger.Value
 import Marlowe.Contracts.Common
@@ -45,28 +49,28 @@ tokSymbol = ""
 tok :: Token
 tok = Token tokSymbol tokName
 
-tokValueOf :: Integer -> Money
+tokValueOf :: Integer -> C.Money
 tokValueOf = singleton tokSymbol tokName
 
-assertTotalPayments :: Party -> [Payment] -> Money -> Assertion
+assertTotalPayments :: Party -> [C.Payment] -> C.Money -> Assertion
 assertTotalPayments p t x = assertBool "total payments to party" (totalPayments t == x)
   where
-    totalPayments = mconcat . map (\(Payment _ _ a) -> a) . filter (\(Payment _ a _) -> a == Party p)
+    totalPayments = mconcat . map (\(C.Payment _ _ a) -> a) . filter (\(C.Payment _ a _) -> a == C.Party p)
 
 assertNoWarnings :: [a] -> Assertion
 assertNoWarnings [] = pure ()
 assertNoWarnings t  = assertBool "No warnings" $ null t
 
-assertClose :: Contract -> Assertion
-assertClose = assertBool "Contract is in Close" . (Close==)
+assertClose :: C.Contract -> Assertion
+assertClose = assertBool "Contract is in Close" . (C.Close==)
 
-assertNoFailedTransactions :: TransactionError -> Assertion
+assertNoFailedTransactions :: C.TransactionError -> Assertion
 assertNoFailedTransactions err = assertFailure $ "Transactions are not expected to fail: " ++ show err
 
 -- |Zero-coupon Bond test
 zeroCouponBondTest :: IO ()
 zeroCouponBondTest =
-  let contract =
+  let Just contract = toCore $
         zeroCouponBond
           w1Pk
           w2Pk
@@ -77,44 +81,44 @@ zeroCouponBondTest =
           ada
           Close
       txIn =
-        [ TransactionInput (0, 0)     [NormalInput $ IDeposit w1Pk w1Pk ada 75_000_000]
-        , TransactionInput (100, 110) [NormalInput $ IDeposit w1Pk w2Pk ada 90_000_000]
+        [ C.TransactionInput (0, 0)     [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 75_000_000]
+        , C.TransactionInput (100, 110) [C.NormalInput $ C.IDeposit w1Pk w2Pk ada 90_000_000]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 90_000_000)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |Swap contract test
 swapContractTest :: IO ()
 swapContractTest =
-  let contract =
+  let Just contract = toCore $
         swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (Slot 100) $
         swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (Slot 200) Close
       txIn =
-        [ TransactionInput (0, 0)
-            [ NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000
-            , NormalInput $ IDeposit w2Pk w2Pk tok 30
-            , NormalInput $ IDeposit w2Pk w2Pk ada 10_000_000
-            , NormalInput $ IDeposit w1Pk w1Pk tok 30
+        [ C.TransactionInput (0, 0)
+            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000
+            , C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30
+            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 10_000_000
+            , C.NormalInput $ C.IDeposit w1Pk w1Pk tok 30
             ]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 10_000_000 <> tokValueOf 30)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 10_000_000 <> tokValueOf 30)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |American Call Option test (No exercise)
 americanCallOptionTest :: IO ()
 americanCallOptionTest =
-  let contract =
+  let Just contract = toCore $
         option
           American
           Call
@@ -125,14 +129,14 @@ americanCallOptionTest =
           (Slot 100)
           (Slot 200)
       txIn =
-        [ TransactionInput (0, 0) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+        [ C.TransactionInput (0, 0) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments mempty
           assertTotalPayments w2Pk txOutPayments mempty
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |American Call Option test (Exercise)
@@ -148,7 +152,7 @@ americanCallOptionExercisedTest =
           (ada, Constant 10_000_000)
           (Slot 100)
           (Slot 200)
-      contract =
+      Just contract = toCore $
         deposit
           w2Pk
           w2Pk
@@ -157,23 +161,23 @@ americanCallOptionExercisedTest =
           Close
           americanCall
       txIn =
-        [ TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]
-        , TransactionInput (99, 99)   [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1]
-        , TransactionInput (101, 101) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000]
+        [ C.TransactionInput (0, 0)     [C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30]
+        , C.TransactionInput (99, 99)   [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 1]
+        , C.TransactionInput (101, 101) [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 10_000_000)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |European Call Option test (No exercise)
 europeanCallOptionTest :: IO ()
 europeanCallOptionTest =
-  let contract =
+  let Just contract = toCore $
         option
           European
           Call
@@ -184,14 +188,14 @@ europeanCallOptionTest =
           (Slot 100)
           (Slot 200)
       txIn =
-        [ TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+        [ C.TransactionInput (101, 101) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0] ]
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments mempty
           assertTotalPayments w2Pk txOutPayments mempty
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |European Call Option test (Exercise)
@@ -207,7 +211,7 @@ europeanCallOptionExercisedTest =
           (ada, Constant 10_000_000)
           (Slot 100)
           (Slot 200)
-      contract =
+      Just contract = toCore $
         deposit
           w2Pk
           w2Pk
@@ -216,17 +220,17 @@ europeanCallOptionExercisedTest =
         `both`
         europeanCall
       txIn =
-        [ TransactionInput (0, 0)     [NormalInput $ IDeposit w2Pk w2Pk tok 30]
-        , TransactionInput (101, 101) [NormalInput $ IChoice (ChoiceId "Exercise Call" w1Pk) 1]
-        , TransactionInput (102, 102) [NormalInput $ IDeposit w1Pk w1Pk ada 10_000_000]
+        [ C.TransactionInput (0, 0)     [C.NormalInput $ C.IDeposit w2Pk w2Pk tok 30]
+        , C.TransactionInput (101, 101) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 1]
+        , C.TransactionInput (102, 102) [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 10_000_000)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |Future, scenario repayment of initial margins
@@ -238,7 +242,7 @@ futureNoChange =
   -- The contract is cash settled, i.e. USD is delivered in ADA
   -- resp. the difference between 80 ADA and 100 USD in ADA is
   -- due at maturity
-  let contract =
+  let Just contract = toCore $
         future
           w1Pk
           w2Pk
@@ -248,29 +252,29 @@ futureNoChange =
           [] -- no margin calls
           (Slot 100) -- maturity
       txIn =
-        [ TransactionInput (0, 0)
-            [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
-            , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000 ]
-        , TransactionInput (99, 99)
-            [ NormalInput $ IChoice dirRate 125_000_000
-            , NormalInput $ IChoice invRate 80_000_000 ]
+        [ C.TransactionInput (0, 0)
+            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
+            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
+        , C.TransactionInput (99, 99)
+            [ C.NormalInput $ C.IChoice dirRate 125_000_000
+            , C.NormalInput $ C.IChoice invRate 80_000_000 ]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings $ filter nonZeroPay txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 8_000_000)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 8_000_000)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
   where
-    nonZeroPay (TransactionNonPositivePay _ _ _ i) = i /= 0
-    nonZeroPay _                                   = True
+    nonZeroPay (C.TransactionNonPositivePay _ _ _ i) = i /= 0
+    nonZeroPay _                                     = True
 
 -- |Future, scenario without any margin calls
 futureNoMarginCall :: IO ()
 futureNoMarginCall =
-  let contract =
+  let Just contract = toCore $
         future
           w1Pk
           w2Pk
@@ -280,26 +284,26 @@ futureNoMarginCall =
           [] -- no margin calls
           (Slot 100) -- maturity
       txIn =
-        [ TransactionInput (0, 0)
-            [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
-            , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000 ]
-        , TransactionInput (99, 99)
-            [ NormalInput $ IChoice dirRate 133_333_333
-            , NormalInput $ IChoice invRate 75_000_000 ]
+        [ C.TransactionInput (0, 0)
+            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
+            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
+        , C.TransactionInput (99, 99)
+            [ C.NormalInput $ C.IChoice dirRate 133_333_333
+            , C.NormalInput $ C.IChoice invRate 75_000_000 ]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 1_333_333)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |Future, scenario with margin call
 futureWithMarinCall :: IO ()
 futureWithMarinCall =
-  let contract =
+  let Just contract = toCore $
         future
           w1Pk
           w2Pk
@@ -309,31 +313,31 @@ futureWithMarinCall =
           [Slot 50] -- margin call
           (Slot 100) -- maturity
       txIn =
-        [ TransactionInput (0, 0)
-            [ NormalInput $ IDeposit w1Pk w1Pk ada 8_000_000
-            , NormalInput $ IDeposit w2Pk w2Pk ada 8_000_000 ]
-        , TransactionInput (40, 40)
-            [ NormalInput $ IChoice dirRate 200_000_000
-            , NormalInput $ IChoice invRate 50_000_000 ]
-        , TransactionInput (42, 42)
-            [ NormalInput $ IDeposit w1Pk w1Pk ada 60_000_000 ]
-        , TransactionInput (99, 99)
-            [ NormalInput $ IChoice dirRate 133_333_333
-            , NormalInput $ IChoice invRate 75_000_000 ]
+        [ C.TransactionInput (0, 0)
+            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 8_000_000
+            , C.NormalInput $ C.IDeposit w2Pk w2Pk ada 8_000_000 ]
+        , C.TransactionInput (40, 40)
+            [ C.NormalInput $ C.IChoice dirRate 200_000_000
+            , C.NormalInput $ C.IChoice invRate 50_000_000 ]
+        , C.TransactionInput (42, 42)
+            [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 60_000_000 ]
+        , C.TransactionInput (99, 99)
+            [ C.NormalInput $ C.IChoice dirRate 133_333_333
+            , C.NormalInput $ C.IChoice invRate 75_000_000 ]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_333)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_667)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |Reverse Convertible test (Exercise)
 reverseConvertibleExercisedTest :: IO ()
 reverseConvertibleExercisedTest =
-  let contract =
+  let Just contract = toCore $
         reverseConvertible
           w1Pk
           (Slot 10)
@@ -345,24 +349,24 @@ reverseConvertibleExercisedTest =
           (Constant 30)
           (Constant 9_000_000)
       txIn =
-        [ TransactionInput (0, 0)   [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]
-        , TransactionInput (99, 99) [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
-        , TransactionInput (100, 100)
-            [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 1
-            , NormalInput $ IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30 ]
+        [ C.TransactionInput (0, 0)   [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 9_000_000 ]
+        , C.TransactionInput (99, 99) [ C.NormalInput $ C.IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
+        , C.TransactionInput (100, 100)
+            [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 1
+            , C.NormalInput $ C.IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30 ]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (tokValueOf 30)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
 
 -- |Reverse Convertible test (No exercise)
 reverseConvertibleTest :: IO ()
 reverseConvertibleTest =
-  let contract =
+  let Just contract = toCore $
         reverseConvertible
           w1Pk
           (Slot 10)
@@ -374,14 +378,14 @@ reverseConvertibleTest =
           (Constant 30)
           (Constant 9_000_000)
       txIn =
-        [ TransactionInput (0, 0)     [ NormalInput $ IDeposit w1Pk w1Pk ada 9_000_000 ]
-        , TransactionInput (99, 99)   [ NormalInput $ IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
-        , TransactionInput (100, 100) [ NormalInput $ IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 0 ]
+        [ C.TransactionInput (0, 0)     [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 9_000_000 ]
+        , C.TransactionInput (99, 99)   [ C.NormalInput $ C.IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
+        , C.TransactionInput (100, 100) [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 0 ]
         ]
-   in case playTrace 0 contract txIn of
-        TransactionOutput {..} -> do
+   in case C.playTrace 0 contract txIn of
+        C.TransactionOutput {..} -> do
           assertClose txOutContract
           assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 10_000_000)
-        Error err ->
+        C.Error err ->
           assertNoFailedTransactions err
