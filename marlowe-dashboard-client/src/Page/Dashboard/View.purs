@@ -23,7 +23,6 @@ import Data.Array as Array
 import Data.Compactable (compact)
 import Data.Int (round)
 import Data.Lens (preview, view, (^.))
-import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
@@ -33,7 +32,6 @@ import Data.PABConnectedWallet
   , _walletNickname
   )
 import Data.String (take)
-import Data.Tuple.Nested ((/\))
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
@@ -68,10 +66,8 @@ import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (PubKey, Slot)
 import Page.Contract.Lenses (_Started, _executionState)
-import Page.Contract.Types (State) as Contract
 import Page.Contract.View (contractScreen)
 import Page.Dashboard.Lenses
   ( _card

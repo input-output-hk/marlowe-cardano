@@ -12,7 +12,7 @@ import Data.Wallet (SyncStatus, WalletDetails)
 import Data.Wallet as D
 import Data.WalletId (WalletId)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweParams(..))
+import Marlowe.Semantics (Assets, MarloweParams)
 import MarloweContract (MarloweContract(..))
 import Page.Contract.Types as Contract
 

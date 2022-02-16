@@ -5,11 +5,7 @@ module Component.ContractPreview.View
 
 import Prologue hiding (div)
 
-import Component.Contract.View
-  ( currentStepActions
-  , startingStepActions
-  , timeoutString
-  )
+import Component.Contract.View (startingStepActions, timeoutString)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
@@ -25,15 +21,14 @@ import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
 import Halogen.HTML.Properties (InputType(..), placeholder, type_, value)
 import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
+import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (numberOfConfirmedTxs)
-import Marlowe.Execution.State as Execution
-import Marlowe.Execution.Types as Execution
+import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended (ContractType(..))
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
-import Page.Contract.Lenses (_executionState, _metadata)
-import Page.Contract.State (currentStep)
-import Page.Contract.Types (Action(..), StartedState, StartingState)
+import Page.Contract.Lenses (_metadata)
+import Page.Contract.Types (Action(..), StartingState)
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
 contractPreviewCard
@@ -172,4 +167,3 @@ contractStartingPreviewCard state =
           [ stepActions
           ]
       ]
-

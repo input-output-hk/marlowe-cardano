@@ -67,7 +67,7 @@ import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (_chHistory, _chParams)
 import Marlowe.Execution.State (getAllPayments)
-import Marlowe.PAB (PlutusAppId, transactionFee)
+import Marlowe.PAB (transactionFee)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
   ( MarloweData
@@ -229,7 +229,7 @@ about its initial state through the WebSocket. We potentially use that to change
 handleAction
   input@{ currentSlot, wallet }
   -- FIXME-3208 do we still need followerAppId here?
-  (UpdateContract followerAppId contractHistory) = do
+  (UpdateContract _followerAppId contractHistory) = do
   let
     marloweParams /\ marloweData = view _chParams contractHistory
     walletId = view _walletId wallet

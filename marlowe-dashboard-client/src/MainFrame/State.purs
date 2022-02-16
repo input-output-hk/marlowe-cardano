@@ -43,13 +43,11 @@ import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
 import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
-import Data.Map (Map, keys)
+import Data.Map (Map)
 import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
-import Data.Set (toUnfoldable) as Set
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
-import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
@@ -89,10 +87,9 @@ import MainFrame.View (render)
 import Marlowe.Client (ContractHistory, _chParams, getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams(..))
+import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
 import Page.Contract.Types as Contract
-import Page.Dashboard.Lenses (_contracts)
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
@@ -204,7 +201,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       mDashboardState <- peruse _dashboardState
       mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
       let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
-      for_ walletIdXDashboardState \(Tuple walletId dashboardState) -> do
+      for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
         -- FIXME-3208 try to test this, we no longer have a list of plutus app Id,
         --            what we can do is to query the PAB via rest and to subscribe
         --            to the active contracts
@@ -503,7 +500,7 @@ enterWelcomeState
   => PABConnectedWallet
   -> Map MarloweParams Contract.State
   -> HalogenM State Action ChildSlots Msg m Unit
-enterWelcomeState walletDetails followerApps = do
+enterWelcomeState walletDetails _followerApps = do
   -- FIXME-3208: check, I think it should not be necesary
   -- let
   --   followerAppIds :: Array PlutusAppId
