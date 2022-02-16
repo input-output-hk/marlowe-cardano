@@ -489,7 +489,7 @@ echo
 echo '![Summary of transactions.](dismiss-claim-txs.svg)'
 
 echo "## Clean Up"
-
+echo
 echo "Send the funds back to the buyer, so that the test can be run again."
 
 marlowe-cli transaction simple "${MAGIC[@]}"                             \
