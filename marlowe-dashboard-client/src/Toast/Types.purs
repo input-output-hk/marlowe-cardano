@@ -8,7 +8,6 @@ module Toast.Types
   , errorToast
   , ajaxErrorToast
   , decodingErrorToast
-  , decodedAjaxErrorToast
   ) where
 
 import Prologue
@@ -18,7 +17,7 @@ import Analytics as A
 import Component.Icons (Icon(..))
 import Data.Argonaut.Decode (JsonDecodeError)
 import Halogen (SubscriptionId)
-import Types (DecodedAjaxError, JsonAjaxError)
+import Types (JsonAjaxError)
 
 type ToastMessage =
   { shortDescription :: String
@@ -98,12 +97,6 @@ ajaxErrorToast shortDescription _ = errorToast shortDescription $ Just
 decodingErrorToast :: String -> JsonDecodeError -> ToastMessage
 decodingErrorToast shortDescription _ = errorToast shortDescription $ Just
   "Some data was received from the server, but the browser was unable to parse it."
-
-decodedAjaxErrorToast :: String -> DecodedAjaxError -> ToastMessage
-decodedAjaxErrorToast shortDescription decodedAjaxError =
-  case decodedAjaxError of
-    Left ajaxError -> ajaxErrorToast shortDescription ajaxError
-    Right multipleErrors -> decodingErrorToast shortDescription multipleErrors
 
 contactSupportMessage :: String
 contactSupportMessage = "Please contact support if the problem persists."

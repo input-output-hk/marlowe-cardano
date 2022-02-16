@@ -36,9 +36,10 @@ import Control.Monad.Reader (asks)
 import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
 import Data.Array (filter) as Array
 import Data.Bifunctor (lmap)
+import Data.Either (note)
 import Data.Lens (view)
 import Data.Map (Map, fromFoldable)
-import Data.Maybe (fromMaybe', maybe')
+import Data.Maybe (maybe')
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _companionAppId
@@ -50,11 +51,12 @@ import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
 import Data.Traversable (traverse)
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
+import Data.Variant (Variant)
+import Data.Variant.Generic (class Constructors, mkConstructors')
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
-import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
@@ -75,8 +77,22 @@ import Plutus.PAB.Webserver.Types
   )
 import Store as Store
 import Store.Contracts (getFollowerContract)
-import Types (AjaxResponse, DecodedAjaxResponse)
+import Type.Proxy (Proxy(..))
+import Type.Row (type (+))
+import Types
+  ( AjaxResponse
+  , DecodedAjaxResponse
+  , JsonAjaxErrorRow
+  , JsonDecodeErrorRow
+  , MetadataNotFoundErrorRow
+  )
 import WebSocket.Support as WS
+
+type FollowContractError = Variant
+  (JsonAjaxErrorRow + MetadataNotFoundErrorRow + JsonDecodeErrorRow + ())
+
+followContractError :: forall c. Constructors FollowContractError c => c
+followContractError = mkConstructors' (Proxy :: Proxy FollowContractError)
 
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
 -- capabilities with functions specific to Marlowe.
@@ -90,8 +106,7 @@ class
   followContract
     :: PABConnectedWallet
     -> MarloweParams
-    -- FIXME-3208: Change error type
-    -> m (DecodedAjaxResponse (Tuple PlutusAppId ContractHistory))
+    -> m (Either FollowContractError (PlutusAppId /\ ContractHistory))
   createContract
     :: PABConnectedWallet
     -> Map TokenName PubKeyHash
@@ -127,12 +142,14 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 
       let
         activateNewFollower = do
-          followAppId <- withExceptT Left $ ExceptT $ PAB.activateContract
-            MarloweFollower
-            walletId
-          void $ withExceptT Left $ ExceptT $ PAB.invokeEndpoint followAppId
-            "follow"
-            marloweParams
+          followAppId <- withExceptT followContractError.jsonAjaxError $ ExceptT
+            $ PAB.activateContract
+                MarloweFollower
+                walletId
+          void $ withExceptT followContractError.jsonAjaxError $ ExceptT $
+            PAB.invokeEndpoint followAppId
+              "follow"
+              marloweParams
           pure followAppId
       -- If we already have a Follower contract use it, if we don't, activate a new one
       followAppId <- maybe'
@@ -140,20 +157,24 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         pure
         (getFollowerContract marloweParams contracts)
 
-      observableStateJson <- withExceptT Left $ ExceptT $
-        PAB.getContractInstanceObservableState followAppId
+      observableStateJson <- withExceptT followContractError.jsonAjaxError
+        $ ExceptT
+        $
+          PAB.getContractInstanceObservableState followAppId
       contractHistory <-
         except
-          $ lmap Right
+          $ lmap followContractError.jsonDecodeError
           $ decodeJson
           $ observableStateJson
 
       let
         contract = getContract contractHistory
-        mMetadata = _.metaData <$> findTemplate contract
-      metadata <- pure $ fromMaybe'
-        (\_ -> unsafeThrow "FIXME-3208 cant find metadata")
-        mMetadata
+
+      metadata <- ExceptT $ pure
+        $ note followContractError.metadataNotFoundError
+        $
+          _.metaData <$> findTemplate contract
+
       lift $ updateStore $ Store.AddFollowerContract currentSlot followAppId
         metadata
         contractHistory
