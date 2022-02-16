@@ -151,6 +151,7 @@ test-suite marlowe-test
         MarloweContract
     build-depends:
         aeson -any,
+        cardano-api -any,
         base >=4.9 && <5,
         containers -any,
         data-default  -any,
