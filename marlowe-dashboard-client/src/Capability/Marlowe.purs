@@ -159,8 +159,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 
       observableStateJson <- withExceptT followContractError.jsonAjaxError
         $ ExceptT
-        $
-          PAB.getContractInstanceObservableState followAppId
+        $ PAB.getContractInstanceObservableState followAppId
       contractHistory <-
         except
           $ lmap followContractError.jsonDecodeError
@@ -172,8 +171,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
 
       metadata <- ExceptT $ pure
         $ note followContractError.metadataNotFoundError
-        $
-          _.metaData <$> findTemplate contract
+        $ _.metaData <$> findTemplate contract
 
       lift $ updateStore $ Store.AddFollowerContract currentSlot followAppId
         metadata
