@@ -62,12 +62,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Newtype (unwrap)
 import Data.Ord (abs)
-import Data.PABConnectedWallet
-  ( PABConnectedWallet
-  , _address
-  , _assets
-  , _pubKeyHash
-  )
+import Data.PABConnectedWallet (PABConnectedWallet, _assets, _pubKeyHash)
 import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (_PubKeyHash)
 import Data.Set (Set)

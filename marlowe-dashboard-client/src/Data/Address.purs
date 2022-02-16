@@ -1,22 +1,24 @@
 module Data.Address
-  ( Address
+  ( Address(..)
   , AddressError(..)
   , fromString
-  , fromPubKeyHash
-  , toPubKeyHash
   , toString
   ) where
 
 import Prologue
 
+import Data.Address.Bech32 (Bech32Address)
+import Data.Address.Bech32 as Bech32Address
 import Data.Argonaut
   ( class DecodeJson
   , class EncodeJson
   , JsonDecodeError(..)
   , decodeJson
+  , encodeJson
   )
 import Data.Bifunctor (lmap)
 import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.Either (note)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
   ( genericCardinality
@@ -26,8 +28,6 @@ import Data.Enum.Generic
   , genericToEnum
   )
 import Data.Generic.Rep (class Generic)
-import Data.PubKeyHash (PubKeyHash)
-import Data.PubKeyHash as PKH
 import Data.Show.Generic (genericShow)
 import Data.String as String
 
@@ -55,35 +55,24 @@ instance BoundedEnum AddressError where
 instance Show AddressError where
   show = genericShow
 
--- TODO use bech-32 addresses (SCP-3145)
-newtype Address = Address String
+newtype Address = Bech32 Bech32Address
 
 derive instance Eq Address
 derive instance Ord Address
 derive newtype instance Show Address
-derive newtype instance EncodeJson Address
+
+instance EncodeJson Address where
+  encodeJson = encodeJson <<< toString
 
 instance DecodeJson Address where
   decodeJson =
     lmap (const $ TypeMismatch "Address") <<< fromString
       <=< decodeJson
 
--- TODO right now Addresses and pub key hashes are the same... this is
--- obviously not what we want. This should bech32 encode it and somehow combine
--- a staking key hash and payment key hash...
-fromPubKeyHash :: PubKeyHash -> Address
-fromPubKeyHash = Address <<< PKH.toString
-
--- TODO right now Addresses and pub key hashes are the same... this is
--- obviously not what we want. This should bech32 encode it and somehow combine
--- a staking key hash and payment key hash...
-toPubKeyHash :: Address -> PubKeyHash
-toPubKeyHash = PKH.fromString <<< toString
-
 fromString :: String -> Either AddressError Address
 fromString s
   | String.null s = Left Empty
-  | otherwise = Right $ Address s
+  | otherwise = note Invalid $ Bech32 <$> Bech32Address.fromString s
 
 toString :: Address -> String
-toString (Address s) = s
+toString (Bech32 addr) = Bech32Address.toString addr

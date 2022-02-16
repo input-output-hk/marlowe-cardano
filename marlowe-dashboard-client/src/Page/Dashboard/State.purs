@@ -30,7 +30,6 @@ import Component.Template.State (dummyState, handleAction, initialState) as Temp
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
-import Data.Address as A
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens
@@ -358,8 +357,7 @@ handleAction
           addToast $ errorToast "Failed to instantiate contract." $ Just
             "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
         Just contract -> do
-          ajaxCreateContract <-
-            createContract wallet (A.toPubKeyHash <$> roles) contract
+          ajaxCreateContract <- createContract wallet roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
             Left ajaxError -> do

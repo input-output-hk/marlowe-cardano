@@ -5,7 +5,9 @@ import Prologue
 import Arbitrary (ArbT(..))
 import Data.Address.Bech32.DataPart.CodePoint
   ( DataPartCodePoint
+  , fromByte
   , fromCodePoint
+  , toByte
   , toCodePoint
   )
 import Effect.Class (liftEffect)
@@ -34,3 +36,8 @@ spec = do
     describe "CodePoint injectivity" do
       it "preserves round trips" do
         quickCheck \(ArbT cp) -> fromCodePoint (toCodePoint cp) === Just cp
+    describe "Byte injectivity" do
+      it "preserves round trips" do
+        quickCheck \(ArbT cp) ->
+          Tuple (fromByte (toByte cp)) (toByte cp `mod` 8) === Tuple (Just cp)
+            (toByte cp `mod` 8)

@@ -33,6 +33,7 @@ import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Reader (asks)
+import Data.Address (Address)
 import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
 import Data.Array (filter) as Array
 import Data.Bifunctor (lmap)
@@ -109,7 +110,7 @@ class
     -> m (Either FollowContractError (PlutusAppId /\ ContractHistory))
   createContract
     :: PABConnectedWallet
-    -> Map TokenName PubKeyHash
+    -> Map TokenName Address
     -> Contract
     -> m (AjaxResponse UUID)
   applyTransactionInput
