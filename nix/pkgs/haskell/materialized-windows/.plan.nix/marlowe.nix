@@ -180,6 +180,7 @@
         "marlowe-test" = {
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
