@@ -34,7 +34,6 @@ import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.AddressBook as AB
 import Data.AddressBook as AddressBook
 import Data.Argonaut (decodeJson, stringify)
 import Data.Array (filter, find) as Array
@@ -156,8 +155,7 @@ mkMainFrame =
 
 emptyState :: State
 emptyState =
-  { addressBook: AB.empty
-  , tzOffset: Minutes 0.0 -- this will be updated in deriveState
+  { tzOffset: Minutes 0.0 -- this will be updated in deriveState
   , webSocketStatus: WebSocketClosed Nothing
   , currentSlot: zero -- this will be updated as soon as the websocket connection is working
   , subState: Left Welcome.initialState

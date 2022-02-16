@@ -43,8 +43,7 @@ type Input =
 -- no wallet, and all you can do is generate one or create a new one; and the "dashboard"
 -- state for when you have selected a wallet, and can do all of the things.
 type State =
-  { addressBook :: AddressBook
-  , webSocketStatus :: WebSocketStatus
+  { webSocketStatus :: WebSocketStatus
   -- TODO: currentSlot, tzOffset, and addressBook should be stored in the global store rather than here, but in order
   --       to remove it from here we need to first change the sub-components that use this into proper components
   , currentSlot :: Slot

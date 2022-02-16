@@ -21,7 +21,7 @@ _currentSlot :: Lens' State Slot
 _currentSlot = prop (Proxy :: _ "currentSlot")
 
 _addressBook :: Lens' State AddressBook
-_addressBook = prop (Proxy :: _ "addressBook")
+_addressBook = _store <<< prop (Proxy :: _ "addressBook")
 
 _tzOffset :: Lens' State Minutes
 _tzOffset = prop (Proxy :: _ "tzOffset")
