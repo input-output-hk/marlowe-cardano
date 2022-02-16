@@ -12,6 +12,8 @@ module Spec.Marlowe.Marlowe
     )
 where
 
+import Cardano.Api (AddressInEra (..), AsType (..), ShelleyEra, deserialiseFromRawBytes, makeShelleyAddressInEra)
+import qualified Cardano.Api.Shelley as Shelley
 import qualified Codec.CBOR.Write as Write
 import qualified Codec.Serialise as Serialise
 import Control.Exception (SomeException, catch)
@@ -46,7 +48,7 @@ import Language.Marlowe.Scripts (MarloweInput, rolePayoutScript, smallTypedValid
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Language.Marlowe.Util
-import Ledger (PaymentPubKeyHash (..), PubKeyHash, Slot (..), pubKeyHash, validatorHash)
+import Ledger (PaymentPubKeyHash (..), PubKeyHash (..), Slot (..), pubKeyHash, validatorHash)
 import Ledger.Ada (adaValueOf, lovelaceValueOf)
 import Ledger.Constraints.TxConstraints (TxConstraints)
 import qualified Ledger.Typed.Scripts as Scripts
@@ -113,6 +115,12 @@ reqId = UUID.nil
 walletPubKeyHash :: Wallet -> PubKeyHash
 walletPubKeyHash = unPaymentPubKeyHash . mockWalletPaymentPubKeyHash
 
+walletAddress :: Wallet -> AddressInEra ShelleyEra
+walletAddress wallet = makeShelleyAddressInEra (Shelley.Testnet $ Shelley.NetworkMagic 0) paymentCredential Shelley.NoStakeAddress
+    where
+    paymentCredential = case deserialiseFromRawBytes (AsHash AsPaymentKey) $ P.fromBuiltin $ getPubKeyHash $ walletPubKeyHash wallet of
+        Nothing   -> error "Failed to deserialize pub key hash"
+        Just hash -> Shelley.PaymentCredentialByKey hash
 
 zeroCouponBondTest :: TestTree
 zeroCouponBondTest = checkPredicateOptions defaultCheckOptions "Zero Coupon Bond Contract"
@@ -255,8 +263,8 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
     ) $ do
 
     -- Init a contract
-    let alicePkh = walletPubKeyHash alice
-        bobPkh = walletPubKeyHash bob
+    let alicePkh = walletAddress alice
+        bobPkh = walletAddress bob
     bobHdl <- Trace.activateContractWallet bob marlowePlutusContract
     aliceHdl <- Trace.activateContractWallet alice marlowePlutusContract
     bobCompanionHdl <- Trace.activateContract bob marloweCompanionContract "bob companion"
@@ -305,7 +313,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             ] (Slot 20) Close
         (params, _ :: TxConstraints MarloweInput MarloweData, _) =
             let con = setupMarloweParams @MarloweSchema @MarloweError
-                        (AssocMap.fromList [("alice", walletPubKeyHash alice), ("bob", walletPubKeyHash bob)])
+                        (AssocMap.fromList [("alice", walletAddress alice), ("bob", walletAddress bob)])
                         contract
                 fld = Folds.instanceOutcome con (Trace.walletInstanceTag alice)
                 getOutcome (Done a) = a

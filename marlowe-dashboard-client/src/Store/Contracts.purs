@@ -33,7 +33,7 @@ import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory, _chParams)
-import Marlowe.Execution.State as Execution
+import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)

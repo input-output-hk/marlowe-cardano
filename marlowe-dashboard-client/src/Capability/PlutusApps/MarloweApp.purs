@@ -32,6 +32,7 @@ import Capability.PlutusApps.MarloweApp.Types
   , MarloweEndpointResponse
   )
 import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Address (Address)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
 import Data.Foldable (elem)
@@ -69,7 +70,7 @@ import Wallet.Types (_EndpointDescription)
 class MarloweApp m where
   createContract
     :: PlutusAppId
-    -> Map TokenName PubKeyHash
+    -> Map TokenName Address
     -> Contract
     -> m (AjaxResponse UUID)
   applyInputs
@@ -87,7 +88,7 @@ instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
     reqId <- liftEffect genUUID
     let
-      backRoles :: Back.Map Back.TokenName PubKeyHash
+      backRoles :: Back.Map Back.TokenName Address
       backRoles = Back.Map $ map (over _1 toBack) $ Map.toUnfoldable roles
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]

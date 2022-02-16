@@ -4,6 +4,7 @@ module Data.Wallet
   , _OutOfSync
   , _Synchronized
   , _Synchronizing
+  , _address
   , _assets
   , _pubKeyHash
   , _syncStatus
@@ -15,6 +16,7 @@ module Data.Wallet
 
 import Prologue
 
+import Data.Address (Address)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -104,3 +106,6 @@ _walletId = _walletInfo <<< _Newtype <<< prop (Proxy :: _ "walletId")
 
 _pubKeyHash :: Lens' WalletDetails PaymentPubKeyHash
 _pubKeyHash = _walletInfo <<< _Newtype <<< prop (Proxy :: _ "pubKeyHash")
+
+_address :: Lens' WalletDetails Address
+_address = _walletInfo <<< _Newtype <<< prop (Proxy :: _ "address")

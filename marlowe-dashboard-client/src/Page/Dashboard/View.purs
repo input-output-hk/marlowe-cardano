@@ -23,18 +23,15 @@ import Data.Array as Array
 import Data.Compactable (compact)
 import Data.Int (round)
 import Data.Lens (preview, view, (^.))
-import Data.Map (Map, filter, isEmpty, toUnfoldable)
 import Data.Maybe (isJust)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
+  , _address
   , _assets
-  , _pubKeyHash
   , _syncStatus
   , _walletNickname
   )
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
-import Data.Tuple.Nested ((/\))
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
@@ -69,10 +66,8 @@ import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (PubKey, Slot)
 import Page.Contract.Lenses (_Started, _executionState)
-import Page.Contract.Types (State) as Contract
 import Page.Contract.View (contractScreen)
 import Page.Dashboard.Lenses
   ( _card
@@ -673,8 +668,7 @@ currentWalletCard wallet =
   let
     walletNickname = view _walletNickname wallet
 
-    address = view (_pubKeyHash <<< _PaymentPubKeyHash)
-      wallet
+    address = view _address wallet
 
     assets = view _assets wallet
 
@@ -702,7 +696,7 @@ currentWalletCard wallet =
               [ classNames [ "font-semibold", "text-lg" ] ]
               [ text $ WN.toString walletNickname ]
           , copyAddress <$> Address.render
-              (Address.defaultInput $ A.fromPubKeyHash address)
+              (Address.defaultInput address)
           , div_
               [ h4
                   [ classNames [ "font-semibold" ] ]

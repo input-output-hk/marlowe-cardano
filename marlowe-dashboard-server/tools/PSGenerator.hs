@@ -64,7 +64,7 @@ walletNameBridge = (typeName ^== "WalletName") $> psWalletName
 walletV1Bridge :: BridgePart
 walletV1Bridge = do
   typeModule ^== "Marlowe.Run.Wallet.V1.Types"
-  walletIdBridge <|> walletNameBridge
+  walletIdBridge <|> walletNameBridge <|> addressBridge
 
 psMnemonic :: TypeInfo 'PureScript
 psMnemonic = TypeInfo "" "Data.MnemonicPhrase" "MnemonicPhrase" []
@@ -72,11 +72,17 @@ psMnemonic = TypeInfo "" "Data.MnemonicPhrase" "MnemonicPhrase" []
 psPassphrase :: TypeInfo 'PureScript
 psPassphrase = TypeInfo "" "Data.Passphrase" "Passphrase" []
 
+psAddress :: TypeInfo 'PureScript
+psAddress = TypeInfo "" "Data.Address" "Address" []
+
 mnemonicBridge :: BridgePart
 mnemonicBridge = (typeName ^== "CreateMnemonic" <|> typeName ^== "RestoreMnemonic") $> psMnemonic
 
 passphraseBridge :: BridgePart
 passphraseBridge = (typeName ^== "Passphrase") $> psPassphrase
+
+addressBridge :: BridgePart
+addressBridge = (typeName ^== "Address") $> psAddress
 
 walletV1CTBridge :: BridgePart
 walletV1CTBridge = do

@@ -5,7 +5,7 @@
   AlonzoGenesisHash = "7e94a15f55d1e82d10f09203fa1d40f8eede58fd8066542cf6566008068ed874";
   ApplicationName = "cardano-sl";
   ApplicationVersion = 0;
-  ByronGenesisHash = "0cb403802a38d5ca4609517e4837c81b42f4760015d450fd33193e8c8b76c579";
+  ByronGenesisHash = "2f1e13c4116da44b22e555ca6249ee284788308bdca3ee635dc1b7fff1ca8cc1";
   LastKnownBlockVersion-Alt = 0;
   LastKnownBlockVersion-Major = 5;
   LastKnownBlockVersion-Minor = 1;
@@ -14,7 +14,7 @@
   PBftSignatureThreshold = 1.1;
   Protocol = "Cardano";
   RequiresNetworkMagic = "RequiresMagic";
-  ShelleyGenesisHash = "40de53f76f83eb808e08b3bf5c3183868f0bf8c61f1f38be656cdbb7b48c588d";
+  ShelleyGenesisHash = "56e7a4a5813a270cd4249ff1515ecb15ce444afda33c62c2e862452077d01ea5";
   TestAllegraHardForkAtEpoch = 2;
   TestAlonzoHardForkAtEpoch = 4;
   TestEnableDevelopmentHardForkEras = false;

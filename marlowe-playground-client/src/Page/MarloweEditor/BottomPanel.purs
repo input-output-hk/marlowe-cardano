@@ -3,6 +3,7 @@ module Page.MarloweEditor.BottomPanel
   ) where
 
 import Prologue hiding (div)
+
 import Component.MetadataTab (render) as MetadataTab
 import Data.Array (drop, head)
 import Data.Array as Array

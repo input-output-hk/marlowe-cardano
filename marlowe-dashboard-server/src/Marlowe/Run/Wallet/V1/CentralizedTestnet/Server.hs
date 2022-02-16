@@ -24,6 +24,8 @@ import qualified Cardano.Wallet.Api.Types as WBE
 import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
 import qualified Cardano.Wallet.Primitive.Types as WBE
 import Colog (log, pattern D, pattern E)
+import qualified Data.Aeson as Aeson
+import qualified Data.HashMap.Internal.Strict as HashMap
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
 import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
@@ -32,7 +34,7 @@ import qualified Marlowe.Run.Wallet.V1.CentralizedTestnet as Service
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.API (API)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
 import Marlowe.Run.Wallet.V1.Client (callWBE, decodeError)
-import Marlowe.Run.Wallet.V1.Types (WalletId (WalletId), WalletInfo (..), WalletName (unWalletName))
+import Marlowe.Run.Wallet.V1.Types (Address (Address), WalletId (WalletId), WalletInfo (..), WalletName (unWalletName))
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
 import Servant (ServerError, ServerT, err500, (:<|>) ((:<|>)), (:>))
 import Servant.Client (ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
@@ -55,10 +57,11 @@ createWallet ::
 createWallet CreatePostData{..} = do
   let walletName = unWalletName getCreateWalletName
   let passphrase = unPassphrase getCreatePassphrase
-  (mnemonic, walletId, pubKeyHash) <- Service.createWallet getPubKeyHashFromWallet postWallet walletName passphrase
+  (mnemonic, walletId, pubKeyHash, address) <-
+    Service.createWallet getPubKeyHashFromWallet getAddress postWallet walletName passphrase
   pure
     $ CreateResponse (CreateMnemonic mnemonic)
-    $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
+    $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash, address = Address address }
 
 -- [UC-WALLET-TESTNET-2][2] Restore a testnet wallet
 restoreWallet ::
@@ -71,8 +74,9 @@ restoreWallet RestorePostData{..} = do
     let mnemonic = unRestoreMnemonic getRestoreMnemonicPhrase
     let walletName = unWalletName getRestoreWalletName
     let passphrase = unPassphrase getRestorePassphrase
-    (walletId, pubKeyHash) <- Service.restoreWallet getPubKeyHashFromWallet postWallet mnemonic walletName passphrase
-    pure $ WalletInfo { walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
+    (walletId, pubKeyHash, address) <-
+      Service.restoreWallet getPubKeyHashFromWallet getAddress postWallet mnemonic walletName passphrase
+    pure $ WalletInfo { walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash, address = Address address }
 
 getPubKeyHashFromWallet ::
     MonadIO m =>
@@ -99,6 +103,21 @@ getPubKeyHashFromWallet walletId = do
 
     transformResponse = (fmap . fmap) (PubKeyHash . BuiltinByteString . fst . getApiVerificationKey)
   either (const $ throwError err500) pure =<< transformResponse makeRequest
+
+getAddress ::
+    MonadIO m =>
+    MonadError ServerError m =>
+    HasEnv m =>
+    WBE.WalletId ->
+    m Text
+getAddress walletId = do
+  response <- callWBE $ WBE.Api.listAddresses WBE.Api.addressClient (WBE.ApiT walletId) Nothing
+  case response of
+    Right ((Aeson.Object obj) : _) ->
+      case HashMap.lookup "id" obj of
+        (Just (Aeson.String s)) -> pure s
+        _                       -> throwError err500
+    _                              -> throwError err500
 
 postWallet ::
     MonadIO m =>

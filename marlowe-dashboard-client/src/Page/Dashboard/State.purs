@@ -30,7 +30,6 @@ import Component.Template.State (dummyState, handleAction, initialState) as Temp
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
-import Data.Address as A
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens
@@ -68,7 +67,7 @@ import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Client (_chHistory, _chParams)
 import Marlowe.Execution.State (getAllPayments)
-import Marlowe.PAB (PlutusAppId, transactionFee)
+import Marlowe.PAB (transactionFee)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics
   ( MarloweData
@@ -230,7 +229,7 @@ about its initial state through the WebSocket. We potentially use that to change
 handleAction
   input@{ currentSlot, wallet }
   -- FIXME-3208 do we still need followerAppId here?
-  (UpdateContract followerAppId contractHistory) = do
+  (UpdateContract _followerAppId contractHistory) = do
   let
     marloweParams /\ marloweData = view _chParams contractHistory
     walletId = view _walletId wallet
@@ -358,8 +357,7 @@ handleAction
           addToast $ errorToast "Failed to instantiate contract." $ Just
             "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
         Just contract -> do
-          ajaxCreateContract <-
-            createContract wallet (A.toPubKeyHash <$> roles) contract
+          ajaxCreateContract <- createContract wallet roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
             Left ajaxError -> do

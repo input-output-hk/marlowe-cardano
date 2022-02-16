@@ -20,7 +20,6 @@ import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.Client (ContractHistory)
-import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Page.Contract.Types (Action, State) as Contract
 import Store.Contracts (ContractStore)

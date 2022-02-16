@@ -43,6 +43,7 @@ library
         base >=4.7 && <5,
         bytestring -any,
         containers -any,
+        unordered-containers,
         cardano-addresses -any,
         cardano-wallet-core -any,
         cardano-prelude -any,

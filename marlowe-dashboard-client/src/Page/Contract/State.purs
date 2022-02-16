@@ -25,16 +25,7 @@ import Component.Contacts.State (adaToken, getAda)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.Array
-  ( difference
-  , filter
-  , foldl
-  , index
-  , length
-  , mapMaybe
-  , modifyAt
-  , null
-  )
+import Data.Array (difference, filter, foldl, index, length, mapMaybe, modifyAt)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
@@ -42,17 +33,7 @@ import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
 import Data.Foldable (foldMap, for_)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens
-  ( assign
-  , modifying
-  , over
-  , set
-  , to
-  , toArrayOf
-  , traversed
-  , view
-  , (^.)
-  )
+import Data.Lens (assign, modifying, over, to, toArrayOf, traversed, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Lens.Lens.Tuple (_2)
@@ -81,7 +62,6 @@ import Halogen
   ( HalogenM
   , getHTMLElementRef
   , liftEffect
-  , put
   , subscribe
   , tell
   , unsubscribe

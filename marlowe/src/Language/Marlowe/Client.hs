@@ -24,12 +24,15 @@
 {-# OPTIONS_GHC -fno-specialise #-}
 
 module Language.Marlowe.Client where
+import Cardano.Api (AddressInEra (..), PaymentCredential (..), SerialiseAsRawBytes (serialiseToRawBytes), ShelleyEra,
+                    StakeAddressReference (..))
+import Cardano.Api.Shelley (StakeCredential (..))
+import qualified Cardano.Api.Shelley as Shelley
 import Control.Lens
 import Control.Monad (forM_, void)
 import Control.Monad.Error.Lens (catching, throwing, throwing_)
 import Control.Monad.Extra (concatMapM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
-import Data.Bifunctor (second)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -49,11 +52,11 @@ import qualified Language.Marlowe.Semantics as Marlowe
 import Language.Marlowe.SemanticsTypes hiding (Contract, getAction)
 import qualified Language.Marlowe.SemanticsTypes as Marlowe
 import Language.Marlowe.Util (extractNonMerkleizedContractRoles)
-import Ledger (CurrencySymbol, Datum (..), PaymentPubKeyHash (..), PubKeyHash, Slot (..), TokenName, TxOut (..),
+import Ledger (CurrencySymbol, Datum (..), PaymentPubKeyHash (..), PubKeyHash (..), Slot (..), TokenName, TxOut (..),
                TxOutRef, dataHash, txOutValue)
 import qualified Ledger
 import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
-import Ledger.Address (Address, pubKeyHashAddress, scriptHashAddress)
+import Ledger.Address (Address, StakePubKeyHash (StakePubKeyHash), pubKeyHashAddress, scriptHashAddress)
 import Ledger.Constraints
 import qualified Ledger.Constraints as Constraints
 import Ledger.Constraints.OffChain (UnbalancedTx (..))
@@ -71,6 +74,8 @@ import Plutus.Contract as Contract
 import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
+import Plutus.V1.Ledger.Api (toBuiltin)
+import PlutusPrelude (foldMapM)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
@@ -81,11 +86,11 @@ data MarloweClientInput = ClientInput InputContent
   deriving anyclass (ToJSON, FromJSON)
 
 type MarloweSchema =
-        Endpoint "create" (UUID, AssocMap.Map Val.TokenName PubKeyHash, Marlowe.Contract)
+        Endpoint "create" (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract)
         .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe SlotInterval, [MarloweClientInput])
         .\/ Endpoint "apply-inputs-nonmerkleized" (UUID, MarloweParams, Maybe SlotInterval, [InputContent])
         .\/ Endpoint "auto" (UUID, MarloweParams, Party, Slot)
-        .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, PubKeyHash)
+        .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, AddressInEra ShelleyEra)
         .\/ Endpoint "close" UUID
 
 data MarloweEndpointResult =
@@ -128,7 +133,7 @@ data PartyAction
              | CloseContract
   deriving (Show)
 
-type RoleOwners = AssocMap.Map Val.TokenName PubKeyHash
+type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 
 data ContractHistory =
     ContractHistory
@@ -305,23 +310,23 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
         logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         marlowePlutusContract
-    redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, pkh) -> catchError reqId "redeem" $ do
+    redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, paymentAddress) -> catchError reqId "redeem" $ do
         let address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
-        let ppkh = PaymentPubKeyHash pkh
         utxos <- utxosAt address
-        let spendPayoutConstraints tx ref txout = let
-                expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData role)
+        let
+          spendPayoutConstraints tx ref txout = do
+            let expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData role)
                 amount = view Ledger.ciTxOutValue txout
                 dh = either id Ledger.datumHash <$> preview Ledger.ciTxOutDatum txout
-                in case dh of
-                    Just datumHash | datumHash == expectedDatumHash ->
-                        -- we spend the rolePayoutScript address
-                        Constraints.mustSpendScriptOutput ref unitRedeemer
-                        -- and pay to a token owner
-                            <> Constraints.mustPayToPubKey ppkh amount
-                    _ -> tx
+            case dh of
+                Just datumHash | datumHash == expectedDatumHash ->
+                    -- we spend the rolePayoutScript address
+                    (Constraints.mustSpendScriptOutput ref unitRedeemer <>)
+                    -- and pay to a token owner
+                        <$> mustPayToShelleyAddress paymentAddress amount
+                _ -> tx
 
-        let spendPayouts = Map.foldlWithKey spendPayoutConstraints mempty utxos
+        spendPayouts <- Map.foldlWithKey spendPayoutConstraints (pure mempty) utxos
         if spendPayouts == mempty
         then do
             logInfo $ "MarloweApp contract redemption empty for role " <> show role <> "."
@@ -333,9 +338,11 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                   <> Constraints.mustSpendAtLeast (Val.singleton rolesCurrency role 1)
               -- lookup for payout validator and role payouts
               validator = rolePayoutScript rolesCurrency
+            ownAddressLookups <- ownShelleyAddress paymentAddress
+            let
               lookups = Constraints.otherScript validator
                   <> Constraints.unspentOutputs utxos
-                  <> Constraints.ownPaymentPubKeyHash ppkh
+                  <> ownAddressLookups
             tx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx @Void lookups constraints)
             _ <- submitTxConfirmed $ Constraints.adjustUnbalancedTx tx
             logInfo $ "MarloweApp contract redemption confirmed for role " <> show role <> "."
@@ -465,8 +472,9 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
                             <> Constraints.mustMintValue (Currency.mintedValue theCurrency)
         let rolesSymbol = Ledger.scriptCurrencySymbol curVali
         let minAdaTxOut = adaValueOf 2
-        let giveToParty (role, pkh) = Constraints.mustPayToPubKey pkh (Val.singleton rolesSymbol role 1 <> minAdaTxOut)
-        let distributeRoleTokens = foldMap giveToParty $ second PaymentPubKeyHash <$> AssocMap.toList owners
+        let giveToParty (role, addr) =
+              mustPayToShelleyAddress addr (Val.singleton rolesSymbol role 1 <> minAdaTxOut)
+        distributeRoleTokens <- foldMapM giveToParty $ AssocMap.toList owners
         let params = marloweParams rolesSymbol
         pure (params, mintTx <> distributeRoleTokens, lookups)
     else do
@@ -474,6 +482,40 @@ setupMarloweParams owners contract = mapError (review _MarloweError) $ do
         let message = T.pack $ "You didn't specify owners of these roles: " <> show missingRoles
         throwing _ContractError $ OtherError message
 
+ownShelleyAddress
+  :: AddressInEra ShelleyEra
+  -> Contract MarloweContractState s MarloweError (ScriptLookups Void)
+ownShelleyAddress addr = Constraints.ownPaymentPubKeyHash . fst <$> shelleyAddressToKeys addr
+
+mustPayToShelleyAddress
+  :: AddressInEra ShelleyEra
+  -> Val.Value
+  -> Contract MarloweContractState s MarloweError (TxConstraints i o)
+mustPayToShelleyAddress addr value = do
+  (ppkh, skh) <- shelleyAddressToKeys addr
+  pure $ ($ value) $ maybe
+    (Constraints.mustPayToPubKey ppkh)
+    (Constraints.mustPayToPubKeyAddress ppkh)
+    skh
+
+shelleyAddressToKeys
+  :: AddressInEra ShelleyEra
+  -> Contract MarloweContractState s MarloweError (PaymentPubKeyHash, Maybe StakePubKeyHash)
+shelleyAddressToKeys (AddressInEra _ (Shelley.ShelleyAddress _ paymentCredential stakeRef)) =
+  case Shelley.fromShelleyPaymentCredential paymentCredential of
+    PaymentCredentialByScript _ -> throwError $ OtherContractError $ OtherError "Script payment addresses not supported"
+    PaymentCredentialByKey hash ->
+      let ppkh = PaymentPubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes hash
+      in
+        case Shelley.fromShelleyStakeReference stakeRef of
+          StakeAddressByValue (StakeCredentialByScript _) ->
+            throwError $ OtherContractError $ OtherError "Script stake addresses not supported"
+          StakeAddressByPointer _ ->
+            throwError $ OtherContractError $ OtherError "Pointer stake addresses not supported"
+          NoStakeAddress -> pure (ppkh, Nothing)
+          StakeAddressByValue (StakeCredentialByKey stakeHash) ->
+            pure (ppkh,  Just . StakePubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes stakeHash)
+shelleyAddressToKeys _ = throwError $ OtherContractError $ OtherError "Byron Addresses not supported"
 
 getAction :: MarloweSlotRange -> Party -> MarloweData -> PartyAction
 getAction slotRange party MarloweData{marloweContract,marloweState} = let
