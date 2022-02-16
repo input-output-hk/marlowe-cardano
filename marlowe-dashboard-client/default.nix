@@ -31,7 +31,7 @@ let
   generate-purescript = writeShellScriptBinInRepoRoot "marlowe-run-generate-purs" ''
     generated=./marlowe-dashboard-client/generated
     rm -rf $generated
-    cp -a $(nix-build -A marlowe-dashboard.generated-purescript --no-out-link) $generated
+    cp -a $(nix-build -A marlowe-dashboard.generated-purescript --no-out-link "$@") $generated
     chmod -R +w $generated
   '';
 

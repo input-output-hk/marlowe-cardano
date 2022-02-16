@@ -42,21 +42,26 @@ let
   #
   # dev convenience scripts
   #
+  writeShellScriptBinInRepoRoot = name: script: pkgs.writeShellScriptBin name ''
+    cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
+    ${script}
+  '';
+
   fixStylishHaskell = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/fix-stylish-haskell") { inherit stylish-haskell; };
   fixPngOptimization = pkgs.callPackage (sources.plutus-apps + "/nix/pkgs/fix-png-optimization") { };
-  updateMaterialized = pkgs.writeShellScriptBin "updateMaterialized" ''
+  updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
     # This runs the 'updateMaterialize' script in all platform combinations we care about.
     # See the comment in ./haskell/haskell.nix
 
     # Update the linux files (will do for all unixes atm).
-    $(nix-build default.nix -A marlowe.haskell.project.plan-nix.passthru.updateMaterialized --argstr system x86_64-linux)
-    $(nix-build default.nix -A marlowe.haskell.project.plan-nix.passthru.updateMaterialized --argstr system x86_64-darwin)
-    $(nix-build default.nix -A marlowe.haskell.project.plan-nix.passthru.updateMaterialized --argstr system windows)
-    $(nix-build default.nix -A marlowe.haskell.project.projectCross.mingwW64.plan-nix.passthru.updateMaterialized --argstr system x86_64-linux)
+    $(nix-build default.nix -A marlowe.haskell.project.plan-nix.passthru.updateMaterialized --argstr system x86_64-linux "$@")
+    $(nix-build default.nix -A marlowe.haskell.project.plan-nix.passthru.updateMaterialized --argstr system x86_64-darwin "$@")
+    $(nix-build default.nix -A marlowe.haskell.project.plan-nix.passthru.updateMaterialized --argstr system windows "$@")
+    $(nix-build default.nix -A marlowe.haskell.project.projectCross.mingwW64.plan-nix.passthru.updateMaterialized --argstr system x86_64-linux "$@")
 
     # This updates the sha files for the extra packages
-    $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-linux)
-    $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-darwin)
+    $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-linux "$@")
+    $(nix-build default.nix -A marlowe.haskell.extraPackages.updateAllShaFiles --argstr system x86_64-darwin "$@")
   '';
 
   updateClientDeps = pkgs.callPackage ./update-client-deps.nix {
@@ -76,11 +81,6 @@ let
     inherit system;
     inherit (sources) nixpkgs;
   });
-
-  writeShellScriptBinInRepoRoot = name: script: pkgs.writeShellScriptBin name ''
-    cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
-    ${script}
-  '';
 
   # easy-purescript-nix has some kind of wacky internal IFD
   # usage that breaks the logic that makes source fetchers
