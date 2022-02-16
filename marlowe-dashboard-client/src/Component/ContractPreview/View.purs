@@ -24,7 +24,6 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (numberOfConfirmedTxs)
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.Extended (ContractType(..))
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
 import Page.Contract.Lenses (_metadata)
@@ -39,11 +38,8 @@ contractPreviewCard
   -> ComponentHTML Action ChildSlots m
 contractPreviewCard currentSlot state =
   let
-    -- FIXME-3208
-    contractType = Escrow
-    contractName = "fixme"
-    -- contractType = state ^. (_metadata <<< _contractType)
-    -- contractName = state ^. (_metadata <<< _contractName)
+    contractType = state ^. (_metadata <<< _contractType)
+    contractName = state ^. (_metadata <<< _contractName)
 
     nickname = Execution.contractName state
 
