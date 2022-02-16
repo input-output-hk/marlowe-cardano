@@ -5,7 +5,11 @@ Then(
   /^I should see "([^"]*)" text$/,
   async function(text: string) {
 
-    const locator = await global.page.locator(`text=${text}`);
+    const {
+      screen: { page }
+    } = this;
+
+    const locator = await page.locator(`text=${text}`);
 
     await expect(locator).toBeVisible();
   }
@@ -14,8 +18,11 @@ Then(
 Then(
   /^I should see a button with "([^"]*)" text$/,
   async function(text: string) {
+    const {
+      screen: { page }
+    } = this;
 
-    const locator = await global.page.locator(`button >> text=${text}`);
+    const locator = await page.locator(`button >> text=${text}`);
 
     await expect(locator).toBeVisible();
   }
