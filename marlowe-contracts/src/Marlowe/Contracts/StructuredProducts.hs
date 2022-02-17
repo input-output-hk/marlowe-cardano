@@ -2,6 +2,7 @@
 module Marlowe.Contracts.StructuredProducts where
 
 import Language.Marlowe.Extended
+import Marlowe.Contracts.Common
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.ZeroCouponBond
 
