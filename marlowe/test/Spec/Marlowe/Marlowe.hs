@@ -526,7 +526,7 @@ tokenShowTest = do
 inputSerialization :: IO ()
 inputSerialization = do
     state <- readFile "test/input.json"
-    let decoded :: Either String [ MarloweClientInput ]
+    let decoded :: Either String [MarloweClientInput]
         decoded = eitherDecode (fromString state)
     case decoded of
         Right input ->
