@@ -75,7 +75,7 @@ import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
 import Plutus.V1.Ledger.Api (toBuiltin)
-import PlutusPrelude (foldMapM)
+import PlutusPrelude (foldMapM, (<|>))
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
@@ -83,7 +83,14 @@ import qualified PlutusTx.Prelude as P
 data MarloweClientInput = ClientInput InputContent
                         | ClientMerkleizedInput InputContent Marlowe.Contract
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
+
+instance FromJSON MarloweClientInput where
+  parseJSON json = uncurry ClientMerkleizedInput <$> parseJSON json <|> ClientInput <$> parseJSON json
+
+instance ToJSON MarloweClientInput where
+  toJSON (ClientInput content)                    = toJSON content
+  toJSON (ClientMerkleizedInput content contract) = toJSON (content, contract)
+
 
 type MarloweSchema =
         Endpoint "create" (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract)
