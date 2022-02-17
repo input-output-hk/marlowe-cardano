@@ -4,8 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "precucumber": "rimraf reports && mkdir reports && echo {} > reports/reports.json",
     "transpile": "rimraf dist && babel --extensions .ts --out-dir dist src",
-    "cucumber": "yarn transpile && cucumber-js"
+    "cucumber-compile": "yarn transpile && cucumber-js",
+    "cucumber": "COMMON_CONFIG_FILE=env/common.env yarn cucumber-compile",
+    "postcucumber": "COMMON_CONFIG_FILE=env/common.env ts-node ./src/reporter/cucumber-report.ts"
   },
   "author": "",
   "license": "ISC",
@@ -14,8 +17,12 @@
     "@babel/preset-env": "^7.16.11",
     "@cucumber/cucumber": "^7.3.2",
     "@playwright/test": "^1.19.0",
+    "dotenv": "^16.0.0",
     "playwright": "^1.19.0",
     "ts-node": "^10.5.0",
     "typescript": "^4.5.5"
+  },
+  "dependencies": {
+    "cucumber-html-reporter": "^5.5.0"
   }
 }
