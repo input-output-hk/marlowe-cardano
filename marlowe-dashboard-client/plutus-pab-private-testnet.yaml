@@ -18,7 +18,7 @@ nodeServerConfig:
   pscKeptBlocks: 2160                                      # Not used by real nodes.
   pscNetworkId: "1564"                                     # Private Marlowe testnet.
   pscSlotConfig:                                           # Private Marlowe testnet.
-    scSlotZeroTime: 1638215277000                          # Private Marlowe testnet.
+    scSlotZeroTime: 1644929640000                          # Private Marlowe testnet.
     scSlotLength: 1000                                     # Private Marlowe testnet.
   pscFeeConfig:                                            # Not used by real nodes.
     fcConstantFee:                                         # Not used by real nodes.

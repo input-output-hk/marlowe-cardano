@@ -32,7 +32,7 @@ nodeServerConfig:
   pscKeptBlocks: 2160
   pscNetworkId: "1564"
   pscSlotConfig:
-    scSlotZeroTime: 1638215277000
+    scSlotZeroTime: 1644929640000
     scSlotLength: 1000
   pscFeeConfig:
     fcConstantFee:

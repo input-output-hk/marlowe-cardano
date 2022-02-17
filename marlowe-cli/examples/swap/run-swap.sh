@@ -33,7 +33,7 @@ then # Use the public testnet.
 else # Use the private testnet.
   MAGIC=(--testnet-magic 1564)
   SLOT_LENGTH=1000
-  SLOT_OFFSET=1638215277000
+  SLOT_OFFSET=1644929640000
 fi
 
 echo "#### The First Party"
