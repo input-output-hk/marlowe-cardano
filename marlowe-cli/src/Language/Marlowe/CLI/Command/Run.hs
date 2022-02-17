@@ -36,7 +36,8 @@ import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runT
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.SemanticsTypes (Input)
-import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName, defaultCostModelParams)
+import Ledger.TimeSlot (SlotConfig (..))
+import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, defaultCostModelParams)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Options.Applicative as O
@@ -124,6 +125,7 @@ runRunCommand command =
         , localNodeSocketPath      = socketPath command
         }
       marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
+      slotConfig = SlotConfig (slotLength command) (POSIXTime $ slotZeroOffset command)
       stake'         = fromMaybe NoStakeAddress $ stake command
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
       guardMainnet = when (network' == Mainnet) $ throwError "Mainnet usage is not supported."
@@ -131,7 +133,7 @@ runRunCommand command =
       outputs' = padTxOut <$> outputs command
     case command of
       Initialize{..} -> initializeTransaction
-                          marloweParams' costModel network' stake'
+                          marloweParams' slotConfig costModel network' stake'
                           contractFile stateFile
                           outputFile
                           printStats

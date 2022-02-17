@@ -49,6 +49,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Semantics (Payment)
 import Language.Marlowe.SemanticsTypes (Contract, Input, State)
+import Ledger.TimeSlot (SlotConfig)
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer, ValidatorHash)
 
 import qualified Cardano.Api as Api (Value)
@@ -81,6 +82,7 @@ data MarloweTransaction era =
   , mtRange         :: Maybe (SlotNo, SlotNo)  -- ^ The slot range for the transaction, if any.
   , mtInputs        :: [Input]                 -- ^ The inputs to the transaction.
   , mtPayments      :: [Payment]               -- ^ The payments from the transaction.
+  , mtSlotConfig    :: SlotConfig              -- ^ The POSIXTime-to-Slot configuration.
   }
     deriving (Generic, Show)
 
@@ -96,6 +98,7 @@ instance IsCardanoEra era => ToJSON (MarloweTransaction era) where
       , "range"            .= toJSON mtRange
       , "inputs"           .= toJSON mtInputs
       , "payments"         .= toJSON mtPayments
+      , "slotConfig"       .= toJSON mtSlotConfig
       ]
 
 instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize eras.
@@ -111,6 +114,7 @@ instance FromJSON (MarloweTransaction AlonzoEra) where  -- FIXME: Generalize era
           mtRange         <- o .: "range"
           mtInputs        <- o .: "inputs"
           mtPayments      <- o .: "payments"
+          mtSlotConfig    <- o .: "slotConfig"
           pure MarloweTransaction{..}
 
 

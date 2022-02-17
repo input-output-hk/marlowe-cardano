@@ -45,7 +45,6 @@ import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Bifunctor (bimap)
-import Data.Default (def)
 import Data.Function (on)
 import Data.List (groupBy)
 import qualified Data.Map.Strict as M (toList)
@@ -113,6 +112,7 @@ makeNotification outputFile =
 initializeTransaction :: MonadError CliError m
               => MonadIO m
               => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
               -> CostModelParams        -- ^ The cost model parameters.
               -> NetworkId              -- ^ The network ID.
               -> StakeAddressReference  -- ^ The stake address.
@@ -121,12 +121,12 @@ initializeTransaction :: MonadError CliError m
               -> Maybe FilePath         -- ^ The output JSON file for the validator information.
               -> Bool                   -- ^ Whether to print statistics about the validator.
               -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransaction marloweParams costModelParams network stake contractFile stateFile outputFile printStats =
+initializeTransaction marloweParams slotConfig costModelParams network stake contractFile stateFile outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
     initializeTransactionImpl
-      marloweParams costModelParams network stake
+      marloweParams slotConfig costModelParams network stake
       contract state
       outputFile
       printStats
@@ -136,6 +136,7 @@ initializeTransaction marloweParams costModelParams network stake contractFile s
 initializeTransactionImpl :: MonadError CliError m
                           => MonadIO m
                           => MarloweParams          -- ^ The Marlowe contract parameters.
+                          -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
                           -> CostModelParams        -- ^ The cost model parameters.
                           -> NetworkId              -- ^ The network ID.
                           -> StakeAddressReference  -- ^ The stake address.
@@ -144,7 +145,7 @@ initializeTransactionImpl :: MonadError CliError m
                           -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
                           -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransactionImpl marloweParams costModelParams network stake mtContract mtState outputFile printStats =
+initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState outputFile printStats =
   do
      let
        mtRoles = rolesCurrency marloweParams
@@ -236,8 +237,7 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{.
                                    }
                                  )
                                    where
-                                     slotConfig = def
-                                     convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot slotConfig
+                                     convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot mtSlotConfig
 
 
 
