@@ -31,6 +31,7 @@ import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Extras as JSON
 import Data.Aeson.Types hiding (Error, Value)
 import qualified Data.Foldable as F
+import qualified Data.HashMap.Internal.Strict as HashMap
 import Data.String (IsString (..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
@@ -231,7 +232,30 @@ data InputContent = IDeposit AccountId Party Token Integer
                   | INotify
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
-  deriving anyclass (ToJSON, FromJSON)
+
+instance FromJSON InputContent where
+  parseJSON (String "input_notify") = return INotify
+  parseJSON (Object v) =
+    IChoice <$> v .: "for_choice_id"
+                <*> v .: "input_that_chooses_num"
+    <|> IDeposit  <$> v .: "into_account"
+              <*> v .: "input_from_party"
+              <*> v .: "of_token"
+              <*> v .: "that_deposits"
+  parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
+
+instance ToJSON InputContent where
+  toJSON (IDeposit accId party tok amount) = object
+      [ "input_from_party" .= party
+      , "that_deposits" .= amount
+      , "of_token" .= tok
+      , "into_account" .= accId
+      ]
+  toJSON (IChoice choiceId chosenNum) = object
+      [ "input_that_chooses_num" .= chosenNum
+      , "for_choice_id" .= choiceId
+      ]
+  toJSON INotify = JSON.String $ pack "input_notify"
 
 data Input = NormalInput InputContent
            | MerkleizedInput InputContent BuiltinByteString Contract
@@ -239,58 +263,26 @@ data Input = NormalInput InputContent
   deriving anyclass (Pretty)
 
 instance FromJSON Input where
-  parseJSON (String "input_notify") = return (NormalInput INotify)
-  parseJSON (Object v) =
-        (MerkleizedInput <$> (IChoice <$> (v .: "for_choice_id")
-                                      <*> (v .: "input_that_chooses_num"))
-                         <*> (v .: "continuation_hash")
-                         <*> (v .: "merkleized_continuation"))
-    <|> (MerkleizedInput <$> (IDeposit <$> (v .: "into_account")
-                                       <*> (v .: "input_from_party")
-                                       <*> (v .: "of_token")
-                                       <*> (v .: "that_deposits"))
-                         <*> (v .: "continuation_hash")
-                         <*> (v .: "merkleized_continuation"))
-    <|> (MerkleizedInput INotify <$> (v .: "continuation_hash")
-                                 <*> (v .: "merkleized_continuation"))
-    <|> (NormalInput <$> (IDeposit <$> (v .: "into_account")
-                                   <*> (v .: "input_from_party")
-                                   <*> (v .: "of_token")
-                                   <*> (v .: "that_deposits")))
-    <|> (NormalInput <$> (IChoice <$> (v .: "for_choice_id")
-                                  <*> (v .: "input_that_chooses_num")))
+  parseJSON (String s) = NormalInput <$> parseJSON (String s)
+  parseJSON (Object v) = do
+    content <- parseJSON (Object v)
+    MerkleizedInput content <$> v .: "continuation_hash" <*> v .: "merkleized_continuation"
+      <|> return (NormalInput content)
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
 instance ToJSON Input where
-  toJSON (NormalInput (IDeposit accId party tok amount)) = object
-      [ "input_from_party" .= party
-      , "that_deposits" .= amount
-      , "of_token" .= tok
-      , "into_account" .= accId
-      ]
-  toJSON (NormalInput (IChoice choiceId chosenNum)) = object
-      [ "input_that_chooses_num" .= chosenNum
-      , "for_choice_id" .= choiceId
-      ]
-  toJSON (NormalInput INotify) = JSON.String $ pack "input_notify"
-  toJSON (MerkleizedInput (IDeposit accId party tok amount) hash continuation) = object
-      [ "input_from_party" .= party
-      , "that_deposits" .= amount
-      , "of_token" .= tok
-      , "into_account" .= accId
-      , "merkleized_continuation" .= continuation
-      , "continuation_hash" .= hash
-      ]
-  toJSON (MerkleizedInput (IChoice choiceId chosenNum) hash continuation) = object
-      [ "input_that_chooses_num" .= chosenNum
-      , "for_choice_id" .= choiceId
-      , "merkleized_continuation" .= continuation
-      , "continuation_hash" .= hash
-      ]
-  toJSON (MerkleizedInput INotify hash continuation) = object
-      [ "merkleized_continuation" .= continuation
-      , "continuation_hash" .= hash
-      ]
+  toJSON (NormalInput content) = toJSON content
+  toJSON (MerkleizedInput content hash continuation) =
+    let
+      obj = case toJSON content of
+        Object obj -> obj
+        _          -> HashMap.empty
+    in
+      Object $ HashMap.union obj $ HashMap.fromList
+          [ ("merkleized_continuation", toJSON continuation)
+          , ("continuation_hash", toJSON hash)
+          ]
+
 
 getInputContent :: Input -> InputContent
 getInputContent (NormalInput inputContent)         = inputContent

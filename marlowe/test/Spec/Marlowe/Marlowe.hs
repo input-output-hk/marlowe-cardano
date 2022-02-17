@@ -21,7 +21,7 @@ import Control.Lens ((&), (.~))
 import Control.Monad (void)
 import Control.Monad.Freer (run)
 import Control.Monad.Freer.Error (runError)
-import Data.Aeson (decode, encode)
+import Data.Aeson (decode, eitherDecode, encode)
 import Data.Aeson.Text (encodeToLazyText)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LB
@@ -81,6 +81,7 @@ tests = testGroup "Marlowe"
     , testCase "Token Show instance respects HEX and Unicode" tokenShowTest
     , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
     , testCase "State serializes into valid JSON" stateSerialization
+    , testCase "Input serializes into valid JSON" inputSerialization
     , testGroup "Validator size is reasonable"
         [ testCase "Typed validator size" typedValidatorSize
         , testCase "Untyped validator size" untypedValidatorSize
@@ -521,6 +522,18 @@ tokenShowTest = do
 
     show actual @=? "AvailableMoney \"alice\" (Token \"00010aff\" \"ÚSD©\")"
 
+
+inputSerialization :: IO ()
+inputSerialization = do
+    state <- readFile "test/input.json"
+    let decoded :: Either String [ MarloweClientInput ]
+        decoded = eitherDecode (fromString state)
+    case decoded of
+        Right input ->
+            case eitherDecode $ encode input of
+                Right input' -> assertBool "Should be equal" (input == input')
+                Left e       -> assertFailure $ "Could not decode encoded input: " <> e
+        Left e -> assertFailure $ "Could not decode test/input.json: " <> e
 
 stateSerialization :: IO ()
 stateSerialization = do
