@@ -142,8 +142,7 @@ handleAction
   -> HalogenM State Action ChildSlots Msg m Unit
 {- [UC-WALLET-3][0] Disconnect a wallet -}
 handleAction { wallet } DisconnectWallet = do
-  contracts <- use _contracts
-  updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet contracts
+  updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet
 
 handleAction _ (ContactsAction contactsAction) =
   case contactsAction of
