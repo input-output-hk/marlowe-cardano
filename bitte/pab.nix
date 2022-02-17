@@ -8,7 +8,7 @@
 
 { writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket }:
 let
-  slotZeroTime = 1638215277000; # POSIX time of slot zeron is milliseconds. See note [Datetime to slot] in Marlowe.Slot
+  slotZeroTime = 1644929640000; # POSIX time of slot zeron is milliseconds. See note [Datetime to slot] in Marlowe.Slot
   slotLengthMillis = 1000;
 
   constantFee = 10; # Constant fee per transaction in lovelace

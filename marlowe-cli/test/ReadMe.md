@@ -371,7 +371,7 @@ marlowe-cli test contracts --testnet-magic 1564                                 
 [PrintWallet] Wallet for role "Lender" contains valueFromList [(AdaAssetId,80000000)].
 [PrintWallet] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,10000000)].
 [CallCreate] Endpoint "create" called on instance c2b9e4c7-fd8d-43ce-a9b5-f1dc6a0fa726 for owners [("Lender",ca485e3ef87f7515bae5cf49a6a55224043d30bd28c04bb06a841c6e),("Borrower",95f1162148b1d5edda006afcfe9b36313034a995f24a6abb17fb23a7)].
-[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 0955850f7d05e040572ef7c580ee99963ed891bc7e1ebd8f2d60372a, rolesCurrency = ea5915a653254c5feea89dac251a7264ce5f6874299439ea1cebcaef, slotConfig = (1000,POSIXTime {getPOSIXTime = 1638215277000})}.
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 0955850f7d05e040572ef7c580ee99963ed891bc7e1ebd8f2d60372a, rolesCurrency = ea5915a653254c5feea89dac251a7264ce5f6874299439ea1cebcaef, slotConfig = (1000,POSIXTime {getPOSIXTime = 1644929640000})}.
 [CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75515174),(AssetId "ea5915a653254c5feea89dac251a7264ce5f6874299439ea1cebcaef" "Lender",1)].
 [CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "ea5915a653254c5feea89dac251a7264ce5f6874299439ea1cebcaef" "Borrower",1)].
 [Follow] Instance f66a6862-9526-4b98-a9b0-c75b96659dc4 now follows instance c2b9e4c7-fd8d-43ce-a9b5-f1dc6a0fa726.
