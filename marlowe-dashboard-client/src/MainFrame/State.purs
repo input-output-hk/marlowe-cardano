@@ -200,16 +200,15 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
       mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
       let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
       for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
-        -- FIXME-3208 try to test this, we no longer have a list of plutus app Id,
-        --            what we can do is to query the PAB via rest and to subscribe
-        --            to the active contracts
-        -- let
-        --   followAppIds :: Array PlutusAppId
-        --   followAppIds =
-        --     Set.toUnfoldable $ keys $ view _contracts dashboardState
+        -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
         subscribeToWallet walletId
-    -- FIXME-3208
-    -- for followAppIds $ subscribeToPlutusApp
+        ajaxPlutusApps <- PAB.getWalletContractInstances walletId
+        case ajaxPlutusApps of
+          Left _ -> pure unit
+          Right plutusApps -> for_
+            (Array.filter (eq Active <<< view _cicStatus) plutusApps)
+            \app ->
+              subscribeToPlutusApp $ view _cicContract app
     (WS.WebSocketClosed closeEvent) -> do
       -- TODO: Consider whether we should show an error/warning when this happens. It might be more
       -- confusing than helpful, since the websocket is automatically reopened if it closes for any
@@ -449,9 +448,9 @@ handleAction (Receive input) = do
     Connecting _, Connected connectedWallet -> do
       assign _subState $ Right $ Dashboard.mkInitialState contracts
       handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
-    Connected _, Disconnecting connectedWallet contracts ->
-      enterWelcomeState connectedWallet contracts
-    Disconnecting _ _, Disconnected ->
+    Connected _, Disconnecting connectedWallet ->
+      enterWelcomeState connectedWallet
+    Disconnecting _, Disconnected ->
       assign _subState $ Left Welcome.initialState
     _, _ -> pure unit
 
@@ -496,17 +495,22 @@ enterWelcomeState
   :: forall m
    . ManageMarlowe m
   => PABConnectedWallet
-  -> Map MarloweParams Contract.State
   -> HalogenM State Action ChildSlots Msg m Unit
-enterWelcomeState walletDetails _followerApps = do
-  -- FIXME-3208: check, I think it should not be necesary
-  -- let
-  --   followerAppIds :: Array PlutusAppId
-  --   followerAppIds = Set.toUnfoldable $ keys followerApps
-  unsubscribeFromWallet $ view Connected._walletId walletDetails
-  unsubscribeFromPlutusApp $ view Connected._companionAppId walletDetails
-  unsubscribeFromPlutusApp $ view Connected._marloweAppId walletDetails
-  -- for_ followerAppIds unsubscribeFromPlutusApp
+enterWelcomeState walletDetails = do
+  let
+    walletId = view Connected._walletId walletDetails
+  -- We need to unsubscribe from the wallet per se
+  unsubscribeFromWallet walletId
+  -- And also from the individual plutus apps that we are
+  -- subscribed to.
+  -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
+  ajaxPlutusApps <- PAB.getWalletContractInstances walletId
+  case ajaxPlutusApps of
+    Left _ -> pure unit
+    Right plutusApps -> for_ plutusApps \app ->
+      unsubscribeFromPlutusApp $ view _cicContract app
+  -- FIXME-3208: Make the disconnect wallet a Store global action that clears the wallet
+  --             and also the running contracts.
   updateStore $ Store.Wallet $ WalletStore.OnDisconnected
 
 {- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet
@@ -550,6 +554,7 @@ enterDashboardState disconnectedWallet = do
           "Failed to create the companion plutus contracts."
           ajaxError
         Right { companionAppId, marloweAppId } -> do
+          -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
           -- Get notified of new contracts
           subscribeToPlutusApp companionAppId
           -- Get notified of the results of our control app
