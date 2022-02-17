@@ -1363,11 +1363,11 @@ let
 
     "web-common" = pkgs.stdenv.mkDerivation {
         name = "web-common";
-        version = "v2.0.1";
+        version = "v2.1.0";
         src = pkgs.fetchgit {
           url = "https://github.com/input-output-hk/purescript-web-common";
-          rev = "fa101cd785ef6aa2f7aa908b38c2195aa2c2ff3d";
-          sha256 = "0sbngaydgrmn948hyvx1ifdanvph1wchsdmjmvc1b25z2zrdc74q";
+          rev = "ccc6b90bb878a507bdd406bf151867a12e4ed4bc";
+          sha256 = "0cd6pa53lywxhljfhq6yhy70lsm3gy1ib1c5b3n06hhnj4gbdcr5";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
