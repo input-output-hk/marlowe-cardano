@@ -1,4 +1,4 @@
-Feature: As a user I expect to be able to navigate to the home page
+Feature: As a user I should be able to see the Marlowe Playground home page
 
     As a user I should be able to navigate to the marlowe playground home page and
     see all the starting point options available
@@ -16,3 +16,6 @@ Feature: As a user I expect to be able to navigate to the home page
       And I should see "Start in Haskell" text
       And I should see a button with "Open existing project" text
       And I should see a button with "Open an example" text
+
+      When I click "Open existing project" button
+      Then I should see "Login with githubssss" text
