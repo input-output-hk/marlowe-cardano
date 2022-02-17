@@ -42,7 +42,6 @@ import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
 import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
-import Data.Map (Map)
 import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
@@ -86,9 +85,7 @@ import MainFrame.View (render)
 import Marlowe.Client (ContractHistory, _chParams, getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
-import Page.Contract.Types as Contract
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
 import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard

@@ -4,16 +4,14 @@ import Prologue
 
 import Data.Lens (Prism', prism', (.~), (^.))
 import Data.Lens.AffineTraversal (AffineTraversal', affineTraversal)
-import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.PABConnectedWallet as C
 import Data.Wallet (SyncStatus, WalletDetails)
 import Data.Wallet as D
 import Data.WalletId (WalletId)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (Assets, MarloweParams)
+import Marlowe.Semantics (Assets)
 import MarloweContract (MarloweContract(..))
-import Page.Contract.Types as Contract
 
 data WalletStore
   = Disconnected
