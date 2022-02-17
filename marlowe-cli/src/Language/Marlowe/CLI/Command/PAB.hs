@@ -22,7 +22,7 @@ module Language.Marlowe.CLI.Command.PAB (
 , runPabCommand
 ) where
 
-import Cardano.Api (SlotNo)
+import Cardano.Api (AddressAny, SlotNo)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT, throwError)
 import Language.Marlowe.CLI.Command.Parse (parseMarloweClientInput, parseRole, parseSlotNo, parseUrl, parseWalletId)
 import Language.Marlowe.CLI.PAB (callApplyInputs, callCreate, callFollow, callRedeem, runApp, runCompanion, runFollower,
@@ -34,7 +34,7 @@ import Network.Socket (withSocketsDo)
 import Network.WebSockets (runClient)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (pabClient)
-import Plutus.V1.Ledger.Api (PubKeyHash, TokenName)
+import Plutus.V1.Ledger.Api (TokenName)
 import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 import Wallet.Emulator.Wallet (WalletId)
 
@@ -58,7 +58,7 @@ data PabCommand =
       pabUrl       :: BaseUrl                    -- ^ The URL for the Marlowe PAB.
     , instanceFile :: FilePath                   -- ^ The file containing the instance ID.
     , contractFile :: FilePath                   -- ^ The JSON file containing the contract.
-    , owners       :: [(TokenName, PubKeyHash)]  -- ^ The contract role names and their public key hashes.
+    , owners       :: [(TokenName, AddressAny)]  -- ^ The contract role names and their public key hashes.
     }
     -- | Call the "apply-inputs" endpoint.
   | ApplyInputs
@@ -76,7 +76,7 @@ data PabCommand =
       pabUrl       :: BaseUrl                  -- ^ The URL for the Marlowe PAB.
     , instanceFile :: FilePath                 -- ^ The file containing the instance ID.
     , paramsFile   :: FilePath                 -- ^ The JSON file containing the contract parameters.
-    , owner        :: (TokenName, PubKeyHash)  -- ^ The contract role name and their public key hash.
+    , owner        :: (TokenName, AddressAny)  -- ^ The contract role name and their public key hash.
     }
     -- | Run the follower contract.
   | Follower
@@ -212,10 +212,10 @@ createCommand =
 createOptions :: O.Parser PabCommand
 createOptions =
   Create
-    <$> O.option parseUrl             (O.long "pab-url"       <> O.metavar "URL"             <> O.help "URL for the Marlowe PAB."              )
-    <*> O.strOption                   (O.long "instance-file" <> O.metavar "INSTANCE_FILE"   <> O.help "Input file for the instance ID."       )
-    <*> O.strOption                   (O.long "contract-file" <> O.metavar "CONTRACT_FILE"   <> O.help "JSON input file for the contract."     )
-    <*> (O.many . O.option parseRole) (O.long "owner"         <> O.metavar "ROLE=PUBKEYHASH" <> O.help "The role name and its public key hash.")
+    <$> O.option parseUrl             (O.long "pab-url"       <> O.metavar "URL"           <> O.help "URL for the Marlowe PAB."         )
+    <*> O.strOption                   (O.long "instance-file" <> O.metavar "INSTANCE_FILE" <> O.help "Input file for the instance ID."  )
+    <*> O.strOption                   (O.long "contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the contract.")
+    <*> (O.many . O.option parseRole) (O.long "owner"         <> O.metavar "ROLE=ADDRESS"  <> O.help "The role name and its address."   )
 
 
 -- | Parser for the "apply-inputs" command.
@@ -253,7 +253,7 @@ redeemOptions =
     <$> O.option parseUrl  (O.long "pab-url"       <> O.metavar "URL"             <> O.help "URL for the Marlowe PAB."                   )
     <*> O.strOption        (O.long "instance-file" <> O.metavar "INSTANCE_FILE"   <> O.help "Input file for the instance ID."            )
     <*> O.strOption        (O.long "params-file"   <> O.metavar "PARAMS_FILE"     <> O.help "JSON input file for the Marlowe parameters.")
-    <*> O.option parseRole (O.long "owner"         <> O.metavar "ROLE=PUBKEYHASH" <> O.help "The role name and its public key hash."     )
+    <*> O.option parseRole (O.long "owner"         <> O.metavar "ROLE=ADDRESS"    <> O.help "The role name and its address."             )
 
 
 -- | Parser for the "follow" command.
