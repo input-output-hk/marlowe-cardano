@@ -128,7 +128,7 @@ instance ToCore Contract S.Contract where
 instance ToCore Value (S.Value S.Observation) where
   toCore (Constant c)               = Just $ S.Constant c
   toCore (ConstantParam _)          = Nothing
-  toCore (AvailableMoney accId tok) = pure (S.AvailableMoney accId) <*> pure tok
+  toCore (AvailableMoney accId tok) = Just $ S.AvailableMoney accId tok
   toCore (NegValue v)               = S.NegValue <$> toCore v
   toCore (AddValue lhs rhs)         = S.AddValue <$> toCore lhs <*> toCore rhs
   toCore (SubValue lhs rhs)         = S.SubValue <$> toCore lhs <*> toCore rhs
@@ -154,7 +154,7 @@ instance ToCore Observation S.Observation where
   toCore FalseObs               = Just S.FalseObs
 
 instance ToCore Action S.Action where
-  toCore (Deposit accId party tok val) = pure (S.Deposit accId) <*> pure party <*> pure tok <*> toCore val
+  toCore (Deposit accId party tok val) = pure (S.Deposit accId party tok) <*> toCore val
   toCore (Choice choId bounds)         = Just $ S.Choice choId bounds
   toCore (Notify obs)                  = S.Notify <$> toCore obs
 
@@ -168,23 +168,3 @@ instance ToCore Payee S.Payee where
 
 instance ToCore Case (S.Case S.Contract) where
   toCore (Case act c) = S.Case <$> toCore act <*> toCore c
-
-advanceTillWhenAndThen :: Contract -> (Contract -> Contract) -> Contract
-advanceTillWhenAndThen Close f                      = f Close
-advanceTillWhenAndThen w@When{} f                   = f w
-advanceTillWhenAndThen (Pay accId p tok val cont) f = Pay accId p tok val (f cont)
-advanceTillWhenAndThen (If obs cont1 cont2) f       = If obs (f cont1) (f cont2)
-advanceTillWhenAndThen (Let vId val cont) f         = Let vId val (f cont)
-advanceTillWhenAndThen (Assert obs cont) f          = Assert obs (f cont)
-
-both :: Contract -> Contract -> Contract
-both Close b = b
-both a Close = a
-both a@(When cases1 (Slot timeout1) cont1) b@(When cases2 (Slot timeout2) cont2)
-  = When ([Case a1 (both c1 b) | Case a1 c1 <- cases1] ++
-          [Case a2 (both a c2) | Case a2 c2 <- cases2])
-         (Slot (min timeout1 timeout2))
-         (both (if timeout1 > timeout2 then a else cont1)
-               (if timeout2 > timeout1 then b else cont2))
-both a@When{} b = advanceTillWhenAndThen b (both a)
-both a b = advanceTillWhenAndThen a (`both` b)
