@@ -37,12 +37,12 @@ module Language.Marlowe.CLI.PAB (
 ) where
 
 
-import Cardano.Api (SlotNo (..))
+import Cardano.Api (AddressAny, AddressInEra, ShelleyEra, SlotNo (..), anyAddressInShelleyBasedEra)
 import Control.Monad (unless, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, liftEither, liftIO, throwError)
 import Data.Aeson (FromJSON, ToJSON, eitherDecode, toJSON)
 import Data.Aeson.Types (parseEither, parseJSON)
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, second)
 import Data.ByteString.Builder (toLazyByteString)
 import Data.Proxy (Proxy (..))
 import Data.Text.Encoding (encodeUtf8Builder)
@@ -59,13 +59,13 @@ import Network.WebSockets (Connection, receiveData)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..))
 import Plutus.PAB.Webserver.Types (ContractActivationArgs (..), InstanceStatusToClient (..))
-import Plutus.V1.Ledger.Api (PubKeyHash, TokenName)
+import Plutus.V1.Ledger.Api (TokenName)
 import Plutus.V1.Ledger.Slot (Slot)
 import Servant.Client (ClientM)
 import System.IO (hPutStrLn, stderr)
 import Wallet.Emulator.Wallet (Wallet (..), WalletId (..))
 
-import qualified PlutusTx.AssocMap as AM (fromList)
+import qualified PlutusTx.AssocMap as AM (Map, fromList)
 
 
 -- | Run in the PAB API.
@@ -247,14 +247,14 @@ callCreate :: MonadError CliError m
            -> (forall a. ApiRunner m a)           -- ^ The HTTP runner.
            -> FilePath                            -- ^ File containing the contract instance ID.
            -> FilePath                            -- ^ The JSON file containing the contract.
-           -> [(TokenName, PubKeyHash)]           -- ^ The contract role names and their owners' public key hashes.
+           -> [(TokenName, AddressAny)]           -- ^ The contract role names and their owners' addresses.
            -> m ()                                -- ^ Action for calling the "create" endpoint.
 callCreate pabClient runApi instanceFile contractFile owners =
   do
     contract <- decodeFileStrict contractFile
     call pabClient runApi instanceFile "create"
       (
-      , AM.fromList owners
+      , AM.fromList $ second anyAddressInShelleyBasedEra <$> owners :: AM.Map TokenName (AddressInEra ShelleyEra)
       , contract :: Contract
       )
 
@@ -288,16 +288,16 @@ callRedeem :: MonadError CliError m
            -> (forall a. ApiRunner m a)           -- ^ The HTTP runner.
            -> FilePath                            -- ^ File containing the contract instance ID.
            -> FilePath                            -- ^ The JSON file containing the Marlowe parameters.
-           -> (TokenName, PubKeyHash)             -- ^ The contract role name and their owner's public key hash.
+           -> (TokenName, AddressAny)             -- ^ The contract role name and their owner's addresses.
            -> m ()                                -- ^ Action for calling the "redeem" endpoint.
-callRedeem pabClient runApi instanceFile paramsFile (ownerName, ownerHash) =
+callRedeem pabClient runApi instanceFile paramsFile (ownerName, ownerAddress) =
   do
     params <- decodeFileStrict paramsFile
     call pabClient runApi instanceFile "redeem"
       (
       , params :: MarloweParams
       , ownerName
-      , ownerHash
+      , anyAddressInShelleyBasedEra ownerAddress :: AddressInEra ShelleyEra
       )
 
 

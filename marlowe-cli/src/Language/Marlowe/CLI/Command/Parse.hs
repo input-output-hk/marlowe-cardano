@@ -331,12 +331,12 @@ readPubKeyHashEither s =
 
 
 -- | Parse a role.
-parseRole :: O.ReadM (TokenName, PubKeyHash)
+parseRole :: O.ReadM (TokenName, AddressAny)
 parseRole =
   O.eitherReader
     $ \s ->
       case splitOn "=" s of
-        [name, pkh] -> do
-                         pkh' <- readPubKeyHashEither pkh
-                         pure (readTokenName name, pkh')
-        _           -> Left "Invalid role assigment."
+        [name, address] -> do
+                             address' <- readAddressAnyEither address
+                             pure (readTokenName name, address')
+        _               -> Left "Invalid role assigment."
