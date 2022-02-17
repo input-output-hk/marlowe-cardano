@@ -13,6 +13,7 @@ import Data.Maybe (isJust)
 import qualified Language.Marlowe as C
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Language.Marlowe.Extended
+import Marlowe.Contracts.Common
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.Swap
 import Test.Tasty
