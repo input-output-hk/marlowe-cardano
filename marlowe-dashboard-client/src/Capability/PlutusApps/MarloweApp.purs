@@ -6,11 +6,10 @@ module Capability.PlutusApps.MarloweApp
   ( class MarloweApp
   , createContract
   , applyInputs
-  , redeem
-  , waitForResponse
-  , createEndpointMutex
+  , maxRequests
   , onNewActiveEndpoints
   , onNewObservableState
+  , redeem
   ) where
 
 import Prologue
@@ -19,24 +18,18 @@ import AppM (AppM)
 import Bridge (toBack)
 import Capability.PAB (class ManagePAB)
 import Capability.PAB (invokeEndpoint) as PAB
-import Capability.PlutusApps.MarloweApp.Lenses
-  ( _applyInputs
-  , _create
-  , _marloweAppEndpointMutex
-  , _redeem
-  , _requests
-  )
 import Capability.PlutusApps.MarloweApp.Types
-  ( class HasMarloweAppEndpointMutex
-  , EndpointMutex
+  ( Endpoints
   , MarloweEndpointResponse
   )
+import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.Trans.Class (lift)
 import Data.Address (Address)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Array (findMap, take, (:))
 import Data.Foldable (elem)
-import Data.Lens (Lens', _1, over, toArrayOf, traversed, view)
+import Data.Lens (_1, over, to, toArrayOf, traversed, view)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
@@ -44,12 +37,11 @@ import Data.PubKeyHash (PubKeyHash)
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID, genUUID)
-import Effect (Effect)
 import Effect.AVar (AVar)
-import Effect.AVar as EAVar
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
+import Env (Env, _marloweEndpoints, _pendingRequests)
 import Language.Marlowe.Client (EndpointResponse(..))
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
@@ -62,7 +54,6 @@ import Marlowe.Semantics
 import Plutus.Contract.Effects (ActiveEndpoint, _ActiveEndpoint)
 import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Value (TokenName) as Back
-import PlutusTx.AssocMap (Map(..)) as Back
 import Type.Proxy (Proxy(..))
 import Types (AjaxResponse)
 import Wallet.Types (_EndpointDescription)
@@ -88,13 +79,14 @@ instance marloweAppM :: MarloweApp AppM where
   createContract plutusAppId roles contract = do
     reqId <- liftEffect genUUID
     let
-      backRoles :: Back.Map Back.TokenName Address
-      backRoles = Back.Map $ map (over _1 toBack) $ Map.toUnfoldable roles
+      backRoles :: Map Back.TokenName Address
+      backRoles = Map.fromFoldable
+        $ map (over _1 toBack)
+        $ (Map.toUnfoldable roles :: Array (TokenName /\ Address))
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
-    map (const reqId) <$> invokeMutexedEndpoint plutusAppId reqId "create"
-      _create
-      payload
+    map (const reqId)
+      <$> invokeEndpointAvar plutusAppId reqId "create" _.create payload
   applyInputs
     plutusAppId
     marloweContractId
@@ -110,8 +102,11 @@ instance marloweAppM :: MarloweApp AppM where
         , encodeJson backTimeInterval
         , encodeJson inputs
         ]
-    invokeMutexedEndpoint plutusAppId reqId "apply-inputs-nonmerkleized"
-      _applyInputs
+    invokeEndpointAvar
+      plutusAppId
+      reqId
+      "apply-inputs-nonmerkleized"
+      _.applyInputs
       payload
   redeem plutusAppId marloweContractId tokenName pubKeyHash = do
     reqId <- liftEffect genUUID
@@ -122,60 +117,52 @@ instance marloweAppM :: MarloweApp AppM where
         , encodeJson tokenName
         , encodeJson pubKeyHash
         ]
-    invokeMutexedEndpoint plutusAppId reqId "redeem" _redeem payload
-
-createEndpointMutex :: Effect EndpointMutex
-createEndpointMutex = do
-  create <- EAVar.empty
-  applyInputs <- EAVar.empty
-  redeem <- EAVar.empty
-  requests <- EAVar.new mempty
-  pure { create, applyInputs, redeem, requests }
+    invokeEndpointAvar plutusAppId reqId "redeem" _.redeem payload
 
 -- This is the amount of requests we store in the request queue
 maxRequests :: Int
 maxRequests = 15
 
-invokeMutexedEndpoint
-  :: forall payload m env
+invokeEndpointAvar
+  :: forall payload m
    . EncodeJson payload
   => MonadAff m
   => ManagePAB m
-  => MonadAsk env m
-  => HasMarloweAppEndpointMutex env
+  => MonadAsk Env m
   => PlutusAppId
   -> UUID
   -> String
-  -> Lens' EndpointMutex (AVar Unit)
+  -> (Endpoints -> (AVar Unit))
   -> payload
   -> m (AjaxResponse Unit)
-invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
-  -- There are three mutex involved in this operation:
-  --   * The endpointMutex help us avoid making multiple requests to the same endpoint if its not
-  --     available.
-  --   * The global requestMutex help us manage the request queue concurrently.
-  --   * For each request in the queue, we store one mutex that represents the response.
-  endpointMutex <- asks $ view (_marloweAppEndpointMutex <<< _endpointMutex)
-  requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
-  -- First we need to see if the endpoint is available to make a request
-  -- TODO: we could later add a forkAff with a timer that unlocks this timer if we
-  --       dont get a response
-  -- TODO: We could change this take for a read and listen for a 500 error with EndpointUnavailabe
-  --       to retry and take it (instead of preemptively taking it).
-  liftAff $ AVar.take endpointMutex
-  result <- PAB.invokeEndpoint plutusAppId endpointName payload
-  -- After making the request, we lock on the global request array so we can add
-  -- a new request id with its corresponding mutex.
-  -- TODO: It would be nice if the invokeEndpoint returns a requestId instead of having to generate
-  --       one from the FE.
-  liftAff do
-    requests <- AVar.take requestMutex
-    newRequestMutex <- AVar.empty
-    let
-      -- We add new requests to the begining of the array and remove them from the end.
-      newRequests = take maxRequests $ (reqId /\ newRequestMutex) : requests
-    AVar.put newRequests requestMutex
-  pure result
+invokeEndpointAvar plutusAppId reqId endpointName getEndpoint payload =
+  runExceptT do
+    -- There are three AVars involved in this operation:
+    --   * The endpoint help us avoid making multiple requests to the same endpoint if its not
+    --     available.
+    --   * The global pendingRequests help us manage the request queue concurrently.
+    --   * For each request in the queue, we store one mutex that represents the response.
+    endpoint <- lift $ asks $ view (_marloweEndpoints <<< to getEndpoint)
+    pendingRequests <- lift $ asks $ view _pendingRequests
+    -- First we need to see if the endpoint is available to make a request
+    -- TODO: we could later add a forkAff with a timer that unlocks this timer if we
+    --       dont get a response
+    -- TODO: We could change this take for a read and listen for a 500 error with EndpointUnavailabe
+    --       to retry and take it (instead of preemptively taking it).
+    liftAff $ AVar.take endpoint
+    result <- ExceptT $ PAB.invokeEndpoint plutusAppId endpointName payload
+    -- After making the request successfully, we lock on the global request array so we can add
+    -- a new request id with its corresponding mutex.
+    -- TODO: It would be nice if the invokeEndpoint returns a requestId instead of having to generate
+    --       one from the FE.
+    liftAff do
+      requests <- AVar.take pendingRequests
+      newRequest <- AVar.empty
+      let
+        -- We add new requests to the begining of the array and remove them from the end.
+        newRequests = take maxRequests $ (reqId /\ newRequest) : requests
+      AVar.put newRequests pendingRequests
+    pure result
 
 -- When a MarloweApp emits a new observable state, it comes with the information of which
 -- request id originated the change. We use this function to update the request queue and
@@ -184,10 +171,9 @@ invokeMutexedEndpoint plutusAppId reqId endpointName _endpointMutex payload = do
 -- find a request that triggered this response. This can happen for example when reloading
 -- the webpage, or if we have two browsers with the same wallet.
 onNewObservableState
-  :: forall env m
+  :: forall m
    . MonadAff m
-  => MonadAsk env m
-  => HasMarloweAppEndpointMutex env
+  => MonadAsk Env m
   => MarloweEndpointResponse
   -> m (Maybe MarloweEndpointResponse)
 onNewObservableState lastResult = case lastResult of
@@ -195,9 +181,9 @@ onNewObservableState lastResult = case lastResult of
   EndpointException reqId _ _ -> onNewObservableState' reqId
   where
   onNewObservableState' reqId = do
-    requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
+    pendingRequests <- asks $ view _pendingRequests
     -- This read is blocking but does not take the mutex.
-    requests <- liftAff $ AVar.read requestMutex
+    requests <- liftAff $ AVar.read pendingRequests
     for (findReqId reqId requests) \reqMutex -> do
       liftAff $ AVar.put lastResult reqMutex
       pure lastResult
@@ -209,34 +195,11 @@ findReqId
 findReqId reqId = findMap
   (\(reqId' /\ reqMutex) -> if reqId == reqId' then Just reqMutex else Nothing)
 
--- TODO: This function is not used yet, but is intended to be used to be able to do the refactor
---       mentioned in MainFrame.State :: NewObservableState
-waitForResponse
-  :: forall env m
-   . MonadAff m
-  => MonadAsk env m
-  => HasMarloweAppEndpointMutex env
-  => UUID
-  -> m (Maybe MarloweEndpointResponse)
-waitForResponse reqId = do
-  requestMutex <- asks $ view (_marloweAppEndpointMutex <<< _requests)
-  -- This read is blocking but does not take the mutex.
-  requests <- liftAff $ AVar.read requestMutex
-  for (findReqId reqId requests) \reqMutex -> do
-    -- TODO: We could add a timer so we don't wait forever
-    lastResult <- liftAff $ AVar.read reqMutex
-    pure lastResult
-
 -- Plutus contracts have endpoints that can be available or not. We get notified by the
 -- websocket message NewActiveEndpoints when the status change, and we use this function
 -- to update some mutex we use to restrict access to unavailable methods.
 onNewActiveEndpoints
-  :: forall env m
-   . MonadAff m
-  => MonadAsk env m
-  => HasMarloweAppEndpointMutex env
-  => Array ActiveEndpoint
-  -> m Unit
+  :: forall m. MonadAff m => MonadAsk Env m => Array ActiveEndpoint -> m Unit
 onNewActiveEndpoints endpoints = do
   let
     endpointsName :: Array String
@@ -252,7 +215,7 @@ onNewActiveEndpoints endpoints = do
 
     -- For each endpoint:
     updateEndpoint name getter = do
-      mutex <- asks $ view (_marloweAppEndpointMutex <<< getter)
+      mutex <- asks $ view (_marloweEndpoints <<< to getter)
       -- We check if it's available or not
       if (elem name endpointsName) then
         -- If it's available we put a unit in the mutex, to allow
@@ -264,6 +227,6 @@ onNewActiveEndpoints endpoints = do
         -- callers to wait until we put a unit. If the mutex was already
         -- empty, tryTake will return Nothing but wont block the thread.
         void $ liftAff $ AVar.tryTake mutex
-  updateEndpoint "redeem" _redeem
-  updateEndpoint "create" _create
-  updateEndpoint "apply-inputs-nonmerkleized" _applyInputs
+  updateEndpoint "redeem" _.redeem
+  updateEndpoint "create" _.create
+  updateEndpoint "apply-inputs-nonmerkleized" _.applyInputs

@@ -6,7 +6,6 @@ import Prologue
 
 import AppM (runAppM)
 import Capability.MarloweStorage as MarloweStorage
-import Capability.PlutusApps.MarloweApp as MarloweApp
 import Control.Logger.Effect.Console (logger) as Console
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut
@@ -51,15 +50,20 @@ instance DecodeJson MainArgs where
 mkEnv :: Milliseconds -> WebSocketManager -> WebpackBuildMode -> Effect Env
 mkEnv pollingInterval wsManager webpackBuildMode = do
   contractStepCarouselSubscription <- AVar.empty
-  marloweAppEndpointMutex <- MarloweApp.createEndpointMutex
+  marloweEndpoints <- { create: _, applyInputs: _, redeem: _ }
+    <$> AVar.empty
+    <*> AVar.empty
+    <*> AVar.empty
+  pendingRequests <- AVar.new []
   pure $ Env
     { contractStepCarouselSubscription
     , logger: case webpackBuildMode of
         -- Add backend logging capability
         Production -> mempty
         Development -> Console.logger identity
-    , marloweAppEndpointMutex
+    , marloweEndpoints
     , wsManager
+    , pendingRequests
     , pollingInterval
     }
 
