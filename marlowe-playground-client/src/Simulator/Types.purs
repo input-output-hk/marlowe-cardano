@@ -27,7 +27,7 @@ import Marlowe.Semantics
   , Party(..)
   , Payment
   , Slot
-  , SlotInterval
+  , TimeInterval
   , Token
   , TransactionError
   , TransactionInput
@@ -162,8 +162,8 @@ otherActionsParty = Role "marlowe_other_actions"
 data LogEntry
   = StartEvent Slot
   | InputEvent TransactionInput
-  | OutputEvent SlotInterval Payment
-  | CloseEvent SlotInterval
+  | OutputEvent TimeInterval Payment
+  | CloseEvent TimeInterval
 
 derive instance genericLogEntry :: Generic LogEntry _
 

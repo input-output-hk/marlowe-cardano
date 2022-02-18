@@ -75,7 +75,7 @@ type Timeout = POSIXTime
 type Money = Val.Value
 type ChoiceName = BuiltinByteString
 type ChosenNum = Integer
-type SlotInterval = (POSIXTime, POSIXTime)
+type TimeInterval = (POSIXTime, POSIXTime)
 type Accounts = Map (AccountId, Token) Integer
 
 -- * Data Types
@@ -221,7 +221,7 @@ data State = State { accounts    :: Accounts
 
 {-| Execution environment. Contains a slot interval of a transaction.
 -}
-newtype Environment = Environment { slotInterval :: SlotInterval }
+newtype Environment = Environment { slotInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
 
@@ -294,8 +294,8 @@ getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
     These errors should never occur, but we are always prepared.
 -}
-data IntervalError = InvalidInterval SlotInterval
-                   | IntervalInPastError POSIXTime SlotInterval
+data IntervalError = InvalidInterval TimeInterval
+                   | IntervalInPastError POSIXTime TimeInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
   deriving anyclass (ToJSON, FromJSON)
 

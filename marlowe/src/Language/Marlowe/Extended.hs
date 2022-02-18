@@ -19,7 +19,7 @@ module Language.Marlowe.Extended ( module Language.Marlowe.Extended
                                  , ada, adaSymbol, adaToken
                                  , S.AccountId, S.Bound(..), S.ChoiceId(..)
                                  , S.ChoiceName, S.ChosenNum, S.Party(..)
-                                 , S.SlotInterval, S.Token(..), S.ValueId(..)
+                                 , S.TimeInterval, S.Token(..), S.ValueId(..)
                                  , ToCore (..)
                                  , (%)
                                  ) where

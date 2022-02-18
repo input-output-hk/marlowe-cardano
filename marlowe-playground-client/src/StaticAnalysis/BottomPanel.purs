@@ -42,7 +42,7 @@ import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Input(..)
-  , SlotInterval(..)
+  , TimeInterval(..)
   , TransactionInput(..)
   )
 import Marlowe.Symbolic.Types.Response as R
@@ -369,7 +369,7 @@ displayTransactionList transactionList =
   ol [ classes [ ClassName "indented-enum" ] ]
     ( do
         ( TransactionInput
-            { interval: SlotInterval from to
+            { interval: TimeInterval from to
             , inputs: inputList
             }
         ) <-

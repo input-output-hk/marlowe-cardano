@@ -42,7 +42,7 @@ import Language.Marlowe.CLI.Types (SomePaymentSigningKey)
 import Language.Marlowe.Client (MarloweClientInput, MarloweContractState)
 import Language.Marlowe.Contract (MarloweContract)
 import Language.Marlowe.Semantics (MarloweParams)
-import Language.Marlowe.SemanticsTypes (Contract, SlotInterval, State)
+import Language.Marlowe.SemanticsTypes (Contract, State, TimeInterval)
 import Plutus.Contract (ContractInstanceId)
 import Plutus.PAB.Webserver.Client (PabClient)
 import Plutus.V1.Ledger.Api (PubKeyHash)
@@ -161,7 +161,7 @@ data PabOperation =
       poInstance :: InstanceNickname
     , poOwner    :: RoleName
     , poInputs   :: [MarloweClientInput]
-    , poSlots    :: Maybe SlotInterval
+    , poSlots    :: Maybe TimeInterval
     }
   | AwaitApplyInputs
     {

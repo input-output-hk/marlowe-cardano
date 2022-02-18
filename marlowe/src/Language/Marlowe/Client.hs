@@ -95,8 +95,8 @@ instance ToJSON MarloweClientInput where
 
 type MarloweSchema =
         Endpoint "create" (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract)
-        .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe SlotInterval, [MarloweClientInput])
-        .\/ Endpoint "apply-inputs-nonmerkleized" (UUID, MarloweParams, Maybe SlotInterval, [InputContent])
+        .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe TimeInterval, [MarloweClientInput])
+        .\/ Endpoint "apply-inputs-nonmerkleized" (UUID, MarloweParams, Maybe TimeInterval, [InputContent])
         .\/ Endpoint "auto" (UUID, MarloweParams, Party, POSIXTime)
         .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, AddressInEra ShelleyEra)
         .\/ Endpoint "close" UUID
@@ -583,7 +583,7 @@ canAutoExecuteContractForParty party = check
 applyInputs :: AsMarloweError e
     => MarloweParams
     -> SmallTypedValidator
-    -> Maybe SlotInterval
+    -> Maybe TimeInterval
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator slotInterval inputs = mapError (review _MarloweError) $ do
@@ -711,7 +711,7 @@ getOnChainState validator = do
 mkStep ::
     MarloweParams
     -> SmallTypedValidator
-    -> SlotInterval
+    -> TimeInterval
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
 mkStep MarloweParams{..} typedValidator slotInterval@(minSlot, maxSlot) clientInputs = do

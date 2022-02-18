@@ -50,7 +50,7 @@ import Marlowe.Semantics
   , Payment
   , ReduceResult(..)
   , Slot
-  , SlotInterval(..)
+  , TimeInterval(..)
   , Timeouts(..)
   , Token
   , TransactionInput(..)
@@ -136,7 +136,7 @@ nextState txInput state =
   let
     { semanticState, contract, history } =
       state
-    TransactionInput { interval: SlotInterval minTime _, inputs } = txInput
+    TransactionInput { interval: TimeInterval minTime _, inputs } = txInput
     minSlot = posixTimeToSlot minTime
 
     { txOutState, txOutContract, txOutPayments } =
@@ -348,20 +348,20 @@ expandBalances participants tokens stateAccounts =
         in
           key /\ (fromMaybe zero $ Map.lookup key stateAccounts)
 
-mkInterval :: Slot -> Contract -> SlotInterval
+mkInterval :: Slot -> Contract -> TimeInterval
 mkInterval currentSlot contract =
   let
     time = slotToPOSIXTime currentSlot
   in
     case nextTimeout contract of
-      Nothing -> SlotInterval time
+      Nothing -> TimeInterval time
         (time + POSIXTime { getPOSIXTime: (fromInt 10) })
       Just minTime
-        -- FIXME: We should change this for a Maybe SlotInterval and return Nothing in this case.
+        -- FIXME: We should change this for a Maybe TimeInterval and return Nothing in this case.
         --        86400 is one day in seconds
-        | minTime < currentSlot -> SlotInterval time
+        | minTime < currentSlot -> TimeInterval time
             (time + POSIXTime { getPOSIXTime: (fromInt 86400) })
-        | otherwise -> SlotInterval time
+        | otherwise -> TimeInterval time
             (slotToPOSIXTime minTime - POSIXTime { getPOSIXTime: (fromInt 1) })
 
 getAllPayments :: State -> List Payment

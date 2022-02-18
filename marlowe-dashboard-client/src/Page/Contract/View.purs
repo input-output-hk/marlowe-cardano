@@ -61,7 +61,7 @@ import Marlowe.Semantics
   ( ChoiceId(..)
   , Party(..)
   , Slot
-  , SlotInterval(..)
+  , TimeInterval(..)
   , Token
   , TransactionInput(..)
   , _accounts
@@ -318,7 +318,7 @@ renderPastStep tzOffset state stepNumber step =
   ]
 
 type InputsByParty
-  = { inputs :: Array S.Input, interval :: SlotInterval, party :: Party }
+  = { inputs :: Array S.Input, interval :: TimeInterval, party :: Party }
 
 -- Normally we would expect that a TransactionInput has either no inputs or a single one
 -- but the types allows for them to be a list of different inputs, possibly made by different
@@ -431,7 +431,7 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
     -- We don't know exactly when a transaction was executed, we have an interval. But
     -- the design asks for an exact date so we use the lower end of the interval so that
     -- we don't show a value in the future
-    (SlotInterval intervalFrom _) = interval
+    (TimeInterval intervalFrom _) = interval
 
     mTransactionDateTime = posixTimeToDateTime intervalFrom
 

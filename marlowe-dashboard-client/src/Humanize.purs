@@ -32,7 +32,7 @@ import Halogen.HTML (HTML, img)
 import Halogen.HTML.Properties (src)
 import Images (cfdIcon, loanIcon, purchaseIcon)
 import Marlowe.Extended (ContractType(..))
-import Marlowe.Semantics (SlotInterval(..), Token(..))
+import Marlowe.Semantics (TimeInterval(..), Token(..))
 import Marlowe.Slot (posixTimeToDateTime)
 import Plutus.V1.Ledger.Time (POSIXTime)
 
@@ -63,8 +63,8 @@ humanizeDuration (Seconds seconds)
         else
           show days <> "days left"
 
-humanizeInterval :: Minutes -> SlotInterval -> String
-humanizeInterval tzOffset (SlotInterval from to) = humanize
+humanizeInterval :: Minutes -> TimeInterval -> String
+humanizeInterval tzOffset (TimeInterval from to) = humanize
   (formatPOSIXTime tzOffset from)
   (formatPOSIXTime tzOffset to)
   where

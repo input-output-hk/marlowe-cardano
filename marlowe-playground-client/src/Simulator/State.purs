@@ -50,8 +50,8 @@ import Marlowe.Semantics
   , Observation
   , Party
   , Slot
-  , SlotInterval(..)
   , State
+  , TimeInterval(..)
   , Timeouts(..)
   , TransactionError(..)
   , TransactionInput(..)
@@ -141,7 +141,7 @@ actionToActionInput state (Deposit accountId party token value) =
 
     evalResult = evalValue env state value
 
-    env = Environment { slotInterval: (SlotInterval minSlot minSlot) }
+    env = Environment { slotInterval: (TimeInterval minSlot minSlot) }
   in
     Tuple (DepositInputId accountId party token evalResult)
       (DepositInput accountId party token evalResult)
@@ -383,7 +383,7 @@ pendingTransactionInputs executionState =
 
     time = slotToPOSIXTime slot
 
-    interval = SlotInterval time time
+    interval = TimeInterval time time
 
     inputs = executionState ^. _pendingInputs
   in

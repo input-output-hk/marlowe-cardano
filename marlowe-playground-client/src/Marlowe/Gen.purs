@@ -49,7 +49,7 @@ import Marlowe.Semantics
   , PubKey
   , Rational(..)
   , Slot(..)
-  , SlotInterval(..)
+  , TimeInterval(..)
   , TokenName
   , TransactionInput(..)
   , TransactionWarning(..)
@@ -161,11 +161,11 @@ genCurrencySymbol :: forall m. MonadGen m => MonadRec m => m CurrencySymbol
 genCurrencySymbol = genBase16
 
 genSlotInterval
-  :: forall m. MonadGen m => MonadRec m => m POSIXTime -> m SlotInterval
+  :: forall m. MonadGen m => MonadRec m => m POSIXTime -> m TimeInterval
 genSlotInterval gen = do
   from <- gen
   to <- suchThat gen (\v -> v > from)
-  pure $ SlotInterval from to
+  pure $ TimeInterval from to
 
 genBound :: forall m. MonadGen m => MonadRec m => m Bound
 genBound = do

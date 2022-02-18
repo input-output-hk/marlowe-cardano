@@ -54,7 +54,7 @@ import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
 import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
-                                        Observation (..), Party, Payee (..), SlotInterval, State (..), Token (..),
+                                        Observation (..), Party, Payee (..), State (..), TimeInterval, Token (..),
                                         Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
 import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
@@ -176,7 +176,7 @@ data TransactionError = TEAmbiguousSlotIntervalError
 {-| Marlowe transaction input.
 -}
 data TransactionInput = TransactionInput
-    { txInterval :: SlotInterval
+    { txInterval :: TimeInterval
     , txInputs   :: [Input] }
   deriving stock (Haskell.Show, Haskell.Eq)
 
@@ -218,7 +218,7 @@ data MarloweParams = MarloweParams {
 
 
 {- Checks 'interval' and trim it if necessary. -}
-fixInterval :: SlotInterval -> State -> IntervalResult
+fixInterval :: TimeInterval -> State -> IntervalResult
 fixInterval interval state =
     case interval of
         (low, high)
@@ -618,7 +618,7 @@ instance FromJSON TransactionInput where
                    withArray "Transaction input list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                                       ))
-    where parseSlotInterval = withObject "SlotInterval" (\v ->
+    where parseSlotInterval = withObject "TimeInterval" (\v ->
             do from <- POSIXTime <$> (withInteger =<< (v .: "from"))
                to <- POSIXTime <$> (withInteger =<< (v .: "to"))
                return (from, to)

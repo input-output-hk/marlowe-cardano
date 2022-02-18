@@ -106,7 +106,7 @@ import Marlowe.Semantics
   , Party(..)
   , Payee(..)
   , Payment(..)
-  , SlotInterval(..)
+  , TimeInterval(..)
   , Token(..)
   , TransactionInput(..)
   , inBounds
@@ -864,15 +864,15 @@ logToLines metadata (OutputEvent interval payment) = paymentToLines metadata
   interval
   payment
 
-logToLines _ (CloseEvent (SlotInterval start end)) =
+logToLines _ (CloseEvent (TimeInterval start end)) =
   [ span_ [ text $ "Contract ended" ]
   , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
   ]
 
-inputToLine :: forall p a. MetaData -> SlotInterval -> Input -> Array (HTML p a)
+inputToLine :: forall p a. MetaData -> TimeInterval -> Input -> Array (HTML p a)
 inputToLine
   metadata
-  (SlotInterval start end)
+  (TimeInterval start end)
   (IDeposit accountOwner party token money) =
   [ span_
       [ text "Deposit "
@@ -889,7 +889,7 @@ inputToLine
 
 inputToLine
   metadata
-  (SlotInterval start end)
+  (TimeInterval start end)
   (IChoice (ChoiceId choiceName choiceOwner) chosenNum) =
   [ span_
       [ text "Participant "
@@ -905,26 +905,26 @@ inputToLine
   , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
   ]
 
-inputToLine _ (SlotInterval start end) INotify =
+inputToLine _ (TimeInterval start end) INotify =
   [ text "Notify"
   , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
   ]
 
 paymentToLines
-  :: forall p a. MetaData -> SlotInterval -> Payment -> Array (HTML p a)
+  :: forall p a. MetaData -> TimeInterval -> Payment -> Array (HTML p a)
 paymentToLines metadata slotInterval (Payment accountId payee money) = join $
   unfoldAssets money (paymentToLine metadata slotInterval accountId payee)
 
 paymentToLine
   :: forall p a
    . MetaData
-  -> SlotInterval
+  -> TimeInterval
   -> AccountId
   -> Payee
   -> Token
   -> BigInt
   -> Array (HTML p a)
-paymentToLine metadata (SlotInterval start end) accountId payee token money =
+paymentToLine metadata (TimeInterval start end) accountId payee token money =
   [ span_
       [ text "The contract pays "
       , strong_ [ text (showPrettyMoney money) ]

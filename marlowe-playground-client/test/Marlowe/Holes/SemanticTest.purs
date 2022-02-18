@@ -37,14 +37,14 @@ import Text.Pretty (pretty)
 transaction :: Input -> TransactionInput
 transaction input =
   S.TransactionInput
-    { interval: (S.SlotInterval zero zero)
+    { interval: (S.TimeInterval zero zero)
     , inputs: List.singleton input
     }
 
 multipleInputs :: List Input -> TransactionInput
 multipleInputs inputs =
   S.TransactionInput
-    { interval: (S.SlotInterval zero zero)
+    { interval: (S.TimeInterval zero zero)
     , inputs: inputs
     }
 
@@ -52,7 +52,7 @@ timeout :: BigInt -> TransactionInput
 timeout slot =
   S.TransactionInput
     { interval:
-        ( S.SlotInterval (POSIXTime { getPOSIXTime: slot })
+        ( S.TimeInterval (POSIXTime { getPOSIXTime: slot })
             (POSIXTime { getPOSIXTime: slot })
         )
     , inputs: mempty

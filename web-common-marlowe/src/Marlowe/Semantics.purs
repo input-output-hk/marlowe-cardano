@@ -636,40 +636,40 @@ instance hasArgsObservation :: Args Observation where
   hasArgs a = genericHasArgs a
   hasNestedArgs a = genericHasNestedArgs a
 
-validInterval :: SlotInterval -> Boolean
-validInterval (SlotInterval from to) = from <= to
+validInterval :: TimeInterval -> Boolean
+validInterval (TimeInterval from to) = from <= to
 
-above :: POSIXTime -> SlotInterval -> Boolean
-above v (SlotInterval _ to) = v > to
+above :: POSIXTime -> TimeInterval -> Boolean
+above v (TimeInterval _ to) = v > to
 
-anyWithin :: forall f. Foldable f => POSIXTime -> f SlotInterval -> Boolean
-anyWithin v = any (\(SlotInterval from to) -> v >= from && v <= to)
+anyWithin :: forall f. Foldable f => POSIXTime -> f TimeInterval -> Boolean
+anyWithin v = any (\(TimeInterval from to) -> v >= from && v <= to)
 
 -- TODO: extract module
-data SlotInterval
-  = SlotInterval POSIXTime POSIXTime
+data TimeInterval
+  = TimeInterval POSIXTime POSIXTime
 
-derive instance genericSlotInterval :: Generic SlotInterval _
+derive instance genericSlotInterval :: Generic TimeInterval _
 
-derive instance eqSlotInterval :: Eq SlotInterval
+derive instance eqSlotInterval :: Eq TimeInterval
 
-derive instance ordSlotInterval :: Ord SlotInterval
+derive instance ordSlotInterval :: Ord TimeInterval
 
-instance showSlotInterval :: Show SlotInterval where
-  show (SlotInterval from to) = "(POSIXTime " <> show from <> " " <> show to <>
+instance showSlotInterval :: Show TimeInterval where
+  show (TimeInterval from to) = "(POSIXTime " <> show from <> " " <> show to <>
     ")"
 
-instance genericEncodeSlotInterval :: EncodeJson SlotInterval where
-  encodeJson (SlotInterval a b) = encodeArray encodeJson [ a, b ]
+instance genericEncodeSlotInterval :: EncodeJson TimeInterval where
+  encodeJson (TimeInterval a b) = encodeArray encodeJson [ a, b ]
 
-instance genericDecodeJsonSlotInterval :: DecodeJson SlotInterval where
-  decodeJson = array "SlotInterval" $ SlotInterval <$> next <*> next
+instance genericDecodeJsonSlotInterval :: DecodeJson TimeInterval where
+  decodeJson = array "TimeInterval" $ TimeInterval <$> next <*> next
 
-ivFrom :: SlotInterval -> POSIXTime
-ivFrom (SlotInterval from _) = from
+ivFrom :: TimeInterval -> POSIXTime
+ivFrom (TimeInterval from _) = from
 
-ivTo :: SlotInterval -> POSIXTime
-ivTo (SlotInterval _ to) = to
+ivTo :: TimeInterval -> POSIXTime
+ivTo (TimeInterval _ to) = to
 
 -- TODO: extract module
 data Bound
@@ -972,7 +972,7 @@ _minTime :: Lens' State POSIXTime
 _minTime = _Newtype <<< prop (Proxy :: _ "minTime")
 
 newtype Environment
-  = Environment { slotInterval :: SlotInterval }
+  = Environment { slotInterval :: TimeInterval }
 
 derive instance genericEnvironment :: Generic Environment _
 
@@ -985,12 +985,12 @@ derive instance ordEnvironment :: Ord Environment
 instance showEnvironment :: Show Environment where
   show v = genericShow v
 
-_slotInterval :: Lens' Environment SlotInterval
+_slotInterval :: Lens' Environment TimeInterval
 _slotInterval = _Newtype <<< prop (Proxy :: _ "slotInterval")
 
 makeEnvironment :: POSIXTime -> POSIXTime -> Environment
 makeEnvironment l h = Environment
-  { slotInterval: SlotInterval l h
+  { slotInterval: TimeInterval l h
   }
 
 data Input
@@ -1049,8 +1049,8 @@ instance decodeJsonInput :: DecodeJson Input where
 
 -- Processing of slot interval
 data IntervalError
-  = InvalidInterval SlotInterval
-  | IntervalInPastError POSIXTime SlotInterval
+  = InvalidInterval TimeInterval
+  | IntervalInPastError POSIXTime TimeInterval
 
 derive instance genericIntervalError :: Generic IntervalError _
 
@@ -1356,7 +1356,7 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
 
 newtype TransactionInput
   = TransactionInput
-  { interval :: SlotInterval
+  { interval :: TimeInterval
   , inputs :: (List Input)
   }
 
@@ -1375,7 +1375,7 @@ instance encodeTransactionInput :: EncodeJson TransactionInput where
   encodeJson
     ( TransactionInput
         { interval:
-            ( SlotInterval (POSIXTime { getPOSIXTime: from })
+            ( TimeInterval (POSIXTime { getPOSIXTime: from })
                 (POSIXTime { getPOSIXTime: to })
             )
         , inputs: txInps
@@ -1396,10 +1396,10 @@ instance decodeTransactionInput :: DecodeJson TransactionInput where
       inputs <- requireProp "tx_inputs"
       interval <-
         ReaderT \_ ->
-          flip (object "nested SlotInterval") intervalObject
+          flip (object "nested TimeInterval") intervalObject
             $ Just
                 <$>
-                  ( SlotInterval
+                  ( TimeInterval
                       <$> (POSIXTime <$> requireProp "from")
                       <*> (POSIXTime <$> requireProp "to")
                   )
@@ -1494,8 +1494,8 @@ boundTo (Bound _ to) = to
 
 -- Note: We use guards here because currently nested ifs break purty formatting
 --       We need to upgrade purty and purescript to fix
-fixInterval :: SlotInterval -> State -> IntervalResult
-fixInterval interval@(SlotInterval from to) (State state)
+fixInterval :: TimeInterval -> State -> IntervalResult
+fixInterval interval@(TimeInterval from to) (State state)
   | (not <<< validInterval) interval = IntervalError (InvalidInterval interval)
   | state.minTime `above` interval = IntervalError
       (IntervalInPastError state.minTime interval)
@@ -1505,7 +1505,7 @@ fixInterval interval@(SlotInterval from to) (State state)
         newLow = max from state.minTime
 
         -- We know high is greater or equal than newLow (prove)
-        currentInterval = SlotInterval newLow to
+        currentInterval = TimeInterval newLow to
 
         env = Environment { slotInterval: currentInterval }
 

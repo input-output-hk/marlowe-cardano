@@ -55,7 +55,7 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
   , MarloweParams
-  , SlotInterval(..)
+  , TimeInterval(..)
   , TokenName
   , TransactionInput(..)
   )
@@ -98,7 +98,7 @@ instance marloweAppM :: MarloweApp AppM where
   applyInputs
     plutusAppId
     marloweContractId
-    (TransactionInput { interval: SlotInterval slotStart slotEnd, inputs }) = do
+    (TransactionInput { interval: TimeInterval slotStart slotEnd, inputs }) = do
     reqId <- liftEffect genUUID
     let
       backSlotInterval :: POSIXTime /\ POSIXTime
