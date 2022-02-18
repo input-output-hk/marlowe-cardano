@@ -84,6 +84,7 @@ let
           # Things that need plutus-tx-plugin
           marlowe.package.buildable = false; # Would also require libpq
           marlowe-actus.package.buildable = false;
+          marlowe-contracts.package.buildable = false;
           marlowe-cli.package.buildable = false;
           marlowe-dashboard-server.package.buildable = false;
           marlowe-playground-server.package.buildable = false; # Would also require libpq
@@ -214,6 +215,7 @@ let
           marlowe-actus.ghcOptions = [ "-Werror" ];
           marlowe-playground-server.ghcOptions = [ "-Werror" ];
           marlowe-dashboard-server.ghcOptions = [ "-Werror" ];
+          marlowe-contract.ghcOptions = [ "-Werror" ];
           playground-common.ghcOptions = [ "-Werror" ];
           plutus-contract.ghcOptions = [ "-Werror" ];
           plutus-ledger.ghcOptions = [ "-Werror" ];
