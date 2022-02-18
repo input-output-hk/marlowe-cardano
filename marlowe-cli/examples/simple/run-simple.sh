@@ -148,17 +148,19 @@ echo "$PARTY_NAME will spend the UTxO "'`'"$TX_0_PARTY"'`.'
 echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
-echo "The contract has a minimum slot and a timeout."
+echo "The contract has a minimum time and a timeout."
 
-MINIMUM_SLOT="$TIP"
-TIMEOUT_SLOT="$((TIP+10*24*3600))"
+MINIMUM_TIME="$NOW"
+TIMEOUT_TIME="$((NOW+24*HOUR))"
 
-echo "The contract starts no sooner than slot $MINIMUM_SLOT and will automatically close at slot $TIMEOUT_SLOT."
+echo "The contract starts no sooner than $(date -u -R -d @$((MINIMUM_TIME/1000))) and will automatically close at $(date -u -R -d @$((TIMEOUT_TIME/1000)))."
 
 echo "The contract also involves various payments."
 
@@ -173,11 +175,11 @@ echo "We create the contract for the previously specified parameters."
 
 marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
                             --minimum-ada "$MINIMUM_ADA"                 \
-                            --minimum-slot "$MINIMUM_SLOT"               \
+                            --minimum-time "$MINIMUM_TIME"               \
                             --party "PK=$PARTY_PUBKEYHASH"               \
                             --deposit-lovelace "$DEPOSIT_LOVELACE"       \
                             --withdrawal-lovelace "$WITHDRAWAL_LOVELACE" \
-                            --timeout "$TIMEOUT_SLOT"                    \
+                            --timeout "$TIMEOUT_TIME"                    \
                             --out-contract-file tx-1.contract            \
                             --out-state-file    tx-1.state
 
@@ -230,8 +232,8 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe              \
                         --deposit-account "PK=$PARTY_PUBKEYHASH" \
                         --deposit-party "PK=$PARTY_PUBKEYHASH"   \
                         --deposit-amount "$DEPOSIT_LOVELACE"     \
-                        --invalid-before "$TIP"                  \
-                        --invalid-hereafter "$((TIP+4*3600))"    \
+                        --invalid-before "$NOW"                  \
+                        --invalid-hereafter "$((NOW+4*HOUR))"    \
                         --out-file tx-2.marlowe                  \
                         --print-stats
 
@@ -267,8 +269,8 @@ echo "First we compute the input for the contract to transition forward."
 
 marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
                         --notify                              \
-                        --invalid-before "$TIP"               \
-                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --invalid-before "$NOW"               \
+                        --invalid-hereafter "$((NOW+4*HOUR))" \
                         --out-file tx-3.marlowe               \
                         --print-stats
 
@@ -304,8 +306,8 @@ echo "As in the third transaction, we compute the input for the contract to tran
 
 marlowe-cli run prepare --marlowe-file tx-3.marlowe           \
                         --notify                              \
-                        --invalid-before "$TIP"               \
-                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --invalid-before "$NOW"               \
+                        --invalid-hereafter "$((NOW+4*HOUR))" \
                         --out-file tx-4.marlowe               \
                         --print-stats
 

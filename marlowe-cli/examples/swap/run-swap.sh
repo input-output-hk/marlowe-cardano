@@ -133,17 +133,19 @@ echo "$PARTY_B_NAME will spend the UTxOs "'`'"$TX_0_B_ADA"'`'" and "'`'"$TX_0_B_
 echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
-echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the first party $PARTY_A_NAME will swap $AMOUNT_A of "'`'"$TOKEN_A"'`'" for $AMOUNT_B of "'`'"$TOKEN_B"'`'" from the second party $PARTY_B_NAME."
-
 MINIMUM_ADA=3000000
 
-PARTY_A_TIMEOUT=$((TIP+12*3600))
-PARTY_B_TIMEOUT=$((TIP+24*3600))
+PARTY_A_TIMEOUT=$((NOW+12*HOUR))
+PARTY_B_TIMEOUT=$((NOW+24*HOUR))
+
+echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the first party $PARTY_A_NAME will swap $AMOUNT_A of "'`'"$TOKEN_A"'`'" before $(date -u -R -d @$((PARTY_A_TIMEOUT/1000))) for $AMOUNT_B of "'`'"$TOKEN_B"'`'" from the second party $PARTY_B_NAME before $(date -u -R -d @$((PARTY_B_TIMEOUT/1000)))."
 
 echo "We create the contract for the previously specified parameters."
 
@@ -209,8 +211,8 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe                \
                         --deposit-party "PK=$PARTY_A_PUBKEYHASH"   \
                         --deposit-token "$TOKEN_A"                 \
                         --deposit-amount "$AMOUNT_A"               \
-                        --invalid-before "$TIP"                    \
-                        --invalid-hereafter "$((TIP+4*3600))"      \
+                        --invalid-before "$NOW"                    \
+                        --invalid-hereafter "$((NOW+4*HOUR))"      \
                         --out-file tx-2.marlowe                    \
                         --print-stats
 
@@ -250,8 +252,8 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
                         --deposit-party "PK=$PARTY_B_PUBKEYHASH"   \
                         --deposit-token "$TOKEN_B"                 \
                         --deposit-amount "$AMOUNT_B"               \
-                        --invalid-before "$TIP"                    \
-                        --invalid-hereafter "$((TIP+4*3600))"      \
+                        --invalid-before "$NOW"                    \
+                        --invalid-hereafter "$((NOW+4*HOUR))"      \
                         --out-file tx-3.marlowe                    \
                         --print-stats
 

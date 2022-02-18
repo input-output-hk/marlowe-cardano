@@ -62,10 +62,10 @@ import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), 
                                    TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
-import Ledger.TimeSlot
+import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
-import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum, TokenName, toData)
+import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum, POSIXTime, TokenName, toData)
 import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
 import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty (..))
@@ -170,16 +170,16 @@ prepareTransaction :: MonadError CliError m
                => MonadIO m
                => FilePath        -- ^ The JSON file with the Marlowe initial state and initial contract.
                -> [Input]         -- ^ The contract's inputs.
-               -> SlotNo          -- ^ The first valid slot for the transaction.
-               -> SlotNo          -- ^ The last valid slot for the transaction.
+               -> POSIXTime       -- ^ The first valid time for the transaction.
+               -> POSIXTime       -- ^ The last valid time for the transaction.
                -> Maybe FilePath  -- ^ The output JSON file with the results of the computation.
                -> Bool            -- ^ Whether to print statistics about the result.
                -> m ()            -- ^ Action to compute the next step in the contract.
-prepareTransaction marloweFile txInputs (SlotNo minimumSlot) (SlotNo maximumSlot) outputFile printStats =
+prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile printStats =
   do
     marloweIn <- decodeFileStrict marloweFile
     let
-      txInterval = (fromIntegral minimumSlot, fromIntegral maximumSlot)
+      txInterval = (minimumTime, maximumTime)
     (warnings, marloweOut@MarloweTransaction{..}) <-
       makeMarlowe
         (marloweIn :: MarloweTransaction AlonzoEra)  -- FIXME: Generalize eras.

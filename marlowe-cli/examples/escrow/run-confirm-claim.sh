@@ -175,6 +175,8 @@ echo "$MEDIATOR_NAME will spend the UTxOs "'`'"$TX_0_MEDIATOR_ADA"'`'" and "'`'"
 echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
@@ -182,16 +184,16 @@ echo "## The Contract"
 
 echo "The contract has a minimum slot and several deadlines."
 
-PAYMENT_DEADLINE=$((TIP+1*24*3600))
-COMPLAINT_DEADLINE=$((TIP+2*24*3600))
-DISPUTE_DEADLINE=$((TIP+3*24*3600))
-MEDIATION_DEADLINE=$((TIP+4*24*3600))
+PAYMENT_DEADLINE=$((NOW+1*24*HOUR))
+COMPLAINT_DEADLINE=$((NOW+2*24*HOUR))
+DISPUTE_DEADLINE=$((NOW+3*24*HOUR))
+MEDIATION_DEADLINE=$((NOW+4*24*HOUR))
 
 echo "* The current slot is $TIP."
-echo "* The buyer $BUYER_NAME must pay before slot $PAYMENT_DEADLINE."
-echo "* They buyer $BUYER_NAME has until slot $COMPLAINT_DEADLINE to complain."
-echo "* The seller $SELLER_NAME has until slot $DISPUTE_DEADLINE to dispute a complaint."
-echo "* The mediator $MEDIATOR_NAME has until slot $MEDIATION_DEADLINE to decide on a disputed complaint."
+echo "* The buyer $BUYER_NAME must pay before $(date -u -R -d @$((PAYMENT_DEADLINE/1000)))."
+echo "* They buyer $BUYER_NAME has until $(date -u -R -d @$((COMPLAINT_DEADLINE/1000))) to complain."
+echo "* The seller $SELLER_NAME has until $(date -u -R -d @$((DISPUTE_DEADLINE/1000))) to dispute a complaint."
+echo "* The mediator $MEDIATOR_NAME has until $(date -u -R -d @$((MEDIATION_DEADLINE/1000))) to decide on a disputed complaint."
 
 echo "The contract also involves the price of the good exchanged and a minimum-ADA value."
 
@@ -270,8 +272,8 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
                         --deposit-account "Role=$SELLER_ROLE" \
                         --deposit-party "Role=$BUYER_ROLE"    \
                         --deposit-amount "$PRICE"             \
-                        --invalid-before "$TIP"               \
-                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --invalid-before "$NOW"               \
+                        --invalid-hereafter "$((NOW+4*HOUR))" \
                         --out-file tx-2.marlowe               \
                         --print-stats
 
@@ -311,8 +313,8 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
                         --choice-name "Report problem"        \
                         --choice-party "Role=$BUYER_ROLE"     \
                         --choice-number 1                     \
-                        --invalid-before "$TIP"               \
-                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --invalid-before "$NOW"               \
+                        --invalid-hereafter "$((NOW+4*HOUR))" \
                         --out-file tx-3.marlowe               \
                         --print-stats
 
@@ -352,8 +354,8 @@ marlowe-cli run prepare --marlowe-file tx-3.marlowe            \
                         --choice-name "Dispute problem"        \
                         --choice-party "Role=$SELLER_ROLE" \
                         --choice-number 0                      \
-                        --invalid-before "$TIP"                \
-                        --invalid-hereafter "$((TIP+4*3600))"  \
+                        --invalid-before "$NOW"                \
+                        --invalid-hereafter "$((NOW+4*HOUR))"  \
                         --out-file tx-4.marlowe                \
                         --print-stats
 
@@ -395,8 +397,8 @@ marlowe-cli run prepare --marlowe-file tx-4.marlowe           \
                         --choice-name "Confirm claim"         \
                         --choice-party "Role=$MEDIATOR_ROLE"  \
                         --choice-number 1                     \
-                        --invalid-before "$TIP"               \
-                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --invalid-before "$NOW"               \
+                        --invalid-hereafter "$((NOW+4*HOUR))" \
                         --out-file tx-5.marlowe               \
                         --print-stats
 

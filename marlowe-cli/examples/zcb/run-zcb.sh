@@ -130,6 +130,8 @@ echo "$BORROWER_NAME will spend the UTxOs "'`'"$TX_0_BORROWER_ADA"'`'" and "'`'"
 echo "### Tip of the Blockchain"
 
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
@@ -139,10 +141,10 @@ MINIMUM_ADA=3000000
 PRINCIPAL=100000000
 INTEREST=5000000
 
-LENDING_DEADLINE=$((TIP+12*3600))
-REPAYMENT_DEADLINE=$((TIP+24*3600))
+LENDING_DEADLINE=$((NOW+12*HOUR))
+REPAYMENT_DEADLINE=$((NOW+24*HOUR))
 
-echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the lender $LENDER_NAME will pay principal of $PRINCIPAL lovelace before slot $LENDING_DEADLINE and the borrower will repay the principal and interest of $INTEREST lovelace before slot $REPAYMENT_DEADLINE."
+echo "The contract has a minimum-ADA requirement and two timeouts. It also specifies that the lender $LENDER_NAME will pay principal of $PRINCIPAL lovelace before $(date -u -R -d @$((LENDING_DEADLINE/1000))) and the borrower will repay the principal and interest of $INTEREST lovelace before $(date -u -R -d @$((REPAYMENT_DEADLINE/1000)))."
 
 echo "We create the contract for the previously specified parameters."
 
@@ -212,8 +214,8 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe           \
                         --deposit-account "Role=$LENDER_ROLE" \
                         --deposit-party "Role=$LENDER_ROLE"   \
                         --deposit-amount "$PRINCIPAL"         \
-                        --invalid-before "$TIP"               \
-                        --invalid-hereafter "$((TIP+4*3600))" \
+                        --invalid-before "$NOW"               \
+                        --invalid-hereafter "$((NOW+4*HOUR))" \
                         --out-file tx-2.marlowe               \
                         --print-stats
 
@@ -286,8 +288,8 @@ marlowe-cli run prepare --marlowe-file tx-2.marlowe                \
                         --deposit-account "Role=$BORROWER_ROLE"    \
                         --deposit-party "Role=$BORROWER_ROLE"      \
                         --deposit-amount "$((PRINCIPAL+INTEREST))" \
-                        --invalid-before "$TIP"                    \
-                        --invalid-hereafter "$((TIP+4*3600))"      \
+                        --invalid-before "$NOW"                    \
+                        --invalid-hereafter "$((NOW+4*HOUR))"      \
                         --out-file tx-4.marlowe                    \
                         --print-stats
 

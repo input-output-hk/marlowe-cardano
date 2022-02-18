@@ -25,12 +25,12 @@ module Language.Marlowe.CLI.Command.Run (
 
 
 import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
-                    NetworkId (..), SlotNo, StakeAddressReference (..), TxIn)
+                    NetworkId (..), StakeAddressReference (..), TxIn)
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseInput, parseNetworkId,
-                                           parseSlotNo, parseStakeAddressReference, parseTokenName, parseTxIn,
+                                           parsePOSIXTime, parseStakeAddressReference, parseTokenName, parseTxIn,
                                            parseTxOut)
 import Language.Marlowe.CLI.Run (initializeTransaction, prepareTransaction, runTransaction, withdrawFunds)
 import Language.Marlowe.CLI.Types (CliError)
@@ -63,8 +63,8 @@ data RunCommand =
     {
       marloweInFile :: FilePath        -- ^ The JSON file with Marlowe initial state and initial contract.
     , inputs'       :: [Input]         -- ^ The contract's inputs.
-    , minimumSlot   :: SlotNo          -- ^ The first valid slot for the transaction.
-    , maximumSlot   :: SlotNo          -- ^ The last valid slot for the transaction.
+    , minimumTime   :: POSIXTime       -- ^ The first valid time for the transaction.
+    , maximumTime   :: POSIXTime       -- ^ The last valid time for the transaction.
     , outputFile    :: Maybe FilePath  -- ^ The output JSON file with the results of the computation.
     , printStats    :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
@@ -139,7 +139,7 @@ runRunCommand command =
                           printStats
       Prepare{..}    -> prepareTransaction
                           marloweInFile
-                          inputs' minimumSlot maximumSlot
+                          inputs' minimumTime maximumTime
                           outputFile
                           printStats
       Run{..}        -> guardMainnet
@@ -214,8 +214,8 @@ prepareOptions =
   Prepare
     <$> O.strOption                (O.long "marlowe-file"      <> O.metavar "MARLOWE_FILE"  <> O.help "JSON input file for the Marlowe state and contract.")
     <*> O.many parseInput
-    <*> O.option parseSlotNo       (O.long "invalid-before"    <> O.metavar "SLOT"          <> O.help "Minimum slot for the input."                        )
-    <*> O.option parseSlotNo       (O.long "invalid-hereafter" <> O.metavar "SLOT"          <> O.help "Maximum slot for the input."                        )
+    <*> O.option parsePOSIXTime    (O.long "invalid-before"    <> O.metavar "POSIX_TIME"    <> O.help "Minimum time for the input, in POSIX milliseconds." )
+    <*> O.option parsePOSIXTime    (O.long "invalid-hereafter" <> O.metavar "POSIX_TIME"    <> O.help "Maximum time for the input, in POSIX milliseconds." )
     <*> (O.optional . O.strOption) (O.long "out-file"          <> O.metavar "OUTPUT_FILE"   <> O.help "JSON output file for contract."                     )
     <*> O.switch                   (O.long "print-stats"                                    <> O.help "Print statistics."                                  )
 
