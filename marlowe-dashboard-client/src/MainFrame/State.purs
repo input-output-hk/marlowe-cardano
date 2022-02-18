@@ -28,6 +28,7 @@ import Capability.PAB (class ManagePAB)
 import Capability.PAB as PAB
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.PlutusApps.MarloweApp as MarloweApp
+import Capability.PlutusApps.MarloweApp.Types (MarloweEndpointResponse)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Control.Logger.Capability (class MonadLogger)
@@ -38,7 +39,7 @@ import Control.Monad.Reader (class MonadAsk, asks)
 import Data.AddressBook as AddressBook
 import Data.Argonaut (decodeJson, stringify)
 import Data.Array (filter, find) as Array
-import Data.Array (mapMaybe)
+import Data.Array (head, mapMaybe, partition)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
 import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
@@ -47,13 +48,15 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
+import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
-import Effect.Aff (delay)
-import Effect.Aff.Class (class MonadAff)
-import Env (Env, _pollingInterval)
+import Effect.Aff (bracket, delay)
+import Effect.Aff.AVar as AVar
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Env (Env, _pendingResults, _pollingInterval)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -177,6 +180,33 @@ deriveState state { context, input } = state
       }
   }
 
+-- When a MarloweApp emits a new observable state, it comes with the information of which
+-- request id originated the change. We use this function to update the request queue and
+-- free any thread that might be waiting for the result of an action.
+-- The return type is a Maybe of the same input, if the value is Nothing, then we couldn't
+-- find a request that triggered this response. This can happen for example when reloading
+-- the webpage, or if we have two browsers with the same wallet.
+fulfillPendingResult
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => MarloweEndpointResponse
+  -> m (Maybe (MarloweEndpointResponse))
+fulfillPendingResult response = do
+  pendingResultsAvar <- asks $ view _pendingResults
+  liftAff
+    $ bracket
+        (partition (eq reqId <<< fst) <$> AVar.take pendingResultsAvar)
+        (flip AVar.put pendingResultsAvar <<< _.no)
+        ( _.yes >>> head >>> map snd >>> traverse \pendingResult -> do
+            AVar.put response pendingResult
+            pure response
+        )
+  where
+  reqId = case response of
+    EndpointSuccess rid _ -> rid
+    EndpointException rid _ _ -> rid
+
 handleQuery
   :: forall a m
    . MonadAff m
@@ -268,22 +298,15 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                         "Failed to parse an update from the marlowe controller."
                         decodingError
                       Right Nothing -> pure unit
-                      Right (Just endpointResponse) -> do
+                      Right (Just response) -> do
                         -- The MarloweApp capability keeps track of the requests it makes to see if this
                         -- new observable state is a WS response for an action that we made. If we refresh
                         -- we get the last observable state, and if we have two tabs open we can get
                         -- a result of an action that the other tab made.
-                        -- TODO: With a "significant refactor" (and the use of `MarloweApp.waitForResponse`)
-                        --       we could rework the different workflows for creating a contract and apply
-                        --       inputs so these toast are closer to the code that initiates the actions.
-                        mEndpointResponse <- MarloweApp.onNewObservableState
-                          endpointResponse
-                        case mEndpointResponse of
-
-                          Just
-                            ( EndpointSuccess _
-                                (CreateResponse marloweParams)
-                            ) -> do
+                        -- TODO: Return the AVar from the API calls so that the
+                        --       responses can be awaited at the call site instead.
+                        fulfillPendingResult response >>= traverse_ case _ of
+                          EndpointSuccess _ (CreateResponse marloweParams) -> do
                             {- [UC-CONTRACT-1][2] Starting a Marlowe contract
                               After the PAB endpoint finishes creating the contract, it modifies
                               its observable state with the MarloweParams of the newly created
@@ -302,15 +325,15 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                                 -- TODO: SCP-3487 swap store contract from new to running
                                 addToast $ successToast
                                   "Contract initialised."
-                          Just (EndpointSuccess _ ApplyInputsResponse) ->
+                          EndpointSuccess _ ApplyInputsResponse ->
                             addToast $ successToast
                               "Contract update applied."
-                          Just (EndpointException _ "create" _) ->
+                          EndpointException _ "create" _ ->
                             addToast $
                               errorToast
                                 "Failed to initialise contract."
                                 Nothing
-                          Just (EndpointException _ "apply-inputs" _) ->
+                          EndpointException _ "apply-inputs" _ ->
                             addToast $
                               errorToast "Failed to update contract." Nothing
                           _ -> pure unit
