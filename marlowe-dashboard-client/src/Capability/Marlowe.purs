@@ -126,6 +126,9 @@ class
   getFollowerApps
     :: WalletId
     -> m (DecodedAjaxResponse (Map PlutusAppId ContractHistory))
+
+  -- TODO: SCP-3543 Remove this endpoint from here and Encapsultate subscribe/unsubscribe logic into
+  --       a separate capability
   subscribeToPlutusApp :: PlutusAppId -> m Unit
   subscribeToWallet :: WalletId -> m Unit
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit

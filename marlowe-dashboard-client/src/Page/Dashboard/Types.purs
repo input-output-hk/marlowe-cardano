@@ -81,7 +81,6 @@ data Action
   | SetContractFilter ContractFilter
   | SelectContract (Maybe MarloweParams)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
-  | UpdateContract MarloweParams ContractHistory
   | RedeemPayments MarloweParams
   | AdvanceTimedoutSteps
   | TemplateAction Template.Action
@@ -100,7 +99,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SetContractFilter _) = Just $ defaultEvent "FilterContracts"
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
   toEvent (UpdateFollowerApps _) = Nothing
-  toEvent (UpdateContract _ _) = Nothing
   toEvent (RedeemPayments _) = Nothing
   toEvent AdvanceTimedoutSteps = Nothing
   toEvent (TemplateAction _) = Nothing

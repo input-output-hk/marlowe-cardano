@@ -26,6 +26,7 @@ import Capability.MarloweStorage
   )
 import Capability.PAB (class ManagePAB)
 import Capability.PAB as PAB
+import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
@@ -333,8 +334,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                         marloweParams = view (_chParams <<< _1) contractHistory
                       {- [UC-CONTRACT-1][3] Start a contract -}
                       {- [UC-CONTRACT-3][1] Apply an input to a contract -}
-                      handleAction $ DashboardAction $ Dashboard.UpdateContract
-                        marloweParams
+                      FollowerApp.onNewObservableState plutusAppId
                         contractHistory
                       {- [UC-CONTRACT-4][0] Redeem payments -}
                       handleAction $ DashboardAction $ Dashboard.RedeemPayments

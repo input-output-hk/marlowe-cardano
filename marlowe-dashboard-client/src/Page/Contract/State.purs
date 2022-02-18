@@ -9,7 +9,7 @@ module Page.Contract.State
   , partyToParticipant
   , paymentToTransfer
   , toInput
-  , updateState
+  -- , updateState
   ) where
 
 import Prologue
@@ -196,6 +196,7 @@ mkInitialState wallet currentSlot mNickname contractHistory =
           , userParties: getUserParties wallet marloweParams
           , namedActions: mempty
           }
+        -- FIXME-3208: Remove applyTransactionInputs from here
         updateExecutionState = over _executionState
           (applyTransactionInputs chHistory)
       in
@@ -229,7 +230,8 @@ getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
     Role _ -> true
     _ -> false
 
--- FIXME-3208 Move contract state to halogen store
+-- FIXME-3208 Change Page.Contract to be a proper component and this should become the receive
+--            function, receiving a ExecutionState, connected wallet, etc.
 updateState
   :: PABConnectedWallet
   -> MarloweParams
@@ -389,6 +391,18 @@ handleAction _ CancelConfirmation = pure unit -- Managed by Dashboard.State
 handleAction _ (SelectStep stepNumber) = assign (_Started <<< _selectedStep)
   stepNumber
 
+-- FIXME-3208: As part of the contract refactor I removed a couple of calls to this action
+--             when a contract was updated. This should cause a bug when you have the Contract
+--             that was modified opened and the Step that is selected is not the same that is shown
+--
+--      selectedStep' <- peruse $ _selectedContract <<< _Started <<<
+--        _selectedStep
+--      when (selectedStep /= selectedStep')
+--        $ for_ selectedStep'
+--            ( handleAction input <<< ContractAction marloweParams <<<
+--                Contract.MoveToStep
+--            )
+
 handleAction _ (MoveToStep stepNumber) = do
   -- The MoveToStep action is called when a new step is added (either via an apply transaction or
   -- a timeout). We unsubscribe and resubscribe to update the tracked elements.
@@ -408,6 +422,7 @@ handleAction _ CarouselOpened = do
 
 handleAction _ CarouselClosed = unsubscribeFromSelectCenteredStep
 
+-- FIXME-3208: Remove applyTransactionInputs from here and put it in the execution state
 applyTransactionInputs
   :: Array TransactionInput -> Execution.State -> Execution.State
 applyTransactionInputs transactionInputs state = foldl (flip nextState) state
