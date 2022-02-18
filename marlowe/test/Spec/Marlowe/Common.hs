@@ -8,7 +8,7 @@ module Spec.Marlowe.Common where
 import Data.Map.Strict (Map)
 
 import Language.Marlowe
-import Ledger (POSIXTime, PaymentPubKeyHash (..), pubKeyHash)
+import Ledger (PaymentPubKeyHash (..), pubKeyHash)
 import qualified Ledger
 import Ledger.TimeSlot (SlotConfig (..))
 import qualified PlutusTx.Ratio as P
