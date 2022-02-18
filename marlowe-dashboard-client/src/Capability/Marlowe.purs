@@ -43,12 +43,11 @@ import Data.Map (Map, fromFoldable)
 import Data.Maybe (maybe')
 import Data.PABConnectedWallet
   ( PABConnectedWallet
+  , _address
   , _companionAppId
   , _marloweAppId
-  , _pubKeyHash
   , _walletId
   )
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
 import Data.Traversable (traverse)
@@ -203,11 +202,9 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
     let
       marloweAppId = view _marloweAppId wallet
 
-      pubKeyHash = view
-        (_pubKeyHash <<< _PaymentPubKeyHash)
-        wallet
+      address = view _address wallet
     in
-      MarloweApp.redeem marloweAppId marloweParams tokenName pubKeyHash
+      MarloweApp.redeem marloweAppId marloweParams tokenName address
 
   -- get the observable state of a wallet's WalletCompanion
   getRoleContracts wallet =
