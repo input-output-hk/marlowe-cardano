@@ -8,12 +8,7 @@ import Prologue
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , createContract
-  , followContract
-  , redeem
-  )
+import Capability.Marlowe (class ManageMarlowe, createContract, followContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -21,7 +16,6 @@ import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.AddContact.Types as AddContact
 import Component.Contacts.Lenses (_cardSection)
-import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, initialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..))
@@ -32,26 +26,10 @@ import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
 import Data.Either (hush)
 import Data.Foldable (for_)
-import Data.Lens
-  ( _Just
-  , assign
-  , filtered
-  , lens
-  , modifying
-  , preview
-  , set
-  , use
-  , (^.)
-  )
-import Data.Lens.At (at)
-import Data.Lens.Extra (peruse)
-import Data.Lens.Index (ix)
-import Data.Lens.Traversal (traversed)
-import Data.List (filter, fromFoldable) as List
+import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
-import Data.PABConnectedWallet (_assets, _walletId, _walletNickname)
+import Data.PABConnectedWallet (_walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -60,33 +38,17 @@ import Data.WalletId (WalletId)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
-import Halogen.Extra (imapState, mapSubmodule)
-import Halogen.Query.HalogenM (mapAction)
+import Halogen.Extra (mapSubmodule)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
-import Marlowe.Execution.State (getAllPayments)
-import Marlowe.PAB (transactionFee)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics
-  ( MarloweData
-  , MarloweParams
-  , Party(..)
-  , Payee(..)
-  , Payment(..)
-  )
-import Page.Contract.Lenses (_Started, _selectedStep)
-import Page.Contract.State (applyTimeout)
-import Page.Contract.State (handleAction) as Contract
-import Page.Contract.Types (Action(..), State) as Contract
+import Marlowe.Semantics (MarloweData, MarloweParams)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
   , _contactsState
-  , _contract
   , _contractFilter
-  , _contracts
   , _menuOpen
-  , _selectedContract
   , _selectedContractMarloweParams
   , _templateState
   , _walletCompanionStatus
@@ -175,9 +137,9 @@ handleAction _ CloseCard = assign _cardOpen false
 handleAction _ (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
 
-handleAction _ (SelectContract mFollowerAppId) = assign
+handleAction _ (SelectContract marloweParams) = assign
   _selectedContractMarloweParams
-  mFollowerAppId
+  marloweParams
 
 {- [UC-CONTRACT-1][2] Start a Marlowe contract
 -- FIXME-3208 redo comments
@@ -221,29 +183,34 @@ we thought it would be more user-friendly for now to trigger this automatically 
 integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
 manually (and sign the transaction). So this will almost certainly have to change.
 -}
+handleAction _ (RedeemPayments _) = pure unit
+{-
+  -- FIXME-3208
 handleAction { wallet } (RedeemPayments marloweParams) = do
-  mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
-  for_ mStartedContract \{ executionState, userParties } ->
-    let
-      payments = getAllPayments executionState
-      { marloweParams } = executionState
-      isToParty party (Payment _ payee _) = case payee of
-        Party p -> p == party
-        _ -> false
-    in
-      for (List.fromFoldable userParties) \party ->
-        let
-          paymentsToParty = List.filter (isToParty party) payments
-        in
-          for paymentsToParty \payment -> case payment of
-            Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
-              marloweParams
-              tokenName
-            _ -> pure unit
+ mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
+for_ mStartedContract \{ executionState, userParties } ->
+  let
+    payments = getAllPayments executionState
+    { marloweParams } = executionState
+    isToParty party (Payment _ payee _) = case payee of
+      Party p -> p == party
+      _ -> false
+  in
+    for (List.fromFoldable userParties) \party ->
+      let
+        paymentsToParty = List.filter (isToParty party) payments
+      in
+        for paymentsToParty \payment -> case payment of
+          Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
+            marloweParams
+            tokenName
+          _ -> pure unit
+-}
 
--- FIXME-3208: move this to the store
+handleAction _ AdvanceTimedoutSteps = pure unit
+{- FIXME-3208
 handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
-  selectedStep <- peruse $ _selectedContract <<< _Started <<< _selectedStep
+  pure unit
   modifying
     ( _contracts
         <<< traversed
@@ -258,19 +225,20 @@ handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
     (applyTimeout currentSlot)
   selectedContractFollowerAppId <- use _selectedContractMarloweParams
   for_ selectedContractFollowerAppId \followerAppId -> do
-    -- If the modification changed the currently selected step, that means the screen for the
-    -- contract that was changed is currently open, so we need to realign the step cards. We also
-    -- call the CancelConfirmation action - because if the user had the action confirmation card
-    -- open for an action in the current step, we want to close it (otherwise they could confirm an
-    -- action that is no longer possible).
-    selectedStep' <- peruse $ _selectedContract <<< _Started <<< _selectedStep
-    when (selectedStep /= selectedStep') do
-      for_ selectedStep'
-        ( handleAction input <<< ContractAction followerAppId <<<
-            Contract.MoveToStep
-        )
-      handleAction input $ ContractAction followerAppId $
-        Contract.CancelConfirmation
+-- If the modification changed the currently selected step, that means the screen for the
+-- contract that was changed is currently open, so we need to realign the step cards. We also
+-- call the CancelConfirmation action - because if the user had the action confirmation card
+-- open for an action in the current step, we want to close it (otherwise they could confirm an
+-- action that is no longer possible).
+
+when (selectedStep /= selectedStep') do
+  for_ selectedStep'
+    ( handleAction input <<< ContractAction followerAppId <<<
+        Contract.MoveToStep
+    )
+  handleAction input $ ContractAction followerAppId $
+    Contract.CancelConfirmation
+    -}
 
 handleAction
   input@{ currentSlot, wallet }
@@ -341,36 +309,43 @@ handleAction _ (SetContactForRole _ _) = do
 -- -- cards - we just want to switch instantly back to this card
 -- assign _card $ Just ContractTemplateCard
 
+handleAction _ (ContractAction _ _) =
+  pure unit
+
+{-
+  FIXME-3208
 handleAction
   input@{ wallet, currentSlot, tzOffset }
   (ContractAction marloweParams contractAction) = do
-  startedState <- peruse
-    $ _contracts
-        <<< at marloweParams
-        <<< _Just
-        <<< _Started
-  let
-    contractInput = { currentSlot, wallet, marloweParams, tzOffset }
-  mContractState <- peruse $ _contract marloweParams
-  case contractAction of
-    Contract.AskConfirmation action ->
-      for_ startedState \contractState ->
-        handleAction input $ OpenCard
-          $ ContractActionConfirmationCard
-              marloweParams
-              { action
-              , contractState
-              , currentSlot
-              , transactionFeeQuote: transactionFee
-              , userNickname: wallet ^. _walletNickname
-              , walletBalance: getAda $ wallet ^. _assets
-              }
-    Contract.CancelConfirmation -> handleAction input CloseCard
-    _ -> for_ mContractState \s -> toContract
-      marloweParams
-      s
-      (Contract.handleAction contractInput contractAction)
+  pure unit
 
+startedState <- peruse
+  $ _contracts
+      <<< at marloweParams
+      <<< _Just
+      <<< _Started
+let
+  contractInput = { currentSlot, wallet, marloweParams, tzOffset }
+mContractState <- peruse $ _contract marloweParams
+case contractAction of
+  Contract.AskConfirmation action ->
+    for_ startedState \contractState ->
+      handleAction input $ OpenCard
+        $ ContractActionConfirmationCard
+            marloweParams
+            { action
+            , contractState
+            , currentSlot
+            , transactionFeeQuote: transactionFee
+            , userNickname: wallet ^. _walletNickname
+            , walletBalance: getAda $ wallet ^. _assets
+            }
+  Contract.CancelConfirmation -> handleAction input CloseCard
+  _ -> for_ mContractState \s -> toContract
+    marloweParams
+    s
+    (Contract.handleAction contractInput contractAction)
+-}
 updateTotalFunds
   :: forall m
    . MonadAff m
@@ -399,17 +374,3 @@ toTemplate
   => HalogenM Template.State Template.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
 toTemplate = mapSubmodule _templateState TemplateAction
-
--- see note [dummyState] in MainFrame.State
-toContract
-  :: forall m msg slots
-   . Functor m
-  => MarloweParams
-  -> Contract.State
-  -> HalogenM Contract.State Contract.Action slots msg m Unit
-  -> HalogenM State Action slots msg m Unit
-toContract marloweParams s =
-  mapAction (ContractAction marloweParams)
-    <<< imapState (lens (fromMaybe s <<< preview trav) (flip (set trav)))
-  where
-  trav = _contract marloweParams

@@ -1,4 +1,6 @@
-module Component.ConfirmInput.View (render) where
+module Component.ConfirmInput.View
+  ( render
+  ) where
 
 import Prologue hiding (div)
 
@@ -10,6 +12,11 @@ import Component.Button.View (button)
 import Component.Column (column)
 import Component.Column as Column
 import Component.ConfirmInput.Types (Input)
+import Component.Contract.View
+  ( currentStep
+  , partyToParticipant
+  , paymentToTransfer
+  )
 import Component.Expand as Expand
 import Component.Heading (Preset(..), heading)
 import Component.IconButton.View (iconButton)
@@ -32,12 +39,7 @@ import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
 import Marlowe.Semantics (Token(..), computeTransaction)
-import Page.Contract.State
-  ( currentStep
-  , partyToParticipant
-  , paymentToTransfer
-  , toInput
-  )
+import Page.Contract.State (toInput)
 import Page.Contract.Types (Action(..))
 
 render :: forall m. Monad m => Input -> ComponentHTML Action ChildSlots m
@@ -217,3 +219,4 @@ confirmation { action, transactionFeeQuote, walletBalance } =
 
 sectionBox :: forall i w. Array String -> HTML i w -> HTML i w
 sectionBox css = box default $ [ "lg:px-5" ] <> css
+

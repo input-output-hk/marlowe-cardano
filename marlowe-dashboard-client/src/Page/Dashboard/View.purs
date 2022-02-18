@@ -5,6 +5,9 @@ module Page.Dashboard.View
 
 import Prologue hiding (Either(..), div)
 
+import Capability.Marlowe (class ManageMarlowe)
+import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.Toast (class Toast)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
 import Component.ConfirmInput.View as ConfirmInput
@@ -17,6 +20,7 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
+import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
 import Data.Array as Array
@@ -35,6 +39,7 @@ import Data.String (take)
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
+import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
 import Halogen.Extra (mapComponentAction, renderSubmodule)
@@ -53,6 +58,7 @@ import Halogen.HTML
   , main
   , nav
   , p
+  , slot_
   , span
   , span_
   , text
@@ -67,8 +73,9 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Semantics (PubKey, Slot)
-import Page.Contract.Lenses (_Started, _executionState)
-import Page.Contract.View (contractScreen)
+import Page.Contract.Lenses (_Started, _contract, _executionState)
+import Page.Contract.State as ContractPage
+import Page.Contract.Types (_contractPage)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
@@ -92,7 +99,16 @@ import Store.Contracts (getClosedContracts, getRunningContracts)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
-  :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => ManageMarlowe m
+  => ManageMarloweStorage m
+  => Toast m
+  => MonadStore Store.Action Store.Store m
+  => Input
+  -> State
+  -> ComponentHTML Action ChildSlots m
 dashboardScreen { currentSlot, tzOffset, wallet } state =
   let
     walletNickname = wallet ^. _walletNickname
@@ -104,7 +120,7 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
     selectedContractMarloweParams = state ^. _selectedContractMarloweParams
 
     selectedContract = preview
-      (_selectedContract <<< _Started <<< _executionState)
+      (_selectedContract <<< _contract <<< _Started <<< _executionState)
       state
   in
     div
@@ -129,17 +145,14 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
                   [ classNames [ "relative" ] ]
                   case selectedContractMarloweParams of
                     Just marloweParams ->
-                      [ renderSubmodule
-                          _selectedContract
-                          (ContractAction marloweParams)
-                          ( contractScreen
-                              { currentSlot
-                              , tzOffset
-                              , wallet
-                              , marloweParams
-                              }
-                          )
-                          state
+                      [ slot_
+                          _contractPage
+                          unit
+                          ContractPage.component
+                          { tzOffset
+                          , wallet
+                          , marloweParams
+                          }
                       ]
                     _ -> [ contractsScreen currentSlot state ]
               ]
@@ -654,14 +667,10 @@ contractGrid currentSlot contractFilter contracts =
       , span_ [ text "New smart contract from template" ]
       ]
 
-  -- FIXME-3208
   dashboardContractCard contractState =
-    let
-      { marloweParams } = contractState
-    in
-      mapComponentAction (ContractAction marloweParams) $ contractPreviewCard
-        currentSlot
-        contractState
+    contractPreviewCard
+      currentSlot
+      contractState
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =

@@ -3,9 +3,12 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
+import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast)
+import Control.Monad.Reader (class MonadAsk)
 import Data.Lens ((^.), (^?))
 import Effect.Aff.Class (class MonadAff)
+import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
@@ -32,9 +35,11 @@ import Toast.State as Toast
 render
   :: forall m
    . MonadAff m
-  => MonadStore Store.Action Store.Store m
+  => MonadAsk Env m
   => ManageMarlowe m
+  => ManageMarloweStorage m
   => Toast m
+  => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =

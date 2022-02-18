@@ -3,12 +3,15 @@ module Page.Contract.Types
   , Input
   , PreviousStep
   , PreviousStepState(..)
+  , Context
   , StartedState
   , StartingState
-  , State(..)
+  , State
+  , ContractState(..)
   , StepBalance
   , Tab(..)
   , TimeoutInfo
+  , _contractPage
   , scrollContainerRef
   ) where
 
@@ -22,6 +25,7 @@ import Data.Set (Set)
 import Data.Time.Duration (Minutes)
 import Data.WalletNickname (WalletNickname)
 import Halogen (RefLabel(..))
+import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
@@ -35,12 +39,21 @@ import Marlowe.Semantics
   , Slot
   , TransactionInput
   )
+import Store.Contracts (ContractStore)
+import Type.Proxy (Proxy(..))
 
-data State
+data ContractState
   = Starting StartingState
   | Started StartedState
 
-derive instance Eq State
+derive instance Eq ContractState
+
+type State =
+  { contract :: ContractState
+  , currentSlot :: Slot
+  , tzOffset :: Minutes
+  , wallet :: PABConnectedWallet
+  }
 
 type StartingState =
   { nickname :: ContractNickname
@@ -97,15 +110,21 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
-type Input =
+type Context =
   { currentSlot :: Slot
-  , tzOffset :: Minutes
+  , contracts :: ContractStore
+  }
+
+type Input =
+  { tzOffset :: Minutes
   , wallet :: PABConnectedWallet
+  -- FIXME-3208 Instead of just MarloweParms this should be a custom data type or a
+  --            Either UUID MarloweParams to be able to work with Starting and Started contracts.
   , marloweParams :: MarloweParams
   }
 
 data Action
-  = SelectSelf
+  = Receive (Connected Context Input)
   | SetNickname ContractNickname
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
@@ -123,7 +142,7 @@ data Action
   | CarouselClosed
 
 instance actionIsEvent :: IsEvent Action where
-  toEvent SelectSelf = Nothing
+  toEvent (Receive _) = Nothing
   toEvent (ConfirmAction _) = Just $ defaultEvent "ConfirmAction"
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (ChangeChoice _ _) = Just $ defaultEvent "ChangeChoice"
@@ -138,3 +157,5 @@ instance actionIsEvent :: IsEvent Action where
 
 scrollContainerRef :: RefLabel
 scrollContainerRef = RefLabel "scroll-container"
+
+_contractPage = Proxy :: Proxy "contractPage"

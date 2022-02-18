@@ -1,7 +1,10 @@
 module Component.Contract.View
-  ( currentStepActions
+  ( currentStep
+  , currentStepActions
   , firstLetterInCircle
   , participantWithNickname
+  , partyToParticipant
+  , paymentToTransfer
   , renderParty
   , startingStepActions
   , timeoutString
@@ -9,14 +12,16 @@ module Component.Contract.View
 
 import Prologue hiding (div)
 
+import Component.Contacts.State (adaToken, getAda)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
+import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Css as Css
-import Data.Array (intercalate)
+import Data.Array (intercalate, length)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromString)
 import Data.BigInt.Argonaut as BigInt
-import Data.Lens ((^.))
+import Data.Lens (view, (^.))
 import Data.Map (lookup) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.Set as Set
@@ -46,6 +51,8 @@ import Marlowe.Semantics
   ( Bound(..)
   , ChoiceId(..)
   , Party(..)
+  , Payee(..)
+  , Payment(..)
   , Slot
   , getEncompassBound
   )
@@ -54,6 +61,7 @@ import Page.Contract.Lenses
   ( _executionState
   , _metadata
   , _participants
+  , _previousSteps
   , _userParties
   )
 import Page.Contract.Types (Action(..), StartedState)
@@ -426,3 +434,32 @@ startingStepActions =
   placeholderContent = div
     [ classNames [ "bg-gray", "rounded-full", "w-full", "h-12" ] ]
     []
+
+-- FIXME-3208 Revisit where this should live
+paymentToTransfer :: StartedState -> Payment -> Transfer
+paymentToTransfer state (Payment sender payee money) = case payee of
+  Party recipient ->
+    makeTransfer recipient
+      $ AccountToWallet sender recipient
+  Account recipient ->
+    makeTransfer recipient
+      $ AccountToAccount sender recipient
+  where
+  makeTransfer recipient termini =
+    { sender: partyToParticipant state sender
+    , recipient: partyToParticipant state recipient
+    , token: adaToken
+    , quantity: getAda money
+    , termini
+    }
+
+-- FIXME-3208 Revisit where this should live
+partyToParticipant :: StartedState -> Party -> Participant
+partyToParticipant { participants, userParties } party =
+  { nickname: join $ Map.lookup party $ participants
+  , isCurrentUser: Set.member party userParties
+  }
+
+-- FIXME-3208 Revisit where this should live
+currentStep :: StartedState -> Int
+currentStep = length <<< view _previousSteps

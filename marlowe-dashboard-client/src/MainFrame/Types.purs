@@ -77,6 +77,7 @@ type ChildSlots =
   , restoreWallet :: RestoreWallet.Slot Unit
   , toaster :: forall q m. H.Slot q m Unit
   , contractSetup :: ContractSetup.Slot Unit
+  , contractPage :: forall q. H.Slot q Void Unit
   )
 
 _toaster :: Proxy "toaster"

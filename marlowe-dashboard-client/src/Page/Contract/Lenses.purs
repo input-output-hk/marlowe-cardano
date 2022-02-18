@@ -1,6 +1,7 @@
 module Page.Contract.Lenses
   ( _Started
   , _Starting
+  , _contract
   , _executionState
   , _expandPayments
   , _marloweParams
@@ -19,10 +20,13 @@ import Prologue
 
 import Data.Lens (Lens', Prism', prism')
 import Data.Lens.Record (prop)
-import Page.Contract.Types (StartedState, StartingState, State(..))
+import Page.Contract.Types (ContractState(..), StartedState, StartingState)
 import Type.Proxy (Proxy(..))
 
-_Starting :: Prism' State StartingState
+_contract :: forall a r. Lens' { contract :: a | r } a
+_contract = prop (Proxy :: _ "contract")
+
+_Starting :: Prism' ContractState StartingState
 _Starting =
   prism'
     Starting
@@ -31,7 +35,7 @@ _Starting =
         _ -> Nothing
     )
 
-_Started :: Prism' State StartedState
+_Started :: Prism' ContractState StartedState
 _Started =
   prism'
     Started

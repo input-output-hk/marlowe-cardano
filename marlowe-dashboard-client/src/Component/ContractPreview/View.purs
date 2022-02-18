@@ -9,16 +9,12 @@ import Component.Contract.View (startingStepActions, timeoutString)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
-import Css as Css
-import Data.ContractNickname as ContractNickname
-import Data.Either (fromRight)
 import Data.Lens ((^.))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.HTML (a, div, h3, input, p, text)
-import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
-import Halogen.HTML.Properties (InputType(..), placeholder, type_, value)
+import Halogen.HTML (a, div, h3, p, text)
+import Halogen.HTML.Events.Extra (onClick_)
 import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
@@ -26,8 +22,9 @@ import Marlowe.Execution.State (numberOfConfirmedTxs)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
-import Page.Contract.Lenses (_metadata)
-import Page.Contract.Types (Action(..), StartingState)
+import Page.Contract.Lenses (_marloweParams, _metadata)
+import Page.Contract.Types (StartingState)
+import Page.Dashboard.Types (Action(..))
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
 contractPreviewCard
@@ -40,7 +37,7 @@ contractPreviewCard currentSlot state =
   let
     contractType = state ^. (_metadata <<< _contractType)
     contractName = state ^. (_metadata <<< _contractName)
-
+    marloweParams = state ^. _marloweParams
     nickname = Execution.contractName state
 
     stepPanel =
@@ -70,21 +67,23 @@ contractPreviewCard currentSlot state =
                   [ contractIcon contractType
                   , text contractName
                   ]
-              -- FIXME-3208: Replace with form
-              , input
-                  [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
-                  , type_ InputText
-                  , value nickname
-                  , onValueInput_
-                      ( SetNickname <<< fromRight ContractNickname.unknown <<<
-                          ContractNickname.fromString
-                      )
-                  , placeholder "Please rename"
-                  ]
+              -- FIXME-3208: Make an input again
+              , text nickname
+
+              -- , input
+              --     [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
+              --     , type_ InputText
+              --     , value nickname
+              --     , onValueInput_
+              --         ( SetNickname <<< fromRight ContractNickname.unknown <<<
+              --             ContractNickname.fromString
+              --         )
+              --     , placeholder "Please rename"
+              --     ]
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              , onClick_ SelectSelf
+              , onClick_ $ SelectContract $ Just marloweParams
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]
           ]
@@ -102,7 +101,7 @@ contractStartingPreviewCard
 contractStartingPreviewCard state =
   let
     -- FIXME-3208:
-    nickname = "Unknown"
+    -- nickname = "Unknown"
 
     contractType = state ^. (_metadata <<< _contractType)
 
@@ -138,21 +137,22 @@ contractStartingPreviewCard state =
                   [ contractIcon contractType
                   , text contractName
                   ]
-              -- FIXME-3208: Replace with form
-              , input
-                  [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
-                  , type_ InputText
-                  , value nickname
-                  , onValueInput_
-                      ( SetNickname <<< fromRight ContractNickname.unknown <<<
-                          ContractNickname.fromString
-                      )
-                  , placeholder "Please rename"
-                  ]
+              -- FIXME-3208
+              -- , input
+              --     [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
+              --     , type_ InputText
+              --     , value nickname
+              --     , onValueInput_
+              --         ( SetNickname <<< fromRight ContractNickname.unknown <<<
+              --             ContractNickname.fromString
+              --         )
+              --     , placeholder "Please rename"
+              --     ]
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              , onClick_ SelectSelf
+              -- FIXME-3208
+              -- , onClick_ SelectSelf
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]
           ]

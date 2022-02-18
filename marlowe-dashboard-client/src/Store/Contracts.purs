@@ -5,6 +5,7 @@ module Store.Contracts
   , emptyContractStore
   , followerContractExists
   , getClosedContracts
+  , getContract
   , getContractNickname
   , getContractNicknames
   , getFollowerContract
@@ -138,6 +139,10 @@ followerContractExists marloweParams = view
 getFollowerContract :: MarloweParams -> ContractStore -> Maybe PlutusAppId
 getFollowerContract marloweParams = view
   (_contractIndex <<< to (Bimap.lookupL marloweParams))
+
+getContract :: MarloweParams -> ContractStore -> Maybe Execution.State
+getContract marloweParams = view
+  (_syncedContracts <<< at marloweParams)
 
 getContractNicknames :: ContractStore -> LocalContractNicknames
 getContractNicknames = view _contractNicknames
