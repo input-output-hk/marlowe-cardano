@@ -1446,11 +1446,6 @@ newtype MarloweParams = MarloweParams
   { rolePayoutValidatorHash :: ValidatorHash
   -- TODO: write a custom decoder/encoder to get rid of this unnecessary record
   , rolesCurrency :: { unCurrencySymbol :: CurrencySymbol } -- this is to ensure the serialisation matches the backend
-  -- FIXME: This is temporary, until SCP-3050 is completed.
-  -- The numbers are opaque for the frontend. We just need to receive and resend whatever the
-  -- backend provides. In the backend this is represented as a Tuple, in which the
-  -- first value matches scSlotLength and the second scSlotZeroTime
-  , slotConfig :: Array BigInt
   }
 
 derive instance eqMarloweParams :: Eq MarloweParams

@@ -64,7 +64,7 @@ import Ledger.Constraints.OffChain (UnbalancedTx (..))
 import Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
-import Ledger.TimeSlot (SlotConfig (..), posixTimeRangeToContainedSlotRange)
+import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
@@ -597,8 +597,7 @@ applyInputs params typedValidator slotInterval inputs = mapError (review _Marlow
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
     { rolesCurrency = rolesCurrency
-    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency
-    , slotConfig = let SlotConfig{..} = unsafeGetSlotConfig in (scSlotLength, scSlotZeroTime)}  -- FIXME: This is temporary, until SCP-3050 is completed.
+    , rolePayoutValidatorHash = mkRolePayoutValidatorHash rolesCurrency}
 
 
 defaultMarloweParams :: MarloweParams
@@ -723,7 +722,7 @@ mkStep MarloweParams{..} typedValidator slotInterval@(minSlot, maxSlot) clientIn
           (Interval.UpperBound (Interval.Finite maxSlot) False)
       range' =
         posixTimeRangeToContainedSlotRange
-          (uncurry SlotConfig slotConfig)
+          unsafeGetSlotConfig
           times
     maybeState <- getOnChainState typedValidator
     case maybeState of

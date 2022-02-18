@@ -211,8 +211,7 @@ data MarloweData = MarloweData {
 
 data MarloweParams = MarloweParams {
         rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol,
-        slotConfig              :: (Integer, POSIXTime)  -- FIXME: This is temporary, until SCP-3050 is completed.
+        rolesCurrency           :: CurrencySymbol
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (FromJSON,ToJSON)

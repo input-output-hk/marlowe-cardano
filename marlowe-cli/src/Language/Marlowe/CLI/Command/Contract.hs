@@ -31,8 +31,7 @@ import Language.Marlowe.CLI.Command.Parse (parseCurrencySymbol, parseNetworkId, 
 import Language.Marlowe.CLI.Export (exportAddress, exportDatum, exportMarlowe, exportRedeemer, exportValidator)
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import Language.Marlowe.Semantics (MarloweParams (slotConfig))
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), defaultCostModelParams)
+import Plutus.V1.Ledger.Api (CurrencySymbol, defaultCostModelParams)
 
 import qualified Options.Applicative as O
 
@@ -105,10 +104,7 @@ runContractCommand command =
         defaultCostModelParams
     let
       network' = fromMaybe Mainnet $ network command
-      marloweParams' = (maybe defaultMarloweParams marloweParams $ rolesCurrency command)
-                       {
-                         slotConfig = (slotLength command, POSIXTime $ slotZeroOffset command)
-                       }
+      marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
       stake'         = fromMaybe NoStakeAddress $ stake command
     case command of
       Export{..}          -> exportMarlowe
