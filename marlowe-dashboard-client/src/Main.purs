@@ -17,6 +17,7 @@ import Data.Argonaut
   , (.:)
   )
 import Data.Either (either)
+import Data.Map as Map
 import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.AVar as AVar
@@ -50,20 +51,17 @@ instance DecodeJson MainArgs where
 mkEnv :: Milliseconds -> WebSocketManager -> WebpackBuildMode -> Effect Env
 mkEnv pollingInterval wsManager webpackBuildMode = do
   contractStepCarouselSubscription <- AVar.empty
-  marloweEndpoints <- { create: _, applyInputs: _, redeem: _ }
-    <$> AVar.empty
-    <*> AVar.empty
-    <*> AVar.empty
-  pendingRequests <- AVar.new []
+  endpointSemaphores <- AVar.new Map.empty
+  pendingResults <- AVar.new []
   pure $ Env
     { contractStepCarouselSubscription
     , logger: case webpackBuildMode of
         -- Add backend logging capability
         Production -> mempty
         Development -> Console.logger identity
-    , marloweEndpoints
+    , endpointSemaphores
     , wsManager
-    , pendingRequests
+    , pendingResults
     , pollingInterval
     }
 

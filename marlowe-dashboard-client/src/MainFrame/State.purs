@@ -24,10 +24,9 @@ import Capability.MarloweStorage
   , getWallet
   , updateWallet
   )
-import Capability.PAB (class ManagePAB)
+import Capability.PAB (class ManagePAB, onNewActiveEndpoints)
 import Capability.PAB as PAB
 import Capability.PlutusApps.FollowerApp as FollowerApp
-import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.PlutusApps.MarloweApp.Types (MarloweEndpointResponse)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
@@ -352,16 +351,8 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       {- [UC-CONTRACT-4][0] Redeem payments -}
                       handleAction $ DashboardAction $ Dashboard.RedeemPayments
                         marloweParams
-          NewActiveEndpoints activeEndpoints -> do
-            mWallet <-
-              peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
-            -- these updates should only ever be coming when we are in the Dashboard state (and if
-            -- we're not, we don't care about them anyway)
-            for_ mWallet \wallet -> do
-              let
-                marloweAppId = view Connected._marloweAppId wallet
-              when (plutusAppId == marloweAppId) $
-                MarloweApp.onNewActiveEndpoints activeEndpoints
+          NewActiveEndpoints activeEndpoints ->
+            onNewActiveEndpoints plutusAppId activeEndpoints
           -- If one of the control apps closes unexpectedly we re-activate them
           ContractFinished mVal -> do
             mWallet <-
