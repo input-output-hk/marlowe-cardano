@@ -29,12 +29,4 @@ type MarloweSlotRange
 type MarloweAppState
   = Maybe MarloweEndpointResponse
 
--- The plutus contracts can have their endpoints active or inactive. We use
--- this object with semephores to avoid calling an inactive endpoint.
-type Endpoints =
-  { create :: AVar Unit
-  , applyInputs :: AVar Unit
-  , redeem :: AVar Unit
-  }
-
 type PendingResults = AVar (Array (UUID /\ (AVar MarloweEndpointResponse)))
