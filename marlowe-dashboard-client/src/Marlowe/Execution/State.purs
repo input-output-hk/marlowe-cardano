@@ -319,7 +319,7 @@ extractActionsFromContract currentSlot semanticState contract@(When cases _ _) =
     let
       interval = mkInterval currentSlot contract
 
-      env = Environment { slotInterval: interval }
+      env = Environment { timeInterval: interval }
 
       amount = evalValue env semanticState v
     in

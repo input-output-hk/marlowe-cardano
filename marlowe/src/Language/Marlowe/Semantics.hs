@@ -229,7 +229,7 @@ fixInterval interval state =
             newLow = max low curMinTime
             -- We know high is greater or equal than newLow (prove)
             curInterval = (newLow, high)
-            env = Environment { slotInterval = curInterval }
+            env = Environment { timeInterval = curInterval }
             newState = state { minTime = newLow }
             in if high < curMinTime then IntervalError (IntervalInPastError curMinTime interval)
             else IntervalTrimmed env newState
@@ -264,8 +264,8 @@ evalValue env state value = let
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
                 Nothing -> 0
-        SlotIntervalStart    -> getPOSIXTime (fst (slotInterval env))
-        SlotIntervalEnd      -> getPOSIXTime (snd (slotInterval env))
+        SlotIntervalStart    -> getPOSIXTime (fst (timeInterval env))
+        SlotIntervalEnd      -> getPOSIXTime (snd (timeInterval env))
         UseValue valId       ->
             case Map.lookup valId (boundValues state) of
                 Just x  -> x
@@ -378,8 +378,8 @@ reduceContractStep env state contract = case contract of
         in Reduced ReduceNoWarning ReduceNoPayment state cont
 
     When _ timeout cont -> let
-        startSlot = fst (slotInterval env)
-        endSlot   = snd (slotInterval env)
+        startSlot = fst (timeInterval env)
+        endSlot   = snd (timeInterval env)
         -- if timeout in future – do not reduce
         in if endSlot < timeout then NotReduced
         -- if timeout in the past – reduce to timeout continuation
@@ -613,12 +613,12 @@ validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList acco
 
 instance FromJSON TransactionInput where
   parseJSON (Object v) =
-        TransactionInput <$> (parseSlotInterval =<< (v .: "tx_interval"))
+        TransactionInput <$> (parseTimeInterval =<< (v .: "tx_interval"))
                          <*> ((v .: "tx_inputs") >>=
                    withArray "Transaction input list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                                       ))
-    where parseSlotInterval = withObject "TimeInterval" (\v ->
+    where parseTimeInterval = withObject "TimeInterval" (\v ->
             do from <- POSIXTime <$> (withInteger =<< (v .: "from"))
                to <- POSIXTime <$> (withInteger =<< (v .: "to"))
                return (from, to)

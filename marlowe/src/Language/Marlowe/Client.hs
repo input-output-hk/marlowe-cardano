@@ -307,15 +307,15 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         logInfo $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
         tell $ Just $ EndpointSuccess reqId $ CreateResponse params
         marlowePlutusContract
-    apply = endpoint @"apply-inputs" $ \(reqId, params, slotInterval, inputs) -> catchError reqId "apply-inputs" $ do
+    apply = endpoint @"apply-inputs" $ \(reqId, params, timeInterval, inputs) -> catchError reqId "apply-inputs" $ do
         let typedValidator = mkMarloweTypedValidator params
-        _ <- applyInputs params typedValidator slotInterval inputs
+        _ <- applyInputs params typedValidator timeInterval inputs
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
         logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         marlowePlutusContract
-    applyNonmerkleized = endpoint @"apply-inputs-nonmerkleized" $ \(reqId, params, slotInterval, inputs) -> catchError reqId "apply-inputs-nonmerkleized" $ do
+    applyNonmerkleized = endpoint @"apply-inputs-nonmerkleized" $ \(reqId, params, timeInterval, inputs) -> catchError reqId "apply-inputs-nonmerkleized" $ do
         let typedValidator = mkMarloweTypedValidator params
-        _ <- applyInputs params typedValidator slotInterval $ ClientInput <$> inputs
+        _ <- applyInputs params typedValidator timeInterval $ ClientInput <$> inputs
         tell $ Just $ EndpointSuccess reqId ApplyInputsResponse
         logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         marlowePlutusContract
@@ -548,14 +548,14 @@ getAction slotRange party MarloweData{marloweContract,marloweState} = let
                 Consider contract:
                     When [cases] (POSIXTime 100) (When [Case Deposit Close]] (POSIXTime 105) Close)
 
-                For a slot range (95, 105) we get RRAmbiguousSlotIntervalError
+                For a slot range (95, 105) we get RRAmbiguoustimeIntervalError
                 because timeout 100 is inside the slot range.
                 Now, we wait for slot 105, and we miss the Deposit.
 
                 To avoid that we need to know what was the original timeout
-                that caused RRAmbiguousSlotIntervalError (i.e. POSIXTime 100).
+                that caused RRAmbiguoustimeIntervalError (i.e. POSIXTime 100).
                 Then we'd rather wait until slot 100 instead and would make the Deposit.
-                I propose to modify RRAmbiguousSlotIntervalError to include the expected timeout.
+                I propose to modify RRAmbiguoustimeIntervalError to include the expected timeout.
              -}
             WaitForTimeout (snd slotRange)
 
@@ -586,8 +586,8 @@ applyInputs :: AsMarloweError e
     -> Maybe TimeInterval
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
-applyInputs params typedValidator slotInterval inputs = mapError (review _MarloweError) $ do
-    slotRange <- case slotInterval of
+applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
+    slotRange <- case timeInterval of
             Just si -> pure si
             Nothing -> do
                 slot <- currentTime
@@ -714,7 +714,7 @@ mkStep ::
     -> TimeInterval
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
-mkStep MarloweParams{..} typedValidator slotInterval@(minSlot, maxSlot) clientInputs = do
+mkStep MarloweParams{..} typedValidator timeInterval@(minSlot, maxSlot) clientInputs = do
     let
       times =
         Interval.Interval
@@ -756,7 +756,7 @@ mkStep MarloweParams{..} typedValidator slotInterval@(minSlot, maxSlot) clientIn
     evaluateTxContstraints MarloweData{..} times marloweTxOutRef = do
         let (inputs, inputsConstraints) = foldMap clientInputToInputAndConstraints clientInputs
         let txInput = TransactionInput {
-                txInterval = slotInterval,
+                txInterval = timeInterval,
                 txInputs = inputs }
 
         case computeTransaction txInput marloweState marloweContract of

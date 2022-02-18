@@ -46,7 +46,7 @@ import Marlowe.Semantics
   , PubKey
   , Timeouts(..)
   , TokenName
-  , _slotInterval
+  , _timeInterval
   , fixInterval
   , ivFrom
   , ivTo
@@ -1510,13 +1510,13 @@ reduceContractStep env state contract = case contract of
     let
       sTimeout = POSIXTime { getPOSIXTime: timeout }
 
-      startSlot = view (_slotInterval <<< to ivFrom) env
+      startTime = view (_timeInterval <<< to ivFrom) env
 
-      endSlot = view (_slotInterval <<< to ivTo) env
+      endTime = view (_timeInterval <<< to ivTo) env
     in
-      if endSlot < sTimeout then
+      if endTime < sTimeout then
         NotReduced
-      else if sTimeout <= startSlot then
+      else if sTimeout <= startTime then
         Reduced nextContract
       else
         ReduceError "AmbiguousSlotIntervalReductionError"

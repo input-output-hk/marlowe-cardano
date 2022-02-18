@@ -137,11 +137,11 @@ minimumBound bnds = case uncons (map boundFrom bnds) of
 actionToActionInput :: State -> Action -> Tuple ActionInputId ActionInput
 actionToActionInput state (Deposit accountId party token value) =
   let
-    minSlot = state ^. _minTime
+    minTime = state ^. _minTime
 
     evalResult = evalValue env state value
 
-    env = Environment { slotInterval: (TimeInterval minSlot minSlot) }
+    env = Environment { timeInterval: (TimeInterval minTime minTime) }
   in
     Tuple (DepositInputId accountId party token evalResult)
       (DepositInput accountId party token evalResult)

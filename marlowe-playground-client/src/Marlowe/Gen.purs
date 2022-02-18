@@ -160,9 +160,9 @@ genParty = oneOf $ pk :| [ role ]
 genCurrencySymbol :: forall m. MonadGen m => MonadRec m => m CurrencySymbol
 genCurrencySymbol = genBase16
 
-genSlotInterval
+genTimeInterval
   :: forall m. MonadGen m => MonadRec m => m POSIXTime -> m TimeInterval
-genSlotInterval gen = do
+genTimeInterval gen = do
   from <- gen
   to <- suchThat gen (\v -> v > from)
   pure $ TimeInterval from to
@@ -538,7 +538,7 @@ genTransactionInput
   => MonadRec m
   => m S.TransactionInput
 genTransactionInput = do
-  interval <- genSlotInterval genPOSIXTime
+  interval <- genTimeInterval genPOSIXTime
   inputs <- unfoldable genInput
   pure $ TransactionInput { interval, inputs }
 

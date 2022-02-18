@@ -912,8 +912,8 @@ inputToLine _ (TimeInterval start end) INotify =
 
 paymentToLines
   :: forall p a. MetaData -> TimeInterval -> Payment -> Array (HTML p a)
-paymentToLines metadata slotInterval (Payment accountId payee money) = join $
-  unfoldAssets money (paymentToLine metadata slotInterval accountId payee)
+paymentToLines metadata timeInterval (Payment accountId payee money) = join $
+  unfoldAssets money (paymentToLine metadata timeInterval accountId payee)
 
 paymentToLine
   :: forall p a

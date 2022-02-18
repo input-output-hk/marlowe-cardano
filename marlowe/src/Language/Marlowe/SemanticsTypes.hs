@@ -107,7 +107,7 @@ newtype ValueId = ValueId BuiltinByteString
   deriving anyclass (Newtype)
 
 {-| Values include some quantities that change with time,
-    including “the slot interval”, “the current balance of an account (in Lovelace)”,
+    including “the time interval”, “the current balance of an account (in Lovelace)”,
     and any choices that have already been made.
 
     Values can also be scaled, and combined using addition, subtraction, and negation.
@@ -219,9 +219,9 @@ data State = State { accounts    :: Accounts
                    , minTime     :: POSIXTime }
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
 
-{-| Execution environment. Contains a slot interval of a transaction.
+{-| Execution environment. Contains a time interval of a transaction.
 -}
-newtype Environment = Environment { slotInterval :: TimeInterval }
+newtype Environment = Environment { timeInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
 
@@ -290,7 +290,7 @@ getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
 {-| Time interval errors.
     'InvalidInterval' means @slotStart > slotEnd@, and
-    'IntervalInPastError' means slot interval is in the past, relative to the contract.
+    'IntervalInPastError' means time interval is in the past, relative to the contract.
 
     These errors should never occur, but we are always prepared.
 -}

@@ -620,9 +620,9 @@ executeAndInterpret sta ((l, h, v, b):t) cont
                                   [caseToInput cases b v] sta cont t
              _ -> error "Cannot interpret result"
          _ -> error "Error reducing contract when interpreting result"
-  where mySlotInterval = (POSIXTime l, POSIXTime h)
-        env = Environment { slotInterval = mySlotInterval }
-        transaction inputs = TransactionInput { txInterval = mySlotInterval
+  where myTimeInterval = (POSIXTime l, POSIXTime h)
+        env = Environment { timeInterval = myTimeInterval }
+        transaction inputs = TransactionInput { txInterval = myTimeInterval
                                               , txInputs = inputs
                                               }
 

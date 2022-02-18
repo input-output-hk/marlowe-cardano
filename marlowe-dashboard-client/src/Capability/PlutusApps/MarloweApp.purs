@@ -101,13 +101,13 @@ instance marloweAppM :: MarloweApp AppM where
     (TransactionInput { interval: TimeInterval slotStart slotEnd, inputs }) = do
     reqId <- liftEffect genUUID
     let
-      backSlotInterval :: POSIXTime /\ POSIXTime
-      backSlotInterval = (slotStart) /\ (slotEnd)
+      backTimeInterval :: POSIXTime /\ POSIXTime
+      backTimeInterval = (slotStart) /\ (slotEnd)
 
       payload =
         [ encodeJson reqId
         , encodeJson marloweContractId
-        , encodeJson backSlotInterval
+        , encodeJson backTimeInterval
         , encodeJson inputs
         ]
     invokeMutexedEndpoint plutusAppId reqId "apply-inputs-nonmerkleized"

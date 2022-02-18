@@ -649,20 +649,20 @@ anyWithin v = any (\(TimeInterval from to) -> v >= from && v <= to)
 data TimeInterval
   = TimeInterval POSIXTime POSIXTime
 
-derive instance genericSlotInterval :: Generic TimeInterval _
+derive instance genericTimeInterval :: Generic TimeInterval _
 
-derive instance eqSlotInterval :: Eq TimeInterval
+derive instance eqTimeInterval :: Eq TimeInterval
 
-derive instance ordSlotInterval :: Ord TimeInterval
+derive instance ordTimeInterval :: Ord TimeInterval
 
-instance showSlotInterval :: Show TimeInterval where
+instance showTimeInterval :: Show TimeInterval where
   show (TimeInterval from to) = "(POSIXTime " <> show from <> " " <> show to <>
     ")"
 
-instance genericEncodeSlotInterval :: EncodeJson TimeInterval where
+instance genericEncodeTimeInterval :: EncodeJson TimeInterval where
   encodeJson (TimeInterval a b) = encodeArray encodeJson [ a, b ]
 
-instance genericDecodeJsonSlotInterval :: DecodeJson TimeInterval where
+instance genericDecodeJsonTimeInterval :: DecodeJson TimeInterval where
   decodeJson = array "TimeInterval" $ TimeInterval <$> next <*> next
 
 ivFrom :: TimeInterval -> POSIXTime
@@ -972,7 +972,7 @@ _minTime :: Lens' State POSIXTime
 _minTime = _Newtype <<< prop (Proxy :: _ "minTime")
 
 newtype Environment
-  = Environment { slotInterval :: TimeInterval }
+  = Environment { timeInterval :: TimeInterval }
 
 derive instance genericEnvironment :: Generic Environment _
 
@@ -985,12 +985,12 @@ derive instance ordEnvironment :: Ord Environment
 instance showEnvironment :: Show Environment where
   show v = genericShow v
 
-_slotInterval :: Lens' Environment TimeInterval
-_slotInterval = _Newtype <<< prop (Proxy :: _ "slotInterval")
+_timeInterval :: Lens' Environment TimeInterval
+_timeInterval = _Newtype <<< prop (Proxy :: _ "timeInterval")
 
 makeEnvironment :: POSIXTime -> POSIXTime -> Environment
 makeEnvironment l h = Environment
-  { slotInterval: TimeInterval l h
+  { timeInterval: TimeInterval l h
   }
 
 data Input
@@ -1507,7 +1507,7 @@ fixInterval interval@(TimeInterval from to) (State state)
         -- We know high is greater or equal than newLow (prove)
         currentInterval = TimeInterval newLow to
 
-        env = Environment { slotInterval: currentInterval }
+        env = Environment { timeInterval: currentInterval }
 
         newState = State (state { minTime = newLow })
       in
@@ -1561,10 +1561,10 @@ evalValue env state value =
                       if qIsEven then q else q + signum n * signum d
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
         (unwrap state).choices
-      SlotIntervalStart -> -- view (_slotInterval <<< to ivFrom <<< to unwrap) env
-        (unwrap (ivFrom ((unwrap env).slotInterval))).getPOSIXTime
-      SlotIntervalEnd -> -- view (_slotInterval <<< to ivTo <<< to _POSIXTime <<< to unwrap) env
-        (unwrap (ivTo ((unwrap env).slotInterval))).getPOSIXTime
+      SlotIntervalStart -> -- view (_timeInterval <<< to ivFrom <<< to unwrap) env
+        (unwrap (ivFrom ((unwrap env).timeInterval))).getPOSIXTime
+      SlotIntervalEnd -> -- view (_timeInterval <<< to ivTo <<< to _POSIXTime <<< to unwrap) env
+        (unwrap (ivTo ((unwrap env).timeInterval))).getPOSIXTime
       UseValue valId -> fromMaybe zero $ Map.lookup valId
         (unwrap state).boundValues
       Cond cond thn els ->
@@ -1703,13 +1703,13 @@ reduceContractStep env state contract = case contract of
       Reduced ReduceNoWarning ReduceNoPayment state cont
   When _ timeout nextContract ->
     let
-      startSlot = view (_slotInterval <<< to ivFrom) env
+      startTime = view (_timeInterval <<< to ivFrom) env
 
-      endSlot = view (_slotInterval <<< to ivTo) env
+      endTime = view (_timeInterval <<< to ivTo) env
     in
-      if endSlot < timeout then
+      if endTime < timeout then
         NotReduced
-      else if timeout <= startSlot then
+      else if timeout <= startTime then
         Reduced ReduceNoWarning ReduceNoPayment state nextContract
       else
         AmbiguousSlotIntervalReductionError
