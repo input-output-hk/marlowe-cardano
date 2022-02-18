@@ -6,15 +6,11 @@ module Capability.PlutusApps.MarloweApp.Types
   , MarloweInput
   , MarloweSlotRange
   , MarloweAppState
-  , EndpointMutex
-  , class HasMarloweAppEndpointMutex
-  , marloweAppEndpointMutex
+  , Endpoints
   ) where
 
 import Prologue
 
-import Data.Tuple.Nested (type (/\))
-import Data.UUID.Argonaut (UUID)
 import Effect.AVar (AVar)
 import Language.Marlowe.Client
   ( EndpointResponse
@@ -39,19 +35,9 @@ type MarloweAppState
   = Maybe MarloweEndpointResponse
 
 -- The plutus contracts can have their endpoints active or inactive. We use
--- this object with Mutex to avoid calling an inactive endpoint and to keep
--- track of the different requests.
-type EndpointMutex
-  =
+-- this object with semephores to avoid calling an inactive endpoint.
+type Endpoints =
   { create :: AVar Unit
   , applyInputs :: AVar Unit
   , redeem :: AVar Unit
-  -- For each request we fire, we store in a queue the tuple of the
-  -- request id and a mutex to wait for the response. We use an array
-  -- instead of a Map because we only want to keep a limited number of
-  -- requests.
-  , requests :: AVar (Array (UUID /\ AVar MarloweEndpointResponse))
   }
-
-class HasMarloweAppEndpointMutex env where
-  marloweAppEndpointMutex :: env -> EndpointMutex
