@@ -581,7 +581,7 @@ renderPartyMissingActions state party actions =
       $ Array.cons (renderParty state party) actionsSeparatedByOr
 
 renderCurrentStep
-  :: forall m r
+  :: forall m
    . MonadAff m
   => Slot
   -> StartedState

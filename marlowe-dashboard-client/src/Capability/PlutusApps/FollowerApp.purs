@@ -6,15 +6,12 @@ module Capability.PlutusApps.FollowerApp
 
 import Prologue
 
-import Data.Lens (view)
 import Data.Traversable (for_)
-import Data.Tuple.Nested ((/\))
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
-import Marlowe.Client (ContractHistory(..), getContract)
+import Marlowe.Client (ContractHistory, getContract)
 import Marlowe.Deinstantiate (findTemplate)
-import Marlowe.PAB (PlutusAppId(..))
+import Marlowe.PAB (PlutusAppId)
 import Store as Store
-import Store.Wallet (_walletId)
 
 -- FIXME-3208
 class FollowerApp m where
@@ -37,7 +34,7 @@ onNewObservableState
   -> ContractHistory
   -> m Unit
 onNewObservableState followerAppId contractHistory = do
-  wallet /\ currentSlot <- (\store -> store.wallet /\ store.currentSlot) <$>
+  currentSlot <- _.currentSlot <$>
     getStore
   -- let
   -- marloweParams /\ marloweData = view _chParams contractHistory

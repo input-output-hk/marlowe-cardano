@@ -28,7 +28,6 @@ import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
-import Data.Map as Map
 import Data.PABConnectedWallet (_walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
@@ -75,8 +74,6 @@ mkInitialState contractStore =
   , menuOpen: false
   , card: Nothing
   , cardOpen: false
-  -- FIXME-3208: remove...
-  , contracts: Map.empty
   , contractStore
   , contractFilter: Running
   , selectedContractMarloweParams: Nothing

@@ -19,9 +19,8 @@ import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.WalletNickname (WalletNickname)
-import Marlowe.Client (ContractHistory)
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
-import Page.Contract.Types (Action, State) as Contract
+import Page.Contract.Types (Action) as Contract
 import Store.Contracts (ContractStore)
 
 type State =
@@ -31,12 +30,8 @@ type State =
   , card :: Maybe Card
   -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
-  -- FIXME-3208: Refactor in progress, remove...
-  -- TODO: SCP-3208 Move contract state to halogen store
-  , contracts :: Map MarloweParams Contract.State
   , contractStore :: ContractStore
   , contractFilter :: ContractFilter
-  -- FIXME-3208 remove
   , selectedContractMarloweParams :: Maybe MarloweParams
   , templateState :: Template.State
   }
