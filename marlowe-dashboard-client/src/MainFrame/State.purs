@@ -97,7 +97,7 @@ import Plutus.PAB.Webserver.Types
   , ContractInstanceClientState
   , InstanceStatusToClient(..)
   )
-import Store (_wallet)
+import Store (_contracts, _wallet)
 import Store as Store
 import Store.Contracts (emptyContractStore)
 import Store.Wallet (WalletStore(..), _Connected, _connectedWallet)
@@ -479,10 +479,13 @@ handleAction (DashboardAction da) = void $ runMaybeT $ do
   currentSlot <- H.lift $ use _currentSlot
   tzOffset <- H.lift $ use _tzOffset
   addressBook <- H.lift $ use _addressBook
+  contracts <- H.lift $ use (_store <<< _contracts)
   dashboardState <- MaybeT $ peruse _dashboardState
   wallet <- MaybeT $ peruse $ _store <<< _wallet <<< _connectedWallet
   H.lift $ toDashboard dashboardState
-    $ Dashboard.handleAction { addressBook, currentSlot, tzOffset, wallet } da
+    $ Dashboard.handleAction
+        { addressBook, currentSlot, tzOffset, wallet, contracts }
+        da
 
 {- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just

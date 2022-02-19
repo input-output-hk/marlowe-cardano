@@ -27,7 +27,7 @@ import MainFrame.Lenses
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
 import Page.Dashboard.View (dashboardCard, dashboardScreen)
 import Page.Welcome.View (welcomeCard, welcomeScreen)
-import Store (_wallet)
+import Store (_contracts, _wallet)
 import Store as Store
 import Store.Wallet (_connectedWallet)
 import Toast.State as Toast
@@ -53,6 +53,8 @@ render state =
     subState = state ^. _subState
 
     mWallet = state ^? _store <<< _wallet <<< _connectedWallet
+
+    contracts = state ^. _store <<< _contracts
   in
     div [ classNames [ "h-full" ] ]
       $
@@ -63,7 +65,7 @@ render state =
                 DashboardAction
                 ( \dashboardState ->
                     dashboardScreen
-                      { addressBook, currentSlot, tzOffset, wallet }
+                      { addressBook, currentSlot, tzOffset, wallet, contracts }
                       dashboardState
                 )
                 state
@@ -72,7 +74,7 @@ render state =
                 DashboardAction
                 ( \dashboardState ->
                     dashboardCard
-                      { addressBook, currentSlot, tzOffset, wallet }
+                      { addressBook, currentSlot, tzOffset, wallet, contracts }
                       dashboardState
                 )
                 state

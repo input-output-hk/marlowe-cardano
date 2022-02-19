@@ -26,7 +26,7 @@ import Data.Address as A
 import Data.Array as Array
 import Data.Compactable (compact)
 import Data.Int (round)
-import Data.Lens (preview, view, (^.))
+import Data.Lens (view, (^.))
 import Data.Maybe (isJust)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
@@ -73,7 +73,6 @@ import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Semantics (PubKey, Slot)
-import Page.Contract.Lenses (_Started, _contract, _executionState)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (_contractPage)
 import Page.Dashboard.Lenses
@@ -82,7 +81,6 @@ import Page.Dashboard.Lenses
   , _contactsState
   , _contractFilter
   , _menuOpen
-  , _selectedContract
   , _selectedContractMarloweParams
   , _templateState
   )
@@ -95,7 +93,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (getClosedContracts, getRunningContracts)
+import Store.Contracts (getClosedContracts, getContract, getRunningContracts)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
@@ -109,7 +107,7 @@ dashboardScreen
   => Input
   -> State
   -> ComponentHTML Action ChildSlots m
-dashboardScreen { currentSlot, tzOffset, wallet } state =
+dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
   let
     walletNickname = wallet ^. _walletNickname
 
@@ -119,9 +117,9 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
 
     selectedContractMarloweParams = state ^. _selectedContractMarloweParams
 
-    selectedContract = preview
-      (_selectedContract <<< _contract <<< _Started <<< _executionState)
-      state
+    selectedContract = do
+      marloweParams <- selectedContractMarloweParams
+      getContract marloweParams contracts
   in
     div
       [ classNames

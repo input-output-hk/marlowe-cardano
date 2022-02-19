@@ -67,6 +67,7 @@ derive instance eqContractFilter :: Eq ContractFilter
 
 type Input =
   { wallet :: PABConnectedWallet
+  , contracts :: ContractStore
   , addressBook :: AddressBook
   , currentSlot :: Slot
   , tzOffset :: Minutes

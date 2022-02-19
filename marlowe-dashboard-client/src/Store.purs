@@ -50,6 +50,9 @@ type Store =
 _wallet :: forall r a. Lens' { wallet :: a | r } a
 _wallet = prop (Proxy :: _ "wallet")
 
+_contracts :: forall r a. Lens' { contracts :: a | r } a
+_contracts = prop (Proxy :: _ "contracts")
+
 mkStore :: AddressBook -> LocalContractNicknames -> Store
 mkStore addressBook contractNicknames =
   { -- # Wallet
