@@ -61,7 +61,7 @@ contractPreviewCard currentSlot state =
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
           [ div
-              [ classNames [ "flex-1" ] ]
+              [ classNames [ "flex-1", "truncate" ] ]
               [ h3
                   [ classNames [ "flex", "gap-2", "items-center" ] ]
                   [ contractIcon contractType

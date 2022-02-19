@@ -25,7 +25,7 @@ import Data.ContractNickname as ContractNickname
 import Data.Lens (_1, _2, view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, fromMaybe', maybe)
+import Data.Maybe (fromMaybe, fromMaybe', maybe')
 import Data.Tuple.Nested ((/\))
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
 import Marlowe.Execution.Lenses (_resultingPayments)
@@ -58,6 +58,7 @@ import Marlowe.Semantics
   , _accounts
   , _marloweContract
   , _marloweState
+  , _rolesCurrency
   , computeTransaction
   , emptyState
   , evalValue
@@ -117,9 +118,9 @@ restoreState currentSlot contractNickname metadata history =
 -- Each contract should always have a name, if we
 -- have given a Local nickname, we use that, if not we
 -- show the currency symbol
--- TODO: SCP-3500 Show the currency symbol when we don't have a nickname
 contractName :: State -> String
-contractName { contractNickname } = maybe "Unknown"
+contractName { contractNickname, marloweParams } = maybe'
+  (\_ -> view _rolesCurrency marloweParams)
   ContractNickname.toString
   contractNickname
 
