@@ -10,26 +10,32 @@ import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.AddressBook (AddressBook)
+import Data.Argonaut (Json, JsonDecodeError)
 import Data.Generic.Rep (class Generic)
+import Data.Map (Map)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
 import Data.WalletId (WalletId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Halogen.Store.Connect (Connected)
-import Marlowe.Semantics (Slot)
+import Language.Marlowe.Client (MarloweError)
+import Marlowe.Client (ContractHistory)
+import Marlowe.PAB (PlutusAppId)
+import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Page.Contract.Types as ContractPage
 import Page.Dashboard.Types (Action, State) as Dashboard
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
 import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
+import Plutus.Contract.Effects (ActiveEndpoint)
 import Store.Contracts (ContractStore)
 import Store.Wallet (WalletStore)
 import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
-import WebSocket.Support (FromSocket) as WS
 
 type Slice =
   { addressBook :: AddressBook
@@ -88,7 +94,21 @@ _toaster = Proxy
 
 ------------------------------------------------------------
 data Query a
-  = ReceiveWebSocketMessage (WS.FromSocket CombinedWSStreamToClient) a
+  = GetWallet (PABConnectedWallet -> a)
+  | NewWebSocketStatus WebSocketStatus a
+  | SlotChange Slot a
+  | CompanionAppStateUpdated (Map MarloweParams MarloweData) a
+  | CreateFailed UUID MarloweError a
+  | MarloweContractCreated UUID MarloweParams a
+  | ApplyInputsFailed UUID MarloweError a
+  | InputsApplied UUID a
+  | RedeemFailed UUID MarloweError a
+  | PaymentRedeemed UUID a
+  | ContractHistoryUpdated ContractHistory a
+  | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint) a
+  | MarloweAppClosed (Maybe Json) a
+  | WalletCompanionAppClosed (Maybe Json) a
+  | NotificationParseFailed String JsonDecodeError a
   | MainFrameActionQuery Action a
 
 data Msg
