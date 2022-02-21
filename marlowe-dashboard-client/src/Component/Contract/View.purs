@@ -21,10 +21,14 @@ import Data.Array (intercalate, length)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromString)
 import Data.BigInt.Argonaut as BigInt
+import Data.ContractUserParties
+  ( ContractUserParties
+  , getNickname
+  , isCurrentUser
+  )
 import Data.Lens (view, (^.))
 import Data.Map (lookup) as Map
 import Data.Maybe (isJust, maybe, maybe')
-import Data.Set as Set
 import Data.String (take, trim)
 import Data.String.Extra (capitalize)
 import Data.Tuple (uncurry)
@@ -58,11 +62,10 @@ import Marlowe.Semantics
   )
 import Marlowe.Slot (secondsDiff)
 import Page.Contract.Lenses
-  ( _executionState
+  ( _contractUserParties
+  , _executionState
   , _metadata
-  , _participants
   , _previousSteps
-  , _userParties
   )
 import Page.Contract.Types (Action(..), StartedState)
 import Text.Markdown.TrimmedInline (markdownToHTML)
@@ -165,7 +168,7 @@ renderParty state party =
   let
     participantName = participantWithNickname state party
 
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
   in
     div [ classNames $ [ "text-xs", "flex", "gap-1" ] ]
       [ firstLetterInCircle
@@ -179,7 +182,8 @@ renderParty state party =
           }
       , div [ classNames [ "font-semibold" ] ]
           [ text $
-              if Set.member party userParties then participantName <> " (you)"
+              if isCurrentUser party contractUserParties then participantName <>
+                " (you)"
               else participantName
           ]
       ]
@@ -201,10 +205,9 @@ renderPartyTasks state party actions =
 participantWithNickname :: StartedState -> Party -> String
 participantWithNickname state party =
   let
-    mNickname = join $ Map.lookup party (state ^. _participants)
+    mNickname = getNickname party (state ^. _contractUserParties)
   in
     capitalize case party, mNickname of
-      -- TODO: For the demo we wont have PK, but eventually we probably want to limit the amount of characters
       PK publicKey, _ -> publicKey
       Role roleName, Just nickname -> roleName <> " (" <> WN.toString nickname
         <> ")"
@@ -214,9 +217,9 @@ participantWithNickname state party =
 renderAction :: forall p. StartedState -> Party -> NamedAction -> HTML p Action
 renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) =
   let
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    isActiveParticipant = Set.member party userParties
+    isActiveParticipant = isCurrentUser party contractUserParties
 
     fromDescription =
       if isActiveParticipant then
@@ -226,7 +229,7 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
         Role roleName -> capitalize roleName <> " makes"
 
     toDescription =
-      if Set.member intoAccountOf userParties then
+      if isCurrentUser intoAccountOf contractUserParties then
         "your"
       else if by == intoAccountOf then
         "their"
@@ -257,9 +260,9 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
 
 renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
   let
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    isActiveParticipant = Set.member party userParties
+    isActiveParticipant = isCurrentUser party contractUserParties
 
     metadata = state ^. (_executionState <<< _metadata)
 
@@ -363,9 +366,9 @@ renderAction _ _ (Evaluate _) = div []
 
 renderAction state party CloseContract =
   let
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    isActiveParticipant = Set.member party userParties
+    isActiveParticipant = isCurrentUser party contractUserParties
   in
     div [ classNames [ "space-y-2" ] ]
       -- FIXME: revisit the text
@@ -436,28 +439,29 @@ startingStepActions =
     []
 
 -- FIXME-3208 Revisit where this should live
-paymentToTransfer :: StartedState -> Payment -> Transfer
-paymentToTransfer state (Payment sender payee money) = case payee of
-  Party recipient ->
-    makeTransfer recipient
-      $ AccountToWallet sender recipient
-  Account recipient ->
-    makeTransfer recipient
-      $ AccountToAccount sender recipient
+paymentToTransfer :: ContractUserParties -> Payment -> Transfer
+paymentToTransfer contractUserParties (Payment sender payee money) =
+  case payee of
+    Party recipient ->
+      makeTransfer recipient
+        $ AccountToWallet sender recipient
+    Account recipient ->
+      makeTransfer recipient
+        $ AccountToAccount sender recipient
   where
   makeTransfer recipient termini =
-    { sender: partyToParticipant state sender
-    , recipient: partyToParticipant state recipient
+    { sender: partyToParticipant contractUserParties sender
+    , recipient: partyToParticipant contractUserParties recipient
     , token: adaToken
     , quantity: getAda money
     , termini
     }
 
 -- FIXME-3208 Revisit where this should live
-partyToParticipant :: StartedState -> Party -> Participant
-partyToParticipant { participants, userParties } party =
-  { nickname: join $ Map.lookup party $ participants
-  , isCurrentUser: Set.member party userParties
+partyToParticipant :: ContractUserParties -> Party -> Participant
+partyToParticipant contractUserParties party =
+  { nickname: getNickname party contractUserParties
+  , isCurrentUser: isCurrentUser party contractUserParties
   }
 
 -- FIXME-3208 Revisit where this should live

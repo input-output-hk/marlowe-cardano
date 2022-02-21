@@ -30,6 +30,7 @@ import Component.Transfer.View (transfer)
 import Data.Array (fromFoldable)
 import Data.Default (default)
 import Data.Foldable (length)
+import Data.Lens ((^.))
 import Data.List as List
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -39,6 +40,7 @@ import Marlowe.Execution.State (mkTx)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
 import Marlowe.Semantics (Token(..), computeTransaction)
+import Page.Contract.Lenses (_contractUserParties)
 import Page.Contract.State (toInput)
 import Page.Contract.Types (Action(..))
 
@@ -83,8 +85,12 @@ summary input@{ action, contractState } =
             , box Box.Card [] case action of
                 MakeDeposit recipient sender token quantity ->
                   transfer
-                    { sender: partyToParticipant contractState sender
-                    , recipient: partyToParticipant contractState recipient
+                    { sender: partyToParticipant
+                        (contractState ^. _contractUserParties)
+                        sender
+                    , recipient: partyToParticipant
+                        (contractState ^. _contractUserParties)
+                        recipient
                     , token
                     , quantity
                     , termini: WalletToAccount sender recipient
@@ -118,8 +124,10 @@ results { action, contractState, currentSlot } = case _ of
     layout Icon.ExpandLess
       $ box Box.Card []
           <$>
-            ( fromFoldable $ transfer <<< paymentToTransfer contractState <$>
-                payments
+            ( fromFoldable $
+                transfer <<< paymentToTransfer
+                  (contractState ^. _contractUserParties) <$>
+                  payments
             )
               <>
                 if willClose then

@@ -19,11 +19,9 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
 import Data.ContractNickname (ContractNickname)
-import Data.Map (Map)
+import Data.ContractUserParties (ContractUserParties)
 import Data.PABConnectedWallet (PABConnectedWallet)
-import Data.Set (Set)
 import Data.Time.Duration (Minutes)
-import Data.WalletNickname (WalletNickname)
 import Halogen (RefLabel(..))
 import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
@@ -70,9 +68,8 @@ type StartedState =
   -- TODO: fix primitive obsession - maybe a zipper is a better representation
   -- than an index + the execution state?
   , selectedStep :: Int
-  , participants :: Map Party (Maybe WalletNickname)
-  -- These are the roles and PK's that the "logged-in" user has in this contract.
-  , userParties :: Set Party
+  -- How the "logged-in" user sees the different Parties of the contract
+  , contractUserParties :: ContractUserParties
   -- These are the possible actions a user can make in the current step (grouped by part). We store this
   -- mainly because extractNamedActions and expandAndGroupByRole could potentially be unperformant to compute
   -- for every render.

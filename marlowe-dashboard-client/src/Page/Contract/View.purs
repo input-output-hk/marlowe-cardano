@@ -32,10 +32,11 @@ import Data.Array.NonEmpty as NonEmptyArray
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
+import Data.ContractUserParties (getParticipants, isCurrentUser)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
 import Data.List.NonEmpty (foldr)
-import Data.Map (intersectionWith, keys, toUnfoldable) as Map
+import Data.Map (intersectionWith, toUnfoldable) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.Set as Set
 import Data.String (take)
@@ -68,14 +69,13 @@ import Marlowe.Semantics
 import Marlowe.Semantics (Input(..)) as S
 import Marlowe.Slot (posixTimeToDateTime, slotToDateTime)
 import Page.Contract.Lenses
-  ( _executionState
+  ( _contractUserParties
+  , _executionState
   , _expandPayments
   , _namedActions
-  , _participants
   , _previousSteps
   , _resultingPayments
   , _selectedStep
-  , _userParties
   )
 import Page.Contract.Types
   ( Action(..)
@@ -190,7 +190,7 @@ statusIndicatorMessage (Starting _) = "Starting contract…"
 
 statusIndicatorMessage (Started state) =
   let
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
     participantsWithAction = Set.fromFoldable $ map fst $ state ^. _namedActions
 
@@ -198,7 +198,11 @@ statusIndicatorMessage (Started state) =
   in
     if isClosed executionState then
       "Contract completed"
-    else if Set.isEmpty (Set.intersection userParties participantsWithAction) then
+    else if
+      Set.isEmpty
+        ( Set.filter (flip isCurrentUser $ contractUserParties)
+            participantsWithAction
+        ) then
       "Waiting for "
         <>
           if Set.size participantsWithAction > 1 then
@@ -373,8 +377,9 @@ renderPaymentSummary
 renderPaymentSummary stepNumber state step =
   let
     expanded = step ^. _expandPayments
-
-    transfers = paymentToTransfer state <$> step ^. _resultingPayments
+    contractUserPartes = state ^. _contractUserParties
+    transfers = paymentToTransfer contractUserPartes <$> step ^.
+      _resultingPayments
 
     expandIcon = if expanded then Icon.ExpandLess else Icon.ExpandMore
   in
@@ -432,6 +437,8 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
 
     transactionTime = formatTime tzOffset mTransactionDateTime
 
+    contractUserParties = state ^. _contractUserParties
+
     renderPartyHeader =
       div [ classNames [ "flex", "justify-between", "items-center", "p-4" ] ]
         [ renderParty state party
@@ -464,8 +471,8 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
     renderPastAction = case _ of
       S.IDeposit recipient sender token quantity ->
         transfer
-          { sender: partyToParticipant state sender
-          , recipient: partyToParticipant state recipient
+          { sender: partyToParticipant contractUserParties sender
+          , recipient: partyToParticipant contractUserParties recipient
           , token
           , quantity
           , termini: WalletToAccount sender recipient
@@ -615,13 +622,13 @@ renderCurrentStep currentSlot state =
                 [ currentStepActions state ]
               Balances ->
                 let
-                  participants = state ^. _participants
+                  participants = getParticipants $ state ^. _contractUserParties
 
                   balancesAtStart = state ^.
                     (_executionState <<< _semanticState <<< _accounts)
 
                   atStart = expandBalances
-                    (Set.toUnfoldable $ Map.keys participants)
+                    (Set.toUnfoldable participants)
                     [ adaToken ]
                     balancesAtStart
 

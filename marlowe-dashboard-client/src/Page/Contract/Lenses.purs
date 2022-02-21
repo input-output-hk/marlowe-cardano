@@ -2,18 +2,17 @@ module Page.Contract.Lenses
   ( _Started
   , _Starting
   , _contract
+  , _contractUserParties
   , _executionState
   , _expandPayments
   , _marloweParams
   , _metadata
   , _namedActions
   , _nickname
-  , _participants
   , _previousSteps
   , _resultingPayments
   , _selectedStep
   , _tab
-  , _userParties
   ) where
 
 import Prologue
@@ -65,11 +64,8 @@ _selectedStep = prop (Proxy :: _ "selectedStep")
 _metadata :: forall a r. Lens' { metadata :: a | r } a
 _metadata = prop (Proxy :: _ "metadata")
 
-_participants :: forall a r. Lens' { participants :: a | r } a
-_participants = prop (Proxy :: _ "participants")
-
-_userParties :: forall a r. Lens' { userParties :: a | r } a
-_userParties = prop (Proxy :: _ "userParties")
+_contractUserParties :: forall a r. Lens' { contractUserParties :: a | r } a
+_contractUserParties = prop (Proxy :: _ "contractUserParties")
 
 _namedActions :: forall a r. Lens' { namedActions :: a | r } a
 _namedActions = prop (Proxy :: _ "namedActions")

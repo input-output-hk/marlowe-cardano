@@ -16,35 +16,34 @@ import Capability.Toast (class Toast, addToast)
 import Component.Contacts.State (adaToken)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.Array (filter, index, length, mapMaybe, modifyAt)
+import Data.Array (index, length, mapMaybe, modifyAt)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
+import Data.ContractUserParties
+  ( contractUserParties
+  , getParticipants
+  , getUserParties
+  )
 import Data.Foldable (foldMap, for_)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, view, (^.))
+import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Lens.Lens.Tuple (_2)
 import Data.List (toUnfoldable)
 import Data.LocalContractNicknames (insertContractNickname)
-import Data.Map (Map)
-import Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Data.Newtype (unwrap)
 import Data.Ord (abs)
-import Data.PABConnectedWallet (PABConnectedWallet, _assets, _pubKeyHash)
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
-import Data.PubKeyHash (_PubKeyHash)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.Unfoldable as Unfoldable
-import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -69,26 +68,17 @@ import Marlowe.Execution.State
 import Marlowe.Execution.Types (NamedAction(..), PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (MetaData, emptyContractMetadata)
-import Marlowe.HasParties (getParties)
-import Marlowe.Semantics
-  ( Contract
-  , MarloweParams
-  , Party(..)
-  , Slot
-  , _accounts
-  , _rolesCurrency
-  )
 import Marlowe.Semantics (Input(..)) as Semantic
+import Marlowe.Semantics (Party, Slot, _accounts)
 import Page.Contract.Lenses
   ( _Started
   , _contract
+  , _contractUserParties
   , _executionState
   , _expandPayments
   , _namedActions
-  , _participants
   , _previousSteps
   , _selectedStep
-  , _userParties
   )
 import Page.Contract.Types
   ( Action(..)
@@ -193,8 +183,7 @@ mkInitialState wallet currentSlot executionState =
       , selectedStep: 0
       -- FIXME-3208: Check, because I think the contract in the executionState is the current
       --             continuation and not the initial contract, so getParticipants might be wrong
-      , participants: getParticipants contract
-      , userParties: getUserParties wallet marloweParams
+      , contractUserParties: contractUserParties wallet marloweParams contract
       , namedActions: mempty
       }
   in
@@ -202,55 +191,6 @@ mkInitialState wallet currentSlot executionState =
       # regenerateStepCards currentSlot
       # selectLastStep
       # Started
-
--- Note 1: We filter out PK parties from the participants of the contract. This is because
--- we don't have a design for displaying them anywhere, and because we are currently only
--- using one in a special case (in the Escrow with Collateral contract), where it doesn't
--- make much sense to show it to the user anyway. If we ever want to use PK parties for
--- other purposes, we will need to rethink this.
--- Note 2: In general there is no way to map parties to wallet nicknames. It is possible
--- for the user who created the contract and distributed the role tokens, but this
--- information will be lost when the browser is closed. And other participants don't have
--- this information in the first place. Also, in the future it could be possible to give
--- role tokens to other wallets, and we wouldn't know about that either. Still, we're
--- keeping the `Maybe WalletNickname` in here for now, in case a way of making it generally
--- available (e.g. through the metadata server) ever becomes apparent.
-getParticipants :: Contract -> Map Party (Maybe WalletNickname)
-getParticipants contract = Map.fromFoldable $ map (\x -> x /\ Nothing)
-  (getRoleParties contract)
-
-getRoleParties :: Contract -> Array Party
-getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
-  contract
-  where
-  isRoleParty party = case party of
-    Role _ -> true
-    _ -> false
-
--- This function creates a Set of the different Contract `Party` a `logged-user`
--- may hold. It is the sum of the role tokens we hold for the contract and any
--- direct usage through the PK (Public Key) constructor
-getUserParties :: PABConnectedWallet -> MarloweParams -> Set Party
-getUserParties wallet marloweParams =
-  let
-    -- the Payment PubKeyHash of the `logged-user`
-    pubKeyHash = view
-      (_pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
-      wallet
-
-    assets = view _assets wallet
-
-    rolesCurrency = view _rolesCurrency marloweParams
-
-    -- See if we have any role for the currencySymbol of the contract
-    mCurrencyTokens = Map.lookup rolesCurrency (unwrap assets)
-
-    -- Convert it to a Set of Role's
-    roleTokens = foldMap (Set.map Role <<< Map.keys <<< Map.filter ((/=) zero))
-      mCurrencyTokens
-  in
-    -- Add a reference to PK directly
-    Set.insert (PK pubKeyHash) roleTokens
 
 withStarted
   :: forall action slots msg m
@@ -413,29 +353,29 @@ transactionsToStep
   state
   { balancesAtStart, balancesAtEnd, txInput, resultingPayments, action } =
   let
-    participants = state ^. _participants
+    participants = getParticipants $ state ^. _contractUserParties
 
     -- TODO: When we add support for multiple tokens we should extract the possible tokens from the
     --       contract, store it in ContractState and pass them here.
     expandedBalancesAtStart = expandBalances
-      (Set.toUnfoldable $ Map.keys participants)
+      (Set.toUnfoldable participants)
       [ adaToken ]
       balancesAtStart
 
     expandedBalancesAtEnd = expandBalances
-      (Set.toUnfoldable $ Map.keys participants)
+      (Set.toUnfoldable participants)
       [ adaToken ]
       balancesAtEnd
 
     stepState = case action of
       TimeoutAction act ->
         let
-          userParties = state ^. _userParties
+          userParties = getUserParties $ state ^. _contractUserParties
 
           missedActions =
             expandAndGroupByRole
               userParties
-              (Map.keys participants)
+              participants
               act.missedActions
         in
           TimeoutStep { slot: act.slot, missedActions }
@@ -457,11 +397,13 @@ timeoutToStep state { slot, missedActions } =
   let
     balances = state ^. (_executionState <<< _semanticState <<< _accounts)
 
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    participants = state ^. _participants
+    userParties = getUserParties contractUserParties
 
-    expandedBalances = expandBalances (Set.toUnfoldable $ Map.keys participants)
+    participants = getParticipants contractUserParties
+
+    expandedBalances = expandBalances (Set.toUnfoldable participants)
       [ adaToken ]
       balances
   in
@@ -479,7 +421,7 @@ timeoutToStep state { slot, missedActions } =
           , missedActions:
               expandAndGroupByRole
                 userParties
-                (Map.keys participants)
+                participants
                 missedActions
           }
     }
@@ -512,14 +454,16 @@ regenerateStepCards currentSlot state =
 
     executionState = state ^. _executionState
 
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    participants = state ^. _participants
+    userParties = getUserParties contractUserParties
+
+    participants = getParticipants contractUserParties
 
     namedActions =
       expandAndGroupByRole
         userParties
-        (Map.keys participants)
+        participants
         (extractNamedActions currentSlot executionState)
   in
     state { previousSteps = previousSteps, namedActions = namedActions }
