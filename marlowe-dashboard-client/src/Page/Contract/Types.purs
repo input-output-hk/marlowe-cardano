@@ -1,25 +1,28 @@
 module Page.Contract.Types
   ( Action(..)
+  , Context
+  , ContractState(..)
   , Input
   , PreviousStep
   , PreviousStepState(..)
-  , Context
   , StartedState
   , StartingState
   , State
-  , ContractState(..)
   , StepBalance
   , Tab(..)
   , TimeoutInfo
   , _contractPage
+  , currentStep
   , scrollContainerRef
   ) where
 
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
+import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractUserParties (ContractUserParties)
+import Data.Lens (view)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Halogen (RefLabel(..))
@@ -156,3 +159,6 @@ scrollContainerRef :: RefLabel
 scrollContainerRef = RefLabel "scroll-container"
 
 _contractPage = Proxy :: Proxy "contractPage"
+
+currentStep :: StartedState -> Int
+currentStep { previousSteps } = length previousSteps

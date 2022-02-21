@@ -12,11 +12,6 @@ import Component.Button.View (button)
 import Component.Column (column)
 import Component.Column as Column
 import Component.ConfirmInput.Types (Input)
-import Component.Contract.View
-  ( currentStep
-  , partyToParticipant
-  , paymentToTransfer
-  )
 import Component.Expand as Expand
 import Component.Heading (Preset(..), heading)
 import Component.IconButton.View (iconButton)
@@ -25,7 +20,11 @@ import Component.Icons as Icon
 import Component.Link (link)
 import Component.Row (row)
 import Component.Row as Row
-import Component.Transfer.Types (Termini(..))
+import Component.Transfer.Types
+  ( Termini(..)
+  , partyToParticipant
+  , paymentToTransfer
+  )
 import Component.Transfer.View (transfer)
 import Data.Array (fromFoldable)
 import Data.Default (default)
@@ -42,7 +41,7 @@ import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as 
 import Marlowe.Semantics (Token(..), computeTransaction)
 import Page.Contract.Lenses (_contractUserParties)
 import Page.Contract.State (toInput)
-import Page.Contract.Types (Action(..))
+import Page.Contract.Types (Action(..), currentStep)
 
 render :: forall m. Monad m => Input -> ComponentHTML Action ChildSlots m
 render =

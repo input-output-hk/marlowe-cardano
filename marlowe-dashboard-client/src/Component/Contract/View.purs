@@ -1,10 +1,7 @@
 module Component.Contract.View
-  ( currentStep
-  , currentStepActions
+  ( currentStepActions
   , firstLetterInCircle
   , participantWithNickname
-  , partyToParticipant
-  , paymentToTransfer
   , renderParty
   , startingStepActions
   , timeoutString
@@ -12,21 +9,15 @@ module Component.Contract.View
 
 import Prologue hiding (div)
 
-import Component.Contacts.State (adaToken, getAda)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
-import Component.Transfer.Types (Participant, Termini(..), Transfer)
 import Css as Css
-import Data.Array (intercalate, length)
+import Data.Array (intercalate)
 import Data.Array as Array
 import Data.BigInt.Argonaut (fromString)
 import Data.BigInt.Argonaut as BigInt
-import Data.ContractUserParties
-  ( ContractUserParties
-  , getNickname
-  , isCurrentUser
-  )
-import Data.Lens (view, (^.))
+import Data.ContractUserParties (getNickname, isCurrentUser)
+import Data.Lens ((^.))
 import Data.Map (lookup) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.String (take, trim)
@@ -55,18 +46,11 @@ import Marlowe.Semantics
   ( Bound(..)
   , ChoiceId(..)
   , Party(..)
-  , Payee(..)
-  , Payment(..)
   , Slot
   , getEncompassBound
   )
 import Marlowe.Slot (secondsDiff)
-import Page.Contract.Lenses
-  ( _contractUserParties
-  , _executionState
-  , _metadata
-  , _previousSteps
-  )
+import Page.Contract.Lenses (_contractUserParties, _executionState, _metadata)
 import Page.Contract.Types (Action(..), StartedState)
 import Text.Markdown.TrimmedInline (markdownToHTML)
 
@@ -437,33 +421,3 @@ startingStepActions =
   placeholderContent = div
     [ classNames [ "bg-gray", "rounded-full", "w-full", "h-12" ] ]
     []
-
--- FIXME-3208 Revisit where this should live
-paymentToTransfer :: ContractUserParties -> Payment -> Transfer
-paymentToTransfer contractUserParties (Payment sender payee money) =
-  case payee of
-    Party recipient ->
-      makeTransfer recipient
-        $ AccountToWallet sender recipient
-    Account recipient ->
-      makeTransfer recipient
-        $ AccountToAccount sender recipient
-  where
-  makeTransfer recipient termini =
-    { sender: partyToParticipant contractUserParties sender
-    , recipient: partyToParticipant contractUserParties recipient
-    , token: adaToken
-    , quantity: getAda money
-    , termini
-    }
-
--- FIXME-3208 Revisit where this should live
-partyToParticipant :: ContractUserParties -> Party -> Participant
-partyToParticipant contractUserParties party =
-  { nickname: getNickname party contractUserParties
-  , isCurrentUser: isCurrentUser party contractUserParties
-  }
-
--- FIXME-3208 Revisit where this should live
-currentStep :: StartedState -> Int
-currentStep = length <<< view _previousSteps

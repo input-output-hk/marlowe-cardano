@@ -6,12 +6,9 @@ import Prologue hiding (div)
 
 import Component.Contacts.State (adaToken)
 import Component.Contract.View
-  ( currentStep
-  , currentStepActions
+  ( currentStepActions
   , firstLetterInCircle
   , participantWithNickname
-  , partyToParticipant
-  , paymentToTransfer
   , renderParty
   , startingStepActions
   , timeoutString
@@ -23,7 +20,11 @@ import Component.Popper (Placement(..))
 import Component.Progress.Circular as Progress
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
-import Component.Transfer.Types (Termini(..))
+import Component.Transfer.Types
+  ( Termini(..)
+  , partyToParticipant
+  , paymentToTransfer
+  )
 import Component.Transfer.View (transfer)
 import Data.Array (fromFoldable, intercalate, length)
 import Data.Array as Array
@@ -87,6 +88,7 @@ import Page.Contract.Types
   , StepBalance
   , Tab(..)
   , TimeoutInfo
+  , currentStep
   , scrollContainerRef
   )
 
