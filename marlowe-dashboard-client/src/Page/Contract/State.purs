@@ -130,7 +130,6 @@ component =
           }
       }
 
--- FIXME-3208 delete this
 dummyState :: ContractState
 dummyState =
   Starting
@@ -149,7 +148,7 @@ deriveState
   } =
   let
     mExecutionState = getContract marloweParams context.contracts
-    -- FIXME-3208 we might want to represent an error state instead of dummyState
+    -- FIXME-3487 we might want to represent an error state instead of dummyState
     contract = fromMaybe dummyState $ mkInitialState wallet context.currentSlot
       <$> mExecutionState
   in
@@ -159,7 +158,7 @@ deriveState
     , wallet
     }
 
--- FIXME-3208: Almost sure delete this
+-- TODO: SCP-3487 Fix the flow that creates a contract
 -- this is for making a placeholder state for the user who created the contract, used for displaying
 -- something before we get the MarloweParams back from the WalletCompanion app
 mkPlaceholderState :: ContractNickname -> MetaData -> ContractState
@@ -297,19 +296,6 @@ handleAction (SelectStep stepNumber) = assign
   (_contract <<< _Started <<< _selectedStep)
   stepNumber
 
--- FIXME-3208: As part of the contract refactor I removed a couple of calls to this action
---             when a contract was updated. This should cause a bug when you have the Contract
---             that was modified opened and the Step that is selected is not the same that is shown
---
---      selectedStep' <- peruse $ _selectedContract <<< _Started <<<
---        _selectedStep
---      when (selectedStep /= selectedStep')
---        $ for_ selectedStep'
---            ( handleAction input <<< ContractAction marloweParams <<<
---                Contract.MoveToStep
---            )
---       handleAction input $ ContractAction followerAppId $
---          Contract.CancelConfirmation
 handleAction (MoveToStep stepNumber) = do
   -- The MoveToStep action is called when a new step is added (either via an apply transaction or
   -- a timeout). We unsubscribe and resubscribe to update the tracked elements.

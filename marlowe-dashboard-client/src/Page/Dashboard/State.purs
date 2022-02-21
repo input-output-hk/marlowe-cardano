@@ -38,7 +38,7 @@ import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (mapSubmodule)
-import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Semantics (MarloweData, MarloweParams)
@@ -138,22 +138,9 @@ handleAction _ (SelectContract marloweParams) = assign
   _selectedContractMarloweParams
   marloweParams
 
-{- [UC-CONTRACT-1][2] Start a Marlowe contract
--- FIXME-3208 redo comments
-After starting a new Marlowe contract, we should receive a WebSocket notification informing us of
-the `MarloweParams` and initial `MarloweData` for that contract (via a status update for our
-`WalletCompanion` app). We now need to start following that contract with a `MarloweFollower` app.
-If we started the contract ourselves, we already created a `MarloweFollower` app as a placeholder.
-So here we need to check whether there is an existing `MarloweFollower` app with the right metadata
-(and no `MarloweParams`) - and potentially use that instead of creating a new one.
-If someone else started the contract, and gave us a role, we will have no placeholder
-`MarloweFollower` app, and so we simply create a new one and start following immediately.
--}
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
-handleAction { wallet } (UpdateFollowerApps companionAppState) = do
+handleAction { wallet, contracts } (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
-  -- FIXME-3208: We should use Input here instead of getStore
-  contracts <- _.contracts <$> getStore
   let
     contractExists marloweParams = followerContractExists marloweParams
       contracts
@@ -165,7 +152,6 @@ handleAction { wallet } (UpdateFollowerApps companionAppState) = do
   when (walletCompanionStatus == WaitingToSync) $ assign
     _walletCompanionStatus
     WalletCompanionSynced
-  -- for_ newContractsArray \(marloweParams /\ marloweData) ->
   for_ newContractsArray \(marloweParams /\ _) ->
     followContract wallet marloweParams
 
@@ -182,7 +168,7 @@ manually (and sign the transaction). So this will almost certainly have to chang
 -}
 handleAction _ (RedeemPayments _) = pure unit
 {-
-  -- FIXME-3208
+  -- FIXME-3559 Fix redeem logic
 handleAction { wallet } (RedeemPayments marloweParams) = do
  mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
 for_ mStartedContract \{ executionState, userParties } ->
@@ -213,7 +199,7 @@ handleAction
         $ set _card (Just $ ContactsCard)
             <<< set (_contactsState <<< _cardSection)
               (NewWallet $ Just tokenName)
-    {- [UC-CONTRACT-1][0] Starting a Marlowe contract
+    {- [UC-CONTRACT-1][0] Start a new marlowe contract
      The flow of creating a new marlowe contract starts when we submit the
      Template form. In here we apply the contract parameters to the Marlowe
      Extended contract to receive a Marlowe Core contract, and we call the
@@ -239,8 +225,6 @@ handleAction
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
             Right reqId -> do
-              -- FIXME-3208
-              -- insertIntoContractNicknames followerAppId nickname
               let metaData = template.metaData
               -- We save in the store the request of a created contract with
               -- the information relevant to show a placeholder of a starting contract.
@@ -277,7 +261,7 @@ handleAction _ (ContractAction _ _) =
   pure unit
 
 {-
-  FIXME-3208
+  FIXME-3561 Fix contract confirmation dialog
 handleAction
   input@{ wallet, currentSlot, tzOffset }
   (ContractAction marloweParams contractAction) = do

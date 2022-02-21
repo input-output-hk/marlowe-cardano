@@ -50,7 +50,7 @@ contractPreviewCard currentSlot state =
             [ classNames [ "font-semibold" ] ]
             [ text $ timeoutString currentSlot state ]
         ]
-    -- FIXME-3208
+    -- FIXME-3560 Fix current step actions from the dashboard
     -- stepActions = currentStepActions state
     stepActions = startingStepActions
   in
@@ -67,7 +67,7 @@ contractPreviewCard currentSlot state =
                   [ contractIcon contractType
                   , text contractName
                   ]
-              -- FIXME-3208: Make an input again
+              -- FIXME-3562: Make an input again
               , text nickname
 
               -- , input
@@ -95,12 +95,11 @@ contractPreviewCard currentSlot state =
           ]
       ]
 
--- FIXME-3208: Factor out commonalities between contractStartingPreviewCard and contractPreviewCard
+-- FIXME-3487: Factor out commonalities between contractStartingPreviewCard and contractPreviewCard
 contractStartingPreviewCard
   :: forall m. MonadAff m => StartingState -> ComponentHTML Action ChildSlots m
 contractStartingPreviewCard state =
   let
-    -- FIXME-3208:
     -- nickname = "Unknown"
 
     contractType = state ^. (_metadata <<< _contractType)
@@ -137,7 +136,7 @@ contractStartingPreviewCard state =
                   [ contractIcon contractType
                   , text contractName
                   ]
-              -- FIXME-3208
+              -- FIXME-3562
               -- , input
               --     [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
               --     , type_ InputText
@@ -151,7 +150,7 @@ contractStartingPreviewCard state =
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              -- FIXME-3208
+              -- TODO: SCP-3487 Fix the flow that creates a contract
               -- , onClick_ SelectSelf
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]

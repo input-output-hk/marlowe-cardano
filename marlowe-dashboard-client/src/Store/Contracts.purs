@@ -54,7 +54,7 @@ type ContractStoreFields =
   -- This Map is used to hold the placeholders for new contracts. The key is the
   -- request id of calling the create endpoint, the value is what is needed to
   -- show a "loading" card.
-  -- See UC-FIXME-3208
+  -- See UC-CONTRACT-1
   , newContracts :: Map UUID (ContractNickname /\ MetaData)
   -- This bimap help us have one Follower contract per Marlowe contract.
   , contractIndex :: Bimap MarloweParams PlutusAppId

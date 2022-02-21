@@ -257,13 +257,6 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                       -- through the PAB - so until that bug is fixed, this will have to mask it
                       updateStore
                         $ Store.NewCompanionAppStateObserved companionAppState
-                      {- [UC-CONTRACT-1][X] Starting a Marlowe contract
-                    When we start a contract, our wallet will initially receive all the role tokens for that contract
-                    (before they are paid out to the people we gave those roles to). And if someone else started a
-                    contract and gave us a role, we will receive that role token. Either way, our `WalletCompanion` app
-                    will notice, and its status will be updated to include the `MarloweParams` and initial `MarloweData`
-                    of the contract in question. We can use that to start following the contract.
-                    -}
                       handleAction
                         $ DashboardAction
                         $ Dashboard.UpdateFollowerApps companionAppState
@@ -306,7 +299,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
                                 "Can't follow the contract"
                                 Nothing
                               Right (_ /\ _) -> do
-                                -- FIXME-3208: swap store contract from new to running
+                                -- TODO: SCP-3487 swap store contract from new to running
                                 addToast $ successToast
                                   "Contract initialised."
                           Just (EndpointSuccess _ ApplyInputsResponse) ->
@@ -512,14 +505,9 @@ enterWelcomeState walletDetails = do
 
 {- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
-the PAB to get the given wallet's `MarloweFollower` apps, and subscribe to all the relevant apps.
-If the wallet has been given a role token for a new contract while the user was disconnected, they
-will not yet have a `MarloweFollower` app for that contract. The business of creating and loading
-these apps (and avoiding the UI bug of saying "you have no contracts" when in fact we haven't
-finished loading them yet) is a bit convoluted - follow the trail of workflow comments to see how
-it works.
+the PAB to get all the running contracts (`WalletCompanion`, `MarloweApp` and `MarloweFollower`)
+and subscribe to notifications.
 -}
--- FIXME-3208: Change comments
 enterDashboardState
   :: forall m
    . ManagePAB m

@@ -13,11 +13,10 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Store as Store
 
--- FIXME-3208
 class FollowerApp m where
   followContract :: m Unit
 
-{- [UC-CONTRACT-1][4] Start a contract
+{- [UC-CONTRACT-1][4] Start a new marlowe contract
    [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
 If we started a contract (or someone else started one and gave us a role in it), we will have
 created a `MarloweFollower` app for that contract, and started following the contract with that
@@ -25,7 +24,6 @@ created a `MarloweFollower` app for that contract, and started following the con
 about its initial state through the WebSocket. We potentially use that to change the corresponding
 `Contract.State` from `Starting` to `Started`.
 -}
--- FIXME-3208 update comments
 {- [UC-CONTRACT-3][2] Apply an input to a contract -}
 onNewObservableState
   :: forall m
@@ -34,11 +32,7 @@ onNewObservableState
   -> ContractHistory
   -> m Unit
 onNewObservableState followerAppId contractHistory = do
-  currentSlot <- _.currentSlot <$>
-    getStore
-  -- let
-  -- marloweParams /\ marloweData = view _chParams contractHistory
-  -- walletId = preview _walletId wallet
+  currentSlot <- _.currentSlot <$> getStore
 
   let
     contract = getContract contractHistory

@@ -281,7 +281,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             logWarn @String (show err)
             tell $ Just $ EndpointException reqId endpointName err
             marlowePlutusContract)
-    -- [UC-CONTRACT-1][1] Starting a Marlowe contract
+    -- [UC-CONTRACT-1][1] Start a new marlowe contract
     create = endpoint @"create" $ \(reqId, owners, contract) -> catchError reqId "create" $ do
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]

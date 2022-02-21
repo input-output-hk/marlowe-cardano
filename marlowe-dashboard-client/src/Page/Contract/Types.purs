@@ -123,7 +123,7 @@ type Context =
 type Input =
   { tzOffset :: Minutes
   , wallet :: PABConnectedWallet
-  -- FIXME-3208 Instead of just MarloweParms this should be a custom data type or a
+  -- TODO-3487 Instead of just MarloweParms this should be a custom data type or a
   --            Either UUID MarloweParams to be able to work with Starting and Started contracts.
   , marloweParams :: MarloweParams
   }

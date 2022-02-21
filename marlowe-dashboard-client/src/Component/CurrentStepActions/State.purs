@@ -2,7 +2,7 @@ module Component.CurrentStepActions.State where
 
 import Prologue
 
-import Component.CurrentStepActions.Types (Action(..), DSL, Input)
+import Component.CurrentStepActions.Types (Action, DSL, Input)
 import Component.CurrentStepActions.View (currentStepActions)
 import Effect.Aff.Class (class MonadAff)
 import Halogen as H
