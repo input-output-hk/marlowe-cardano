@@ -499,9 +499,7 @@ enterWelcomeState walletDetails = do
     Left _ -> pure unit
     Right plutusApps -> for_ plutusApps \app ->
       unsubscribeFromPlutusApp $ view _cicContract app
-  -- FIXME-3208: Make the disconnect wallet a Store global action that clears the wallet
-  --             and also the running contracts.
-  updateStore $ Store.Wallet $ WalletStore.OnDisconnected
+  updateStore $ Store.Disconnect
 
 {- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query

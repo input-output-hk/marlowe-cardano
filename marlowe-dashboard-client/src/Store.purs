@@ -20,6 +20,7 @@ import Store.Contracts
   , addFollowerContract
   , addStartingContract
   , advanceToSlot
+  , emptyContractStore
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
@@ -83,6 +84,7 @@ data Action
   -- Wallet
   | Wallet WalletAction
   -- System wide components
+  | Disconnect
   | ShowToast ToastMessage
   | ClearToast
   | DropdownOpened String
@@ -129,3 +131,7 @@ reduce store = case _ of
   -- Dropdown
   DropdownOpened dropdown -> store { openDropdown = Just dropdown }
   DropdownClosed -> store { openDropdown = Nothing }
+  Disconnect -> store
+    { wallet = Wallet.Disconnected
+    , contracts = emptyContractStore
+    }
