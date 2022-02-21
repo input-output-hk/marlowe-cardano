@@ -204,39 +204,6 @@ for_ mStartedContract \{ executionState, userParties } ->
           _ -> pure unit
 -}
 
-handleAction _ AdvanceTimedoutSteps = pure unit
-{- FIXME-3208
-handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
-  pure unit
-  modifying
-    ( _contracts
-        <<< traversed
-        <<< _Started
-        <<< filtered
-          ( \contract ->
-              contract.executionState.mNextTimeout /= Nothing
-                && contract.executionState.mNextTimeout
-                  <= Just currentSlot
-          )
-    )
-    (applyTimeout currentSlot)
-  selectedContractFollowerAppId <- use _selectedContractMarloweParams
-  for_ selectedContractFollowerAppId \followerAppId -> do
--- If the modification changed the currently selected step, that means the screen for the
--- contract that was changed is currently open, so we need to realign the step cards. We also
--- call the CancelConfirmation action - because if the user had the action confirmation card
--- open for an action in the current step, we want to close it (otherwise they could confirm an
--- action that is no longer possible).
-
-when (selectedStep /= selectedStep') do
-  for_ selectedStep'
-    ( handleAction input <<< ContractAction followerAppId <<<
-        Contract.MoveToStep
-    )
-  handleAction input $ ContractAction followerAppId $
-    Contract.CancelConfirmation
-    -}
-
 handleAction
   input@{ currentSlot, wallet }
   (TemplateAction templateAction) =

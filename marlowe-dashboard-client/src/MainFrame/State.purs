@@ -225,10 +225,7 @@ handleQuery (ReceiveWebSocketMessage msg next) = do
         updateStore $ Store.AdvanceToSlot $ toFront slot
         -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
         assign _currentSlot $ toFront slot
-        -- TODO: SCP-3208 Move contract logic to global store and include AdvanceTimedoutSteps
-        --       We need to have special care when modifying this function as there are some effectful
-        --       computations that needs to happen in the view if the currently selected step is modified.
-        handleAction $ DashboardAction Dashboard.AdvanceTimedoutSteps
+      --
       -- update the state when a contract instance changes
       -- note: we should be subscribed to updates from all (and only) the current wallet's contract
       -- instances, including its wallet companion contract

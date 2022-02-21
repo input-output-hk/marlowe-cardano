@@ -78,7 +78,6 @@ data Action
   | SelectContract (Maybe MarloweParams)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
   | RedeemPayments MarloweParams
-  | AdvanceTimedoutSteps
   | TemplateAction Template.Action
   | ContractAction MarloweParams Contract.Action
   | SetContactForRole String WalletNickname
@@ -96,7 +95,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
   toEvent (UpdateFollowerApps _) = Nothing
   toEvent (RedeemPayments _) = Nothing
-  toEvent AdvanceTimedoutSteps = Nothing
   toEvent (TemplateAction _) = Nothing
   toEvent (ContractAction _ contractAction) = toEvent contractAction
   toEvent (SetContactForRole _ _) = Nothing

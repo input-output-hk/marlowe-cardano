@@ -19,6 +19,7 @@ import Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
+  , advanceToSlot
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
@@ -90,18 +91,27 @@ data Action
 reduce :: Store -> Action -> Store
 reduce store = case _ of
   -- Backend Notifications
-  -- FIXME-3208: Need to create and call an advanceToSlot in Store.Contracts
-  AdvanceToSlot newSlot -> store { currentSlot = newSlot }
+  AdvanceToSlot newSlot -> store
+    { currentSlot = newSlot
+    , contracts = advanceToSlot newSlot store.contracts
+    }
   NewCompanionAppStateObserved state ->
     store { previousCompanionAppState = Just state }
   -- Contract
   AddStartingContract startingContractInfo -> store
-    { contracts = addStartingContract startingContractInfo
-        store.contracts
+    { contracts =
+        addStartingContract
+          startingContractInfo
+          store.contracts
     }
   AddFollowerContract currentSlot followerId metadata history -> store
-    { contracts = addFollowerContract currentSlot followerId metadata history
-        store.contracts
+    { contracts =
+        addFollowerContract
+          currentSlot
+          followerId
+          metadata
+          history
+          store.contracts
     }
   ModifyContractNicknames f -> store
     { contracts = modifyContractNicknames f store.contracts

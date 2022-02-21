@@ -2,6 +2,7 @@ module Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
+  , advanceToSlot
   , emptyContractStore
   , followerContractExists
   , getClosedContracts
@@ -21,7 +22,7 @@ import Data.Array (filter)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
-import Data.Lens (Lens', _1, iso, over, to, view)
+import Data.Lens (Lens', _1, filtered, iso, over, to, traversed, view)
 import Data.Lens.At (at)
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
@@ -35,6 +36,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory, _chParams)
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
+import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -129,6 +131,19 @@ modifyContract
   -> ContractStore
 modifyContract marloweParams f =
   over (_syncedContracts <<< at marloweParams) (map f)
+
+advanceToSlot :: Slot -> ContractStore -> ContractStore
+advanceToSlot currentSlot =
+  over
+    ( _syncedContracts
+        <<< traversed
+        <<< filtered
+          ( \executionState ->
+              executionState.mNextTimeout /= Nothing
+                && executionState.mNextTimeout <= Just currentSlot
+          )
+    )
+    (timeoutState currentSlot)
 
 ------------------------------------------------------------
 

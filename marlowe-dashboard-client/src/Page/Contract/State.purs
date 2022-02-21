@@ -1,7 +1,5 @@
 module Page.Contract.State
-  ( applyTimeout
-  , applyTx
-  , component
+  ( component
   , handleAction
   , mkPlaceholderState
   , toInput
@@ -26,7 +24,7 @@ import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
 import Data.Foldable (foldMap, for_)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens (assign, modifying, over, to, toArrayOf, traversed, view, (^.))
+import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
 import Data.Lens.Lens.Tuple (_2)
@@ -53,7 +51,7 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env(..))
-import Halogen (HalogenM, get, put)
+import Halogen (HalogenM, get)
 import Halogen as H
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
@@ -66,9 +64,7 @@ import Marlowe.Execution.State
   , extractNamedActions
   , getActionParticipant
   , mkTx
-  , nextState
   , setPendingTransaction
-  , timeoutState
   )
 import Marlowe.Execution.Types (NamedAction(..), PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
@@ -79,7 +75,6 @@ import Marlowe.Semantics
   , MarloweParams
   , Party(..)
   , Slot
-  , TransactionInput
   , _accounts
   , _rolesCurrency
   )
@@ -232,60 +227,6 @@ getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
     Role _ -> true
     _ -> false
 
--- FIXME-3208 Change Page.Contract to be a proper component and this should become the receive
---            function, receiving a ExecutionState, connected wallet, etc.
-{-
-updateState
-  :: PABConnectedWallet
-  -> MarloweParams
-  -> MarloweData
-  -> Slot
-  -> Array TransactionInput
-  -> State
-  -> State
-updateState
-  wallet
-  marloweParams
-  marloweData
-  currentSlot
-  transactionInputs
-  state =
-  let
-    state' = case state of
-      Starting { nickname, metadata } ->
-        let
-          contract = marloweData ^. _marloweContract
-          participants = getParticipants contract
-        in
-          { tab: Tasks
-          , executionState: Execution.mkInitialState currentSlot (Just nickname)
-              marloweParams
-              metadata
-              contract
-          , previousSteps: []
-          , selectedStep: 0
-          , participants
-          , userParties: getUserParties wallet marloweParams
-          , namedActions: []
-          }
-      Started s -> s
-
-    previousTransactionInputs = toArrayOf
-      (_executionState <<< _previousTransactions)
-      state'
-
-    newTransactionInputs = difference transactionInputs
-      previousTransactionInputs
-
-    updateExecutionState = over _executionState
-      (applyTransactionInputs newTransactionInputs)
-  in
-    state'
-      # updateExecutionState
-      # regenerateStepCards currentSlot
-      # selectLastStep
-      # Started
--}
 -- This function creates a Set of the different Contract `Party` a `logged-user`
 -- may hold. It is the sum of the role tokens we hold for the contract and any
 -- direct usage through the PK (Public Key) constructor
@@ -328,7 +269,22 @@ handleAction
   => Action
   -- FIXME-3208 remove ChildSlots
   -> HalogenM State Action ChildSlots msg m Unit
-handleAction (Receive input) = put $ deriveState input
+handleAction (Receive { input, context }) = do
+  let
+    mExecutionState = getContract input.marloweParams context.contracts
+  mStartedContract <- peruse (_contract <<< _Started)
+  case mExecutionState, mStartedContract of
+    Just executionState, Just startedContract
+      | executionState /= startedContract.executionState ->
+          let
+            newContractState =
+              startedContract
+                # set _executionState executionState
+                # regenerateStepCards context.currentSlot
+                # Started
+          in
+            assign _contract newContractState
+    _, _ -> pure unit
 handleAction (SetNickname nickname) =
   withStarted \{ executionState: { marloweParams } } -> do
     void $ modifyContractNicknames $ insertContractNickname marloweParams
@@ -404,7 +360,8 @@ handleAction (SelectStep stepNumber) = assign
 --            ( handleAction input <<< ContractAction marloweParams <<<
 --                Contract.MoveToStep
 --            )
-
+--       handleAction input $ ContractAction followerAppId $
+--          Contract.CancelConfirmation
 handleAction (MoveToStep stepNumber) = do
   -- The MoveToStep action is called when a new step is added (either via an apply transaction or
   -- a timeout). We unsubscribe and resubscribe to update the tracked elements.
@@ -423,26 +380,6 @@ handleAction CarouselOpened = do
     subscribeToSelectCenteredStep
 
 handleAction CarouselClosed = unsubscribeFromSelectCenteredStep
-
-applyTx :: Slot -> TransactionInput -> StartedState -> StartedState
-applyTx currentSlot txInput state =
-  let
-    updateExecutionState = over _executionState $ nextState txInput
-  in
-    state
-      # updateExecutionState
-      # regenerateStepCards currentSlot
-      # selectLastStep
-
-applyTimeout :: Slot -> StartedState -> StartedState
-applyTimeout currentSlot state =
-  let
-    updateExecutionState = over _executionState (timeoutState currentSlot)
-  in
-    state
-      # updateExecutionState
-      # regenerateStepCards currentSlot
-      # selectLastStep
 
 toInput :: NamedAction -> Maybe Semantic.Input
 toInput (MakeDeposit accountId party token value) = Just $ Semantic.IDeposit
