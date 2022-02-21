@@ -56,7 +56,6 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
-import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
 import Marlowe.Execution.State
   ( expandBalances
@@ -84,6 +83,7 @@ import Page.Contract.Types
   ( Action(..)
   , Context
   , ContractState(..)
+  , DSL
   , Input
   , PreviousStep
   , PreviousStepState(..)
@@ -110,14 +110,14 @@ import Web.HTML.HTMLElement (getBoundingClientRect, offsetLeft)
 import Web.HTML.HTMLElement as HTMLElement
 
 component
-  :: forall query msg m
+  :: forall query m
    . MonadAff m
   => MonadAsk Env m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
-  => H.Component query Input msg m
+  => H.Component query Input Void m
 component =
   connect (selectEq \{ contracts, currentSlot } -> { contracts, currentSlot }) $
     H.mkComponent
@@ -126,6 +126,7 @@ component =
       , eval: H.mkEval H.defaultEval
           { handleAction = handleAction
           , receive = Just <<< Receive
+          , initialize = Just Init
           }
       }
 
@@ -200,15 +201,22 @@ withStarted
 withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
 
 handleAction
-  :: forall m msg
+  :: forall m
    . MonadAff m
   => MonadAsk Env m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
   => Action
-  -- FIXME-3208 remove ChildSlots
-  -> HalogenM State Action ChildSlots msg m Unit
+  -> DSL m Unit
+handleAction Init = do
+  selectedStep <- peruse $ _contract <<< _Started <<< _selectedStep
+  mElement <- H.getHTMLElementRef scrollContainerRef
+  for_ (Tuple <$> mElement <*> selectedStep) \(elm /\ step) -> do
+    -- When the carousel is opened we want to assure that the selected step is
+    -- in the center without any animation
+    liftEffect $ scrollStepToCenter Auto step elm
+    subscribeToSelectCenteredStep
 handleAction (Receive { input, context }) = do
   let
     mExecutionState = getContract input.marloweParams context.contracts
@@ -309,17 +317,6 @@ handleAction (MoveToStep stepNumber) = do
   subscribeToSelectCenteredStep
   mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement $ liftEffect <<< scrollStepToCenter Smooth stepNumber
-
-handleAction CarouselOpened = do
-  selectedStep <- peruse $ _contract <<< _Started <<< _selectedStep
-  mElement <- H.getHTMLElementRef scrollContainerRef
-  for_ (Tuple <$> mElement <*> selectedStep) \(elm /\ step) -> do
-    -- When the carousel is opened we want to assure that the selected step is
-    -- in the center without any animation
-    liftEffect $ scrollStepToCenter Auto step elm
-    subscribeToSelectCenteredStep
-
-handleAction CarouselClosed = unsubscribeFromSelectCenteredStep
 
 toInput :: NamedAction -> Maybe Semantic.Input
 toInput (MakeDeposit accountId party token value) = Just $ Semantic.IDeposit
@@ -518,20 +515,20 @@ selectLastStep state@{ previousSteps } = state
 --       were active at the same time, which caused scroll issues. We use an AVar to control the
 --       concurrency and assure that only one subscription is active at a time.
 unsubscribeFromSelectCenteredStep
-  :: forall m msg
+  :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => HalogenM State Action ChildSlots msg m Unit
+  => DSL m Unit
 unsubscribeFromSelectCenteredStep = do
   mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
   mSubscription <- liftAff $ AVar.tryTake mutex
   for_ mSubscription H.unsubscribe
 
 subscribeToSelectCenteredStep
-  :: forall m msg
+  :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => HalogenM State Action ChildSlots msg m Unit
+  => DSL m Unit
 subscribeToSelectCenteredStep = do
   mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement \elm -> do

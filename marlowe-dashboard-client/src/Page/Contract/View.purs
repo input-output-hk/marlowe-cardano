@@ -6,13 +6,14 @@ import Prologue hiding (div)
 
 import Component.Contacts.State (adaToken)
 import Component.Contract.View
-  ( currentStepActions
-  , firstLetterInCircle
+  ( firstLetterInCircle
   , participantWithNickname
   , renderParty
   , startingStepActions
   , timeoutString
   )
+import Component.CurrentStepActions.State as CurrentStepActions
+import Component.CurrentStepActions.Types (_currentStepActions)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -45,15 +46,13 @@ import Data.Time.Duration (Minutes)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
-import Halogen (ComponentHTML)
+import Halogen as H
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (LifecycleEvent(..), lifeCycleSlot)
-import Halogen.HTML (HTML, a, button, div, div_, h4_, span, span_, text)
+import Halogen.HTML (HTML, a, button, div, div_, h4_, slot_, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (IProp, enabled, id, ref)
 import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
-import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.Lenses (_semanticState)
 import Marlowe.Execution.State (expandBalances, isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
@@ -73,6 +72,7 @@ import Page.Contract.Lenses
   ( _contractUserParties
   , _executionState
   , _expandPayments
+  , _marloweParams
   , _namedActions
   , _previousSteps
   , _resultingPayments
@@ -80,6 +80,8 @@ import Page.Contract.Lenses
   )
 import Page.Contract.Types
   ( Action(..)
+  , ChildSlots
+  , ComponentHTML
   , ContractState(..)
   , PreviousStep
   , PreviousStepState(..)
@@ -96,7 +98,7 @@ import Page.Contract.Types
 -- Top-level views
 -------------------------------------------------------------------------------
 contractScreen
-  :: forall m. MonadAff m => State -> ComponentHTML Action ChildSlots m
+  :: forall m. MonadAff m => State -> ComponentHTML m
 contractScreen state =
   let
     cards = case state.contract of
@@ -156,13 +158,11 @@ contractScreen state =
           , "relative"
           ]
       ]
-      [ lifeCycleSlot "carousel-lifecycle" case _ of
-          OnInit -> CarouselOpened
-          OnFinalize -> CarouselClosed
-      -- NOTE: The card is allowed to grow in an h-full container and the navigation buttons are absolute positioned
-      --       because the cards x-scrolling can't coexist with a visible y-overflow. To avoid clipping the cards shadow
-      --       we need the cards container to grow (hence the flex-grow).
-      , div [ classNames [ "flex-grow", "w-full" ] ]
+      [
+        -- NOTE: The card is allowed to grow in an h-full container and the navigation buttons are absolute positioned
+        --       because the cards x-scrolling can't coexist with a visible y-overflow. To avoid clipping the cards shadow
+        --       we need the cards container to grow (hence the flex-grow).
+        div [ classNames [ "flex-grow", "w-full" ] ]
           [ div
               [ classNames
                   [ "flex"
@@ -217,7 +217,7 @@ statusIndicatorMessage (Started state) =
       "Your turn…"
 
 cardNavigationButtons
-  :: forall m. MonadAff m => ContractState -> ComponentHTML Action ChildSlots m
+  :: forall m. MonadAff m => ContractState -> ComponentHTML m
 cardNavigationButtons (Starting _) = div [] []
 
 cardNavigationButtons (Started state) =
@@ -288,7 +288,7 @@ renderPastStep
   -> StartedState
   -> Int
   -> PreviousStep
-  -> Array (ComponentHTML Action ChildSlots m)
+  -> Array (ComponentHTML m)
 renderPastStep tzOffset state stepNumber step =
   [ tabBar step.tab $ Just (SelectTab stepNumber)
   , cardBody []
@@ -353,7 +353,7 @@ renderPastStepTasksTab
   -> StartedState
   -> TransactionInput
   -> PreviousStep
-  -> ComponentHTML Action ChildSlots m
+  -> ComponentHTML m
 renderPastStepTasksTab tzOffset stepNumber state txInput step =
   let
     actionsByParticipant = groupTransactionInputByParticipant txInput
@@ -425,7 +425,7 @@ renderPartyPastActions
   => Minutes
   -> StartedState
   -> InputsByParty
-  -> ComponentHTML action ChildSlots m
+  -> H.ComponentHTML action ChildSlots m
 renderPartyPastActions tzOffset state { inputs, interval, party } =
   let
     -- We don't know exactly when a transaction was executed, we have an interval. But
@@ -443,7 +443,7 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
 
     renderPartyHeader =
       div [ classNames [ "flex", "justify-between", "items-center", "p-4" ] ]
-        [ renderParty state party
+        [ renderParty contractUserParties party
         , div
             [ classNames
                 [ "flex", "flex-col", "items-end", "text-xxs", "font-semibold" ]
@@ -580,6 +580,8 @@ renderPartyMissingActions state party actions =
 
     renderMissingAction _ = span [] [ text "invalid action" ]
 
+    contractUserParties = state ^. _contractUserParties
+
     actionsSeparatedByOr =
       intercalate
         [ div [ classNames [ "font-semibold", "text-xs" ] ] [ text "or" ]
@@ -587,14 +589,14 @@ renderPartyMissingActions state party actions =
         (Array.singleton <<< renderMissingAction <$> actions)
   in
     div [ classNames [ "border-l-2", "border-black", "pl-2", "space-y-2" ] ]
-      $ Array.cons (renderParty state party) actionsSeparatedByOr
+      $ Array.cons (renderParty contractUserParties party) actionsSeparatedByOr
 
 renderCurrentStep
   :: forall m
    . MonadAff m
   => Slot
   -> StartedState
-  -> Array (ComponentHTML Action ChildSlots m)
+  -> Array (ComponentHTML m)
 renderCurrentStep currentSlot state =
   let
     stepNumber = currentStep state
@@ -620,8 +622,19 @@ renderCurrentStep currentSlot state =
                         ]
               ]
           , case state.tab of
-              Tasks -> cardContent [ "bg-wite", "p-4" ]
-                [ currentStepActions state ]
+              Tasks ->
+                let
+                  marloweParams = state ^. (_executionState <<< _marloweParams)
+                  contractUserParties = state ^. _contractUserParties
+                  namedActions = state ^. _namedActions
+                in
+                  cardContent [ "bg-wite", "p-4" ]
+                    [ slot_
+                        _currentStepActions
+                        marloweParams
+                        CurrentStepActions.component
+                        { executionState, contractUserParties, namedActions }
+                    ]
               Balances ->
                 let
                   participants = getParticipants $ state ^. _contractUserParties
@@ -664,12 +677,12 @@ accountIndicator { colorStyles, otherStyles, name } =
     ]
 
 renderBalances
-  :: forall m a
+  :: forall m action
    . MonadAff m
   => Int
   -> StartedState
   -> StepBalance
-  -> ComponentHTML a ChildSlots m
+  -> H.ComponentHTML action ChildSlots m
 renderBalances stepNumber state stepBalance =
   let
     -- TODO: Right now we only have one type of Token (ada), but when we support multiple tokens we may want to group by
@@ -692,6 +705,8 @@ renderBalances stepNumber state stepBalance =
                   balancesAtEnd
             )
             stepBalance.atEnd
+
+    contractUserParties = state ^. _contractUserParties
   in
     div [ classNames [ "text-xs", "space-y-4" ] ]
       [ div
@@ -714,7 +729,9 @@ renderBalances stepNumber state stepBalance =
               <#>
                 ( \((party /\ token) /\ balance) ->
                     let
-                      participantName = participantWithNickname state party
+                      participantName = participantWithNickname
+                        contractUserParties
+                        party
                     in
                       div
                         [ classNames

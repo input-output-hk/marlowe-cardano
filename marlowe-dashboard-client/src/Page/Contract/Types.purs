@@ -1,7 +1,10 @@
 module Page.Contract.Types
   ( Action(..)
+  , ComponentHTML
   , Context
   , ContractState(..)
+  , ChildSlots
+  , DSL
   , Input
   , PreviousStep
   , PreviousStepState(..)
@@ -19,13 +22,15 @@ module Page.Contract.Types
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
+import Component.LoadingSubmitButton.Types as LoadingSubmitButton
+import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractUserParties (ContractUserParties)
-import Data.Lens (view)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Halogen (RefLabel(..))
+import Halogen as H
 import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
@@ -124,7 +129,8 @@ type Input =
   }
 
 data Action
-  = Receive (Connected Context Input)
+  = Init
+  | Receive (Connected Context Input)
   | SetNickname ContractNickname
   | ConfirmAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
@@ -133,15 +139,25 @@ data Action
   | AskConfirmation NamedAction
   | CancelConfirmation
   -- The SelectStep action is what changes the model and causes the card to seem bigger.
-  -- TODO: refactor this stuff - why are there two actions?
   | SelectStep Int
   -- The MoveToStep action scrolls the step carousel so that the indicated step is at the center (without changing the model).
   | MoveToStep Int
-  -- TODO: seems like all the carousel stuff shoule be moved to a component
-  | CarouselOpened
-  | CarouselClosed
+
+type ChildSlots =
+  ( submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
+  , tooltipSlot :: forall query. H.Slot query Void ReferenceId
+  , hintSlot :: forall query. H.Slot query Void String
+  , currentStepActions :: forall query. H.Slot query Void MarloweParams
+  )
+
+type ComponentHTML m =
+  H.ComponentHTML Action ChildSlots m
+
+type DSL m a =
+  H.HalogenM State Action ChildSlots Void m a
 
 instance actionIsEvent :: IsEvent Action where
+  toEvent Init = Nothing
   toEvent (Receive _) = Nothing
   toEvent (ConfirmAction _) = Just $ defaultEvent "ConfirmAction"
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
@@ -152,8 +168,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent CancelConfirmation = Just $ defaultEvent "CancelConfirmation"
   toEvent (SelectStep _) = Just $ defaultEvent "SelectStep"
   toEvent (MoveToStep _) = Nothing
-  toEvent CarouselOpened = Just $ defaultEvent "CarouselOpened"
-  toEvent CarouselClosed = Just $ defaultEvent "CarouselClosed"
 
 scrollContainerRef :: RefLabel
 scrollContainerRef = RefLabel "scroll-container"
