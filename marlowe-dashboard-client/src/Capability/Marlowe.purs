@@ -32,6 +32,7 @@ import Capability.PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
+import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (asks)
 import Data.Address (Address)
 import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
@@ -59,7 +60,7 @@ import Data.WalletId (WalletId)
 import Data.WalletId as WI
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
-import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
+import Halogen.Store.Monad (getStore, updateStore)
 import Marlowe.Client (ContractHistory, getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
@@ -100,7 +101,6 @@ class
   ( ManagePAB m
   , ManageMarloweStorage m
   , ManageWallet m
-  , MonadStore Store.Action Store.Store m
   ) <=
   ManageMarlowe m where
   followContract
@@ -261,10 +261,24 @@ sendWsMessage msg = do
     $ WS.managerWriteOutbound wsManager
     $ WS.SendMessage msg
 
-instance monadMarloweHalogenM ::
-  ( ManageMarlowe m
-  ) =>
-  ManageMarlowe (HalogenM state action slots msg m) where
+instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) where
+  followContract walletDetails marloweParams = lift $ followContract
+    walletDetails
+    marloweParams
+  createContract walletDetails roles contract =
+    lift $ createContract walletDetails roles contract
+  applyTransactionInput walletDetails marloweParams transactionInput =
+    lift $ applyTransactionInput walletDetails marloweParams transactionInput
+  redeem walletDetails marloweParams tokenName =
+    lift $ redeem walletDetails marloweParams tokenName
+  getRoleContracts = lift <<< getRoleContracts
+  getFollowerApps = lift <<< getFollowerApps
+  subscribeToPlutusApp = lift <<< subscribeToPlutusApp
+  subscribeToWallet = lift <<< subscribeToWallet
+  unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
+  unsubscribeFromWallet = lift <<< unsubscribeFromWallet
+
+instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams

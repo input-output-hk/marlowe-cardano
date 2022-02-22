@@ -9,7 +9,6 @@ import API.Lenses
   , _cicStatus
   , _observableState
   )
-import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
@@ -35,8 +34,9 @@ import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
-import Data.Argonaut (decodeJson, stringify)
+import Data.Argonaut (Json, decodeJson, printJsonDecodeError, stringify)
 import Data.Array (filter, find) as Array
 import Data.Array (head, mapMaybe, partition)
 import Data.Either (hush)
@@ -46,6 +46,7 @@ import Data.Lens.Extra (peruse)
 import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
+import Data.String (joinWith)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -94,27 +95,16 @@ import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient(..)
-  , ContractInstanceClientState
-  , InstanceStatusToClient(..)
-  )
+import Plutus.PAB.Webserver.Types (ContractInstanceClientState)
 import Store (_contracts, _wallet)
 import Store as Store
 import Store.Contracts (emptyContractStore)
-import Store.Wallet (WalletStore(..), _Connected, _connectedWallet)
+import Store.Wallet (WalletStore(..), _Connected, _connectedWallet, _walletId)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types
-  ( ajaxErrorToast
-  , decodingErrorToast
-  , errorToast
-  , infoToast
-  , successToast
-  )
+import Toast.Types (ajaxErrorToast, errorToast, infoToast, successToast)
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
-import WebSocket.Support as WS
 
 {-
 The Marlowe Run App features are defined in the docs/use-cases/Readme.md file, and they have indices
@@ -218,175 +208,165 @@ handleQuery
   => MainFrameLoop m
   => Query a
   -> HalogenM State Action ChildSlots Msg m (Maybe a)
-handleQuery (ReceiveWebSocketMessage msg next) = do
-  case msg of
-    WS.WebSocketOpen -> do
-      assign _webSocketStatus WebSocketOpen
-      -- potentially renew websocket subscriptions
-      mDashboardState <- peruse _dashboardState
-      mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
-      let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
-      for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
-        -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
-        subscribeToWallet walletId
-        ajaxPlutusApps <- PAB.getWalletContractInstances walletId
-        case ajaxPlutusApps of
-          Left _ -> pure unit
-          Right plutusApps -> for_
-            (Array.filter (eq Active <<< view _cicStatus) plutusApps)
-            \app ->
-              subscribeToPlutusApp $ view _cicContract app
-    (WS.WebSocketClosed closeEvent) -> do
+handleQuery = case _ of
+  MainFrameActionQuery action next -> do
+    handleAction action
+    pure $ Just next
+
+  GetWallet next -> do
+    map (map next) $ peruse $ _store <<< _wallet <<< _Connected
+
+  NewWebSocketStatus status next -> do
+    assign _webSocketStatus status
+    case status of
+      WebSocketOpen -> do
+        -- potentially renew websocket subscriptions
+        mDashboardState <- peruse _dashboardState
+        mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
+        let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
+        for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
+          -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
+          subscribeToWallet walletId
+          ajaxPlutusApps <- PAB.getWalletContractInstances walletId
+          case ajaxPlutusApps of
+            Left _ -> pure unit
+            Right plutusApps -> for_
+              (Array.filter (eq Active <<< view _cicStatus) plutusApps)
+              \app ->
+                subscribeToPlutusApp $ view _cicContract app
       -- TODO: Consider whether we should show an error/warning when this happens. It might be more
       -- confusing than helpful, since the websocket is automatically reopened if it closes for any
       -- reason.
-      assign _webSocketStatus (WebSocketClosed (Just closeEvent))
-    (WS.ReceiveMessage (Left multipleErrors)) -> addToast $ decodingErrorToast
-      "Failed to parse message from the server."
-      multipleErrors
-    (WS.ReceiveMessage (Right streamToClient)) -> case streamToClient of
-      -- update the current slot
-      -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
-      --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
-      --       so that it only triggers this call once synced or ignore the message altogether and find
-      --       a different approach.
-      SlotChange slot -> do
-        updateStore $ Store.AdvanceToSlot $ toFront slot
-        -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
-        assign _currentSlot $ toFront slot
-      --
-      -- update the state when a contract instance changes
-      -- note: we should be subscribed to updates from all (and only) the current wallet's contract
-      -- instances, including its wallet companion contract
-      InstanceUpdate plutusAppId instanceStatusToClient ->
-        case instanceStatusToClient of
-          NewObservableState rawJson -> do
-            -- TODO: If we receive a second status update for the same contract / plutus app, while
-            -- the previous update is still being handled, then strange things could happen. This
-            -- does not seem very likely. Still, it might be worth considering guarding against this
-            -- possibility by e.g. keeping a list/array of updates and having a subscription that
-            -- handles them synchronously in the order in which they arrive.
-            mWallet <-
-              peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
-            -- these updates should only ever be coming when we are in the Dashboard state (and if
-            -- we're not, we don't care about them _)
-            for_ mWallet \wallet ->
-              let
-                walletCompanionAppId = view Connected._companionAppId wallet
-                marloweAppId = view Connected._marloweAppId wallet
-              in
-                -- if this is the wallet's WalletCompanion app...
-                if (plutusAppId == walletCompanionAppId) then
-                  case decodeJson rawJson of
-                    Left decodingError -> addToast $ decodingErrorToast
-                      "Failed to parse an update from the wallet companion."
-                      decodingError
-                    Right companionAppState -> do
-                      -- this check shouldn't be necessary, but at the moment we are getting too many update notifications
-                      -- through the PAB - so until that bug is fixed, this will have to mask it
-                      updateStore
-                        $ Store.NewCompanionAppStateObserved companionAppState
-                      handleAction
-                        $ DashboardAction
-                        $ Dashboard.UpdateFollowerApps companionAppState
-                else do
-                  -- if this is the wallet's MarloweApp...
-                  if (plutusAppId == marloweAppId) then
-                    case decodeJson rawJson of
-                      Left decodingError -> addToast $ decodingErrorToast
-                        "Failed to parse an update from the marlowe controller."
-                        decodingError
-                      Right Nothing -> pure unit
-                      Right (Just response) -> do
-                        -- The MarloweApp capability keeps track of the requests it makes to see if this
-                        -- new observable state is a WS response for an action that we made. If we refresh
-                        -- we get the last observable state, and if we have two tabs open we can get
-                        -- a result of an action that the other tab made.
-                        -- TODO: Return the AVar from the API calls so that the
-                        --       responses can be awaited at the call site instead.
-                        fulfillPendingResult response >>= traverse_ case _ of
-                          EndpointSuccess _ (CreateResponse marloweParams) -> do
-                            {- [UC-CONTRACT-1][2] Starting a Marlowe contract
-                              After the PAB endpoint finishes creating the contract, it modifies
-                              its observable state with the MarloweParams of the newly created
-                              contract. We take this opportunity to create a FollowerContract
-                              that will give us updates on the state of the contract
-                            -}
-                            -- TODO: refactor into a function and co-locate this handler with
-                            --       step 0.
-                            mFollower <- followContract wallet
-                              marloweParams
-                            case mFollower of
-                              Left _ -> addToast $ errorToast
-                                "Can't follow the contract"
-                                Nothing
-                              Right (_ /\ _) -> do
-                                -- TODO: SCP-3487 swap store contract from new to running
-                                addToast $ successToast
-                                  "Contract initialised."
-                          EndpointSuccess _ ApplyInputsResponse ->
-                            addToast $ successToast
-                              "Contract update applied."
-                          EndpointException _ "create" _ ->
-                            addToast $
-                              errorToast
-                                "Failed to initialise contract."
-                                Nothing
-                          EndpointException _ "apply-inputs" _ ->
-                            addToast $
-                              errorToast "Failed to update contract." Nothing
-                          _ -> pure unit
-                  -- otherwise this should be one of the wallet's `MarloweFollower` apps
-                  else case decodeJson rawJson of
-                    Left decodingError -> addToast $ decodingErrorToast
-                      "Failed to parse an update from a contract."
-                      decodingError
-                    Right contractHistory -> do
-                      let
-                        marloweParams = view (_chParams <<< _1) contractHistory
-                      {- [UC-CONTRACT-1][3] Start a contract -}
-                      {- [UC-CONTRACT-3][1] Apply an input to a contract -}
-                      FollowerApp.onNewObservableState plutusAppId
-                        contractHistory
-                      {- [UC-CONTRACT-4][0] Redeem payments -}
-                      handleAction $ DashboardAction $ Dashboard.RedeemPayments
-                        marloweParams
-          NewActiveEndpoints activeEndpoints ->
-            onNewActiveEndpoints plutusAppId activeEndpoints
-          -- If one of the control apps closes unexpectedly we re-activate them
-          ContractFinished mVal -> do
-            mWallet <-
-              peruse $ _store <<< _wallet <<< WalletStore._connectedWallet
-            -- these updates should only ever be coming when we are in the Dashboard state (and if
-            -- we're not, we don't care about them _)
-            for_ mWallet \walletDetails ->
-              let
-                walletId = view Connected._walletId walletDetails
-                walletCompanionAppId = view Connected._companionAppId
-                  walletDetails
-                marloweAppId = view Connected._marloweAppId walletDetails
+      _ -> pure unit
+    pure $ Just next
 
-                reActivatePlutusScript contractType = do
-                  Logger.error $ "Plutus script " <> show contractType
-                    <> " has closed unexpectedly: "
-                    <> maybe "" stringify mVal
-                  mNewAppId <- PAB.activateContract contractType walletId
-                  for_ mNewAppId
-                    ( updateStore <<< Store.Wallet <<<
-                        Wallet.OnPlutusScriptChanged contractType
-                    )
-              in
-                if (plutusAppId == walletCompanionAppId) then
-                  reActivatePlutusScript WalletCompanion
-                else if (plutusAppId == marloweAppId) then
-                  reActivatePlutusScript MarloweApp
-                else pure unit
-          NewYieldedExportTxs _ -> pure unit -- TODO handle with lite wallet support
-  pure $ Just next
+  NotificationParseFailed whatFailed error next -> do
+    addToast $ errorToast
+      ("Failed to parse " <> whatFailed <> " from websocket message")
+      (Just $ printJsonDecodeError error)
+    pure $ Just next
 
-handleQuery (MainFrameActionQuery action next) = do
-  handleAction action
-  pure $ Just next
+  SlotChange slot next -> do
+    updateStore $ Store.AdvanceToSlot slot
+    -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
+    assign _currentSlot slot
+    pure $ Just next
+
+  CompanionAppStateUpdated companionAppState next -> do
+    handleAction
+      $ DashboardAction
+      $ Dashboard.UpdateFollowerApps companionAppState
+    pure $ Just next
+
+  {- [UC-CONTRACT-1][2] Starting a Marlowe contract
+    After the PAB endpoint finishes creating the contract, it modifies
+    its observable state with the MarloweParams of the newly created
+    contract. We take this opportunity to create a FollowerContract
+    that will give us updates on the state of the contract
+  -}
+  MarloweContractCreated reqId marloweParams next -> runMaybeT $ do
+    -- TODO: Return an Aff from the API calls so that the
+    --       responses can be awaited at the call site instead.
+    _ <- MaybeT
+      $ fulfillPendingResult
+      $ EndpointSuccess reqId
+      $ CreateResponse marloweParams
+    wallet <- MaybeT $ peruse $ _store <<< _wallet <<< _Connected
+    followContract wallet marloweParams >>= case _ of
+      Left _ -> addToast $ errorToast "Can't follow the contract" Nothing
+      Right (_ /\ _) -> do
+        -- TODO: SCP-3487 swap store contract from new to running
+        addToast $ successToast "Contract initialised."
+    pure next
+  InputsApplied reqId next -> runMaybeT $ do
+    -- TODO: Return an Aff from the API calls so that the
+    --       responses can be awaited at the call site instead.
+    _ <- MaybeT
+      $ fulfillPendingResult
+      $ EndpointSuccess reqId ApplyInputsResponse
+    addToast $ successToast "Contract update applied."
+    pure next
+
+  PaymentRedeemed reqId next -> runMaybeT $ do
+    -- TODO: Return an Aff from the API calls so that the
+    --       responses can be awaited at the call site instead.
+    _ <- MaybeT
+      $ fulfillPendingResult
+      $ EndpointSuccess reqId RedeemResponse
+    addToast $ successToast "Payment from contract redeemed"
+    pure next
+
+  CreateFailed reqId error next -> runMaybeT $ do
+    -- TODO: Return an Aff from the API calls so that the
+    --       responses can be awaited at the call site instead.
+    _ <- MaybeT
+      $ fulfillPendingResult
+      $ EndpointException reqId "create" error
+    addToast $ errorToast "Failed to create contract" $ Just $ show error
+    pure next
+
+  ApplyInputsFailed reqId error next -> runMaybeT $ do
+    -- TODO: Return an Aff from the API calls so that the
+    --       responses can be awaited at the call site instead.
+    _ <- MaybeT
+      $ fulfillPendingResult
+      $ EndpointException reqId "apply-inputs-nonmerkleized" error
+    addToast $ errorToast "Failed to update contract" $ Just $ show error
+    pure next
+
+  RedeemFailed reqId error next -> runMaybeT $ do
+    -- TODO: Return an Aff from the API calls so that the
+    --       responses can be awaited at the call site instead.
+    _ <- MaybeT
+      $ fulfillPendingResult
+      $ EndpointException reqId "redeem" error
+    addToast $ errorToast "Failed to redeem payment" $ Just $ show error
+    pure next
+
+  ContractHistoryUpdated plutusAppId contractHistory next -> do
+    let marloweParams = view (_chParams <<< _1) contractHistory
+    {- [UC-CONTRACT-1][3] Start a contract -}
+    {- [UC-CONTRACT-3][1] Apply an input to a contract -}
+    FollowerApp.onNewObservableState plutusAppId contractHistory
+    {- [UC-CONTRACT-4][0] Redeem payments -}
+    handleAction $ DashboardAction $ Dashboard.RedeemPayments marloweParams
+    pure $ Just next
+
+  NewActiveEndpoints plutusAppId activeEndpoints next -> do
+    -- TODO move into main directly and remove this from the PAB capability API
+    onNewActiveEndpoints plutusAppId activeEndpoints
+    pure $ Just next
+
+  MarloweAppClosed mVal next -> runMaybeT do
+    reActivatePlutusScript MarloweApp mVal
+    pure next
+
+  WalletCompanionAppClosed mVal next -> runMaybeT do
+    reActivatePlutusScript WalletCompanion mVal
+    pure next
+
+reActivatePlutusScript
+  :: forall m
+   . MonadState State m
+  => MonadLogger String m
+  => MonadStore Store.Action Store.Store m
+  => ManagePAB m
+  => MarloweContract
+  -> Maybe Json
+  -> MaybeT m Unit
+reActivatePlutusScript contractType mVal = do
+  walletId <- MaybeT $ peruse $ _store <<< _wallet <<< _walletId
+  Logger.error $ joinWith " "
+    [ "Plutus script"
+    , show contractType
+    , "has closed unexpectedly:"
+    , maybe "" stringify mVal
+    ]
+  newAppId <- MaybeT $ hush <$> PAB.activateContract contractType walletId
+  H.lift
+    $ updateStore
+    $ Store.Wallet
+    $ Wallet.OnPlutusScriptChanged contractType newAppId
 
 -- Note [State]: Some actions belong logically in one part of the state, but
 -- from the user's point of view in another. For example, the action of picking
@@ -410,6 +390,7 @@ handleAction
   => MainFrameLoop m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
+
 handleAction Init = do
   {- [UC-WALLET-TESTNET-2][4b] Restore a testnet wallet
   This is another path for "restoring" a wallet. When we initialize the app,
@@ -498,6 +479,7 @@ need to unsubscribe from all the apps related to the wallet that was previously 
 enterWelcomeState
   :: forall m
    . ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => PABConnectedWallet
   -> HalogenM State Action ChildSlots Msg m Unit
 enterWelcomeState walletDetails = do
@@ -525,6 +507,7 @@ enterDashboardState
    . ManagePAB m
   => MonadLogger String m
   => ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => WalletDetails
   -> HalogenM State Action ChildSlots Msg m Unit

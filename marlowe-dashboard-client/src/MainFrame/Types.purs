@@ -94,22 +94,22 @@ _toaster = Proxy
 
 ------------------------------------------------------------
 data Query a
-  = GetWallet (PABConnectedWallet -> a)
+  = MainFrameActionQuery Action a
+  | GetWallet (PABConnectedWallet -> a)
   | NewWebSocketStatus WebSocketStatus a
+  | NotificationParseFailed String JsonDecodeError a
   | SlotChange Slot a
   | CompanionAppStateUpdated (Map MarloweParams MarloweData) a
-  | CreateFailed UUID MarloweError a
   | MarloweContractCreated UUID MarloweParams a
-  | ApplyInputsFailed UUID MarloweError a
   | InputsApplied UUID a
-  | RedeemFailed UUID MarloweError a
   | PaymentRedeemed UUID a
-  | ContractHistoryUpdated ContractHistory a
+  | CreateFailed UUID MarloweError a
+  | ApplyInputsFailed UUID MarloweError a
+  | RedeemFailed UUID MarloweError a
+  | ContractHistoryUpdated PlutusAppId ContractHistory a
   | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint) a
   | MarloweAppClosed (Maybe Json) a
   | WalletCompanionAppClosed (Maybe Json) a
-  | NotificationParseFailed String JsonDecodeError a
-  | MainFrameActionQuery Action a
 
 data Msg
   = MainFrameActionMsg Action

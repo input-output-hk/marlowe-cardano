@@ -33,6 +33,7 @@ import Effect.Aff (error, forkAff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Env (Env(..), WebSocketManager)
+import Halogen (Tell)
 import Halogen as H
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
@@ -136,7 +137,7 @@ main args = do
 wsMsgToQuery
   :: Maybe PABConnectedWallet
   -> FromSocket CombinedWSStreamToClient
-  -> Maybe (Unit -> MainFrame.Query Unit)
+  -> Maybe (Tell MainFrame.Query)
 wsMsgToQuery mWallet = case _ of
   WS.WebSocketOpen ->
     Just $ MainFrame.NewWebSocketStatus MainFrame.WebSocketOpen
@@ -152,11 +153,19 @@ wsMsgToQuery mWallet = case _ of
 streamToQuery
   :: Maybe PABConnectedWallet
   -> CombinedWSStreamToClient
-  -> Maybe (Unit -> MainFrame.Query Unit)
-
+  -> Maybe (Tell MainFrame.Query)
 streamToQuery mWallet = case _ of
   SlotChange slot -> Just $ MainFrame.SlotChange $ toFront slot
   -- TODO handle with lite wallet support
+  -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
+  --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
+  --       so that it only triggers this call once synced or ignore the message altogether and find
+  --       a different approach.
+  -- TODO: If we receive a second status update for the same contract / plutus app, while
+  -- the previous update is still being handled, then strange things could happen. This
+  -- does not seem very likely. Still, it might be worth considering guarding against this
+  -- possibility by e.g. keeping a list/array of updates and having a subscription that
+  -- handles them synchronously in the order in which they arrive.
   InstanceUpdate _ (NewYieldedExportTxs _) -> Nothing
   InstanceUpdate appId (NewActiveEndpoints activeEndpoints) ->
     Just $ MainFrame.NewActiveEndpoints appId activeEndpoints
@@ -193,7 +202,7 @@ streamToQuery mWallet = case _ of
         Left error ->
           Just $ MainFrame.NotificationParseFailed "follower app response" error
         Right history ->
-          Just $ MainFrame.ContractHistoryUpdated history
+          Just $ MainFrame.ContractHistoryUpdated appId history
   where
   mCompanionAppId = mWallet ^? _Just <<< _companionAppId
   mMarloweAppId = mWallet ^? _Just <<< _marloweAppId

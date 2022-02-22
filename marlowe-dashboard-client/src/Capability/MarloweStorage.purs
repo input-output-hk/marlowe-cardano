@@ -15,6 +15,7 @@ import Prologue
 
 import AppM (AppM)
 import Control.Monad.Except (lift)
+import Control.Monad.Maybe.Trans (MaybeT)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -51,9 +52,7 @@ contractNicknamesLocalStorageKey = Key "contractNicknames"
 walletRoleContractsLocalStorageKey :: Key
 walletRoleContractsLocalStorageKey = Key "walletRoleContracts"
 
-class
-  Monad m <=
-  ManageMarloweStorage m where
+class Monad m <= ManageMarloweStorage m where
   clearAllLocalStorage :: m Unit
   -- Address book
   modifyAddressBook :: (AddressBook -> AddressBook) -> m AddressBook
@@ -88,7 +87,7 @@ getContractNicknames = decodeContractNicknames <$> getItem
     fromMaybe emptyLocalContractNicknames $ hush <<< parseDecodeJson =<<
       mContractNicknames
 
-instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
+instance ManageMarloweStorage AppM where
   clearAllLocalStorage =
     liftEffect do
       removeItem addressBookLocalStorageKey
@@ -127,9 +126,16 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
         walletInfo = WalletInfo { walletId, pubKeyHash, address }
       pure $ mkWalletDetails walletNickName walletInfo
 
-instance manageMarloweStorageHalogenM ::
+instance
   ManageMarloweStorage m =>
   ManageMarloweStorage (HalogenM state action slots msg m) where
+  clearAllLocalStorage = lift clearAllLocalStorage
+  modifyAddressBook = lift <<< modifyAddressBook
+  modifyContractNicknames = lift <<< modifyContractNicknames
+  updateWallet = lift <<< updateWallet
+  getWallet = lift getWallet
+
+instance ManageMarloweStorage m => ManageMarloweStorage (MaybeT m) where
   clearAllLocalStorage = lift clearAllLocalStorage
   modifyAddressBook = lift <<< modifyAddressBook
   modifyContractNicknames = lift <<< modifyContractNicknames

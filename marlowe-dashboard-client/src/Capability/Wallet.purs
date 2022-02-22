@@ -12,6 +12,7 @@ import Prologue
 
 import AppM (AppM)
 import Control.Monad.Except (lift)
+import Control.Monad.Maybe.Trans (MaybeT)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Passphrase (Passphrase)
 import Data.WalletId (WalletId)
@@ -44,7 +45,7 @@ class Monad m <= ManageWallet m where
   getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFundsResponse)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
-instance monadWalletAppM :: ManageWallet AppM where
+instance ManageWallet AppM where
   createWallet wn p = MarloweRun.postApiWalletV1CentralizedtestnetCreate
     $ CreatePostData { getCreateWalletName: wn, getCreatePassphrase: p }
   restoreWallet mp wn p = MarloweRun.postApiWalletV1CentralizedtestnetRestore
@@ -58,9 +59,15 @@ instance monadWalletAppM :: ManageWallet AppM where
   getWalletTotalFunds = MarloweRun.getApiWalletV1ByWalletidTotalfunds
   signTransaction _wallet _tx = unsafeThrow "Not implemented"
 
-instance monadWalletHalogenM ::
-  ManageWallet m =>
-  ManageWallet (HalogenM state action slots msg m) where
+instance ManageWallet m => ManageWallet (HalogenM state action slots msg m) where
+  createWallet wn p = lift $ createWallet wn p
+  restoreWallet mp wn p = lift $ restoreWallet mp wn p
+  submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet
+  getWalletInfo = lift <<< getWalletInfo
+  getWalletTotalFunds = lift <<< getWalletTotalFunds
+  signTransaction tx wallet = lift $ signTransaction tx wallet
+
+instance ManageWallet m => ManageWallet (MaybeT m) where
   createWallet wn p = lift $ createWallet wn p
   restoreWallet mp wn p = lift $ restoreWallet mp wn p
   submitWalletTransaction tx wallet = lift $ submitWalletTransaction tx wallet

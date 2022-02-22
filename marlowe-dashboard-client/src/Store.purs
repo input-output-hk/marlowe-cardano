@@ -7,14 +7,13 @@ import Data.ContractNickname (ContractNickname)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
-import Data.Map (Map)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
+import Marlowe.Semantics (MarloweParams, Slot)
 import Store.Contracts
   ( ContractStore
   , addFollowerContract
@@ -36,10 +35,6 @@ type Store =
   -- # Contracts
   , contracts :: ContractStore
   -- # Backend Notifications
-  -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
-  -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
-  -- really has changed anything
-  , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
   , currentSlot :: Slot
   -- # System wide components
   -- This is to make sure only one dropdown at a time is open, in order to
@@ -63,7 +58,6 @@ mkStore addressBook contractNicknames =
   -- # Contracts
   , contracts: mkContractStore contractNicknames
   -- # Backend Notifications
-  , previousCompanionAppState: Nothing
   , currentSlot: zero
   -- # System wide components
   , openDropdown: Nothing
@@ -73,7 +67,6 @@ mkStore addressBook contractNicknames =
 data Action
   -- Backend Notifications
   = AdvanceToSlot Slot
-  | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
   -- Contract
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
   | AddFollowerContract Slot PlutusAppId MetaData ContractHistory
@@ -97,8 +90,6 @@ reduce store = case _ of
     { currentSlot = newSlot
     , contracts = advanceToSlot newSlot store.contracts
     }
-  NewCompanionAppStateObserved state ->
-    store { previousCompanionAppState = Just state }
   -- Contract
   AddStartingContract startingContractInfo -> store
     { contracts =

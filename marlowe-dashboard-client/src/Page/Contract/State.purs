@@ -195,6 +195,7 @@ handleAction
   => MonadAsk Env m
   => ManageMarlowe m
   => ManageMarloweStorage m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => Action
   -> DSL m Unit
@@ -529,4 +530,3 @@ selectCenteredStepEventSource scrollContainer =
     pure do
       unsubscribeSelectEventListener
       unsubscribeSnapEventListener
-

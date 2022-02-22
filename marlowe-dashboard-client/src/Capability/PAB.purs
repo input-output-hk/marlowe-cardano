@@ -20,6 +20,7 @@ import Affjax (Error(..))
 import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
 import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
+import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (asks)
 import Data.Align (align)
 import Data.Argonaut (Json, encodeJson)
@@ -210,6 +211,25 @@ instance ManagePAB AppM where
     updateSemaphore (Both semaphore _) = AVar.put unit semaphore $> semaphore
 
 instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
+  activateContract contractActivationId wallet = lift $ activateContract
+    contractActivationId
+    wallet
+  deactivateContract = lift <<< deactivateContract
+  getContractInstanceClientState = lift <<< getContractInstanceClientState
+  getContractInstanceCurrentState = lift <<< getContractInstanceCurrentState
+  getContractInstanceObservableState = lift <<<
+    getContractInstanceObservableState
+  getContractInstanceHooks = lift <<< getContractInstanceHooks
+  invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
+    plutusAppId
+    endpointDescription
+    payload
+  getWalletContractInstances = lift <<< getWalletContractInstances
+  getAllContractInstances = lift getAllContractInstances
+  getContractDefinitions = lift getContractDefinitions
+  onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
+
+instance ManagePAB m => ManagePAB (MaybeT m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
