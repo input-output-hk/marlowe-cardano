@@ -58,6 +58,7 @@
   , "spec-quickcheck"
   , "strings"
   , "tailrec"
+  , "these"
   , "transformers"
   , "tuples"
   , "typelevel-prelude"

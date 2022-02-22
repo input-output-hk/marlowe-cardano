@@ -46,6 +46,7 @@ import Data.Lens.Extra (peruse)
 import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
+import Data.String (joinWith)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
