@@ -16,8 +16,10 @@ module Capability.PAB
 import Prologue
 
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
+import Affjax (Error(..))
+import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
-import Control.Monad.Except (lift)
+import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
 import Control.Monad.Reader (asks)
 import Data.Align (align)
 import Data.Argonaut (Json, encodeJson)
@@ -29,6 +31,7 @@ import Data.Map.Alignable (AlignableMap(..))
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Data.Set as Set
+import Data.String (Pattern(..), contains)
 import Data.These (These(..))
 import Data.Traversable (sequence, traverse)
 import Data.WalletId (WalletId)
@@ -38,6 +41,7 @@ import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (liftAff)
 import Env (_endpointSemaphores)
+import Foreign.Class (decode)
 import Halogen (HalogenM)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
@@ -50,6 +54,7 @@ import Plutus.PAB.Webserver.Types
   , ContractInstanceClientState
   , ContractSignatureResponse
   )
+import Servant.PureScript (AjaxError(..), ErrorDescription(..))
 import Types (AjaxResponse)
 import Wallet.Emulator.Wallet (Wallet(..))
 
@@ -88,43 +93,94 @@ instance ManagePAB AppM where
           { caID: contractActivationId
           , caWallet: Just $ Wallet { getWalletId: WalletId.toString wallet }
           }
+
   deactivateContract =
     PAB.putApiContractInstanceByContractinstanceidStop
+
   getContractInstanceClientState =
     PAB.getApiContractInstanceByContractinstanceidStatus
+
   getContractInstanceCurrentState plutusAppId = do
     clientState <- getContractInstanceClientState plutusAppId
     pure $ map (view _cicCurrentState) clientState
+
   getContractInstanceObservableState plutusAppId = do
     currentState <- getContractInstanceCurrentState plutusAppId
     pure $ map (view _observableState) currentState
+
   getContractInstanceHooks plutusAppId = do
     currentState <- getContractInstanceCurrentState plutusAppId
     pure $ map (view _hooks) currentState
-  invokeEndpoint plutusAppId endpoint payload = do
-    endpointSemaphoresAVar <- asks $ view _endpointSemaphores
-    liftAff do
-      endpointSemaphores <- AVar.take endpointSemaphoresAVar
-      let
-        appSemaphores =
-          fromMaybe Map.empty $ Map.lookup plutusAppId endpointSemaphores
-      endpointSemaphore <- maybe AVar.empty pure
-        $ Map.lookup endpoint appSemaphores
-      let
-        appSemaphores' = Map.insert endpoint endpointSemaphore appSemaphores
-        endpointSemaphores' =
-          Map.insert plutusAppId appSemaphores' endpointSemaphores
-      AVar.put endpointSemaphores' endpointSemaphoresAVar
-      AVar.take endpointSemaphore
-    PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
-      (encodeJson payload)
-      plutusAppId
-      endpoint
+
+  invokeEndpoint appId endpoint payload = runExceptT do
+    result <- ExceptT tryInvokeEndpoint
+    ExceptT case result of
+      Nothing -> waitForEndpointAndRetry
+      Just a -> pure $ Right a
+    where
+    -- Tries to call the endpoint. If it's unavailable, returns a successful
+    -- result with Nothing.
+    tryInvokeEndpoint = do
+      ajaxResult <-
+        PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
+          (encodeJson payload)
+          appId
+          endpoint
+      pure $ case ajaxResult of
+        Left
+          ( AjaxError
+              -- This is a ConnectingError, not an UnexpectedHTTPStatus becase to
+              -- create an UnexpectedHTTPStatus, servant-support needs to get a
+              -- `Response Json` back from affjax. However, the body is in fact a
+              -- String produced by calling Show, not JSON. Affjax fails to parse
+              -- this as JSON and throws an error instead. So, we need to dig
+              -- into the Error returned from Affjax to get the underlying
+              -- `Response Foreign` and inspect that instead.
+              { description: ConnectingError
+                  (ResponseBodyError _ { status: StatusCode 500, body })
+              }
+          ) ->
+          case runExcept $ decode body of
+            Right str
+              | contains (Pattern "EndpointNotAvailable") str -> Right Nothing
+            _ -> Just <$> ajaxResult
+        _ -> Just <$> ajaxResult
+
+    waitForEndpointAndRetry = do
+      -- Get the AVar for the global semaphore lookup
+      applicationsAvar <- asks $ view _endpointSemaphores
+      -- Get the AVar that corresponds to this specific endpoint
+      endpointSem <- liftAff $ getOrCreateEndpoint applicationsAvar
+      -- Wait until it is available
+      liftAff $ AVar.take endpointSem
+      -- Try again
+      invokeEndpoint appId endpoint payload
+
+    getOrCreateEndpoint applicationsAvar = do
+      applications <- AVar.take applicationsAvar
+      -- Get the mapping of AVars for this plutusAppId, or create a new one if
+      -- it doesn't exist.
+      let endpoints = fromMaybe Map.empty $ Map.lookup appId applications
+      -- Get the AVar this endpoint, or create a new one if it doesn't exist.
+      endpointSem <- maybe AVar.empty pure $ Map.lookup endpoint endpoints
+      -- Insert the newly created AVar into the AVar Map for this application
+      let endpoints' = Map.insert endpoint endpointSem endpoints
+      -- Insert the newly updates AVar mapping for this app into the global
+      -- map.
+      let applications' = Map.insert appId endpoints' applications
+      -- Put it back into the AVar.
+      AVar.put applications' applicationsAvar
+      -- Return the AVar for the endpoint.
+      pure endpointSem
+
   getWalletContractInstances wallet =
     PAB.getApiContractInstancesWalletByWalletid (WalletId.toString wallet)
       Nothing
+
   getAllContractInstances = PAB.getApiContractInstances Nothing
+
   getContractDefinitions = PAB.getApiContractDefinitions
+
   onNewActiveEndpoints appId endpoints = do
     let
       endpointMap :: Map String Unit
