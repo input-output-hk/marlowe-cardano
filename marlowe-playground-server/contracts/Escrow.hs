@@ -20,10 +20,10 @@ price :: Value
 price = ConstantParam "Price"
 
 depositTimeout, disputeTimeout, answerTimeout, arbitrageTimeout :: Timeout
-depositTimeout = SlotParam "Payment deadline"
-disputeTimeout = SlotParam "Complaint response deadline"
-answerTimeout = SlotParam "Complaint deadline"
-arbitrageTimeout = SlotParam "Mediation deadline"
+depositTimeout = TimeParam "Payment deadline"
+disputeTimeout = TimeParam "Complaint response deadline"
+answerTimeout = TimeParam "Complaint deadline"
+arbitrageTimeout = TimeParam "Mediation deadline"
 
 choice :: ChoiceName -> Party -> Integer -> Contract -> Case
 choice choiceName chooser choiceValue = Case (Choice (ChoiceId choiceName chooser)

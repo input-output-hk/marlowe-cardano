@@ -20,10 +20,10 @@ escrow =
 
     const price: Value = ConstantParam("Price");
 
-    const depositTimeout: Timeout = SlotParam("Payment deadline");
-    const disputeTimeout: Timeout = SlotParam("Complaint response deadline");
-    const answerTimeout: Timeout = SlotParam("Complaint deadline");
-    const arbitrageTimeout: Timeout = SlotParam("Mediation deadline");
+    const depositTimeout: Timeout = TimeParam("Payment deadline");
+    const disputeTimeout: Timeout = TimeParam("Complaint response deadline");
+    const answerTimeout: Timeout = TimeParam("Complaint deadline");
+    const arbitrageTimeout: Timeout = TimeParam("Mediation deadline");
 
     function choice(choiceName: string, chooser: Party, choiceValue: SomeNumber, continuation: Contract): Case {
         return Case(Choice(ChoiceId(choiceName, chooser),
@@ -95,11 +95,11 @@ escrowWithCollateral =
     const price: Value = ConstantParam("Price");
     const collateral: Value = ConstantParam("Collateral amount");
 
-    const sellerCollateralTimeout: Timeout = SlotParam("Collateral deposit by seller timeout");
-    const buyerCollateralTimeout: Timeout = SlotParam("Deposit of collateral by buyer timeout");
-    const depositTimeout: Timeout = SlotParam("Deposit of price by buyer timeout");
-    const disputeTimeout: Timeout = SlotParam("Dispute by buyer timeout");
-    const answerTimeout: Timeout = SlotParam("Complaint deadline");
+    const sellerCollateralTimeout: Timeout = TimeParam("Collateral deposit by seller timeout");
+    const buyerCollateralTimeout: Timeout = TimeParam("Deposit of collateral by buyer timeout");
+    const depositTimeout: Timeout = TimeParam("Deposit of price by buyer timeout");
+    const disputeTimeout: Timeout = TimeParam("Dispute by buyer timeout");
+    const answerTimeout: Timeout = TimeParam("Complaint deadline");
 
     function depositCollateral(party: Party, timeout: Timeout, timeoutContinuation: Contract, continuation: Contract): Contract {
         return When([Case(Deposit(party, party, ada, collateral), continuation)],
@@ -189,8 +189,8 @@ zeroCouponBond =
     const investor: Party = Role("Lender");
     const issuer: Party = Role("Borrower");
 
-    const initialExchange: Timeout = SlotParam("Loan deadline");
-    const maturityExchangeTimeout: Timeout = SlotParam("Payback deadline");
+    const initialExchange: Timeout = TimeParam("Loan deadline");
+    const maturityExchangeTimeout: Timeout = TimeParam("Payback deadline");
 
     function transfer(timeout: Timeout, from: Party, to: Party, amount: Value, continuation: Contract): Contract {
         return When([Case(Deposit(from, from, ada, amount),
@@ -289,8 +289,8 @@ swap =
     const amountOfLovelace: Value = MulValue(lovelacePerAda, amountOfAda);
     const amountOfDollars: Value = ConstantParam("Amount of dollars");
 
-    const adaDepositTimeout: Timeout = SlotParam("Timeout for Ada deposit");
-    const dollarDepositTimeout: Timeout = SlotParam("Timeout for dollar deposit");
+    const adaDepositTimeout: Timeout = TimeParam("Timeout for Ada deposit");
+    const dollarDepositTimeout: Timeout = TimeParam("Timeout for dollar deposit");
 
     const dollars: Token = Token("85bb65", "dollar")
 
@@ -433,12 +433,12 @@ contractForDifferences =
     }
 
     const contract: Contract =
-        initialDeposit(party, partyDeposit, SlotParam("Party deposit deadline"), Close,
-            initialDeposit(counterparty, counterpartyDeposit, SlotParam("Counterparty deposit deadline"), refund(party, partyDeposit, Close),
-                wait(SlotParam("First window beginning"),
-                    oracleInput(priceBeginning, SlotParam("First window deadline"), refundBoth,
-                        wait(SlotParam("Second window beginning"),
-                            oracleInput(priceEnd, SlotParam("Second window deadline"), refundBoth,
+        initialDeposit(party, partyDeposit, TimeParam("Party deposit deadline"), Close,
+            initialDeposit(counterparty, counterpartyDeposit, TimeParam("Counterparty deposit deadline"), refund(party, partyDeposit, Close),
+                wait(TimeParam("First window beginning"),
+                    oracleInput(priceBeginning, TimeParam("First window deadline"), refundBoth,
+                        wait(TimeParam("Second window beginning"),
+                            oracleInput(priceEnd, TimeParam("Second window deadline"), refundBoth,
                                 gtLtEq(ChoiceValue(priceBeginning), ChoiceValue(priceEnd),
                                     recordDifference(decreaseInPrice, priceBeginning, priceEnd,
                                         transferUpToDeposit(counterparty, counterpartyDeposit, party, UseValue(decreaseInPrice),
@@ -552,12 +552,12 @@ contractForDifferencesWithOracle =
     }
 
     const contract: Contract =
-        initialDeposit(party, partyDeposit, SlotParam("Party deposit deadline"), Close,
-            initialDeposit(counterparty, counterpartyDeposit, SlotParam("Counterparty deposit deadline"), refund(party, partyDeposit, Close),
-                wait(SlotParam("First window beginning"),
-                    oracleInput(exchangeBeginning, SlotParam("First window deadline"), refundBoth,
-                        wait(SlotParam("Second window beginning"),
-                            oracleInput(exchangeEnd, SlotParam("Second window deadline"), refundBoth,
+        initialDeposit(party, partyDeposit, TimeParam("Party deposit deadline"), Close,
+            initialDeposit(counterparty, counterpartyDeposit, TimeParam("Counterparty deposit deadline"), refund(party, partyDeposit, Close),
+                wait(TimeParam("First window beginning"),
+                    oracleInput(exchangeBeginning, TimeParam("First window deadline"), refundBoth,
+                        wait(TimeParam("Second window beginning"),
+                            oracleInput(exchangeEnd, TimeParam("Second window deadline"), refundBoth,
                                 recordEndPrice(priceEnd, exchangeBeginning, exchangeEnd,
                                     gtLtEq(priceBeginning, UseValue(priceEnd),
                                         recordDifference(decreaseInPrice, priceBeginning, UseValue(priceEnd),

@@ -109,14 +109,14 @@ transferUpToDeposit from payerDeposit to amount = Pay from (Account to) ada
 
 extendedContract :: Contract
 extendedContract =
-  initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
+  initialDeposit party partyDeposit (TimeParam "Party deposit deadline") Close
     $ initialDeposit counterparty counterpartyDeposit
-        (SlotParam "Counterparty deposit deadline")
+        (TimeParam "Counterparty deposit deadline")
         Close
-    $ wait (SlotParam "First window beginning")
-    $ oracleInput priceBeginning (SlotParam "First window deadline") Close
-    $ wait (SlotParam "Second window beginning")
-    $ oracleInput priceEnd (SlotParam "Second window deadline") Close
+    $ wait (TimeParam "First window beginning")
+    $ oracleInput priceBeginning (TimeParam "First window deadline") Close
+    $ wait (TimeParam "Second window beginning")
+    $ oracleInput priceEnd (TimeParam "Second window deadline") Close
     $ gtLtEq (ChoiceValue priceBeginning) (ChoiceValue priceEnd)
         ( recordDifference decreaseInPrice priceBeginning priceEnd
             $ transferUpToDeposit counterparty counterpartyDeposit party

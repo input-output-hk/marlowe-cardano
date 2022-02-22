@@ -114,7 +114,7 @@ instance isInstanceOfArrayOfCase :: IsInstanceOf (Array S.Case) (Array EM.Case) 
   isInstance a b = all identity (zipWith isInstance a b)
 
 instance isInstanceOfSlotTimeout :: IsInstanceOf POSIXTime EM.Timeout where
-  isInstance _ (EM.SlotParam _) = true
+  isInstance _ (EM.TimeParam _) = true
   -- we don't check x == y here because then we get false negatives when resolving relative slots to absolutes
   isInstance (POSIXTime _) (EM.Slot _) = true
 

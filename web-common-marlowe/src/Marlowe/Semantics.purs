@@ -417,8 +417,8 @@ data Value
   | MulValue Value Value
   | DivValue Value Value
   | ChoiceValue ChoiceId
-  | SlotIntervalStart
-  | SlotIntervalEnd
+  | TimeIntervalStart
+  | TimeIntervalEnd
   | UseValue ValueId
   | Cond Observation Value Value
 
@@ -463,8 +463,8 @@ instance encodeJsonValue :: EncodeJson Value where
     encodeJson
       { value_of_choice: choiceId
       }
-  encodeJson SlotIntervalStart = encodeJson "slot_interval_start"
-  encodeJson SlotIntervalEnd = encodeJson "slot_interval_end"
+  encodeJson TimeIntervalStart = encodeJson "time_interval_start"
+  encodeJson TimeIntervalEnd = encodeJson "time_interval_end"
   encodeJson (UseValue valueId) =
     encodeJson
       { use_value: valueId
@@ -483,8 +483,8 @@ instance decodeJsonValue :: DecodeJson Value where
     where
     valueConstants =
       Map.fromFoldable
-        [ Tuple "slot_interval_start" SlotIntervalStart
-        , Tuple "slot_interval_end" SlotIntervalEnd
+        [ Tuple "time_interval_start" TimeIntervalStart
+        , Tuple "time_interval_end" TimeIntervalEnd
         ]
 
     decodeObject =
@@ -1047,7 +1047,7 @@ instance decodeJsonInput :: DecodeJson Input where
             )
               <|> (IChoice <$> forChoiceId <*> inputThatChoosesNum)
 
--- Processing of slot interval
+-- Processing of time interval
 data IntervalError
   = InvalidInterval TimeInterval
   | IntervalInPastError POSIXTime TimeInterval
@@ -1060,8 +1060,8 @@ derive instance ordIntervalError :: Ord IntervalError
 
 instance showIntervalError :: Show IntervalError where
   show (InvalidInterval interval) = "Invalid interval: " <> show interval
-  show (IntervalInPastError slot interval) =
-    "Interval is in the past, the current slot is " <> show slot
+  show (IntervalInPastError time interval) =
+    "Interval is in the past, the current time is " <> show time
       <> " but the interval is "
       <> show interval
 
@@ -1147,7 +1147,7 @@ instance showReduceWarning :: Show ReduceWarning where
 data ReduceStepResult
   = Reduced ReduceWarning ReduceEffect State Contract
   | NotReduced
-  | AmbiguousSlotIntervalReductionError
+  | AmbiguousTimeIntervalReductionError
 
 derive instance genericReduceStepResult :: Generic ReduceStepResult _
 
@@ -1158,7 +1158,7 @@ instance showReduceStepResult :: Show ReduceStepResult where
 
 data ReduceResult
   = ContractQuiescent Boolean (List ReduceWarning) (List Payment) State Contract
-  | RRAmbiguousSlotIntervalError
+  | RRAmbiguousTimeIntervalError
 
 derive instance genericReduceResult :: Generic ReduceResult _
 
@@ -1201,7 +1201,7 @@ data ApplyAllResult
       State
       Contract
   | ApplyAllNoMatchError
-  | ApplyAllAmbiguousSlotIntervalError
+  | ApplyAllAmbiguousTimeIntervalError
 
 derive instance genericApplyAllResult :: Generic ApplyAllResult _
 
@@ -1314,7 +1314,7 @@ instance decodeTransactionWarning :: DecodeJson TransactionWarning where
 
 -- | Transaction error
 data TransactionError
-  = TEAmbiguousSlotIntervalError
+  = TEAmbiguousTimeIntervalError
   | TEApplyNoMatchError
   | TEIntervalError IntervalError
   | TEUselessTransaction
@@ -1326,7 +1326,7 @@ derive instance eqTransactionError :: Eq TransactionError
 derive instance ordTransactionError :: Ord TransactionError
 
 instance showTransactionError :: Show TransactionError where
-  show TEAmbiguousSlotIntervalError = "Abiguous slot interval"
+  show TEAmbiguousTimeIntervalError = "Abiguous time interval"
   show TEApplyNoMatchError =
     "At least one of the inputs in the transaction is not allowed by the contract"
   show (TEIntervalError err) = show err
@@ -1334,8 +1334,8 @@ instance showTransactionError :: Show TransactionError where
 
 instance genericEncodeTransactionError :: EncodeJson TransactionError where
   encodeJson = case _ of
-    TEAmbiguousSlotIntervalError -> E.encodeTagged
-      "TEAmbiguousSlotIntervalError"
+    TEAmbiguousTimeIntervalError -> E.encodeTagged
+      "TEAmbiguousTimeIntervalError"
       unit
       E.null
     TEApplyNoMatchError -> E.encodeTagged "TEApplyNoMatchError" unit E.null
@@ -1347,8 +1347,8 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
     D.decode
       $ D.sumType "TransactionError"
       $ Map.fromFoldable
-          [ "TEAmbiguousSlotIntervalError" /\ D.content
-              (TEAmbiguousSlotIntervalError <$ D.null)
+          [ "TEAmbiguousTimeIntervalError" /\ D.content
+              (TEAmbiguousTimeIntervalError <$ D.null)
           , "TEApplyNoMatchError" /\ D.content (TEApplyNoMatchError <$ D.null)
           , "TEIntervalError" /\ D.content (TEIntervalError <$> D.value)
           , "TEUselessTransaction" /\ D.content (TEUselessTransaction <$ D.null)
@@ -1561,9 +1561,9 @@ evalValue env state value =
                       if qIsEven then q else q + signum n * signum d
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
         (unwrap state).choices
-      SlotIntervalStart -> -- view (_timeInterval <<< to ivFrom <<< to unwrap) env
+      TimeIntervalStart ->
         (unwrap (ivFrom ((unwrap env).timeInterval))).getPOSIXTime
-      SlotIntervalEnd -> -- view (_timeInterval <<< to ivTo <<< to _POSIXTime <<< to unwrap) env
+      TimeIntervalEnd ->
         (unwrap (ivTo ((unwrap env).timeInterval))).getPOSIXTime
       UseValue valId -> fromMaybe zero $ Map.lookup valId
         (unwrap state).boundValues
@@ -1712,7 +1712,7 @@ reduceContractStep env state contract = case contract of
       else if timeout <= startTime then
         Reduced ReduceNoWarning ReduceNoPayment state nextContract
       else
-        AmbiguousSlotIntervalReductionError
+        AmbiguousTimeIntervalReductionError
   Let valId val nextContract ->
     let
       evaluatedValue = evalValue env state val
@@ -1759,7 +1759,7 @@ reduceContractUntilQuiescent startEnv startState startContract =
               ReduceNoPayment -> payments
           in
             reductionLoop true env newState nextContract newWarnings newPayments
-        AmbiguousSlotIntervalReductionError -> RRAmbiguousSlotIntervalError
+        AmbiguousTimeIntervalReductionError -> RRAmbiguousTimeIntervalError
         -- this is the last invocation of reductionLoop, so we can reverse lists
         NotReduced -> ContractQuiescent reduced (reverse warnings)
           (reverse payments)
@@ -1848,7 +1848,7 @@ applyAllInputs startEnv startState startContract startInputs =
       -> ApplyAllResult
     applyAllLoop contractChanged env state contract inputs warnings payments =
       case reduceContractUntilQuiescent env state contract of
-        RRAmbiguousSlotIntervalError -> ApplyAllAmbiguousSlotIntervalError
+        RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
         ContractQuiescent reduced reduceWarns pays curState cont ->
           case inputs of
             Nil ->
@@ -1898,8 +1898,8 @@ computeTransaction tx state contract =
                 , txOutContract: cont
                 }
           ApplyAllNoMatchError -> Error TEApplyNoMatchError
-          ApplyAllAmbiguousSlotIntervalError -> Error
-            TEAmbiguousSlotIntervalError
+          ApplyAllAmbiguousTimeIntervalError -> Error
+            TEAmbiguousTimeIntervalError
       IntervalError error -> Error (TEIntervalError error)
 
 moneyInContract :: State -> Money

@@ -78,8 +78,8 @@ type Value =
   | { multiply: Value; times: Value }
   | { divide: Value; by: Value }
   | { value_of_choice: ChoiceId }
-  | "slot_interval_start"
-  | "slot_interval_end"
+  | "time_interval_start"
+  | "time_interval_end"
   | { use_value: ValueId }
   | { if: Observation; then: Value; else: Value };
 
@@ -97,8 +97,8 @@ function coerceValue(val: EValue): Value {
     return new bignumber.BigNumber(val.toString());
   } else if (
     typeof val == "string" &&
-    val != "slot_interval_start" &&
-    val != "slot_interval_end"
+    val != "time_interval_start" &&
+    val != "time_interval_end"
   ) {
     return new bignumber.BigNumber(val);
   } else {
@@ -145,9 +145,9 @@ export const ChoiceValue = function (choiceId: ChoiceId): Value {
   return { value_of_choice: choiceId };
 };
 
-export const SlotIntervalStart: Value = "slot_interval_start";
+export const TimeIntervalStart: Value = "time_interval_start";
 
-export const SlotIntervalEnd: Value = "slot_interval_end";
+export const TimeIntervalEnd: Value = "time_interval_end";
 
 export const UseValue = function (valueId: ValueId): Value {
   return { use_value: valueId };
@@ -274,12 +274,12 @@ export const Case = function (
   return { case: caseAction, then: continuation };
 };
 
-type Timeout = { slot_param: String } | bignumber.BigNumber;
+type Timeout = { time_param: String } | bignumber.BigNumber;
 
 type ETimeout = SomeNumber | Timeout;
 
-export const SlotParam = function (paramName: String): Timeout {
-  return { slot_param: paramName };
+export const TimeParam = function (paramName: String): Timeout {
+  return { time_param: paramName };
 };
 
 type Contract =

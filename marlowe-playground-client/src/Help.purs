@@ -223,7 +223,7 @@ marloweTypeMarkerText TimeoutType =
   """
 Timeout is the slot number after which the When will no longer accept any new events: Case branches will become unusable, and the contract will continue as specified by the timeout continuation.
 
-Timeouts accept templates, this means that instead of writing a specific slot number it is possible to fill Timeouts by using a template parameter that can be filled just before deploying or simulating the contract, for example: SlotParam "maturityDate"
+Timeouts accept templates, this means that instead of writing a specific slot number it is possible to fill Timeouts by using a template parameter that can be filled just before deploying or simulating the contract, for example: TimeParam "maturityDate"
 """
 
 helpForConstructor :: String -> Maybe String

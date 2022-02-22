@@ -513,7 +513,7 @@ lintContract env (Term (When cases (Term (Holes.Slot timeout) pos) cont) _) = do
 
 lintContract env (Term (When cases t cont) _) = do
   case t of
-    Term (Holes.SlotParam slotParamName) _ -> addSlotParameter slotParamName
+    Term (Holes.TimeParam slotParamName) _ -> addSlotParameter slotParamName
     _ -> pure unit
   modifying _holes (insertHole t)
   traverseWithIndex_ (lintCase env) cases
@@ -766,9 +766,9 @@ lintValue env t@(Term (ChoiceValue choiceId@(ChoiceId choiceName party)) pos) =
     modifying _holes (getHoles choiceId)
     pure (ValueSimp pos false t)
 
-lintValue _ t@(Term SlotIntervalStart pos) = pure (ValueSimp pos false t)
+lintValue _ t@(Term TimeIntervalStart pos) = pure (ValueSimp pos false t)
 
-lintValue _ t@(Term SlotIntervalEnd pos) = pure (ValueSimp pos false t)
+lintValue _ t@(Term TimeIntervalEnd pos) = pure (ValueSimp pos false t)
 
 lintValue env t@(Term (UseValue (TermWrapper valueId _)) pos) = do
   when

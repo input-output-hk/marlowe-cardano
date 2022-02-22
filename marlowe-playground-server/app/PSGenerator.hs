@@ -280,7 +280,7 @@ writePangramJson outputDir = do
                             (S.Pay alicePk (S.Account alicePk) token (S.DivValue (S.AvailableMoney alicePk token) const100) S.Close)
                             S.Close
                         )
-                    , S.Case (S.Notify (S.AndObs (S.SlotIntervalStart `S.ValueLT` S.SlotIntervalEnd) S.TrueObs)) S.Close
+                    , S.Case (S.Notify (S.AndObs (S.TimeIntervalStart `S.ValueLT` S.TimeIntervalEnd) S.TrueObs)) S.Close
                     ]
                     (S.POSIXTime 100)
                     S.Close

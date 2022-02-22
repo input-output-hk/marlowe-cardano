@@ -24,7 +24,7 @@ import Marlowe.Holes
   , Payee(..)
   , Term(..)
   , TermWrapper(..)
-  , Timeout(SlotParam)
+  , Timeout(TimeParam)
   , Token(..)
   , Value(..)
   , ValueId(..)
@@ -89,8 +89,8 @@ type HelperFunctions a
   , mkMulValue :: Term Value -> Term Value -> Value
   , mkDivValue :: Term Value -> Term Value -> Value
   , mkChoiceValue :: ChoiceId -> Value
-  , mkSlotIntervalStart :: Value
-  , mkSlotIntervalEnd :: Value
+  , mkTimeIntervalStart :: Value
+  , mkTimeIntervalEnd :: Value
   , mkUseValue :: TermWrapper ValueId -> Value
   , mkCond :: Term Observation -> Term Value -> Term Value -> Value
   }
@@ -115,7 +115,7 @@ helperFunctions =
   , mkBigInteger: BigInt.fromInt
   , mkSlot: Slot
   , mkExtendedSlot: H.Slot
-  , mkExtendedSlotParam: SlotParam
+  , mkExtendedSlotParam: TimeParam
   , mkClose: Close
   , mkPay: Pay
   , mkWhen: When
@@ -154,8 +154,8 @@ helperFunctions =
   , mkMulValue: MulValue
   , mkDivValue: DivValue
   , mkChoiceValue: ChoiceValue
-  , mkSlotIntervalStart: SlotIntervalStart
-  , mkSlotIntervalEnd: SlotIntervalEnd
+  , mkTimeIntervalStart: TimeIntervalStart
+  , mkTimeIntervalEnd: TimeIntervalEnd
   , mkUseValue: UseValue
   , mkCond: Cond
   }

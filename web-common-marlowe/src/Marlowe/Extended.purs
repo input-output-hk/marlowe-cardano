@@ -152,7 +152,7 @@ instance sChoiceIdHasChoices :: HasChoices S.ChoiceId where
 
 -- TODO fix primitive obsession
 data Timeout
-  = SlotParam String
+  = TimeParam String
   | Slot BigInt
 
 derive instance genericTimeout :: Generic Timeout _
@@ -162,7 +162,7 @@ derive instance eqTimeout :: Eq Timeout
 derive instance ordTimeout :: Ord Timeout
 
 instance encodeJsonTimeout :: EncodeJson Timeout where
-  encodeJson (SlotParam str) = encodeJson { slot_param: str }
+  encodeJson (TimeParam str) = encodeJson { time_param: str }
   encodeJson (Slot val) = encodeJson val
 
 instance decodeJsonTimeout :: DecodeJson Timeout where
@@ -170,8 +170,8 @@ instance decodeJsonTimeout :: DecodeJson Timeout where
     lmap (Named "Timeout")
       $ caseJsonObject
           (lmap (Named "constructor Slot") $ Slot <$> decodeJson json)
-          ( lmap (Named "constructor SlotParam")
-              <<< runReaderT (SlotParam <$> requireProp "slot_param")
+          ( lmap (Named "constructor TimeParam")
+              <<< runReaderT (TimeParam <$> requireProp "time_param")
           )
           json
 
@@ -190,17 +190,17 @@ instance hasArgsTimeout :: Args Timeout where
   hasNestedArgs x = genericHasNestedArgs x
 
 instance toCoreTimeout :: ToCore Timeout POSIXTime where
-  toCore (SlotParam _) = Nothing
+  toCore (TimeParam _) = Nothing
   toCore (Slot x) = Just (POSIXTime { getPOSIXTime: x })
 
 instance templateTimeout :: Template Timeout Placeholders where
-  getPlaceholderIds (SlotParam slotParamId) = Placeholders
+  getPlaceholderIds (TimeParam slotParamId) = Placeholders
     (unwrap (mempty :: Placeholders))
       { slotPlaceholderIds = Set.singleton slotParamId }
   getPlaceholderIds (Slot _) = mempty
 
 instance fillableTimeout :: Fillable Timeout TemplateContent where
-  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $
+  fillTemplate placeholders v@(TimeParam slotParamId) = maybe v Slot $
     Map.lookup slotParamId (unwrap placeholders).slotContent
   fillTemplate _ (Slot x) = Slot x
 
@@ -214,8 +214,8 @@ data Value
   | MulValue Value Value
   | DivValue Value Value
   | ChoiceValue S.ChoiceId
-  | SlotIntervalStart
-  | SlotIntervalEnd
+  | TimeIntervalStart
+  | TimeIntervalEnd
   | UseValue S.ValueId
   | Cond Observation Value Value
 
@@ -261,8 +261,8 @@ instance encodeJsonValue :: EncodeJson Value where
     encodeJson
       { value_of_choice: choiceId
       }
-  encodeJson SlotIntervalStart = encodeJson "slot_interval_start"
-  encodeJson SlotIntervalEnd = encodeJson "slot_interval_end"
+  encodeJson TimeIntervalStart = encodeJson "time_interval_start"
+  encodeJson TimeIntervalEnd = encodeJson "time_interval_end"
   encodeJson (UseValue valueId) =
     encodeJson
       { use_value: valueId
@@ -280,8 +280,8 @@ instance decodeJsonValue :: DecodeJson Value where
     where
     valueConstants =
       Map.fromFoldable
-        [ Tuple "slot_interval_start" SlotIntervalStart
-        , Tuple "slot_interval_end" SlotIntervalEnd
+        [ Tuple "time_interval_start" TimeIntervalStart
+        , Tuple "time_interval_end" TimeIntervalEnd
         ]
 
     decodeObject =
@@ -337,8 +337,8 @@ instance toCoreValue :: ToCore Value S.Value where
   toCore (MulValue lhs rhs) = S.MulValue <$> toCore lhs <*> toCore rhs
   toCore (DivValue lhs rhs) = S.DivValue <$> toCore lhs <*> toCore rhs
   toCore (ChoiceValue choId) = Just $ S.ChoiceValue choId
-  toCore SlotIntervalStart = Just $ S.SlotIntervalStart
-  toCore SlotIntervalEnd = Just $ S.SlotIntervalEnd
+  toCore TimeIntervalStart = Just $ S.TimeIntervalStart
+  toCore TimeIntervalEnd = Just $ S.TimeIntervalEnd
   toCore (UseValue vId) = Just $ S.UseValue vId
   toCore (Cond obs lhs rhs) = S.Cond <$> toCore obs <*> toCore lhs <*> toCore
     rhs
@@ -359,8 +359,8 @@ instance templateValue :: Template Value Placeholders where
   getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <>
     getPlaceholderIds rhs
   getPlaceholderIds (ChoiceValue _) = mempty
-  getPlaceholderIds SlotIntervalStart = mempty
-  getPlaceholderIds SlotIntervalEnd = mempty
+  getPlaceholderIds TimeIntervalStart = mempty
+  getPlaceholderIds TimeIntervalEnd = mempty
   getPlaceholderIds (UseValue _) = mempty
   getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs
     <> getPlaceholderIds lhs
@@ -379,8 +379,8 @@ instance fillableValue :: Fillable Value TemplateContent where
     MulValue lhs rhs -> MulValue (go lhs) (go rhs)
     DivValue lhs rhs -> DivValue (go lhs) (go rhs)
     ChoiceValue _ -> val
-    SlotIntervalStart -> val
-    SlotIntervalEnd -> val
+    TimeIntervalStart -> val
+    TimeIntervalEnd -> val
     UseValue _ -> val
     Cond obs lhs rhs -> Cond (go obs) (go lhs) (go rhs)
     where
@@ -397,8 +397,8 @@ instance valueHasChoices :: HasChoices Value where
   getChoiceNames (MulValue lhs rhs) = getChoiceNames lhs <> getChoiceNames rhs
   getChoiceNames (DivValue lhs rhs) = getChoiceNames lhs <> getChoiceNames rhs
   getChoiceNames (ChoiceValue choId) = getChoiceNames choId
-  getChoiceNames SlotIntervalStart = Set.empty
-  getChoiceNames SlotIntervalEnd = Set.empty
+  getChoiceNames TimeIntervalStart = Set.empty
+  getChoiceNames TimeIntervalEnd = Set.empty
   getChoiceNames (UseValue _) = Set.empty
   getChoiceNames (Cond obs lhs rhs) = getChoiceNames obs <> getChoiceNames lhs
     <> getChoiceNames rhs
@@ -877,7 +877,7 @@ instance contractHasChoices :: HasChoices Contract where
   getChoiceNames (Assert obs cont) = getChoiceNames obs <> getChoiceNames cont
 
 -- In the extended marlowe we are treating Slot's as relative times to an initial slot and the
--- SlotParam as absolute times. This function will recurse on a contract making the relative slots
+-- TimeParam as absolute times. This function will recurse on a contract making the relative slots
 -- absolute
 resolveRelativeTimes :: S.Slot -> Contract -> Contract
 resolveRelativeTimes (S.Slot baseSlot) contract = relativeContract contract

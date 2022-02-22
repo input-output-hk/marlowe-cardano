@@ -70,7 +70,7 @@ actionShow = escape . showAction
     showAction (Notify obs) = "A notification on " ++ observationShow obs
 
 timeoutShow :: Timeout -> String
-timeoutShow (SlotParam slotId)     = show slotId
+timeoutShow (TimeParam slotId)     = show slotId
 timeoutShow (POSIXTime slotNumber) = show slotNumber ++ " slots after start"
 
 -- | A concise representation of an Observation for display in a node.
@@ -115,8 +115,8 @@ valueShow (ChoiceValue (ChoiceId id party)) = show party ++ " choice on " ++ sho
 valueShow (Cond obs val1 val2) = "(" ++ observationShow obs ++ " ? " ++ valueShow val1 ++ " : " ++ valueShow val2 ++ ")"
 valueShow (UseValue (ValueId id)) = show id
 valueShow (AvailableMoney party _) = show party ++ "'s available money"
-valueShow SlotIntervalStart  = "slot interval start"
-valueShow SlotIntervalEnd  = "slot interval end"
+valueShow TimeIntervalStart  = "time interval start"
+valueShow TimeIntervalEnd  = "time interval end"
 
 -- | Convert a 'Contract' into a string that can be printed and loaded into the
 -- mermaid live editor: <https://mermaid-js.github.io/mermaid-live-editor/>.

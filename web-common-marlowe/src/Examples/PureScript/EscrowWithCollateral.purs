@@ -78,19 +78,19 @@ collateral :: Value
 collateral = ConstantParam "Collateral amount"
 
 sellerCollateralTimeout :: Timeout
-sellerCollateralTimeout = SlotParam "Collateral deposit by seller timeout"
+sellerCollateralTimeout = TimeParam "Collateral deposit by seller timeout"
 
 buyerCollateralTimeout :: Timeout
-buyerCollateralTimeout = SlotParam "Deposit of collateral by buyer timeout"
+buyerCollateralTimeout = TimeParam "Deposit of collateral by buyer timeout"
 
 depositTimeout :: Timeout
-depositTimeout = SlotParam "Deposit of price by buyer timeout"
+depositTimeout = TimeParam "Deposit of price by buyer timeout"
 
 disputeTimeout :: Timeout
-disputeTimeout = SlotParam "Dispute by buyer timeout"
+disputeTimeout = TimeParam "Dispute by buyer timeout"
 
 answerTimeout :: Timeout
-answerTimeout = SlotParam "Complaint deadline"
+answerTimeout = TimeParam "Complaint deadline"
 
 depositCollateral :: Party -> Timeout -> Contract -> Contract -> Contract
 depositCollateral party timeout timeoutContinuation continuation =

@@ -137,8 +137,8 @@
         "case": {
           "notify_if": {
             "both": {
-              "value": "slot_interval_start",
-              "lt": "slot_interval_end"
+              "value": "time_interval_start",
+              "lt": "time_interval_end"
             },
             "and": true
           }

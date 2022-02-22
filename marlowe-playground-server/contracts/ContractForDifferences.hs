@@ -84,12 +84,12 @@ refundAfterDifference payer payerDeposit payee payeeDeposit difference =
     Close
 
 contract :: Contract
-contract = initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
-         $ initialDeposit counterparty counterpartyDeposit (SlotParam "Counterparty deposit deadline") (refund party partyDeposit Close)
-         $ wait (SlotParam "First window beginning")
-         $ oracleInput priceBeginning (SlotParam "First window deadline") refundBoth
-         $ wait (SlotParam "Second window beginning")
-         $ oracleInput priceEnd (SlotParam "Second window deadline") refundBoth
+contract = initialDeposit party partyDeposit (TimeParam "Party deposit deadline") Close
+         $ initialDeposit counterparty counterpartyDeposit (TimeParam "Counterparty deposit deadline") (refund party partyDeposit Close)
+         $ wait (TimeParam "First window beginning")
+         $ oracleInput priceBeginning (TimeParam "First window deadline") refundBoth
+         $ wait (TimeParam "Second window beginning")
+         $ oracleInput priceEnd (TimeParam "Second window deadline") refundBoth
          $ gtLtEq (ChoiceValue priceBeginning) (ChoiceValue priceEnd)
                   ( recordDifference decreaseInPrice priceBeginning priceEnd
                   $ transferUpToDeposit counterparty counterpartyDeposit party (UseValue decreaseInPrice)

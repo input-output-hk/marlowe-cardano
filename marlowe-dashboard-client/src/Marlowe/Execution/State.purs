@@ -243,7 +243,7 @@ timeoutState
                 ContractQuiescent _ _ _ txOutState txOutContract ->
                   { txOutState, txOutContract }
                 -- FIXME: Change timeoutState to return an Either
-                RRAmbiguousSlotIntervalError ->
+                RRAmbiguousTimeIntervalError ->
                   { txOutState: state', txOutContract: contract' }
 
             timeoutInfo =

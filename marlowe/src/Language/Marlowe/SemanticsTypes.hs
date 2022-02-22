@@ -120,8 +120,8 @@ data Value a = AvailableMoney AccountId Token
            | MulValue (Value a) (Value a)
            | DivValue (Value a) (Value a)
            | ChoiceValue ChoiceId
-           | SlotIntervalStart
-           | SlotIntervalEnd
+           | TimeIntervalStart
+           | TimeIntervalEnd
            | UseValue ValueId
            | Cond a (Value a) (Value a)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
@@ -397,8 +397,8 @@ instance FromJSON (Value Observation) where
     <|> (Cond <$> (v .: "if")
               <*> (v .: "then")
               <*> (v .: "else"))
-  parseJSON (String "slot_interval_start") = return SlotIntervalStart
-  parseJSON (String "slot_interval_end") = return SlotIntervalEnd
+  parseJSON (String "time_interval_start") = return TimeIntervalStart
+  parseJSON (String "time_interval_end") = return TimeIntervalEnd
   parseJSON (Number n) = Constant <$> getInteger n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
 instance ToJSON (Value Observation) where
@@ -427,8 +427,8 @@ instance ToJSON (Value Observation) where
       ]
   toJSON (ChoiceValue choiceId) = object
       [ "value_of_choice" .= choiceId ]
-  toJSON SlotIntervalStart = JSON.String $ pack "slot_interval_start"
-  toJSON SlotIntervalEnd = JSON.String $ pack "slot_interval_end"
+  toJSON TimeIntervalStart = JSON.String $ pack "time_interval_start"
+  toJSON TimeIntervalEnd = JSON.String $ pack "time_interval_end"
   toJSON (UseValue valueId) = object
       [ "use_value" .= valueId ]
   toJSON (Cond obs tv ev) = object
@@ -658,8 +658,8 @@ instance Eq a => Eq (Value a) where
     MulValue val1 val2 == MulValue val3 val4 = val1 == val3 && val2 == val4
     DivValue val1 val2 == DivValue val3 val4 = val1 == val3 && val2 == val4
     ChoiceValue cid1 == ChoiceValue cid2 = cid1 == cid2
-    SlotIntervalStart == SlotIntervalStart = True
-    SlotIntervalEnd   == SlotIntervalEnd   = True
+    TimeIntervalStart == TimeIntervalStart = True
+    TimeIntervalEnd   == TimeIntervalEnd   = True
     UseValue val1 == UseValue val2 = val1 == val2
     Cond obs1 thn1 els1 == Cond obs2 thn2 els2 =  obs1 == obs2 && thn1 == thn2 && els1 == els2
     _ == _ = False
@@ -739,8 +739,8 @@ makeIsDataIndexed ''Value [
     ('MulValue,5),
     ('DivValue,6),
     ('ChoiceValue,7),
-    ('SlotIntervalStart, 8),
-    ('SlotIntervalEnd,9),
+    ('TimeIntervalStart, 8),
+    ('TimeIntervalEnd,9),
     ('UseValue,10),
     ('Cond,11)
     ]

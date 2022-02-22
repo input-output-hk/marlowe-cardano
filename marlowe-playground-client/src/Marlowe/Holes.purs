@@ -218,8 +218,8 @@ getMarloweConstructors ValueType =
           [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
       )
     , (Tuple "ChoiceValue" $ ArgumentArray [ GenArg ChoiceIdType ])
-    , (Tuple "SlotIntervalStart" $ ArgumentArray [])
-    , (Tuple "SlotIntervalEnd" $ ArgumentArray [])
+    , (Tuple "TimeIntervalStart" $ ArgumentArray [])
+    , (Tuple "TimeIntervalEnd" $ ArgumentArray [])
     , (Tuple "UseValue" $ ArgumentArray [ DefaultString "valueId" ])
     , ( Tuple "Cond" $ ArgumentArray
           [ DataArg ObservationType, DataArg ValueType, DataArg ValueType ]
@@ -302,7 +302,7 @@ getMarloweConstructors PartyType =
 getMarloweConstructors TimeoutType =
   Map.fromFoldable
     [ (Tuple "Slot" $ SimpleArgument $ DefaultNumber zero)
-    , (Tuple "SlotParam" $ ArgumentArray [ DefaultString "slotParameterName" ])
+    , (Tuple "TimeParam" $ ArgumentArray [ DefaultString "slotParameterName" ])
     ]
 
 allMarloweConstructors :: Map String TermGenerator
@@ -670,7 +670,7 @@ instance boundHasMarloweHoles :: HasMarloweHoles Bound where
 
 data Timeout
   = Slot BigInt
-  | SlotParam String
+  | TimeParam String
 
 derive instance genericTimeout :: Generic Timeout _
 
@@ -684,7 +684,7 @@ instance showTimeout :: Show Timeout where
 
 instance prettyTimeout :: Pretty Timeout where
   pretty (Slot x) = pretty x
-  pretty (SlotParam x) = genericPretty (SlotParam x)
+  pretty (TimeParam x) = genericPretty (TimeParam x)
 
 instance hasArgsTimeout :: Args Timeout where
   hasArgs (Slot _) = false
@@ -693,13 +693,13 @@ instance hasArgsTimeout :: Args Timeout where
   hasNestedArgs x = genericHasNestedArgs x
 
 instance templateTimeout :: Template Timeout Placeholders where
-  getPlaceholderIds (SlotParam slotParamId) = Placeholders
+  getPlaceholderIds (TimeParam slotParamId) = Placeholders
     (unwrap (mempty :: Placeholders))
       { slotPlaceholderIds = Set.singleton slotParamId }
   getPlaceholderIds (Slot _) = mempty
 
 instance fillableTimeout :: Fillable Timeout TemplateContent where
-  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $
+  fillTemplate placeholders v@(TimeParam slotParamId) = maybe v Slot $
     Map.lookup slotParamId (unwrap placeholders).slotContent
   fillTemplate _ (Slot x) = Slot x
 
@@ -708,18 +708,18 @@ instance hasTimeoutTimeout :: HasTimeout Timeout where
     { maxTime: (POSIXTime { getPOSIXTime: slot })
     , minTime: Just (POSIXTime { getPOSIXTime: slot })
     }
-  timeouts (SlotParam _) = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts (TimeParam _) = Timeouts { maxTime: zero, minTime: Nothing }
 
 instance timeoutFromTerm :: FromTerm Timeout EM.Timeout where
   fromTerm (Slot b) = pure $ EM.Slot b
-  fromTerm (SlotParam b) = pure $ EM.SlotParam b
+  fromTerm (TimeParam b) = pure $ EM.TimeParam b
 
 instance timeoutIsMarloweType :: IsMarloweType Timeout where
   marloweType _ = TimeoutType
 
 instance timeoutHasMarloweHoles :: HasMarloweHoles Timeout where
   getHoles (Slot _) m = m
-  getHoles (SlotParam _) m = m
+  getHoles (TimeParam _) m = m
 
 data Party
   = PK PubKey
@@ -962,8 +962,8 @@ data Value
   | MulValue (Term Value) (Term Value)
   | DivValue (Term Value) (Term Value)
   | ChoiceValue ChoiceId
-  | SlotIntervalStart
-  | SlotIntervalEnd
+  | TimeIntervalStart
+  | TimeIntervalEnd
   | UseValue (TermWrapper ValueId)
   | Cond (Term Observation) (Term Value) (Term Value)
 
@@ -1000,8 +1000,8 @@ instance templateValue :: Template Value Placeholders where
   getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <>
     getPlaceholderIds rhs
   getPlaceholderIds (ChoiceValue _) = mempty
-  getPlaceholderIds SlotIntervalStart = mempty
-  getPlaceholderIds SlotIntervalEnd = mempty
+  getPlaceholderIds TimeIntervalStart = mempty
+  getPlaceholderIds TimeIntervalEnd = mempty
   getPlaceholderIds (UseValue _) = mempty
   getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs
     <> getPlaceholderIds lhs
@@ -1020,8 +1020,8 @@ instance fillableValue :: Fillable Value TemplateContent where
     MulValue lhs rhs -> MulValue (go lhs) (go rhs)
     DivValue lhs rhs -> DivValue (go lhs) (go rhs)
     ChoiceValue _ -> val
-    SlotIntervalStart -> val
-    SlotIntervalEnd -> val
+    TimeIntervalStart -> val
+    TimeIntervalEnd -> val
     UseValue _ -> val
     Cond obs lhs rhs -> Cond (go obs) (go lhs) (go rhs)
     where
@@ -1039,8 +1039,8 @@ instance valueFromTerm :: FromTerm Value EM.Value where
   fromTerm (MulValue a b) = EM.MulValue <$> fromTerm a <*> fromTerm b
   fromTerm (DivValue a b) = EM.DivValue <$> fromTerm a <*> fromTerm b
   fromTerm (ChoiceValue a) = EM.ChoiceValue <$> fromTerm a
-  fromTerm SlotIntervalStart = pure EM.SlotIntervalStart
-  fromTerm SlotIntervalEnd = pure EM.SlotIntervalEnd
+  fromTerm TimeIntervalStart = pure EM.TimeIntervalStart
+  fromTerm TimeIntervalEnd = pure EM.TimeIntervalEnd
   fromTerm (UseValue a) = EM.UseValue <$> fromTerm a
   fromTerm (Cond c a b) = EM.Cond <$> fromTerm c <*> fromTerm a <*> fromTerm b
 
@@ -1504,7 +1504,7 @@ reduceContractStep env state contract = case contract of
       "this function should not be called in a contract with holes"
   When _ (Hole _ _) _ -> ReduceError
     "this function should not be called in a contract with holes"
-  When _ (Term (SlotParam _) _) _ -> ReduceError
+  When _ (Term (TimeParam _) _) _ -> ReduceError
     "this function should not be called with slot params"
   When _ (Term (Slot timeout) _) nextContract ->
     let
@@ -1519,6 +1519,6 @@ reduceContractStep env state contract = case contract of
       else if sTimeout <= startTime then
         Reduced nextContract
       else
-        ReduceError "AmbiguousSlotIntervalReductionError"
+        ReduceError "AmbiguousTimeIntervalReductionError"
   Let _ _ nextContract -> Reduced nextContract
   Assert _ cont -> Reduced cont

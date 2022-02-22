@@ -128,14 +128,14 @@ valueGenSized s
                   , Cond  <$> observationGenSized (s `quot` 3)
                           <*> valueGenSized (s `quot` 2)
                           <*> valueGenSized (s `quot` 2)
-                  , return SlotIntervalStart
-                  , return SlotIntervalEnd
+                  , return TimeIntervalStart
+                  , return TimeIntervalEnd
                   , UseValue <$> valueIdGen
                   ]
   | otherwise = oneof [ AvailableMoney <$> partyGen <*> tokenGen
                       , Constant <$> simpleIntegerGen
-                      , return SlotIntervalStart
-                      , return SlotIntervalEnd
+                      , return TimeIntervalStart
+                      , return TimeIntervalEnd
                       , UseValue <$> valueIdGen
                       ]
 
@@ -147,8 +147,8 @@ valueGen = sized valueGenSized
 shrinkValue :: Value Observation -> [Value Observation]
 shrinkValue value = case value of
     Constant x -> [Constant y | y <- shrinkSimpleInteger x]
-    SlotIntervalStart -> [Constant 0]
-    SlotIntervalEnd -> [Constant 0, SlotIntervalStart]
+    TimeIntervalStart -> [Constant 0]
+    TimeIntervalEnd -> [Constant 0, TimeIntervalStart]
     AvailableMoney accId tok -> Constant 0 : ([AvailableMoney x tok | x <- shrinkParty accId]
                ++ [AvailableMoney accId y | y <- shrinkToken tok])
     UseValue valId -> Constant 0 : [UseValue x | x <- shrinkValueId valId]
@@ -348,7 +348,7 @@ pangramContract = let
             (If (ChoseSomething choiceId `OrObs` (ChoiceValue choiceId `ValueEQ` constant))
                 (Pay aliceAcc (Account aliceAcc) token (DivValue (AvailableMoney aliceAcc token) constant) Close)
                 Close)
-        , Case (Notify (AndObs (SlotIntervalStart `ValueLT` SlotIntervalEnd) TrueObs)) Close
+        , Case (Notify (AndObs (TimeIntervalStart `ValueLT` TimeIntervalEnd) TrueObs)) Close
         ] (POSIXTime 100) Close
 
 

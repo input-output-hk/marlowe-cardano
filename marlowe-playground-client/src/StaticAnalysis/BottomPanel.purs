@@ -378,7 +378,7 @@ displayTransactionList transactionList =
           ( li_
               [ span_
                   [ b_ [ text "Transaction" ]
-                  , text " with slot interval "
+                  , text " with time interval "
                   , b_ [ text $ (show from <> " to " <> show to) ]
                   , if List.null inputList then
                       text " and no inputs (empty transaction)."

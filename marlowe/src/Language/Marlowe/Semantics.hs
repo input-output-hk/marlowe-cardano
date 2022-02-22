@@ -120,13 +120,13 @@ data ReduceWarning = ReduceNoWarning
 -- | Result of 'reduceContractStep'
 data ReduceStepResult = Reduced ReduceWarning ReduceEffect State Contract
                       | NotReduced
-                      | AmbiguousSlotIntervalReductionError
+                      | AmbiguousTimeIntervalReductionError
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'reduceContractUntilQuiescent'
 data ReduceResult = ContractQuiescent Bool [ReduceWarning] [Payment] State Contract
-                  | RRAmbiguousSlotIntervalError
+                  | RRAmbiguousTimeIntervalError
   deriving stock (Haskell.Show)
 
 
@@ -146,7 +146,7 @@ data ApplyResult = Applied ApplyWarning State Contract
 -- | Result of 'applyAllInputs'
 data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] State Contract
                     | ApplyAllNoMatchError
-                    | ApplyAllAmbiguousSlotIntervalError
+                    | ApplyAllAmbiguousTimeIntervalError
                     | ApplyAllHashMismatch
   deriving stock (Haskell.Show)
 
@@ -164,7 +164,7 @@ data TransactionWarning = TransactionNonPositiveDeposit Party AccountId Token In
 
 
 -- | Transaction error
-data TransactionError = TEAmbiguousSlotIntervalError
+data TransactionError = TEAmbiguousTimeIntervalError
                       | TEApplyNoMatchError
                       | TEIntervalError IntervalError
                       | TEUselessTransaction
@@ -264,8 +264,8 @@ evalValue env state value = let
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
                 Nothing -> 0
-        SlotIntervalStart    -> getPOSIXTime (fst (timeInterval env))
-        SlotIntervalEnd      -> getPOSIXTime (snd (timeInterval env))
+        TimeIntervalStart    -> getPOSIXTime (fst (timeInterval env))
+        TimeIntervalEnd      -> getPOSIXTime (snd (timeInterval env))
         UseValue valId       ->
             case Map.lookup valId (boundValues state) of
                 Just x  -> x
@@ -384,8 +384,8 @@ reduceContractStep env state contract = case contract of
         in if endSlot < timeout then NotReduced
         -- if timeout in the past – reduce to timeout continuation
         else if timeout <= startSlot then Reduced ReduceNoWarning ReduceNoPayment state cont
-        -- if timeout in the slot range – issue an ambiguity error
-        else AmbiguousSlotIntervalReductionError
+        -- if timeout in the time range – issue an ambiguity error
+        else AmbiguousTimeIntervalReductionError
 
     Let valId val cont -> let
         evaluatedValue = evalValue env state val
@@ -417,7 +417,7 @@ reduceContractUntilQuiescent env state contract = let
                     ReduceWithPayment payment -> payment : payments
                     ReduceNoPayment           -> payments
                 in reductionLoop True env newState cont newWarnings newPayments
-            AmbiguousSlotIntervalReductionError -> RRAmbiguousSlotIntervalError
+            AmbiguousTimeIntervalReductionError -> RRAmbiguousTimeIntervalError
             -- this is the last invocation of reductionLoop, so we can reverse lists
             NotReduced -> ContractQuiescent reduced (reverse warnings) (reverse payments) state contract
 
@@ -501,7 +501,7 @@ applyAllInputs env state contract inputs = let
         -> ApplyAllResult
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
-            RRAmbiguousSlotIntervalError -> ApplyAllAmbiguousSlotIntervalError
+            RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
             ContractQuiescent reduced reduceWarns pays curState cont -> case inputs of
                 [] -> ApplyAllSuccess
                     (contractChanged || reduced)
@@ -550,7 +550,7 @@ computeTransaction tx state contract = let
                                            , txOutState = newState
                                            , txOutContract = cont }
             ApplyAllNoMatchError -> Error TEApplyNoMatchError
-            ApplyAllAmbiguousSlotIntervalError -> Error TEAmbiguousSlotIntervalError
+            ApplyAllAmbiguousTimeIntervalError -> Error TEAmbiguousTimeIntervalError
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
@@ -627,10 +627,10 @@ instance FromJSON TransactionInput where
 
 instance ToJSON TransactionInput where
   toJSON (TransactionInput (POSIXTime from, POSIXTime to) txInps) = object
-      [ "tx_interval" .= slotIntervalJSON
+      [ "tx_interval" .= timeIntervalJSON
       , "tx_inputs" .= toJSONList (map toJSON txInps)
       ]
-    where slotIntervalJSON = object [ "from" .= from
+    where timeIntervalJSON = object [ "from" .= from
                                     , "to" .= to
                                     ]
 

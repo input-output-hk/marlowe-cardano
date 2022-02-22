@@ -34,13 +34,13 @@ import Ledger.Ada (adaSymbol, adaToken)
 import Text.PrettyPrint.Leijen (parens, text)
 
 
-data Timeout = SlotParam String
+data Timeout = TimeParam String
              | POSIXTime Integer
   deriving stock (Show,Generic)
 
 instance Pretty Timeout where
     prettyFragment (POSIXTime n)    = prettyFragment n
-    prettyFragment sp@(SlotParam _) = parens $ text $ show sp
+    prettyFragment sp@(TimeParam _) = parens $ text $ show sp
 
 instance Num Timeout where
   (+) (POSIXTime a) (POSIXTime b) = POSIXTime (a + b)
@@ -69,8 +69,8 @@ data Value = AvailableMoney S.AccountId S.Token
            | MulValue Value Value
            | DivValue Value Value
            | ChoiceValue S.ChoiceId
-           | SlotIntervalStart
-           | SlotIntervalEnd
+           | TimeIntervalStart
+           | TimeIntervalEnd
            | UseValue S.ValueId
            | Cond Observation Value Value
   deriving stock (Show,Generic)
@@ -135,8 +135,8 @@ instance ToCore Value (S.Value S.Observation) where
   toCore (MulValue lhs rhs)         = S.MulValue <$> toCore lhs <*> toCore rhs
   toCore (DivValue lhs rhs)         = S.DivValue <$> toCore lhs <*> toCore rhs
   toCore (ChoiceValue choId)        = Just $ S.ChoiceValue choId
-  toCore SlotIntervalStart          = Just S.SlotIntervalStart
-  toCore SlotIntervalEnd            = Just S.SlotIntervalEnd
+  toCore TimeIntervalStart          = Just S.TimeIntervalStart
+  toCore TimeIntervalEnd            = Just S.TimeIntervalEnd
   toCore (UseValue vId)             = Just $ S.UseValue vId
   toCore (Cond obs lhs rhs)         = S.Cond <$> toCore obs <*> toCore lhs <*> toCore rhs
 
@@ -159,7 +159,7 @@ instance ToCore Action S.Action where
   toCore (Notify obs)                  = S.Notify <$> toCore obs
 
 instance ToCore Timeout L.POSIXTime where
-  toCore (SlotParam _) = Nothing
+  toCore (TimeParam _) = Nothing
   toCore (POSIXTime x) = Just (L.POSIXTime x)
 
 instance ToCore Payee S.Payee where

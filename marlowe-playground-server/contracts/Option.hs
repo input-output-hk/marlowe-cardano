@@ -12,9 +12,9 @@ main = print . pretty $
     (Token "" "Underlying")
     (ConstantParam "Strike")
     (ConstantParam "Ratio")
-    (SlotParam "Issue Date")
-    (SlotParam "Expiry")
-    (SlotParam "Settlement Date")
+    (TimeParam "Issue Date")
+    (TimeParam "Expiry")
+    (TimeParam "Settlement Date")
 
 -- = Options
 

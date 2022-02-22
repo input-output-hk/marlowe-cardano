@@ -65,10 +65,10 @@ amountOfDollars :: Value
 amountOfDollars = ConstantParam "Amount of dollars"
 
 adaDepositTimeout :: Timeout
-adaDepositTimeout = SlotParam "Timeout for Ada deposit"
+adaDepositTimeout = TimeParam "Timeout for Ada deposit"
 
 dollarDepositTimeout :: Timeout
-dollarDepositTimeout = SlotParam "Timeout for dollar deposit"
+dollarDepositTimeout = TimeParam "Timeout for dollar deposit"
 
 dollars :: Token
 dollars = Token "85bb65" "dollar"

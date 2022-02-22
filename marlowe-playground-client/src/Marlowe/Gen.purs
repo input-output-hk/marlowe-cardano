@@ -112,7 +112,7 @@ genTimeout = do
   where
   slot = H.Slot <$> genBigInt
 
-  slotParam = H.SlotParam <$> genTokenName
+  slotParam = H.TimeParam <$> genTokenName
 
 genValueId
   :: forall m
@@ -332,9 +332,9 @@ genValue' size
           extendedConstructcs =
             if withExtendedConstructs then [ ConstantParam <$> genTokenName ]
             else []
-        oneOf $ pure SlotIntervalStart
+        oneOf $ pure TimeIntervalStart
           :|
-            ( [ pure SlotIntervalEnd
+            ( [ pure TimeIntervalEnd
               , AvailableMoney <$> genTerm (mkArgName PartyType) genParty <*>
                   genTerm (mkArgName TokenType) genToken
               , Constant <$> genBigInt
@@ -352,9 +352,9 @@ genValue' size
                 <> extendedConstructcs
             )
   | otherwise =
-      oneOf $ pure SlotIntervalStart
+      oneOf $ pure TimeIntervalStart
         :|
-          [ pure SlotIntervalEnd
+          [ pure TimeIntervalEnd
           , AvailableMoney <$> genTerm (mkArgName PartyType) genParty <*>
               genTerm (mkArgName TokenType) genToken
           , Constant <$> genBigInt

@@ -95,12 +95,12 @@ letContract subExpression = "Let \"simplifiableValue\" " <> subExpression <>
 
 addContract :: String -> String
 addContract subExpression =
-  "Let \"simplifiableValue\" (AddValue SlotIntervalEnd " <> subExpression <>
+  "Let \"simplifiableValue\" (AddValue TimeIntervalEnd " <> subExpression <>
     ") Close"
 
 subContract :: String -> String
 subContract subExpression =
-  "Let \"simplifiableValue\" (SubValue SlotIntervalEnd " <> subExpression <>
+  "Let \"simplifiableValue\" (SubValue TimeIntervalEnd " <> subExpression <>
     ") Close"
 
 depositAndThenDo :: String -> String -> String
@@ -138,11 +138,11 @@ ifContract subExpression = "If " <> subExpression <> " Close Close"
 
 andContract :: String -> String
 andContract subExpression =
-  "If (AndObs (ValueLE SlotIntervalEnd (Constant 20)) " <> subExpression <>
+  "If (AndObs (ValueLE TimeIntervalEnd (Constant 20)) " <> subExpression <>
     ") Close Close"
 
 orContract :: String -> String
-orContract subExpression = "If (OrObs (ValueGE SlotIntervalEnd (Constant 5)) "
+orContract subExpression = "If (OrObs (ValueGE TimeIntervalEnd (Constant 5)) "
   <> subExpression
   <> ") Close Close"
 
@@ -265,9 +265,9 @@ addValueSimplifiesWithZero :: forall m. MonadThrow Error m => m Unit
 addValueSimplifiesWithZero =
   let
     simplifiableExpression =
-      "(AddValue SlotIntervalEnd (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)))"
+      "(AddValue TimeIntervalEnd (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)))"
 
-    simplification = "SlotIntervalEnd"
+    simplification = "TimeIntervalEnd"
   in
     testValueSimplificationWarning letContract simplifiableExpression
       simplification
@@ -287,9 +287,9 @@ subValueSimplifiesWithZero :: forall m. MonadThrow Error m => m Unit
 subValueSimplifiesWithZero =
   let
     simplifiableExpression =
-      "(SubValue (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)) SlotIntervalEnd)"
+      "(SubValue (AddValue (NegValue (SubValue (Constant -1) (Constant 4))) (Constant -5)) TimeIntervalEnd)"
 
-    simplification = "(NegValue SlotIntervalEnd)"
+    simplification = "(NegValue TimeIntervalEnd)"
   in
     testValueSimplificationWarning letContract simplifiableExpression
       simplification
@@ -298,9 +298,9 @@ notifySimplifies :: forall m. MonadThrow Error m => m Unit
 notifySimplifies =
   let
     simplifiableExpression =
-      "(OrObs (ValueLT SlotIntervalEnd (Constant 34)) (OrObs (NotObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3))) (NotObs (OrObs TrueObs FalseObs))))"
+      "(OrObs (ValueLT TimeIntervalEnd (Constant 34)) (OrObs (NotObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3))) (NotObs (OrObs TrueObs FalseObs))))"
 
-    simplification = "(ValueLT SlotIntervalEnd (Constant 34))"
+    simplification = "(ValueLT TimeIntervalEnd (Constant 34))"
   in
     testObservationSimplificationWarning notifyContract simplifiableExpression
       simplification
@@ -309,9 +309,9 @@ assertSimplifies :: forall m. MonadThrow Error m => m Unit
 assertSimplifies =
   let
     simplifiableExpression =
-      "(AndObs (ValueGT (Constant 14) SlotIntervalEnd) (AndObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3)) (OrObs FalseObs TrueObs)))"
+      "(AndObs (ValueGT (Constant 14) TimeIntervalEnd) (AndObs (ValueEQ (AddValue (NegValue (Constant 2)) (Constant 5)) (Constant 3)) (OrObs FalseObs TrueObs)))"
 
-    simplification = "(ValueGT (Constant 14) SlotIntervalEnd)"
+    simplification = "(ValueGT (Constant 14) TimeIntervalEnd)"
   in
     testObservationSimplificationWarning assertContract simplifiableExpression
       simplification
@@ -320,9 +320,9 @@ ifSimplifies :: forall m. MonadThrow Error m => m Unit
 ifSimplifies =
   let
     simplifiableExpression =
-      "(OrObs (ValueGE SlotIntervalEnd (Constant 5)) (AndObs (NotObs (OrObs FalseObs (ValueEQ (AddValue (Constant -2) (Constant 3)) (Constant 1)))) TrueObs))"
+      "(OrObs (ValueGE TimeIntervalEnd (Constant 5)) (AndObs (NotObs (OrObs FalseObs (ValueEQ (AddValue (Constant -2) (Constant 3)) (Constant 1)))) TrueObs))"
 
-    simplification = "(ValueGE SlotIntervalEnd (Constant 5))"
+    simplification = "(ValueGE TimeIntervalEnd (Constant 5))"
   in
     testObservationSimplificationWarning ifContract simplifiableExpression
       simplification
@@ -331,9 +331,9 @@ andObsSimplifies :: forall m. MonadThrow Error m => m Unit
 andObsSimplifies =
   let
     simplifiableExpression =
-      "(OrObs FalseObs (ValueEQ SlotIntervalEnd (Constant 2)))"
+      "(OrObs FalseObs (ValueEQ TimeIntervalEnd (Constant 2)))"
 
-    simplification = "(ValueEQ SlotIntervalEnd (Constant 2))"
+    simplification = "(ValueEQ TimeIntervalEnd (Constant 2))"
   in
     testObservationSimplificationWarning andContract simplifiableExpression
       simplification
@@ -342,9 +342,9 @@ andObsSimplifiesWithTrue :: forall m. MonadThrow Error m => m Unit
 andObsSimplifiesWithTrue =
   let
     simplifiableExpression =
-      "(AndObs TrueObs (ValueLE SlotIntervalEnd (Constant 6)))"
+      "(AndObs TrueObs (ValueLE TimeIntervalEnd (Constant 6)))"
 
-    simplification = "(ValueLE SlotIntervalEnd (Constant 6))"
+    simplification = "(ValueLE TimeIntervalEnd (Constant 6))"
   in
     testObservationSimplificationWarning ifContract simplifiableExpression
       simplification
@@ -353,9 +353,9 @@ orObsSimplifies :: forall m. MonadThrow Error m => m Unit
 orObsSimplifies =
   let
     simplifiableExpression =
-      "(AndObs TrueObs (ValueEQ SlotIntervalEnd (Constant 12)))"
+      "(AndObs TrueObs (ValueEQ TimeIntervalEnd (Constant 12)))"
 
-    simplification = "(ValueEQ SlotIntervalEnd (Constant 12))"
+    simplification = "(ValueEQ TimeIntervalEnd (Constant 12))"
   in
     testObservationSimplificationWarning orContract simplifiableExpression
       simplification
@@ -364,9 +364,9 @@ orObsSimplifiesWithFalse :: forall m. MonadThrow Error m => m Unit
 orObsSimplifiesWithFalse =
   let
     simplifiableExpression =
-      "(OrObs FalseObs (ValueGE SlotIntervalEnd (Constant 3)))"
+      "(OrObs FalseObs (ValueGE TimeIntervalEnd (Constant 3)))"
 
-    simplification = "(ValueGE SlotIntervalEnd (Constant 3))"
+    simplification = "(ValueGE TimeIntervalEnd (Constant 3))"
   in
     testObservationSimplificationWarning ifContract simplifiableExpression
       simplification

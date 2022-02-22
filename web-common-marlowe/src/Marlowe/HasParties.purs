@@ -29,8 +29,8 @@ instance semanticValueHasParties :: HasParties Semantic.Value where
   getParties (Semantic.MulValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Semantic.DivValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Semantic.ChoiceValue choId) = getParties choId
-  getParties Semantic.SlotIntervalStart = Set.empty
-  getParties Semantic.SlotIntervalEnd = Set.empty
+  getParties Semantic.TimeIntervalStart = Set.empty
+  getParties Semantic.TimeIntervalEnd = Set.empty
   getParties (Semantic.UseValue _) = Set.empty
   getParties (Semantic.Cond obs lhs rhs) = getParties obs <> getParties lhs <>
     getParties rhs
@@ -45,8 +45,8 @@ instance extendedValueHasParties :: HasParties Extended.Value where
   getParties (Extended.MulValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Extended.DivValue lhs rhs) = getParties lhs <> getParties rhs
   getParties (Extended.ChoiceValue choId) = getParties choId
-  getParties Extended.SlotIntervalStart = Set.empty
-  getParties Extended.SlotIntervalEnd = Set.empty
+  getParties Extended.TimeIntervalStart = Set.empty
+  getParties Extended.TimeIntervalEnd = Set.empty
   getParties (Extended.UseValue _) = Set.empty
   getParties (Extended.Cond obs lhs rhs) = getParties obs <> getParties lhs <>
     getParties rhs

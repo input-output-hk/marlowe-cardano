@@ -330,8 +330,8 @@ data ValueType
   | DivValueValueType
   | ScaleValueType
   | ChoiceValueValueType
-  | SlotIntervalStartValueType
-  | SlotIntervalEndValueType
+  | TimeIntervalStartValueType
+  | TimeIntervalEndValueType
   | UseValueValueType
   | CondObservationValueValueType
 
@@ -1198,11 +1198,11 @@ toDefinition blockType@(ValueType ChoiceValueValueType) =
         }
         defaultBlockDefinition
 
-toDefinition blockType@(ValueType SlotIntervalStartValueType) =
+toDefinition blockType@(ValueType TimeIntervalStartValueType) =
   BlockDefinition
     $ merge
-        { type: show SlotIntervalStartValueType
-        , message0: "Slot Interval Start"
+        { type: show TimeIntervalStartValueType
+        , message0: "Time Interval Start"
         , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "value"
@@ -1210,11 +1210,11 @@ toDefinition blockType@(ValueType SlotIntervalStartValueType) =
         }
         defaultBlockDefinition
 
-toDefinition blockType@(ValueType SlotIntervalEndValueType) =
+toDefinition blockType@(ValueType TimeIntervalEndValueType) =
   BlockDefinition
     $ merge
-        { type: show SlotIntervalEndValueType
-        , message0: "Slot Interval End"
+        { type: show TimeIntervalEndValueType
+        , message0: "Time Interval End"
         , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "value"
@@ -1518,7 +1518,7 @@ instance blockToTermContract :: BlockToTerm Contract where
         pure $ Term (Slot slot) location
       "slot_param" -> do
         slotParam <- fieldAsString "timeout" b
-        pure $ Term (SlotParam slotParam) location
+        pure $ Term (TimeParam slotParam) location
       _ -> throwError $ ErrorInChild b "timeout_type"
         (InvalidChildType "Timeout")
     contract <- singleStatementToTerm "contract" b
@@ -1616,11 +1616,11 @@ instance blockToTermValue :: BlockToTerm Value where
     choiceName <- fieldAsString "choice_name" b
     party <- valueToTerm "party" b
     pure $ Term (ChoiceValue (ChoiceId choiceName party)) (BlockId id)
-  blockToTerm ({ type: "SlotIntervalStartValueType", id }) = pure $ Term
-    SlotIntervalStart
+  blockToTerm ({ type: "TimeIntervalStartValueType", id }) = pure $ Term
+    TimeIntervalStart
     (BlockId id)
-  blockToTerm ({ type: "SlotIntervalEndValueType", id }) = pure $ Term
-    SlotIntervalEnd
+  blockToTerm ({ type: "TimeIntervalEndValueType", id }) = pure $ Term
+    TimeIntervalEnd
     (BlockId id)
   blockToTerm b@({ type: "UseValueValueType", id }) = do
     valueId <- fieldAsString "value_id" b
@@ -1921,13 +1921,13 @@ instance toBlocklyContract :: ToBlockly Contract where
     inputToBlockly newBlock workspace block "case" cases
     setField block "timeout_type"
       ( case timeout of
-          Term (SlotParam _) _ -> "slot_param"
+          Term (TimeParam _) _ -> "slot_param"
           _ -> "slot"
       )
     setField block "timeout"
       ( case timeout of
           Term (Slot slotNum) _ -> BigInt.toString slotNum
-          Term (SlotParam paramName) _ -> paramName
+          Term (TimeParam paramName) _ -> paramName
           _ -> "0"
       )
     inputToBlockly newBlock workspace block "contract" contract
@@ -2050,11 +2050,11 @@ instance toBlocklyValue :: ToBlockly Value where
     connectToOutput block input
     setField block "choice_name" choiceName
     inputToBlockly newBlock workspace block "party" choiceOwner
-  toBlockly newBlock workspace input SlotIntervalStart = do
-    block <- newBlock workspace (show SlotIntervalStartValueType)
+  toBlockly newBlock workspace input TimeIntervalStart = do
+    block <- newBlock workspace (show TimeIntervalStartValueType)
     connectToOutput block input
-  toBlockly newBlock workspace input SlotIntervalEnd = do
-    block <- newBlock workspace (show SlotIntervalEndValueType)
+  toBlockly newBlock workspace input TimeIntervalEnd = do
+    block <- newBlock workspace (show TimeIntervalEndValueType)
     connectToOutput block input
   toBlockly
     newBlock

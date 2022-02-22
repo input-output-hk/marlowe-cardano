@@ -59,7 +59,7 @@ escrow =
                                    (Choice
                                       (ChoiceId "Confirm problem"
                                          (Role "Mediator")) [
-                                      (Bound 1 1)]) Close)] (SlotParam "Mediation deadline") Close))] (SlotParam "Complaint deadline") Close)))] (SlotParam "Complaint response deadline") Close))] (SlotParam "Payment deadline") Close"""
+                                      (Bound 1 1)]) Close)] (TimeParam "Mediation deadline") Close))] (TimeParam "Complaint deadline") Close)))] (TimeParam "Complaint response deadline") Close))] (TimeParam "Payment deadline") Close"""
 
 escrowWithCollateral :: String
 escrowWithCollateral =
@@ -125,7 +125,7 @@ escrowWithCollateral =
                                             (Party
                                                (PK "0000000000000000000000000000000000000000000000000000000000000000"))
                                             (Token "" "")
-                                            (ConstantParam "Collateral amount") Close)))] (SlotParam "Complaint deadline") Close)))] (SlotParam "Dispute by buyer timeout") Close))] (SlotParam "Deposit of price by buyer timeout") Close))] (SlotParam "Deposit of collateral by buyer timeout") Close))] (SlotParam "Collateral deposit by seller timeout") Close"""
+                                            (ConstantParam "Collateral amount") Close)))] (TimeParam "Complaint deadline") Close)))] (TimeParam "Dispute by buyer timeout") Close))] (TimeParam "Deposit of price by buyer timeout") Close))] (TimeParam "Deposit of collateral by buyer timeout") Close))] (TimeParam "Collateral deposit by seller timeout") Close"""
 
 zeroCouponBond :: String
 zeroCouponBond =
@@ -158,7 +158,7 @@ zeroCouponBond =
                  (Token "" "")
                  (AddValue
                     (ConstantParam "Interest")
-                    (ConstantParam "Amount")) Close))] (SlotParam "Payback deadline") Close)))] (SlotParam "Loan deadline") Close"""
+                    (ConstantParam "Amount")) Close))] (TimeParam "Payback deadline") Close)))] (TimeParam "Loan deadline") Close"""
 
 couponBondGuaranteed :: String
 couponBondGuaranteed =
@@ -291,7 +291,7 @@ swap =
                  (Party
                     (Role "Ada provider"))
                  (Token "85bb65" "dollar")
-                 (ConstantParam "Amount of dollars") Close)))] (SlotParam "Timeout for dollar deposit") Close))] (SlotParam "Timeout for Ada deposit") Close"""
+                 (ConstantParam "Amount of dollars") Close)))] (TimeParam "Timeout for dollar deposit") Close))] (TimeParam "Timeout for Ada deposit") Close"""
 
 contractForDifferences :: String
 contractForDifferences =
@@ -309,14 +309,14 @@ contractForDifferences =
               (Role "Counterparty")
               (Token "" "")
               (ConstantParam "Amount paid by counterparty"))
-           (When [] (SlotParam "First window beginning")
+           (When [] (TimeParam "First window beginning")
               (When [
                  (Case
                     (Choice
                        (ChoiceId "Price in first window"
                           (Role "Oracle")) [
                        (Bound 0 1000000000)])
-                    (When [] (SlotParam "Second window beginning")
+                    (When [] (TimeParam "Second window beginning")
                        (When [
                           (Case
                              (Choice
@@ -376,7 +376,7 @@ contractForDifferences =
                                                (UseValue "Increase in price")
                                                (ConstantParam "Amount paid by party"))
                                             (UseValue "Increase in price")
-                                            (ConstantParam "Amount paid by party")) Close)) Close)))] (SlotParam "Second window deadline") Close)))] (SlotParam "First window deadline") Close)))] (SlotParam "Counterparty deposit deadline") Close))] (SlotParam "Party deposit deadline") Close"""
+                                            (ConstantParam "Amount paid by party")) Close)) Close)))] (TimeParam "Second window deadline") Close)))] (TimeParam "First window deadline") Close)))] (TimeParam "Counterparty deposit deadline") Close))] (TimeParam "Party deposit deadline") Close"""
 
 contractForDifferencesWithOracle :: String
 contractForDifferencesWithOracle =
@@ -394,14 +394,14 @@ contractForDifferencesWithOracle =
               (Role "Counterparty")
               (Token "" "")
               (ConstantParam "Amount paid by counterparty"))
-           (When [] (SlotParam "First window beginning")
+           (When [] (TimeParam "First window beginning")
               (When [
                  (Case
                     (Choice
                        (ChoiceId "dir-adausd"
                           (Role "kraken")) [
                        (Bound 0 100000000000)])
-                    (When [] (SlotParam "Second window beginning")
+                    (When [] (TimeParam "Second window beginning")
                        (When [
                           (Case
                              (Choice
@@ -457,4 +457,4 @@ contractForDifferencesWithOracle =
                                                   (UseValue "Increase in price")
                                                   (ConstantParam "Amount paid by party"))
                                                (UseValue "Increase in price")
-                                               (ConstantParam "Amount paid by party")) Close)) Close))))] (SlotParam "Second window deadline") Close)))] (SlotParam "First window deadline") Close)))] (SlotParam "Counterparty deposit deadline") Close))] (SlotParam "Party deposit deadline") Close"""
+                                               (ConstantParam "Amount paid by party")) Close)) Close))))] (TimeParam "Second window deadline") Close)))] (TimeParam "First window deadline") Close)))] (TimeParam "Counterparty deposit deadline") Close))] (TimeParam "Party deposit deadline") Close"""

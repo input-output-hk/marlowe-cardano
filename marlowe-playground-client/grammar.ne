@@ -39,8 +39,8 @@ const lexer = moo.compile({
                     'MulValue',
                     'DivValue',
                     'ChoiceValue',
-                    'SlotIntervalStart',
-                    'SlotIntervalEnd',
+                    'TimeIntervalStart',
+                    'TimeIntervalEnd',
                     'UseValue',
                     'Cond'
                 ],
@@ -48,7 +48,7 @@ const lexer = moo.compile({
                 PAYEE: ['Account', 'Party'],
                 PARTY: ['PK', 'Role'],
                 BOUND: ['Bound'],
-                TIMEOUT: ['SlotParam'],
+                TIMEOUT: ['TimeParam'],
                 VALUE_ID: ['ValueId'],
                 CASE: ['Case'],
                 ACTION: ['Deposit', 'Choice', 'Notify'],
@@ -91,7 +91,7 @@ number
 timeout
    -> hole {% ([hole]) => hole %}
     | number {% ([n]) => opts.mkTerm(opts.mkExtendedSlot(n))({startLineNumber: n.line, startColumn: n.col, endLineNumber: n.line, endColumn: n.col + n.toString(10).length}) %}
-    | lparen "SlotParam" someWS string rparen {% ([start,{line,col},,s,end]) => opts.mkTerm(opts.mkExtendedSlotParam(s))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col}) %}
+    | lparen "TimeParam" someWS string rparen {% ([start,{line,col},,s,end]) => opts.mkTerm(opts.mkExtendedSlotParam(s))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col}) %}
 
 string
    -> %string {% ([s]) => s.value %}
@@ -197,7 +197,7 @@ value
     | lparen "MulValue" someWS value someWS value rparen {% ([start,{line,col},,v1,,v2,end]) => opts.mkTerm(opts.mkMulValue(v1)(v2))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col + 1}) %}
     | lparen "DivValue" someWS value someWS value rparen {% ([start,{line,col},,v1,,v2,end]) => opts.mkTerm(opts.mkDivValue(v1)(v2))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col + 1}) %}
     | lparen "ChoiceValue" someWS choiceId rparen {% ([start,{line,col},,choiceId,end]) => opts.mkTerm(opts.mkChoiceValue(choiceId))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col + 1}) %}
-    | "SlotIntervalStart" {% ([{line,col}]) => opts.mkTerm(opts.mkSlotIntervalStart)({startLineNumber: line, startColumn: col, endLineNumber: line, endColumn: col + 17}) %}
-    | "SlotIntervalEnd" {% ([{line,col}]) => opts.mkTerm(opts.mkSlotIntervalEnd)({startLineNumber: line, startColumn: col, endLineNumber: line, endColumn: col + 15}) %}
+    | "TimeIntervalStart" {% ([{line,col}]) => opts.mkTerm(opts.mkTimeIntervalStart)({startLineNumber: line, startColumn: col, endLineNumber: line, endColumn: col + 17}) %}
+    | "TimeIntervalEnd" {% ([{line,col}]) => opts.mkTerm(opts.mkTimeIntervalEnd)({startLineNumber: line, startColumn: col, endLineNumber: line, endColumn: col + 15}) %}
     | lparen "UseValue" someWS valueId rparen {% ([start,{line,col},,valueId,end]) => opts.mkTerm(opts.mkUseValue(valueId))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col + 1}) %}
     | lparen "Cond" someWS observation someWS value someWS value rparen {% ([start,{line,col},,oo,,v1,,v2,end]) => opts.mkTerm(opts.mkCond(oo)(v1)(v2))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col + 1}) %}

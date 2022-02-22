@@ -289,7 +289,7 @@ trustFundTest = checkPredicateOptions defaultCheckOptions "Trust Fund Contract"
             Case (Choice chId [Bound 10 90_000_000])
                 (When [Case
                     (Deposit "alice" "alice" ada (ChoiceValue chId))
-                        (When [Case (Notify (SlotIntervalStart `ValueGE` Constant 15))
+                        (When [Case (Notify (TimeIntervalStart `ValueGE` Constant 15))
                             (Pay "alice" (Party "bob") ada
                                 (ChoiceValue chId) Close)]
                         (seconds 40) Close)

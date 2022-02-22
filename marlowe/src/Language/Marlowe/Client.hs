@@ -288,15 +288,15 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
         let roles = extractNonMerkleizedContractRoles contract
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners roles
-        slot <- currentTime
-        logInfo $ "Marlowe contract created with parameters: " <> show params <> " at " <> show slot
+        time <- currentTime
+        logInfo $ "Marlowe contract created with parameters: " <> show params <> " at " <> show time
         let marloweData = MarloweData {
                 marloweContract = contract,
                 marloweState = State
                     { accounts = AssocMap.singleton (PK ownPubKey, Token adaSymbol adaToken) minLovelaceDeposit
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
-                    , minTime = slot } }
+                    , minTime = time } }
         let minAdaTxOut = lovelaceValueOf minLovelaceDeposit
         let typedValidator = mkMarloweTypedValidator params
         let tx = mustPayToTheScript marloweData minAdaTxOut <> distributeRoleTokens
@@ -358,7 +358,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             tell $ Just $ EndpointSuccess reqId RedeemResponse
 
         marlowePlutusContract
-    auto = endpoint @"auto" $ \(reqId, params, party, untilSlot) -> catchError reqId "auto" $ do
+    auto = endpoint @"auto" $ \(reqId, params, party, untilTime) -> catchError reqId "auto" $ do
         let typedValidator = mkMarloweTypedValidator params
         let continueWith :: MarloweData -> Contract MarloweContractState MarloweSchema MarloweError ()
             continueWith md@MarloweData{marloweContract} =
@@ -371,7 +371,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         maybeState <- getOnChainState typedValidator
         case maybeState of
             Nothing -> do
-                wr <- waitForUpdateUntilSlot typedValidator untilSlot
+                wr <- waitForUpdateUntilTime typedValidator untilTime
                 case wr of
                     Transition Closed{} -> do
                         logInfo @String $ "Contract Ended for party " <> show party
@@ -398,19 +398,19 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                       -> MarloweData
                       -> Contract MarloweContractState MarloweSchema MarloweError ()
     autoExecuteContract reqId params typedValidator party marloweData = do
-        slot <- currentTime
-        let slotRange = (slot, slot + defaultTxValidationRange)
-        let action = getAction slotRange party marloweData
+        time <- currentTime
+        let timeRange = (time, time + defaultTxValidationRange)
+        let action = getAction timeRange party marloweData
         case action of
             PayDeposit acc p token amount -> do
-                logInfo @String $ "PayDeposit " <> show amount <> " at within slots " <> show slotRange
+                logInfo @String $ "PayDeposit " <> show amount <> " at within time " <> show timeRange
                 let payDeposit = do
-                        marloweData <- mkStep params typedValidator slotRange [ClientInput $ IDeposit acc p token amount]
+                        marloweData <- mkStep params typedValidator timeRange [ClientInput $ IDeposit acc p token amount]
                         continueWith marloweData
                 catching _MarloweError payDeposit $ \err -> do
                     logWarn @String $ "Error " <> show err
-                    logInfo @String $ "Retry PayDeposit in 2 slots"
-                    _ <- awaitTime (slot + 2)
+                    logInfo @String $ "Retry PayDeposit in 2 seconds"
+                    _ <- awaitTime (time + 2000)
                     continueWith marloweData
             WaitForTimeout timeout -> do
                 logInfo @String $ "WaitForTimeout " <> show timeout
@@ -418,7 +418,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                 continueWith marloweData
             WaitOtherActionUntil timeout -> do
                 logInfo @String $ "WaitOtherActionUntil " <> show timeout
-                wr <- waitForUpdateUntilSlot typedValidator timeout
+                wr <- waitForUpdateUntilTime typedValidator timeout
                 case wr of
                     Transition Closed{} -> do
                         logInfo @String $ "Contract Ended"
@@ -433,14 +433,14 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             CloseContract -> do
                 logInfo @String $ "CloseContract"
                 let closeContract = do
-                        _ <- mkStep params typedValidator slotRange []
+                        _ <- mkStep params typedValidator timeRange []
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
 
                 catching _MarloweError closeContract $ \err -> do
                     logWarn @String $ "Error " <> show err
-                    logInfo @String $ "Retry CloseContract in 2 slots"
-                    _ <- awaitTime (slot + 2)
+                    logInfo @String $ "Retry CloseContract in 2 seconds"
+                    _ <- awaitTime (time + 2000)
                     continueWith marloweData
             NotSure -> do
                 logInfo @String $ "NotSure"
@@ -525,9 +525,9 @@ shelleyAddressToKeys (AddressInEra _ (Shelley.ShelleyAddress _ paymentCredential
             pure (ppkh,  Just . StakePubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes stakeHash)
 shelleyAddressToKeys _ = throwError $ OtherContractError $ OtherError "Byron Addresses not supported"
 
-getAction :: MarloweSlotRange -> Party -> MarloweData -> PartyAction
-getAction slotRange party MarloweData{marloweContract,marloweState} = let
-    env = Environment slotRange
+getAction :: MarloweTimeRange -> Party -> MarloweData -> PartyAction
+getAction timeRange party MarloweData{marloweContract,marloweState} = let
+    env = Environment timeRange
     in case reduceContractUntilQuiescent env marloweState marloweContract of
         ContractQuiescent _reduced _warnings _payments state contract ->
             -- here the contract is either When or Close
@@ -542,22 +542,22 @@ getAction slotRange party MarloweData{marloweContract,marloweState} = let
                 When [] timeout _ -> WaitForTimeout timeout
                 Close -> CloseContract
                 _ -> NotSure
-        -- When timeout is in the slot range
-        RRAmbiguousSlotIntervalError ->
+        -- When timeout is in the time range
+        RRAmbiguousTimeIntervalError ->
             {- FIXME
                 Consider contract:
                     When [cases] (POSIXTime 100) (When [Case Deposit Close]] (POSIXTime 105) Close)
 
-                For a slot range (95, 105) we get RRAmbiguoustimeIntervalError
-                because timeout 100 is inside the slot range.
-                Now, we wait for slot 105, and we miss the Deposit.
+                For a time range (95, 105) we get RRAmbiguousTimeIntervalError
+                because timeout 100 is inside the time range.
+                Now, we wait for time 105, and we miss the Deposit.
 
                 To avoid that we need to know what was the original timeout
-                that caused RRAmbiguoustimeIntervalError (i.e. POSIXTime 100).
-                Then we'd rather wait until slot 100 instead and would make the Deposit.
-                I propose to modify RRAmbiguoustimeIntervalError to include the expected timeout.
+                that caused RRAmbiguousTimeIntervalError (i.e. POSIXTime 100).
+                Then we'd rather wait until time 100 instead and would make the Deposit.
+                I propose to modify RRAmbiguousTimeIntervalError to include the expected timeout.
              -}
-            WaitForTimeout (snd slotRange)
+            WaitForTimeout (snd timeRange)
 
 
 
@@ -587,12 +587,12 @@ applyInputs :: AsMarloweError e
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
-    slotRange <- case timeInterval of
+    timeRange <- case timeInterval of
             Just si -> pure si
             Nothing -> do
-                slot <- currentTime
-                pure (slot, slot + defaultTxValidationRange)
-    mkStep params typedValidator slotRange inputs
+                time <- currentTime
+                pure (time, time + defaultTxValidationRange)
+    mkStep params typedValidator timeRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams
 marloweParams rolesCurrency = MarloweParams
@@ -714,12 +714,12 @@ mkStep ::
     -> TimeInterval
     -> [MarloweClientInput]
     -> Contract w MarloweSchema MarloweError MarloweData
-mkStep MarloweParams{..} typedValidator timeInterval@(minSlot, maxSlot) clientInputs = do
+mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientInputs = do
     let
       times =
         Interval.Interval
-          (Interval.LowerBound (Interval.Finite minSlot) True )
-          (Interval.UpperBound (Interval.Finite maxSlot) False)
+          (Interval.LowerBound (Interval.Finite minTime) True )
+          (Interval.UpperBound (Interval.Finite maxTime) False)
       range' =
         posixTimeRangeToContainedSlotRange
           unsafeGetSlotConfig
@@ -867,12 +867,12 @@ waitForUpdateTimeout typedValidator timeout = do
     pure $ select success (Timeout <$> timeout)
 
 
-waitForUpdateUntilSlot ::
+waitForUpdateUntilTime ::
     forall w schema.
        SmallTypedValidator
     -> POSIXTime
     -> Contract w schema MarloweError (WaitingResult POSIXTime)
-waitForUpdateUntilSlot client timeout =
+waitForUpdateUntilTime client timeout =
     awaitPromise
       =<< waitForUpdateTimeout client (isTime timeout)
 

@@ -65,10 +65,10 @@ issuer :: Party
 issuer = Role "Borrower"
 
 initialExchange :: Timeout
-initialExchange = SlotParam "Loan deadline"
+initialExchange = TimeParam "Loan deadline"
 
 maturityExchangeTimeout :: Timeout
-maturityExchangeTimeout = SlotParam "Payback deadline"
+maturityExchangeTimeout = TimeParam "Payback deadline"
 
 transfer :: Timeout -> Party -> Party -> Value -> Contract -> Contract
 transfer timeout from to amount continuation =

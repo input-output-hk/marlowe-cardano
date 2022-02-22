@@ -73,16 +73,16 @@ price :: Value
 price = ConstantParam "Price"
 
 depositTimeout :: Timeout
-depositTimeout = SlotParam "Payment deadline"
+depositTimeout = TimeParam "Payment deadline"
 
 disputeTimeout :: Timeout
-disputeTimeout = SlotParam "Complaint response deadline"
+disputeTimeout = TimeParam "Complaint response deadline"
 
 answerTimeout :: Timeout
-answerTimeout = SlotParam "Complaint deadline"
+answerTimeout = TimeParam "Complaint deadline"
 
 arbitrageTimeout :: Timeout
-arbitrageTimeout = SlotParam "Mediation deadline"
+arbitrageTimeout = TimeParam "Mediation deadline"
 
 choice :: ChoiceName -> Party -> BigInt -> Contract -> Case
 choice choiceName chooser choiceValue continuation =

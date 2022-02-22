@@ -42,7 +42,7 @@ import PlutusTx.Prelude
 import qualified Prelude as Haskell
 import Unsafe.Coerce
 
-type MarloweSlotRange = (POSIXTime, POSIXTime)
+type MarloweTimeRange = (POSIXTime, POSIXTime)
 type MarloweInput = [MarloweTxInput]
 
 -- Yeah, I know
@@ -153,7 +153,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                                     }
                         in checkOwnOutputConstraint ctx outConstrs
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
-        Error TEAmbiguousSlotIntervalError -> traceError "E1"
+        Error TEAmbiguousTimeIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"
         Error (TEIntervalError (InvalidInterval _)) -> traceError "E3"
         Error (TEIntervalError (IntervalInPastError _ _)) -> traceError "E4"

@@ -106,7 +106,7 @@ serializationTest =
                   )
               , Case
                   ( Notify
-                      ( AndObs (SlotIntervalStart `ValueLT` SlotIntervalEnd)
+                      ( AndObs (TimeIntervalStart `ValueLT` TimeIntervalEnd)
                           TrueObs
                       )
                   )

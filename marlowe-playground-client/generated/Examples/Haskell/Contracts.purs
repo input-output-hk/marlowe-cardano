@@ -42,10 +42,10 @@ price :: Value
 price = ConstantParam "Price"
 
 depositTimeout, disputeTimeout, answerTimeout, arbitrageTimeout :: Timeout
-depositTimeout = SlotParam "Payment deadline"
-disputeTimeout = SlotParam "Complaint response deadline"
-answerTimeout = SlotParam "Complaint deadline"
-arbitrageTimeout = SlotParam "Mediation deadline"
+depositTimeout = TimeParam "Payment deadline"
+disputeTimeout = TimeParam "Complaint response deadline"
+answerTimeout = TimeParam "Complaint deadline"
+arbitrageTimeout = TimeParam "Mediation deadline"
 
 choice :: ChoiceName -> Party -> Integer -> Contract -> Case
 choice choiceName chooser choiceValue = Case (Choice (ChoiceId choiceName chooser)
@@ -131,11 +131,11 @@ price = ConstantParam "Price"
 collateral = ConstantParam "Collateral amount"
 
 sellerCollateralTimeout, buyerCollateralTimeout, depositTimeout, disputeTimeout, answerTimeout :: Timeout
-sellerCollateralTimeout = SlotParam "Collateral deposit by seller timeout"
-buyerCollateralTimeout = SlotParam "Deposit of collateral by buyer timeout"
-depositTimeout = SlotParam "Deposit of price by buyer timeout"
-disputeTimeout = SlotParam "Dispute by buyer timeout"
-answerTimeout = SlotParam "Complaint deadline"
+sellerCollateralTimeout = TimeParam "Collateral deposit by seller timeout"
+buyerCollateralTimeout = TimeParam "Deposit of collateral by buyer timeout"
+depositTimeout = TimeParam "Deposit of price by buyer timeout"
+disputeTimeout = TimeParam "Dispute by buyer timeout"
+answerTimeout = TimeParam "Complaint deadline"
 
 depositCollateral :: Party -> Timeout -> Contract -> Contract -> Contract
 depositCollateral party timeout timeoutContinuation continuation =
@@ -232,8 +232,8 @@ investor = Role "Lender"
 issuer = Role "Borrower"
 
 initialExchange, maturityExchangeTimeout :: Timeout
-initialExchange = SlotParam "Loan deadline"
-maturityExchangeTimeout = SlotParam "Payback deadline"
+initialExchange = TimeParam "Loan deadline"
+maturityExchangeTimeout = TimeParam "Payback deadline"
 
 transfer :: Timeout -> Party -> Party -> Value -> Contract -> Contract
 transfer timeout from to amount continuation =
@@ -337,8 +337,8 @@ amountOfLovelace = MulValue lovelacePerAda amountOfAda
 amountOfDollars = ConstantParam "Amount of dollars"
 
 adaDepositTimeout, dollarDepositTimeout :: Timeout
-adaDepositTimeout = SlotParam "Timeout for Ada deposit"
-dollarDepositTimeout = SlotParam "Timeout for dollar deposit"
+adaDepositTimeout = TimeParam "Timeout for Ada deposit"
+dollarDepositTimeout = TimeParam "Timeout for dollar deposit"
 
 dollars :: Token
 dollars = Token "85bb65" "dollar"
@@ -470,12 +470,12 @@ refundAfterDifference payer payerDeposit payee payeeDeposit difference =
     Close
 
 contract :: Contract
-contract = initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
-         $ initialDeposit counterparty counterpartyDeposit (SlotParam "Counterparty deposit deadline") (refund party partyDeposit Close)
-         $ wait (SlotParam "First window beginning")
-         $ oracleInput priceBeginning (SlotParam "First window deadline") refundBoth
-         $ wait (SlotParam "Second window beginning")
-         $ oracleInput priceEnd (SlotParam "Second window deadline") refundBoth
+contract = initialDeposit party partyDeposit (TimeParam "Party deposit deadline") Close
+         $ initialDeposit counterparty counterpartyDeposit (TimeParam "Counterparty deposit deadline") (refund party partyDeposit Close)
+         $ wait (TimeParam "First window beginning")
+         $ oracleInput priceBeginning (TimeParam "First window deadline") refundBoth
+         $ wait (TimeParam "Second window beginning")
+         $ oracleInput priceEnd (TimeParam "Second window deadline") refundBoth
          $ gtLtEq (ChoiceValue priceBeginning) (ChoiceValue priceEnd)
                   ( recordDifference decreaseInPrice priceBeginning priceEnd
                   $ transferUpToDeposit counterparty counterpartyDeposit party (UseValue decreaseInPrice)
@@ -586,12 +586,12 @@ refundAfterDifference payer payerDeposit payee payeeDeposit difference =
     Close
 
 contract :: Contract
-contract = initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
-         $ initialDeposit counterparty counterpartyDeposit (SlotParam "Counterparty deposit deadline") (refund party partyDeposit Close)
-         $ wait (SlotParam "First window beginning")
-         $ oracleInput exchangeBeginning (SlotParam "First window deadline") refundBoth
-         $ wait (SlotParam "Second window beginning")
-         $ oracleInput exchangeEnd (SlotParam "Second window deadline") refundBoth
+contract = initialDeposit party partyDeposit (TimeParam "Party deposit deadline") Close
+         $ initialDeposit counterparty counterpartyDeposit (TimeParam "Counterparty deposit deadline") (refund party partyDeposit Close)
+         $ wait (TimeParam "First window beginning")
+         $ oracleInput exchangeBeginning (TimeParam "First window deadline") refundBoth
+         $ wait (TimeParam "Second window beginning")
+         $ oracleInput exchangeEnd (TimeParam "Second window deadline") refundBoth
          $ recordEndPrice priceEnd exchangeBeginning exchangeEnd
          $ gtLtEq priceBeginning (UseValue priceEnd)
                   ( recordDifference decreaseInPrice priceBeginning (UseValue priceEnd)
