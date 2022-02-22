@@ -1,3 +1,6 @@
+-- A Map newtype that supports Data.Align and Data.Alignable instances.
+-- TODO push these instances upstream to purescript-these for regular
+-- Data.Maps.
 module Data.Map.Alignable where
 
 import Prologue
@@ -15,6 +18,8 @@ derive instance Newtype (AlignableMap k v) _
 
 derive newtype instance Functor (AlignableMap k)
 
+-- Aligns two maps on their keys. Similar to an "outer join" of two maps on
+-- their keys.
 instance Ord k => Align (AlignableMap k) where
   align f (AlignableMap map1) (AlignableMap map2) =
     AlignableMap $ Map.mapMaybeWithKey align' unionKeys
