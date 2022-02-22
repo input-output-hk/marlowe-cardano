@@ -69,6 +69,7 @@
           "Language/Marlowe/Extended"
           "Language/Marlowe/Semantics"
           "Language/Marlowe/SemanticsTypes"
+          "Language/Marlowe/FindInputs"
           "Language/Marlowe/Client"
           "Language/Marlowe/Client/History"
           "Language/Marlowe/Util"
