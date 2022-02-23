@@ -8,7 +8,7 @@ module Examples.PureScript.EscrowWithCollateral
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
@@ -29,7 +29,6 @@ import Marlowe.Semantics
   , Party(..)
   , Token(..)
   )
-import Marlowe.Slot (secondsSinceShelley)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 
 contractTemplate :: ContractTemplate
@@ -48,11 +47,11 @@ fixedTimeoutContract =
 defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
-    [ "Collateral deposit by seller timeout" /\ secondsSinceShelley 600
-    , "Deposit of collateral by buyer timeout" /\ secondsSinceShelley 1200
-    , "Deposit of price by buyer timeout" /\ secondsSinceShelley 1800
-    , "Dispute by buyer timeout" /\ secondsSinceShelley 3000
-    , "Complaint deadline" /\ secondsSinceShelley 3600
+    [ "Collateral deposit by seller timeout" /\ fromInt 600
+    , "Deposit of collateral by buyer timeout" /\ fromInt 1200
+    , "Deposit of price by buyer timeout" /\ fromInt 1800
+    , "Dispute by buyer timeout" /\ fromInt 3000
+    , "Complaint deadline" /\ fromInt 3600
     ]
 
 metaData :: MetaData

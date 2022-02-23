@@ -8,7 +8,7 @@ module Examples.PureScript.Escrow
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
@@ -29,7 +29,6 @@ import Marlowe.Semantics
   , Party(..)
   , Token(..)
   )
-import Marlowe.Slot (secondsSinceShelley)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 
 contractTemplate :: ContractTemplate
@@ -48,10 +47,10 @@ fixedTimeoutContract =
 defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
-    [ "Payment deadline" /\ secondsSinceShelley 600
-    , "Complaint deadline" /\ secondsSinceShelley 1800
-    , "Complaint response deadline" /\ secondsSinceShelley 2400
-    , "Mediation deadline" /\ secondsSinceShelley 3600
+    [ "Payment deadline" /\ fromInt 600
+    , "Complaint deadline" /\ fromInt 1800
+    , "Complaint response deadline" /\ fromInt 2400
+    , "Mediation deadline" /\ fromInt 3600
     ]
 
 metaData :: MetaData

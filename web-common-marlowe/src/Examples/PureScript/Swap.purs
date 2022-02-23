@@ -23,7 +23,6 @@ import Marlowe.Extended
   )
 import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics (Party(..), Token(..))
-import Marlowe.Slot (secondsSinceShelley)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
 
 contractTemplate :: ContractTemplate
@@ -42,8 +41,8 @@ fixedTimeoutContract =
 defaultSlotContent :: Map String BigInt
 defaultSlotContent =
   Map.fromFoldable
-    [ "Timeout for Ada deposit" /\ secondsSinceShelley 600
-    , "Timeout for dollar deposit" /\ secondsSinceShelley 1200
+    [ "Timeout for Ada deposit" /\ fromInt 600
+    , "Timeout for dollar deposit" /\ fromInt 1200
     ]
 
 metaData :: MetaData
