@@ -10,7 +10,8 @@ import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
-import Component.ConfirmInput.View as ConfirmInput
+import Component.ConfirmInput.State as ConfirmInput
+import Component.ConfirmInput.Types (Msg(..), _confirmActionDialog)
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.View (contactsCard)
 import Component.ContractPreview.View (contractPreviewCard)
@@ -42,7 +43,7 @@ import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (mapComponentAction, renderSubmodule)
+import Halogen.Extra (renderSubmodule)
 import Halogen.HTML
   ( HTML
   , a
@@ -58,7 +59,7 @@ import Halogen.HTML
   , main
   , nav
   , p
-  , slot_
+  , slot
   , span
   , span_
   , text
@@ -74,7 +75,7 @@ import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Semantics (PubKey, Slot)
 import Page.Contract.State as ContractPage
-import Page.Contract.Types (_contractPage)
+import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
@@ -143,7 +144,7 @@ dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
                   [ classNames [ "relative" ] ]
                   case selectedContractMarloweParams of
                     Just marloweParams ->
-                      [ slot_
+                      [ slot
                           _contractPage
                           unit
                           ContractPage.component
@@ -151,6 +152,10 @@ dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
                           , wallet
                           , marloweParams
                           }
+                          ( \(AskConfirmation namedAction) ->
+                              OnAskContractActionConfirmation marloweParams
+                                namedAction
+                          )
                       ]
                     _ -> [ contractsScreen currentSlot state ]
               ]
@@ -161,6 +166,8 @@ dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
 dashboardCard
   :: forall m
    . MonadAff m
+  => ManageMarlowe m
+  => Toast m
   => MonadStore Store.Action Store.Store m
   => Input
   -> State
@@ -192,10 +199,14 @@ dashboardCard { addressBook, wallet } state = case view _card state of
                     TemplateAction
                     (contractTemplateCard assets)
                     state
-                  ContractActionConfirmationCard contractId input ->
-                    mapComponentAction
-                      (ContractAction contractId)
-                      (ConfirmInput.render input)
+
+                  ContractActionConfirmationCard input ->
+                    slot
+                      _confirmActionDialog
+                      unit
+                      ConfirmInput.component
+                      input
+                      (\DialogClosed -> CloseCard)
               ]
         ]
   Nothing -> div_ []

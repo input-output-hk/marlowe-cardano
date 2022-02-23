@@ -4,6 +4,7 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Component.AddContact.Types as AddContact
+import Component.ConfirmInput.Types as ConfirmInput
 import Component.ContractSetup.Types as ContractSetup
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
@@ -17,6 +18,7 @@ import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Halogen.Store.Connect (Connected)
 import Marlowe.Semantics (Slot)
+import Page.Contract.Types as ContractPage
 import Page.Dashboard.Types (Action, State) as Dashboard
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
 import Page.Welcome.CreateWallet.Types as CreateWallet
@@ -77,7 +79,8 @@ type ChildSlots =
   , restoreWallet :: RestoreWallet.Slot Unit
   , toaster :: forall q m. H.Slot q m Unit
   , contractSetup :: ContractSetup.Slot Unit
-  , contractPage :: forall q. H.Slot q Void Unit
+  , contractPage :: ContractPage.Slot Unit
+  , confirmActionDialog :: ConfirmInput.Slot Unit
   )
 
 _toaster :: Proxy "toaster"

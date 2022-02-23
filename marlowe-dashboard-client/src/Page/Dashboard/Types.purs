@@ -19,8 +19,8 @@ import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.WalletNickname (WalletNickname)
+import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
-import Page.Contract.Types (Action) as Contract
 import Store.Contracts (ContractStore)
 
 type State =
@@ -52,7 +52,7 @@ data Card
   | CurrentWalletCard
   | ContactsCard
   | ContractTemplateCard
-  | ContractActionConfirmationCard MarloweParams ConfirmInput.Input
+  | ContractActionConfirmationCard ConfirmInput.Input
 
 data ContractFilter
   = Running
@@ -78,8 +78,8 @@ data Action
   | SelectContract (Maybe MarloweParams)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
   | RedeemPayments MarloweParams
+  | OnAskContractActionConfirmation MarloweParams NamedAction
   | TemplateAction Template.Action
-  | ContractAction MarloweParams Contract.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
 
@@ -95,6 +95,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
   toEvent (UpdateFollowerApps _) = Nothing
   toEvent (RedeemPayments _) = Nothing
+  toEvent (OnAskContractActionConfirmation _ _) = Nothing
   toEvent (TemplateAction _) = Nothing
-  toEvent (ContractAction _ contractAction) = toEvent contractAction
   toEvent (SetContactForRole _ _) = Nothing

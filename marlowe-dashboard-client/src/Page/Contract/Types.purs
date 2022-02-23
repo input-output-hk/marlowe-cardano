@@ -1,13 +1,16 @@
 module Page.Contract.Types
   ( Action(..)
+  , ChildSlots
   , ComponentHTML
   , Context
   , ContractState(..)
-  , ChildSlots
   , DSL
   , Input
+  , Msg(..)
   , PreviousStep
   , PreviousStepState(..)
+  , Query(..)
+  , Slot
   , StartedState
   , StartingState
   , State
@@ -22,6 +25,7 @@ module Page.Contract.Types
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent)
+import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
@@ -37,14 +41,12 @@ import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( Accounts
-  , ChoiceId
-  , ChosenNum
   , MarloweParams
   , Party
   , Payment
-  , Slot
   , TransactionInput
   )
+import Marlowe.Semantics (Slot) as Semantic
 import Store.Contracts (ContractStore)
 import Type.Proxy (Proxy(..))
 
@@ -56,7 +58,7 @@ derive instance Eq ContractState
 
 type State =
   { contract :: ContractState
-  , currentSlot :: Slot
+  , currentSlot :: Semantic.Slot
   , tzOffset :: Minutes
   , wallet :: PABConnectedWallet
   }
@@ -99,7 +101,7 @@ type PreviousStep =
   }
 
 type TimeoutInfo =
-  { slot :: Slot
+  { slot :: Semantic.Slot
   , missedActions :: Array (Tuple Party (Array NamedAction))
   }
 
@@ -116,7 +118,7 @@ data Tab
 derive instance eqTab :: Eq Tab
 
 type Context =
-  { currentSlot :: Slot
+  { currentSlot :: Semantic.Slot
   , contracts :: ContractStore
   }
 
@@ -128,15 +130,16 @@ type Input =
   , marloweParams :: MarloweParams
   }
 
+data Msg
+  = AskConfirmation NamedAction
+
 data Action
   = Init
   | Receive (Connected Context Input)
   | SetNickname ContractNickname
-  | ConfirmAction NamedAction
-  | ChangeChoice ChoiceId (Maybe ChosenNum)
   | SelectTab Int Tab
   | ToggleExpandPayment Int
-  | AskConfirmation NamedAction
+  | OnActionSelected NamedAction
   | CancelConfirmation
   -- The SelectStep action is what changes the model and causes the card to seem bigger.
   | SelectStep Int
@@ -147,24 +150,26 @@ type ChildSlots =
   ( submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
-  , currentStepActions :: forall query. H.Slot query Void MarloweParams
+  , currentStepActions :: CurrentStepActions.Slot MarloweParams
   )
 
 type ComponentHTML m =
   H.ComponentHTML Action ChildSlots m
 
 type DSL m a =
-  H.HalogenM State Action ChildSlots Void m a
+  H.HalogenM State Action ChildSlots Msg m a
+
+data Query (a :: Type)
+
+type Slot m = H.Slot Query Msg m
 
 instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
   toEvent (Receive _) = Nothing
-  toEvent (ConfirmAction _) = Just $ defaultEvent "ConfirmAction"
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
-  toEvent (ChangeChoice _ _) = Just $ defaultEvent "ChangeChoice"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
-  toEvent (AskConfirmation _) = Just $ defaultEvent "AskConfirmation"
+  toEvent (OnActionSelected _) = Nothing
   toEvent CancelConfirmation = Just $ defaultEvent "CancelConfirmation"
   toEvent (SelectStep _) = Just $ defaultEvent "SelectStep"
   toEvent (MoveToStep _) = Nothing

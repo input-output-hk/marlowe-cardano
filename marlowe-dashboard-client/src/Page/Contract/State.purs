@@ -2,19 +2,17 @@ module Page.Contract.State
   ( component
   , handleAction
   , mkPlaceholderState
-  , toInput
   ) where
 
 import Prologue
 
-import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
+import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , modifyContractNicknames
   )
-import Capability.Toast (class Toast, addToast)
+import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
-import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Array (index, length, mapMaybe, modifyAt)
 import Data.Array as Array
@@ -32,7 +30,6 @@ import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
-import Data.Lens.Lens.Tuple (_2)
 import Data.List (toUnfoldable)
 import Data.LocalContractNicknames (insertContractNickname)
 import Data.Maybe (fromMaybe)
@@ -40,20 +37,17 @@ import Data.Ord (abs)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set (Set)
 import Data.Set as Set
-import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
-import Data.Unfoldable as Unfoldable
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
-import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env(..))
-import Halogen (HalogenM, get)
+import Halogen (HalogenM, raise)
 import Halogen as H
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
@@ -61,13 +55,10 @@ import Marlowe.Execution.State
   ( expandBalances
   , extractNamedActions
   , getActionParticipant
-  , mkTx
-  , setPendingTransaction
   )
-import Marlowe.Execution.Types (NamedAction(..), PastAction(..))
+import Marlowe.Execution.Types (NamedAction, PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (MetaData, emptyContractMetadata)
-import Marlowe.Semantics (Input(..)) as Semantic
 import Marlowe.Semantics (Party, Slot, _accounts)
 import Page.Contract.Lenses
   ( _Started
@@ -75,7 +66,6 @@ import Page.Contract.Lenses
   , _contractUserParties
   , _executionState
   , _expandPayments
-  , _namedActions
   , _previousSteps
   , _selectedStep
   )
@@ -85,6 +75,7 @@ import Page.Contract.Types
   , ContractState(..)
   , DSL
   , Input
+  , Msg(..)
   , PreviousStep
   , PreviousStepState(..)
   , StartedState
@@ -95,7 +86,6 @@ import Page.Contract.Types
 import Page.Contract.View (contractScreen)
 import Store as Store
 import Store.Contracts (getContract)
-import Toast.Types (ajaxErrorToast, successToast)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -117,7 +107,7 @@ component
   => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
-  => H.Component query Input Void m
+  => H.Component query Input Msg m
 component =
   connect (selectEq \{ contracts, currentSlot } -> { contracts, currentSlot }) $
     H.mkComponent
@@ -237,39 +227,6 @@ handleAction (SetNickname nickname) =
     void $ modifyContractNicknames $ insertContractNickname marloweParams
       nickname
 
-{- [UC-CONTRACT-3][0] Apply an input to a contract -}
-handleAction (ConfirmAction namedAction) = do
-  { currentSlot, wallet } <- get
-  withStarted \{ executionState } -> do
-    let
-      contractInput = toInput namedAction
-      { marloweParams } = executionState
-      txInput = mkTx currentSlot (executionState ^. _contract)
-        (Unfoldable.fromMaybe contractInput)
-    ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput
-    case ajaxApplyInputs of
-      Left ajaxError -> do
-        void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
-          (Milliseconds 600.0)
-          (Left "Error")
-        addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
-      Right _ -> do
-        updateStore $ Store.ModifySyncedContract marloweParams $
-          setPendingTransaction txInput
-        void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
-          (Milliseconds 600.0)
-          (Right "")
-        addToast $ successToast "Transaction submitted, awating confirmation."
-
-handleAction (ChangeChoice choiceId chosenNum) = modifying
-  (_contract <<< _Started <<< _namedActions <<< traversed <<< _2 <<< traversed)
-  changeChoice
-  where
-  changeChoice (MakeChoice choiceId' bounds _)
-    | choiceId == choiceId' = MakeChoice choiceId bounds chosenNum
-
-  changeChoice namedAction = namedAction
-
 handleAction (SelectTab stepNumber tab) =
   modifying (_contract <<< _Started) \started@{ previousSteps } ->
     case
@@ -288,7 +245,7 @@ handleAction (ToggleExpandPayment stepNumber) = modifying
   )
   not
 
-handleAction (AskConfirmation _) = pure unit -- Managed by Dashboard.State
+handleAction (OnActionSelected action) = raise $ AskConfirmation action
 
 handleAction CancelConfirmation = pure unit -- Managed by Dashboard.State
 
@@ -303,33 +260,6 @@ handleAction (MoveToStep stepNumber) = do
   subscribeToSelectCenteredStep
   mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement $ liftEffect <<< scrollStepToCenter Smooth stepNumber
-
-toInput :: NamedAction -> Maybe Semantic.Input
-toInput (MakeDeposit accountId party token value) = Just $ Semantic.IDeposit
-  accountId
-  party
-  token
-  value
-
-toInput (MakeChoice choiceId _ (Just chosenNum)) = Just $ Semantic.IChoice
-  choiceId
-  chosenNum
-
--- WARNING:
---       This is possible in the types but should never happen in runtime. And I prefer to explicitly throw
---       an error if it happens than silently omit it by returning Nothing (which in case of Input, it has
---       the semantics of an empty transaction).
---       The reason we use Maybe in the chosenNum is that we use the same NamedAction data type
---       for triggering the action and to display to the user what choice did he/she made. And we need
---       to represent that initialy no choice is made, and eventually you can type an option and delete it.
---       Another way to do this would be to duplicate the NamedAction data type with just that difference, which
---       seems like an overkill.
-toInput (MakeChoice _ _ Nothing) = unsafeThrow
-  "A choice action has been triggered"
-
-toInput (MakeNotify _) = Just $ Semantic.INotify
-
-toInput _ = Nothing
 
 transactionsToStep :: StartedState -> Execution.PastState -> PreviousStep
 transactionsToStep

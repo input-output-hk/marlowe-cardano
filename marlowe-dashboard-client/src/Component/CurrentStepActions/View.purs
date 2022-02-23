@@ -169,7 +169,7 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
                 else
                   [ "text-black", "cursor-default" ]
           , enabled $ isActiveParticipant
-          , onClick_ $ AskConfirmation namedAction
+          , onClick_ $ SelectAction namedAction
           ]
           [ span_ [ text "Deposit:" ]
           , span_ [ text $ humanizeValue token value ]
@@ -248,7 +248,7 @@ renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
                         , "cursor-default"
                         ]
                 )
-            , onClick_ $ AskConfirmation namedAction
+            , onClick_ $ SelectAction namedAction
             , enabled $ isValid && isActiveParticipant
             ]
             [ text "..." ]
@@ -263,7 +263,7 @@ renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
               else
                 [ "text-black", "cursor-default" ]
         , enabled isActiveParticipant
-        , onClick_ $ AskConfirmation $ MakeChoice choiceId bounds $ Just
+        , onClick_ $ SelectAction $ MakeChoice choiceId bounds $ Just
             minBound
         ]
         [ span_ [ text choiceIdKey ]
@@ -300,7 +300,7 @@ renderAction state party CloseContract =
                 else
                   [ "text-black", "cursor-default" ]
           , enabled $ isActiveParticipant
-          , onClick_ $ AskConfirmation CloseContract
+          , onClick_ $ SelectAction CloseContract
           ]
           [ text "Close contract" ]
       ]

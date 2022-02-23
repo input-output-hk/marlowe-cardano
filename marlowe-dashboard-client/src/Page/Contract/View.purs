@@ -13,7 +13,7 @@ import Component.Contract.View
   , timeoutString
   )
 import Component.CurrentStepActions.State as CurrentStepActions
-import Component.CurrentStepActions.Types (_currentStepActions)
+import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -48,7 +48,7 @@ import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
 import Halogen as H
 import Halogen.Css (applyWhen, classNames)
-import Halogen.HTML (HTML, a, button, div, div_, h4_, slot_, span, span_, text)
+import Halogen.HTML (HTML, a, button, div, div_, h4_, slot, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (IProp, enabled, id, ref)
@@ -629,11 +629,12 @@ renderCurrentStep currentSlot state =
                   namedActions = state ^. _namedActions
                 in
                   cardContent [ "bg-wite", "p-4" ]
-                    [ slot_
+                    [ slot
                         _currentStepActions
                         marloweParams
                         CurrentStepActions.component
                         { executionState, contractUserParties, namedActions }
+                        (\(ActionSelected action) -> OnActionSelected action)
                     ]
               Balances ->
                 let

@@ -61,7 +61,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (ContractStore, followerContractExists)
+import Store.Contracts (ContractStore, followerContractExists, getContract)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
@@ -257,43 +257,20 @@ handleAction _ (SetContactForRole _ _) = do
 -- -- cards - we just want to switch instantly back to this card
 -- assign _card $ Just ContractTemplateCard
 
-handleAction _ (ContractAction _ _) =
-  pure unit
-
-{-
-  FIXME-3561 Fix contract confirmation dialog
 handleAction
-  input@{ wallet, currentSlot, tzOffset }
-  (ContractAction marloweParams contractAction) = do
-  pure unit
+  input@{ contracts, currentSlot, wallet }
+  (OnAskContractActionConfirmation marloweParams action) = do
+  let
+    mExecutionState = getContract marloweParams contracts
+  for_ mExecutionState \executionState ->
+    handleAction input $ OpenCard
+      $ ContractActionConfirmationCard
+          { action
+          , executionState
+          , currentSlot
+          , wallet
+          }
 
-startedState <- peruse
-  $ _contracts
-      <<< at marloweParams
-      <<< _Just
-      <<< _Started
-let
-  contractInput = { currentSlot, wallet, marloweParams, tzOffset }
-mContractState <- peruse $ _contract marloweParams
-case contractAction of
-  Contract.AskConfirmation action ->
-    for_ startedState \contractState ->
-      handleAction input $ OpenCard
-        $ ContractActionConfirmationCard
-            marloweParams
-            { action
-            , contractState
-            , currentSlot
-            , transactionFeeQuote: transactionFee
-            , userNickname: wallet ^. _walletNickname
-            , walletBalance: getAda $ wallet ^. _assets
-            }
-  Contract.CancelConfirmation -> handleAction input CloseCard
-  _ -> for_ mContractState \s -> toContract
-    marloweParams
-    s
-    (Contract.handleAction contractInput contractAction)
--}
 updateTotalFunds
   :: forall m
    . MonadAff m

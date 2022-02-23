@@ -1,16 +1,23 @@
-module Component.CurrentStepActions.State where
+module Component.CurrentStepActions.State
+  ( component
+  ) where
 
 import Prologue
 
-import Component.CurrentStepActions.Types (Action, DSL, Input)
+import Component.CurrentStepActions.Types (Action(..), DSL, Input, Msg(..))
 import Component.CurrentStepActions.View (currentStepActions)
+import Data.Lens (modifying, traversed)
+import Data.Lens.Lens.Tuple (_2)
 import Effect.Aff.Class (class MonadAff)
+import Halogen (raise)
 import Halogen as H
+import Marlowe.Execution.Types (NamedAction(..))
+import Page.Contract.Lenses (_namedActions)
 
 component
   :: forall query m
    . MonadAff m
-  => H.Component query Input Void m
+  => H.Component query Input Msg m
 component =
   H.mkComponent
     { initialState: identity
@@ -21,4 +28,13 @@ component =
     }
 
 handleAction :: forall m. Action -> DSL m Unit
-handleAction _ = pure unit
+handleAction (SelectAction namedAction) = raise $ ActionSelected namedAction
+handleAction (ChangeChoice choiceId chosenNum) = modifying
+  (_namedActions <<< traversed <<< _2 <<< traversed)
+  changeChoice
+  where
+  changeChoice (MakeChoice choiceId' bounds _)
+    | choiceId == choiceId' = MakeChoice choiceId bounds chosenNum
+
+  changeChoice namedAction = namedAction
+

@@ -3,6 +3,9 @@ module Component.CurrentStepActions.Types
   , ComponentHTML
   , DSL
   , Input
+  , Msg(..)
+  , Query
+  , Slot
   , State
   , _currentStepActions
   ) where
@@ -16,20 +19,10 @@ import Marlowe.Execution.Types as Execution
 import Marlowe.Semantics (ChoiceId, ChosenNum, Party)
 import Type.Proxy (Proxy(..))
 
--- type ChildSlots =
---   ( submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
---   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
---   , hintSlot :: forall query. H.Slot query Void String
---   )
-
-type ComponentHTML m =
-  H.ComponentHTML Action () m
-
-type DSL m a =
-  H.HalogenM State Action () Void m a
+data Msg = ActionSelected NamedAction
 
 data Action
-  = AskConfirmation NamedAction
+  = SelectAction NamedAction
   | ChangeChoice ChoiceId (Maybe ChosenNum)
 
 type State =
@@ -40,5 +33,15 @@ type State =
   }
 
 type Input = State
+
+type ComponentHTML m =
+  H.ComponentHTML Action () m
+
+type DSL m a =
+  H.HalogenM State Action () Msg m a
+
+data Query (a :: Type)
+
+type Slot m = H.Slot Query Msg m
 
 _currentStepActions = Proxy :: Proxy "currentStepActions"

@@ -1,5 +1,6 @@
 module Marlowe.Execution.State
   ( contractName
+  , currentStep
   , expandBalances
   , extractNamedActions
   , getActionParticipant
@@ -25,7 +26,7 @@ import Data.ContractNickname as ContractNickname
 import Data.Lens (_1, _2, view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, fromMaybe', maybe')
+import Data.Maybe (fromMaybe, fromMaybe', maybe, maybe')
 import Data.Tuple.Nested ((/\))
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
 import Marlowe.Execution.Lenses (_resultingPayments)
@@ -368,3 +369,9 @@ getAllPayments :: State -> List Payment
 getAllPayments { history } = concat $ fromFoldable $ map
   (view _resultingPayments)
   history
+
+currentStep :: State -> Int
+currentStep { history, mPendingTimeouts } = pastSteps + pendingSteps
+  where
+  pastSteps = length history
+  pendingSteps = maybe 0 (\{ timeouts } -> length timeouts) mPendingTimeouts
