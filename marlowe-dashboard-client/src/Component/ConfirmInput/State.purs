@@ -17,7 +17,7 @@ import Data.Unfoldable as Unfoldable
 import Effect.Aff.Class (class MonadAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen as H
-import Halogen.Store.Monad (updateStore)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import Marlowe.Execution.State (mkTx, setPendingTransaction)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
@@ -30,6 +30,7 @@ component
   :: forall query m
    . MonadAff m
   => ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => H.Component query Input Msg m
 component =
@@ -69,6 +70,7 @@ mkInitialState
 handleAction
   :: forall m
    . ManageMarlowe m
+  => MonadStore Store.Action Store.Store m
   => Toast m
   => Action
   -> DSL m Unit
