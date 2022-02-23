@@ -18,7 +18,7 @@ let
     baseUrl = "http://0.0.0.0:${pab-port}";
     walletUrl = "http://wallet:${wallet-port}";
     inherit socket-path network-id;
-    protocol-parameters = ./dev/testnet.protocol;
+    protocol-parameters = "./testnet.protocol";
   };
   run-params = { wallet-port = wallet-port-int; };
   config = pkgs.runCommand "config"
@@ -34,6 +34,27 @@ let
       cp ${../bitte/node/config/topology.yaml} $out/topology.yaml
     '';
 
+  node-seeder = {
+    service = {
+      useHostStore = true;
+      volumes = [
+        "cardano-node-data:/data"
+        "${./dev}:/copy"
+      ];
+      command = [
+        "${pkgs.bash}/bin/bash"
+        "-c"
+        ''
+          export PATH=$PATH:${pkgs.gzip}/bin
+          if [ -z "$$(${pkgs.coreutils}/bin/ls -A /data)" ]; then
+            ${pkgs.gnutar}/bin/tar xf /copy/node.db.saved.tar.gz --strip-components 1 -C /data
+          fi
+          sleep infinity
+        ''
+      ];
+    };
+  };
+
   node = {
     service = {
       image = "inputoutput/cardano-node:1.33.0";
@@ -43,6 +64,7 @@ let
         "cardano-node-data:/data"
         "${config}:/config"
       ];
+      depends_on = [ "node-seeder" ];
       command = [
         "run"
         "--config"
@@ -94,7 +116,6 @@ let
       volumes = [
         "cardano-ipc:/ipc"
         "chain-index-data:/data"
-        "${config}:/config"
       ];
       restart = "on-failure";
       depends_on = [ "wallet" ];
@@ -110,10 +131,6 @@ let
           # TODO this would be nicer implemented as a healthcheck, but I
           # couldn't get that to work.
           until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${socket-path} 2> /dev/null; do :; done
-          CARDANO_NODE_SOCKET_PATH=${socket-path} ${cardano-cli}/bin/cardano-cli query \
-            protocol-parameters \
-            --testnet-magic ${network-id} \
-            --out-file /config/testnet.protocol
           ${plutus-chain-index}/bin/plutus-chain-index start-index \
             --network-id ${network-id} \
             --db-path /data/chain-index.sqlite \
@@ -150,6 +167,10 @@ let
           # TODO this would be nicer implemented as a healthcheck, but I
           # couldn't get that to work.
           until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${socket-path} 2> /dev/null; do :; done
+          CARDANO_NODE_SOCKET_PATH=${socket-path} ${cardano-cli}/bin/cardano-cli query \
+            protocol-parameters \
+            --testnet-magic ${network-id} \
+            --out-file ./testnet.protocol
           ${marlowe-pab}/bin/marlowe-pab webserver \
             --config /config/pab.yaml \
             --passphrase fixme-allow-pass-per-wallet \
@@ -182,6 +203,7 @@ let
 in
 {
   config.services = {
+    inherit node-seeder;
     inherit node;
     inherit wallet;
     inherit chain-index;
