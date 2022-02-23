@@ -12,7 +12,6 @@ import API.Lenses
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe
   ( class ManageMarlowe
-  , followContract
   , subscribeToPlutusApp
   , subscribeToWallet
   , unsubscribeFromPlutusApp
@@ -26,37 +25,44 @@ import Capability.MarloweStorage
 import Capability.PAB (class ManagePAB, onNewActiveEndpoints)
 import Capability.PAB as PAB
 import Capability.PlutusApps.FollowerApp as FollowerApp
-import Capability.PlutusApps.MarloweApp.Types (MarloweEndpointResponse)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
+import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
 import Data.Argonaut (Json, decodeJson, printJsonDecodeError, stringify)
 import Data.Array (filter, find) as Array
-import Data.Array (head, mapMaybe, partition)
+import Data.Array (mapMaybe)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
 import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
+import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
 import Data.String (joinWith)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
-import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
-import Effect.Aff (bracket, delay)
+import Effect.Aff (delay)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Env (Env, _pendingResults, _pollingInterval)
+import Effect.Class (liftEffect)
+import Env
+  ( Env
+  , _applyInputListeners
+  , _createListeners
+  , _pollingInterval
+  , _redeemListeners
+  )
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -64,7 +70,7 @@ import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
-import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
+import Halogen.Subscription as HS
 import MainFrame.Lenses
   ( _addressBook
   , _currentSlot
@@ -169,33 +175,6 @@ deriveState state { context, input } = state
       }
   }
 
--- When a MarloweApp emits a new observable state, it comes with the information of which
--- request id originated the change. We use this function to update the request queue and
--- free any thread that might be waiting for the result of an action.
--- The return type is a Maybe of the same input, if the value is Nothing, then we couldn't
--- find a request that triggered this response. This can happen for example when reloading
--- the webpage, or if we have two browsers with the same wallet.
-fulfillPendingResult
-  :: forall m
-   . MonadAff m
-  => MonadAsk Env m
-  => MarloweEndpointResponse
-  -> m (Maybe (MarloweEndpointResponse))
-fulfillPendingResult response = do
-  pendingResultsAvar <- asks $ view _pendingResults
-  liftAff
-    $ bracket
-        (partition (eq reqId <<< fst) <$> AVar.take pendingResultsAvar)
-        (flip AVar.put pendingResultsAvar <<< _.no)
-        ( _.yes >>> head >>> map snd >>> traverse \pendingResult -> do
-            AVar.put response pendingResult
-            pure response
-        )
-  where
-  reqId = case response of
-    EndpointSuccess rid _ -> rid
-    EndpointException rid _ _ -> rid
-
 handleQuery
   :: forall a m
    . MonadAff m
@@ -264,63 +243,55 @@ handleQuery = case _ of
     contract. We take this opportunity to create a FollowerContract
     that will give us updates on the state of the contract
   -}
-  MarloweContractCreated reqId marloweParams next -> runMaybeT $ do
-    -- TODO: Return an Aff from the API calls so that the
-    --       responses can be awaited at the call site instead.
-    _ <- MaybeT
-      $ fulfillPendingResult
-      $ EndpointSuccess reqId
-      $ CreateResponse marloweParams
-    wallet <- MaybeT $ peruse $ _store <<< _wallet <<< _Connected
-    followContract wallet marloweParams >>= case _ of
-      Left _ -> addToast $ errorToast "Can't follow the contract" Nothing
-      Right (_ /\ _) -> do
-        -- TODO: SCP-3487 swap store contract from new to running
-        addToast $ successToast "Contract initialised."
+  MarloweContractCreated reqId marloweParams next -> runMaybeT do
+    listenersAVar <- asks $ view _createListeners
+    listeners <- liftAff $ AVar.read listenersAVar
+    subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
+    liftEffect do
+      HS.notify listener marloweParams
+      traverse_ HS.unsubscribe subscription
     pure next
+
   InputsApplied reqId next -> runMaybeT $ do
-    -- TODO: Return an Aff from the API calls so that the
-    --       responses can be awaited at the call site instead.
-    _ <- MaybeT
-      $ fulfillPendingResult
-      $ EndpointSuccess reqId ApplyInputsResponse
-    addToast $ successToast "Contract update applied."
+    listenersAVar <- asks $ view _applyInputListeners
+    listeners <- liftAff $ AVar.read listenersAVar
+    subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
+    liftEffect do
+      HS.notify listener unit
+      traverse_ HS.unsubscribe subscription
     pure next
 
   PaymentRedeemed reqId next -> runMaybeT $ do
-    -- TODO: Return an Aff from the API calls so that the
-    --       responses can be awaited at the call site instead.
-    _ <- MaybeT
-      $ fulfillPendingResult
-      $ EndpointSuccess reqId RedeemResponse
-    addToast $ successToast "Payment from contract redeemed"
+    listenersAVar <- asks $ view _redeemListeners
+    listeners <- liftAff $ AVar.read listenersAVar
+    subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
+    liftEffect do
+      HS.notify listener unit
+      traverse_ HS.unsubscribe subscription
     pure next
 
   CreateFailed reqId error next -> runMaybeT $ do
-    -- TODO: Return an Aff from the API calls so that the
-    --       responses can be awaited at the call site instead.
-    _ <- MaybeT
-      $ fulfillPendingResult
-      $ EndpointException reqId "create" error
+    listenersAVar <- asks $ view _createListeners
+    listeners <- liftAff $ AVar.read listenersAVar
+    subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
     addToast $ errorToast "Failed to create contract" $ Just $ show error
+    liftEffect $ traverse_ HS.unsubscribe subscription
     pure next
 
   ApplyInputsFailed reqId error next -> runMaybeT $ do
-    -- TODO: Return an Aff from the API calls so that the
-    --       responses can be awaited at the call site instead.
-    _ <- MaybeT
-      $ fulfillPendingResult
-      $ EndpointException reqId "apply-inputs-nonmerkleized" error
+    listenersAVar <- asks $ view _applyInputListeners
+    listeners <- liftAff $ AVar.read listenersAVar
+    subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
     addToast $ errorToast "Failed to update contract" $ Just $ show error
+    liftEffect $ traverse_ HS.unsubscribe subscription
     pure next
 
   RedeemFailed reqId error next -> runMaybeT $ do
-    -- TODO: Return an Aff from the API calls so that the
-    --       responses can be awaited at the call site instead.
-    _ <- MaybeT
-      $ fulfillPendingResult
-      $ EndpointException reqId "redeem" error
+    listenersAVar <- asks $ view _redeemListeners
+    listeners <- liftAff $ AVar.read listenersAVar
+    subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
     addToast $ errorToast "Failed to redeem payment" $ Just $ show error
+    liftEffect $ traverse_ HS.unsubscribe subscription
     pure next
 
   ContractHistoryUpdated plutusAppId contractHistory next -> do

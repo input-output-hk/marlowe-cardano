@@ -58,6 +58,7 @@ import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
+import Effect.Aff (Aff)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Halogen.Store.Monad (getStore, updateStore)
@@ -111,14 +112,17 @@ class
     :: PABConnectedWallet
     -> Map TokenName Address
     -> Contract
-    -> m (AjaxResponse UUID)
+    -> m (AjaxResponse (UUID /\ Aff MarloweParams))
   applyTransactionInput
     :: PABConnectedWallet
     -> MarloweParams
     -> TransactionInput
-    -> m (AjaxResponse Unit)
+    -> m (AjaxResponse (Aff Unit))
   redeem
-    :: PABConnectedWallet -> MarloweParams -> TokenName -> m (AjaxResponse Unit)
+    :: PABConnectedWallet
+    -> MarloweParams
+    -> TokenName
+    -> m (AjaxResponse (Aff Unit))
   getRoleContracts
     :: PABConnectedWallet
     -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))

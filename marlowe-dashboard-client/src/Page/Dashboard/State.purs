@@ -34,7 +34,7 @@ import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (mapSubmodule)
@@ -222,20 +222,27 @@ handleAction input@{ currentSlot, wallet } (TemplateAction templateAction) =
                 SubmitResult (Milliseconds 600.0) (Left "Error")
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
-            Right reqId -> do
+            Right (reqId /\ mMarloweParams) -> do
               let metaData = template.metaData
               -- We save in the store the request of a created contract with
               -- the information relevant to show a placeholder of a starting contract.
-              updateStore $ Store.AddStartingContract $ reqId
-                /\ nickname
-                /\
-                  metaData
+              updateStore
+                $ Store.AddStartingContract
+                $ reqId /\ nickname /\ metaData
               handleAction input CloseCard
               void $ tell _submitButtonSlot "action-pay-and-start" $
                 SubmitResult (Milliseconds 600.0) (Right "")
               addToast $ successToast
                 "The request to initialise this contract has been submitted."
               assign _templateState Template.initialState
+              marloweParams <- liftAff mMarloweParams
+              ajaxFollow <- followContract wallet marloweParams
+              case ajaxFollow of
+                Left _ -> addToast $ errorToast "Can't follow the contract"
+                  Nothing
+                Right (_ /\ _) -> do
+                  -- TODO: SCP-3487 swap store contract from new to running
+                  addToast $ successToast "Contract initialised."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 

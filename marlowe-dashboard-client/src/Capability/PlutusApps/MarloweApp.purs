@@ -6,7 +6,6 @@ module Capability.PlutusApps.MarloweApp
   ( class MarloweApp
   , createContract
   , applyInputs
-  , maxRequests
   , redeem
   ) where
 
@@ -15,19 +14,23 @@ import Prologue
 import AppM (AppM)
 import Bridge (toBack)
 import Capability.PAB (invokeEndpoint) as PAB
+import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (asks)
 import Data.Address (Address)
 import Data.Argonaut.Encode (encodeJson)
-import Data.Array (take, (:))
 import Data.Lens (_1, over, view)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID, genUUID)
+import Effect.AVar (AVar)
+import Effect.Aff (Aff, effectCanceler, launchAff_)
+import Effect.Aff as Aff
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
-import Env (_pendingResults)
+import Env (_applyInputListeners, _createListeners, _redeemListeners)
+import Halogen.Subscription as HS
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
@@ -45,9 +48,12 @@ class MarloweApp m where
     :: PlutusAppId
     -> Map TokenName Address
     -> Contract
-    -> m (AjaxResponse UUID)
+    -> m (AjaxResponse (UUID /\ Aff MarloweParams))
   applyInputs
-    :: PlutusAppId -> MarloweParams -> TransactionInput -> m (AjaxResponse Unit)
+    :: PlutusAppId
+    -> MarloweParams
+    -> TransactionInput
+    -> m (AjaxResponse (Aff Unit))
   -- TODO auto
   -- TODO close
   redeem
@@ -55,10 +61,10 @@ class MarloweApp m where
     -> MarloweParams
     -> TokenName
     -> Address
-    -> m (AjaxResponse Unit)
+    -> m (AjaxResponse (Aff Unit))
 
 instance marloweAppM :: MarloweApp AppM where
-  createContract plutusAppId roles contract = do
+  createContract plutusAppId roles contract = runExceptT do
     reqId <- liftEffect genUUID
     let
       backRoles :: Map Back.TokenName Address
@@ -67,15 +73,14 @@ instance marloweAppM :: MarloweApp AppM where
         $ (Map.toUnfoldable roles :: Array (TokenName /\ Address))
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
-    enqueueResultHandler reqId =<< PAB.invokeEndpoint
-      plutusAppId
-      "create"
-      payload
+    ExceptT $ PAB.invokeEndpoint plutusAppId "create" payload
+    createListenersAVar <- asks $ view _createListeners
+    liftAff $ Tuple reqId <$> waitForUpdate reqId createListenersAVar
 
-  applyInputs
-    plutusAppId
-    marloweContractId
-    (TransactionInput { interval: TimeInterval slotStart slotEnd, inputs }) = do
+  applyInputs plutusAppId marloweContractId input = runExceptT do
+    let
+      TransactionInput { interval: TimeInterval slotStart slotEnd, inputs } =
+        input
     reqId <- liftEffect genUUID
     let
       backTimeInterval :: POSIXTime /\ POSIXTime
@@ -87,12 +92,12 @@ instance marloweAppM :: MarloweApp AppM where
         , encodeJson backTimeInterval
         , encodeJson inputs
         ]
-    map void <$> enqueueResultHandler reqId =<< PAB.invokeEndpoint
-      plutusAppId
-      "apply-inputs-nonmerkleized"
-      payload
+    ExceptT
+      $ PAB.invokeEndpoint plutusAppId "apply-inputs-nonmerkleized" payload
+    applyInputListenersAVar <- asks $ view _applyInputListeners
+    liftAff $ waitForUpdate reqId applyInputListenersAVar
 
-  redeem plutusAppId marloweContractId tokenName address = do
+  redeem plutusAppId marloweContractId tokenName address = runExceptT do
     reqId <- liftEffect genUUID
     let
       payload =
@@ -101,24 +106,32 @@ instance marloweAppM :: MarloweApp AppM where
         , encodeJson tokenName
         , encodeJson address
         ]
-    map void <$> enqueueResultHandler reqId =<< PAB.invokeEndpoint
-      plutusAppId
-      "redeem"
-      payload
+    ExceptT $ PAB.invokeEndpoint plutusAppId "redeem" payload
+    redeemListenersAVar <- asks $ view _redeemListeners
+    liftAff $ waitForUpdate reqId redeemListenersAVar
 
--- This is the amount of requests we store in the request queue
-maxRequests :: Int
-maxRequests = 15
-
-enqueueResultHandler :: UUID -> AjaxResponse Unit -> AppM (AjaxResponse UUID)
-enqueueResultHandler _ (Left e) = pure $ Left e
-enqueueResultHandler reqId (Right _) = do
-  pendingResults <- asks $ view _pendingResults
-  liftAff do
-    pendingResults' <- AVar.take pendingResults
-    pendingResult <- AVar.empty
-    -- We add new pending results to the begining of the array and remove them from the end.
-    AVar.put
-      (take maxRequests $ (reqId /\ pendingResult) : pendingResults')
-      pendingResults
-  pure $ Right reqId
+waitForUpdate
+  :: forall a
+   . UUID
+  -> AVar (Map UUID (Maybe HS.Subscription /\ HS.Listener a))
+  -> Aff (Aff a)
+waitForUpdate reqId listenersAVar = do
+  { emitter, listener } <- liftEffect HS.create
+  listeners <- AVar.take listenersAVar
+  AVar.put (Map.insert reqId (Nothing /\ listener) listeners) listenersAVar
+  pure $ Aff.makeAff \resolve -> do
+    subscription <- HS.subscribe emitter \params -> do
+      launchAff_ do
+        listeners' <- AVar.take listenersAVar
+        AVar.put (Map.delete reqId listeners') listenersAVar
+      resolve $ pure params
+    launchAff_ do
+      listeners' <- AVar.take listenersAVar
+      AVar.put
+        (Map.insert reqId (Just subscription /\ listener) listeners')
+        listenersAVar
+    pure $ effectCanceler do
+      launchAff_ do
+        listeners' <- AVar.take listenersAVar
+        AVar.put (Map.delete reqId listeners') listenersAVar
+      HS.unsubscribe subscription

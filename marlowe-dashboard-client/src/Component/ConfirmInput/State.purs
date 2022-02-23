@@ -14,7 +14,7 @@ import Data.ContractUserParties (contractUserParties)
 import Data.List as List
 import Data.Time.Duration (Milliseconds(..))
 import Data.Unfoldable as Unfoldable
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen as H
 import Halogen.Store.Monad (class MonadStore, updateStore)
@@ -71,6 +71,7 @@ handleAction
   :: forall m
    . ManageMarlowe m
   => MonadStore Store.Action Store.Store m
+  => MonadAff m
   => Toast m
   => Action
   -> DSL m Unit
@@ -92,7 +93,7 @@ handleAction (ConfirmAction namedAction) = do
         (Milliseconds 600.0)
         (Left "Error")
       addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
-    Right _ -> do
+    Right mResult -> do
       updateStore $ Store.ModifySyncedContract marloweParams $
         setPendingTransaction txInput
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
@@ -100,6 +101,8 @@ handleAction (ConfirmAction namedAction) = do
         (Right "")
       addToast $ successToast "Transaction submitted, awating confirmation."
       H.raise DialogClosed
+      liftAff mResult
+      addToast $ successToast "Contract update applied."
 
 toInput :: NamedAction -> Maybe Semantic.Input
 toInput (MakeDeposit accountId party token value) = Just $ Semantic.IDeposit

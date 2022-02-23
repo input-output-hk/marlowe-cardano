@@ -70,7 +70,9 @@ mkEnv :: Milliseconds -> WebSocketManager -> WebpackBuildMode -> Effect Env
 mkEnv pollingInterval wsManager webpackBuildMode = do
   contractStepCarouselSubscription <- AVar.empty
   endpointSemaphores <- AVar.new Map.empty
-  pendingResults <- AVar.new []
+  createListeners <- AVar.new Map.empty
+  applyInputListeners <- AVar.new Map.empty
+  redeemListeners <- AVar.new Map.empty
   pure $ Env
     { contractStepCarouselSubscription
     , logger: case webpackBuildMode of
@@ -79,7 +81,9 @@ mkEnv pollingInterval wsManager webpackBuildMode = do
         Development -> Console.logger identity
     , endpointSemaphores
     , wsManager
-    , pendingResults
+    , createListeners
+    , applyInputListeners
+    , redeemListeners
     , pollingInterval
     }
 
