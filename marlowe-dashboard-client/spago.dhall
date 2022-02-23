@@ -22,6 +22,7 @@
   , "filterable"
   , "foldable-traversable"
   , "foreign"
+  , "foreign-generic"
   , "foreign-object"
   , "formatters"
   , "free"
