@@ -804,6 +804,10 @@ Furthermore, the log for `marlowe-pab` will report that the redemption occurred.
 [pab:Warning:42] [2022-02-23 03:02:35.01 UTC] 1aa03656-52df-4115-8044-78b1d6824e09: "WalletCompanion found currency symbol c22472fa0a9b8a571fbf8d42f72e8ecd3746367367161f06d398fd53 but no on-chain state."
 ```
 
+At this point, Daedalus will display the four transactions:
+
+![Marlowe transactions viewed in Daedalus](PAB-daedalus.png)
+
 
 ## Stop the Contracts
 
