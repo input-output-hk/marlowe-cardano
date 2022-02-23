@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -161,7 +160,7 @@ data PabOperation =
       poInstance :: InstanceNickname
     , poOwner    :: RoleName
     , poInputs   :: [MarloweClientInput]
-    , poSlots    :: Maybe TimeInterval
+    , poTimes    :: Maybe TimeInterval
     }
   | AwaitApplyInputs
     {

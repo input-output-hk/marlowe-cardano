@@ -165,11 +165,18 @@ git clone git@github.com:input-output-hk/daedalus.git -b 4.7.0
 # Patch Daedalus for use with the Marlowe testnet.
 pushd daedalus.git
 git apply << EOI
+diff --git a/installer-clusters.cfg b/installer-clusters.cfg
+index aa6f7770b..a26dfe400 100644
+--- a/installer-clusters.cfg
++++ b/installer-clusters.cfg
+@@ -1 +1 @@
+-mainnet mainnet_flight testnet shelley_qa staging alonzo_purple
++alonzo_purple
 diff --git a/nix/launcher-config.nix b/nix/launcher-config.nix
-index 905e636fd..9f995d904 100644
+index 905e636fd..64a1cc213 100644
 --- a/nix/launcher-config.nix
 +++ b/nix/launcher-config.nix
-@@ -27,7 +27,41 @@ let
+@@ -27,7 +27,36 @@ let
        networkName = "mainnet";
      };
      alonzo_purple = {
@@ -186,19 +193,14 @@ index 905e636fd..9f995d904 100644
 +          AlonzoGenesisHash = "7e94a15f55d1e82d10f09203fa1d40f8eede58fd8066542cf6566008068ed874";
 +          Protocol = "Cardano";
 +          RequiresNetworkMagic = "RequiresMagic";
-+          MaxKnownMajorProtocolVersion = 5;
-+          LastKnownBlockVersion-Major = 5;
-+          LastKnownBlockVersion-Minor = 1;
++          MaxKnownMajorProtocolVersion = 2;
++          LastKnownBlockVersion-Major = 3;
++          LastKnownBlockVersion-Minor = 0;
 +          LastKnownBlockVersion-Alt = 0;
 +          ApplicationName = "cardano-sl";
 +          ApplicationVersion = 0;
 +          MaxConcurrencyDeadline = 4;
 +          PBftSignatureThreshold = 1.1;
-+          TestAllegraHardForkAtEpoch = 2;
-+          TestAlonzoHardForkAtEpoch = 4;
-+          TestEnableDevelopmentHardForkEras = false;
-+          TestEnableDevelopmentNetworkProtocols = false;
-+          TestMaryHardForkAtEpoch = 3;
 +          TestShelleyHardForkAtEpoch = 1;
 +        };
 +        relays = "europe.relays.marlowe-testnet.dev.cardano.org";
@@ -261,6 +263,7 @@ index c193bf71b..3bda328b7 100755
 +}
 EOI
 popd
+```
 
 # Build Daedalus.
 pushd daedalus

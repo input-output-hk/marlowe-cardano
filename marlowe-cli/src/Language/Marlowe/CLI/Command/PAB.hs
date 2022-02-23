@@ -22,9 +22,9 @@ module Language.Marlowe.CLI.Command.PAB (
 , runPabCommand
 ) where
 
-import Cardano.Api (AddressAny, SlotNo)
+import Cardano.Api (AddressAny)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT, throwError)
-import Language.Marlowe.CLI.Command.Parse (parseMarloweClientInput, parseRole, parseSlotNo, parseUrl, parseWalletId)
+import Language.Marlowe.CLI.Command.Parse (parseMarloweClientInput, parsePOSIXTime, parseRole, parseUrl, parseWalletId)
 import Language.Marlowe.CLI.PAB (callApplyInputs, callCreate, callFollow, callRedeem, runApp, runCompanion, runFollower,
                                  stop)
 import Language.Marlowe.CLI.Types (CliError (..))
@@ -34,7 +34,7 @@ import Network.Socket (withSocketsDo)
 import Network.WebSockets (runClient)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (pabClient)
-import Plutus.V1.Ledger.Api (TokenName)
+import Plutus.V1.Ledger.Api (POSIXTime, TokenName)
 import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 import Wallet.Emulator.Wallet (WalletId)
 
@@ -67,8 +67,8 @@ data PabCommand =
     , instanceFile :: FilePath              -- ^ The file containing the instance ID.
     , paramsFile   :: FilePath              -- ^ The JSON file containing the contract parameters.
     , inputs       :: [MarloweClientInput]  -- ^ The contract's inputs.
-    , minimumSlot  :: SlotNo                -- ^ The first valid slot for the transaction.
-    , maximumSlot  :: SlotNo                -- ^ The last valid slot for the transaction.
+    , minimumTime  :: POSIXTime             -- ^ The first valid time for the transaction.
+    , maximumTime  :: POSIXTime             -- ^ The last valid time for the transaction.
     }
     -- | Call the "redeem" endpoint.
   | Redeem
@@ -140,7 +140,7 @@ runPabCommand command =
     case command of
       App{..}         -> runApp paramsFile' loop client runApi runWs walletId instanceFile'
       Create{..}      -> callCreate client runApi instanceFile contractFile owners
-      ApplyInputs{..} -> callApplyInputs client runApi instanceFile paramsFile inputs minimumSlot maximumSlot
+      ApplyInputs{..} -> callApplyInputs client runApi instanceFile paramsFile inputs minimumTime maximumTime
       Redeem{..}      -> callRedeem client runApi instanceFile paramsFile owner
       Follower{..}    -> runFollower loop client runApi runWs walletId instanceFile'
       Follow{..}      -> callFollow client runApi instanceFile paramsFile
@@ -230,12 +230,12 @@ inputsCommand =
 inputsOptions :: O.Parser PabCommand
 inputsOptions =
   ApplyInputs
-    <$> O.option parseUrl              (O.long "pab-url"           <> O.metavar "URL"           <> O.help "URL for the Marlowe PAB."                   )
-    <*> O.strOption                    (O.long "instance-file"     <> O.metavar "INSTANCE_FILE" <> O.help "Input file for the instance ID."            )
-    <*> O.strOption                    (O.long "params-file"       <> O.metavar "PARAMS_FILE"   <> O.help "JSON input file for the Marlowe parameters.")
+    <$> O.option parseUrl              (O.long "pab-url"           <> O.metavar "URL"           <> O.help "URL for the Marlowe PAB."                           )
+    <*> O.strOption                    (O.long "instance-file"     <> O.metavar "INSTANCE_FILE" <> O.help "Input file for the instance ID."                    )
+    <*> O.strOption                    (O.long "params-file"       <> O.metavar "PARAMS_FILE"   <> O.help "JSON input file for the Marlowe parameters."        )
     <*> O.many parseMarloweClientInput
-    <*> O.option parseSlotNo           (O.long "invalid-before"    <> O.metavar "SLOT"          <> O.help "Minimum slot for the input."                )
-    <*> O.option parseSlotNo           (O.long "invalid-hereafter" <> O.metavar "SLOT"          <> O.help "Maximum slot for the input."                )
+    <*> O.option parsePOSIXTime        (O.long "invalid-before"    <> O.metavar "POSIX_TIME"    <> O.help "Minimum time for the input, in POSIX milliseconds." )
+    <*> O.option parsePOSIXTime        (O.long "invalid-hereafter" <> O.metavar "POSIX_TIME"    <> O.help "Maximum time for the input, in POSIX milliseconds." )
 
 
 -- | Parser for the "redeem" command.

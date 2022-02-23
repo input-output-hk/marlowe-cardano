@@ -33,7 +33,7 @@ runTests :: MonadError CliError m
 runTests ScriptTests{..} =
   do
     let
-      network' = fromMaybe Mainnet $ network
+      network' = fromMaybe Mainnet network
       connection =
         LocalNodeConnectInfo
         {
@@ -48,7 +48,7 @@ runTests PabTests{..} =
   do
     manager <- liftIO $ newManager defaultManagerSettings
     let
-      network' = fromMaybe Mainnet $ network
+      network' = fromMaybe Mainnet network
       localConnection =
         LocalNodeConnectInfo
         {

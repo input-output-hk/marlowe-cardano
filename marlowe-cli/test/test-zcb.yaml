@@ -95,9 +95,9 @@ ptPabOperations:
                 party:
                   role_token: Lender
               then: close
-          timeout: 100000002
+          timeout: 1961123625000
           timeout_continuation: close
-    timeout: 100000001
+    timeout: 1929587625000
     timeout_continuation: close
 
 - tag: AwaitCreate
@@ -138,18 +138,17 @@ ptPabOperations:
   poInstance: LenderApp
   poOwner: Lender
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: Lender
-      - role_token: Lender
-      - currency_symbol: ''
-        token_name: ''
-      - 50000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - input_from_party:
+      role_token: Lender
+    that_deposits: 50000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Lender
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: LenderApp
@@ -212,18 +211,17 @@ ptPabOperations:
   poInstance: BorrowerApp
   poOwner: Lender
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: Borrower
-      - role_token: Borrower
-      - currency_symbol: ''
-        token_name: ''
-      - 53000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - input_from_party:
+      role_token: Borrower
+    that_deposits: 53000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Borrower
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: BorrowerApp

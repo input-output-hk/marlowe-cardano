@@ -13,7 +13,6 @@
 
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 
 
 module Language.Marlowe.CLI.Command.Test (

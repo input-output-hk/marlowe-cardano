@@ -15,9 +15,10 @@ module Language.Marlowe.CLI.Test.PAB (
 ) where
 
 
-import Cardano.Api (AddressAny, AsType (AsAddress, AsScriptHash, AsShelleyAddr), AssetId (..), AssetName (..),
-                    PolicyId (..), Quantity (..), deserialiseAddress, deserialiseFromRawBytes, lovelaceToValue,
-                    negateValue, quantityToLovelace, selectLovelace, toAddressAny, valueFromList)
+import Cardano.Api (AddressAny, AddressInEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr), AssetId (..),
+                    AssetName (..), PolicyId (..), Quantity (..), ShelleyEra, anyAddressInShelleyBasedEra,
+                    deserialiseAddress, deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace,
+                    selectLovelace, toAddressAny, valueFromList)
 import Cardano.Api.Shelley (shelleyPayAddrToPlutusPubKHash)
 import Cardano.Mnemonic (SomeMnemonic (..))
 import Cardano.Wallet.Api.Client (addressClient, getWallet, listAddresses, postWallet, walletClient)
@@ -139,7 +140,7 @@ interpret access CheckFunds{..} =
                 $ rolesCurrency
                 <$> aiParams
             policy <-
-              liftCliMaybe ("[CheckFunds] Failed deserialising currency symbol.")
+              liftCliMaybe "[CheckFunds] Failed deserialising currency symbol."
                 . deserialiseFromRawBytes AsScriptHash
                 $ fromBuiltin currency
             pure
@@ -176,7 +177,13 @@ interpret access CallCreate{..} =
     AppInstanceInfo{..} <- findInstance poInstance
     owners <-
       mapM
-        (\owner -> (TokenName . toBuiltin $ BS8.pack owner, ) . wiPubKeyHash <$> findOwner owner)
+        (
+          \owner ->
+            (TokenName . toBuiltin $ BS8.pack owner, )
+              . (anyAddressInShelleyBasedEra :: AddressAny -> AddressInEra ShelleyEra)
+              . wiAddress
+              <$> findOwner owner
+        )
         poOwners
     lift
       $ call access aiInstance "create" (uuid, AM.fromList owners, poContract)
@@ -197,8 +204,8 @@ interpret access CallApplyInputs{..} =
     uuid <- liftIO nextRandom
     AppInstanceInfo{..} <- findInstance poInstance
     lift
-      $ call access aiInstance "apply-inputs" (uuid, aiParams, poSlots, poInputs)
-    liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and slots " <> show poSlots <> "."
+      $ call access aiInstance "apply-inputs" (uuid, aiParams, poTimes, poInputs)
+    liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
 interpret _ AwaitApplyInputs{..} =
   do
     result <- awaitApp poInstance (-1)
@@ -211,7 +218,13 @@ interpret access CallRedeem{..} =
     AppInstanceInfo{..} <- findInstance poInstance
     WalletInfo{..} <- findOwner poOwner
     lift
-      $ call access aiInstance "redeem" (uuid, aiParams, TokenName . toBuiltin $ BS8.pack poOwner, wiPubKeyHash)
+      $ call access aiInstance "redeem"
+      (
+        uuid
+      , aiParams
+      , TokenName . toBuiltin $ BS8.pack poOwner
+      , anyAddressInShelleyBasedEra wiAddress :: AddressInEra ShelleyEra
+      )
     liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
 interpret _ AwaitRedeem{..} =
   do
@@ -334,7 +347,7 @@ createWallet PabAccess{..} owner passphrase' =
         do
           liftIO $ threadDelay 5_000_000
           s <- W.state <$> runWallet (getWallet walletClient $ W.id wallet)
-          unless (s == ApiT Ready) $ go
+          unless (s == ApiT Ready) go
     go
     pure WalletInfo{..}
 

@@ -37,7 +37,7 @@ module Language.Marlowe.CLI.PAB (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra, ShelleyEra, SlotNo (..), anyAddressInShelleyBasedEra)
+import Cardano.Api (AddressAny, AddressInEra, ShelleyEra, anyAddressInShelleyBasedEra)
 import Control.Monad (unless, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, liftEither, liftIO, throwError)
 import Data.Aeson (FromJSON, ToJSON, eitherDecode, toJSON)
@@ -59,8 +59,7 @@ import Network.WebSockets (Connection, receiveData)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..))
 import Plutus.PAB.Webserver.Types (ContractActivationArgs (..), InstanceStatusToClient (..))
-import Plutus.V1.Ledger.Api (TokenName)
-import Plutus.V1.Ledger.Slot (Slot)
+import Plutus.V1.Ledger.Api (POSIXTime (..), TokenName)
 import Servant.Client (ClientM)
 import System.IO (hPutStrLn, stderr)
 import Wallet.Emulator.Wallet (Wallet (..), WalletId (..))
@@ -219,6 +218,7 @@ receiveStatus :: Connection                                  -- ^ The websocket 
 receiveStatus connection =
   do
     message <- liftIO $ receiveData connection
+--  liftIO . putStrLn $ "Received message: " <> show message
     case eitherDecode . toLazyByteString $ encodeUtf8Builder message of
        Right status -> pure status
        Left  e      -> throwError $ CliError e
@@ -267,16 +267,16 @@ callApplyInputs :: MonadError CliError m
                 -> FilePath                            -- ^ File containing the contract instance ID.
                 -> FilePath                            -- ^ The JSON file containing the Marlowe parameters.
                 -> [MarloweClientInput]                -- ^ The inputs to the contract.
-                -> SlotNo                              -- ^ The first valid slot for the transaction.
-                -> SlotNo                              -- ^ The last valid slot for the transaction.
+                -> POSIXTime                           -- ^ The first valid time for the transaction.
+                -> POSIXTime                           -- ^ The last valid time for the transaction.
                 -> m ()                                -- ^ Action for calling the "apply-inputs" endpoint.
-callApplyInputs pabClient runApi instanceFile paramsFile inputs (SlotNo minimumSlot) (SlotNo maximumSlot) =
+callApplyInputs pabClient runApi instanceFile paramsFile inputs minimumTime maximumTime =
   do
     params <- decodeFileStrict paramsFile
     call pabClient runApi instanceFile "apply-inputs"
       (
       , params :: MarloweParams
-      , Just (fromIntegral minimumSlot :: Slot, fromIntegral maximumSlot :: Slot)
+      , Just (minimumTime, maximumTime)
       , inputs
       )
 
