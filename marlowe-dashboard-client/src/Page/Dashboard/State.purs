@@ -190,9 +190,7 @@ for_ mStartedContract \{ executionState, userParties } ->
           _ -> pure unit
 -}
 
-handleAction
-  input@{ currentSlot, wallet }
-  (TemplateAction templateAction) =
+handleAction input@{ currentSlot, wallet } (TemplateAction templateAction) =
   case templateAction of
     Template.OpenCreateWalletCard tokenName -> do
       modify_
