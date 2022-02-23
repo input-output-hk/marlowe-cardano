@@ -118,6 +118,7 @@ let
     updateClientDeps
     docs.build-and-serve-docs
     start-marlowe-run
+    marlowe-cli
   ] ++ easyPS.buildInputs);
 
 in

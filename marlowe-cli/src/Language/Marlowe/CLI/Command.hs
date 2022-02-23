@@ -37,7 +37,7 @@ import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransa
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.Types (CliError (..))
 import System.Exit (exitFailure)
-import System.IO (hPutStrLn, stderr)
+import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
 import qualified Options.Applicative as O
 
@@ -69,6 +69,8 @@ runCLI :: String  -- ^ The version of the tool.
        -> IO ()   -- ^ Action to run the tool.
 runCLI version =
   do
+    hSetBuffering stdout  LineBuffering
+    hSetBuffering stderr  LineBuffering
     command <- O.execParser $ parseCommand version
     result <- runExceptT $ runCommand command
     case result of

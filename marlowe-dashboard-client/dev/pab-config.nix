@@ -39,7 +39,7 @@
     pscProtocolParametersJsonPath = protocol-parameters;
   };
   chainIndexConfig = {
-    ciBaseUrl = "http://0.0.0.0:9083";
+    ciBaseUrl = "http://chain-index:9083";
     ciWatchedAddresses = [ ];
   };
   requestProcessingConfig = {

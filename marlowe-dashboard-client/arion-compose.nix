@@ -3,7 +3,7 @@
 , ...
 }:
 let
-  inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab;
+  inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab marlowe-cli;
   marlowe-run-backend-invoker = pkgs.marlowe-dashboard.marlowe-run-backend-invoker;
   node-port = "3001";
   wallet-port-int = 8090;
@@ -49,7 +49,6 @@ let
           if [ -z "$$(${pkgs.coreutils}/bin/ls -A /data)" ]; then
             ${pkgs.gnutar}/bin/tar xf /copy/node.db.saved.tar.gz --strip-components 1 -C /data
           fi
-          sleep infinity
         ''
       ];
     };
@@ -64,21 +63,19 @@ let
         "cardano-node-data:/data"
         "${config}:/config"
       ];
-      depends_on = [ "node-seeder" ];
+      entrypoint = "bash";
       command = [
-        "run"
-        "--config"
-        "/config/config.json"
-        "--topology"
-        "/config/topology.yaml"
-        "--port"
-        node-port
-        "--socket-path"
-        socket-path
-        "--database-path"
-        "/data"
-        "--host-addr"
-        "0.0.0.0"
+        "-c"
+        ''
+          until [ ! -z "$$(ls -A /data)" ]; do :; done
+          cardano-node run \
+            --config /config/config.json \
+            --topology /config/topology.yaml \
+            --port ${node-port} \
+            --socket-path ${socket-path} \
+            --database-path /data \
+            --host-addr 0.0.0.0
+        ''
       ];
     };
   };
@@ -136,6 +133,7 @@ let
             --db-path /data/chain-index.sqlite \
             --socket-path ${socket-path} \
             --port ${chain-index-port}
+            --verbose
         ''
       ];
     };
@@ -200,6 +198,34 @@ let
     };
   };
 
+  marlowe-cli-tests = {
+    service = {
+      useHostStore = true;
+      volumes = [
+        "cardano-ipc:/ipc"
+      ];
+      restart = "on-failure";
+      depends_on = [ "wallet" "pab" ];
+      command = [
+        "${pkgs.bash}/bin/bash"
+        "-c"
+        ''
+          set -euo pipefail
+          exec ${marlowe-cli}/bin/marlowe-cli test contracts \
+            --testnet-magic 1564 \
+            --socket-path /ipc/node.socket \
+            --wallet-url http://wallet:8090 \
+            --pab-url http://pab:9080 \
+            --faucet-key ${../payment.skey} \
+            --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
+            --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7 \
+            --passphrase fixme-allow-pass-per-wallet \
+            ${../marlowe-cli/test/test-zcb.yaml} 2>&1
+        ''
+      ];
+    };
+  };
+
 in
 {
   config.services = {
@@ -209,6 +235,7 @@ in
     inherit chain-index;
     inherit pab;
     inherit marlowe-run;
+    # inherit marlowe-cli-tests;
   };
   config.docker-compose.raw = {
     volumes = {
