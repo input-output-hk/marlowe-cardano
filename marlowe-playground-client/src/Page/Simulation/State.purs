@@ -39,7 +39,7 @@ import Effect.Console (log)
 import Effect.Now (nowDateTime)
 import Foreign.Generic (ForeignError, decode)
 import Foreign.JSON (parseJSON)
-import Halogen (HalogenM, get, query, tell)
+import Halogen (HalogenM, query, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Monaco (Message(..), Query(..)) as Monaco
 import Help (HelpContext(..))
@@ -75,7 +75,7 @@ import Simulator.Lenses
   , _currentContract
   , _currentMarloweState
   , _executionState
-  , _initialSlot
+  , _initialTime
   , _marloweState
   , _moveToAction
   , _possibleActions
@@ -83,10 +83,9 @@ import Simulator.Lenses
   , _termContract
   )
 import Simulator.State
-  ( applyInput
+  ( advanceTime
+  , applyInput
   , emptyMarloweState
-  , inFuture
-  , moveToSlot
   , startSimulation
   , updateChoice
   )
@@ -160,12 +159,12 @@ handleAction (HandleEditorMessage Monaco.EditorReady) = do
 
 handleAction (HandleEditorMessage (Monaco.TextChanged _)) = pure unit
 
-handleAction (SetInitialSlot initialSlot) = do
+handleAction (SetInitialTime initialTime) = do
   assign
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted <<<
-        _initialSlot
+        _initialTime
     )
-    initialSlot
+    initialTime
   setOraclePrice
 
 handleAction (SetIntegerTemplateParam templateType key value) = do
@@ -181,12 +180,12 @@ handleAction StartSimulation = do
   {- The marloweState is a non empty list of an object that includes the ExecutionState (SimulationRunning | SimulationNotStarted)
   Inside the SimulationNotStarted we can find the information needed to start the simulation. By running
   this code inside of a maybeT, we make sure that the Head of the list has the state SimulationNotStarted -}
-  initialSlot <- peruse
+  initialTime <- peruse
     ( _currentMarloweState <<< _executionState <<< _SimulationNotStarted
-        <<< _initialSlot
+        <<< _initialTime
     )
   contract <- mkContract
-  void $ sequence $ startSimulation <$> initialSlot <*> contract
+  void $ sequence $ startSimulation <$> initialTime <*> contract
   updateOracleAndContractEditor
 
 handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
@@ -206,19 +205,17 @@ handleAction DownloadAsJson = mkContract >>= (_ >>= fromTerm) >>> case _ of
       download (FileDownload fullName) blob
   Nothing -> pure unit
 
-handleAction (MoveSlot slot) = do
-  inTheFuture <- inFuture <$> get <*> pure slot
-  when inTheFuture do
-    moveToSlot slot
-    updateOracleAndContractEditor
+handleAction (MoveTime instant) = void $ runMaybeT do
+  advanceTime instant
+  lift updateOracleAndContractEditor
 
-handleAction (SetSlot slot) = do
+handleAction (SetTime time) = do
   assign
     ( _currentMarloweState <<< _executionState <<< _SimulationRunning
         <<< _possibleActions
         <<< _moveToAction
     )
-    (Just $ MoveToSlot slot)
+    (Just $ MoveToTime time)
   setOraclePrice
 
 handleAction (AddInput input bounds) = do

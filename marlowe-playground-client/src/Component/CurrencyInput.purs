@@ -81,7 +81,7 @@ currencyInput =
                           , "border-0"
                           , "outline-none"
                           ]
-                      , HE.onValueChange $ Hooks.put valueId
+                      , HE.onValueInput $ Hooks.put valueId
                       , HP.type_ HP.InputNumber
                       , HP.value value
                       ]

@@ -5,6 +5,7 @@ import Prologue
 import Data.Foldable (for_)
 import Data.Lens (assign)
 import Data.Lens.Extra (peruse)
+import Data.Maybe (fromMaybe)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse)
 import Effect.Aff as Aff
@@ -64,9 +65,10 @@ handleAction
   => Action
   -> HalogenM State Action slots msg m Unit
 handleAction (Receive mToast) = do
-  H.put $ deriveState mToast
-  sub <- traverse (subscribe <<< toastTimeoutSubscription) mToast
-  H.modify_ _ { timeoutSubscription = sub }
+  unlessM (fromMaybe false <$> peruse _expanded) do
+    H.put $ deriveState mToast
+    sub <- traverse (subscribe <<< toastTimeoutSubscription) mToast
+    H.modify_ _ { timeoutSubscription = sub }
 
 handleAction ExpandToast = do
   assign _expanded true

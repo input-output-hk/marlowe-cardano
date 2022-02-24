@@ -17,6 +17,7 @@ import Component.Contacts.Types (Action, State) as Contacts
 import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
 import Data.ContractUserParties (ContractUserParties)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
@@ -24,7 +25,7 @@ import Data.UserNamedActions (UserNamedActions)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
+import Marlowe.Semantics (MarloweData, MarloweParams)
 import Store.Contracts (ContractStore)
 
 type ContractState =
@@ -75,7 +76,7 @@ type Input =
   { wallet :: PABConnectedWallet
   , contracts :: ContractStore
   , addressBook :: AddressBook
-  , currentSlot :: Slot
+  , currentTime :: Instant
   , tzOffset :: Minutes
   }
 

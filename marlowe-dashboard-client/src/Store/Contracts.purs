@@ -2,7 +2,7 @@ module Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
-  , advanceToSlot
+  , tick
   , emptyContractStore
   , followerContractExists
   , getClosedContracts
@@ -18,11 +18,25 @@ module Store.Contracts
 
 import Prologue
 
+import Control.Apply (lift2)
 import Data.Array (filter)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
-import Data.Lens (Lens', _1, filtered, iso, over, to, traversed, view)
+import Data.DateTime.Instant (Instant)
+import Data.Either (note)
+import Data.Lens
+  ( Lens'
+  , _1
+  , filtered
+  , iso
+  , over
+  , to
+  , traverseOf
+  , traversed
+  , view
+  , (^?)
+  )
 import Data.Lens.At (at)
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
@@ -40,7 +54,7 @@ import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams, Slot)
+import Marlowe.Semantics (MarloweParams)
 import Type.Proxy (Proxy(..))
 
 newtype ContractStore = ContractStore ContractStoreFields
@@ -102,21 +116,26 @@ addStartingContract (reqId /\ contractNickname /\ metadata) =
   over _newContracts $ Map.insert reqId (contractNickname /\ metadata)
 
 addFollowerContract
-  :: Slot
+  :: Instant
   -> PlutusAppId
   -> MetaData
   -> ContractHistory
   -> ContractStore
-  -> ContractStore
-addFollowerContract currentSlot followerId metadata history store =
+  -> Either String ContractStore
+addFollowerContract currentTime followerId metadata history store = do
+  marloweParams <- note "params not available" $ history ^? _chParams <<< _1
   let
-    marloweParams = view (_chParams <<< _1) history
     mContractNickname = getContractNickname marloweParams store
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams followerId
-    updateSyncedContracts = over _syncedContracts $ Map.insert marloweParams
-      $ Execution.restoreState currentSlot mContractNickname metadata history
-  in
-    updateIndexes $ updateSyncedContracts store
+    updateSyncedContracts = traverseOf _syncedContracts
+      $
+        lift2
+          (Map.insert marloweParams)
+          ( Execution.restoreState currentTime mContractNickname metadata
+              history
+          )
+          <<< pure
+  updateIndexes <$> updateSyncedContracts store
 
 modifyContractNicknames
   :: (LocalContractNicknames -> LocalContractNicknames)
@@ -132,18 +151,18 @@ modifyContract
 modifyContract marloweParams f =
   over (_syncedContracts <<< at marloweParams) (map f)
 
-advanceToSlot :: Slot -> ContractStore -> ContractStore
-advanceToSlot currentSlot =
-  over
+tick :: Instant -> ContractStore -> Either String ContractStore
+tick currentTime =
+  traverseOf
     ( _syncedContracts
         <<< traversed
         <<< filtered
           ( \executionState ->
               executionState.mNextTimeout /= Nothing
-                && executionState.mNextTimeout <= Just currentSlot
+                && executionState.mNextTimeout <= Just currentTime
           )
     )
-    (timeoutState currentSlot)
+    (timeoutState currentTime)
 
 ------------------------------------------------------------
 

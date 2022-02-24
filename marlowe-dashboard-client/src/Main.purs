@@ -5,10 +5,10 @@ module Main
 import Prologue
 
 import AppM (runAppM)
-import Bridge (toFront)
 import Capability.MarloweStorage as MarloweStorage
 import Control.Logger.Effect.Console (logger) as Console
 import Control.Monad.Error.Class (throwError)
+import Control.Monad.Now (now)
 import Data.Argonaut
   ( class DecodeJson
   , Json
@@ -17,7 +17,9 @@ import Data.Argonaut
   , printJsonDecodeError
   , (.:)
   )
-import Data.Either (either)
+import Data.Argonaut.Decode.Aeson as D
+import Data.Argonaut.Extra (parseDecodeJson)
+import Data.Either (either, hush)
 import Data.Lens (_Just, (^?))
 import Data.Map as Map
 import Data.PABConnectedWallet
@@ -38,7 +40,6 @@ import Halogen as H
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
-import Humanize (getTimezoneOffset)
 import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
@@ -96,16 +97,16 @@ main :: Json -> Effect Unit
 main args = do
   MainArgs { pollingInterval, webpackBuildMode } <- either exitBadArgs pure $
     decodeJson args
-  tzOffset <- getTimezoneOffset
   addressBook <- MarloweStorage.getAddressBook
   contractNicknames <- MarloweStorage.getContractNicknames
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
     env <- liftEffect $ mkEnv pollingInterval wsManager webpackBuildMode
-    let store = mkStore addressBook contractNicknames
+    currentTime <- now
+    let store = mkStore currentTime addressBook contractNicknames
     body <- awaitBody
     rootComponent <- runAppM env store mkMainFrame
-    driver <- runUI rootComponent { tzOffset } body
+    driver <- runUI rootComponent unit body
     -- This is a hack. The PAB sends us duplicate companion app updates, so we
     -- deduplicate by storing the last update and ignoring subsequent
     -- duplicates.
@@ -150,8 +151,12 @@ wsMsgToQuery mWallet = case _ of
       $ MainFrame.NewWebSocketStatus
       $ MainFrame.WebSocketClosed
       $ Just closeEvent
-  WS.ReceiveMessage (Left jsonDecodeError) ->
-    Just $ MainFrame.NotificationParseFailed "websocket message" jsonDecodeError
+  WS.ReceiveMessage (Left (Tuple str jsonDecodeError)) ->
+    let
+      json = hush $ parseDecodeJson str
+    in
+      MainFrame.NotificationParseFailed "websocket message" <$> json <*> pure
+        jsonDecodeError
   WS.ReceiveMessage (Right stream) -> streamToQuery mWallet stream
 
 streamToQuery
@@ -159,7 +164,7 @@ streamToQuery
   -> CombinedWSStreamToClient
   -> Maybe (Tell MainFrame.Query)
 streamToQuery mWallet = case _ of
-  SlotChange slot -> Just $ MainFrame.SlotChange $ toFront slot
+  SlotChange _ -> Nothing
   -- TODO handle with lite wallet support
   -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
   --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
@@ -181,32 +186,42 @@ streamToQuery mWallet = case _ of
     | otherwise ->
         Just $ MainFrame.MarloweAppClosed message
   InstanceUpdate appId (NewObservableState state)
-    | Just appId == mCompanionAppId -> Just $ case decodeJson state of
+    | Just appId == mCompanionAppId ->
+        case D.decode (D.maybe D.value) state of
+          Left error ->
+            Just $ MainFrame.NotificationParseFailed
+              "wallet companion state"
+              state
+              error
+          Right (Just companionAppState) ->
+            Just $ MainFrame.CompanionAppStateUpdated companionAppState
+          _ -> Nothing
+    | Just appId == mMarloweAppId -> case D.decode (D.maybe D.value) state of
         Left error ->
-          MainFrame.NotificationParseFailed "wallet companion state" error
-        Right companionAppState ->
-          MainFrame.CompanionAppStateUpdated companionAppState
-    | Just appId == mMarloweAppId -> case decodeJson state of
-        Left error ->
-          Just $ MainFrame.NotificationParseFailed "marlowe app response" error
-        Right (EndpointException uuid "create" error) ->
+          Just $ MainFrame.NotificationParseFailed "marlowe app response" state
+            error
+        Right Nothing ->
+          Nothing
+        Right (Just (EndpointException uuid "create" error)) ->
           Just $ MainFrame.CreateFailed uuid error
-        Right (EndpointException uuid "apply-inputs-nonmerkleized" error) ->
+        Right (Just (EndpointException uuid "apply-inputs-nonmerkleized" error)) ->
           Just $ MainFrame.ApplyInputsFailed uuid error
-        Right (EndpointException uuid "redeem" error) ->
+        Right (Just (EndpointException uuid "redeem" error)) ->
           Just $ MainFrame.RedeemFailed uuid error
-        Right (EndpointSuccess uuid (CreateResponse marloweParams)) ->
+        Right (Just (EndpointSuccess uuid (CreateResponse marloweParams))) ->
           Just $ MainFrame.MarloweContractCreated uuid marloweParams
-        Right (EndpointSuccess uuid ApplyInputsResponse) ->
+        Right (Just (EndpointSuccess uuid ApplyInputsResponse)) ->
           Just $ MainFrame.InputsApplied uuid
-        Right (EndpointSuccess uuid RedeemResponse) ->
+        Right (Just (EndpointSuccess uuid RedeemResponse)) ->
           Just $ MainFrame.PaymentRedeemed uuid
         _ -> Nothing
-    | otherwise -> case decodeJson state of
+    | otherwise -> case D.decode (D.maybe D.value) state of
         Left error ->
-          Just $ MainFrame.NotificationParseFailed "follower app response" error
-        Right history ->
+          Just $ MainFrame.NotificationParseFailed "follower app response" state
+            error
+        Right (Just history) ->
           Just $ MainFrame.ContractHistoryUpdated appId history
+        Right _ -> Nothing
   where
   mCompanionAppId = mWallet ^? _Just <<< _companionAppId
   mMarloweAppId = mWallet ^? _Just <<< _marloweAppId

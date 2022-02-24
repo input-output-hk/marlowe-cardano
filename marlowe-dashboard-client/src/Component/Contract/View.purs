@@ -13,6 +13,9 @@ import Data.ContractUserParties
   , getNickname
   , isCurrentUser
   )
+import Data.DateTime (diff)
+import Data.DateTime.Instant (Instant, toDateTime)
+import Data.Function (on)
 import Data.Lens ((^.))
 import Data.Maybe (maybe')
 import Data.String (take)
@@ -24,11 +27,10 @@ import Humanize (humanizeDuration)
 import Marlowe.Execution.Lenses (_mNextTimeout)
 import Marlowe.Execution.State (isClosed)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (Party(..), Slot)
-import Marlowe.Slot (secondsDiff)
+import Marlowe.Semantics (Party(..))
 
-timeoutString :: Slot -> Execution.State -> String
-timeoutString currentSlot executionState =
+timeoutString :: Instant -> Execution.State -> String
+timeoutString currentTime executionState =
   let
     mNextTimeout = executionState ^. _mNextTimeout
   in
@@ -37,7 +39,9 @@ timeoutString currentSlot executionState =
           if isClosed executionState then "Contract closed"
           else "Timed out"
       )
-      (\nextTimeout -> humanizeDuration $ secondsDiff nextTimeout currentSlot)
+      ( \nextTimeout ->
+          humanizeDuration $ on diff toDateTime nextTimeout currentTime
+      )
       mNextTimeout
 
 -- TODO: In zeplin all participants have a different color. We need to decide how are we going to assing

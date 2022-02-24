@@ -110,6 +110,7 @@ let
     marlowe-dashboard.build-client
     marlowe-dashboard.generate-purescript
     marlowe-dashboard.start-backend
+    marlowe-playground.build-client
     marlowe-playground.generate-purescript
     marlowe-playground.start-backend
     generate-purescript

@@ -12,6 +12,7 @@ import Data.Array (concatMap, intercalate, length, reverse, sortWith)
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant, unInstant)
 import Data.Enum (fromEnum)
 import Data.Lens (has, only, previewOn, to, view, (^.), (^?))
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -20,7 +21,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, isJust, maybe)
-import Data.Newtype (unwrap, wrap)
+import Data.Newtype (unwrap)
 import Data.Set.Ordered.OSet (OSet)
 import Data.String (trim)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -112,12 +113,18 @@ import Marlowe.Semantics
   , inBounds
   , timeouts
   )
-import Marlowe.Template (IntegerTemplateType(..), orderContentUsingMetadata)
+import Marlowe.Template
+  ( IntegerTemplateType(..)
+  , TemplateContent(..)
+  , orderContentUsingMetadata
+  )
+import Marlowe.Time (unixEpoch)
 import Monaco as Monaco
 import Page.Simulation.BottomPanel (panelContents)
 import Page.Simulation.Lenses (_bottomPanelState)
 import Page.Simulation.Types (Action(..), BottomPanelView(..), State)
-import Plutus.V1.Ledger.Time (POSIXTime)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Plutus.V1.Ledger.Time as POSIXTime
 import Pretty
   ( renderPrettyParty
   , renderPrettyPayee
@@ -133,11 +140,11 @@ import Simulator.Lenses
   , _log
   , _marloweState
   , _possibleActions
-  , _slot
+  , _time
   , _transactionError
   , _transactionWarnings
   )
-import Simulator.State (hasHistory, inFuture)
+import Simulator.State (hasHistory)
 import Simulator.Types
   ( ActionInput(..)
   , ActionInputId
@@ -338,27 +345,26 @@ startSimulationWidget
   => MetaData
   -> InitialConditionsRecord
   -> ComponentHTML Action ChildSlots m
-startSimulationWidget metadata { initialSlot, templateContent } =
+startSimulationWidget
+  metadata
+  { initialTime
+  , templateContent: TemplateContent { timeContent, valueContent }
+  } =
   cardWidget "Simulation has not started yet"
     $ div_
         [ div
-            [ classes [ ClassName "slot-input", ClassName "initial-slot-input" ]
+            [ classes [ ClassName "time-input", ClassName "initial-time-input" ]
             ]
-            [ spanText "Initial slot:"
-            , marloweActionInput "initial-slot"
+            -- TODO use a real date time picker
+            [ spanText "Initial time (milliseconds since UNIX epoch):"
+            , marloweInstantInput "initial-time"
                 [ "mx-2", "flex-grow", "flex-shrink-0" ]
-                (SetInitialSlot <<< wrap)
-                (unwrap initialSlot)
+                SetInitialTime
+                initialTime
             ]
         , div_
             [ ul [ class_ (ClassName "templates") ]
-                ( integerTemplateParameters SetIntegerTemplateParam
-                    slotParameterDisplayInfo
-                    (unwrap templateContent).slotContent
-                    <> integerTemplateParameters SetIntegerTemplateParam
-                      valueParameterDisplayInfo
-                      (unwrap templateContent).valueContent
-                )
+                $ timeoutParameters <> valueParameters
             ]
         , div [ classNames [ "transaction-btns", "flex", "justify-center" ] ]
             [ button
@@ -376,14 +382,23 @@ startSimulationWidget metadata { initialSlot, templateContent } =
             ]
         ]
   where
-  slotParameterDisplayInfo =
+  timeoutParameters =
+    integerTemplateParameters SetIntegerTemplateParam timeParameterDisplayInfo
+      $ map (POSIXTime.toBigInt <<< POSIXTime) timeContent
+
+  valueParameters = integerTemplateParameters
+    SetIntegerTemplateParam
+    valueParameterDisplayInfo
+    valueContent
+
+  timeParameterDisplayInfo =
     { lookupFormat: const Nothing
     , lookupDefinition: (flip Map.lookup)
-        (Map.fromFoldableWithIndex metadata.slotParameterDescriptions) -- Convert to normal Map for efficiency
-    , typeName: SlotContent
+        (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
+    , typeName: TimeContent
     , title: "Timeout template parameters"
-    , prefix: "Slot for"
-    , orderedMetadataSet: OMap.keys metadata.slotParameterDescriptions
+    , prefix: "POSIX time for"
+    , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
     }
 
   valueParameterDisplayInfo =
@@ -485,27 +500,28 @@ integerTemplateParameters
   orderedContent = orderContentUsingMetadata content orderedMetadataSet
 
 ------------------------------------------------------------
-simulationStateWidget
-  :: forall p
-   . State
-  -> HTML p Action
+simulationStateWidget :: forall p. State -> HTML p Action
 simulationStateWidget state =
   let
-    currentSlot = state ^.
+    currentTime = state ^.
       ( _currentMarloweState <<< _executionState <<< _SimulationRunning
-          <<< _slot
-          <<< to show
+          <<< _time
+          <<< to unInstant
+          <<< to unwrap
+          <<< to \ms -> show ms <> " POSIX ms"
       )
 
-    expirationSlot = contractMaxTime (previewOn state _currentContract)
+    expirationTime = contractMaxTime (previewOn state _currentContract)
 
     contractMaxTime = case _ of
       Nothing -> "Closed"
       Just contract ->
         let
-          t = (_.maxTime <<< unwrap <<< timeouts) contract
+          POSIXTime t = (_.maxTime <<< unwrap <<< timeouts) contract
         in
-          if t == zero then "Closed" else show t
+          if t == unixEpoch then "Closed"
+          else
+            show (unwrap $ unInstant t) <> " POSIX ms"
 
     indicator name value =
       div_
@@ -517,8 +533,8 @@ simulationStateWidget state =
   in
     div
       [ classes [ flex, justifyBetween ] ]
-      [ indicator "current slot" currentSlot
-      , indicator "expiration slot" expirationSlot
+      [ indicator "current time" currentTime
+      , indicator "expiration time" expirationTime
       ]
 
 ------------------------------------------------------------
@@ -605,7 +621,7 @@ participant metadata state party actionInputs =
   title =
     div [ classes [ ClassName "action-group" ] ]
       if party == otherActionsParty then
-        -- QUESTION: if we only have "move to slot", could we rename this to "Slot Actions"?
+        -- QUESTION: if we only have "move to time", could we rename this to "Time Actions"?
         [ h6_ [ em_ [ text "Other Actions" ] ] ]
       else
         [ h6_
@@ -738,16 +754,16 @@ inputItem _ _ NotifyInput =
         [ text "+" ]
     ]
 
-inputItem _ state (MoveToSlot slot) =
+inputItem _ state (MoveToTime time) =
   div
     [ classes [ aHorizontal, ClassName "flex-nowrap" ] ]
     ( [ div [ classes [ ClassName "action" ] ]
-          [ p [ class_ (ClassName "slot-input") ]
-              [ spanTextBreakWord "Move to slot "
-              , marloweActionInput "move-to-slot"
+          [ p [ class_ (ClassName "time-input") ]
+              [ spanTextBreakWord "Move to POSIXTime "
+              , marloweInstantInput "move-to-instant"
                   [ "mx-2", "flex-grow", "flex-shrink-0" ]
-                  (SetSlot <<< wrap)
-                  (unwrap slot)
+                  SetTime
+                  time
               ]
           , p [ class_ (ClassName "choice-error") ] error
           ]
@@ -755,8 +771,13 @@ inputItem _ state (MoveToSlot slot) =
         <> addButton
     )
   where
+  currentTime = fromMaybe unixEpoch $ state ^?
+    _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _time
+
+  isForward = currentTime < time
+
   addButton =
-    if inFuture state slot then
+    if isForward then
       [ button
           [ classes
               [ plusBtn
@@ -765,22 +786,16 @@ inputItem _ state (MoveToSlot slot) =
               , ClassName "flex-noshrink"
               , btn
               ]
-          , onClick $ const $ MoveSlot slot
+          , onClick $ const $ MoveTime time
           ]
           [ text "+" ]
       ]
     else
       []
 
-  error = if inFuture state slot then [] else [ text boundsError ]
+  error = if isForward then [] else [ text boundsError ]
 
-  boundsError = "The slot must be more than the current slot " <>
-    ( state ^.
-        ( _currentMarloweState <<< _executionState <<< _SimulationRunning
-            <<< _slot
-            <<< to show
-        )
-    )
+  boundsError = "The new time must be more than the current time."
 
 marloweCurrencyInput
   :: forall m action
@@ -798,6 +813,18 @@ marloweCurrencyInput ref classList f currencyLabel numDecimals value =
     currencyInput
     { classList, value, prefix: currencyLabel, numDecimals }
     f
+
+marloweInstantInput
+  :: forall m action
+   . String
+  -> Array String
+  -> (Instant -> action)
+  -> Instant
+  -> ComponentHTML action ChildSlots m
+marloweInstantInput ref classes f current =
+  marloweActionInput ref classes
+    (f <<< maybe current unwrap <<< POSIXTime.fromBigInt)
+    (POSIXTime.toBigInt $ POSIXTime current)
 
 marloweActionInput
   :: forall m action
@@ -840,7 +867,7 @@ logWidget metadata state =
   cardWidget "Transaction log"
     $ div [ classes [ grid, gridColsDescriptionLocation, fullWidth ] ]
         ( [ div [ class_ fontBold ] [ text "Action" ]
-          , div [ class_ fontBold ] [ text "Slot" ]
+          , div [ class_ fontBold ] [ text "POSIX time" ]
           ]
             <> inputLines
         )
@@ -852,9 +879,9 @@ logWidget metadata state =
     )
 
 logToLines :: forall p a. MetaData -> LogEntry -> Array (HTML p a)
-logToLines _ (StartEvent slot) =
+logToLines _ (StartEvent time) =
   [ span_ [ text "Contract started" ]
-  , span [ class_ justifyEnd ] [ text $ show slot ]
+  , span [ class_ justifyEnd ] [ text $ show time ]
   ]
 
 logToLines metadata (InputEvent (TransactionInput { interval, inputs })) =
@@ -866,7 +893,7 @@ logToLines metadata (OutputEvent interval payment) = paymentToLines metadata
 
 logToLines _ (CloseEvent (TimeInterval start end)) =
   [ span_ [ text $ "Contract ended" ]
-  , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
+  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
   ]
 
 inputToLine :: forall p a. MetaData -> TimeInterval -> Input -> Array (HTML p a)
@@ -884,7 +911,7 @@ inputToLine
       , text " as "
       , strong_ [ renderPrettyParty metadata party ]
       ]
-  , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
+  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
   ]
 
 inputToLine
@@ -902,12 +929,12 @@ inputToLine
       , text " for choice with id "
       , strong_ [ text (show choiceName) ]
       ]
-  , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
+  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
   ]
 
 inputToLine _ (TimeInterval start end) INotify =
   [ text "Notify"
-  , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
+  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
   ]
 
 paymentToLines
@@ -935,11 +962,11 @@ paymentToLine metadata (TimeInterval start end) accountId payee token money =
       , text " from "
       , strong_ $ renderPrettyPayee metadata (Account accountId)
       ]
-  , span [ class_ justifyEnd ] [ text $ showSlotRange start end ]
+  , span [ class_ justifyEnd ] [ text $ showTimeRange start end ]
   ]
 
-showSlotRange :: POSIXTime -> POSIXTime -> String
-showSlotRange start end =
+showTimeRange :: POSIXTime -> POSIXTime -> String
+showTimeRange start end =
   if start == end then
     show start
   else

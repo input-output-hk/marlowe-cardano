@@ -54,6 +54,7 @@
   , "record"
   , "refs"
   , "remotedata"
+  , "safe-coerce"
   , "servant-support"
   , "spec"
   , "spec-quickcheck"

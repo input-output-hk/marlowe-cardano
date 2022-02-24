@@ -12,19 +12,12 @@ import Language.Marlowe.Client
   , MarloweEndpointResult
   , MarloweError
   )
-import Marlowe.Semantics (Input, Slot)
 
 type EndpointName
   = String
 
 type MarloweEndpointResponse = EndpointResponse MarloweEndpointResult
   MarloweError
-
-type MarloweInput
-  = Tuple MarloweSlotRange (Array Input)
-
-type MarloweSlotRange
-  = Tuple Slot Slot
 
 type MarloweAppState
   = Maybe MarloweEndpointResponse

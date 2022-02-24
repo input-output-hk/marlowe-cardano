@@ -27,7 +27,7 @@ import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Either (note')
-import Data.Foldable (class Foldable, any, foldl, minimum)
+import Data.Foldable (class Foldable, any, foldl, maximum, minimum)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens', over, to, view)
@@ -44,7 +44,9 @@ import Data.String (joinWith, toLower)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Foreign.Object (Object)
+import Marlowe.Time (unixEpoch)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Plutus.V1.Ledger.Time as POSIXTime
 import Text.Pretty
   ( class Args
   , class Pretty
@@ -255,36 +257,6 @@ instance semigroupAssets :: Semigroup Assets where
 
 instance monoidAssets :: Monoid Assets where
   mempty = Assets Map.empty
-
-newtype Slot
-  = Slot BigInt
-
-derive newtype instance encodeJsonSlot :: EncodeJson Slot
-
-derive newtype instance decodeJsonSlot :: DecodeJson Slot
-
-derive instance genericSlot :: Generic Slot _
-
-derive instance newtypeSlot :: Newtype Slot _
-
-derive instance eqSlot :: Eq Slot
-
-derive instance ordSlot :: Ord Slot
-
-instance showSlot :: Show Slot where
-  show (Slot s) = BigInt.toString s
-
-derive newtype instance semiRingSlot :: Semiring Slot
-
-derive newtype instance ringSlot :: Ring Slot
-
-instance commutativeRingSlot :: CommutativeRing Slot
-
-derive newtype instance euclideanRingSlot :: EuclideanRing Slot
-
-derive newtype instance prettySlot :: Pretty Slot
-
-derive newtype instance hasArgsSlot :: Args Slot
 
 newtype Ada
   = Lovelace BigInt
@@ -1373,19 +1345,9 @@ instance showTransactionInput :: Show TransactionInput where
 
 instance encodeTransactionInput :: EncodeJson TransactionInput where
   encodeJson
-    ( TransactionInput
-        { interval:
-            ( TimeInterval (POSIXTime { getPOSIXTime: from })
-                (POSIXTime { getPOSIXTime: to })
-            )
-        , inputs: txInps
-        }
-    ) =
+    (TransactionInput { interval: (TimeInterval from to), inputs: txInps }) =
     encodeJson
-      { tx_interval:
-          { from
-          , to
-          }
+      { tx_interval: { from, to }
       , tx_inputs: txInps
       }
 
@@ -1400,8 +1362,8 @@ instance decodeTransactionInput :: DecodeJson TransactionInput where
             $ Just
                 <$>
                   ( TimeInterval
-                      <$> (POSIXTime <$> requireProp "from")
-                      <*> (POSIXTime <$> requireProp "to")
+                      <$> requireProp "from"
+                      <*> requireProp "to"
                   )
       pure $ Just $ TransactionInput { interval, inputs: inputs }
 
@@ -1474,13 +1436,13 @@ _rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop
 type ValidatorHash
   = String
 
-emptyState :: POSIXTime -> State
-emptyState sn =
+emptyState :: State
+emptyState =
   State
     { accounts: Map.empty
     , choices: Map.empty
     , boundValues: Map.empty
-    , minTime: sn
+    , minTime: POSIXTime unixEpoch
     }
 
 inBounds :: ChosenNum -> Array Bound -> Boolean
@@ -1562,9 +1524,9 @@ evalValue env state value =
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
         (unwrap state).choices
       TimeIntervalStart ->
-        (unwrap (ivFrom ((unwrap env).timeInterval))).getPOSIXTime
+        POSIXTime.toBigInt $ ivFrom $ (unwrap env).timeInterval
       TimeIntervalEnd ->
-        (unwrap (ivTo ((unwrap env).timeInterval))).getPOSIXTime
+        POSIXTime.toBigInt $ ivTo $ (unwrap env).timeInterval
       UseValue valId -> fromMaybe zero $ Map.lookup valId
         (unwrap state).boundValues
       Cond cond thn els ->
@@ -1922,7 +1884,7 @@ class HasTimeout a where
   timeouts :: a -> Timeouts
 
 instance hasTimeoutContract :: HasTimeout Contract where
-  timeouts Close = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts Close = Timeouts { maxTime: POSIXTime unixEpoch, minTime: Nothing }
   timeouts (Pay _ _ _ _ contract) = timeouts contract
   timeouts (If _ contractTrue contractFalse) = timeouts
     [ contractTrue, contractFalse ]
@@ -1948,7 +1910,7 @@ else instance hasTimeoutArray :: HasTimeout a => HasTimeout (Array a) where
   timeouts vs = timeouts $ map timeouts vs
 
 maxOf :: Array Timeout -> Timeout
-maxOf = foldl max zero
+maxOf = fromMaybe (POSIXTime unixEpoch) <<< maximum
 
 minOf :: Array (Maybe Timeout) -> Maybe Timeout
 minOf as = minimum $ catMaybes as

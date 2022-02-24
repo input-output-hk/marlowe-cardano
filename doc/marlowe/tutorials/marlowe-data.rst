@@ -242,7 +242,7 @@ extended with these values:
 
 .. code:: haskell
 
-   SlotParam "string"
+   TimeParam "string"
 
 Extended Marlowe is not directly executable, it has to be translated to core Marlowe before
 execution, deployment, or analysis, through the process of *instantiation*.

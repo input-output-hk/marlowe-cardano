@@ -23,12 +23,15 @@ import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
+import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk)
 import Data.ContractUserParties (contractUserParties)
+import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
+import Data.Maybe (fromMaybe)
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
@@ -45,7 +48,7 @@ import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Execution.State (extractNamedActions)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
+import Marlowe.Semantics (MarloweData, MarloweParams)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
@@ -80,12 +83,12 @@ import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 mkInitialState
-  :: Slot -> PABConnectedWallet -> ContractStore -> State
-mkInitialState currentSlot wallet contracts =
+  :: Instant -> PABConnectedWallet -> ContractStore -> State
+mkInitialState currentTime wallet contracts =
   let
-    runningContracts = deriveContractState currentSlot wallet $
+    runningContracts = deriveContractState currentTime wallet $
       getRunningContracts contracts
-    closedContracts = deriveContractState currentSlot wallet $
+    closedContracts = deriveContractState currentTime wallet $
       getClosedContracts contracts
   in
     { contactsState: Contacts.initialState
@@ -101,30 +104,28 @@ mkInitialState currentSlot wallet contracts =
     }
 
 deriveContractState
-  :: Slot
+  :: Instant
   -> PABConnectedWallet
   -> Array Execution.State
   -> Array ContractState
-deriveContractState currentSlot wallet = map \executionState ->
+deriveContractState currentTime wallet = map \executionState ->
   let
     { marloweParams, contract } = executionState
     userParties = contractUserParties wallet marloweParams contract
   in
     { executionState
     , contractUserParties: userParties
-    , namedActions:
-        userNamedActions
-          userParties
-          ( extractNamedActions
-              currentSlot
-              executionState
-          )
+    , namedActions: userNamedActions userParties
+        $ fromMaybe []
+        $ hush
+        $ extractNamedActions currentTime executionState
     }
 
 handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadTime m
   => ManageMarloweStorage m
   => ManageMarlowe m
   => MainFrameLoop m
@@ -134,11 +135,11 @@ handleAction
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction { currentSlot, wallet, contracts } Receive = do
+handleAction { currentTime, wallet, contracts } Receive = do
   let
-    runningContracts = deriveContractState currentSlot wallet $
+    runningContracts = deriveContractState currentTime wallet $
       getRunningContracts contracts
-    closedContracts = deriveContractState currentSlot wallet $
+    closedContracts = deriveContractState currentTime wallet $
       getClosedContracts contracts
   modify_
     ( set _runningContracts runningContracts
@@ -242,7 +243,7 @@ for_ mStartedContract \{ executionState, userParties } ->
           _ -> pure unit
 -}
 
-handleAction input@{ currentSlot, wallet } (TemplateAction templateAction) =
+handleAction input@{ wallet } (TemplateAction templateAction) =
   case templateAction of
     Template.OpenCreateWalletCard tokenName -> do
       modify_
@@ -258,7 +259,8 @@ handleAction input@{ currentSlot, wallet } (TemplateAction templateAction) =
     -}
     Template.OnStartContract template params -> do
       let { nickname, roles } = params
-      case instantiateExtendedContract currentSlot template params of
+      currentInstant <- now
+      case instantiateExtendedContract currentInstant template params of
         Nothing -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
             (Milliseconds 600.0)
@@ -290,8 +292,8 @@ handleAction input@{ currentSlot, wallet } (TemplateAction templateAction) =
               marloweParams <- liftAff mMarloweParams
               ajaxFollow <- followContract wallet marloweParams
               case ajaxFollow of
-                Left _ -> addToast $ errorToast "Can't follow the contract"
-                  Nothing
+                Left _ ->
+                  addToast $ errorToast "Can't follow the contract" Nothing
                 Right (_ /\ _) -> do
                   -- TODO: SCP-3487 swap store contract from new to running
                   addToast $ successToast "Contract initialised."
@@ -315,18 +317,14 @@ handleAction _ (SetContactForRole _ _) = do
 -- assign _card $ Just ContractTemplateCard
 
 handleAction
-  input@{ contracts, currentSlot, wallet }
+  input@{ contracts, wallet }
   (OnAskContractActionConfirmation marloweParams action) = do
   let
     mExecutionState = getContract marloweParams contracts
   for_ mExecutionState \executionState ->
-    handleAction input $ OpenCard
-      $ ContractActionConfirmationCard
-          { action
-          , executionState
-          , currentSlot
-          , wallet
-          }
+    handleAction input
+      $ OpenCard
+      $ ContractActionConfirmationCard { action, executionState, wallet }
 
 updateTotalFunds
   :: forall m

@@ -35,6 +35,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
 import Data.ContractUserParties (getParticipants, isCurrentUser)
+import Data.DateTime.Instant (Instant, toDateTime)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
 import Data.List.NonEmpty (foldr)
@@ -64,14 +65,12 @@ import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Party(..)
-  , Slot
   , TimeInterval(..)
   , Token
   , TransactionInput(..)
   , _accounts
   )
 import Marlowe.Semantics (Input(..)) as S
-import Marlowe.Slot (posixTimeToDateTime, slotToDateTime)
 import Page.Contract.Lenses
   ( _contractUserParties
   , _executionState
@@ -97,6 +96,7 @@ import Page.Contract.Types
   , currentStep
   , scrollContainerRef
   )
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 -------------------------------------------------------------------------------
 -- Top-level views
@@ -113,7 +113,7 @@ contractScreen state =
               (renderPastStep state.tzOffset started)
               (started ^. _previousSteps)
 
-          currentStepCard = [ renderCurrentStep state.currentSlot started ]
+          currentStepCard = [ renderCurrentStep state.currentTime started ]
 
           cardForStep stepNumber
             | stepNumber == started.selectedStep = card
@@ -435,9 +435,9 @@ renderPartyPastActions tzOffset state { inputs, interval, party } =
     -- We don't know exactly when a transaction was executed, we have an interval. But
     -- the design asks for an exact date so we use the lower end of the interval so that
     -- we don't show a value in the future
-    (TimeInterval intervalFrom _) = interval
+    (TimeInterval (POSIXTime intervalFrom) _) = interval
 
-    mTransactionDateTime = posixTimeToDateTime intervalFrom
+    mTransactionDateTime = toDateTime intervalFrom
 
     transactionDate = formatDate tzOffset mTransactionDateTime
 
@@ -508,11 +508,11 @@ renderTimeout
   :: forall p a. Minutes -> StartedState -> Int -> TimeoutInfo -> HTML p a
 renderTimeout tzOffset state _ timeoutInfo =
   let
-    mTimeoutDateTime = slotToDateTime timeoutInfo.slot
+    timeoutDateTime = toDateTime timeoutInfo.time
 
-    timeoutDate = maybe "-" (formatDate tzOffset) mTimeoutDateTime
+    timeoutDate = formatDate tzOffset timeoutDateTime
 
-    timeoutTime = maybe "-" (formatTime tzOffset) mTimeoutDateTime
+    timeoutTime = formatTime tzOffset timeoutDateTime
 
     header =
       div
@@ -598,7 +598,7 @@ renderPartyMissingActions state party actions =
 renderCurrentStep
   :: forall m
    . MonadAff m
-  => Slot
+  => Instant
   -> StartedState
   -> Array (ComponentHTML m)
 renderCurrentStep currentSlot state =
@@ -892,4 +892,3 @@ stepStatusText message css =
   span
     [ classNames $ [ "select-none", "font-semibold" ] <> css ]
     [ text message ]
-

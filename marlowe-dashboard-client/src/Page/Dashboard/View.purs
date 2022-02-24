@@ -24,11 +24,13 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
+import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
 import Data.Array as Array
 import Data.Compactable (compact)
+import Data.DateTime.Instant (Instant)
 import Data.Int (round)
 import Data.Lens (view, (^.))
 import Data.Maybe (isJust)
@@ -76,7 +78,7 @@ import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.Semantics (PubKey, Slot)
+import Marlowe.Semantics (PubKey)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
@@ -105,6 +107,7 @@ dashboardScreen
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadTime m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
@@ -112,7 +115,7 @@ dashboardScreen
   => Input
   -> State
   -> ComponentHTML Action ChildSlots m
-dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
+dashboardScreen { currentTime, wallet, contracts } state =
   let
     walletNickname = wallet ^. _walletNickname
 
@@ -152,16 +155,13 @@ dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
                           _contractPage
                           unit
                           ContractPage.component
-                          { tzOffset
-                          , wallet
-                          , marloweParams
-                          }
+                          { wallet, marloweParams }
                           ( \(AskConfirmation namedAction) ->
                               OnAskContractActionConfirmation marloweParams
                                 namedAction
                           )
                       ]
-                    _ -> [ contractsScreen currentSlot state ]
+                    _ -> [ contractsScreen currentTime state ]
               ]
           ]
       , dashboardFooter
@@ -170,6 +170,7 @@ dashboardScreen { currentSlot, tzOffset, wallet, contracts } state =
 dashboardCard
   :: forall m
    . MonadAff m
+  => MonadTime m
   => ManageMarlowe m
   => Toast m
   => MonadStore Store.Action Store.Store m
@@ -438,8 +439,12 @@ link label url =
 
 ------------------------------------------------------------
 contractsScreen
-  :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
-contractsScreen currentSlot state =
+  :: forall m
+   . MonadAff m
+  => Instant
+  -> State
+  -> ComponentHTML Action ChildSlots m
+contractsScreen currentTime state =
   let
     contractFilter = view _contractFilter state
   in
@@ -463,7 +468,7 @@ contractsScreen currentSlot state =
           ]
           [ div
               [ classNames $ Css.maxWidthContainer <> [ "relative", "h-full" ] ]
-              [ contractCards currentSlot state ]
+              [ contractCards currentTime state ]
           ]
       , div
           [ classNames [ "absolute", "inset-0" ] ]
@@ -572,9 +577,13 @@ contractNavigation contractFilter =
       ]
 
 contractCards
-  :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
+  :: forall m
+   . MonadAff m
+  => Instant
+  -> State
+  -> ComponentHTML Action ChildSlots m
 contractCards
-  currentSlot
+  currentTime
   { walletCompanionStatus, contractFilter, runningContracts, closedContracts } =
   case walletCompanionStatus of
     WalletCompanionSynced ->
@@ -588,7 +597,7 @@ contractCards
         if Array.null filteredContracts then
           noContractsMessage contractFilter
         else
-          contractGrid currentSlot contractFilter filteredContracts
+          contractGrid currentTime contractFilter filteredContracts
     WaitingToSync ->
       div
         [ classNames
@@ -632,11 +641,11 @@ noContractsMessage contractFilter =
 contractGrid
   :: forall m
    . MonadAff m
-  => Slot
+  => Instant
   -> ContractFilter
   -> Array ContractState
   -> ComponentHTML Action ChildSlots m
-contractGrid currentSlot contractFilter contracts =
+contractGrid currentTime contractFilter contracts =
   div
     [ classNames
         [ "grid"
@@ -682,7 +691,7 @@ contractGrid currentSlot contractFilter contracts =
 
   dashboardContractCard { executionState, contractUserParties, namedActions } =
     contractPreviewCard
-      currentSlot
+      currentTime
       executionState
       contractUserParties
       namedActions

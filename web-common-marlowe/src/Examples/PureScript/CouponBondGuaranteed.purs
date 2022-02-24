@@ -18,6 +18,8 @@ import Marlowe.Extended
   )
 import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics (Party(..), Token(..))
+import Marlowe.Time (unsafeInstantFromInt)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract }
@@ -72,21 +74,21 @@ transfer amount from to timeout timeoutContinuation continuation =
 extendedContract :: Contract
 extendedContract =
   deposit (guaranteedAmount (fromInt 3)) guarantor investor
-    (Slot $ fromInt 300)
+    (TimeValue $ POSIXTime $ unsafeInstantFromInt 300)
     Close
     $ transfer principal investor issuer
-        (Slot $ fromInt 600)
+        (TimeValue $ POSIXTime $ unsafeInstantFromInt 600)
         (refundGuarantor (guaranteedAmount (fromInt 3)) Close)
     $ transfer instalment issuer investor
-        (Slot $ fromInt 900)
+        (TimeValue $ POSIXTime $ unsafeInstantFromInt 900)
         Close
     $ refundGuarantor instalment
     $ transfer instalment issuer investor
-        (Slot $ fromInt 1200)
+        (TimeValue $ POSIXTime $ unsafeInstantFromInt 1200)
         Close
     $ refundGuarantor instalment
     $ transfer lastInstalment issuer investor
-        (Slot $ fromInt 1500)
+        (TimeValue $ POSIXTime $ unsafeInstantFromInt 1500)
         Close
     $ refundGuarantor lastInstalment
         Close

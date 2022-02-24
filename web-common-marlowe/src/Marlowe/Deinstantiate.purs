@@ -116,7 +116,7 @@ instance isInstanceOfArrayOfCase :: IsInstanceOf (Array S.Case) (Array EM.Case) 
 instance isInstanceOfSlotTimeout :: IsInstanceOf POSIXTime EM.Timeout where
   isInstance _ (EM.TimeParam _) = true
   -- we don't check x == y here because then we get false negatives when resolving relative slots to absolutes
-  isInstance (POSIXTime _) (EM.Slot _) = true
+  isInstance (POSIXTime _) (EM.TimeValue _) = true
 
 instance isInstanceOfContract :: IsInstanceOf S.Contract EM.Contract where
   isInstance a b = genericIsInstanceOf a b

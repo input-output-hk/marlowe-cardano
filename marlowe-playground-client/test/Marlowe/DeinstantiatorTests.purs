@@ -12,6 +12,7 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.Extended (toCore)
 import Marlowe.Semantics (Contract)
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (unsafeInstantFromInt)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual, shouldSatisfy)
 
@@ -25,12 +26,13 @@ all =
           toCore
             ( fillTemplate
                 ( TemplateContent
-                    { slotContent:
+                    { timeContent:
                         Map.fromFoldable
-                          [ "Payment deadline" /\ fromInt 600
-                          , "Complaint response deadline" /\ fromInt 1800
-                          , "Complaint deadline" /\ fromInt 2400
-                          , "Mediation deadline" /\ fromInt 3600
+                          [ "Payment deadline" /\ unsafeInstantFromInt 600
+                          , "Complaint response deadline" /\
+                              unsafeInstantFromInt 1800
+                          , "Complaint deadline" /\ unsafeInstantFromInt 2400
+                          , "Mediation deadline" /\ unsafeInstantFromInt 3600
                           ]
                     , valueContent:
                         Map.fromFoldable
@@ -51,10 +53,10 @@ all =
           toCore
             ( fillTemplate
                 ( TemplateContent
-                    { slotContent:
+                    { timeContent:
                         Map.fromFoldable
-                          [ "Loan deadline" /\ fromInt 600
-                          , "Payback deadline" /\ fromInt 1500
+                          [ "Loan deadline" /\ unsafeInstantFromInt 600
+                          , "Payback deadline" /\ unsafeInstantFromInt 1500
                           ]
                     , valueContent:
                         Map.fromFoldable

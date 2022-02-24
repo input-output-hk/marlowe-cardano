@@ -50,7 +50,7 @@ rec {
       inherit haskell webCommon webCommonMarlowe;
       inherit (marlowe) purs-tidy writeShellScriptBinInRepoRoot;
       inherit (pkgs.nodePackages) prettier;
-    }) client server generated-purescript generate-purescript start-backend;
+    }) client server generated-purescript generate-purescript start-backend build-client;
   };
 
   marlowe-dashboard = pkgs.recurseIntoAttrs rec {

@@ -5,7 +5,11 @@ module Component.CurrentStepActions.View
 import Prologue hiding (div)
 
 import Component.Contract.View (renderParty)
-import Component.CurrentStepActions.Types (Action(..), ComponentHTML, State)
+import Component.CurrentStepActions.Types
+  ( Action(..)
+  , ComponentHTML
+  , State
+  )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Css as Css
@@ -20,7 +24,6 @@ import Data.Maybe (isJust, maybe, maybe')
 import Data.String (trim)
 import Data.String.Extra (capitalize)
 import Data.UserNamedActions (haveActions, mapActions)
-import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (applyWhen, classNames)
 import Halogen.HTML (HTML, button, div, div_, h4, input, p_, span, span_, text)
 import Halogen.HTML.Events.Extra (onClick_, onValueInput_)
@@ -40,8 +43,7 @@ import Text.Markdown.TrimmedInline (markdownToHTML)
 
 currentStepActions
   :: forall m
-   . MonadAff m
-  => State
+   . State
   -> ComponentHTML m
 currentStepActions state =
   let

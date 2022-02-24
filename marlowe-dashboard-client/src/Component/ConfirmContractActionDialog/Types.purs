@@ -21,7 +21,6 @@ import Data.PABConnectedWallet (PABConnectedWallet)
 import Halogen as H
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (Slot) as Semantics
 import Marlowe.Semantics (TransactionInput)
 import Type.Proxy (Proxy(..))
 
@@ -36,16 +35,14 @@ type State =
   { action :: NamedAction
   , executionState :: Execution.State
   , contractUserParties :: ContractUserParties
-  , currentSlot :: Semantics.Slot
   , transactionFeeQuote :: BigInt
-  , txInput :: TransactionInput
+  , txInput :: Maybe TransactionInput
   , wallet :: PABConnectedWallet
   }
 
 type Input =
   { action :: NamedAction
   , executionState :: Execution.State
-  , currentSlot :: Semantics.Slot
   , wallet :: PABConnectedWallet
   }
 

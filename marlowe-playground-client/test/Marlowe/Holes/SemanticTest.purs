@@ -4,8 +4,10 @@ import Prologue
 
 import Control.Monad.Error.Class (class MonadError)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_)
+import Data.Function (on)
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Map as Map
@@ -28,6 +30,7 @@ import Marlowe.Semantics
   )
 import Marlowe.Semantics as S
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (unixEpoch, unsafeInstantFromInt)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (fail, shouldEqual)
@@ -37,24 +40,21 @@ import Text.Pretty (pretty)
 transaction :: Input -> TransactionInput
 transaction input =
   S.TransactionInput
-    { interval: (S.TimeInterval zero zero)
+    { interval: on S.TimeInterval POSIXTime unixEpoch unixEpoch
     , inputs: List.singleton input
     }
 
 multipleInputs :: List Input -> TransactionInput
 multipleInputs inputs =
   S.TransactionInput
-    { interval: (S.TimeInterval zero zero)
+    { interval: on S.TimeInterval POSIXTime unixEpoch unixEpoch
     , inputs: inputs
     }
 
-timeout :: BigInt -> TransactionInput
-timeout slot =
+timeout :: Instant -> TransactionInput
+timeout instant =
   S.TransactionInput
-    { interval:
-        ( S.TimeInterval (POSIXTime { getPOSIXTime: slot })
-            (POSIXTime { getPOSIXTime: slot })
-        )
+    { interval: S.TimeInterval (POSIXTime instant) (POSIXTime instant)
     , inputs: mempty
     }
 
@@ -81,7 +81,7 @@ escrowContract :: EM.Contract
 escrowContract =
   fillTemplate
     ( TemplateContent
-        { slotContent: Map.empty
+        { timeContent: Map.empty
         , valueContent:
             Map.fromFoldable
               [ "Price" /\ escrowPrice
@@ -135,18 +135,18 @@ escrowFlows =
           ]
     , "Timeout 1"
         /\ List.fromFoldable
-          [ timeout (fromInt 61)
+          [ timeout (unsafeInstantFromInt 61)
           ]
     , "Timeout 2"
         /\ List.fromFoldable
           [ transaction $ S.IDeposit seller buyer ada escrowPrice
-          , timeout (fromInt 181)
+          , timeout (unsafeInstantFromInt 181)
           ]
     -- Because the slot 10 is lower than the first timeout (60), this "timeout" should
     -- not be significant
     , "Everything is alright (with non significant timeout)"
         /\ List.fromFoldable
-          [ timeout (fromInt 10)
+          [ timeout (unsafeInstantFromInt 10)
           , transaction $ S.IDeposit seller buyer ada escrowPrice
           , transaction $ S.IChoice (S.ChoiceId "Everything is alright" buyer)
               zero
@@ -170,14 +170,14 @@ contractForDifferences :: EM.Contract
 contractForDifferences =
   fillTemplate
     ( TemplateContent
-        { slotContent:
+        { timeContent:
             Map.fromFoldable
-              [ "Party deposit deadline" /\ fromInt 10
-              , "Counterparty deposit deadline" /\ fromInt 20
-              , "First window beginning" /\ fromInt 30
-              , "First window deadline" /\ fromInt 40
-              , "Second window beginning" /\ fromInt 100
-              , "Second window deadline" /\ fromInt 110
+              [ "Party deposit deadline" /\ unsafeInstantFromInt 10
+              , "Counterparty deposit deadline" /\ unsafeInstantFromInt 20
+              , "First window beginning" /\ unsafeInstantFromInt 30
+              , "First window deadline" /\ unsafeInstantFromInt 40
+              , "Second window beginning" /\ unsafeInstantFromInt 100
+              , "Second window deadline" /\ unsafeInstantFromInt 110
               ]
         , valueContent:
             Map.fromFoldable
@@ -195,10 +195,10 @@ contractForDifferencesFlows =
         /\ List.fromFoldable
           [ transaction $ S.IDeposit party party ada cfdPrice
           , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-          , timeout (fromInt 35)
+          , timeout (unsafeInstantFromInt 35)
           , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
               (fromInt 90000000)
-          , timeout (fromInt 105)
+          , timeout (unsafeInstantFromInt 105)
           , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
               (fromInt 85000000)
           ]
@@ -206,10 +206,10 @@ contractForDifferencesFlows =
         /\ List.fromFoldable
           [ transaction $ S.IDeposit party party ada cfdPrice
           , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-          , timeout (fromInt 35)
+          , timeout (unsafeInstantFromInt 35)
           , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
               (fromInt 90000000)
-          , timeout (fromInt 105)
+          , timeout (unsafeInstantFromInt 105)
           , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
               (fromInt 95000000)
           ]
@@ -217,10 +217,10 @@ contractForDifferencesFlows =
         /\ List.fromFoldable
           [ transaction $ S.IDeposit party party ada cfdPrice
           , transaction $ S.IDeposit counterparty counterparty ada cfdPrice
-          , timeout (fromInt 35)
+          , timeout (unsafeInstantFromInt 35)
           , transaction $ S.IChoice (S.ChoiceId "Price in first window" oracle)
               (fromInt 90000000)
-          , timeout (fromInt 105)
+          , timeout (unsafeInstantFromInt 105)
           , transaction $ S.IChoice (S.ChoiceId "Price in second window" oracle)
               (fromInt 90000000)
           ]
@@ -276,8 +276,7 @@ testTransactionList extendedContract inputs =
   where
   testAllInputs (semanticContract /\ termContract) =
     let
-      -- slot = initialSlot semanticContract
-      state = emptyState zero
+      state = emptyState
     in
       testStep inputs state semanticContract termContract
 

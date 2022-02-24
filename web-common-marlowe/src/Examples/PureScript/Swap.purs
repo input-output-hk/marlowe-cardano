@@ -3,12 +3,13 @@ module Examples.PureScript.Swap
   , fullExtendedContract
   , metaData
   , fixedTimeoutContract
-  , defaultSlotContent
+  , defaultTimeContent
   ) where
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut (fromInt)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested ((/\))
@@ -24,6 +25,7 @@ import Marlowe.Extended
 import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics (Party(..), Token(..))
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (unsafeInstantFromInt)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }
@@ -32,17 +34,17 @@ fixedTimeoutContract :: Contract
 fixedTimeoutContract =
   fillTemplate
     ( TemplateContent
-        { slotContent: defaultSlotContent
+        { timeContent: defaultTimeContent
         , valueContent: Map.empty
         }
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInt
-defaultSlotContent =
+defaultTimeContent :: Map String Instant
+defaultTimeContent =
   Map.fromFoldable
-    [ "Timeout for Ada deposit" /\ fromInt 600
-    , "Timeout for dollar deposit" /\ fromInt 1200
+    [ "Timeout for Ada deposit" /\ unsafeInstantFromInt 600000
+    , "Timeout for dollar deposit" /\ unsafeInstantFromInt 1200000
     ]
 
 metaData :: MetaData

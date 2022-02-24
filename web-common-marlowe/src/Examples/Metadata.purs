@@ -67,7 +67,7 @@ escrow =
           , "Seller" /\ "The seller of the item."
           ]
       )
-  , slotParameterDescriptions:
+  , timeParameterDescriptions:
       ( OMap.fromFoldable
           [ "Payment deadline" /\
               "The _**buyer**_ must pay the _price_ of the item by this time, otherwise the contract is cancelled."
@@ -133,7 +133,7 @@ escrowWithCollateral =
               "The party that sells the item and gets the money if the exchange is successful."
           ]
       )
-  , slotParameterDescriptions:
+  , timeParameterDescriptions:
       ( OMap.fromFoldable
           [ "Collateral deposit by seller timeout" /\
               "The deadline by which the _**Seller**_ must deposit the _**Collateral amount**_ in the contract."
@@ -180,7 +180,7 @@ zeroCouponBond =
           , "Borrower" /\ "The party that borrows the _amount_."
           ]
       )
-  , slotParameterDescriptions:
+  , timeParameterDescriptions:
       ( OMap.fromFoldable
           [ "Loan deadline" /\
               "The _**lender**_ needs to deposit the _amount_ by this time."
@@ -224,7 +224,7 @@ couponBondGuaranteed =
               "Borrows the money provided by the _**Lender**_ and returns it together with three _**Interest instalment**_s."
           ]
       )
-  , slotParameterDescriptions: mempty
+  , timeParameterDescriptions: mempty
   , valueParameterInfo:
       ( OMap.fromFoldable
           [ "Interest instalment"
@@ -257,7 +257,7 @@ swap =
           , "Dollar provider" /\ "The party that provides the dollar tokens."
           ]
       )
-  , slotParameterDescriptions:
+  , timeParameterDescriptions:
       ( OMap.fromFoldable
           [ "Timeout for Ada deposit" /\
               "Deadline by which Ada must be deposited."
@@ -317,7 +317,7 @@ contractForDifferences =
               "The _**oracle**_ provides the price of the asset at the beginning (first window) and at the end (second window) of the contract (in this case the _**oracle**_ provides the conversion rate between Ada and dollars)."
           ]
       )
-  , slotParameterDescriptions:
+  , timeParameterDescriptions:
       ( OMap.fromFoldable
           [ "Party deposit deadline" /\
               "The _amount paid by party_ must be deposited by this deadline, otherwise the contract is cancelled."
@@ -385,7 +385,7 @@ contractForDifferencesWithOracle =
               "The _**oracle**_ provides the price of the asset at the beginning (first window) and at the end (second window) of the contract (in this case the _**oracle**_ provides the conversion rate between Ada and dollars)."
           ]
       )
-  , slotParameterDescriptions:
+  , timeParameterDescriptions:
       ( OMap.fromFoldable
           [ "Party deposit deadline" /\
               "The _amount paid by party_ must be deposited by this deadline, otherwise the contract is cancelled."

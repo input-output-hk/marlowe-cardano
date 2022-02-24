@@ -3,8 +3,10 @@ module Marlowe.Template where
 import Prelude
 
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Foldable (foldl)
-import Data.Lens (Lens')
+import Data.Lens (Lens', iso, re)
+import Data.Lens.Iso (mapping)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
@@ -17,11 +19,12 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.Set.Ordered.OSet (OSet)
 import Data.Traversable (foldMap)
+import Marlowe.Time (unixEpoch)
+import Plutus.V1.Ledger.Time as POSIXTime
 import Type.Proxy (Proxy(..))
 
-newtype Placeholders
-  = Placeholders
-  { slotPlaceholderIds :: Set String
+newtype Placeholders = Placeholders
+  { timeoutPlaceholderIds :: Set String
   , valuePlaceholderIds :: Set String
   }
 
@@ -38,24 +41,26 @@ derive newtype instance semigroupPlaceholders :: Semigroup Placeholders
 derive newtype instance monoidPlaceholders :: Monoid Placeholders
 
 data IntegerTemplateType
-  = SlotContent
+  = TimeContent
   | ValueContent
 
-newtype TemplateContent
-  = TemplateContent
-  { slotContent :: Map String BigInt
+newtype TemplateContent = TemplateContent
+  { timeContent :: Map String Instant
   , valueContent :: Map String BigInt
   }
 
-_slotContent :: Lens' TemplateContent (Map String BigInt)
-_slotContent = _Newtype <<< prop (Proxy :: _ "slotContent")
+_timeContent :: Lens' TemplateContent (Map String Instant)
+_timeContent = _Newtype <<< prop (Proxy :: _ "timeContent")
 
 _valueContent :: Lens' TemplateContent (Map String BigInt)
 _valueContent = _Newtype <<< prop (Proxy :: _ "valueContent")
 
 typeToLens :: IntegerTemplateType -> Lens' TemplateContent (Map String BigInt)
-typeToLens SlotContent = _slotContent
-
+typeToLens TimeContent =
+  _timeContent <<< mapping
+    ( re _Newtype <<< iso POSIXTime.toBigInt
+        (fromMaybe bottom <<< POSIXTime.fromBigInt)
+    )
 typeToLens ValueContent = _valueContent
 
 derive instance newTypeTemplateContent :: Newtype TemplateContent _
@@ -63,13 +68,13 @@ derive instance newTypeTemplateContent :: Newtype TemplateContent _
 instance semigroupTemplateContent :: Semigroup TemplateContent where
   append (TemplateContent a) (TemplateContent b) =
     TemplateContent
-      { slotContent: Map.unionWith (const identity) a.slotContent b.slotContent
+      { timeContent: Map.unionWith (const identity) a.timeContent b.timeContent
       , valueContent: Map.unionWith (const identity) a.valueContent
           b.valueContent
       }
 
 instance monoidTemplateContent :: Monoid TemplateContent where
-  mempty = TemplateContent { slotContent: Map.empty, valueContent: Map.empty }
+  mempty = TemplateContent { timeContent: Map.empty, valueContent: Map.empty }
 
 initializeWith :: forall a b. Ord a => (a -> b) -> Set a -> Map a b
 initializeWith f = foldl (\m x -> Map.insert x (f x) m) Map.empty
@@ -77,22 +82,22 @@ initializeWith f = foldl (\m x -> Map.insert x (f x) m) Map.empty
 initializeTemplateContent :: Placeholders -> TemplateContent
 initializeTemplateContent
   ( Placeholders
-      { slotPlaceholderIds, valuePlaceholderIds }
+      { timeoutPlaceholderIds, valuePlaceholderIds }
   ) =
   TemplateContent
-    { slotContent: initializeWith (const one) slotPlaceholderIds
+    { timeContent: initializeWith (const unixEpoch) timeoutPlaceholderIds
     , valueContent: initializeWith (const zero) valuePlaceholderIds
     }
 
 updateTemplateContent :: Placeholders -> TemplateContent -> TemplateContent
 updateTemplateContent
-  ( Placeholders { slotPlaceholderIds, valuePlaceholderIds }
+  ( Placeholders { timeoutPlaceholderIds, valuePlaceholderIds }
   )
-  (TemplateContent { slotContent, valueContent }) =
+  (TemplateContent { timeContent, valueContent }) =
   TemplateContent
-    { slotContent: initializeWith
-        (\x -> fromMaybe one $ Map.lookup x slotContent)
-        slotPlaceholderIds
+    { timeContent: initializeWith
+        (\x -> fromMaybe unixEpoch $ Map.lookup x timeContent)
+        timeoutPlaceholderIds
     , valueContent: initializeWith
         (\x -> fromMaybe zero $ Map.lookup x valueContent)
         valuePlaceholderIds

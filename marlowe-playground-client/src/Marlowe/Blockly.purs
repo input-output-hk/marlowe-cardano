@@ -89,6 +89,8 @@ import Marlowe.Holes
   , Value(..)
   , ValueId(..)
   )
+import Plutus.V1.Ledger.Time (POSIXTime)
+import Plutus.V1.Ledger.Time as POSIXTime
 import Prologue
   ( class Bounded
   , class Eq
@@ -754,8 +756,8 @@ toDefinition blockType@(ContractType WhenContractType) =
             , Dropdown
                 { name: "timeout_type"
                 , options:
-                    [ Pair "slot number" "slot"
-                    , Pair "slot parameter" "slot_param"
+                    [ Pair "timeout POSIX" "time"
+                    , Pair "timeout parameter" "time_param"
                     ]
                 }
             , Input { name: "timeout", text: "0", spellcheck: false }
@@ -1478,6 +1480,19 @@ fieldAsString attr block =
     (asField =<< getRequiredAttribute attr block)
     (\err -> throwError $ ErrorInChild block attr err)
 
+fieldAsPOSIXTime
+  :: forall m
+   . MonadError ParseTermError m
+  => String
+  -> BDom.Block
+  -> m POSIXTime
+fieldAsPOSIXTime attr block = do
+  bigIntVal <- fieldAsBigInt attr block
+  case POSIXTime.fromBigInt bigIntVal of
+    Nothing -> throwError $ ErrorInChild block attr $
+      InvalidFieldCast (BigInt.toString bigIntVal) "POSIXTime"
+    Just time -> pure time
+
 fieldAsBigInt
   :: forall m
    . MonadError ParseTermError m
@@ -1513,12 +1528,12 @@ instance blockToTermContract :: BlockToTerm Contract where
     let
       location = (BlockId id)
     timeout <- case timeoutType of
-      "slot" -> do
-        slot <- fieldAsBigInt "timeout" b
-        pure $ Term (Slot slot) location
-      "slot_param" -> do
-        slotParam <- fieldAsString "timeout" b
-        pure $ Term (TimeParam slotParam) location
+      "time" -> do
+        time <- fieldAsPOSIXTime "timeout" b
+        pure $ Term (TimeValue time) location
+      "time_param" -> do
+        timeParam <- fieldAsString "timeout" b
+        pure $ Term (TimeParam timeParam) location
       _ -> throwError $ ErrorInChild b "timeout_type"
         (InvalidChildType "Timeout")
     contract <- singleStatementToTerm "contract" b
@@ -1921,12 +1936,12 @@ instance toBlocklyContract :: ToBlockly Contract where
     inputToBlockly newBlock workspace block "case" cases
     setField block "timeout_type"
       ( case timeout of
-          Term (TimeParam _) _ -> "slot_param"
-          _ -> "slot"
+          Term (TimeParam _) _ -> "time_param"
+          _ -> "time"
       )
     setField block "timeout"
       ( case timeout of
-          Term (Slot slotNum) _ -> BigInt.toString slotNum
+          Term (TimeValue time) _ -> BigInt.toString $ POSIXTime.toBigInt time
           Term (TimeParam paramName) _ -> paramName
           _ -> "0"
       )

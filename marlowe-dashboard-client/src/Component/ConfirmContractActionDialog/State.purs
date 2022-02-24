@@ -15,10 +15,11 @@ import Component.ConfirmContractActionDialog.Types
   )
 import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
+import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.State (get)
 import Data.ContractUserParties (contractUserParties)
-import Data.List as List
 import Data.Time.Duration (Milliseconds(..))
+import Data.Traversable (for)
 import Data.Unfoldable as Unfoldable
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
@@ -29,7 +30,7 @@ import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics as Semantic
 import Store as Store
-import Toast.Types (ajaxErrorToast, successToast)
+import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 --
 component
@@ -37,6 +38,7 @@ component
    . MonadAff m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m
+  => MonadTime m
   => Toast m
   => H.Component query Input Msg m
 component =
@@ -52,24 +54,16 @@ mkInitialState :: Input -> State
 mkInitialState
   { action
   , executionState
-  , currentSlot
   , wallet
   } =
   let
     { marloweParams, contract } = executionState
-
-    txInput =
-      mkTx
-        currentSlot
-        contract
-        (List.fromFoldable $ toInput action)
   in
     { action
     , executionState
     , contractUserParties: contractUserParties wallet marloweParams contract
-    , currentSlot
     , transactionFeeQuote: transactionFee
-    , txInput
+    , txInput: Nothing
     , wallet
     }
 
@@ -78,6 +72,7 @@ handleAction
    . ManageMarlowe m
   => MonadStore Store.Action Store.Store m
   => MonadAff m
+  => MonadTime m
   => Toast m
   => Action
   -> DSL m Unit
@@ -85,21 +80,27 @@ handleAction CancelConfirmation = H.raise DialogClosed
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction (ConfirmAction namedAction) = do
-  { currentSlot, wallet, executionState } <- get
+  { wallet, executionState } <- get
+  currentTime <- now
 
   let
     { marloweParams, contract } = executionState
     contractInput = toInput namedAction
-    txInput = mkTx currentSlot contract
-      (Unfoldable.fromMaybe contractInput)
-  ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput
+    mTxInput = mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
+  ajaxApplyInputs <- for mTxInput \txin ->
+    map (Tuple txin) <$> applyTransactionInput wallet marloweParams txin
   case ajaxApplyInputs of
-    Left ajaxError -> do
+    Left txError -> do
+      void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
+        (Milliseconds 600.0)
+        (Left "Error")
+      addToast $ errorToast "Failed to create transaction." $ Just txError
+    Right (Left ajaxError) -> do
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
         (Milliseconds 600.0)
         (Left "Error")
       addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
-    Right mResult -> do
+    Right (Right (Tuple txInput mResult)) -> do
       updateStore $ Store.ModifySyncedContract marloweParams $
         setPendingTransaction txInput
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult

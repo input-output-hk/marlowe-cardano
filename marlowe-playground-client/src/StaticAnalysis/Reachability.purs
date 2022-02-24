@@ -62,7 +62,7 @@ analyseReachability extendedContract = do
       -- at any step of the simulator. Now that they are separate, it can only be done
       -- with initial state
       let
-        emptySemanticState = emptyState zero
+        emptySemanticState = emptyState
       newReachabilityAnalysisState <- startReachabilityAnalysis contract
         emptySemanticState
       assign (_analysisState <<< _analysisExecutionState)

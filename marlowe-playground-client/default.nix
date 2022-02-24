@@ -62,6 +62,11 @@ let
     };
   };
 
+  build-client = writeShellScriptBinInRepoRoot "marlowe-play-spago" ''
+    cd marlowe-playground-client
+    spago build --purs-args "--strict --stash --censor-lib --stash --is-lib=generated --is-lib=.spago"
+  '';
+
   client = pkgs.lib.overrideDerivation
     (buildPursPackage {
       inherit pkgs nodeModules;
@@ -81,6 +86,6 @@ let
     });
 in
 {
-  inherit client generated-purescript generate-purescript start-backend;
+  inherit client generated-purescript generate-purescript start-backend build-client;
   server = playground-exe;
 }

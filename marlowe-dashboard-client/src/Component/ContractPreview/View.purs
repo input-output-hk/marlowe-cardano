@@ -12,6 +12,7 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import Data.ContractUserParties (ContractUserParties)
+import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
 import Data.UserNamedActions (UserNamedActions)
 import Effect.Aff.Class (class MonadAff)
@@ -25,7 +26,6 @@ import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (_contractName, _contractType)
-import Marlowe.Semantics (Slot)
 import Page.Contract.Lenses (_marloweParams, _metadata)
 import Page.Contract.Types (StartingState)
 import Page.Dashboard.Types (Action(..))
@@ -34,12 +34,12 @@ import Page.Dashboard.Types (Action(..))
 contractPreviewCard
   :: forall m
    . MonadAff m
-  => Slot
+  => Instant
   -> Execution.State
   -> ContractUserParties
   -> UserNamedActions
   -> ComponentHTML Action ChildSlots m
-contractPreviewCard currentSlot executionState contractUserParties namedActions =
+contractPreviewCard currentTime executionState contractUserParties namedActions =
   let
     contractType = executionState ^. (_metadata <<< _contractType)
     contractName = executionState ^. (_metadata <<< _contractName)
@@ -54,7 +54,7 @@ contractPreviewCard currentSlot executionState contractUserParties namedActions 
             [ text $ "Current step:" <> show (currentStep executionState + 1) ]
         , p
             [ classNames [ "font-semibold" ] ]
-            [ text $ timeoutString currentSlot executionState ]
+            [ text $ timeoutString currentTime executionState ]
         ]
     stepActions = slot
       _currentStepActions

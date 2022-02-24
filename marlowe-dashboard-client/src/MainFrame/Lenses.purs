@@ -3,13 +3,13 @@ module MainFrame.Lenses where
 import Prologue
 
 import Data.AddressBook (AddressBook)
+import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.AffineTraversal (AffineTraversal')
 import Data.Lens.Prism.Either (_Left, _Right)
 import Data.Lens.Record (prop)
 import Data.Time.Duration (Minutes)
 import MainFrame.Types (Slice, State, WebSocketStatus)
-import Marlowe.Semantics (Slot)
 import Page.Dashboard.Types (State) as Dashboard
 import Page.Welcome.Types (State) as Welcome
 import Type.Proxy (Proxy(..))
@@ -17,8 +17,8 @@ import Type.Proxy (Proxy(..))
 _webSocketStatus :: Lens' State WebSocketStatus
 _webSocketStatus = prop (Proxy :: _ "webSocketStatus")
 
-_currentSlot :: Lens' State Slot
-_currentSlot = prop (Proxy :: _ "currentSlot")
+_currentTime :: Lens' State Instant
+_currentTime = _store <<< prop (Proxy :: _ "currentTime")
 
 _addressBook :: Lens' State AddressBook
 _addressBook = _store <<< prop (Proxy :: _ "addressBook")

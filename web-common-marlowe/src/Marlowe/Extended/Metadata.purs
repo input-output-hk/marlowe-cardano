@@ -184,7 +184,7 @@ type MetaData =
   , contractLongDescription :: String
   , roleDescriptions :: Map S.TokenName String
   -- TODO: fix primitive obsession (what is the key supposed to be?)
-  , slotParameterDescriptions :: OMap String String
+  , timeParameterDescriptions :: OMap String String
   -- TODO: fix primitive obsession (what is the key supposed to be?)
   , valueParameterInfo :: OMap String ValueParameterInfo
   -- TODO: fix primitive obsession (what is the key supposed to be?)
@@ -206,8 +206,8 @@ _contractLongDescription = prop (Proxy :: _ "contractLongDescription")
 _roleDescriptions :: Lens' MetaData (Map S.TokenName String)
 _roleDescriptions = prop (Proxy :: _ "roleDescriptions")
 
-_slotParameterDescriptions :: Lens' MetaData (OMap String String)
-_slotParameterDescriptions = prop (Proxy :: _ "slotParameterDescriptions")
+_timeParameterDescriptions :: Lens' MetaData (OMap String String)
+_timeParameterDescriptions = prop (Proxy :: _ "timeParameterDescriptions")
 
 _valueParameterInfo :: Lens' MetaData (OMap String ValueParameterInfo)
 _valueParameterInfo = prop (Proxy :: _ "valueParameterInfo")
@@ -222,7 +222,7 @@ emptyContractMetadata =
   , contractShortDescription: ""
   , contractLongDescription: ""
   , roleDescriptions: Map.empty
-  , slotParameterDescriptions: mempty
+  , timeParameterDescriptions: mempty
   , valueParameterInfo: mempty
   , choiceInfo: Map.empty
   }
@@ -235,7 +235,7 @@ getChoiceFormat { choiceInfo } choiceName =
 type MetadataHintInfo
   =
   { roles :: Set S.TokenName
-  , slotParameters :: OSet String
+  , timeParameters :: OSet String
   , valueParameters :: OSet String
   , choiceNames :: Set String
   }
@@ -243,8 +243,8 @@ type MetadataHintInfo
 _roles :: Lens' MetadataHintInfo (Set S.TokenName)
 _roles = prop (Proxy :: _ "roles")
 
-_slotParameters :: Lens' MetadataHintInfo (OSet String)
-_slotParameters = prop (Proxy :: _ "slotParameters")
+_timeParameters :: Lens' MetadataHintInfo (OSet String)
+_timeParameters = prop (Proxy :: _ "timeParameters")
 
 _valueParameters :: Lens' MetadataHintInfo (OSet String)
 _valueParameters = prop (Proxy :: _ "valueParameters")
@@ -264,7 +264,7 @@ getMetadataHintInfo contract =
               _ -> Nothing
           )
           $ getParties contract
-    , slotParameters: OSet.fromFoldable (placeholders.slotPlaceholderIds)
+    , timeParameters: OSet.fromFoldable (placeholders.timeoutPlaceholderIds)
     , valueParameters: OSet.fromFoldable (placeholders.valuePlaceholderIds)
     , choiceNames: getChoiceNames contract
     }
@@ -272,12 +272,12 @@ getMetadataHintInfo contract =
 getHintsFromMetadata :: MetaData -> MetadataHintInfo
 getHintsFromMetadata
   { roleDescriptions
-  , slotParameterDescriptions
+  , timeParameterDescriptions
   , valueParameterInfo
   , choiceInfo
   } =
   { roles: Map.keys roleDescriptions
-  , slotParameters: OMap.keys slotParameterDescriptions
+  , timeParameters: OMap.keys timeParameterDescriptions
   , valueParameters: OMap.keys valueParameterInfo
   , choiceNames: Map.keys choiceInfo
   }

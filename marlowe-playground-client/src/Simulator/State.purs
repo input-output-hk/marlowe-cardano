@@ -1,9 +1,8 @@
 module Simulator.State
   ( applyInput
   , hasHistory
-  , inFuture
-  , moveToSlot
-  , emptyExecutionStateWithSlot
+  , advanceTime
+  , emptyExecutionStateWithTime
   , emptyMarloweState
   , startSimulation
   , updateChoice
@@ -12,11 +11,18 @@ module Simulator.State
 
 import Prologue
 
+import Control.Alt ((<|>))
+import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
+import Control.Monad.Maybe.Trans (MaybeT(..))
 import Control.Monad.State (class MonadState)
 import Data.Array (fromFoldable, mapMaybe, snoc, sort, toUnfoldable, uncons)
+import Data.DateTime (adjust)
+import Data.DateTime.Instant (Instant, fromDateTime, toDateTime)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens (has, modifying, nearly, over, previewOn, set, to, use, (^.))
+import Data.Function (on)
+import Data.Lens (modifying, over, previewOn, set, to, use, (^.))
+import Data.Lens.Extra (peruse)
 import Data.Lens.NonEmptyList (_Head)
 import Data.List (List(..))
 import Data.List as List
@@ -29,6 +35,7 @@ import Data.NonEmpty ((:|))
 import Data.NonEmptyList.Extra (extendWith)
 import Data.NonEmptyList.Lens (_Tail)
 import Data.Semigroup.Foldable (foldl1)
+import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple.Nested ((/\))
 import Marlowe.Holes
   ( Contract(..)
@@ -49,7 +56,6 @@ import Marlowe.Semantics
   , IntervalResult(..)
   , Observation
   , Party
-  , Slot
   , State
   , TimeInterval(..)
   , Timeouts(..)
@@ -64,8 +70,9 @@ import Marlowe.Semantics
   , timeouts
   )
 import Marlowe.Semantics as S
-import Marlowe.Slot (posixTimeToSlot, slotToPOSIXTime)
 import Marlowe.Template (getPlaceholderIds, initializeTemplateContent)
+import Marlowe.Time (unixEpoch)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Simulator.Lenses
   ( _SimulationRunning
   , _contract
@@ -77,8 +84,8 @@ import Simulator.Lenses
   , _moveToAction
   , _pendingInputs
   , _possibleActions
-  , _slot
   , _state
+  , _time
   , _transactionError
   , _transactionWarnings
   )
@@ -93,25 +100,25 @@ import Simulator.Types
   , otherActionsParty
   )
 
-emptyExecutionStateWithSlot :: Slot -> Term T.Contract -> ExecutionState
-emptyExecutionStateWithSlot sn cont =
+emptyExecutionStateWithTime :: Instant -> Term T.Contract -> ExecutionState
+emptyExecutionStateWithTime time cont =
   SimulationRunning
     { possibleActions: mempty
     , pendingInputs: mempty
     , transactionError: Nothing
     , transactionWarnings: mempty
     , log: mempty
-    , state: emptyState (slotToPOSIXTime sn)
-    , slot: sn
+    , state: emptyState
+    , time
     , moneyInContract: mempty
     , contract: cont
     }
 
-simulationNotStartedWithSlot
-  :: Slot -> Maybe (Term T.Contract) -> ExecutionState
-simulationNotStartedWithSlot slot mContract =
+simulationNotStartedWithTime
+  :: Instant -> Maybe (Term T.Contract) -> ExecutionState
+simulationNotStartedWithTime time mContract =
   SimulationNotStarted
-    { initialSlot: slot
+    { initialTime: time
     , termContract: mContract
     , templateContent: maybe mempty
         (initializeTemplateContent <<< getPlaceholderIds)
@@ -119,7 +126,7 @@ simulationNotStartedWithSlot slot mContract =
     }
 
 simulationNotStarted :: Maybe (Term T.Contract) -> ExecutionState
-simulationNotStarted = simulationNotStartedWithSlot zero
+simulationNotStarted = simulationNotStartedWithTime unixEpoch
 
 emptyMarloweState :: Maybe (Term T.Contract) -> MarloweState
 emptyMarloweState mContract =
@@ -182,17 +189,6 @@ simplifyBoundList (Cons (Bound low1 high1) (Cons b2@(Bound low2 high2) rest))
 
 simplifyBoundList l = l
 
-inFuture
-  :: forall r
-   . { marloweState :: NonEmptyList MarloweState | r }
-  -> Slot
-  -> Boolean
-inFuture state slot = has
-  ( _currentMarloweState <<< _executionState <<< _SimulationRunning <<< _slot
-      <<< nearly zero ((>) slot)
-  )
-  state
-
 updatePossibleActions :: MarloweState -> MarloweState
 updatePossibleActions
   oldState@{ executionState: SimulationRunning executionState } =
@@ -201,8 +197,6 @@ updatePossibleActions
 
     state = executionState ^. _state
 
-    currentSlot = executionState ^. _slot
-
     txInput = pendingTransactionInputs executionState
 
     (Tuple nextState actions) = extractRequiredActionsWithTxs txInput state
@@ -210,7 +204,14 @@ updatePossibleActions
 
     usefulActions = mapMaybe removeUseless actions
 
-    slot = fromMaybe (add one currentSlot) (nextTimeout oldState)
+    currentTime = executionState.time
+
+    nextJump = fromMaybe
+      currentTime
+      ( nextTimeout oldState
+          <|> map fromDateTime
+            (adjust (Milliseconds one) $ toDateTime currentTime)
+      )
 
     rawActionInputs = Map.fromFoldableWith combineChoices $ map
       (actionToActionInput nextState)
@@ -220,7 +221,7 @@ updatePossibleActions
 
     moveTo = case contract of
       Term Close _ -> Nothing
-      _ -> Just $ MoveToSlot slot
+      _ -> Just $ MoveToTime nextJump
 
     newExecutionState =
       executionState
@@ -373,17 +374,15 @@ applyPendingInputs oldState@{ executionState: SimulationRunning executionState }
 
 applyPendingInputs oldState = oldState
 
-updateSlot :: Slot -> MarloweState -> MarloweState
-updateSlot = set (_executionState <<< _SimulationRunning <<< _slot)
+updateTime :: Instant -> MarloweState -> MarloweState
+updateTime = set (_executionState <<< _SimulationRunning <<< _time)
 
 pendingTransactionInputs :: ExecutionStateRecord -> TransactionInput
 pendingTransactionInputs executionState =
   let
-    slot = executionState ^. _slot
+    time = executionState ^. _time
 
-    time = slotToPOSIXTime slot
-
-    interval = TimeInterval time time
+    interval = on TimeInterval POSIXTime time time
 
     inputs = executionState ^. _pendingInputs
   in
@@ -438,14 +437,14 @@ updateChoice choiceId chosenNum = updateMarloweState
 startSimulation
   :: forall s m
    . MonadState { marloweState :: NonEmptyList MarloweState | s } m
-  => Slot
+  => Instant
   -> Term Contract
   -> m Unit
-startSimulation initialSlot contract =
+startSimulation initialTime contract =
   let
     initialExecutionState =
-      emptyExecutionStateWithSlot initialSlot contract
-        # over (_SimulationRunning <<< _log) (append [ StartEvent initialSlot ])
+      emptyExecutionStateWithTime initialTime contract
+        # over (_SimulationRunning <<< _log) (append [ StartEvent initialTime ])
   in
     updateMarloweState
       ( {- This code was taken/adapted from the SimulationPage, we should revisit if applyPendingInputs is necesary
@@ -456,22 +455,29 @@ startSimulation initialSlot contract =
           <<< (set _executionState initialExecutionState)
       )
 
-moveToSlot
+advanceTime
   :: forall s m
    . MonadState { marloweState :: NonEmptyList MarloweState | s } m
-  => Slot
-  -> m Unit
-moveToSlot slot = do
-  mSignificantSlot <- use (_marloweState <<< _Head <<< to nextTimeout)
+  => Instant
+  -> MaybeT m Unit
+advanceTime newTime = do
+  time <- MaybeT $ peruse
+    ( _currentMarloweState
+        <<< _executionState
+        <<< _SimulationRunning
+        <<< _time
+    )
+  guard $ newTime > time
+  mSignificantTime <- use (_marloweState <<< _Head <<< to nextTimeout)
   let
     -- We only apply pending inputs if the new slot is "significant", in other
     -- words, if it would trigger a timeout
     mApplyPendingInputs =
-      if slot >= (fromMaybe zero mSignificantSlot) then
+      if newTime >= (fromMaybe unixEpoch mSignificantTime) then
         applyPendingInputs
       else
         identity
-  updateMarloweState (mApplyPendingInputs <<< updateSlot slot)
+  updateMarloweState (mApplyPendingInputs <<< updateTime newTime)
 
 hasHistory
   :: forall s. { marloweState :: NonEmptyList MarloweState | s } -> Boolean
@@ -492,13 +498,13 @@ evalObservation { executionState: SimulationRunning executionState } observation
 
 evalObservation _ _ = false
 
-nextTimeout :: MarloweState -> Maybe Slot
+nextTimeout :: MarloweState -> Maybe Instant
 nextTimeout state = do
   contract <- previewOn state
     (_executionState <<< _SimulationRunning <<< _contract)
   let
     Timeouts { minTime } = timeouts contract
-  map posixTimeToSlot minTime
+  map unwrap minTime
 
 mapPartiesActionInput :: (ActionInput -> ActionInput) -> Parties -> Parties
 mapPartiesActionInput f (Parties m) = Parties $ (map <<< map) f m

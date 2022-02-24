@@ -55,7 +55,7 @@ import Marlowe.Extended.Metadata
   , MetaData
   , ValueParameterInfo
   , _metaData
-  , _slotParameterDescriptions
+  , _timeParameterDescriptions
   )
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
@@ -295,7 +295,7 @@ contractReview assets template params =
               ]
           , div
               [ classNames [ "p-4" ] ]
-              [ ul_ $ slotParameter metaData <$> Map.toUnfoldable timeouts
+              [ ul_ $ timeParameter metaData <$> Map.toUnfoldable timeouts
               , ul_ $ valueParameter metaData.valueParameterInfo
                   <$> Map.toUnfoldable values
               ]
@@ -352,18 +352,18 @@ contractReview assets template params =
       ]
 
 ------------------------------------------------------------
-slotParameter
+timeParameter
   :: forall m
    . MonadAff m
   => MetaData
   -> Tuple String ContractTimeout
   -> ComponentHTML Action ChildSlots m
-slotParameter metaData (key /\ timeout) =
+timeParameter metaData (key /\ timeout) =
   let
-    slotParameterDescriptions = view _slotParameterDescriptions metaData
+    timeParameterDescriptions = view _timeParameterDescriptions metaData
 
     description = fromMaybe "no description available" $ OMap.lookup key
-      slotParameterDescriptions
+      timeParameterDescriptions
   in
     parameter key description $ CT.toString timeout <> " minutes"
 

@@ -90,8 +90,8 @@ number
 
 timeout
    -> hole {% ([hole]) => hole %}
-    | number {% ([n]) => opts.mkTerm(opts.mkExtendedSlot(n))({startLineNumber: n.line, startColumn: n.col, endLineNumber: n.line, endColumn: n.col + n.toString(10).length}) %}
-    | lparen "TimeParam" someWS string rparen {% ([start,{line,col},,s,end]) => opts.mkTerm(opts.mkExtendedSlotParam(s))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col}) %}
+    | number {% ([n]) => opts.mkTerm(opts.mkExtendedTimeValue(n))({startLineNumber: n.line, startColumn: n.col, endLineNumber: n.line, endColumn: n.col + n.toString(10).length}) %}
+    | lparen "TimeParam" someWS string rparen {% ([start,{line,col},,s,end]) => opts.mkTerm(opts.mkExtendedTimeParam(s))({startLineNumber: start.line, startColumn: start.col, endLineNumber: end.line, endColumn: end.col}) %}
 
 string
    -> %string {% ([s]) => s.value %}

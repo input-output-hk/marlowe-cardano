@@ -12,6 +12,7 @@ import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.AddressBook (AddressBook)
 import Data.Argonaut (Json, JsonDecodeError)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
@@ -25,7 +26,7 @@ import Halogen.Store.Connect (Connected)
 import Language.Marlowe.Client (MarloweError)
 import Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
+import Marlowe.Semantics (MarloweData, MarloweParams)
 import Page.Contract.Types as ContractPage
 import Page.Dashboard.Types (Action, State) as Dashboard
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
@@ -42,10 +43,7 @@ type Slice =
   { addressBook :: AddressBook
   , wallet :: WalletStore
   , contracts :: ContractStore
-  }
-
-type Input =
-  { tzOffset :: Minutes
+  , currentTime :: Instant
   }
 
 -- The app exists in one of two main subStates: the "welcome" state for when you have
@@ -53,9 +51,6 @@ type Input =
 -- state for when you have selected a wallet, and can do all of the things.
 type State =
   { webSocketStatus :: WebSocketStatus
-  -- TODO: currentSlot, tzOffset, and addressBook should be stored in the global store rather than here, but in order
-  --       to remove it from here we need to first change the sub-components that use this into proper components
-  , currentSlot :: Slot
   , tzOffset :: Minutes
   , store :: Slice
   , subState :: Either Welcome.State Dashboard.State
@@ -99,8 +94,7 @@ data Query a
   = MainFrameActionQuery Action a
   | GetWallet (PABConnectedWallet -> a)
   | NewWebSocketStatus WebSocketStatus a
-  | NotificationParseFailed String JsonDecodeError a
-  | SlotChange Slot a
+  | NotificationParseFailed String Json JsonDecodeError a
   | CompanionAppStateUpdated (Map MarloweParams MarloweData) a
   | MarloweContractCreated UUID MarloweParams a
   | InputsApplied UUID a
@@ -120,14 +114,16 @@ data Msg
 data Action
   = WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
-  | Receive (Connected Slice Input)
+  | Receive (Connected Slice Unit)
   | Init
+  | Tick Instant
   | OnPoll SyncStatus WalletId
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent (Receive _) = Just $ defaultEvent "Receive"
+  toEvent (Receive _) = Nothing
+  toEvent (Tick _) = Nothing
   toEvent Init = Just $ defaultEvent "Init"
   toEvent (OnPoll _ _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction

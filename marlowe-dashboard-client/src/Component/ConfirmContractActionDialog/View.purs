@@ -153,15 +153,19 @@ results { action, contractUserParties, executionState, txInput } = case _ of
 
   semanticState = executionState.semanticState
 
-  txOutput = computeTransaction txInput semanticState contract
+  txOutput = computeTransaction
+    <$> txInput
+    <*> pure semanticState
+    <*> pure contract
 
   payments = case txOutput of
-    Semantics.TransactionOutput { txOutPayments } -> fromFoldable txOutPayments
+    Just (Semantics.TransactionOutput { txOutPayments }) ->
+      fromFoldable txOutPayments
     _ -> []
 
   willClose = case txOutput of
-    Semantics.TransactionOutput { txOutContract } -> txOutContract ==
-      Semantics.Close
+    Just (Semantics.TransactionOutput { txOutContract }) ->
+      txOutContract == Semantics.Close
     _ -> action == CloseContract
 
   count = length payments + if willClose then 1 else 0
@@ -223,4 +227,3 @@ confirmation { action, transactionFeeQuote, wallet } =
 
 sectionBox :: forall i w. Array String -> HTML i w -> HTML i w
 sectionBox css = box default $ [ "lg:px-5" ] <> css
-

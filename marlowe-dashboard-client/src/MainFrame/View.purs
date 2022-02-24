@@ -5,6 +5,7 @@ import Prologue hiding (div)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast)
+import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Lens ((^.), (^?))
 import Effect.Aff.Class (class MonadAff)
@@ -17,7 +18,7 @@ import Halogen.HTML as H
 import Halogen.Store.Monad (class MonadStore)
 import MainFrame.Lenses
   ( _addressBook
-  , _currentSlot
+  , _currentTime
   , _dashboardState
   , _store
   , _subState
@@ -36,6 +37,7 @@ render
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadTime m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
@@ -46,7 +48,7 @@ render state =
   let
     addressBook = state ^. _addressBook
 
-    currentSlot = state ^. _currentSlot
+    currentTime = state ^. _currentTime
 
     tzOffset = state ^. _tzOffset
 
@@ -65,7 +67,7 @@ render state =
                 DashboardAction
                 ( \dashboardState ->
                     dashboardScreen
-                      { addressBook, currentSlot, tzOffset, wallet, contracts }
+                      { addressBook, currentTime, tzOffset, wallet, contracts }
                       dashboardState
                 )
                 state
@@ -74,7 +76,7 @@ render state =
                 DashboardAction
                 ( \dashboardState ->
                     dashboardCard
-                      { addressBook, currentSlot, tzOffset, wallet, contracts }
+                      { addressBook, currentTime, tzOffset, wallet, contracts }
                       dashboardState
                 )
                 state

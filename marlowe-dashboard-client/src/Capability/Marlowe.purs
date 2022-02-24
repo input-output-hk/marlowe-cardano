@@ -142,10 +142,8 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
   -- return its PlutusAppId and observable state
   followContract wallet marloweParams =
     runExceptT do
-      let
-        walletId = view _walletId wallet
-      contracts /\ currentSlot <-
-        (\store -> store.contracts /\ store.currentSlot) <$> lift getStore
+      let walletId = view _walletId wallet
+      contracts <- _.contracts <$> lift getStore
 
       let
         activateNewFollower = do
@@ -174,15 +172,15 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           $ observableStateJson
 
       let
-        contract = getContract contractHistory
+        mContract = getContract contractHistory
 
       metadata <- ExceptT $ pure
         $ note followContractError.metadataNotFoundError
-        $ _.metaData <$> findTemplate contract
+        $ _.metaData <$> (findTemplate =<< mContract)
 
-      lift $ updateStore $ Store.AddFollowerContract currentSlot followAppId
-        metadata
-        contractHistory
+      lift
+        $ updateStore
+        $ Store.AddFollowerContract followAppId metadata contractHistory
       pure $ followAppId /\ contractHistory
   -- "create" a Marlowe contract on the blockchain
   -- FIXME: if we want users to be able to follow contracts that they don't have roles in, we need this function

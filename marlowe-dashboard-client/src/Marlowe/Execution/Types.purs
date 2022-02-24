@@ -12,8 +12,11 @@ import Prologue
 
 import Data.BigInt.Argonaut (BigInt)
 import Data.ContractNickname (ContractNickname)
+import Data.DateTime.Instant (Instant)
+import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Map (Map)
+import Data.Show.Generic (genericShow)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( AccountId
@@ -26,7 +29,6 @@ import Marlowe.Semantics
   , Observation
   , Party
   , Payment
-  , Slot
   , Token
   , TransactionInput
   , ValueId
@@ -52,11 +54,11 @@ type State =
   , mPendingTransaction :: Maybe TransactionInput
 
   , mPendingTimeouts :: Maybe PendingTimeouts
-  , mNextTimeout :: Maybe Slot
+  , mNextTimeout :: Maybe Instant
   }
 
 type TimeoutInfo =
-  { slot :: Slot
+  { time :: Instant
   , missedActions :: Array NamedAction
   }
 
@@ -117,4 +119,7 @@ data NamedAction
   -- Creates empty tx
   | CloseContract
 
-derive instance eqNamedAction :: Eq NamedAction
+derive instance Eq NamedAction
+derive instance Generic NamedAction _
+instance Show NamedAction where
+  show = genericShow

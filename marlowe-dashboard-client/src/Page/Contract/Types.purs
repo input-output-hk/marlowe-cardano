@@ -2,7 +2,6 @@ module Page.Contract.Types
   ( Action(..)
   , ChildSlots
   , ComponentHTML
-  , Context
   , ContractState(..)
   , DSL
   , Input
@@ -31,6 +30,7 @@ import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractUserParties (ContractUserParties)
+import Data.DateTime.Instant (Instant)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.UserNamedActions (UserNamedActions)
@@ -41,7 +41,6 @@ import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics (Accounts, MarloweParams, Payment, TransactionInput)
-import Marlowe.Semantics (Slot) as Semantic
 import Store.Contracts (ContractStore)
 import Type.Proxy (Proxy(..))
 
@@ -53,7 +52,7 @@ derive instance Eq ContractState
 
 type State =
   { contract :: ContractState
-  , currentSlot :: Semantic.Slot
+  , currentTime :: Instant
   , tzOffset :: Minutes
   , wallet :: PABConnectedWallet
   }
@@ -94,7 +93,7 @@ type PreviousStep =
   }
 
 type TimeoutInfo =
-  { slot :: Semantic.Slot
+  { time :: Instant
   , missedActions :: UserNamedActions
   }
 
@@ -110,14 +109,8 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
-type Context =
-  { currentSlot :: Semantic.Slot
-  , contracts :: ContractStore
-  }
-
 type Input =
-  { tzOffset :: Minutes
-  , wallet :: PABConnectedWallet
+  { wallet :: PABConnectedWallet
   -- TODO-3487 Instead of just MarloweParms this should be a custom data type or a
   --            Either UUID MarloweParams to be able to work with Starting and Started contracts.
   , marloweParams :: MarloweParams
@@ -128,7 +121,8 @@ data Msg
 
 data Action
   = Init
-  | Receive (Connected Context Input)
+  | Tick Instant
+  | Receive (Connected ContractStore Input)
   | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
@@ -159,6 +153,7 @@ type Slot m = H.Slot Query Msg m
 instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
   toEvent (Receive _) = Nothing
+  toEvent (Tick _) = Nothing
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"

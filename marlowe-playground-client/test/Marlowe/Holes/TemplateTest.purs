@@ -9,7 +9,7 @@ import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Extended (toCore)
 import Marlowe.Extended as EM
-import Marlowe.Gen (GenerationOptions(..), genBigInt, genContract)
+import Marlowe.Gen (GenerationOptions(..), genBigInt, genContract, genInstant)
 import Marlowe.GenWithHoles (GenWithHoles, contractQuickCheck)
 import Marlowe.Holes (fromTerm)
 import Marlowe.Semantics as S
@@ -54,28 +54,29 @@ sameFillTemplate = do
   let
     (emContract :: Maybe EM.Contract) = fromTerm termContract
 
-    Placeholders { slotPlaceholderIds, valuePlaceholderIds } = getPlaceholderIds
-      termContract
+    Placeholders { timeoutPlaceholderIds, valuePlaceholderIds } =
+      getPlaceholderIds
+        termContract
 
-    slotPlaceholderArray :: Array String
-    slotPlaceholderArray = Set.toUnfoldable slotPlaceholderIds
+    timeoutPlaceholderArray :: Array String
+    timeoutPlaceholderArray = Set.toUnfoldable timeoutPlaceholderIds
 
     valuePlaceholderArray :: Array String
     valuePlaceholderArray = Set.toUnfoldable valuePlaceholderIds
   -- We generate random values for the template variables
-  slotContent <-
+  timeContent <-
     Map.fromFoldable
       <$>
-        ( for slotPlaceholderArray \slotId -> do
-            slotValue <- genBigInt
-            pure (slotId /\ slotValue)
+        ( for timeoutPlaceholderArray \timeoutId -> do
+            timeoutValue <- genInstant
+            pure (timeoutId /\ timeoutValue)
         )
   valueContent <-
     Map.fromFoldable
       <$>
-        ( for valuePlaceholderArray \slotId -> do
-            slotValue <- genBigInt
-            pure (slotId /\ slotValue)
+        ( for valuePlaceholderArray \valueId -> do
+            timeoutValue <- genBigInt
+            pure (valueId /\ timeoutValue)
         )
   -- And check that once we fill the contract, the semantic version for both of them
   -- are the same.
@@ -83,7 +84,7 @@ sameFillTemplate = do
   -- some problem with parentesis, so I decided to convert both of them to the semantic version
   -- and test that those are equal.
   let
-    templateContent = TemplateContent { slotContent, valueContent }
+    templateContent = TemplateContent { timeContent, valueContent }
 
     filledTerm = fillTemplate templateContent termContract
 

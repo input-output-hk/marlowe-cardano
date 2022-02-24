@@ -32,6 +32,7 @@ import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
@@ -47,7 +48,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
 import Data.PABConnectedWallet as Connected
 import Data.String (joinWith)
-import Data.Time.Duration (Milliseconds(..), Minutes(..))
+import Data.Time.Duration (Milliseconds(..), Minutes(..), Seconds(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
@@ -71,9 +72,9 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
+import Halogen.Time (subscribeTime')
 import MainFrame.Lenses
   ( _addressBook
-  , _currentSlot
   , _dashboardState
   , _store
   , _subState
@@ -84,7 +85,6 @@ import MainFrame.Lenses
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
-  , Input
   , Msg
   , Query(..)
   , Slice
@@ -127,15 +127,16 @@ mkMainFrame
   => MonadLogger String m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
+  => MonadTime m
   => ManageMarlowe m
   => Toast m
   => MonadClipboard m
   => MainFrameLoop m
-  => Component Query Input Msg m
+  => Component Query Unit Msg m
 mkMainFrame =
   connect
-    ( selectEq \{ addressBook, wallet, contracts } ->
-        { addressBook, wallet, contracts }
+    ( selectEq \{ addressBook, wallet, contracts, currentTime } ->
+        { addressBook, wallet, contracts, currentTime }
     ) $
     mkComponent
       { initialState: deriveState emptyState
@@ -151,34 +152,30 @@ mkMainFrame =
 
 emptyState :: State
 emptyState =
-  { tzOffset: Minutes 0.0 -- this will be updated in deriveState
+  { tzOffset: Minutes 0.0 -- this will be updated in Init
   , webSocketStatus: WebSocketClosed Nothing
-  , currentSlot: zero -- this will be updated as soon as the websocket connection is working
   , subState: Left Welcome.initialState
   , store:
       { addressBook: AddressBook.empty
       , wallet: Disconnected
       , contracts: emptyContractStore
+      , currentTime: bottom
       }
   }
 
-deriveState :: State -> Connected Slice Input -> State
-deriveState state { context, input } = state
+deriveState :: State -> Connected Slice Unit -> State
+deriveState state { context } = state
   { subState = case state.subState of
       Right ds -> Right ds
       Left ws -> Left ws
-  , tzOffset = input.tzOffset
-  , store =
-      { addressBook: context.addressBook
-      , wallet: context.wallet
-      , contracts: context.contracts
-      }
+  , store = context
   }
 
 handleQuery
   :: forall a m
    . MonadAff m
   => MonadLogger String m
+  => MonadTime m
   => MonadAsk Env m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m
@@ -219,16 +216,10 @@ handleQuery = case _ of
       _ -> pure unit
     pure $ Just next
 
-  NotificationParseFailed whatFailed error next -> do
+  NotificationParseFailed whatFailed _ error next -> do
     addToast $ errorToast
       ("Failed to parse " <> whatFailed <> " from websocket message")
       (Just $ printJsonDecodeError error)
-    pure $ Just next
-
-  SlotChange slot next -> do
-    updateStore $ Store.AdvanceToSlot slot
-    -- TODO: remove currentSlot from Mainframe once the sub-components are replaced by proper components
-    assign _currentSlot slot
     pure $ Just next
 
   CompanionAppStateUpdated companionAppState next -> do
@@ -294,14 +285,17 @@ handleQuery = case _ of
     liftEffect $ traverse_ HS.unsubscribe subscription
     pure next
 
-  ContractHistoryUpdated plutusAppId contractHistory next -> do
-    let marloweParams = view (_chParams <<< _1) contractHistory
+  ContractHistoryUpdated plutusAppId contractHistory next -> runMaybeT do
+    marloweParams <- hoistMaybe $ preview (_chParams <<< _1) contractHistory
     {- [UC-CONTRACT-1][3] Start a contract -}
     {- [UC-CONTRACT-3][1] Apply an input to a contract -}
-    FollowerApp.onNewObservableState plutusAppId contractHistory
+    H.lift $ FollowerApp.onNewObservableState plutusAppId contractHistory
     {- [UC-CONTRACT-4][0] Redeem payments -}
-    handleAction $ DashboardAction $ Dashboard.RedeemPayments marloweParams
-    pure $ Just next
+    H.lift
+      $ handleAction
+      $ DashboardAction
+      $ Dashboard.RedeemPayments marloweParams
+    pure next
 
   NewActiveEndpoints plutusAppId activeEndpoints next -> do
     -- TODO move into main directly and remove this from the PAB capability API
@@ -352,6 +346,7 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadTime m
   => MonadLogger String m
   => ManageMarlowe m
   => ManageMarloweStorage m
@@ -361,6 +356,7 @@ handleAction
   => MainFrameLoop m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
+handleAction (Tick currentTime) = updateStore $ Store.Tick currentTime
 
 handleAction Init = do
   {- [UC-WALLET-TESTNET-2][4b] Restore a testnet wallet
@@ -378,11 +374,12 @@ handleAction Init = do
         (view Disconnected._walletId w)
     )
     mWalletDetails
+  assign _tzOffset =<< timezoneOffset
   pure unit
+  subscribeTime' (Seconds 1.0) Tick
 
 handleAction (Receive input) = do
   oldStore <- use _store
-  currentSlot <- use _currentSlot
   { store } <- H.modify $ flip deriveState input
   -- Persist the wallet details so that when we Init, we can try to recover it
   updateWallet
@@ -400,7 +397,8 @@ handleAction (Receive input) = do
   case oldStore.wallet, store.wallet of
     Disconnected, Connecting details -> enterDashboardState details
     Connecting _, Connected connectedWallet -> do
-      assign _subState $ Right $ Dashboard.mkInitialState currentSlot
+      currentTime <- now
+      assign _subState $ Right $ Dashboard.mkInitialState currentTime
         connectedWallet
         contracts
       handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
@@ -437,7 +435,7 @@ handleAction (WelcomeAction wa) = do
   for_ mWelcomeState \ws -> toWelcome ws $ Welcome.handleAction wa
 
 handleAction (DashboardAction da) = void $ runMaybeT $ do
-  currentSlot <- H.lift $ use _currentSlot
+  currentTime <- now
   tzOffset <- H.lift $ use _tzOffset
   addressBook <- H.lift $ use _addressBook
   contracts <- H.lift $ use (_store <<< _contracts)
@@ -445,7 +443,7 @@ handleAction (DashboardAction da) = void $ runMaybeT $ do
   wallet <- MaybeT $ peruse $ _store <<< _wallet <<< _connectedWallet
   H.lift $ toDashboard dashboardState
     $ Dashboard.handleAction
-        { addressBook, currentSlot, tzOffset, wallet, contracts }
+        { addressBook, currentTime, tzOffset, wallet, contracts }
         da
 
 {- [UC-WALLET-3][1] Disconnect a wallet
@@ -523,15 +521,13 @@ enterDashboardState disconnectedWallet = do
             connectedWallet = connectWallet { companionAppId, marloweAppId }
               disconnectedWallet
             followerApps = filterFollowerApps plutusApps
-          currentSlot <- use _currentSlot
           for_ followerApps \(followerAppId /\ contractHistory) -> do
             subscribeToPlutusApp followerAppId
             let
               contract = getContract contractHistory
-              mMetadata = _.metaData <$> findTemplate contract
+              mMetadata = _.metaData <$> (findTemplate =<< contract)
             for_ mMetadata \metadata ->
               updateStore $ Store.AddFollowerContract
-                currentSlot
                 followerAppId
                 metadata
                 contractHistory
