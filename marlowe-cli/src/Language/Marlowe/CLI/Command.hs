@@ -69,8 +69,8 @@ runCLI :: String  -- ^ The version of the tool.
        -> IO ()   -- ^ Action to run the tool.
 runCLI version =
   do
-    hSetBuffering stdout  LineBuffering
-    hSetBuffering stderr  LineBuffering
+    hSetBuffering stdout LineBuffering
+    hSetBuffering stderr LineBuffering
     command <- O.execParser $ parseCommand version
     result <- runExceptT $ runCommand command
     case result of

@@ -112,6 +112,7 @@ library
     servant-client,
     split,
     text,
+    time,
     unordered-containers,
     uuid,
     websockets,

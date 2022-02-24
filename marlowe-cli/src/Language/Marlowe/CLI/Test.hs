@@ -8,7 +8,8 @@ module Language.Marlowe.CLI.Test (
 
 
 import Cardano.Api (ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..), NetworkId (..))
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT, throwError)
+import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
+import Data.Bifunctor (first)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.IO (decodeFileStrict, readSigningKey)
 import Language.Marlowe.CLI.Test.PAB (pabTest)
@@ -58,11 +59,8 @@ runTests PabTests{..} =
       BaseUrl{..} = pabUrl
       client = pabClient
       runHttp url f =
-        do
-          result <- liftIO $ runClientM f $ mkClientEnv manager url
-          case result of
-            Right result' -> pure result'
-            Left  e       -> throwError . CliError $ show e
+        first (CliError . show)
+          <$> runClientM f (mkClientEnv manager url)
       runWallet = runHttp walletUrl
       runApi = runHttp pabUrl
       runWs ContractInstanceId{..} f =

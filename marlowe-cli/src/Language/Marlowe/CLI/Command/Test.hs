@@ -41,9 +41,7 @@ runTestCommand :: MonadError CliError m
                => MonadIO m
                => TestCommand  -- ^ The command.
                -> m ()         -- ^ Action for running the command.
-runTestCommand command =
-  do
-    runTests command
+runTestCommand = runTests
 
 
 -- | Parser for test commands.

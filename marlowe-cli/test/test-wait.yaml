@@ -1,0 +1,23 @@
+ptTestName: Waiting
+
+ptPabOperations:
+
+- tag: WaitFor
+  poRelativeTime: 10000
+
+- tag: WaitUntil
+  poAbsoluteTime: 1645736000000
+
+- tag: Timeout
+  poTimeoutSeconds: 10
+  poOperation:
+    tag: WaitFor
+    poRelativeTime: 5000
+
+- tag: ShouldFail
+  poOperations:
+  - tag: Timeout
+    poTimeoutSeconds: 10
+    poOperation:
+      tag: WaitFor
+      poRelativeTime: 15000
