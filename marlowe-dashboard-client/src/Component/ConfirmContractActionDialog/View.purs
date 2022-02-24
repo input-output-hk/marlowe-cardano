@@ -1,4 +1,4 @@
-module Component.ConfirmInput.View
+module Component.ConfirmContractActionDialog.View
   ( render
   ) where
 
@@ -11,7 +11,11 @@ import Component.Button.Types as Button
 import Component.Button.View (button)
 import Component.Column (column)
 import Component.Column as Column
-import Component.ConfirmInput.Types (Action(..), ComponentHTML, State)
+import Component.ConfirmContractActionDialog.Types
+  ( Action(..)
+  , ComponentHTML
+  , State
+  )
 import Component.Contacts.State (getAda)
 import Component.Expand as Expand
 import Component.Heading (Preset(..), heading)

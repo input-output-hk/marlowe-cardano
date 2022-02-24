@@ -11,7 +11,7 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
-import Component.ConfirmInput.Types as ConfirmInput
+import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.Contacts.Types (Action, State) as Contacts
 import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
@@ -52,7 +52,7 @@ data Card
   | CurrentWalletCard
   | ContactsCard
   | ContractTemplateCard
-  | ContractActionConfirmationCard ConfirmInput.Input
+  | ContractActionConfirmationCard ConfirmContractActionDialog.Input
 
 data ContractFilter
   = Running

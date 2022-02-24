@@ -1,4 +1,4 @@
-module Component.ConfirmInput.State
+module Component.ConfirmContractActionDialog.State
   ( component
   ) where
 
@@ -6,8 +6,14 @@ import Prologue
 
 import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
 import Capability.Toast (class Toast, addToast)
-import Component.ConfirmInput.Types (Action(..), DSL, Input, Msg(..), State)
-import Component.ConfirmInput.View (render)
+import Component.ConfirmContractActionDialog.Types
+  ( Action(..)
+  , DSL
+  , Input
+  , Msg(..)
+  , State
+  )
+import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Control.Monad.State (get)
 import Data.ContractUserParties (contractUserParties)

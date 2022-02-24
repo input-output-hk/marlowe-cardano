@@ -1,5 +1,4 @@
--- TODO: Rename to ConfirmActionDialog
-module Component.ConfirmInput.Types
+module Component.ConfirmContractActionDialog.Types
   ( Action(..)
   , ChildSlots
   , ComponentHTML

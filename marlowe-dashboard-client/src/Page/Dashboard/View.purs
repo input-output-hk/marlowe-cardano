@@ -10,8 +10,11 @@ import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
-import Component.ConfirmInput.State as ConfirmInput
-import Component.ConfirmInput.Types (Msg(..), _confirmActionDialog)
+import Component.ConfirmContractActionDialog.State as ConfirmContractActionDialog
+import Component.ConfirmContractActionDialog.Types
+  ( Msg(..)
+  , _confirmActionDialog
+  )
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.View (contactsCard)
 import Component.ContractPreview.View (contractPreviewCard)
@@ -204,7 +207,7 @@ dashboardCard { addressBook, wallet } state = case view _card state of
                     slot
                       _confirmActionDialog
                       unit
-                      ConfirmInput.component
+                      ConfirmContractActionDialog.component
                       input
                       (\DialogClosed -> CloseCard)
               ]

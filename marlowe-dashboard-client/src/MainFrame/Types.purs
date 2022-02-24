@@ -4,7 +4,7 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Component.AddContact.Types as AddContact
-import Component.ConfirmInput.Types as ConfirmInput
+import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.ContractSetup.Types as ContractSetup
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
@@ -86,7 +86,7 @@ type ChildSlots =
   , toaster :: forall q m. H.Slot q m Unit
   , contractSetup :: ContractSetup.Slot Unit
   , contractPage :: ContractPage.Slot Unit
-  , confirmActionDialog :: ConfirmInput.Slot Unit
+  , confirmActionDialog :: ConfirmContractActionDialog.Slot Unit
   )
 
 _toaster :: Proxy "toaster"
