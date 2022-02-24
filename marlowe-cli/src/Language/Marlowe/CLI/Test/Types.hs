@@ -132,6 +132,11 @@ data PabOperation =
       poOwner :: RoleName
     , poValue :: Value
     }
+  | ReturnFunds
+    {
+      poOwner     :: RoleName
+    , poInstances :: [RoleName]
+    }
   | CheckFunds
     {
       poOwner       :: RoleName

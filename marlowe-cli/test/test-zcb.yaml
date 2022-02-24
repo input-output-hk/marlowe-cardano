@@ -279,6 +279,18 @@ ptPabOperations:
   poInstances:
   - BorrowerApp
 
+  # Return unused funds.
+
+- tag: ReturnFunds
+  poOwner: Lender
+  poInstances:
+  - LenderApp
+
+- tag: ReturnFunds
+  poOwner: Borrower
+  poInstances:
+  - BorrowerApp
+
   # Stop the Marlowe application.
 
 - tag: Stop

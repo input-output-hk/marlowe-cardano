@@ -354,7 +354,7 @@ marlowe-cli test contracts --testnet-magic 1564                                 
                            --faucet-key payment.skey                                                        \
                            --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
                            --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7   \
-                           --passphrase pab123456789                                                        \
+                           --passphrase fixme-allow-pass-per-wallet                                         \
                            test-zcb.yaml
 ```
 

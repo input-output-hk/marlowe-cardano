@@ -106,3 +106,10 @@ ptPabOperations:
   poMaximumFees: 4000000
   poInstances:
   - App
+
+  # Return unused funds.
+
+- tag: ReturnFunds
+  poOwner: PAB
+  poInstances:
+  - App
