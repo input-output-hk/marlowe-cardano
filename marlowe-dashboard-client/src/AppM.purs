@@ -5,6 +5,7 @@ import Prologue
 import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
+import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader
   ( class MonadReader
   , ReaderT
@@ -77,6 +78,8 @@ derive newtype instance Monad AppM
 derive newtype instance MonadEffect AppM
 
 derive newtype instance MonadAff AppM
+
+derive newtype instance MonadTime AppM
 
 -- TODO use newtype deriving when MonadRec instance is added to StoreT
 instance MonadRec AppM where
