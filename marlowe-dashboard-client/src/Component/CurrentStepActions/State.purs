@@ -6,8 +6,8 @@ import Prologue
 
 import Component.CurrentStepActions.Types (Action(..), DSL, Input, Msg(..))
 import Component.CurrentStepActions.View (currentStepActions)
-import Data.Lens (modifying, traversed)
-import Data.Lens.Lens.Tuple (_2)
+import Data.Lens (modifying)
+import Data.UserNamedActions (_Actions)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (raise)
 import Halogen as H
@@ -30,7 +30,7 @@ component =
 handleAction :: forall m. Action -> DSL m Unit
 handleAction (SelectAction namedAction) = raise $ ActionSelected namedAction
 handleAction (ChangeChoice choiceId chosenNum) = modifying
-  (_namedActions <<< traversed <<< _2 <<< traversed)
+  (_namedActions <<< _Actions)
   changeChoice
   where
   changeChoice (MakeChoice choiceId' bounds _)

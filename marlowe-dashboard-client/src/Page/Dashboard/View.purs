@@ -92,12 +92,13 @@ import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
   , ContractFilter(..)
+  , ContractState
   , Input
   , State
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (getClosedContracts, getContract, getRunningContracts)
+import Store.Contracts (getContract)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
@@ -574,15 +575,15 @@ contractCards
   :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
 contractCards
   currentSlot
-  { walletCompanionStatus, contractFilter, contractStore } =
+  { walletCompanionStatus, contractFilter, runningContracts, closedContracts } =
   case walletCompanionStatus of
     WalletCompanionSynced ->
       let
         filteredContracts =
           if contractFilter == Running then
-            getRunningContracts contractStore
+            runningContracts
           else
-            getClosedContracts contractStore
+            closedContracts
       in
         if Array.null filteredContracts then
           noContractsMessage contractFilter
@@ -633,7 +634,7 @@ contractGrid
    . MonadAff m
   => Slot
   -> ContractFilter
-  -> Array Execution.State
+  -> Array ContractState
   -> ComponentHTML Action ChildSlots m
 contractGrid currentSlot contractFilter contracts =
   div
@@ -679,10 +680,12 @@ contractGrid currentSlot contractFilter contracts =
       , span_ [ text "New smart contract from template" ]
       ]
 
-  dashboardContractCard contractState =
+  dashboardContractCard { executionState, contractUserParties, namedActions } =
     contractPreviewCard
       currentSlot
-      contractState
+      executionState
+      contractUserParties
+      namedActions
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =

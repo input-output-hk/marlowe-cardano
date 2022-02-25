@@ -15,17 +15,10 @@ import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Data.Array (index, length, mapMaybe, modifyAt)
-import Data.Array as Array
-import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Array.NonEmpty as NonEmptyArray
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
-import Data.ContractUserParties
-  ( contractUserParties
-  , getParticipants
-  , getUserParties
-  )
-import Data.Foldable (foldMap, for_)
+import Data.ContractUserParties (contractUserParties, getParticipants)
+import Data.Foldable (for_)
 import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
 import Data.Lens.Extra (peruse)
@@ -35,10 +28,11 @@ import Data.LocalContractNicknames (insertContractNickname)
 import Data.Maybe (fromMaybe)
 import Data.Ord (abs)
 import Data.PABConnectedWallet (PABConnectedWallet)
-import Data.Set (Set)
 import Data.Set as Set
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
+import Data.UserNamedActions (userNamedActions)
+import Data.UserNamedActions as UserNamedActions
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -51,15 +45,11 @@ import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
-import Marlowe.Execution.State
-  ( expandBalances
-  , extractNamedActions
-  , getActionParticipant
-  )
-import Marlowe.Execution.Types (NamedAction, PastAction(..))
+import Marlowe.Execution.State (expandBalances, extractNamedActions)
+import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (MetaData, emptyContractMetadata)
-import Marlowe.Semantics (Party, Slot, _accounts)
+import Marlowe.Semantics (Slot, _accounts)
 import Page.Contract.Lenses
   ( _Started
   , _contract
@@ -174,7 +164,7 @@ mkInitialState wallet currentSlot executionState =
       -- FIXME-3208: Check, because I think the contract in the executionState is the current
       --             continuation and not the initial contract, so getParticipants might be wrong
       , contractUserParties: contractUserParties wallet marloweParams contract
-      , namedActions: mempty
+      , namedActions: UserNamedActions.empty
       }
   in
     initialState
@@ -284,12 +274,11 @@ transactionsToStep
     stepState = case action of
       TimeoutAction act ->
         let
-          userParties = getUserParties $ state ^. _contractUserParties
+          contractUserParties = state ^. _contractUserParties
 
           missedActions =
-            expandAndGroupByRole
-              userParties
-              participants
+            userNamedActions
+              contractUserParties
               act.missedActions
         in
           TimeoutStep { slot: act.slot, missedActions }
@@ -313,8 +302,6 @@ timeoutToStep state { slot, missedActions } =
 
     contractUserParties = state ^. _contractUserParties
 
-    userParties = getUserParties contractUserParties
-
     participants = getParticipants contractUserParties
 
     expandedBalances = expandBalances (Set.toUnfoldable participants)
@@ -333,9 +320,8 @@ timeoutToStep state { slot, missedActions } =
         TimeoutStep
           { slot
           , missedActions:
-              expandAndGroupByRole
-                userParties
-                participants
+              userNamedActions
+                contractUserParties
                 missedActions
           }
     }
@@ -370,56 +356,11 @@ regenerateStepCards currentSlot state =
 
     contractUserParties = state ^. _contractUserParties
 
-    userParties = getUserParties contractUserParties
-
-    participants = getParticipants contractUserParties
-
     namedActions =
-      expandAndGroupByRole
-        userParties
-        participants
-        (extractNamedActions currentSlot executionState)
+      userNamedActions contractUserParties $ extractNamedActions currentSlot
+        executionState
   in
     state { previousSteps = previousSteps, namedActions = namedActions }
-
--- This helper function expands actions that can be taken by anybody,
--- then groups by participant and sorts it so that the owner starts first and the rest go
--- in alphabetical order
-expandAndGroupByRole
-  :: Set Party
-  -> Set Party
-  -> Array NamedAction
-  -> Array (Tuple Party (Array NamedAction))
-expandAndGroupByRole userParties allParticipants actions =
-  expandedActions
-    # Array.sortBy currentPartiesFirst
-    # Array.groupBy sameParty
-    # map extractGroupedParty
-  where
-  -- If an action has a participant, just use that, if it doesn't expand it to all
-  -- participants
-  expandedActions :: Array (Tuple Party NamedAction)
-  expandedActions =
-    actions
-      # foldMap \action -> case getActionParticipant action of
-          Just participant -> [ participant /\ action ]
-          Nothing -> Set.toUnfoldable allParticipants <#> \participant ->
-            participant /\ action
-
-  isUserParty party = Set.member party userParties
-
-  currentPartiesFirst (Tuple party1 _) (Tuple party2 _)
-    | isUserParty party1 == isUserParty party2 = compare party1 party2
-    | otherwise = if isUserParty party1 then LT else GT
-
-  sameParty a b = fst a == fst b
-
-  extractGroupedParty
-    :: NonEmptyArray (Tuple Party NamedAction)
-    -> Tuple Party (Array NamedAction)
-  extractGroupedParty group = case NonEmptyArray.unzip group of
-    tokens /\ actions' -> NonEmptyArray.head tokens /\ NonEmptyArray.toArray
-      actions'
 
 selectLastStep :: StartedState -> StartedState
 selectLastStep state@{ previousSteps } = state

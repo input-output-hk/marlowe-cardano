@@ -24,14 +24,16 @@ import Component.Template.State (dummyState, handleAction, initialState) as Temp
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Monad.Reader (class MonadAsk)
+import Data.ContractUserParties (contractUserParties)
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
-import Data.PABConnectedWallet (_walletId)
+import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
+import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -40,14 +42,18 @@ import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
+import Marlowe.Execution.State (extractNamedActions)
+import Marlowe.Execution.Types as Execution
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics (MarloweData, MarloweParams)
+import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
+  , _closedContracts
   , _contactsState
   , _contractFilter
   , _menuOpen
+  , _runningContracts
   , _selectedContractMarloweParams
   , _templateState
   , _walletCompanionStatus
@@ -56,29 +62,64 @@ import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
   , ContractFilter(..)
+  , ContractState
   , Input
   , State
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (ContractStore, followerContractExists, getContract)
+import Store.Contracts
+  ( ContractStore
+  , followerContractExists
+  , getClosedContracts
+  , getContract
+  , getRunningContracts
+  )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 mkInitialState
-  :: ContractStore -> State
-mkInitialState contractStore =
-  { contactsState: Contacts.initialState
-  , walletCompanionStatus: WaitingToSync
-  , menuOpen: false
-  , card: Nothing
-  , cardOpen: false
-  , contractStore
-  , contractFilter: Running
-  , selectedContractMarloweParams: Nothing
-  , templateState: Template.dummyState
-  }
+  :: Slot -> PABConnectedWallet -> ContractStore -> State
+mkInitialState currentSlot wallet contracts =
+  let
+    runningContracts = deriveContractState currentSlot wallet $
+      getRunningContracts contracts
+    closedContracts = deriveContractState currentSlot wallet $
+      getClosedContracts contracts
+  in
+    { contactsState: Contacts.initialState
+    , walletCompanionStatus: WaitingToSync
+    , menuOpen: false
+    , card: Nothing
+    , cardOpen: false
+    , runningContracts
+    , closedContracts
+    , contractFilter: Running
+    , selectedContractMarloweParams: Nothing
+    , templateState: Template.dummyState
+    }
+
+deriveContractState
+  :: Slot
+  -> PABConnectedWallet
+  -> Array Execution.State
+  -> Array ContractState
+deriveContractState currentSlot wallet = map \executionState ->
+  let
+    { marloweParams, contract } = executionState
+    userParties = contractUserParties wallet marloweParams contract
+  in
+    { executionState
+    , contractUserParties: userParties
+    , namedActions:
+        userNamedActions
+          userParties
+          ( extractNamedActions
+              currentSlot
+              executionState
+          )
+    }
 
 handleAction
   :: forall m
@@ -93,6 +134,17 @@ handleAction
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
+handleAction { currentSlot, wallet, contracts } Receive = do
+  let
+    runningContracts = deriveContractState currentSlot wallet $
+      getRunningContracts contracts
+    closedContracts = deriveContractState currentSlot wallet $
+      getClosedContracts contracts
+  modify_
+    ( set _runningContracts runningContracts
+        <<< set _closedContracts closedContracts
+    )
+
 {- [UC-WALLET-3][0] Disconnect a wallet -}
 handleAction { wallet } DisconnectWallet = do
   updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet

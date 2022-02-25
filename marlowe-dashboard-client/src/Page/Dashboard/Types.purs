@@ -1,6 +1,7 @@
 module Page.Dashboard.Types
   ( Action(..)
   , State
+  , ContractState
   , Card(..)
   , ContractFilter(..)
   , Input
@@ -15,13 +16,22 @@ import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialo
 import Component.Contacts.Types (Action, State) as Contacts
 import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
+import Data.ContractUserParties (ContractUserParties)
 import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UserNamedActions (UserNamedActions)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.Execution.Types (NamedAction)
+import Marlowe.Execution.Types as Execution
 import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
 import Store.Contracts (ContractStore)
+
+type ContractState =
+  { executionState :: Execution.State
+  , contractUserParties :: ContractUserParties
+  , namedActions :: UserNamedActions
+  }
 
 type State =
   { contactsState :: Contacts.State
@@ -30,7 +40,8 @@ type State =
   , card :: Maybe Card
   -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
-  , contractStore :: ContractStore
+  , runningContracts :: Array ContractState
+  , closedContracts :: Array ContractState
   , contractFilter :: ContractFilter
   , selectedContractMarloweParams :: Maybe MarloweParams
   , templateState :: Template.State
@@ -69,7 +80,8 @@ type Input =
   }
 
 data Action
-  = DisconnectWallet
+  = Receive
+  | DisconnectWallet
   | ContactsAction Contacts.Action
   | ToggleMenu
   | OpenCard Card
@@ -85,6 +97,7 @@ data Action
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
+  toEvent Receive = Nothing
   toEvent DisconnectWallet = Just $ defaultEvent "DisconnectWallet"
   toEvent (ContactsAction contactsAction) = toEvent contactsAction
   toEvent ToggleMenu = Just $ defaultEvent "ToggleMenu"

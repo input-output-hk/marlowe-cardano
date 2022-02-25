@@ -13,10 +13,11 @@ module Component.CurrentStepActions.Types
 import Prologue
 
 import Data.ContractUserParties (ContractUserParties)
+import Data.UserNamedActions (UserNamedActions)
 import Halogen as H
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (ChoiceId, ChosenNum, Party)
+import Marlowe.Semantics (ChoiceId, ChosenNum)
 import Type.Proxy (Proxy(..))
 
 data Msg = ActionSelected NamedAction
@@ -28,8 +29,7 @@ data Action
 type State =
   { executionState :: Execution.State
   , contractUserParties :: ContractUserParties
-  -- Same as Page.Contract.Types Named actions. TODO: Create a custom data type
-  , namedActions :: Array (Tuple Party (Array NamedAction))
+  , namedActions :: UserNamedActions
   }
 
 type Input = State

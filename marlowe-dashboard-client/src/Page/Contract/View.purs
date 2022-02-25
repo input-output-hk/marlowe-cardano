@@ -43,8 +43,12 @@ import Data.Maybe (isJust, maybe, maybe')
 import Data.Set as Set
 import Data.String (take)
 import Data.Time.Duration (Minutes)
-import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
+import Data.UserNamedActions
+  ( getParticipantsWithAction
+  , haveActions
+  , mapActions
+  )
 import Effect.Aff.Class (class MonadAff)
 import Halogen as H
 import Halogen.Css (applyWhen, classNames)
@@ -194,7 +198,7 @@ statusIndicatorMessage (Started state) =
   let
     contractUserParties = state ^. _contractUserParties
 
-    participantsWithAction = Set.fromFoldable $ map fst $ state ^. _namedActions
+    participantsWithAction = getParticipantsWithAction $ state ^. _namedActions
 
     executionState = state ^. _executionState
   in
@@ -549,7 +553,7 @@ renderTimeout tzOffset state _ timeoutInfo =
 
 renderMissingActions
   :: forall p a. StartedState -> TimeoutInfo -> Array (HTML p a)
-renderMissingActions _ { missedActions: [] } =
+renderMissingActions _ { missedActions } | haveActions missedActions == false =
   [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
       [ text
           "There were no tasks to complete at this step and the contract has timeouted as expected."
@@ -562,7 +566,7 @@ renderMissingActions state { missedActions } =
         [ text "The step timed out before the following actions could be made."
         ]
     ]
-    (missedActions <#> uncurry (renderPartyMissingActions state))
+    (renderPartyMissingActions state `mapActions` missedActions)
 
 renderPartyMissingActions
   :: forall p a. StartedState -> Party -> Array NamedAction -> HTML p a

@@ -10,7 +10,6 @@ module Marlowe.Execution.State
   , mkTx
   , nextState
   , nextTimeout
-  , numberOfConfirmedTxs
   , restoreState
   , setPendingTransaction
   , timeoutState
@@ -124,9 +123,6 @@ contractName { contractNickname, marloweParams } = maybe'
   (\_ -> view _rolesCurrency marloweParams)
   ContractNickname.toString
   contractNickname
-
-numberOfConfirmedTxs :: State -> Int
-numberOfConfirmedTxs state = length state.history
 
 setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state

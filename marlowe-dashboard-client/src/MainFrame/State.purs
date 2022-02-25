@@ -382,6 +382,7 @@ handleAction Init = do
 
 handleAction (Receive input) = do
   oldStore <- use _store
+  currentSlot <- use _currentSlot
   { store } <- H.modify $ flip deriveState input
   -- Persist the wallet details so that when we Init, we can try to recover it
   updateWallet
@@ -399,12 +400,16 @@ handleAction (Receive input) = do
   case oldStore.wallet, store.wallet of
     Disconnected, Connecting details -> enterDashboardState details
     Connecting _, Connected connectedWallet -> do
-      assign _subState $ Right $ Dashboard.mkInitialState contracts
+      assign _subState $ Right $ Dashboard.mkInitialState currentSlot
+        connectedWallet
+        contracts
       handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
     Connected _, Disconnecting connectedWallet ->
       enterWelcomeState connectedWallet
     Disconnecting _, Disconnected ->
       assign _subState $ Left Welcome.initialState
+    Connected _, Connected _ ->
+      handleAction $ DashboardAction $ Dashboard.Receive
     _, _ -> pure unit
 
 handleAction (OnPoll lastSyncStatus walletId) = do

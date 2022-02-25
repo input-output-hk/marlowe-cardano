@@ -1,9 +1,11 @@
 module Page.Dashboard.Lenses
   ( _card
   , _cardOpen
+  , _closedContracts
   , _contactsState
   , _contractFilter
   , _menuOpen
+  , _runningContracts
   , _selectedContractMarloweParams
   , _templateState
   , _walletCompanionStatus
@@ -16,7 +18,13 @@ import Component.Template.Types (State) as Template
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Marlowe.Semantics (MarloweParams)
-import Page.Dashboard.Types (Card, ContractFilter, State, WalletCompanionStatus)
+import Page.Dashboard.Types
+  ( Card
+  , ContractFilter
+  , ContractState
+  , State
+  , WalletCompanionStatus
+  )
 import Type.Proxy (Proxy(..))
 
 _contactsState :: Lens' State Contacts.State
@@ -43,3 +51,10 @@ _selectedContractMarloweParams = prop
 
 _templateState :: Lens' State Template.State
 _templateState = prop (Proxy :: _ "templateState")
+
+_runningContracts :: Lens' State (Array ContractState)
+_runningContracts = prop (Proxy :: _ "runningContracts")
+
+_closedContracts :: Lens' State (Array ContractState)
+_closedContracts = prop (Proxy :: _ "closedContracts")
+

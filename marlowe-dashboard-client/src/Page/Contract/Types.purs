@@ -33,19 +33,14 @@ import Data.ContractNickname (ContractNickname)
 import Data.ContractUserParties (ContractUserParties)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UserNamedActions (UserNamedActions)
 import Halogen (RefLabel(..))
 import Halogen as H
 import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics
-  ( Accounts
-  , MarloweParams
-  , Party
-  , Payment
-  , TransactionInput
-  )
+import Marlowe.Semantics (Accounts, MarloweParams, Payment, TransactionInput)
 import Marlowe.Semantics (Slot) as Semantic
 import Store.Contracts (ContractStore)
 import Type.Proxy (Proxy(..))
@@ -80,10 +75,8 @@ type StartedState =
   , selectedStep :: Int
   -- How the "logged-in" user sees the different Parties of the contract
   , contractUserParties :: ContractUserParties
-  -- These are the possible actions a user can make in the current step (grouped by part). We store this
-  -- mainly because extractNamedActions and expandAndGroupByRole could potentially be unperformant to compute
-  -- for every render.
-  , namedActions :: Array (Tuple Party (Array NamedAction))
+  -- These are the possible actions a user can make in the current step (grouped by party).
+  , namedActions :: UserNamedActions
   }
 
 type StepBalance =
@@ -102,7 +95,7 @@ type PreviousStep =
 
 type TimeoutInfo =
   { slot :: Semantic.Slot
-  , missedActions :: Array (Tuple Party (Array NamedAction))
+  , missedActions :: UserNamedActions
   }
 
 data PreviousStepState

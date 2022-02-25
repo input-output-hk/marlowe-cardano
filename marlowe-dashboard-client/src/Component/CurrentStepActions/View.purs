@@ -19,7 +19,7 @@ import Data.Map (lookup) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.String (trim)
 import Data.String.Extra (capitalize)
-import Data.Tuple (uncurry)
+import Data.UserNamedActions (haveActions, mapActions)
 import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (applyWhen, classNames)
 import Halogen.HTML (HTML, button, div, div_, h4, input, p_, span, span_, text)
@@ -75,7 +75,7 @@ currentStepActions state =
           [ text
               "Your transaction has been submitted. You will be notified when confirmation is received."
           ]
-      _, _, [] ->
+      _, _, namedActions | haveActions namedActions == false ->
         let
           purpleDot extraCss = div
             [ classNames $
@@ -113,8 +113,7 @@ currentStepActions state =
       _, _, namedActions ->
         div
           [ classNames [ "space-y-4" ] ]
-          $ uncurry (renderPartyTasks state)
-              <$> namedActions
+          $ renderPartyTasks state `mapActions` namedActions
 
 renderPartyTasks
   :: forall p. State -> Party -> Array NamedAction -> HTML p Action

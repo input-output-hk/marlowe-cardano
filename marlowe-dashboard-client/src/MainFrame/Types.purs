@@ -6,6 +6,7 @@ import Analytics (class IsEvent, defaultEvent, toEvent)
 import Component.AddContact.Types as AddContact
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.ContractSetup.Types as ContractSetup
+import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
@@ -87,6 +88,7 @@ type ChildSlots =
   , contractSetup :: ContractSetup.Slot Unit
   , contractPage :: ContractPage.Slot Unit
   , confirmActionDialog :: ConfirmContractActionDialog.Slot Unit
+  , currentStepActions :: CurrentStepActions.Slot MarloweParams
   )
 
 _toaster :: Proxy "toaster"

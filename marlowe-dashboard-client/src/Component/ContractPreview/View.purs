@@ -6,19 +6,23 @@ module Component.ContractPreview.View
 import Prologue hiding (div)
 
 import Component.Contract.View (startingStepActions, timeoutString)
+import Component.CurrentStepActions.State as CurrentStepActions
+import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
+import Data.ContractUserParties (ContractUserParties)
 import Data.Lens ((^.))
+import Data.UserNamedActions (UserNamedActions)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.HTML (a, div, h3, p, text)
+import Halogen.HTML (a, div, h3, p, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
 import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
-import Marlowe.Execution.State (numberOfConfirmedTxs)
+import Marlowe.Execution.State (currentStep)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Marlowe.Semantics (Slot)
@@ -32,27 +36,35 @@ contractPreviewCard
    . MonadAff m
   => Slot
   -> Execution.State
+  -> ContractUserParties
+  -> UserNamedActions
   -> ComponentHTML Action ChildSlots m
-contractPreviewCard currentSlot state =
+contractPreviewCard currentSlot executionState contractUserParties namedActions =
   let
-    contractType = state ^. (_metadata <<< _contractType)
-    contractName = state ^. (_metadata <<< _contractName)
-    marloweParams = state ^. _marloweParams
-    nickname = Execution.contractName state
+    contractType = executionState ^. (_metadata <<< _contractType)
+    contractName = executionState ^. (_metadata <<< _contractName)
+    marloweParams = executionState ^. _marloweParams
+    nickname = Execution.contractName executionState
 
     stepPanel =
       div
         [ classNames [ "px-4", "py-2" ] ]
         [ p
             [ classNames [ "text-xs", "font-semibold" ] ]
-            [ text $ "Current step:" <> show (numberOfConfirmedTxs state + 1) ]
+            [ text $ "Current step:" <> show (currentStep executionState + 1) ]
         , p
             [ classNames [ "font-semibold" ] ]
-            [ text $ timeoutString currentSlot state ]
+            [ text $ timeoutString currentSlot executionState ]
         ]
-    -- FIXME-3560 Fix current step actions from the dashboard
-    -- stepActions = currentStepActions state
-    stepActions = startingStepActions
+    stepActions = slot
+      _currentStepActions
+      marloweParams
+      CurrentStepActions.component
+      { executionState, contractUserParties, namedActions }
+      ( \(ActionSelected action) -> OnAskContractActionConfirmation
+          marloweParams
+          action
+      )
   in
     div
       [ classNames
