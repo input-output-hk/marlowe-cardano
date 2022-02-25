@@ -8,11 +8,11 @@
 
 { writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux, wait-for-socket }:
 let
-  slotZeroTime = 1644929640000; # POSIX time of slot zeron is milliseconds. See note [Datetime to slot] in Marlowe.Slot
+  slotZeroTime = 1638215277000; # POSIX time of slot zero is milliseconds. See note [Datetime to slot] in Marlowe.Slot
   slotLengthMillis = 1000;
 
   constantFee = 10; # Constant fee per transaction in lovelace
-  scriptsFeeFactor = 0.0; # Factor by which to multiply the size-dependent scripts fee in lovelace
+  scriptsFeeFactor = 1.0; # Factor by which to multiply the size-dependent scripts fee in lovelace
 
   pabYamlIn = writeText "pab.yaml.in" (builtins.toJSON {
     dbConfig = {
@@ -27,13 +27,18 @@ let
     };
 
     walletServerConfig = {
-      baseUrl = "@NOMAD_ADDR_wbe@";
+      tag = "LocalWalletConfig";
+      walletSettings = {
+        baseUrl = "@NOMAD_ADDR_wbe@";
+      };
     };
 
     nodeServerConfig = {
-      pscBaseUrl = "@NOMAD_ADDR_node@";
       pscSocketPath = "@NOMAD_ALLOC_DIR@/node.sock";
+      pscBaseUrl = "@NOMAD_ADDR_node@";
+      pscKeptBlocks = 2160;
       pscRandomTxInterval = 20000000;
+      pscNetworkId = "1564";
       pscSlotConfig = {
         scSlotZeroTime = slotZeroTime;
         scSlotLength = slotLengthMillis;
@@ -44,8 +49,6 @@ let
         };
         fcScriptsFeeFactor = scriptsFeeFactor;
       };
-      pscNetworkId = "1564";
-      pscKeptBlocks = 100000;
       pscInitialTxWallets = [ ];
       pscNodeMode = "AlonzoNode";
       pscProtocolParametersJsonPath = ../marlowe-dashboard-client/private-testnet.protocol;
@@ -58,6 +61,24 @@ let
 
     requestProcessingConfig = {
       requestProcessingInterval = 1;
+    };
+
+    signingProcessConfig = {
+      spBaseUrl = "http://fixme";
+      spWallet = {
+        getWallet = 1;
+      };
+    };
+
+    metadataServerConfig = {
+      mdBaseUrl = "http://fixme";
+    };
+
+    developmentOptions = {
+      pabRollbackHistory = null;
+      pabResumeFrom = {
+        tag = "PointAtGenesis";
+      };
     };
   });
 
