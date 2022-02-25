@@ -1,0 +1,252 @@
+ptTestName: Swap of ADA and Dollar Tokens
+
+ptPabOperations:
+
+  # Create the wallet for the ADA provider, fund it with 50 ADA, and activate
+  # the Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Ada provider
+
+- tag: FundWallet
+  poOwner: Ada provider
+  poValue:
+    lovelace: 50000000
+
+- tag: ActivateApp
+  poOwner: Ada provider
+  poInstance: AdaApp
+
+  # Create the wallet for the dollar provider, fund it with 35 ADA and 100
+  # dollars, and activate the Marlowe endpoints. In order that there be a UTxO
+  # for collateral, send the funds in two batches.
+
+- tag: CreateWallet
+  poOwner: Dollar provider
+
+- tag: FundWallet
+  poOwner: Dollar provider
+  poValue:
+    lovelace: 10000000
+
+- tag: FundWallet
+  poOwner: Dollar provider
+  poValue:
+    lovelace: 25000000
+    8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d:
+      646f6c6c6172: 100  # NB: 0x646f6c6c6172 = "dollar"
+
+- tag: ActivateApp
+  poOwner: Dollar provider
+  poInstance: DollarApp
+
+  # The ADA provider creates the swap contract for 30 ADA to 50 dollars.
+
+- tag: CallCreate
+  poInstance: AdaApp
+  poOwners:
+    - Ada provider
+    - Dollar provider
+  poContract:
+    when:
+    - case:
+        party:
+          role_token: Ada provider
+        deposits:
+          multiply: 1000000
+          times: 30
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Ada provider
+      then:
+        when:
+        - case:
+            party:
+              role_token: Dollar provider
+            deposits: 40
+            of_token:
+              currency_symbol: 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d
+              token_name: dollar
+            into_account:
+              role_token: Dollar provider
+          then:
+            pay:
+              multiply: 1000000
+              times: 30
+            token:
+              currency_symbol: ''
+              token_name: ''
+            from_account:
+              role_token: Ada provider
+            to:
+              party:
+                role_token: Dollar provider
+            then:
+              pay: 40
+              token:
+                currency_symbol: 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d
+                token_name: dollar
+              from_account:
+                role_token: Dollar provider
+              to:
+                party:
+                  role_token: Ada provider
+              then: close
+        timeout: 1961123625000
+        timeout_continuation: close
+    timeout: 1929587625000
+    timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: AdaApp
+
+  # The ADA provider should have 48 ADA now, since 2 ADA was sent to the script
+  # when creating the contract and 2 ADA was sent to the dollar provider along
+  # with their role token, and up to 1 ADA in fees might have been paid.
+
+- tag: CheckFunds
+  poOwner: Ada provider
+  poValue:
+    lovelace: 46000000
+  poMaximumFees: 1000000
+  poInstances:
+  - AdaApp
+
+  # The dollar provider should have 37 ADA now and 100 USD.
+
+- tag: CheckFunds
+  poOwner: Dollar provider
+  poValue:
+    lovelace: 37000000
+    8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d:
+      646f6c6c6172: 100
+  poMaximumFees: 0
+  poInstances:
+  - AdaApp
+
+  # The dollar provider needs to followe the contract created by the ada
+  # provider.
+
+- tag: Follow
+  poInstance: DollarApp
+  poOtherInstance: AdaApp
+
+  # The ADA provider deposits their 30 ADA for the swap.
+
+- tag: CallApplyInputs
+  poInstance: AdaApp
+  poOwner: Ada provider
+  poInputs:
+  - input_from_party:
+      role_token: Ada provider
+    that_deposits: 30000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Ada provider
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: AdaApp
+
+  # The ADA provider should have 16 ADA now, since they paid 30 ADA for the
+  # swap, minus up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Ada provider
+  poValue:
+    lovelace: 16000000
+  poMaximumFees: 3000000
+  poInstances:
+  - AdaApp
+
+  # The dollar provider deposits their 40 USD for the swap.
+
+- tag: CallApplyInputs
+  poInstance: DollarApp
+  poOwner: Dollar provider
+  poInputs:
+  - input_from_party:
+      role_token: Dollar provider
+    that_deposits: 40
+    of_token:
+      currency_symbol: 8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d
+      token_name: dollar
+    into_account:
+      role_token: Dollar provider
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: DollarApp
+
+  # The dollar provider should have 37 ADA and 60 USD now, since they paid 50
+  # USD for the swap, minus up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Dollar provider
+  poValue:
+    lovelace: 37000000
+    8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d:
+      646f6c6c6172: 60
+  poMaximumFees: 2000000
+  poInstances:
+  - DollarApp
+
+  # Now the ADA provider redeems the 2 ADA and 40 USD from the payout script.
+
+- tag: CallRedeem
+  poInstance: AdaApp
+  poOwner: Ada provider
+
+- tag: AwaitRedeem
+  poInstance: AdaApp
+
+  # The ADA provider should now have 18 ADA and 40 USD, but they may have paid
+  # up to 4 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Ada provider
+  poValue:
+    lovelace: 18000000
+    8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d:
+      646f6c6c6172: 40
+  poMaximumFees: 4000000
+  poInstances:
+  - AdaApp
+
+  # Now the dollar provider redeems the 30 USD from the payout script.
+
+- tag: CallRedeem
+  poInstance: DollarApp
+  poOwner: Dollar provider
+
+- tag: AwaitRedeem
+  poInstance: DollarApp
+
+  # The ADA provider should now have 67 ADA and 60 USD, but they may have paid
+  # up to 3 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Dollar provider
+  poValue:
+    lovelace: 67000000
+    8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d:
+      646f6c6c6172: 60
+  poMaximumFees: 3000000
+  poInstances:
+  - DollarApp
+
+  # Stop the Marlowe application.
+
+- tag: Stop
+  poInstance: AdaApp
+
+- tag: Stop
+  poInstance: AdarApp
