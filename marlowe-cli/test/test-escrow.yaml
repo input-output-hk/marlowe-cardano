@@ -145,13 +145,13 @@ ptPabOperations:
                         choice_owner:
                           role_token: Mediator
                     then: close
-                  timeout: 100000004
+                  timeout: 2024195625000
                   timeout_continuation: close
-              timeout: 100000003
+              timeout: 1992659625000
               timeout_continuation: close
-        timeout: 100000002
+        timeout: 1961123625000
         timeout_continuation: close
-    timeout: 100000001
+    timeout: 1929587625000
     timeout_continuation: close
 
 - tag: AwaitCreate
@@ -206,18 +206,17 @@ ptPabOperations:
   poInstance: BuyerApp
   poOwner: Buyer
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: Seller
-      - role_token: Buyer
-      - currency_symbol: ''
-        token_name: ''
-      - 50000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - input_from_party:
+      role_token: Buyer
+    that_deposits: 50000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Seller
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: BuyerApp
@@ -239,17 +238,14 @@ ptPabOperations:
   poInstance: BuyerApp
   poOwner: Buyer
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IChoice
-      contents:
-      - choice_name: Everything is alright
-        choice_owner:
-          role_token: Buyer
-      - 0
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - for_choice_id:
+      choice_name: Everything is alright
+      choice_owner:
+        role_token: Buyer
+    input_that_chooses_num: 0
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: BuyerApp

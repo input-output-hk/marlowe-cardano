@@ -161,13 +161,13 @@ ptPabOperations:
                               party:
                                 role_token: Mediator
                             then: close
-                      timeout: 100000004
+                      timeout: 2024195625000
                       timeout_continuation: close
-            timeout: 100000003
+            timeout: 1992659625000
             timeout_continuation: close
-        timeout: 100000002
+        timeout: 1961123625000
         timeout_continuation: close
-    timeout: 100000001
+    timeout: 1929587625000
     timeout_continuation: close
 
 - tag: AwaitCreate
@@ -222,18 +222,17 @@ ptPabOperations:
   poInstance: SellerApp
   poOwner: Seller
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: Seller
-      - role_token: Seller
-      - currency_symbol: ''
-        token_name: ''
-      - 10000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - input_from_party:
+      role_token: Seller
+    that_deposits: 10000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Seller
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: SellerApp
@@ -255,18 +254,17 @@ ptPabOperations:
   poInstance: BuyerApp
   poOwner: Buyer
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: Buyer
-      - role_token: Buyer
-      - currency_symbol: ''
-        token_name: ''
-      - 10000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - input_from_party:
+      role_token: Buyer
+    that_deposits: 10000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Buyer
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: BuyerApp
@@ -288,18 +286,17 @@ ptPabOperations:
   poInstance: BuyerApp
   poOwner: Buyer
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: Seller
-      - role_token: Buyer
-      - currency_symbol: ''
-        token_name: ''
-      - 50000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - input_from_party:
+      role_token: Buyer
+    that_deposits: 50000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Seller
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: BuyerApp
@@ -321,17 +318,14 @@ ptPabOperations:
   poInstance: BuyerApp
   poOwner: Buyer
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IChoice
-      contents:
-      - choice_name: Report problem
-        choice_owner:
-          role_token: Buyer
-      - 1
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - for_choice_id:
+      choice_name: Report problem
+      choice_owner:
+        role_token: Buyer
+    input_that_chooses_num: 1
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: BuyerApp
@@ -353,17 +347,14 @@ ptPabOperations:
   poInstance: SellerApp
   poOwner: Seller
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IChoice
-      contents:
-      - choice_name: Dispute problem.
-        choice_owner:
-          role_token: Seller
-      - 0
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 100000000
+  - for_choice_id:
+      choice_name: Dispute problem
+      choice_owner:
+        role_token: Seller
+    input_that_chooses_num: 0
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: SellerApp
@@ -380,15 +371,24 @@ ptPabOperations:
   - SellerApp
 
 
+  # Now the mediator redeems the 22 ADA from the payout script.
+
+- tag: CallRedeem
+  poInstance: MediatorApp
+  poOwner: Mediator
+
+- tag: AwaitRedeem
+  poInstance: MediatorApp
+
   # The mediator should have 36 ADA now because they received back their
   # initial 2 ADA that was contributed when creating the contract and they
-  # received all of the collateral, but they did not pay additional fees
+  # received all of the collateral, but they paid additional fees.
 
 - tag: CheckFunds
   poOwner: Mediator
   poValue:
     lovelace: 36000000
-  poMaximumFees: 1000000
+  poMaximumFees: 2000000
   poInstances:
   - MediatorApp
 

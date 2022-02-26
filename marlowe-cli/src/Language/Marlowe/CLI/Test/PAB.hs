@@ -38,7 +38,7 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Exception (SomeException, catch, displayException)
 import Control.Lens (use, (%=))
-import Control.Monad (unless, void)
+import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
@@ -83,6 +83,10 @@ import qualified Data.Text as T (pack)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
 import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
+
+
+verbose :: Bool
+verbose = True
 
 
 pabTest :: MonadError CliError m
@@ -517,7 +521,8 @@ runContract PabAccess{..} contract walletId =
       go connection =
         do
           status <- receiveStatus connection
-          liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
+          when verbose
+            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
