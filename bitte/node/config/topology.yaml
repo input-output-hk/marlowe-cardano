@@ -1,9 +1,9 @@
 {
   "Producers": [
     {
-      "addr": "europe.relays.marlowe-testnet.dev.cardano.org",
+      "addr": "relays.marlowe-testnet.dev.cardano.org",
       "port": 3001,
-      "valency": 2
+      "valency": 1
     }
   ]
 }
