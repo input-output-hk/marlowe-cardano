@@ -28,6 +28,7 @@ import Halogen.Store.Monad (class MonadStore, updateStore)
 import Marlowe.Execution.State (mkTx, setPendingTransaction)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
+import Marlowe.Semantics (ChosenNum)
 import Marlowe.Semantics as Semantic
 import Store as Store
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
@@ -55,6 +56,7 @@ mkInitialState
   { action
   , executionState
   , wallet
+  , chosenNum
   } =
   let
     { marloweParams, contract } = executionState
@@ -65,6 +67,7 @@ mkInitialState
     , transactionFeeQuote: transactionFee
     , txInput: Nothing
     , wallet
+    , chosenNum
     }
 
 handleAction
@@ -80,12 +83,12 @@ handleAction CancelConfirmation = H.raise DialogClosed
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction (ConfirmAction namedAction) = do
-  { wallet, executionState } <- get
+  { wallet, executionState, chosenNum } <- get
   currentTime <- now
 
   let
     { marloweParams, contract } = executionState
-    contractInput = toInput namedAction
+    contractInput = toInput namedAction chosenNum
     mTxInput = mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
   ajaxApplyInputs <- for mTxInput \txin ->
     map (Tuple txin) <$> applyTransactionInput wallet marloweParams txin
@@ -111,14 +114,14 @@ handleAction (ConfirmAction namedAction) = do
       liftAff mResult
       addToast $ successToast "Contract update applied."
 
-toInput :: NamedAction -> Maybe Semantic.Input
-toInput (MakeDeposit accountId party token value) = Just $ Semantic.IDeposit
+toInput :: NamedAction -> Maybe ChosenNum -> Maybe Semantic.Input
+toInput (MakeDeposit accountId party token value) _ = Just $ Semantic.IDeposit
   accountId
   party
   token
   value
 
-toInput (MakeChoice choiceId _ (Just chosenNum)) = Just $ Semantic.IChoice
+toInput (MakeChoice choiceId _) (Just chosenNum) = Just $ Semantic.IChoice
   choiceId
   chosenNum
 
@@ -131,9 +134,9 @@ toInput (MakeChoice choiceId _ (Just chosenNum)) = Just $ Semantic.IChoice
 --       to represent that initialy no choice is made, and eventually you can type an option and delete it.
 --       Another way to do this would be to duplicate the NamedAction data type with just that difference, which
 --       seems like an overkill.
-toInput (MakeChoice _ _ Nothing) = unsafeThrow
+toInput (MakeChoice _ _) Nothing = unsafeThrow
   "A choice action has been triggered"
 
-toInput (MakeNotify _) = Just $ Semantic.INotify
+toInput (MakeNotify _) _ = Just $ Semantic.INotify
 
-toInput _ = Nothing
+toInput _ _ = Nothing

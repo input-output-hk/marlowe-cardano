@@ -21,7 +21,7 @@ import Data.PABConnectedWallet (PABConnectedWallet)
 import Halogen as H
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (TransactionInput)
+import Marlowe.Semantics (ChosenNum, TransactionInput)
 import Type.Proxy (Proxy(..))
 
 data Msg
@@ -38,12 +38,14 @@ type State =
   , transactionFeeQuote :: BigInt
   , txInput :: Maybe TransactionInput
   , wallet :: PABConnectedWallet
+  , chosenNum :: Maybe ChosenNum
   }
 
 type Input =
   { action :: NamedAction
   , executionState :: Execution.State
   , wallet :: PABConnectedWallet
+  , chosenNum :: Maybe ChosenNum
   }
 
 type ChildSlots =

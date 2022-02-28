@@ -25,7 +25,7 @@ import Data.UserNamedActions (UserNamedActions)
 import Data.WalletNickname (WalletNickname)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
-import Marlowe.Semantics (MarloweData, MarloweParams)
+import Marlowe.Semantics (ChosenNum, MarloweData, MarloweParams)
 import Store.Contracts (ContractStore)
 
 type ContractState =
@@ -91,7 +91,7 @@ data Action
   | SelectContract (Maybe MarloweParams)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
   | RedeemPayments MarloweParams
-  | OnAskContractActionConfirmation MarloweParams NamedAction
+  | OnAskContractActionConfirmation MarloweParams NamedAction (Maybe ChosenNum)
   | TemplateAction Template.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
@@ -109,6 +109,6 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
   toEvent (UpdateFollowerApps _) = Nothing
   toEvent (RedeemPayments _) = Nothing
-  toEvent (OnAskContractActionConfirmation _ _) = Nothing
+  toEvent (OnAskContractActionConfirmation _ _ _) = Nothing
   toEvent (TemplateAction _) = Nothing
   toEvent (SetContactForRole _ _) = Nothing

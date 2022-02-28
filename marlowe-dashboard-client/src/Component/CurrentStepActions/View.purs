@@ -5,11 +5,7 @@ module Component.CurrentStepActions.View
 import Prologue hiding (div)
 
 import Component.Contract.View (renderParty)
-import Component.CurrentStepActions.Types
-  ( Action(..)
-  , ComponentHTML
-  , State
-  )
+import Component.CurrentStepActions.Types (Action(..), ComponentHTML, State)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Css as Css
@@ -170,16 +166,18 @@ renderAction state party namedAction@(MakeDeposit intoAccountOf by token value) 
                 else
                   [ "text-black", "cursor-default" ]
           , enabled $ isActiveParticipant
-          , onClick_ $ SelectAction namedAction
+          , onClick_ $ SelectAction namedAction Nothing
           ]
           [ span_ [ text "Deposit:" ]
           , span_ [ text $ humanizeValue token value ]
           ]
       ]
 
-renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
+renderAction state party namedAction@(MakeChoice choiceId bounds) =
   let
     contractUserParties = state ^. _contractUserParties
+
+    mChosenNum = Map.lookup choiceId $ state.choiceValues
 
     isActiveParticipant = isCurrentUser party contractUserParties
 
@@ -249,7 +247,7 @@ renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
                         , "cursor-default"
                         ]
                 )
-            , onClick_ $ SelectAction namedAction
+            , onClick_ $ SelectAction namedAction Nothing
             , enabled $ isValid && isActiveParticipant
             ]
             [ text "..." ]
@@ -264,7 +262,7 @@ renderAction state party namedAction@(MakeChoice choiceId bounds mChosenNum) =
               else
                 [ "text-black", "cursor-default" ]
         , enabled isActiveParticipant
-        , onClick_ $ SelectAction $ MakeChoice choiceId bounds $ Just
+        , onClick_ $ SelectAction (MakeChoice choiceId bounds) $ Just
             minBound
         ]
         [ span_ [ text choiceIdKey ]
@@ -301,7 +299,7 @@ renderAction state party CloseContract =
                 else
                   [ "text-black", "cursor-default" ]
           , enabled $ isActiveParticipant
-          , onClick_ $ SelectAction CloseContract
+          , onClick_ $ SelectAction CloseContract Nothing
           ]
           [ text "Close contract" ]
       ]

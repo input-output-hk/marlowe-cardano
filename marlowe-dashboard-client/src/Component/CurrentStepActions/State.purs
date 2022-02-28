@@ -6,13 +6,13 @@ import Prologue
 
 import Component.CurrentStepActions.Types (Action(..), DSL, Input, Msg(..))
 import Component.CurrentStepActions.View (currentStepActions)
-import Data.Lens (modifying)
-import Data.UserNamedActions (_Actions)
+import Data.Map as Map
+import Data.Maybe (maybe)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (raise)
 import Halogen as H
-import Marlowe.Execution.Types (NamedAction(..))
-import Page.Contract.Lenses (_namedActions)
+import Record as Record
+import Type.Proxy (Proxy(..))
 
 component
   :: forall query m
@@ -20,7 +20,7 @@ component
   => H.Component query Input Msg m
 component =
   H.mkComponent
-    { initialState: identity
+    { initialState: Record.insert (Proxy :: _ "choiceValues") Map.empty
     , render: currentStepActions
     , eval: H.mkEval H.defaultEval
         { handleAction = handleAction
@@ -28,13 +28,14 @@ component =
     }
 
 handleAction :: forall m. Action -> DSL m Unit
-handleAction (SelectAction namedAction) = raise $ ActionSelected namedAction
-handleAction (ChangeChoice choiceId chosenNum) = modifying
-  (_namedActions <<< _Actions)
-  changeChoice
-  where
-  changeChoice (MakeChoice choiceId' bounds _)
-    | choiceId == choiceId' = MakeChoice choiceId bounds chosenNum
+handleAction (OnReceive input) = H.modify_ $ Record.merge input
 
-  changeChoice namedAction = namedAction
+handleAction (SelectAction namedAction chosenNum) =
+  raise $ ActionSelected namedAction chosenNum
 
+handleAction (ChangeChoice choiceId chosenNum) =
+  H.modify_ \s ->
+    s
+      { choiceValues = s.choiceValues
+          # maybe (Map.delete choiceId) (Map.insert choiceId) chosenNum
+      }

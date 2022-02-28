@@ -137,7 +137,7 @@ deriveState
   in
     { contract
     , currentTime: bottom
-    , tzOffset: Minutes 0.0
+    , tzOffset: Minutes 0.0 -- This will be set in Init
     , wallet
     }
 
@@ -246,7 +246,7 @@ handleAction (ToggleExpandPayment stepNumber) = modifying
   )
   not
 
-handleAction (OnActionSelected action) = raise $ AskConfirmation action
+handleAction (OnActionSelected action num) = raise $ AskConfirmation action num
 
 handleAction CancelConfirmation = pure unit -- Managed by Dashboard.State
 

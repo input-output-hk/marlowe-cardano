@@ -156,9 +156,11 @@ dashboardScreen { currentTime, wallet, contracts } state =
                           unit
                           ContractPage.component
                           { wallet, marloweParams }
-                          ( \(AskConfirmation namedAction) ->
-                              OnAskContractActionConfirmation marloweParams
+                          ( \(AskConfirmation namedAction num) ->
+                              OnAskContractActionConfirmation
+                                marloweParams
                                 namedAction
+                                num
                           )
                       ]
                     _ -> [ contractsScreen currentTime state ]

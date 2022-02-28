@@ -292,7 +292,7 @@ isClosed _ = false
 getActionParticipant :: NamedAction -> Maybe Party
 getActionParticipant (MakeDeposit _ party _ _) = Just party
 
-getActionParticipant (MakeChoice (ChoiceId _ party) _ _) = Just party
+getActionParticipant (MakeChoice (ChoiceId _ party) _) = Just party
 
 getActionParticipant _ = Nothing
 
@@ -324,7 +324,7 @@ extractActionsFromContract currentTime semanticState contract@(When cases _ _) =
       amount = evalValue env semanticState v
     pure $ MakeDeposit a p t amount
 
-  toNamedAction (Choice cid bounds) = pure $ MakeChoice cid bounds Nothing
+  toNamedAction (Choice cid bounds) = pure $ MakeChoice cid bounds
 
   toNamedAction (Notify obs) = pure $ MakeNotify obs
 

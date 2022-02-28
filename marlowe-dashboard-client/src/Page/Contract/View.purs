@@ -572,7 +572,7 @@ renderPartyMissingActions
   :: forall p a. StartedState -> Party -> Array NamedAction -> HTML p a
 renderPartyMissingActions state party actions =
   let
-    renderMissingAction (MakeChoice (ChoiceId name _) _ _) = span_
+    renderMissingAction (MakeChoice (ChoiceId name _) _) = span_
       [ text "Make a choice for "
       , span [ classNames [ "font-semibold" ] ] [ text name ]
       ]
@@ -638,7 +638,9 @@ renderCurrentStep currentSlot state =
                         marloweParams
                         CurrentStepActions.component
                         { executionState, contractUserParties, namedActions }
-                        (\(ActionSelected action) -> OnActionSelected action)
+                        case _ of
+                          ActionSelected action num ->
+                            OnActionSelected action num
                     ]
               Balances ->
                 let

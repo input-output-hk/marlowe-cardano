@@ -58,7 +58,7 @@ render state@{ action, executionState } =
                       <> " "
                       <> case action of
                         MakeDeposit _ _ _ _ -> "deposit"
-                        MakeChoice _ _ _ -> "choice"
+                        MakeChoice _ _ -> "choice"
                         CloseContract -> "close"
                         _ -> ""
               ]
@@ -76,7 +76,7 @@ summary state@{ action, contractUserParties } =
                     $
                       case action of
                         MakeDeposit _ _ _ _ -> "Deposit"
-                        MakeChoice _ _ _ -> "Choice"
+                        MakeChoice _ _ -> "Choice"
                         CloseContract -> "Close"
                         _ -> ""
                         <> " summary"
@@ -94,7 +94,7 @@ summary state@{ action, contractUserParties } =
                     , quantity
                     , termini: WalletToAccount sender recipient
                     }
-                MakeChoice (Semantics.ChoiceId key _) _ _ ->
+                MakeChoice (Semantics.ChoiceId key _) _ ->
                   row Row.Between []
                     [ span [ classNames [ "font-semibold", "text-sm" ] ]
                         [ text "Your choice:" ]

@@ -318,13 +318,14 @@ handleAction _ (SetContactForRole _ _) = do
 
 handleAction
   input@{ contracts, wallet }
-  (OnAskContractActionConfirmation marloweParams action) = do
+  (OnAskContractActionConfirmation marloweParams action chosenNum) = do
   let
     mExecutionState = getContract marloweParams contracts
   for_ mExecutionState \executionState ->
     handleAction input
       $ OpenCard
-      $ ContractActionConfirmationCard { action, executionState, wallet }
+      $ ContractActionConfirmationCard
+          { action, chosenNum, executionState, wallet }
 
 updateTotalFunds
   :: forall m

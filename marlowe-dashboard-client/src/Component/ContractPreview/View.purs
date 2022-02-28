@@ -61,9 +61,10 @@ contractPreviewCard currentTime executionState contractUserParties namedActions 
       marloweParams
       CurrentStepActions.component
       { executionState, contractUserParties, namedActions }
-      ( \(ActionSelected action) -> OnAskContractActionConfirmation
+      ( \(ActionSelected action num) -> OnAskContractActionConfirmation
           marloweParams
           action
+          num
       )
   in
     div

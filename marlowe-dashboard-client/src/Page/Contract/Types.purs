@@ -40,7 +40,13 @@ import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
-import Marlowe.Semantics (Accounts, MarloweParams, Payment, TransactionInput)
+import Marlowe.Semantics
+  ( Accounts
+  , ChosenNum
+  , MarloweParams
+  , Payment
+  , TransactionInput
+  )
 import Store.Contracts (ContractStore)
 import Type.Proxy (Proxy(..))
 
@@ -117,7 +123,7 @@ type Input =
   }
 
 data Msg
-  = AskConfirmation NamedAction
+  = AskConfirmation NamedAction (Maybe ChosenNum)
 
 data Action
   = Init
@@ -126,7 +132,7 @@ data Action
   | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
-  | OnActionSelected NamedAction
+  | OnActionSelected NamedAction (Maybe ChosenNum)
   | CancelConfirmation
   -- The SelectStep action is what changes the model and causes the card to seem bigger.
   | SelectStep Int
@@ -157,7 +163,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
-  toEvent (OnActionSelected _) = Nothing
+  toEvent (OnActionSelected _ _) = Nothing
   toEvent CancelConfirmation = Just $ defaultEvent "CancelConfirmation"
   toEvent (SelectStep _) = Just $ defaultEvent "SelectStep"
   toEvent (MoveToStep _) = Nothing

@@ -23,7 +23,6 @@ import Marlowe.Semantics
   , Accounts
   , Bound
   , ChoiceId
-  , ChosenNum
   , Contract
   , MarloweParams
   , Observation
@@ -105,7 +104,7 @@ data NamedAction
   -- Equivalent to Semantics.Action(Choice) but has ChosenNum since it is a stateful element that
   -- stores the users choice
   -- Creates IChoice
-  | MakeChoice ChoiceId (Array Bound) (Maybe ChosenNum)
+  | MakeChoice ChoiceId (Array Bound)
   -- Equivalent to Semantics.Action(Notify) (can be applied by any user)
   -- Creates INotify
   | MakeNotify Observation

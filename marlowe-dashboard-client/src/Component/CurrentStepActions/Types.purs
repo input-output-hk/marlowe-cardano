@@ -13,6 +13,7 @@ module Component.CurrentStepActions.Types
 import Prologue
 
 import Data.ContractUserParties (ContractUserParties)
+import Data.Map (Map)
 import Data.UserNamedActions (UserNamedActions)
 import Halogen as H
 import Marlowe.Execution.Types (NamedAction)
@@ -20,19 +21,25 @@ import Marlowe.Execution.Types as Execution
 import Marlowe.Semantics (ChoiceId, ChosenNum)
 import Type.Proxy (Proxy(..))
 
-data Msg = ActionSelected NamedAction
+data Msg = ActionSelected NamedAction (Maybe ChosenNum)
 
 data Action
-  = SelectAction NamedAction
+  = OnReceive Input
+  | SelectAction NamedAction (Maybe ChosenNum)
   | ChangeChoice ChoiceId (Maybe ChosenNum)
 
 type State =
   { executionState :: Execution.State
   , contractUserParties :: ContractUserParties
   , namedActions :: UserNamedActions
+  , choiceValues :: Map ChoiceId ChosenNum
   }
 
-type Input = State
+type Input =
+  { executionState :: Execution.State
+  , contractUserParties :: ContractUserParties
+  , namedActions :: UserNamedActions
+  }
 
 type ComponentHTML m =
   H.ComponentHTML Action () m
