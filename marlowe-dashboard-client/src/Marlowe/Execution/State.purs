@@ -30,7 +30,7 @@ import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, fromMaybe', maybe, maybe')
 import Data.String (joinWith)
-import Data.Time.Duration (Milliseconds(..), Seconds(..))
+import Data.Time.Duration (Milliseconds(..), Minutes(..), Seconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)
@@ -350,10 +350,11 @@ mkInterval currentTime contract =
   case nextTimeout contract of
     Nothing -> map (TimeInterval $ POSIXTime currentTime)
       $ note "Ten seconds from now is outside the range of valid dates."
-      $ POSIXTime.adjust (Seconds 10.0) (POSIXTime currentTime)
+      $ POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
     Just nextTO
-      -- FIXME: We should change this for a Maybe TimeInterval and return Nothing in this case.
-      | nextTO < currentTime -> Left "Timeout has already passed."
+      | nextTO < currentTime -> map (TimeInterval $ POSIXTime currentTime)
+          $ note "Ten seconds from now is outside the range of valid dates."
+          $ POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
       | otherwise ->
           note
             ( joinWith "\n"
