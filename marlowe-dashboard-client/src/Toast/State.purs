@@ -73,7 +73,9 @@ handleAction (Receive mToast) = do
 handleAction ExpandToast = do
   assign _expanded true
 
-handleAction CloseToast = updateStore Store.ClearToast
+handleAction CloseToast = do
+  assign _expanded false
+  updateStore Store.ClearToast
 
 handleAction ToastTimeout = do
   mElement <- getHTMLElementRef (RefLabel "collapsed-toast")

@@ -24,6 +24,7 @@ import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
 import Data.DateTime.Instant (Instant)
 import Data.Either (note)
+import Data.Function (on)
 import Data.Lens (view, (^.), (^?))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
@@ -235,21 +236,18 @@ timeoutState currentTime state =
            }
     advanceAllTimeouts (Just timeoutTime) newTimeouts state' contract'
       | timeoutTime <= currentTime = do
-          let
-            env = makeEnvironment
-              (POSIXTime currentTime)
-              (POSIXTime currentTime)
+          let env = on makeEnvironment POSIXTime currentTime currentTime
 
-            { txOutState, txOutContract } =
-              case reduceContractUntilQuiescent env state' contract' of
-                -- TODO: SCP-2088 We need to discuss how to display the warnings that computeTransaction may give
-                ContractQuiescent _ _ _ txOutState txOutContract ->
-                  { txOutState, txOutContract }
-                -- FIXME: Change timeoutState to return an Either
-                RRAmbiguousTimeIntervalError ->
-                  { txOutState: state', txOutContract: contract' }
+          { txOutState, txOutContract } <-
+            case reduceContractUntilQuiescent env state' contract' of
+              -- TODO: SCP-2088 We need to discuss how to display the warnings that computeTransaction may give
+              ContractQuiescent _ _ _ txOutState txOutContract ->
+                Right { txOutState, txOutContract }
+              -- FIXME: Change timeoutState to return an Either
+              RRAmbiguousTimeIntervalError ->
+                Left "RRAmbiguousTimeIntervalError"
 
-            newNextTimeout = nextTimeout txOutContract
+          let newNextTimeout = nextTimeout txOutContract
           timeoutInfo <- { time: timeoutTime, missedActions: _ }
             <$> extractActionsFromContract timeoutTime state' contract'
           advanceAllTimeouts newNextTimeout
@@ -257,8 +255,8 @@ timeoutState currentTime state =
             txOutState
             txOutContract
 
-    advanceAllTimeouts mNextTimeout' newTimeouts state' contract' = pure
-      { mNextTimeout: mNextTimeout'
+    advanceAllTimeouts mNextTimeout newTimeouts state' contract' = pure
+      { mNextTimeout
       , mPendingTimeouts:
           if newTimeouts == mempty then
             Nothing
