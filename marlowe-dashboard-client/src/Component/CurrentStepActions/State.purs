@@ -24,6 +24,7 @@ component =
     , render: currentStepActions
     , eval: H.mkEval H.defaultEval
         { handleAction = handleAction
+        , receive = Just <<< OnReceive
         }
     }
 
