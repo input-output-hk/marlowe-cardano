@@ -78,6 +78,8 @@ pkgs/.stack
 **/.psci_modules/
 **/.spago/
 **/.spago2nix/
+*/web-common-marlowe/node_modules/
+*/web-common-marlowe/output/
 .psa-stash
 
 # Backend config files
