@@ -11,6 +11,7 @@ import Halogen.Css (classNames)
 import Halogen.HTML (ClassName(..), HTML, a, button, div, div_, p_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (classes, disabled)
+import Halogen.HTML.Properties.ARIA (label)
 import Icons (Icon(..), icon)
 import MainFrame.Types (Action(..), State, _authStatus)
 import Network.RemoteData (RemoteData(..))
@@ -43,6 +44,7 @@ authButton intendedAction state =
                   [ a
                       [ idPublishGist
                       , classes [ ClassName "auth-button" ]
+                      , label "Login with Github"
                       , onClick $ const $ OpenLoginPopup intendedAction
                       ]
                       [ text "Login"

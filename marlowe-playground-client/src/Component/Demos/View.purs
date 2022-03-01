@@ -13,13 +13,17 @@ import Halogen.Css (classNames)
 import Halogen.HTML (HTML, button, div, div_, h2_, hr_, span, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (class_, classes)
+import Halogen.HTML.Properties.ARIA (label)
 import MainFrame.Types (ChildSlots)
 
 render :: forall m. MonadAff m => ComponentHTML Action ChildSlots m
 render =
   div_
     [ modalHeader "Demo Files" (Just Cancel)
-    , div [ classes [ modalContent, ClassName "projects-container" ] ]
+    , div
+        [ classes [ modalContent, ClassName "projects-container" ]
+        , label "Demo files container"
+        ]
         [ demoFile (wrap "Escrow") "Escrow"
             "Regulates a money exchange between a \"Buyer\" and a \"Seller\". If there is a disagreement, an \"Mediator\" will decide whether the money is refunded or paid to the \"Seller\"."
         , demoFile (wrap "EscrowWithCollateral") "Escrow With Collateral"
@@ -47,24 +51,32 @@ demoFile key name description =
             [ button
                 [ onClick $ const $ LoadDemo Haskell key
                 , classNames [ "btn" ]
+                , label $ ariaLabelForDemoButton name "Haskell"
                 ]
                 [ text "Haskell" ]
             , button
                 [ onClick $ const $ LoadDemo Javascript key
                 , classNames [ "btn" ]
+                , label $ ariaLabelForDemoButton name "Javascript"
                 ]
                 [ text "Javascript" ]
             , button
                 [ onClick $ const $ LoadDemo Marlowe key
                 , classNames [ "btn" ]
+                , label $ ariaLabelForDemoButton name "Marlowe"
                 ]
                 [ text "Marlowe" ]
             , button
                 [ onClick $ const $ LoadDemo Blockly key
                 , classNames [ "btn" ]
+                , label $ ariaLabelForDemoButton name "Blockly"
                 ]
                 [ text "Blockly" ]
             ]
         ]
     , hr_
     ]
+
+ariaLabelForDemoButton :: String -> String -> String
+ariaLabelForDemoButton name language = "Open " <> language <> " " <> name <>
+  " demo file button"
