@@ -30,7 +30,7 @@ import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, fromMaybe', maybe, maybe')
 import Data.String (joinWith)
-import Data.Time.Duration (Milliseconds(..), Minutes(..), Seconds(..))
+import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Client (ContractHistory, _chHistory, _chParams)

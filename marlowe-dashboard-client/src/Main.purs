@@ -14,12 +14,12 @@ import Data.Argonaut
   , Json
   , JsonDecodeError
   , decodeJson
+  , jsonNull
   , printJsonDecodeError
   , (.:)
   )
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Extra (parseDecodeJson)
-import Data.Either (either, hush)
+import Data.Either (either)
 import Data.Lens (_Just, (^?))
 import Data.Map as Map
 import Data.PABConnectedWallet
@@ -151,12 +151,11 @@ wsMsgToQuery mWallet = case _ of
       $ MainFrame.NewWebSocketStatus
       $ MainFrame.WebSocketClosed
       $ Just closeEvent
-  WS.ReceiveMessage (Left (Tuple str jsonDecodeError)) ->
-    let
-      json = hush $ parseDecodeJson str
-    in
-      MainFrame.NotificationParseFailed "websocket message" <$> json <*> pure
-        jsonDecodeError
+  WS.ReceiveMessage (Left jsonDecodeError) ->
+    Just $ MainFrame.NotificationParseFailed
+      "websocket message"
+      jsonNull
+      jsonDecodeError
   WS.ReceiveMessage (Right stream) -> streamToQuery mWallet stream
 
 streamToQuery
