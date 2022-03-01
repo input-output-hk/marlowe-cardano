@@ -120,6 +120,7 @@ let
     docs.build-and-serve-docs
     start-marlowe-run
     marlowe-cli
+    cardano-cli
   ] ++ easyPS.buildInputs);
 
 in

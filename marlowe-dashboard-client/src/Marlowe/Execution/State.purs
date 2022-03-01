@@ -29,7 +29,6 @@ import Data.Lens (view, (^.), (^?))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, fromMaybe', maybe, maybe')
-import Data.String (joinWith)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -100,7 +99,6 @@ restoreState
   -> MetaData
   -> ContractHistory
   -> Either String State
-
 restoreState currentTime contractNickname metadata history = do
   Tuple marloweParams marloweData <-
     note "params not available" $ history ^? _chParams
@@ -193,7 +191,6 @@ nextState txInput state = do
     }
 
 nextTimeout :: Contract -> Maybe Instant
-
 nextTimeout = timeouts >>> \(Timeouts { minTime }) -> coerce minTime
 
 mkTx :: Instant -> Contract -> List Input -> Either String TransactionInput
@@ -348,25 +345,18 @@ expandBalances participants tokens stateAccounts =
 mkInterval :: Instant -> Contract -> Either String TimeInterval
 mkInterval currentTime contract =
   case nextTimeout contract of
-    Nothing -> map (TimeInterval $ POSIXTime currentTime)
-      $ note "Ten seconds from now is outside the range of valid dates."
-      $ POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
+    Nothing -> note "Invalid time range" $
+      TimeInterval
+        <$> POSIXTime.adjust (Minutes (-2.0)) (POSIXTime currentTime)
+        <*> POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
     Just nextTO
-      | nextTO < currentTime -> map (TimeInterval $ POSIXTime currentTime)
-          $ note "Ten seconds from now is outside the range of valid dates."
-          $ POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
+      | nextTO < currentTime -> note "Invalid time range"
+          $ TimeInterval (POSIXTime nextTO) <$> top
       | otherwise ->
-          note
-            ( joinWith "\n"
-                [ "1 millisecond before the next timeout is outside the range of valid dates."
-                , "This is a bug, please report it at https://github.com/input-output-hk/marlowe-cardano/issues with the following information:"
-                , "currentTime: " <> show currentTime
-                , "nextTO: " <> show nextTO
-                ]
-            )
-            $ map (TimeInterval $ POSIXTime currentTime)
-            $ POSIXTime.adjust (Milliseconds (-1.0))
-            $ POSIXTime nextTO
+          note "Invalid time range" $
+            TimeInterval
+              <$> POSIXTime.adjust (Minutes (-2.0)) (POSIXTime currentTime)
+              <*> POSIXTime.adjust (Milliseconds (-1.0)) (POSIXTime nextTO)
 
 getAllPayments :: State -> List Payment
 getAllPayments { history } = concat $ fromFoldable $ map

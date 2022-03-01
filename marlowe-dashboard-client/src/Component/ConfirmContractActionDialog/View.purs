@@ -104,7 +104,7 @@ summary state@{ action, contractUserParties } =
                 CloseContract ->
                   row default []
                     [ span [ classNames [ "font-semibold", "text-sm" ] ]
-                        [ text "You a closing the contract" ]
+                        [ text "You are closing the contract" ]
                     ]
                 _ -> text ""
             ]
