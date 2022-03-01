@@ -8,7 +8,6 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
-import Data.Time.Duration (Milliseconds)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Effect.AVar (AVar)
@@ -51,16 +50,12 @@ newtype Env = Env
   , applyInputListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
   , redeemListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
   , wsManager :: WebSocketManager
-  , pollingInterval :: Milliseconds
   }
 
 derive instance newtypeEnv :: Newtype Env _
 
 type WebSocketManager
   = WS.WebSocketManager CombinedWSStreamToClient CombinedWSStreamToServer
-
-_pollingInterval :: Lens' Env Milliseconds
-_pollingInterval = _Newtype <<< prop (Proxy :: _ "pollingInterval")
 
 _createListeners :: Lens' Env
   (AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams)))

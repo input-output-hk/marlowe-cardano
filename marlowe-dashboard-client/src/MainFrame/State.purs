@@ -23,10 +23,12 @@ import Capability.MarloweStorage
   , updateWallet
   )
 import Capability.PAB (class ManagePAB, onNewActiveEndpoints)
-import Capability.PAB as PAB
+import Capability.PAB (activateContract, getWalletContractInstances) as PAB
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
+import Control.Alt ((<|>))
+import Control.Alternative (empty)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
@@ -36,7 +38,14 @@ import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
-import Data.Argonaut (Json, decodeJson, printJsonDecodeError, stringify)
+import Data.Argonaut
+  ( Json
+  , decodeJson
+  , jsonNull
+  , printJsonDecodeError
+  , stringify
+  )
+import Data.Argonaut.Decode.Aeson as D
 import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
 import Data.Either (hush)
@@ -45,34 +54,41 @@ import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
-import Data.PABConnectedWallet (PABConnectedWallet, connectWallet)
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
+  , _companionAppId
+  , _marloweAppId
+  , _syncStatus
+  , connectWallet
+  )
 import Data.PABConnectedWallet as Connected
 import Data.String (joinWith)
-import Data.Time.Duration (Milliseconds(..), Minutes(..), Seconds(..))
+import Data.Time.Duration (Minutes(..))
+import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
-import Effect.Aff (delay)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
-import Env
-  ( Env
-  , _applyInputListeners
-  , _createListeners
-  , _pollingInterval
-  , _redeemListeners
-  )
+import Effect.Ref as Ref
+import Env (Env, _applyInputListeners, _createListeners, _redeemListeners)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad
+  ( class MonadStore
+  , emitSelected
+  , getStore
+  , updateStore
+  )
 import Halogen.Store.Select (selectEq)
+import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
-import Halogen.Time (subscribeTime')
+import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
 import MainFrame.Lenses
   ( _addressBook
   , _dashboardState
@@ -85,9 +101,12 @@ import MainFrame.Lenses
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
+  , Input
   , Msg
+  , PollingSources
   , Query(..)
   , Slice
+  , Sources
   , State
   , WebSocketStatus(..)
   )
@@ -101,7 +120,14 @@ import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types (ContractInstanceClientState)
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient(..)
+  , ContractInstanceClientState
+  )
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient
+  , InstanceStatusToClient(..)
+  ) as PAB
 import Store (_contracts, _wallet)
 import Store as Store
 import Store.Contracts (emptyContractStore)
@@ -111,6 +137,8 @@ import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, infoToast, successToast)
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
+import WebSocket.Support (FromSocket)
+import WebSocket.Support as WS
 
 {-
 The Marlowe Run App features are defined in the docs/use-cases/Readme.md file, and they have indices
@@ -132,7 +160,7 @@ mkMainFrame
   => Toast m
   => MonadClipboard m
   => MainFrameLoop m
-  => Component Query Unit Msg m
+  => Component Query Input Msg m
 mkMainFrame =
   connect
     ( selectEq \{ addressBook, wallet, contracts, currentTime } ->
@@ -161,14 +189,20 @@ emptyState =
       , contracts: emptyContractStore
       , currentTime: bottom
       }
+  , sources:
+      { pabWebsocket: empty
+      , clock: empty
+      , polling: { walletRegular: empty, walletSync: empty }
+      }
   }
 
-deriveState :: State -> Connected Slice Unit -> State
-deriveState state { context } = state
+deriveState :: State -> Connected Slice Input -> State
+deriveState state { context, input } = state
   { subState = case state.subState of
       Right ds -> Right ds
       Left ws -> Left ws
   , store = context
+  , sources = input.sources
   }
 
 handleQuery
@@ -188,127 +222,6 @@ handleQuery = case _ of
   MainFrameActionQuery action next -> do
     handleAction action
     pure $ Just next
-
-  GetWallet next -> do
-    map (map next) $ peruse $ _store <<< _wallet <<< _Connected
-
-  NewWebSocketStatus status next -> do
-    assign _webSocketStatus status
-    case status of
-      WebSocketOpen -> do
-        -- potentially renew websocket subscriptions
-        mDashboardState <- peruse _dashboardState
-        mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
-        let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
-        for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
-          -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
-          subscribeToWallet walletId
-          ajaxPlutusApps <- PAB.getWalletContractInstances walletId
-          case ajaxPlutusApps of
-            Left _ -> pure unit
-            Right plutusApps -> for_
-              (Array.filter (eq Active <<< view _cicStatus) plutusApps)
-              \app ->
-                subscribeToPlutusApp $ view _cicContract app
-      -- TODO: Consider whether we should show an error/warning when this happens. It might be more
-      -- confusing than helpful, since the websocket is automatically reopened if it closes for any
-      -- reason.
-      _ -> pure unit
-    pure $ Just next
-
-  NotificationParseFailed whatFailed _ error next -> do
-    addToast $ errorToast
-      ("Failed to parse " <> whatFailed <> " from websocket message")
-      (Just $ printJsonDecodeError error)
-    pure $ Just next
-
-  CompanionAppStateUpdated companionAppState next -> do
-    handleAction
-      $ DashboardAction
-      $ Dashboard.UpdateFollowerApps companionAppState
-    pure $ Just next
-
-  {- [UC-CONTRACT-1][2] Starting a Marlowe contract
-    After the PAB endpoint finishes creating the contract, it modifies
-    its observable state with the MarloweParams of the newly created
-    contract. We take this opportunity to create a FollowerContract
-    that will give us updates on the state of the contract
-  -}
-  MarloweContractCreated reqId marloweParams next -> runMaybeT do
-    listenersAVar <- asks $ view _createListeners
-    listeners <- liftAff $ AVar.read listenersAVar
-    subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
-    liftEffect do
-      HS.notify listener marloweParams
-      traverse_ HS.unsubscribe subscription
-    pure next
-
-  InputsApplied reqId next -> runMaybeT $ do
-    listenersAVar <- asks $ view _applyInputListeners
-    listeners <- liftAff $ AVar.read listenersAVar
-    subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
-    liftEffect do
-      HS.notify listener unit
-      traverse_ HS.unsubscribe subscription
-    pure next
-
-  PaymentRedeemed reqId next -> runMaybeT $ do
-    listenersAVar <- asks $ view _redeemListeners
-    listeners <- liftAff $ AVar.read listenersAVar
-    subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
-    liftEffect do
-      HS.notify listener unit
-      traverse_ HS.unsubscribe subscription
-    pure next
-
-  CreateFailed reqId error next -> runMaybeT $ do
-    listenersAVar <- asks $ view _createListeners
-    listeners <- liftAff $ AVar.read listenersAVar
-    subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
-    addToast $ errorToast "Failed to create contract" $ Just $ show error
-    liftEffect $ traverse_ HS.unsubscribe subscription
-    pure next
-
-  ApplyInputsFailed reqId error next -> runMaybeT $ do
-    listenersAVar <- asks $ view _applyInputListeners
-    listeners <- liftAff $ AVar.read listenersAVar
-    subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
-    addToast $ errorToast "Failed to update contract" $ Just $ show error
-    liftEffect $ traverse_ HS.unsubscribe subscription
-    pure next
-
-  RedeemFailed reqId error next -> runMaybeT $ do
-    listenersAVar <- asks $ view _redeemListeners
-    listeners <- liftAff $ AVar.read listenersAVar
-    subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
-    addToast $ errorToast "Failed to redeem payment" $ Just $ show error
-    liftEffect $ traverse_ HS.unsubscribe subscription
-    pure next
-
-  ContractHistoryUpdated plutusAppId contractHistory next -> runMaybeT do
-    marloweParams <- hoistMaybe $ preview (_chParams <<< _1) contractHistory
-    {- [UC-CONTRACT-1][3] Start a contract -}
-    {- [UC-CONTRACT-3][1] Apply an input to a contract -}
-    H.lift $ FollowerApp.onNewObservableState plutusAppId contractHistory
-    {- [UC-CONTRACT-4][0] Redeem payments -}
-    H.lift
-      $ handleAction
-      $ DashboardAction
-      $ Dashboard.RedeemPayments marloweParams
-    pure next
-
-  NewActiveEndpoints plutusAppId activeEndpoints next -> do
-    -- TODO move into main directly and remove this from the PAB capability API
-    onNewActiveEndpoints plutusAppId activeEndpoints
-    pure $ Just next
-
-  MarloweAppClosed mVal next -> runMaybeT do
-    reActivatePlutusScript MarloweApp mVal
-    pure next
-
-  WalletCompanionAppClosed mVal next -> runMaybeT do
-    reActivatePlutusScript WalletCompanion mVal
-    pure next
 
 reActivatePlutusScript
   :: forall m
@@ -356,9 +269,10 @@ handleAction
   => MainFrameLoop m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
-handleAction (Tick currentTime) = updateStore $ Store.Tick currentTime
+handleAction Tick = updateStore <<< Store.Tick =<< now
 
 handleAction Init = do
+  subscribeToSources
   {- [UC-WALLET-TESTNET-2][4b] Restore a testnet wallet
   This is another path for "restoring" a wallet. When we initialize the app,
   if we have some wallet details in the local storage, we try to enter the dashboard
@@ -368,15 +282,7 @@ handleAction Init = do
   traverse_
     (updateStore <<< Store.Wallet <<< WalletStore.OnConnect)
     mWalletDetails
-  traverse_
-    ( \w -> handleAction $ OnPoll
-        (view Disconnected._syncStatus w)
-        (view Disconnected._walletId w)
-    )
-    mWalletDetails
   assign _tzOffset =<< timezoneOffset
-  pure unit
-  subscribeTime' (Seconds 1.0) Tick
 
 handleAction (Receive input) = do
   oldStore <- use _store
@@ -401,7 +307,6 @@ handleAction (Receive input) = do
       assign _subState $ Right $ Dashboard.mkInitialState currentTime
         connectedWallet
         contracts
-      handleAction $ OnPoll OutOfSync $ connectedWallet ^. Connected._walletId
     Connected _, Disconnecting connectedWallet ->
       enterWelcomeState connectedWallet
     Disconnecting _, Disconnected ->
@@ -419,16 +324,6 @@ handleAction (OnPoll lastSyncStatus walletId) = do
         "Wallet backend synchronizing..."
       _, _ -> pure unit
     updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
-    pollingInterval <- case syncStatus of
-      -- We poll more frequently when the wallet backend is synchronizing so we
-      -- get more rapid feedback.
-      Synchronizing _ -> pure $ Milliseconds 500.0
-      _ -> asks $ view _pollingInterval
-    H.liftAff $ delay pollingInterval
-    newWalletId <-
-      peruse $ _store <<< _wallet <<< _Connected <<< Connected._walletId
-    when (Just walletId == newWalletId) do
-      void $ H.subscribe $ pure $ OnPoll syncStatus walletId
 
 handleAction (WelcomeAction wa) = do
   mWelcomeState <- peruse _welcomeState
@@ -445,6 +340,112 @@ handleAction (DashboardAction da) = void $ runMaybeT $ do
     $ Dashboard.handleAction
         { addressBook, currentTime, tzOffset, wallet, contracts }
         da
+
+handleAction (NewWebSocketStatus status) = do
+  assign _webSocketStatus status
+  case status of
+    WebSocketOpen -> do
+      -- potentially renew websocket subscriptions
+      mDashboardState <- peruse _dashboardState
+      mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
+      let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
+      for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
+        -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
+        subscribeToWallet walletId
+        ajaxPlutusApps <- PAB.getWalletContractInstances walletId
+        case ajaxPlutusApps of
+          Left _ -> pure unit
+          Right plutusApps -> for_
+            (Array.filter (eq Active <<< view _cicStatus) plutusApps)
+            \app ->
+              subscribeToPlutusApp $ view _cicContract app
+    -- TODO: Consider whether we should show an error/warning when this happens. It might be more
+    -- confusing than helpful, since the websocket is automatically reopened if it closes for any
+    -- reason.
+    _ -> pure unit
+
+handleAction (NotificationParseFailed whatFailed _ error) = do
+  addToast $ errorToast
+    ("Failed to parse " <> whatFailed <> " from websocket message")
+    (Just $ printJsonDecodeError error)
+
+handleAction (CompanionAppStateUpdated companionAppState) = do
+  handleAction
+    $ DashboardAction
+    $ Dashboard.UpdateFollowerApps companionAppState
+
+{- [UC-CONTRACT-1][2] Starting a Marlowe contract
+  After the PAB endpoint finishes creating the contract, it modifies
+  its observable state with the MarloweParams of the newly created
+  contract. We take this opportunity to create a FollowerContract
+  that will give us updates on the state of the contract
+-}
+handleAction (MarloweContractCreated reqId marloweParams) = void $ runMaybeT do
+  listenersAVar <- asks $ view _createListeners
+  listeners <- liftAff $ AVar.read listenersAVar
+  subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
+  liftEffect do
+    HS.notify listener marloweParams
+    traverse_ HS.unsubscribe subscription
+
+handleAction (InputsApplied reqId) = void $ runMaybeT $ do
+  listenersAVar <- asks $ view _applyInputListeners
+  listeners <- liftAff $ AVar.read listenersAVar
+  subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
+  liftEffect do
+    HS.notify listener unit
+    traverse_ HS.unsubscribe subscription
+
+handleAction (PaymentRedeemed reqId) = void $ runMaybeT $ do
+  listenersAVar <- asks $ view _redeemListeners
+  listeners <- liftAff $ AVar.read listenersAVar
+  subscription /\ listener <- hoistMaybe $ Map.lookup reqId listeners
+  liftEffect do
+    HS.notify listener unit
+    traverse_ HS.unsubscribe subscription
+
+handleAction (CreateFailed reqId error) = void $ runMaybeT $ do
+  listenersAVar <- asks $ view _createListeners
+  listeners <- liftAff $ AVar.read listenersAVar
+  subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
+  addToast $ errorToast "Failed to create contract" $ Just $ show error
+  liftEffect $ traverse_ HS.unsubscribe subscription
+
+handleAction (ApplyInputsFailed reqId error) = void $ runMaybeT $ do
+  listenersAVar <- asks $ view _applyInputListeners
+  listeners <- liftAff $ AVar.read listenersAVar
+  subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
+  addToast $ errorToast "Failed to update contract" $ Just $ show error
+  liftEffect $ traverse_ HS.unsubscribe subscription
+
+handleAction (RedeemFailed reqId error) = void $ runMaybeT $ do
+  listenersAVar <- asks $ view _redeemListeners
+  listeners <- liftAff $ AVar.read listenersAVar
+  subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
+  addToast $ errorToast "Failed to redeem payment" $ Just $ show error
+  liftEffect $ traverse_ HS.unsubscribe subscription
+
+handleAction (ContractHistoryUpdated plutusAppId contractHistory) =
+  void $ runMaybeT do
+    marloweParams <- hoistMaybe $ preview (_chParams <<< _1) contractHistory
+    {- [UC-CONTRACT-1][3] Start a contract -}
+    {- [UC-CONTRACT-3][1] Apply an input to a contract -}
+    H.lift $ FollowerApp.onNewObservableState plutusAppId contractHistory
+    {- [UC-CONTRACT-4][0] Redeem payments -}
+    H.lift
+      $ handleAction
+      $ DashboardAction
+      $ Dashboard.RedeemPayments marloweParams
+
+handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
+  -- TODO move into main directly and remove this from the PAB capability API
+  onNewActiveEndpoints plutusAppId activeEndpoints
+
+handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
+  reActivatePlutusScript MarloweApp mVal
+
+handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
+  reActivatePlutusScript WalletCompanion mVal
 
 {- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
@@ -587,6 +588,135 @@ activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
       <$> findOrActivateContract WalletCompanion
       <*> findOrActivateContract MarloweApp
 
+subscribeToSources
+  :: forall m msg slots
+   . MonadStore Store.Action Store.Store m
+  => HalogenM State Action slots msg m Unit
+
+subscribeToSources = do
+  sources <- H.gets _.sources
+  walletInitial <- liftEffect HS.create
+  walletUpdates <- liftEffect HS.create
+  storeEmitter <- emitSelected $ selectEq $ preview $ _wallet <<< _Connected
+  -- emitSelected does not start by emitting the current value in the store, so
+  -- we need to do that ourselves. Because it also uses Refs to track the
+  -- latest value, it can't be used more than once. This means we need to
+  -- manually create a new emitter that can be used to "fan out" one value
+  -- many.
+  _ <- liftEffect $ HS.subscribe storeEmitter $ HS.notify walletUpdates.listener
+  let
+    wallet =
+      walletInitial.emitter <|> walletUpdates.emitter :: Emitter
+        (Maybe PABConnectedWallet)
+  void $ H.subscribe $ compactEmitter $ actionsFromSources wallet sources
+  store <- getStore
+  liftEffect
+    $ HS.notify walletInitial.listener
+    $ store ^? _wallet <<< _Connected
+
+actionsFromSources
+  :: Emitter (Maybe PABConnectedWallet)
+  -> Sources
+  -> Emitter (Maybe Action)
+actionsFromSources wallet { pabWebsocket, clock, polling } =
+  actionFromWebsocket <$> wallet <*> pabWebsocket
+    <|> switchEmitter (pollWallet polling <$> wallet)
+    <|> Just Tick <$ clock
+
+pollWallet
+  :: PollingSources -> Maybe PABConnectedWallet -> Emitter (Maybe Action)
+pollWallet { walletRegular, walletSync } = case _ of
+  Nothing -> empty
+  Just wallet ->
+    Just (OnPoll (wallet ^. _syncStatus) (wallet ^. Connected._walletId)) <$
+      case wallet ^. _syncStatus of
+        Synchronizing _ -> walletSync
+        _ -> walletRegular
+
+actionFromWebsocket
+  :: Maybe PABConnectedWallet
+  -> FromSocket CombinedWSStreamToClient
+  -> Maybe Action
+actionFromWebsocket Nothing = const Nothing
+actionFromWebsocket (Just wallet) = case _ of
+  WS.WebSocketOpen ->
+    Just $ NewWebSocketStatus WebSocketOpen
+  WS.WebSocketClosed closeEvent ->
+    Just $ NewWebSocketStatus $ WebSocketClosed $ Just closeEvent
+  WS.ReceiveMessage (Left jsonDecodeError) ->
+    Just $ NotificationParseFailed
+      "websocket message"
+      jsonNull
+      jsonDecodeError
+  WS.ReceiveMessage (Right stream) -> actionFromStream wallet stream
+
+actionFromStream
+  :: PABConnectedWallet
+  -> PAB.CombinedWSStreamToClient
+  -> Maybe Action
+actionFromStream wallet = case _ of
+  SlotChange _ -> Nothing
+  -- TODO handle with lite wallet support
+  -- NOTE: The PAB is currently sending this message when syncing up, and when it needs to rollback
+  --       it restarts the slot count from zero, so we get thousands of calls. We should fix the PAB
+  --       so that it only triggers this call once synced or ignore the message altogether and find
+  --       a different approach.
+  -- TODO: If we receive a second status update for the same contract / plutus app, while
+  -- the previous update is still being handled, then strange things could happen. This
+  -- does not seem very likely. Still, it might be worth considering guarding against this
+  -- possibility by e.g. keeping a list/array of updates and having a subscription that
+  -- handles them synchronously in the order in which they arrive.
+  InstanceUpdate _ (PAB.NewYieldedExportTxs _) -> Nothing
+  InstanceUpdate appId (PAB.NewActiveEndpoints activeEndpoints) ->
+    Just $ NewActiveEndpoints appId activeEndpoints
+  InstanceUpdate appId (PAB.ContractFinished message)
+    | appId == companionAppId ->
+        Just $ WalletCompanionAppClosed message
+    | appId == marloweAppId ->
+        Just $ MarloweAppClosed message
+    | otherwise ->
+        Just $ MarloweAppClosed message
+  InstanceUpdate appId (PAB.NewObservableState state)
+    | appId == companionAppId ->
+        case D.decode (D.maybe D.value) state of
+          Left error ->
+            Just $ NotificationParseFailed
+              "wallet companion state"
+              state
+              error
+          Right (Just companionAppState) ->
+            Just $ CompanionAppStateUpdated companionAppState
+          _ -> Nothing
+    | appId == marloweAppId -> case D.decode (D.maybe D.value) state of
+        Left error ->
+          Just $ NotificationParseFailed "marlowe app response" state
+            error
+        Right Nothing ->
+          Nothing
+        Right (Just (EndpointException uuid "create" error)) ->
+          Just $ CreateFailed uuid error
+        Right (Just (EndpointException uuid "apply-inputs-nonmerkleized" error)) ->
+          Just $ ApplyInputsFailed uuid error
+        Right (Just (EndpointException uuid "redeem" error)) ->
+          Just $ RedeemFailed uuid error
+        Right (Just (EndpointSuccess uuid (CreateResponse marloweParams))) ->
+          Just $ MarloweContractCreated uuid marloweParams
+        Right (Just (EndpointSuccess uuid ApplyInputsResponse)) ->
+          Just $ InputsApplied uuid
+        Right (Just (EndpointSuccess uuid RedeemResponse)) ->
+          Just $ PaymentRedeemed uuid
+        _ -> Nothing
+    | otherwise -> case D.decode (D.maybe D.value) state of
+        Left error ->
+          Just $ NotificationParseFailed "follower app response" state
+            error
+        Right (Just history) ->
+          Just $ ContractHistoryUpdated appId history
+        Right _ -> Nothing
+  where
+  companionAppId = wallet ^. _companionAppId
+  marloweAppId = wallet ^. _marloweAppId
+
 ------------------------------------------------------------
 -- Note [dummyState]: In order to map a submodule whose state might not exist, we need
 -- to provide a dummyState for that submodule. Halogen would use this dummyState to play
@@ -598,6 +728,7 @@ toWelcome
   => Welcome.State
   -> HalogenM Welcome.State Welcome.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
+
 toWelcome s = mapAction WelcomeAction <<< imapState (lens getter setter)
   where
   getter = fromMaybe s <<< preview _welcomeState
@@ -613,3 +744,23 @@ toDashboard s = mapAction DashboardAction <<< imapState (lens getter setter)
   where
   getter = fromMaybe s <<< preview _dashboardState
   setter = flip $ set _dashboardState
+
+compactEmitter
+  :: forall a
+   . Emitter (Maybe a)
+  -> Emitter a
+compactEmitter emitter = HS.makeEmitter $
+  pure <<< HS.unsubscribe <=< HS.subscribe emitter <<< traverse
+
+switchEmitter
+  :: forall a
+   . Emitter (Emitter a)
+  -> Emitter a
+switchEmitter emitter = HS.makeEmitter \push -> do
+  innerSub <- Ref.new Nothing
+  outerSub <- HS.subscribe emitter \emitter' -> do
+    traverse_ HS.unsubscribe =<< Ref.read innerSub
+    flip Ref.write innerSub <<< Just =<< HS.subscribe emitter' push
+  pure do
+    traverse_ HS.unsubscribe =<< Ref.read innerSub
+    HS.unsubscribe outerSub
