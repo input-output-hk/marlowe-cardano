@@ -31,9 +31,7 @@ import Marlowe.Semantics as S
 import Marlowe.Symbolic.Types.Request as MSReq
 import Marlowe.Symbolic.Types.Response (Response(..), Result(..))
 import Marlowe.Template (fillTemplate)
-import Marlowe.Time (unixEpoch)
 import Network.RemoteData (RemoteData(..), fromEither)
-import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Servant.PureScript (class MonadAjax)
 import StaticAnalysis.Types
   ( AnalysisExecutionState(..)

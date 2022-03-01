@@ -52,7 +52,6 @@ import Marlowe.Semantics
   , Input(..)
   , PubKey
   , Rational(..)
-  , Slot(..)
   , TimeInterval(..)
   , TokenName
   , TransactionInput(..)
@@ -93,9 +92,6 @@ genRational = do
         Rational n d
       else
         Rational (-n) (-d)
-
-genSlot :: forall m. MonadGen m => MonadRec m => m Slot
-genSlot = Slot <$> genBigInt
 
 genInstant :: forall m. MonadGen m => MonadRec m => m Instant
 genInstant = do
