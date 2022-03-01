@@ -3,7 +3,7 @@ module Control.Monad.Now where
 import Prologue
 
 import Control.Alt (class Alt)
-import Control.Alternative (class Alternative)
+import Control.Alternative (class Alternative, empty)
 import Control.Lazy (class Lazy)
 import Control.Monad.Cont (ContT)
 import Control.Monad.Cont.Class (class MonadCont)
@@ -13,7 +13,7 @@ import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.RWS (RWST)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Reader.Class (class MonadAsk, class MonadReader)
-import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.Rec.Class (class MonadRec, forever)
 import Control.Monad.State (StateT, gets)
 import Control.Monad.State.Class (class MonadState, state)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
@@ -26,13 +26,15 @@ import Data.DateTime (DateTime, date, time)
 import Data.DateTime.Instant (Instant, toDateTime)
 import Data.Newtype (class Newtype)
 import Data.Time (Time)
-import Data.Time.Duration (Minutes)
+import Data.Time.Duration (class Duration, Minutes, fromDuration)
 import Effect (Effect)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, delay, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Now as EN
 import Halogen (HalogenM)
 import Halogen.Store.Monad (StoreT(..))
+import Halogen.Subscription (Emitter)
+import Halogen.Subscription as HS
 
 -- | A class for monads that can read information about the current time.
 class Monad m <= MonadTime m where
@@ -42,6 +44,9 @@ class Monad m <= MonadTime m where
   -- | Gets the time zone difference, in minutes,
   -- | from current local time (host system settings) to UTC using `now`.
   timezoneOffset :: m Minutes
+  -- | Make an emitter that will emit the current time on an interval specified
+  -- | by the given duration.
+  makeClock :: forall d. Duration d => d -> m (Emitter Instant)
 
 -- | Gets a `DateTime` value for the date and time according to the current
 -- | machine’s clock.
@@ -59,46 +64,62 @@ nowTime = time <<< toDateTime <$> now
 instance MonadTime Effect where
   now = EN.now
   timezoneOffset = EN.getTimezoneOffset
+  makeClock d = do
+    { emitter, listener } <- HS.create
+    launchAff_ $ forever do
+      liftEffect $ HS.notify listener =<< now
+      delay $ fromDuration d
+    pure emitter
 
 instance MonadTime Aff where
   now = liftEffect now
   timezoneOffset = liftEffect timezoneOffset
+  makeClock = liftEffect <<< makeClock
 
 instance MonadTime m => MonadTime (HalogenM state action slots msg m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance MonadTime m => MonadTime (StoreT action state m) where
   now = StoreT $ lift now
   timezoneOffset = StoreT $ lift timezoneOffset
+  makeClock = StoreT <<< lift <<< makeClock
 
 instance MonadTime m => MonadTime (ReaderT r m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance (Monoid w, MonadTime m) => MonadTime (WriterT w m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance MonadTime m => MonadTime (StateT s m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance MonadTime m => MonadTime (ContT r m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance MonadTime m => MonadTime (ExceptT e m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance MonadTime m => MonadTime (MaybeT m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 instance (Monoid w, MonadTime m) => MonadTime (RWST r w s m) where
   now = lift now
   timezoneOffset = lift timezoneOffset
+  makeClock = lift <<< makeClock
 
 -- | A type for faking the current time.
 newtype FakeTime m a = FakeTime
@@ -134,3 +155,4 @@ instance MonadState s m => MonadState s (FakeTime m) where
 instance Monad m => MonadTime (FakeTime m) where
   now = FakeTime $ gets _.now
   timezoneOffset = FakeTime $ gets _.timezoneOffset
+  makeClock _ = pure empty
