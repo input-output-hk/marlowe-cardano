@@ -89,6 +89,8 @@ import Marlowe.Holes
   , Value(..)
   , ValueId(..)
   )
+import Plutus.V1.Ledger.Time (POSIXTime)
+import Plutus.V1.Ledger.Time as POSIXTime
 import Prologue
   ( class Bounded
   , class Eq
@@ -330,8 +332,8 @@ data ValueType
   | DivValueValueType
   | ScaleValueType
   | ChoiceValueValueType
-  | SlotIntervalStartValueType
-  | SlotIntervalEndValueType
+  | TimeIntervalStartValueType
+  | TimeIntervalEndValueType
   | UseValueValueType
   | CondObservationValueValueType
 
@@ -754,8 +756,8 @@ toDefinition blockType@(ContractType WhenContractType) =
             , Dropdown
                 { name: "timeout_type"
                 , options:
-                    [ Pair "slot number" "slot"
-                    , Pair "slot parameter" "slot_param"
+                    [ Pair "timeout POSIX" "time"
+                    , Pair "timeout parameter" "time_param"
                     ]
                 }
             , Input { name: "timeout", text: "0", spellcheck: false }
@@ -1198,11 +1200,11 @@ toDefinition blockType@(ValueType ChoiceValueValueType) =
         }
         defaultBlockDefinition
 
-toDefinition blockType@(ValueType SlotIntervalStartValueType) =
+toDefinition blockType@(ValueType TimeIntervalStartValueType) =
   BlockDefinition
     $ merge
-        { type: show SlotIntervalStartValueType
-        , message0: "Slot Interval Start"
+        { type: show TimeIntervalStartValueType
+        , message0: "Time Interval Start"
         , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "value"
@@ -1210,11 +1212,11 @@ toDefinition blockType@(ValueType SlotIntervalStartValueType) =
         }
         defaultBlockDefinition
 
-toDefinition blockType@(ValueType SlotIntervalEndValueType) =
+toDefinition blockType@(ValueType TimeIntervalEndValueType) =
   BlockDefinition
     $ merge
-        { type: show SlotIntervalEndValueType
-        , message0: "Slot Interval End"
+        { type: show TimeIntervalEndValueType
+        , message0: "Time Interval End"
         , lastDummyAlign0: AlignCentre
         , colour: blockColour blockType
         , output: Just "value"
@@ -1478,6 +1480,19 @@ fieldAsString attr block =
     (asField =<< getRequiredAttribute attr block)
     (\err -> throwError $ ErrorInChild block attr err)
 
+fieldAsPOSIXTime
+  :: forall m
+   . MonadError ParseTermError m
+  => String
+  -> BDom.Block
+  -> m POSIXTime
+fieldAsPOSIXTime attr block = do
+  bigIntVal <- fieldAsBigInt attr block
+  case POSIXTime.fromBigInt bigIntVal of
+    Nothing -> throwError $ ErrorInChild block attr $
+      InvalidFieldCast (BigInt.toString bigIntVal) "POSIXTime"
+    Just time -> pure time
+
 fieldAsBigInt
   :: forall m
    . MonadError ParseTermError m
@@ -1513,12 +1528,12 @@ instance blockToTermContract :: BlockToTerm Contract where
     let
       location = (BlockId id)
     timeout <- case timeoutType of
-      "slot" -> do
-        slot <- fieldAsBigInt "timeout" b
-        pure $ Term (Slot slot) location
-      "slot_param" -> do
-        slotParam <- fieldAsString "timeout" b
-        pure $ Term (SlotParam slotParam) location
+      "time" -> do
+        time <- fieldAsPOSIXTime "timeout" b
+        pure $ Term (TimeValue time) location
+      "time_param" -> do
+        timeParam <- fieldAsString "timeout" b
+        pure $ Term (TimeParam timeParam) location
       _ -> throwError $ ErrorInChild b "timeout_type"
         (InvalidChildType "Timeout")
     contract <- singleStatementToTerm "contract" b
@@ -1616,11 +1631,11 @@ instance blockToTermValue :: BlockToTerm Value where
     choiceName <- fieldAsString "choice_name" b
     party <- valueToTerm "party" b
     pure $ Term (ChoiceValue (ChoiceId choiceName party)) (BlockId id)
-  blockToTerm ({ type: "SlotIntervalStartValueType", id }) = pure $ Term
-    SlotIntervalStart
+  blockToTerm ({ type: "TimeIntervalStartValueType", id }) = pure $ Term
+    TimeIntervalStart
     (BlockId id)
-  blockToTerm ({ type: "SlotIntervalEndValueType", id }) = pure $ Term
-    SlotIntervalEnd
+  blockToTerm ({ type: "TimeIntervalEndValueType", id }) = pure $ Term
+    TimeIntervalEnd
     (BlockId id)
   blockToTerm b@({ type: "UseValueValueType", id }) = do
     valueId <- fieldAsString "value_id" b
@@ -1921,13 +1936,13 @@ instance toBlocklyContract :: ToBlockly Contract where
     inputToBlockly newBlock workspace block "case" cases
     setField block "timeout_type"
       ( case timeout of
-          Term (SlotParam _) _ -> "slot_param"
-          _ -> "slot"
+          Term (TimeParam _) _ -> "time_param"
+          _ -> "time"
       )
     setField block "timeout"
       ( case timeout of
-          Term (Slot slotNum) _ -> BigInt.toString slotNum
-          Term (SlotParam paramName) _ -> paramName
+          Term (TimeValue time) _ -> BigInt.toString $ POSIXTime.toBigInt time
+          Term (TimeParam paramName) _ -> paramName
           _ -> "0"
       )
     inputToBlockly newBlock workspace block "contract" contract
@@ -2050,11 +2065,11 @@ instance toBlocklyValue :: ToBlockly Value where
     connectToOutput block input
     setField block "choice_name" choiceName
     inputToBlockly newBlock workspace block "party" choiceOwner
-  toBlockly newBlock workspace input SlotIntervalStart = do
-    block <- newBlock workspace (show SlotIntervalStartValueType)
+  toBlockly newBlock workspace input TimeIntervalStart = do
+    block <- newBlock workspace (show TimeIntervalStartValueType)
     connectToOutput block input
-  toBlockly newBlock workspace input SlotIntervalEnd = do
-    block <- newBlock workspace (show SlotIntervalEndValueType)
+  toBlockly newBlock workspace input TimeIntervalEnd = do
+    block <- newBlock workspace (show TimeIntervalEndValueType)
     connectToOutput block input
   toBlockly
     newBlock

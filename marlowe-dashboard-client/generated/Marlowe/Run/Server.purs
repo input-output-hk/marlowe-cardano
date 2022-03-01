@@ -20,7 +20,6 @@ import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData
   , CreateResponse
-  , RestoreError
   , RestorePostData
   )
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
@@ -94,10 +93,7 @@ postApiWalletV1CentralizedtestnetRestore
   :: forall m
    . MonadAjax Api m
   => RestorePostData
-  -> m
-       ( Either (AjaxError JsonDecodeError Json)
-           (Either RestoreError WalletInfo)
-       )
+  -> m (Either (AjaxError JsonDecodeError Json) WalletInfo)
 postApiWalletV1CentralizedtestnetRestore reqBody =
   request Api req
   where
@@ -111,7 +107,7 @@ postApiWalletV1CentralizedtestnetRestore reqBody =
   encode = E.encode encoder
   decode = D.decode decoder
   encoder = E.value
-  decoder = (D.either D.value D.value)
+  decoder = D.value
   relativePart = RelativePartNoAuth $ Just
     [ "api"
     , "wallet"
@@ -125,7 +121,7 @@ postApiWalletV1CentralizedtestnetCreate
   :: forall m
    . MonadAjax Api m
   => CreatePostData
-  -> m (Either (AjaxError JsonDecodeError Json) (Maybe CreateResponse))
+  -> m (Either (AjaxError JsonDecodeError Json) CreateResponse)
 postApiWalletV1CentralizedtestnetCreate reqBody =
   request Api req
   where
@@ -139,7 +135,7 @@ postApiWalletV1CentralizedtestnetCreate reqBody =
   encode = E.encode encoder
   decode = D.decode decoder
   encoder = E.value
-  decoder = (D.maybe D.value)
+  decoder = D.value
   relativePart = RelativePartNoAuth $ Just
     [ "api"
     , "wallet"

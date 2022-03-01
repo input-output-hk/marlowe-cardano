@@ -4,48 +4,53 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Component.AddContact.Types as AddContact
+import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.ContractSetup.Types as ContractSetup
+import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.Expand as Expand
 import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.AddressBook (AddressBook)
+import Data.Argonaut (Json, JsonDecodeError)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
+import Data.Map (Map)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
 import Data.WalletId (WalletId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Halogen.Store.Connect (Connected)
-import Marlowe.Semantics (Slot)
+import Language.Marlowe.Client (MarloweError)
+import Marlowe.Client (ContractHistory)
+import Marlowe.PAB (PlutusAppId)
+import Marlowe.Semantics (MarloweData, MarloweParams)
+import Page.Contract.Types as ContractPage
 import Page.Dashboard.Types (Action, State) as Dashboard
 import Page.Welcome.ConfirmMnemonic.Types as ConfirmMnemonic
 import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
+import Plutus.Contract.Effects (ActiveEndpoint)
+import Store.Contracts (ContractStore)
 import Store.Wallet (WalletStore)
 import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
-import WebSocket.Support (FromSocket) as WS
 
 type Slice =
   { addressBook :: AddressBook
   , wallet :: WalletStore
-  }
-
-type Input =
-  { tzOffset :: Minutes
+  , contracts :: ContractStore
+  , currentTime :: Instant
   }
 
 -- The app exists in one of two main subStates: the "welcome" state for when you have
 -- no wallet, and all you can do is generate one or create a new one; and the "dashboard"
 -- state for when you have selected a wallet, and can do all of the things.
 type State =
-  { addressBook :: AddressBook
-  , webSocketStatus :: WebSocketStatus
-  -- TODO: currentSlot, tzOffset, and addressBook should be stored in the global store rather than here, but in order
-  --       to remove it from here we need to first change the sub-components that use this into proper components
-  , currentSlot :: Slot
+  { webSocketStatus :: WebSocketStatus
   , tzOffset :: Minutes
   , store :: Slice
   , subState :: Either Welcome.State Dashboard.State
@@ -76,6 +81,9 @@ type ChildSlots =
   , restoreWallet :: RestoreWallet.Slot Unit
   , toaster :: forall q m. H.Slot q m Unit
   , contractSetup :: ContractSetup.Slot Unit
+  , contractPage :: ContractPage.Slot Unit
+  , confirmActionDialog :: ConfirmContractActionDialog.Slot Unit
+  , currentStepActions :: CurrentStepActions.Slot MarloweParams
   )
 
 _toaster :: Proxy "toaster"
@@ -83,8 +91,21 @@ _toaster = Proxy
 
 ------------------------------------------------------------
 data Query a
-  = ReceiveWebSocketMessage (WS.FromSocket CombinedWSStreamToClient) a
-  | MainFrameActionQuery Action a
+  = MainFrameActionQuery Action a
+  | GetWallet (PABConnectedWallet -> a)
+  | NewWebSocketStatus WebSocketStatus a
+  | NotificationParseFailed String Json JsonDecodeError a
+  | CompanionAppStateUpdated (Map MarloweParams MarloweData) a
+  | MarloweContractCreated UUID MarloweParams a
+  | InputsApplied UUID a
+  | PaymentRedeemed UUID a
+  | CreateFailed UUID MarloweError a
+  | ApplyInputsFailed UUID MarloweError a
+  | RedeemFailed UUID MarloweError a
+  | ContractHistoryUpdated PlutusAppId ContractHistory a
+  | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint) a
+  | MarloweAppClosed (Maybe Json) a
+  | WalletCompanionAppClosed (Maybe Json) a
 
 data Msg
   = MainFrameActionMsg Action
@@ -93,14 +114,16 @@ data Msg
 data Action
   = WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
-  | Receive (Connected Slice Input)
+  | Receive (Connected Slice Unit)
   | Init
+  | Tick Instant
   | OnPoll SyncStatus WalletId
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent (Receive _) = Just $ defaultEvent "Receive"
+  toEvent (Receive _) = Nothing
+  toEvent (Tick _) = Nothing
   toEvent Init = Just $ defaultEvent "Init"
   toEvent (OnPoll _ _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction

@@ -15,35 +15,35 @@ module Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
  )
  where
 
-import Cardano.Mnemonic (SomeMnemonic (..), entropyToMnemonic, genEntropy, mkSomeMnemonic, mnemonicToText)
+import Cardano.Mnemonic (SomeMnemonic (..))
 import Cardano.Prelude hiding (Handler, log)
 import Cardano.Wallet.Api (WalletKeys)
 import qualified Cardano.Wallet.Api.Client as WBE.Api
 import Cardano.Wallet.Api.Types (ApiVerificationKeyShelley (..))
 import qualified Cardano.Wallet.Api.Types as WBE
-import Cardano.Wallet.Primitive.AddressDerivation (Passphrase (Passphrase))
 import qualified Cardano.Wallet.Primitive.AddressDerivation as WBE
 import qualified Cardano.Wallet.Primitive.Types as WBE
 import Colog (log, pattern D, pattern E)
-import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
-import Data.String as S
+import qualified Data.Aeson as Aeson
+import qualified Data.HashMap.Internal.Strict as HashMap
 import qualified Data.Text as Text
 import Data.Text.Class (FromText (..))
 import Ledger (PaymentPubKeyHash (..), PubKeyHash (..))
 import Marlowe.Run.Env (HasEnv)
+import qualified Marlowe.Run.Wallet.V1.CentralizedTestnet as Service
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.API (API)
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreatePostData (..), CreateResponse (..), RestoreError (..),
-                                                       RestorePostData (..))
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
 import Marlowe.Run.Wallet.V1.Client (callWBE, decodeError)
-import Marlowe.Run.Wallet.V1.Types (WalletId (WalletId), WalletInfo (..), WalletName (unWalletName))
+import Marlowe.Run.Wallet.V1.Types (Address (Address), WalletId (WalletId), WalletInfo (..), WalletName (unWalletName))
 import PlutusTx.Builtins.Internal (BuiltinByteString (..))
-import Servant (ServerT, (:<|>) ((:<|>)), (:>))
+import Servant (ServerError, ServerT, err500, (:<|>) ((:<|>)), (:>))
 import Servant.Client (ClientError (FailureResponse), ClientM, ResponseF (responseBody), client)
 import Text.Regex (Regex)
 import qualified Text.Regex as Regex
 
 handlers ::
     MonadIO m =>
+    MonadError ServerError m =>
     HasEnv m =>
     ServerT API m
 handlers = restoreWallet :<|> createWallet
@@ -51,55 +51,39 @@ handlers = restoreWallet :<|> createWallet
 createWallet ::
      MonadIO m =>
      HasEnv m =>
+     MonadError ServerError  m =>
      CreatePostData ->
-     m (Maybe CreateResponse)
-createWallet CreatePostData{..} = runMaybeT $ do
-  mnemonic <- liftIO $ entropyToMnemonic <$> genEntropy @256
-  let
-    walletName = unWalletName getCreateWalletName
-    passphrase = Passphrase $ fromString $ Text.unpack getCreatePassphrase
-
-  walletId <- MaybeT $ hush <$> createOrRestoreWallet walletName passphrase (SomeMnemonic mnemonic)
-
-  pubKeyHash <- MaybeT $ hush <$> getPubKeyHashFromWallet walletId
-
+     m CreateResponse
+createWallet CreatePostData{..} = do
+  let walletName = unWalletName getCreateWalletName
+  let passphrase = unPassphrase getCreatePassphrase
+  (mnemonic, walletId, pubKeyHash, address) <-
+    Service.createWallet getPubKeyHashFromWallet getAddress postWallet walletName passphrase
   pure
-    $ CreateResponse (mnemonicToText mnemonic)
-    $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
+    $ CreateResponse (CreateMnemonic mnemonic)
+    $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash, address = Address address }
 
 -- [UC-WALLET-TESTNET-2][2] Restore a testnet wallet
 restoreWallet ::
      MonadIO m =>
      HasEnv m =>
+     MonadError ServerError m =>
      RestorePostData ->
-     m (Either RestoreError WalletInfo)
-restoreWallet RestorePostData{..} = runExceptT $ do
-    let
-        phrase = getRestoreMnemonicPhrase
-        walletName = unWalletName getRestoreWalletName
-        passphrase = Passphrase $ fromString $ Text.unpack getRestorePassphrase
-
-    -- Try to decode the passphrase into a mnemonic or fail with InvalidMnemonic
-    mnemonic <- withExceptT (const InvalidMnemonic)
-        ( ExceptT $
-            pure (mkSomeMnemonic @'[15, 18, 21, 24] phrase)
-        )
-
-    -- Call the WBE trying to restore the wallet, and take error 409 Conflict as a success
-    walletId <- withExceptT (const RestoreWalletError)
-        (ExceptT $ createOrRestoreWallet walletName passphrase mnemonic)
-
-    -- Get the pubKeyHash of the first wallet derivation
-    pubKeyHash <- withExceptT (const FetchPubKeyHashError) $
-        ExceptT $ getPubKeyHashFromWallet walletId
-
-    pure $ WalletInfo{ walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash }
+     m WalletInfo
+restoreWallet RestorePostData{..} = do
+    let mnemonic = unRestoreMnemonic getRestoreMnemonicPhrase
+    let walletName = unWalletName getRestoreWalletName
+    let passphrase = unPassphrase getRestorePassphrase
+    (walletId, pubKeyHash, address) <-
+      Service.restoreWallet getPubKeyHashFromWallet getAddress postWallet mnemonic walletName passphrase
+    pure $ WalletInfo { walletId = WalletId walletId, pubKeyHash = PaymentPubKeyHash pubKeyHash, address = Address address }
 
 getPubKeyHashFromWallet ::
     MonadIO m =>
+    MonadError ServerError m =>
     HasEnv m =>
     WBE.WalletId ->
-    m (Either ClientError PubKeyHash)
+    m PubKeyHash
 getPubKeyHashFromWallet walletId = do
   let
     -- This endpoint is not exposed directly by the WBE, I took this helper from the plutus-pab code.
@@ -118,16 +102,32 @@ getPubKeyHashFromWallet walletId = do
         (Just True)
 
     transformResponse = (fmap . fmap) (PubKeyHash . BuiltinByteString . fst . getApiVerificationKey)
-  transformResponse makeRequest
+  either (const $ throwError err500) pure =<< transformResponse makeRequest
 
-createOrRestoreWallet ::
+getAddress ::
+    MonadIO m =>
+    MonadError ServerError m =>
+    HasEnv m =>
+    WBE.WalletId ->
+    m Text
+getAddress walletId = do
+  response <- callWBE $ WBE.Api.listAddresses WBE.Api.addressClient (WBE.ApiT walletId) Nothing
+  case response of
+    Right ((Aeson.Object obj) : _) ->
+      case HashMap.lookup "id" obj of
+        (Just (Aeson.String s)) -> pure s
+        _                       -> throwError err500
+    _                              -> throwError err500
+
+postWallet ::
     MonadIO m =>
     HasEnv m =>
+    MonadError ServerError m =>
     WBE.WalletName ->
-    Passphrase "raw" ->
+    WBE.Passphrase "raw" ->
     SomeMnemonic ->
-    m (Either ClientError WBE.WalletId)
-createOrRestoreWallet walletName passphrase mnemonic = do
+    m WBE.WalletId
+postWallet walletName passphrase mnemonic = do
     let
         walletPostData = WBE.WalletOrAccountPostData $ Left $ WBE.WalletPostData
             Nothing
@@ -150,13 +150,13 @@ createOrRestoreWallet walletName passphrase mnemonic = do
                     walletIdStr <- headMay matches
                     rightToMaybe $ fromText $ Text.pack walletIdStr
             case mWalletIdFromErr of
-                Just walletId -> pure $ Right walletId
+                Just walletId -> pure walletId
                 Nothing       ->  do
                     log E $ "restoreWallet failed: " <> show err
-                    pure $ Left err
+                    throwError err500
         Left err -> do
             log E $ "restoreWallet failed: " <> show err
-            pure $ Left err
+            throwError err500
         Right WBE.ApiWallet{WBE.id = WBE.ApiT walletId} -> do
             log D $ "Restored wallet: " <> show walletId
-            pure $ Right walletId
+            pure walletId

@@ -1,0 +1,81 @@
+cabal-version: 2.2
+name: marlowe-contracts
+version: 0.1.0.0
+license: Apache-2.0
+license-files:
+  LICENSE
+  NOTICE
+build-type: Simple
+maintainer: yves.hauser@iohk.io
+stability: experimental
+author: Yves Hauser
+synopsis:
+  Collection of Marlowe contract examples
+description:
+  Collection of Marlowe contract examples
+category: Language
+extra-doc-files: ReadMe.md
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-contracts
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+common lang
+  default-language: Haskell2010
+  default-extensions: ExplicitForAll ScopedTypeVariables
+                      DeriveGeneric StandaloneDeriving DeriveLift
+                      DeriveFunctor DeriveFoldable
+                      DeriveTraversable
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+
+library
+  import: lang
+  hs-source-dirs: src
+  exposed-modules:
+    Marlowe.Contracts.Common
+    Marlowe.Contracts.Futures
+    Marlowe.Contracts.Options
+    Marlowe.Contracts.StructuredProducts
+    Marlowe.Contracts.Swap
+    Marlowe.Contracts.ZeroCouponBond
+  other-modules:
+  build-depends:
+    base >= 4.9 && < 5,
+    marlowe -any
+
+test-suite marlowe-contracts-test
+    import: lang
+    hs-source-dirs: test
+    type: exitcode-stdio-1.0
+    main-is: Spec.hs
+    other-modules:
+        Spec.Marlowe.Analysis
+        Spec.Marlowe.Contracts
+    build-depends:
+        base >=4.9 && <5,
+        bytestring -any,
+        tasty -any,
+        tasty-hunit -any,
+        tasty-quickcheck,
+        text -any,
+        plutus-contract -any,
+        plutus-ledger -any,
+        plutus-ledger-api -any,
+        plutus-ledger-constraints -any,
+        marlowe,
+        marlowe-contracts,
+        plutus-tx -any,
+        QuickCheck,
+        uuid -any

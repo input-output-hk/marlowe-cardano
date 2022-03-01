@@ -1,23 +1,14 @@
 module Data.ContractTimeout
   ( ContractTimeout
   , ContractTimeoutError(..)
-  , fromBigInt
+  , fromDuration
   , fromString
   , toString
-  , toBigInt
+  , toDuration
   ) where
 
 import Prologue
 
-import Data.Argonaut
-  ( class DecodeJson
-  , class EncodeJson
-  , JsonDecodeError(..)
-  , decodeJson
-  )
-import Data.Bifunctor (lmap)
-import Data.BigInt.Argonaut (BigInt)
-import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -28,8 +19,17 @@ import Data.Enum.Generic
   , genericToEnum
   )
 import Data.Generic.Rep (class Generic)
+import Data.Int (decimal, round)
+import Data.Int as Int
+import Data.Newtype (un)
 import Data.Show.Generic (genericShow)
 import Data.String (null)
+import Data.Time.Duration
+  ( class Duration
+  , Milliseconds(..)
+  , Minutes(..)
+  , convertDuration
+  )
 
 data ContractTimeoutError
   = Empty
@@ -56,32 +56,27 @@ instance boundedEnumContractTimeoutError :: BoundedEnum ContractTimeoutError whe
 instance showContractTimeoutError :: Show ContractTimeoutError where
   show = genericShow
 
-newtype ContractTimeout = ContractTimeout BigInt
+newtype ContractTimeout = ContractTimeout Milliseconds
 
 derive instance Eq ContractTimeout
 derive instance Ord ContractTimeout
 derive newtype instance Show ContractTimeout
-derive newtype instance EncodeJson ContractTimeout
-
-instance DecodeJson ContractTimeout where
-  decodeJson =
-    lmap (const $ TypeMismatch "ContractTimeout") <<< fromString
-      <=< decodeJson
 
 fromString :: String -> Either ContractTimeoutError ContractTimeout
 fromString s
   | null s = Left Empty
-  | otherwise = case BigInt.fromString s of
+  | otherwise = case Int.fromStringAs decimal s of
       Nothing -> Left Invalid
-      Just i -> fromBigInt $ BigInt.fromInt 60 * i
+      Just i -> fromDuration $ Minutes $ Int.toNumber i
 
-fromBigInt :: BigInt -> Either ContractTimeoutError ContractTimeout
-fromBigInt i
-  | i < zero = Left Past
-  | otherwise = Right $ ContractTimeout i
+fromDuration
+  :: forall d. Duration d => d -> Either ContractTimeoutError ContractTimeout
+fromDuration ms
+  | convertDuration ms < Milliseconds zero = Left Past
+  | otherwise = Right $ ContractTimeout $ convertDuration ms
 
 toString :: ContractTimeout -> String
-toString = BigInt.toString <<< (_ / BigInt.fromInt 60) <<< toBigInt
+toString = Int.toStringAs decimal <<< round <<< un Minutes <<< toDuration
 
-toBigInt :: ContractTimeout -> BigInt
-toBigInt (ContractTimeout i) = i
+toDuration :: forall d. Duration d => ContractTimeout -> d
+toDuration (ContractTimeout min) = convertDuration min

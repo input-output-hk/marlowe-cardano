@@ -24,7 +24,7 @@
       12
     ]
   ],
-  "minSlot": 123,
+  "minTime": 123,
   "boundValues": [
     ["x", 1],
     ["y", 2]

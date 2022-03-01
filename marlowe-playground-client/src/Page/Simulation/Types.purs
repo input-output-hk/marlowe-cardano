@@ -7,19 +7,19 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.BottomPanel.Types as BottomPanel
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.List.Types (NonEmptyList)
 import Data.Show.Generic (genericShow)
 import Halogen.Monaco as Monaco
 import Help (HelpContext)
-import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input, Slot)
+import Marlowe.Semantics (Bound, ChoiceId, ChosenNum, Input)
 import Marlowe.Symbolic.Types.Response (Result)
 import Marlowe.Template (IntegerTemplateType)
 import Network.RemoteData (RemoteData)
 import Simulator.Types (MarloweState)
 
-type StateBase r
-  =
+type StateBase r =
   { showRightPanel :: Boolean
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , marloweState :: NonEmptyList MarloweState
@@ -34,12 +34,12 @@ type State = StateBase (projectName :: String)
 data Action
   = HandleEditorMessage Monaco.Message
   -- marlowe actions
-  | SetInitialSlot Slot
+  | SetInitialTime Instant
   | SetIntegerTemplateParam IntegerTemplateType String BigInt
   | StartSimulation
   | DownloadAsJson
-  | MoveSlot Slot
-  | SetSlot Slot
+  | MoveTime Instant
+  | SetTime Instant
   | AddInput Input (Array Bound)
   | SetChoice ChoiceId ChosenNum
   | ResetSimulator
@@ -59,13 +59,13 @@ defaultEvent :: String -> Event
 defaultEvent s = A.defaultEvent $ "Simulation." <> s
 
 instance isEventAction :: IsEvent Action where
-  toEvent (SetInitialSlot _) = Just $ defaultEvent "SetInitialSlot"
+  toEvent (SetInitialTime _) = Just $ defaultEvent "SetInitialTime"
   toEvent (SetIntegerTemplateParam _ _ _) = Just $ defaultEvent
     "SetIntegerTemplateParam"
   toEvent StartSimulation = Just $ defaultEvent "StartSimulation"
   toEvent DownloadAsJson = Just $ defaultEvent "DownloadAsJson"
-  toEvent (MoveSlot _) = Just $ defaultEvent "MoveSlot"
-  toEvent (SetSlot _) = Just $ defaultEvent "SetSlot"
+  toEvent (MoveTime _) = Just $ defaultEvent "MoveTime"
+  toEvent (SetTime _) = Just $ defaultEvent "SetTime"
   toEvent (AddInput _ _) = Just $ defaultEvent "AddInput"
   toEvent (SetChoice _ _) = Just $ defaultEvent "SetChoice"
   toEvent ResetSimulator = Just $ defaultEvent "ResetSimulator"

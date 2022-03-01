@@ -3,12 +3,12 @@ module Examples.PureScript.ZeroCouponBond
   , fullExtendedContract
   , metaData
   , fixedTimeoutContract
-  , defaultSlotContent
+  , defaultTimeContent
   ) where
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested ((/\))
@@ -24,6 +24,7 @@ import Marlowe.Extended
 import Marlowe.Extended.Metadata (ContractTemplate, MetaData)
 import Marlowe.Semantics (Party(..), Token(..))
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (unsafeInstantFromInt)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }
@@ -32,17 +33,17 @@ fixedTimeoutContract :: Contract
 fixedTimeoutContract =
   fillTemplate
     ( TemplateContent
-        { slotContent: defaultSlotContent
+        { timeContent: defaultTimeContent
         , valueContent: Map.empty
         }
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInt
-defaultSlotContent =
+defaultTimeContent :: Map String Instant
+defaultTimeContent =
   Map.fromFoldable
-    [ "Loan deadline" /\ fromInt 600
-    , "Payback deadline" /\ fromInt 1500
+    [ "Loan deadline" /\ unsafeInstantFromInt 600000
+    , "Payback deadline" /\ unsafeInstantFromInt 1500000
     ]
 
 metaData :: MetaData
@@ -64,10 +65,10 @@ issuer :: Party
 issuer = Role "Borrower"
 
 initialExchange :: Timeout
-initialExchange = SlotParam "Loan deadline"
+initialExchange = TimeParam "Loan deadline"
 
 maturityExchangeTimeout :: Timeout
-maturityExchangeTimeout = SlotParam "Payback deadline"
+maturityExchangeTimeout = TimeParam "Payback deadline"
 
 transfer :: Timeout -> Party -> Party -> Value -> Contract -> Contract
 transfer timeout from to amount continuation =

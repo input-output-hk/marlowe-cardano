@@ -37,6 +37,7 @@
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+          (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           (hsPkgs."cardano-addresses" or (errorHandler.buildDepError "cardano-addresses"))
           (hsPkgs."cardano-wallet-core" or (errorHandler.buildDepError "cardano-wallet-core"))
           (hsPkgs."cardano-prelude" or (errorHandler.buildDepError "cardano-prelude"))
@@ -72,7 +73,7 @@
         modules = [
           "Marlowe/Run"
           "Marlowe/Run/Wallet/V1"
-          "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Server"
           "Marlowe/Run/Wallet/V1/Server"
           "Paths_marlowe_dashboard_server"
@@ -80,8 +81,9 @@
           "Marlowe/Run/Env"
           "Marlowe/Run/Server"
           "Marlowe/Run/Wallet/V1/API"
-          "Marlowe/Run/Wallet/V1/Types"
+          "Marlowe/Run/Wallet/V1/CentralizedTestnet/API"
           "Marlowe/Run/Wallet/V1/CentralizedTestnet/Types"
+          "Marlowe/Run/Wallet/V1/Types"
           "Marlowe/Run/Wallet/V1/Client"
           "Marlowe/Run/WebSocket"
           ];

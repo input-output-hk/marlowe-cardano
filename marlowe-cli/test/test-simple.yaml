@@ -40,9 +40,9 @@ ptPabOperations:
         - case:
             notify_if: true
           then: close
-        timeout: 99888778
+        timeout: 1961123625000
         timeout_continuation: close
-    timeout: 99888777
+    timeout: 1929587625000
     timeout_continuation: close
 
 - tag: AwaitCreate
@@ -54,18 +54,17 @@ ptPabOperations:
   poInstance: App
   poOwner: PAB
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: IDeposit
-      contents:
-      - role_token: PAB
-      - role_token: PAB
-      - currency_symbol: ''
-        token_name: ''
-      - 15000000
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 9999999
+  - input_from_party:
+      role_token: PAB
+    that_deposits: 15000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: PAB
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: App
@@ -76,12 +75,10 @@ ptPabOperations:
   poInstance: App
   poOwner: PAB
   poInputs:
-  - tag: ClientInput
-    contents:
-      tag: INotify
-  poSlots:
-  - getSlot: 1000000
-  - getSlot: 9999999
+  - input_notify
+  poTimes:
+  - 1645590825000
+  - 1898051625000
 
 - tag: AwaitApplyInputs
   poInstance: App
@@ -107,5 +104,12 @@ ptPabOperations:
   poValue:
     lovelace: 100000000
   poMaximumFees: 4000000
+  poInstances:
+  - App
+
+  # Return unused funds.
+
+- tag: ReturnFunds
+  poOwner: PAB
   poInstances:
   - App

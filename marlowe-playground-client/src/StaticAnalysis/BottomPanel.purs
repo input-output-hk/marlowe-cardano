@@ -10,12 +10,12 @@ import Data.Argonaut (printJsonDecodeError, stringify)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Lens ((^.))
+import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List (List, null, toUnfoldable)
 import Data.List as List
 import Data.List.NonEmpty (toList)
 import Data.Map as Map
 import Data.Map.Ordered.OMap as OMap
-import Data.Newtype (unwrap)
 import Data.String (trim)
 import Data.Tuple.Nested ((/\))
 import Effect.Aff.Class (class MonadAff)
@@ -42,8 +42,7 @@ import Marlowe.Extended.Metadata (MetaData, NumberFormat(..))
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Input(..)
-  , Slot(..)
-  , SlotInterval(..)
+  , TimeInterval(..)
   , TransactionInput(..)
   )
 import Marlowe.Symbolic.Types.Response as R
@@ -51,6 +50,8 @@ import Marlowe.Template (IntegerTemplateType(..))
 import Marlowe.ViewPartials (displayWarningList)
 import Network.RemoteData (RemoteData(..))
 import Page.Simulation.View (integerTemplateParameters)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Plutus.V1.Ledger.Time as POSIXTime
 import Pretty (showPrettyToken)
 import Servant.PureScript (printAjaxError)
 import StaticAnalysis.Types
@@ -92,23 +93,26 @@ analysisResultPane
   -> ComponentHTML action ChildSlots m
 analysisResultPane metadata actionGen state =
   let
-    templateContent = state ^. (_analysisState <<< _templateContent)
+    { timeContent, valueContent } =
+      state ^. (_analysisState <<< _templateContent <<< _Newtype)
 
     result = state ^. (_analysisState <<< _analysisExecutionState)
 
     explanation = div [ classes [ ClassName "padded-explanation" ] ]
+
+    timeoutParameters =
+      integerTemplateParameters actionGen timeParameterDisplayInfo
+        $ map (POSIXTime.toBigInt <<< POSIXTime) timeContent
+
+    valueParameters =
+      integerTemplateParameters actionGen valueParameterDisplayInfo valueContent
   in
     case result of
       NoneAsked ->
         explanation
           [ text ""
           , ul [ class_ (ClassName "templates") ]
-              ( integerTemplateParameters actionGen slotParameterDisplayInfo
-                  (unwrap templateContent).slotContent
-                  <> integerTemplateParameters actionGen
-                    valueParameterDisplayInfo
-                    (unwrap templateContent).valueContent
-              )
+              $ timeoutParameters <> valueParameters
           ]
       WarningAnalysis staticSubResult -> case staticSubResult of
         NotAsked ->
@@ -331,14 +335,14 @@ analysisResultPane metadata actionGen state =
                 "None of the Close constructs refunds any money, all refunds are explicit."
             ]
   where
-  slotParameterDisplayInfo =
+  timeParameterDisplayInfo =
     { lookupFormat: const Nothing
     , lookupDefinition: (flip Map.lookup)
-        (Map.fromFoldableWithIndex metadata.slotParameterDescriptions) -- Convert to normal Map for efficiency
-    , typeName: SlotContent
+        (Map.fromFoldableWithIndex metadata.timeParameterDescriptions) -- Convert to normal Map for efficiency
+    , typeName: TimeContent
     , title: "Timeout template parameters"
     , prefix: "Slot for"
-    , orderedMetadataSet: OMap.keys metadata.slotParameterDescriptions
+    , orderedMetadataSet: OMap.keys metadata.timeParameterDescriptions
     }
 
   valueParameterDisplayInfo =
@@ -370,7 +374,7 @@ displayTransactionList transactionList =
   ol [ classes [ ClassName "indented-enum" ] ]
     ( do
         ( TransactionInput
-            { interval: SlotInterval (Slot from) (Slot to)
+            { interval: TimeInterval from to
             , inputs: inputList
             }
         ) <-
@@ -379,7 +383,7 @@ displayTransactionList transactionList =
           ( li_
               [ span_
                   [ b_ [ text "Transaction" ]
-                  , text " with slot interval "
+                  , text " with time interval "
                   , b_ [ text $ (show from <> " to " <> show to) ]
                   , if List.null inputList then
                       text " and no inputs (empty transaction)."

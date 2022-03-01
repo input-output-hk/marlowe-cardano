@@ -7,6 +7,7 @@ packages: marlowe
           marlowe-dashboard-server
           marlowe-symbolic
           marlowe-cli
+          marlowe-contracts
 
 -- We never, ever, want this.
 write-ghc-environment-files: never
@@ -47,8 +48,8 @@ package cardano-wallet-core-integration
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: eb1a2e5a3219392fef465ebeb4fe00c032a48d22
-  --sha256: 1wvr0xhmvhs056fv2yyh3la9mnfx613vws3krhxyzm74jifznncl
+  tag: 400318e0976b82e0ba7692edf26d93293589c671
+  --sha256: 0b8p9i8c88vh8ng05n03m52wsmyp3lc7n649ch66r0yrc6wig04m
   subdir:
     freer-extras
     playground-common

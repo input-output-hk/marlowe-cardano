@@ -43,18 +43,18 @@ When
                   , Case (Choice (ChoiceId "Confirm claim" (Role "Christopher Marlowe (the mediator)")) [Bound 1 1])
                       Close
                   ]
-                  (SlotParam "Mediation deadline")
+                  (TimeParam "Mediation deadline")
                   Close
                 )
               ]
-              (SlotParam "Dispute deadline")
+              (TimeParam "Dispute deadline")
             ) Close
         ]
-        (SlotParam "Complaint deadline")
+        (TimeParam "Complaint deadline")
         Close
       )
   ]
-  (SlotParam "Payment deadline")
+  (TimeParam "Payment deadline")
   Close
 </pre>
 </td>

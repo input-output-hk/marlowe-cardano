@@ -4,26 +4,30 @@ import Prologue
 
 import Data.AddressBook (AddressBook)
 import Data.ContractNickname (ContractNickname)
+import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
-import Data.Map (Map)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory)
+import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
+import Marlowe.Semantics (MarloweParams)
 import Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
+  , emptyContractStore
   , mkContractStore
+  , modifyContract
   , modifyContractNicknames
+  , tick
   )
 import Store.Wallet (WalletAction, WalletStore)
 import Store.Wallet as Wallet
-import Toast.Types (ToastMessage)
+import Toast.Types (ToastMessage, errorToast)
 import Type.Proxy (Proxy(..))
 
 type Store =
@@ -32,11 +36,7 @@ type Store =
   -- # Contracts
   , contracts :: ContractStore
   -- # Backend Notifications
-  -- this property shouldn't be necessary, but at the moment we are getting too many update notifications
-  -- through the PAB - so until that bug is fixed, we use this to check whether an update notification
-  -- really has changed anything
-  , previousCompanionAppState :: Maybe (Map MarloweParams MarloweData)
-  , currentSlot :: Slot
+  , currentTime :: Instant
   -- # System wide components
   -- This is to make sure only one dropdown at a time is open, in order to
   -- overcome a limitation of nselect that prevents it from closing the
@@ -48,34 +48,37 @@ type Store =
 _wallet :: forall r a. Lens' { wallet :: a | r } a
 _wallet = prop (Proxy :: _ "wallet")
 
-mkStore :: AddressBook -> LocalContractNicknames -> Store
-mkStore addressBook contractNicknames =
+_contracts :: forall r a. Lens' { contracts :: a | r } a
+_contracts = prop (Proxy :: _ "contracts")
+
+mkStore :: Instant -> AddressBook -> LocalContractNicknames -> Store
+mkStore currentTime addressBook contractNicknames =
   { -- # Wallet
     addressBook
   , wallet: Wallet.Disconnected
   -- # Contracts
   , contracts: mkContractStore contractNicknames
-  -- # Backend Notifications
-  , previousCompanionAppState: Nothing
-  , currentSlot: zero
+  -- # Time
+  , currentTime
   -- # System wide components
   , openDropdown: Nothing
   , toast: Nothing
   }
 
 data Action
-  -- Backend Notifications
-  = AdvanceToSlot Slot
-  | NewCompanionAppStateObserved (Map MarloweParams MarloweData)
+  -- Time
+  = Tick Instant
   -- Contract
   | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
-  | AddFollowerContract Slot PlutusAppId ContractHistory
+  | AddFollowerContract PlutusAppId MetaData ContractHistory
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
+  | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
   | Wallet WalletAction
   -- System wide components
+  | Disconnect
   | ShowToast ToastMessage
   | ClearToast
   | DropdownOpened String
@@ -83,22 +86,43 @@ data Action
 
 reduce :: Store -> Action -> Store
 reduce store = case _ of
-  -- Backend Notifications
-  -- FIXME-3208: Need to create and call an advanceToSlot in Store.Contracts
-  AdvanceToSlot newSlot -> store { currentSlot = newSlot }
-  NewCompanionAppStateObserved state ->
-    store { previousCompanionAppState = Just state }
+  -- Time
+  Tick currentTime -> case tick currentTime store.contracts of
+    Left error -> reduce store
+      $ ShowToast
+      $ errorToast "Error updating contract state with new time"
+      $ Just error
+    Right contracts -> store
+      { currentTime = currentTime
+      , contracts = contracts
+      }
   -- Contract
   AddStartingContract startingContractInfo -> store
-    { contracts = addStartingContract startingContractInfo
-        store.contracts
+    { contracts =
+        addStartingContract
+          startingContractInfo
+          store.contracts
     }
-  AddFollowerContract currentSlot followerId history -> store
-    { contracts = addFollowerContract currentSlot followerId history
+  AddFollowerContract followerId metadata history ->
+    let
+      mContracts = addFollowerContract
+        store.currentTime
+        followerId
+        metadata
+        history
         store.contracts
-    }
+    in
+      case mContracts of
+        Left error -> reduce store
+          $ ShowToast
+          $ errorToast "Error adding follower contract"
+          $ Just error
+        Right contracts -> store { contracts = contracts }
   ModifyContractNicknames f -> store
     { contracts = modifyContractNicknames f store.contracts
+    }
+  ModifySyncedContract marloweParams f -> store
+    { contracts = modifyContract marloweParams f store.contracts
     }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
@@ -110,3 +134,7 @@ reduce store = case _ of
   -- Dropdown
   DropdownOpened dropdown -> store { openDropdown = Just dropdown }
   DropdownClosed -> store { openDropdown = Nothing }
+  Disconnect -> store
+    { wallet = Wallet.Disconnected
+    , contracts = emptyContractStore
+    }

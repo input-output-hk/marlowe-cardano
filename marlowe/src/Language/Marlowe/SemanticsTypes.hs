@@ -31,13 +31,14 @@ import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Extras as JSON
 import Data.Aeson.Types hiding (Error, Value)
 import qualified Data.Foldable as F
+import qualified Data.HashMap.Internal.Strict as HashMap
 import Data.String (IsString (..))
 import Data.Text (pack)
 import Data.Text.Encoding as Text (decodeUtf8, encodeUtf8)
 import Deriving.Aeson
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Ledger (PubKeyHash (..), Slot (..))
+import Ledger (POSIXTime (..), PubKeyHash (..))
 import Ledger.Value (CurrencySymbol (..), TokenName (..))
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
@@ -70,11 +71,11 @@ instance Haskell.Show Party where
   showsPrec _ (Role role) = Haskell.showsPrec 11 $ unTokenName role
 
 type AccountId = Party
-type Timeout = Slot
+type Timeout = POSIXTime
 type Money = Val.Value
 type ChoiceName = BuiltinByteString
 type ChosenNum = Integer
-type SlotInterval = (Slot, Slot)
+type TimeInterval = (POSIXTime, POSIXTime)
 type Accounts = Map (AccountId, Token) Integer
 
 -- * Data Types
@@ -106,7 +107,7 @@ newtype ValueId = ValueId BuiltinByteString
   deriving anyclass (Newtype)
 
 {-| Values include some quantities that change with time,
-    including “the slot interval”, “the current balance of an account (in Lovelace)”,
+    including “the time interval”, “the current balance of an account (in Lovelace)”,
     and any choices that have already been made.
 
     Values can also be scaled, and combined using addition, subtraction, and negation.
@@ -119,8 +120,8 @@ data Value a = AvailableMoney AccountId Token
            | MulValue (Value a) (Value a)
            | DivValue (Value a) (Value a)
            | ChoiceValue ChoiceId
-           | SlotIntervalStart
-           | SlotIntervalEnd
+           | TimeIntervalStart
+           | TimeIntervalEnd
            | UseValue ValueId
            | Cond a (Value a) (Value a)
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
@@ -215,12 +216,12 @@ data Contract = Close
 data State = State { accounts    :: Accounts
                    , choices     :: Map ChoiceId ChosenNum
                    , boundValues :: Map ValueId Integer
-                   , minSlot     :: Slot }
+                   , minTime     :: POSIXTime }
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
 
-{-| Execution environment. Contains a slot interval of a transaction.
+{-| Execution environment. Contains a time interval of a transaction.
 -}
-newtype Environment = Environment { slotInterval :: SlotInterval }
+newtype Environment = Environment { timeInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
 
@@ -231,7 +232,30 @@ data InputContent = IDeposit AccountId Party Token Integer
                   | INotify
   deriving stock (Haskell.Show,Haskell.Eq,Generic)
   deriving anyclass (Pretty)
-  deriving anyclass (ToJSON, FromJSON)
+
+instance FromJSON InputContent where
+  parseJSON (String "input_notify") = return INotify
+  parseJSON (Object v) =
+    IChoice <$> v .: "for_choice_id"
+                <*> v .: "input_that_chooses_num"
+    <|> IDeposit  <$> v .: "into_account"
+              <*> v .: "input_from_party"
+              <*> v .: "of_token"
+              <*> v .: "that_deposits"
+  parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
+
+instance ToJSON InputContent where
+  toJSON (IDeposit accId party tok amount) = object
+      [ "input_from_party" .= party
+      , "that_deposits" .= amount
+      , "of_token" .= tok
+      , "into_account" .= accId
+      ]
+  toJSON (IChoice choiceId chosenNum) = object
+      [ "input_that_chooses_num" .= chosenNum
+      , "for_choice_id" .= choiceId
+      ]
+  toJSON INotify = JSON.String $ pack "input_notify"
 
 data Input = NormalInput InputContent
            | MerkleizedInput InputContent BuiltinByteString Contract
@@ -239,71 +263,39 @@ data Input = NormalInput InputContent
   deriving anyclass (Pretty)
 
 instance FromJSON Input where
-  parseJSON (String "input_notify") = return (NormalInput INotify)
-  parseJSON (Object v) =
-        (MerkleizedInput <$> (IChoice <$> (v .: "for_choice_id")
-                                      <*> (v .: "input_that_chooses_num"))
-                         <*> (v .: "continuation_hash")
-                         <*> (v .: "merkleized_continuation"))
-    <|> (MerkleizedInput <$> (IDeposit <$> (v .: "into_account")
-                                       <*> (v .: "input_from_party")
-                                       <*> (v .: "of_token")
-                                       <*> (v .: "that_deposits"))
-                         <*> (v .: "continuation_hash")
-                         <*> (v .: "merkleized_continuation"))
-    <|> (MerkleizedInput INotify <$> (v .: "continuation_hash")
-                                 <*> (v .: "merkleized_continuation"))
-    <|> (NormalInput <$> (IDeposit <$> (v .: "into_account")
-                                   <*> (v .: "input_from_party")
-                                   <*> (v .: "of_token")
-                                   <*> (v .: "that_deposits")))
-    <|> (NormalInput <$> (IChoice <$> (v .: "for_choice_id")
-                                  <*> (v .: "input_that_chooses_num")))
+  parseJSON (String s) = NormalInput <$> parseJSON (String s)
+  parseJSON (Object v) = do
+    content <- parseJSON (Object v)
+    MerkleizedInput content <$> v .: "continuation_hash" <*> v .: "merkleized_continuation"
+      <|> return (NormalInput content)
   parseJSON _ = Haskell.fail "Input must be either an object or the string \"input_notify\""
 
 instance ToJSON Input where
-  toJSON (NormalInput (IDeposit accId party tok amount)) = object
-      [ "input_from_party" .= party
-      , "that_deposits" .= amount
-      , "of_token" .= tok
-      , "into_account" .= accId
-      ]
-  toJSON (NormalInput (IChoice choiceId chosenNum)) = object
-      [ "input_that_chooses_num" .= chosenNum
-      , "for_choice_id" .= choiceId
-      ]
-  toJSON (NormalInput INotify) = JSON.String $ pack "input_notify"
-  toJSON (MerkleizedInput (IDeposit accId party tok amount) hash continuation) = object
-      [ "input_from_party" .= party
-      , "that_deposits" .= amount
-      , "of_token" .= tok
-      , "into_account" .= accId
-      , "merkleized_continuation" .= continuation
-      , "continuation_hash" .= hash
-      ]
-  toJSON (MerkleizedInput (IChoice choiceId chosenNum) hash continuation) = object
-      [ "input_that_chooses_num" .= chosenNum
-      , "for_choice_id" .= choiceId
-      , "merkleized_continuation" .= continuation
-      , "continuation_hash" .= hash
-      ]
-  toJSON (MerkleizedInput INotify hash continuation) = object
-      [ "merkleized_continuation" .= continuation
-      , "continuation_hash" .= hash
-      ]
+  toJSON (NormalInput content) = toJSON content
+  toJSON (MerkleizedInput content hash continuation) =
+    let
+      obj = case toJSON content of
+        Object obj -> obj
+        _          -> HashMap.empty
+    in
+      Object $ HashMap.union obj $ HashMap.fromList
+          [ ("merkleized_continuation", toJSON continuation)
+          , ("continuation_hash", toJSON hash)
+          ]
+
 
 getInputContent :: Input -> InputContent
 getInputContent (NormalInput inputContent)         = inputContent
 getInputContent (MerkleizedInput inputContent _ _) = inputContent
 
-{-| Slot interval errors.
+{-| Time interval errors.
     'InvalidInterval' means @slotStart > slotEnd@, and
-    'IntervalInPastError' means slot interval is in the past, relative to the contract.
+    'IntervalInPastError' means time interval is in the past, relative to the contract.
 
     These errors should never occur, but we are always prepared.
 -}
-data IntervalError = InvalidInterval SlotInterval
-                   | IntervalInPastError Slot SlotInterval
+data IntervalError = InvalidInterval TimeInterval
+                   | IntervalInPastError POSIXTime TimeInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -314,13 +306,13 @@ data IntervalResult = IntervalTrimmed Environment State
   deriving stock (Haskell.Show)
 
 
--- | Empty State for a given minimal 'Slot'
-emptyState :: Slot -> State
+-- | Empty State for a given minimal 'POSIXTime'
+emptyState :: POSIXTime -> State
 emptyState sn = State
     { accounts = Map.empty
     , choices  = Map.empty
     , boundValues = Map.empty
-    , minSlot = sn }
+    , minTime = sn }
 
 
 -- | Check if a 'num' is withint a list of inclusive bounds.
@@ -333,18 +325,18 @@ instance FromJSON State where
          State <$> (v .: "accounts")
                <*> (v .: "choices")
                <*> (v .: "boundValues")
-               <*> (Slot <$> (withInteger =<< (v .: "minSlot")))
+               <*> (POSIXTime <$> (withInteger =<< (v .: "minTime")))
                                  )
 
 instance ToJSON State where
   toJSON State { accounts = a
                , choices = c
                , boundValues = bv
-               , minSlot = Slot ms } = object
+               , minTime = POSIXTime ms } = object
         [ "accounts" .= a
         , "choices" .= c
         , "boundValues" .= bv
-        , "minSlot" .= ms ]
+        , "minTime" .= ms ]
 
 instance FromJSON Party where
   parseJSON = withObject "Party" (\v ->
@@ -405,8 +397,8 @@ instance FromJSON (Value Observation) where
     <|> (Cond <$> (v .: "if")
               <*> (v .: "then")
               <*> (v .: "else"))
-  parseJSON (String "slot_interval_start") = return SlotIntervalStart
-  parseJSON (String "slot_interval_end") = return SlotIntervalEnd
+  parseJSON (String "time_interval_start") = return TimeIntervalStart
+  parseJSON (String "time_interval_end") = return TimeIntervalEnd
   parseJSON (Number n) = Constant <$> getInteger n
   parseJSON _ = Haskell.fail "Value must be either an object or an integer"
 instance ToJSON (Value Observation) where
@@ -435,8 +427,8 @@ instance ToJSON (Value Observation) where
       ]
   toJSON (ChoiceValue choiceId) = object
       [ "value_of_choice" .= choiceId ]
-  toJSON SlotIntervalStart = JSON.String $ pack "slot_interval_start"
-  toJSON SlotIntervalEnd = JSON.String $ pack "slot_interval_end"
+  toJSON TimeIntervalStart = JSON.String $ pack "time_interval_start"
+  toJSON TimeIntervalEnd = JSON.String $ pack "time_interval_end"
   toJSON (UseValue valueId) = object
       [ "use_value" .= valueId ]
   toJSON (Cond obs tv ev) = object
@@ -587,7 +579,7 @@ instance FromJSON Contract where
                    withArray "Case list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                           ))
-              <*> (Slot <$> (withInteger =<< (v .: "timeout")))
+              <*> (POSIXTime <$> (withInteger =<< (v .: "timeout")))
               <*> (v .: "timeout_continuation"))
     <|> (Let <$> (v .: "let")
              <*> (v .: "be")
@@ -612,7 +604,7 @@ instance ToJSON Contract where
       ]
   toJSON (When caseList timeout cont) = object
       [ "when" .= toJSONList (map toJSON caseList)
-      , "timeout" .= getSlot timeout
+      , "timeout" .= getPOSIXTime timeout
       , "timeout_continuation" .= cont
       ]
   toJSON (Let valId value cont) = object
@@ -666,8 +658,8 @@ instance Eq a => Eq (Value a) where
     MulValue val1 val2 == MulValue val3 val4 = val1 == val3 && val2 == val4
     DivValue val1 val2 == DivValue val3 val4 = val1 == val3 && val2 == val4
     ChoiceValue cid1 == ChoiceValue cid2 = cid1 == cid2
-    SlotIntervalStart == SlotIntervalStart = True
-    SlotIntervalEnd   == SlotIntervalEnd   = True
+    TimeIntervalStart == TimeIntervalStart = True
+    TimeIntervalEnd   == TimeIntervalEnd   = True
     UseValue val1 == UseValue val2 = val1 == val2
     Cond obs1 thn1 els1 == Cond obs2 thn2 els2 =  obs1 == obs2 && thn1 == thn2 && els1 == els2
     _ == _ = False
@@ -723,7 +715,7 @@ instance Eq Contract where
 
 instance Eq State where
     {-# INLINABLE (==) #-}
-    l == r = minSlot l == minSlot r
+    l == r = minTime l == minTime r
         && accounts l == accounts r
         && choices l == choices r
         && boundValues l == boundValues r
@@ -747,8 +739,8 @@ makeIsDataIndexed ''Value [
     ('MulValue,5),
     ('DivValue,6),
     ('ChoiceValue,7),
-    ('SlotIntervalStart, 8),
-    ('SlotIntervalEnd,9),
+    ('TimeIntervalStart, 8),
+    ('TimeIntervalEnd,9),
     ('UseValue,10),
     ('Cond,11)
     ]

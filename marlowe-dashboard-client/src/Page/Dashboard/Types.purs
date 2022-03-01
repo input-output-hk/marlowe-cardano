@@ -1,6 +1,7 @@
 module Page.Dashboard.Types
   ( Action(..)
   , State
+  , ContractState
   , Card(..)
   , ContractFilter(..)
   , Input
@@ -11,18 +12,27 @@ import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
 import Clipboard (Action) as Clipboard
-import Component.ConfirmInput.Types as ConfirmInput
+import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.Contacts.Types (Action, State) as Contacts
 import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
+import Data.ContractUserParties (ContractUserParties)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UserNamedActions (UserNamedActions)
 import Data.WalletNickname (WalletNickname)
-import Marlowe.Client (ContractHistory)
-import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweData, MarloweParams, Slot)
-import Page.Contract.Types (Action, State) as Contract
+import Marlowe.Execution.Types (NamedAction)
+import Marlowe.Execution.Types as Execution
+import Marlowe.Semantics (ChosenNum, MarloweData, MarloweParams)
+import Store.Contracts (ContractStore)
+
+type ContractState =
+  { executionState :: Execution.State
+  , contractUserParties :: ContractUserParties
+  , namedActions :: UserNamedActions
+  }
 
 type State =
   { contactsState :: Contacts.State
@@ -31,11 +41,10 @@ type State =
   , card :: Maybe Card
   -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
-  -- FIXME-3208: Refactor in progress, remove...
-  -- TODO: SCP-3208 Move contract state to halogen store
-  , contracts :: Map PlutusAppId Contract.State
+  , runningContracts :: Array ContractState
+  , closedContracts :: Array ContractState
   , contractFilter :: ContractFilter
-  , selectedContractFollowerAppId :: Maybe PlutusAppId
+  , selectedContractMarloweParams :: Maybe MarloweParams
   , templateState :: Template.State
   }
 
@@ -55,7 +64,7 @@ data Card
   | CurrentWalletCard
   | ContactsCard
   | ContractTemplateCard
-  | ContractActionConfirmationCard PlutusAppId ConfirmInput.Input
+  | ContractActionConfirmationCard ConfirmContractActionDialog.Input
 
 data ContractFilter
   = Running
@@ -65,30 +74,31 @@ derive instance eqContractFilter :: Eq ContractFilter
 
 type Input =
   { wallet :: PABConnectedWallet
+  , contracts :: ContractStore
   , addressBook :: AddressBook
-  , currentSlot :: Slot
+  , currentTime :: Instant
   , tzOffset :: Minutes
   }
 
 data Action
-  = DisconnectWallet
+  = Receive
+  | DisconnectWallet
   | ContactsAction Contacts.Action
   | ToggleMenu
   | OpenCard Card
   | CloseCard
   | SetContractFilter ContractFilter
-  | SelectContract (Maybe PlutusAppId)
+  | SelectContract (Maybe MarloweParams)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
-  | UpdateContract PlutusAppId ContractHistory
-  | RedeemPayments PlutusAppId
-  | AdvanceTimedoutSteps
+  | RedeemPayments MarloweParams
+  | OnAskContractActionConfirmation MarloweParams NamedAction (Maybe ChosenNum)
   | TemplateAction Template.Action
-  | ContractAction PlutusAppId Contract.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
+  toEvent Receive = Nothing
   toEvent DisconnectWallet = Just $ defaultEvent "DisconnectWallet"
   toEvent (ContactsAction contactsAction) = toEvent contactsAction
   toEvent ToggleMenu = Just $ defaultEvent "ToggleMenu"
@@ -98,9 +108,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (SetContractFilter _) = Just $ defaultEvent "FilterContracts"
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
   toEvent (UpdateFollowerApps _) = Nothing
-  toEvent (UpdateContract _ _) = Nothing
   toEvent (RedeemPayments _) = Nothing
-  toEvent AdvanceTimedoutSteps = Nothing
+  toEvent (OnAskContractActionConfirmation _ _ _) = Nothing
   toEvent (TemplateAction _) = Nothing
-  toEvent (ContractAction _ contractAction) = toEvent contractAction
   toEvent (SetContactForRole _ _) = Nothing

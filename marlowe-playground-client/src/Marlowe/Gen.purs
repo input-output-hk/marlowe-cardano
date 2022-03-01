@@ -5,6 +5,7 @@ import Prologue
 import Control.Lazy (class Lazy, defer)
 import Control.Monad.Gen
   ( class MonadGen
+  , chooseFloat
   , chooseInt
   , resize
   , suchThat
@@ -17,12 +18,15 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Char (fromCharCode)
 import Data.Char.Gen (genAlpha, genDigitChar)
+import Data.DateTime.Instant (Instant, instant, unInstant)
 import Data.Foldable (class Foldable)
 import Data.Int (rem)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
+import Data.Newtype (unwrap)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Semigroup.Foldable (foldl1)
 import Data.String.CodeUnits (fromCharArray)
+import Data.Time.Duration (Milliseconds(..))
 import Marlowe.Extended as EM
 import Marlowe.Holes
   ( Action(..)
@@ -48,13 +52,14 @@ import Marlowe.Semantics
   , Input(..)
   , PubKey
   , Rational(..)
-  , Slot(..)
-  , SlotInterval(..)
+  , TimeInterval(..)
   , TokenName
   , TransactionInput(..)
   , TransactionWarning(..)
   )
 import Marlowe.Semantics as S
+import Partial.Unsafe (unsafePartial)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 newtype GenerationOptions
   = GenerationOptions
@@ -88,8 +93,13 @@ genRational = do
       else
         Rational (-n) (-d)
 
-genSlot :: forall m. MonadGen m => MonadRec m => m Slot
-genSlot = Slot <$> genBigInt
+genInstant :: forall m. MonadGen m => MonadRec m => m Instant
+genInstant = do
+  n <- chooseFloat (unwrap (unInstant bottom)) (unwrap (unInstant top))
+  pure $ unsafePartial $ fromJust $ instant $ Milliseconds n
+
+genPOSIXTime :: forall m. MonadGen m => MonadRec m => m POSIXTime
+genPOSIXTime = POSIXTime <$> genInstant
 
 genTimeout
   :: forall m
@@ -100,13 +110,13 @@ genTimeout
 genTimeout = do
   GenerationOptions { withExtendedConstructs } <- ask
   if withExtendedConstructs then
-    oneOf $ slot :| [ slotParam ]
+    oneOf $ slot :| [ timeParam ]
   else
     slot
   where
-  slot = H.Slot <$> genBigInt
+  slot = H.TimeValue <$> genPOSIXTime
 
-  slotParam = H.SlotParam <$> genTokenName
+  timeParam = H.TimeParam <$> genTokenName
 
 genValueId
   :: forall m
@@ -154,12 +164,12 @@ genParty = oneOf $ pk :| [ role ]
 genCurrencySymbol :: forall m. MonadGen m => MonadRec m => m CurrencySymbol
 genCurrencySymbol = genBase16
 
-genSlotInterval
-  :: forall m. MonadGen m => MonadRec m => m Slot -> m SlotInterval
-genSlotInterval gen = do
+genTimeInterval
+  :: forall m. MonadGen m => MonadRec m => m POSIXTime -> m TimeInterval
+genTimeInterval gen = do
   from <- gen
   to <- suchThat gen (\v -> v > from)
-  pure $ SlotInterval from to
+  pure $ TimeInterval from to
 
 genBound :: forall m. MonadGen m => MonadRec m => m Bound
 genBound = do
@@ -326,9 +336,9 @@ genValue' size
           extendedConstructcs =
             if withExtendedConstructs then [ ConstantParam <$> genTokenName ]
             else []
-        oneOf $ pure SlotIntervalStart
+        oneOf $ pure TimeIntervalStart
           :|
-            ( [ pure SlotIntervalEnd
+            ( [ pure TimeIntervalEnd
               , AvailableMoney <$> genTerm (mkArgName PartyType) genParty <*>
                   genTerm (mkArgName TokenType) genToken
               , Constant <$> genBigInt
@@ -346,9 +356,9 @@ genValue' size
                 <> extendedConstructcs
             )
   | otherwise =
-      oneOf $ pure SlotIntervalStart
+      oneOf $ pure TimeIntervalStart
         :|
-          [ pure SlotIntervalEnd
+          [ pure TimeIntervalEnd
           , AvailableMoney <$> genTerm (mkArgName PartyType) genParty <*>
               genTerm (mkArgName TokenType) genToken
           , Constant <$> genBigInt
@@ -532,7 +542,7 @@ genTransactionInput
   => MonadRec m
   => m S.TransactionInput
 genTransactionInput = do
-  interval <- genSlotInterval genSlot
+  interval <- genTimeInterval genPOSIXTime
   inputs <- unfoldable genInput
   pure $ TransactionInput { interval, inputs }
 

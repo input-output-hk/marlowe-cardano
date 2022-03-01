@@ -1,4 +1,6 @@
-module Component.ConfirmInput.View (render) where
+module Component.ConfirmContractActionDialog.View
+  ( render
+  ) where
 
 import Prologue hiding (div)
 
@@ -9,7 +11,12 @@ import Component.Button.Types as Button
 import Component.Button.View (button)
 import Component.Column (column)
 import Component.Column as Column
-import Component.ConfirmInput.Types (Input)
+import Component.ConfirmContractActionDialog.Types
+  ( Action(..)
+  , ComponentHTML
+  , State
+  )
+import Component.Contacts.State (getAda)
 import Component.Expand as Expand
 import Component.Heading (Preset(..), heading)
 import Component.IconButton.View (iconButton)
@@ -18,53 +25,49 @@ import Component.Icons as Icon
 import Component.Link (link)
 import Component.Row (row)
 import Component.Row as Row
-import Component.Transfer.Types (Termini(..))
+import Component.Transfer.Types
+  ( Termini(..)
+  , partyToParticipant
+  , paymentToTransfer
+  )
 import Component.Transfer.View (transfer)
 import Data.Array (fromFoldable)
 import Data.Default (default)
 import Data.Foldable (length)
-import Data.List as List
-import Halogen (ComponentHTML)
+import Data.Lens ((^.))
+import Data.PABConnectedWallet (_assets)
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, div, div_, lazy, p, span, text)
+import Halogen.HTML (HTML, div, div_, p, span, text)
 import MainFrame.Types (ChildSlots)
-import Marlowe.Execution.State (mkTx)
+import Marlowe.Execution.State (currentStep)
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
 import Marlowe.Semantics (Token(..), computeTransaction)
-import Page.Contract.State
-  ( currentStep
-  , partyToParticipant
-  , paymentToTransfer
-  , toInput
-  )
-import Page.Contract.Types (Action(..))
 
-render :: forall m. Monad m => Input -> ComponentHTML Action ChildSlots m
-render =
-  lazy \input@{ action, contractState } ->
-    let
-      stepNumber = currentStep contractState + 1
-    in
-      column Column.Divided [ "h-full", "grid", "grid-rows-auto-1fr-auto" ]
-        [ sectionBox [ "lg:p-5" ]
-            $ heading H2 [ "leading-none" ]
-                [ text
-                    $ "Step "
-                        <> show stepNumber
-                        <> " "
-                        <> case action of
-                          MakeDeposit _ _ _ _ -> "deposit"
-                          MakeChoice _ _ _ -> "choice"
-                          CloseContract -> "close"
-                          _ -> ""
-                ]
-        , summary input
-        , confirmation input
-        ]
+render :: forall m. Monad m => State -> ComponentHTML m
+render state@{ action, executionState } =
+  let
+    stepNumber = currentStep executionState + 1
+  in
+    column Column.Divided [ "h-full", "grid", "grid-rows-auto-1fr-auto" ]
+      [ sectionBox [ "lg:p-5" ]
+          $ heading H2 [ "leading-none" ]
+              [ text
+                  $ "Step "
+                      <> show stepNumber
+                      <> " "
+                      <> case action of
+                        MakeDeposit _ _ _ _ -> "deposit"
+                        MakeChoice _ _ -> "choice"
+                        CloseContract -> "close"
+                        _ -> ""
+              ]
+      , summary state
+      , confirmation state
+      ]
 
-summary :: forall m. Monad m => Input -> ComponentHTML Action ChildSlots m
-summary input@{ action, contractState } =
+summary :: forall m. Monad m => State -> ComponentHTML m
+summary state@{ action, contractUserParties } =
   sectionBox [ "overflow-y-scroll" ]
     $ column Column.Divided [ "space-y-4" ]
         [ column default []
@@ -73,7 +76,7 @@ summary input@{ action, contractState } =
                     $
                       case action of
                         MakeDeposit _ _ _ _ -> "Deposit"
-                        MakeChoice _ _ _ -> "Choice"
+                        MakeChoice _ _ -> "Choice"
                         CloseContract -> "Close"
                         _ -> ""
                         <> " summary"
@@ -81,13 +84,17 @@ summary input@{ action, contractState } =
             , box Box.Card [] case action of
                 MakeDeposit recipient sender token quantity ->
                   transfer
-                    { sender: partyToParticipant contractState sender
-                    , recipient: partyToParticipant contractState recipient
+                    { sender: partyToParticipant
+                        contractUserParties
+                        sender
+                    , recipient: partyToParticipant
+                        contractUserParties
+                        recipient
                     , token
                     , quantity
                     , termini: WalletToAccount sender recipient
                     }
-                MakeChoice (Semantics.ChoiceId key _) _ _ ->
+                MakeChoice (Semantics.ChoiceId key _) _ ->
                   row Row.Between []
                     [ span [ classNames [ "font-semibold", "text-sm" ] ]
                         [ text "Your choice:" ]
@@ -102,22 +109,24 @@ summary input@{ action, contractState } =
                 _ -> text ""
             ]
         , box Box.NoSpace [ "pt-4" ]
-            $ Expand.expand_ "resultingAction" Expand.Closed (results input)
+            $ Expand.expand_ "resultingAction" Expand.Closed (results state)
         ]
 
 results
   :: forall m
    . Monad m
-  => Input
+  => State
   -> Expand.State
   -> Expand.ComponentHTML ChildSlots Void m
-results { action, contractState, currentSlot } = case _ of
+results { action, contractUserParties, executionState, txInput } = case _ of
   Expand.Opened ->
     layout Icon.ExpandLess
       $ box Box.Card []
           <$>
-            ( fromFoldable $ transfer <<< paymentToTransfer contractState <$>
-                payments
+            ( fromFoldable $
+                transfer <<< paymentToTransfer
+                  contractUserParties <$>
+                  payments
             )
               <>
                 if willClose then
@@ -140,30 +149,29 @@ results { action, contractState, currentSlot } = case _ of
         ]
           <> children
 
-  contract = contractState.executionState.contract
+  contract = executionState.contract
 
-  semanticState = contractState.executionState.semanticState
+  semanticState = executionState.semanticState
 
-  txInput =
-    mkTx currentSlot contract $ List.fromFoldable
-      $ toInput
-      $ action
-
-  txOutput = computeTransaction txInput semanticState contract
+  txOutput = computeTransaction
+    <$> txInput
+    <*> pure semanticState
+    <*> pure contract
 
   payments = case txOutput of
-    Semantics.TransactionOutput { txOutPayments } -> fromFoldable txOutPayments
+    Just (Semantics.TransactionOutput { txOutPayments }) ->
+      fromFoldable txOutPayments
     _ -> []
 
   willClose = case txOutput of
-    Semantics.TransactionOutput { txOutContract } -> txOutContract ==
-      Semantics.Close
+    Just (Semantics.TransactionOutput { txOutContract }) ->
+      txOutContract == Semantics.Close
     _ -> action == CloseContract
 
   count = length payments + if willClose then 1 else 0
 
-confirmation :: forall w. Input -> HTML w Action
-confirmation { action, transactionFeeQuote, walletBalance } =
+confirmation :: forall w. State -> HTML w Action
+confirmation { action, transactionFeeQuote, wallet } =
   column Column.Divided []
     [ sectionBox [ "bg-lightgray" ]
         $ row Row.Between []
@@ -209,6 +217,8 @@ confirmation { action, transactionFeeQuote, walletBalance } =
             ]
     ]
   where
+  walletBalance = getAda $ wallet ^. _assets
+
   total =
     transactionFeeQuote
       + case action of

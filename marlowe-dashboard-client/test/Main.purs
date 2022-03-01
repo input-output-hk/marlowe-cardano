@@ -14,6 +14,11 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties.ARIA as HP
+import Test.Data.Address.Bech32 as Bech32Address
+import Test.Data.Address.Bech32.DataPart as Bech32DataPart
+import Test.Data.Address.Bech32.DataPart.CodePoint as DataPartCodePoint
+import Test.Data.Address.Bech32.HRP as Bech32HRP
+import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
 import Test.Spec (Spec, describe, it)
@@ -30,6 +35,11 @@ import Web.DOM (Element)
 
 main :: Effect Unit
 main = launchAff_ $ runSpec [ consoleReporter ] do
+  Bech32Address.spec
+  Bech32DataPart.spec
+  Bech32HRP.spec
+  DataPartCodePoint.spec
+  HRPCodePoint.spec
   testingLibrarySpec
   halogenTestingLibrarySpec
 

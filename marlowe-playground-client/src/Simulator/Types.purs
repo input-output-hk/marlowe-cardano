@@ -2,6 +2,8 @@ module Simulator.Types where
 
 import Prologue
 
+import Control.Monad.Reader (ReaderT(..))
+import Data.Argonaut (JsonDecodeError(..), decodeJson)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -9,10 +11,17 @@ import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant, instant, unInstant)
+import Data.Either (note)
 import Data.Generic.Rep (class Generic)
+import Data.Int (round)
+import Data.Int as Int
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Data.Newtype (class Newtype, unwrap)
+import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Marlowe.Holes (Holes, Term)
@@ -26,8 +35,7 @@ import Marlowe.Semantics
   , Input
   , Party(..)
   , Payment
-  , Slot
-  , SlotInterval
+  , TimeInterval
   , Token
   , TransactionError
   , TransactionInput
@@ -41,7 +49,7 @@ data ActionInputId
   = DepositInputId AccountId Party Token BigInt
   | ChoiceInputId ChoiceId
   | NotifyInputId
-  | MoveToSlotId
+  | MoveToTimeId
 
 derive instance eqActionInputId :: Eq ActionInputId
 
@@ -66,7 +74,7 @@ instance encodeJsonActionInputId :: EncodeJson ActionInputId where
       , contents: encodeJson choiceId
       }
   encodeJson NotifyInputId = encodeJson { tag: "NotifyInputId" }
-  encodeJson MoveToSlotId = encodeJson { tag: "MoveToSlotId" }
+  encodeJson MoveToTimeId = encodeJson { tag: "MoveToTimeId" }
 
 instance decodeJsonActionInputId :: DecodeJson ActionInputId where
   decodeJson =
@@ -79,7 +87,7 @@ instance decodeJsonActionInputId :: DecodeJson ActionInputId where
               )
           , "ChoiceInputId" /\ D.content (ChoiceInputId <$> D.value)
           , "NotifyInputId" /\ pure NotifyInputId
-          , "MoveToSlotId" /\ pure MoveToSlotId
+          , "MoveToTimeId" /\ pure MoveToTimeId
           ]
 
 -- | On the front end we need Actions however we also need to keep track of the current
@@ -88,13 +96,16 @@ data ActionInput
   = DepositInput AccountId Party Token BigInt
   | ChoiceInput ChoiceId (Array Bound) ChosenNum
   | NotifyInput
-  | MoveToSlot Slot
+  | MoveToTime Instant
 
 derive instance eqActionInput :: Eq ActionInput
 
 derive instance ordActionInput :: Ord ActionInput
 
 derive instance genericActionInput :: Generic ActionInput _
+
+instance Show ActionInput where
+  show = genericShow
 
 instance encodeJsonActionInput :: EncodeJson ActionInput where
   encodeJson (DepositInput accountId party token amount) =
@@ -117,10 +128,10 @@ instance encodeJsonActionInput :: EncodeJson ActionInput where
           ]
       }
   encodeJson NotifyInput = encodeJson { tag: "NotifyInput" }
-  encodeJson (MoveToSlot slot) =
+  encodeJson (MoveToTime time) =
     encodeJson
-      { tag: "MoveToSlot"
-      , contents: encodeJson slot
+      { tag: "MoveToTime"
+      , contents: encodeJson $ round $ unwrap $ unInstant time
       }
 
 instance decodeJsonActionInput :: DecodeJson ActionInput where
@@ -134,7 +145,13 @@ instance decodeJsonActionInput :: DecodeJson ActionInput where
           , "ChoiceInput" /\ D.content
               (D.tuple $ ChoiceInput </$\> D.value </*\> D.value </*\> D.value)
           , "NotifyInput" /\ pure NotifyInput
-          , "MoveToSlot" /\ D.content (MoveToSlot <$> D.value)
+          , "MoveToTime" /\ D.content
+              ( ReaderT \json -> do
+                  numberValue <- decodeJson json
+                  let
+                    mResult = MoveToTime <$> instant (Milliseconds numberValue)
+                  note (TypeMismatch "Instant") mResult
+              )
           ]
 
 -- TODO: Probably rename to PartiesActions or similar
@@ -160,18 +177,18 @@ otherActionsParty :: Party
 otherActionsParty = Role "marlowe_other_actions"
 
 data LogEntry
-  = StartEvent Slot
+  = StartEvent Instant
   | InputEvent TransactionInput
-  | OutputEvent SlotInterval Payment
-  | CloseEvent SlotInterval
+  | OutputEvent TimeInterval Payment
+  | CloseEvent TimeInterval
 
 derive instance genericLogEntry :: Generic LogEntry _
 
 instance encodeJsonLogEntry :: EncodeJson LogEntry where
-  encodeJson (StartEvent slot) =
+  encodeJson (StartEvent instant) =
     encodeJson
       { tag: "StartEvent"
-      , contents: encodeJson slot
+      , contents: encodeJson $ round $ unwrap $ unInstant instant
       }
   encodeJson (InputEvent input) =
     encodeJson
@@ -196,29 +213,34 @@ instance decodeJsonLogEntry :: DecodeJson LogEntry where
   decodeJson =
     D.decode $ D.sumType "LogEntry"
       $ Map.fromFoldable
-          [ "StartEvent" /\ D.content (StartEvent <$> D.value)
+          [ "StartEvent" /\ D.content
+              ( StartEvent
+                  <<< fromMaybe bottom
+                  <<< instant
+                  <<< Milliseconds
+                  <<< Int.toNumber
+                  <$> D.value
+              )
           , "InputEvent" /\ D.content (InputEvent <$> D.value)
           , "OutputEvent" /\ D.content (uncurry OutputEvent <$> D.value)
           , "CloseEvent" /\ D.content (CloseEvent <$> D.value)
           ]
 
-type ExecutionStateRecord
-  =
+type ExecutionStateRecord =
   { possibleActions :: Parties
   , pendingInputs :: Array Input
   , transactionError :: Maybe TransactionError
   , transactionWarnings :: Array TransactionWarning
   , log :: Array LogEntry
   , state :: S.State
-  , slot :: Slot
+  , time :: Instant
   , moneyInContract :: Assets
   -- This is the remaining of the contract to be executed
   , contract :: Term T.Contract
   }
 
-type InitialConditionsRecord
-  =
-  { initialSlot :: Slot
+type InitialConditionsRecord =
+  { initialTime :: Instant
   -- TODO: Should we remove the Maybe and just not set InitialConditionsRecord if we cannot
   --       parse the contract?
   , termContract :: Maybe (Term T.Contract)
@@ -229,8 +251,7 @@ data ExecutionState
   = SimulationRunning ExecutionStateRecord
   | SimulationNotStarted InitialConditionsRecord
 
-type MarloweState
-  =
+type MarloweState =
   { executionState :: ExecutionState
   , holes :: Holes
   -- NOTE: as part of the marlowe editor and simulator split this part of the

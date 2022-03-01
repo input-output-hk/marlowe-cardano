@@ -46,7 +46,7 @@ import Marlowe.Semantics
   , PubKey
   , Timeouts(..)
   , TokenName
-  , _slotInterval
+  , _timeInterval
   , fixInterval
   , ivFrom
   , ivTo
@@ -61,7 +61,9 @@ import Marlowe.Template
   , fillTemplate
   , getPlaceholderIds
   )
+import Marlowe.Time (unixEpoch)
 import Monaco (IRange)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Text.Pretty
   ( class Args
   , class Pretty
@@ -159,8 +161,8 @@ data Argument
   | GenArg MarloweType
 
 -- | TermGenerator is a decorator for Array Argument. Array Argument is used, among other things, for generating
--- | terms from holes. But, by default, it includes the constructor name, e.g: "Slot ?slotNumber"
--- | In the case of Slot, we just want to generate the argument, i.e: "0", not "Slot 0",
+-- | terms from holes. But, by default, it includes the constructor name, e.g: "TimeValue ?timeout"
+-- | In the case of TimeValue, we just want to generate the argument, i.e: "0", not "TimeValue 0",
 -- | that is what SimpleArgument does. See implementation of `constructMarloweType` function.
 data TermGenerator
   = ArgumentArray (Array Argument)
@@ -217,8 +219,8 @@ getMarloweConstructors ValueType =
           [ DataArgIndexed 1 ValueType, DataArgIndexed 2 ValueType ]
       )
     , (Tuple "ChoiceValue" $ ArgumentArray [ GenArg ChoiceIdType ])
-    , (Tuple "SlotIntervalStart" $ ArgumentArray [])
-    , (Tuple "SlotIntervalEnd" $ ArgumentArray [])
+    , (Tuple "TimeIntervalStart" $ ArgumentArray [])
+    , (Tuple "TimeIntervalEnd" $ ArgumentArray [])
     , (Tuple "UseValue" $ ArgumentArray [ DefaultString "valueId" ])
     , ( Tuple "Cond" $ ArgumentArray
           [ DataArg ObservationType, DataArg ValueType, DataArg ValueType ]
@@ -300,8 +302,8 @@ getMarloweConstructors PartyType =
 
 getMarloweConstructors TimeoutType =
   Map.fromFoldable
-    [ (Tuple "Slot" $ SimpleArgument $ DefaultNumber zero)
-    , (Tuple "SlotParam" $ ArgumentArray [ DefaultString "slotParameterName" ])
+    [ (Tuple "TimeValue" $ SimpleArgument $ DefaultNumber zero)
+    , (Tuple "TimeParam" $ ArgumentArray [ DefaultString "timeParameterName" ])
     ]
 
 allMarloweConstructors :: Map String TermGenerator
@@ -503,7 +505,8 @@ instance fillableTerm :: Fillable a b => Fillable (Term a) b where
 
 instance hasTimeoutTerm :: HasTimeout a => HasTimeout (Term a) where
   timeouts (Term a _) = timeouts a
-  timeouts (Hole _ _) = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts (Hole _ _) = Timeouts
+    { maxTime: POSIXTime unixEpoch, minTime: Nothing }
 
 mkHole :: forall a. String -> Location -> Term a
 mkHole name range = Hole name range
@@ -668,8 +671,8 @@ instance boundHasMarloweHoles :: HasMarloweHoles Bound where
   getHoles (Bound _ _) m = m
 
 data Timeout
-  = Slot BigInt
-  | SlotParam String
+  = TimeValue POSIXTime
+  | TimeParam String
 
 derive instance genericTimeout :: Generic Timeout _
 
@@ -678,45 +681,49 @@ derive instance eqTimeout :: Eq Timeout
 derive instance ordTimeout :: Ord Timeout
 
 instance showTimeout :: Show Timeout where
-  show (Slot x) = show $ pretty x
+  show (TimeValue x) = show $ pretty x
   show v = genericShow v
 
 instance prettyTimeout :: Pretty Timeout where
-  pretty (Slot x) = pretty x
-  pretty (SlotParam x) = genericPretty (SlotParam x)
+  pretty (TimeValue x) = pretty x
+  pretty (TimeParam x) = genericPretty (TimeParam x)
 
 instance hasArgsTimeout :: Args Timeout where
-  hasArgs (Slot _) = false
+  hasArgs (TimeValue _) = false
   hasArgs x = genericHasArgs x
-  hasNestedArgs (Slot _) = false
+  hasNestedArgs (TimeValue _) = false
   hasNestedArgs x = genericHasNestedArgs x
 
 instance templateTimeout :: Template Timeout Placeholders where
-  getPlaceholderIds (SlotParam slotParamId) = Placeholders
+  getPlaceholderIds (TimeParam timeParamId) = Placeholders
     (unwrap (mempty :: Placeholders))
-      { slotPlaceholderIds = Set.singleton slotParamId }
-  getPlaceholderIds (Slot _) = mempty
+      { timeoutPlaceholderIds = Set.singleton timeParamId }
+  getPlaceholderIds (TimeValue _) = mempty
 
 instance fillableTimeout :: Fillable Timeout TemplateContent where
-  fillTemplate placeholders v@(SlotParam slotParamId) = maybe v Slot $
-    Map.lookup slotParamId (unwrap placeholders).slotContent
-  fillTemplate _ (Slot x) = Slot x
+  fillTemplate placeholders v@(TimeParam timeParamId) =
+    maybe v (TimeValue <<< POSIXTime) $
+      Map.lookup timeParamId (unwrap placeholders).timeContent
+  fillTemplate _ (TimeValue x) = TimeValue x
 
 instance hasTimeoutTimeout :: HasTimeout Timeout where
-  timeouts (Slot slot) = Timeouts
-    { maxTime: (S.Slot slot), minTime: Just (S.Slot slot) }
-  timeouts (SlotParam _) = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts (TimeValue time) = Timeouts
+    { maxTime: time
+    , minTime: Just time
+    }
+  timeouts (TimeParam _) = Timeouts
+    { maxTime: POSIXTime unixEpoch, minTime: Nothing }
 
 instance timeoutFromTerm :: FromTerm Timeout EM.Timeout where
-  fromTerm (Slot b) = pure $ EM.Slot b
-  fromTerm (SlotParam b) = pure $ EM.SlotParam b
+  fromTerm (TimeValue b) = pure $ EM.TimeValue b
+  fromTerm (TimeParam b) = pure $ EM.TimeParam b
 
 instance timeoutIsMarloweType :: IsMarloweType Timeout where
   marloweType _ = TimeoutType
 
 instance timeoutHasMarloweHoles :: HasMarloweHoles Timeout where
-  getHoles (Slot _) m = m
-  getHoles (SlotParam _) m = m
+  getHoles (TimeValue _) m = m
+  getHoles (TimeParam _) m = m
 
 data Party
   = PK PubKey
@@ -959,8 +966,8 @@ data Value
   | MulValue (Term Value) (Term Value)
   | DivValue (Term Value) (Term Value)
   | ChoiceValue ChoiceId
-  | SlotIntervalStart
-  | SlotIntervalEnd
+  | TimeIntervalStart
+  | TimeIntervalEnd
   | UseValue (TermWrapper ValueId)
   | Cond (Term Observation) (Term Value) (Term Value)
 
@@ -997,8 +1004,8 @@ instance templateValue :: Template Value Placeholders where
   getPlaceholderIds (DivValue lhs rhs) = getPlaceholderIds lhs <>
     getPlaceholderIds rhs
   getPlaceholderIds (ChoiceValue _) = mempty
-  getPlaceholderIds SlotIntervalStart = mempty
-  getPlaceholderIds SlotIntervalEnd = mempty
+  getPlaceholderIds TimeIntervalStart = mempty
+  getPlaceholderIds TimeIntervalEnd = mempty
   getPlaceholderIds (UseValue _) = mempty
   getPlaceholderIds (Cond obs lhs rhs) = getPlaceholderIds obs
     <> getPlaceholderIds lhs
@@ -1017,8 +1024,8 @@ instance fillableValue :: Fillable Value TemplateContent where
     MulValue lhs rhs -> MulValue (go lhs) (go rhs)
     DivValue lhs rhs -> DivValue (go lhs) (go rhs)
     ChoiceValue _ -> val
-    SlotIntervalStart -> val
-    SlotIntervalEnd -> val
+    TimeIntervalStart -> val
+    TimeIntervalEnd -> val
     UseValue _ -> val
     Cond obs lhs rhs -> Cond (go obs) (go lhs) (go rhs)
     where
@@ -1036,8 +1043,8 @@ instance valueFromTerm :: FromTerm Value EM.Value where
   fromTerm (MulValue a b) = EM.MulValue <$> fromTerm a <*> fromTerm b
   fromTerm (DivValue a b) = EM.DivValue <$> fromTerm a <*> fromTerm b
   fromTerm (ChoiceValue a) = EM.ChoiceValue <$> fromTerm a
-  fromTerm SlotIntervalStart = pure EM.SlotIntervalStart
-  fromTerm SlotIntervalEnd = pure EM.SlotIntervalEnd
+  fromTerm TimeIntervalStart = pure EM.TimeIntervalStart
+  fromTerm TimeIntervalEnd = pure EM.TimeIntervalEnd
   fromTerm (UseValue a) = EM.UseValue <$> fromTerm a
   fromTerm (Cond c a b) = EM.Cond <$> fromTerm c <*> fromTerm a <*> fromTerm b
 
@@ -1223,7 +1230,7 @@ instance fillableContract :: Fillable Contract TemplateContent where
     go = fillTemplate placeholders
 
 instance hasTimeoutContract :: HasTimeout Contract where
-  timeouts Close = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts Close = Timeouts { maxTime: POSIXTime unixEpoch, minTime: Nothing }
   timeouts (Pay _ _ _ _ contract) = timeouts contract
   timeouts (If _ contractTrue contractFalse) = timeouts
     [ contractTrue, contractFalse ]
@@ -1501,21 +1508,19 @@ reduceContractStep env state contract = case contract of
       "this function should not be called in a contract with holes"
   When _ (Hole _ _) _ -> ReduceError
     "this function should not be called in a contract with holes"
-  When _ (Term (SlotParam _) _) _ -> ReduceError
-    "this function should not be called with slot params"
-  When _ (Term (Slot timeout) _) nextContract ->
+  When _ (Term (TimeParam _) _) _ -> ReduceError
+    "this function should not be called with time params"
+  When _ (Term (TimeValue timeout) _) nextContract ->
     let
-      sTimeout = S.Slot timeout
+      startTime = view (_timeInterval <<< to ivFrom) env
 
-      startSlot = view (_slotInterval <<< to ivFrom) env
-
-      endSlot = view (_slotInterval <<< to ivTo) env
+      endTime = view (_timeInterval <<< to ivTo) env
     in
-      if endSlot < sTimeout then
+      if endTime < timeout then
         NotReduced
-      else if sTimeout <= startSlot then
+      else if timeout <= startTime then
         Reduced nextContract
       else
-        ReduceError "AmbiguousSlotIntervalReductionError"
+        ReduceError "AmbiguousTimeIntervalReductionError"
   Let _ _ nextContract -> Reduced nextContract
   Assert _ cont -> Reduced cont

@@ -1,6 +1,5 @@
 
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
 
 
 module Language.Marlowe.CLI.Test.Script (

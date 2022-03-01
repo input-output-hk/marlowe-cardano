@@ -3,12 +3,13 @@ module Examples.PureScript.Escrow
   , fullExtendedContract
   , metaData
   , fixedTimeoutContract
-  , defaultSlotContent
+  , defaultTimeContent
   ) where
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
@@ -30,6 +31,7 @@ import Marlowe.Semantics
   , Token(..)
   )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (unsafeInstantFromInt)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }
@@ -38,19 +40,19 @@ fixedTimeoutContract :: Contract
 fixedTimeoutContract =
   fillTemplate
     ( TemplateContent
-        { slotContent: defaultSlotContent
+        { timeContent: defaultTimeContent
         , valueContent: Map.empty
         }
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInt
-defaultSlotContent =
+defaultTimeContent :: Map String Instant
+defaultTimeContent =
   Map.fromFoldable
-    [ "Payment deadline" /\ fromInt 600
-    , "Complaint deadline" /\ fromInt 1800
-    , "Complaint response deadline" /\ fromInt 2400
-    , "Mediation deadline" /\ fromInt 3600
+    [ "Payment deadline" /\ unsafeInstantFromInt 600000
+    , "Complaint deadline" /\ unsafeInstantFromInt 1800000
+    , "Complaint response deadline" /\ unsafeInstantFromInt 2400000
+    , "Mediation deadline" /\ unsafeInstantFromInt 3600000
     ]
 
 metaData :: MetaData
@@ -72,16 +74,16 @@ price :: Value
 price = ConstantParam "Price"
 
 depositTimeout :: Timeout
-depositTimeout = SlotParam "Payment deadline"
+depositTimeout = TimeParam "Payment deadline"
 
 disputeTimeout :: Timeout
-disputeTimeout = SlotParam "Complaint response deadline"
+disputeTimeout = TimeParam "Complaint response deadline"
 
 answerTimeout :: Timeout
-answerTimeout = SlotParam "Complaint deadline"
+answerTimeout = TimeParam "Complaint deadline"
 
 arbitrageTimeout :: Timeout
-arbitrageTimeout = SlotParam "Mediation deadline"
+arbitrageTimeout = TimeParam "Mediation deadline"
 
 choice :: ChoiceName -> Party -> BigInt -> Contract -> Case
 choice choiceName chooser choiceValue continuation =

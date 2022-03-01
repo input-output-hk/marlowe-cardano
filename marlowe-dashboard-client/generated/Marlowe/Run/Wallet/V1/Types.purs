@@ -4,6 +4,7 @@ module Marlowe.Run.Wallet.V1.Types where
 import Prelude
 
 import Control.Lazy (defer)
+import Data.Address (Address)
 import Data.Argonaut (encodeJson, jsonNull)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Decode.Aeson ((</$\>), (</*\>), (</\>))
@@ -27,6 +28,7 @@ import Type.Proxy (Proxy(Proxy))
 newtype WalletInfo = WalletInfo
   { walletId :: WalletId
   , pubKeyHash :: PaymentPubKeyHash
+  , address :: Address
   }
 
 derive instance Eq WalletInfo
@@ -39,6 +41,7 @@ instance EncodeJson WalletInfo where
     ( E.record
         { walletId: E.value :: _ WalletId
         , pubKeyHash: E.value :: _ PaymentPubKeyHash
+        , address: E.value :: _ Address
         }
     )
 
@@ -47,6 +50,7 @@ instance DecodeJson WalletInfo where
     ( WalletInfo <$> D.record "WalletInfo"
         { walletId: D.value :: _ WalletId
         , pubKeyHash: D.value :: _ PaymentPubKeyHash
+        , address: D.value :: _ Address
         }
     )
 
@@ -57,5 +61,5 @@ derive instance Newtype WalletInfo _
 --------------------------------------------------------------------------------
 
 _WalletInfo :: Iso' WalletInfo
-  { walletId :: WalletId, pubKeyHash :: PaymentPubKeyHash }
+  { walletId :: WalletId, pubKeyHash :: PaymentPubKeyHash, address :: Address }
 _WalletInfo = _Newtype

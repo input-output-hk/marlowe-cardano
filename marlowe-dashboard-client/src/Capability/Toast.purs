@@ -6,6 +6,7 @@ module Capability.Toast
 import Prologue
 
 import AppM (AppM)
+import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Trans.Class (lift)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (updateStore)
@@ -18,8 +19,11 @@ class Monad m <= Toast m where
 
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
 -- satisfy the compiler
-instance toastAppM :: Toast AppM where
+instance Toast AppM where
   addToast = updateStore <<< ShowToast
 
-instance toastHalogenM :: Toast m => Toast (HalogenM state action slots msg m) where
+instance Toast m => Toast (HalogenM state action slots msg m) where
+  addToast = lift <<< addToast
+
+instance Toast m => Toast (MaybeT m) where
   addToast = lift <<< addToast

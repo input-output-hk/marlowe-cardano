@@ -9,6 +9,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Function.Uncurried (Fn5, runFn5)
 import Data.Generic.Rep (class Generic)
+import Data.Maybe (fromJust)
 import Data.Show.Generic (genericShow)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Marlowe.Holes
@@ -24,7 +25,7 @@ import Marlowe.Holes
   , Payee(..)
   , Term(..)
   , TermWrapper(..)
-  , Timeout(SlotParam)
+  , Timeout(TimeParam)
   , Token(..)
   , Value(..)
   , ValueId(..)
@@ -32,19 +33,20 @@ import Marlowe.Holes
   , mkHole
   )
 import Marlowe.Holes as H
-import Marlowe.Semantics (Slot(..))
 import Monaco (IRange)
+import Partial.Unsafe (unsafePartial)
+import Plutus.V1.Ledger.Time (POSIXTime)
+import Plutus.V1.Ledger.Time as POSIXTime
 
-type HelperFunctions a
-  =
+type HelperFunctions a =
   { mkHole :: String -> IRange -> Term a
   , mkTerm :: a -> IRange -> Term a
   , mkTermWrapper :: a -> IRange -> TermWrapper a
   , getRange :: Term a -> IRange
   , mkBigInteger :: Int -> BigInt
-  , mkSlot :: BigInt -> Slot
-  , mkExtendedSlot :: BigInt -> Timeout
-  , mkExtendedSlotParam :: String -> Timeout
+  , mkPOSIXTime :: BigInt -> POSIXTime
+  , mkExtendedTimeValue :: BigInt -> Timeout
+  , mkExtendedTimeParam :: String -> Timeout
   , mkClose :: Contract
   , mkPay ::
       AccountId
@@ -89,8 +91,8 @@ type HelperFunctions a
   , mkMulValue :: Term Value -> Term Value -> Value
   , mkDivValue :: Term Value -> Term Value -> Value
   , mkChoiceValue :: ChoiceId -> Value
-  , mkSlotIntervalStart :: Value
-  , mkSlotIntervalEnd :: Value
+  , mkTimeIntervalStart :: Value
+  , mkTimeIntervalEnd :: Value
   , mkUseValue :: TermWrapper ValueId -> Value
   , mkCond :: Term Observation -> Term Value -> Term Value -> Value
   }
@@ -113,9 +115,10 @@ helperFunctions =
   , mkTermWrapper: \a pos -> TermWrapper a (Range pos)
   , getRange: getLocation >>> locationToRange
   , mkBigInteger: BigInt.fromInt
-  , mkSlot: Slot
-  , mkExtendedSlot: H.Slot
-  , mkExtendedSlotParam: SlotParam
+  , mkPOSIXTime: \bi -> unsafePartial $ fromJust $ POSIXTime.fromBigInt bi
+  , mkExtendedTimeValue:
+      \bi -> H.TimeValue <<< unsafePartial $ fromJust $ POSIXTime.fromBigInt bi
+  , mkExtendedTimeParam: TimeParam
   , mkClose: Close
   , mkPay: Pay
   , mkWhen: When
@@ -154,8 +157,8 @@ helperFunctions =
   , mkMulValue: MulValue
   , mkDivValue: DivValue
   , mkChoiceValue: ChoiceValue
-  , mkSlotIntervalStart: SlotIntervalStart
-  , mkSlotIntervalEnd: SlotIntervalEnd
+  , mkTimeIntervalStart: TimeIntervalStart
+  , mkTimeIntervalEnd: TimeIntervalEnd
   , mkUseValue: UseValue
   , mkCond: Cond
   }

@@ -3,7 +3,7 @@
 , ...
 }:
 let
-  inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab;
+  inherit (pkgs) plutus-chain-index cardano-cli marlowe-pab marlowe-cli;
   marlowe-run-backend-invoker = pkgs.marlowe-dashboard.marlowe-run-backend-invoker;
   node-port = "3001";
   wallet-port-int = 8090;
@@ -18,7 +18,7 @@ let
     baseUrl = "http://0.0.0.0:${pab-port}";
     walletUrl = "http://wallet:${wallet-port}";
     inherit socket-path network-id;
-    protocol-parameters = ./dev/testnet.protocol;
+    protocol-parameters = "./testnet.protocol";
   };
   run-params = { wallet-port = wallet-port-int; };
   config = pkgs.runCommand "config"
@@ -34,6 +34,26 @@ let
       cp ${../bitte/node/config/topology.yaml} $out/topology.yaml
     '';
 
+  node-seeder = {
+    service = {
+      useHostStore = true;
+      volumes = [
+        "cardano-node-data:/data"
+        "${./dev}:/copy"
+      ];
+      command = [
+        "${pkgs.bash}/bin/bash"
+        "-c"
+        ''
+          export PATH=$PATH:${pkgs.gzip}/bin
+          if [ -z "$$(${pkgs.coreutils}/bin/ls -A /data)" ]; then
+            ${pkgs.gnutar}/bin/tar xf /copy/node.db.saved.tar.gz --strip-components 1 -C /data
+          fi
+        ''
+      ];
+    };
+  };
+
   node = {
     service = {
       image = "inputoutput/cardano-node:1.33.0";
@@ -43,20 +63,19 @@ let
         "cardano-node-data:/data"
         "${config}:/config"
       ];
+      entrypoint = "bash";
       command = [
-        "run"
-        "--config"
-        "/config/config.json"
-        "--topology"
-        "/config/topology.yaml"
-        "--port"
-        node-port
-        "--socket-path"
-        socket-path
-        "--database-path"
-        "/data"
-        "--host-addr"
-        "0.0.0.0"
+        "-c"
+        ''
+          until [ ! -z "$$(ls -A /data)" ]; do :; done
+          cardano-node run \
+            --config /config/config.json \
+            --topology /config/topology.yaml \
+            --port ${node-port} \
+            --socket-path ${socket-path} \
+            --database-path /data \
+            --host-addr 0.0.0.0
+        ''
       ];
     };
   };
@@ -94,7 +113,6 @@ let
       volumes = [
         "cardano-ipc:/ipc"
         "chain-index-data:/data"
-        "${config}:/config"
       ];
       restart = "on-failure";
       depends_on = [ "wallet" ];
@@ -110,15 +128,12 @@ let
           # TODO this would be nicer implemented as a healthcheck, but I
           # couldn't get that to work.
           until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${socket-path} 2> /dev/null; do :; done
-          CARDANO_NODE_SOCKET_PATH=${socket-path} ${cardano-cli}/bin/cardano-cli query \
-            protocol-parameters \
-            --testnet-magic ${network-id} \
-            --out-file /config/testnet.protocol
           ${plutus-chain-index}/bin/plutus-chain-index start-index \
             --network-id ${network-id} \
             --db-path /data/chain-index.sqlite \
             --socket-path ${socket-path} \
             --port ${chain-index-port}
+            --verbose
         ''
       ];
     };
@@ -150,6 +165,10 @@ let
           # TODO this would be nicer implemented as a healthcheck, but I
           # couldn't get that to work.
           until ${pkgs.socat}/bin/socat /dev/null UNIX-CONNECT:${socket-path} 2> /dev/null; do :; done
+          CARDANO_NODE_SOCKET_PATH=${socket-path} ${cardano-cli}/bin/cardano-cli query \
+            protocol-parameters \
+            --testnet-magic ${network-id} \
+            --out-file ./testnet.protocol
           ${marlowe-pab}/bin/marlowe-pab webserver \
             --config /config/pab.yaml \
             --passphrase fixme-allow-pass-per-wallet \
@@ -179,14 +198,44 @@ let
     };
   };
 
+  marlowe-cli-tests = {
+    service = {
+      useHostStore = true;
+      volumes = [
+        "cardano-ipc:/ipc"
+      ];
+      restart = "on-failure";
+      depends_on = [ "wallet" "pab" ];
+      command = [
+        "${pkgs.bash}/bin/bash"
+        "-c"
+        ''
+          set -euo pipefail
+          exec ${marlowe-cli}/bin/marlowe-cli test contracts \
+            --testnet-magic 1564 \
+            --socket-path /ipc/node.socket \
+            --wallet-url http://wallet:8090 \
+            --pab-url http://pab:9080 \
+            --faucet-key ${../payment.skey} \
+            --faucet-address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
+            --burn-address addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7 \
+            --passphrase fixme-allow-pass-per-wallet \
+            ${../marlowe-cli/test/test-zcb.yaml} 2>&1
+        ''
+      ];
+    };
+  };
+
 in
 {
   config.services = {
+    inherit node-seeder;
     inherit node;
     inherit wallet;
     inherit chain-index;
     inherit pab;
     inherit marlowe-run;
+    # inherit marlowe-cli-tests;
   };
   config.docker-compose.raw = {
     volumes = {

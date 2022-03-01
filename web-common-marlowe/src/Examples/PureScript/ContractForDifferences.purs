@@ -1,13 +1,14 @@
 module Examples.PureScript.ContractForDifferences
   ( contractTemplate
   , metaData
-  , defaultSlotContent
+  , defaultTimeContent
   , extendedContract
   ) where
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut (fromInt)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested ((/\))
@@ -29,6 +30,7 @@ import Marlowe.Semantics
   , Token(..)
   , ValueId(..)
   )
+import Marlowe.Time (unsafeInstantFromInt)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract }
@@ -36,15 +38,15 @@ contractTemplate = { metaData, extendedContract }
 metaData :: MetaData
 metaData = Metadata.contractForDifferences
 
-defaultSlotContent :: Map String BigInt
-defaultSlotContent =
+defaultTimeContent :: Map String Instant
+defaultTimeContent =
   Map.fromFoldable
-    [ "Party deposit deadline" /\ fromInt 300
-    , "Counterparty deposit deadline" /\ fromInt 600
-    , "First window beginning" /\ fromInt 900
-    , "First window deadline" /\ fromInt 1200
-    , "Second window beginning" /\ fromInt 1500
-    , "Second window deadline" /\ fromInt 1800
+    [ "Party deposit deadline" /\ unsafeInstantFromInt 300000
+    , "Counterparty deposit deadline" /\ unsafeInstantFromInt 600000
+    , "First window beginning" /\ unsafeInstantFromInt 900000
+    , "First window deadline" /\ unsafeInstantFromInt 1200000
+    , "Second window beginning" /\ unsafeInstantFromInt 1500000
+    , "Second window deadline" /\ unsafeInstantFromInt 1800000
     ]
 
 ada :: Token
@@ -109,14 +111,14 @@ transferUpToDeposit from payerDeposit to amount = Pay from (Account to) ada
 
 extendedContract :: Contract
 extendedContract =
-  initialDeposit party partyDeposit (SlotParam "Party deposit deadline") Close
+  initialDeposit party partyDeposit (TimeParam "Party deposit deadline") Close
     $ initialDeposit counterparty counterpartyDeposit
-        (SlotParam "Counterparty deposit deadline")
+        (TimeParam "Counterparty deposit deadline")
         Close
-    $ wait (SlotParam "First window beginning")
-    $ oracleInput priceBeginning (SlotParam "First window deadline") Close
-    $ wait (SlotParam "Second window beginning")
-    $ oracleInput priceEnd (SlotParam "Second window deadline") Close
+    $ wait (TimeParam "First window beginning")
+    $ oracleInput priceBeginning (TimeParam "First window deadline") Close
+    $ wait (TimeParam "Second window beginning")
+    $ oracleInput priceEnd (TimeParam "Second window deadline") Close
     $ gtLtEq (ChoiceValue priceBeginning) (ChoiceValue priceEnd)
         ( recordDifference decreaseInPrice priceBeginning priceEnd
             $ transferUpToDeposit counterparty counterpartyDeposit party

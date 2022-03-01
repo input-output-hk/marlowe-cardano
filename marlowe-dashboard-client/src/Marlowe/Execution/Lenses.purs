@@ -16,6 +16,7 @@ module Marlowe.Execution.Lenses
 
 import Prologue
 
+import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens', Traversal', _Just, traversed)
 import Data.Lens.Record (prop)
 import Data.List (List)
@@ -26,7 +27,7 @@ import Marlowe.Execution.Types
   , State
   , TimeoutInfo
   )
-import Marlowe.Semantics (Accounts, Contract, Payment, Slot, TransactionInput)
+import Marlowe.Semantics (Accounts, Contract, Payment, TransactionInput)
 import Marlowe.Semantics (State) as Semantic
 import Type.Proxy (Proxy(..))
 
@@ -48,7 +49,7 @@ _mPendingTimeouts = prop (Proxy :: _ "mPendingTimeouts")
 _pendingTimeouts :: Traversal' State (Array TimeoutInfo)
 _pendingTimeouts = _mPendingTimeouts <<< _Just <<< _timeouts
 
-_mNextTimeout :: Lens' State (Maybe Slot)
+_mNextTimeout :: Lens' State (Maybe Instant)
 _mNextTimeout = prop (Proxy :: _ "mNextTimeout")
 
 ----------

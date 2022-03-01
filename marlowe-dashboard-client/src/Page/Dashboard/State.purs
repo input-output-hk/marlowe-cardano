@@ -8,12 +8,7 @@ import Prologue
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , createContract
-  , followContract
-  , redeem
-  )
+import Capability.Marlowe (class ManageMarlowe, createContract, followContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -21,7 +16,6 @@ import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.AddContact.Types as AddContact
 import Component.Contacts.Lenses (_cardSection)
-import Component.Contacts.State (getAda)
 import Component.Contacts.State (handleAction, initialState) as Contacts
 import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..))
@@ -29,68 +23,41 @@ import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
+import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk)
-import Data.Address as A
+import Data.ContractUserParties (contractUserParties)
+import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_)
-import Data.Lens
-  ( _Just
-  , assign
-  , filtered
-  , lens
-  , modifying
-  , preview
-  , set
-  , use
-  , view
-  , (^.)
-  )
-import Data.Lens.At (at)
-import Data.Lens.Extra (peruse)
-import Data.Lens.Index (ix)
-import Data.Lens.Traversal (traversed)
-import Data.List (filter, fromFoldable) as List
-import Data.Map (filterKeys, insert, lookup, toUnfoldable)
-import Data.Map as Map
+import Data.Lens (assign, modifying, set, use, (^.))
+import Data.Map (filterKeys, toUnfoldable)
 import Data.Maybe (fromMaybe)
-import Data.PABConnectedWallet (_assets, _walletId, _walletNickname)
+import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
+import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (Env)
 import Halogen (HalogenM, modify_, tell)
-import Halogen.Extra (imapState, mapSubmodule)
-import Halogen.Query.HalogenM (mapAction)
-import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
+import Halogen.Extra (mapSubmodule)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (ChildSlots, Msg)
-import Marlowe.Client (_chHistory, _chParams)
-import Marlowe.Execution.State (getAllPayments)
-import Marlowe.PAB (PlutusAppId, transactionFee)
+import Marlowe.Execution.State (extractNamedActions)
+import Marlowe.Execution.Types as Execution
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
-import Marlowe.Semantics
-  ( MarloweData
-  , MarloweParams
-  , Party(..)
-  , Payee(..)
-  , Payment(..)
-  )
-import Page.Contract.Lenses (_Started, _selectedStep)
-import Page.Contract.State (applyTimeout)
-import Page.Contract.State (handleAction, mkInitialState, updateState) as Contract
-import Page.Contract.Types (Action(..), State) as Contract
+import Marlowe.Semantics (MarloweData, MarloweParams)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
+  , _closedContracts
   , _contactsState
-  , _contract
   , _contractFilter
-  , _contracts
   , _menuOpen
-  , _selectedContract
-  , _selectedContractFollowerAppId
+  , _runningContracts
+  , _selectedContractMarloweParams
   , _templateState
   , _walletCompanionStatus
   )
@@ -98,35 +65,67 @@ import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
   , ContractFilter(..)
+  , ContractState
   , Input
   , State
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (followerContractExists, getContractNickname)
+import Store.Contracts
+  ( ContractStore
+  , followerContractExists
+  , getClosedContracts
+  , getContract
+  , getRunningContracts
+  )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (ajaxErrorToast, errorToast, successToast)
 
 mkInitialState
-  :: State
-mkInitialState =
-  { contactsState: Contacts.initialState
-  , walletCompanionStatus: WaitingToSync
-  , menuOpen: false
-  , card: Nothing
-  , cardOpen: false
-  -- FIXME-3208: remove...
-  , contracts: Map.empty
-  , contractFilter: Running
-  , selectedContractFollowerAppId: Nothing
-  , templateState: Template.dummyState
-  }
+  :: Instant -> PABConnectedWallet -> ContractStore -> State
+mkInitialState currentTime wallet contracts =
+  let
+    runningContracts = deriveContractState currentTime wallet $
+      getRunningContracts contracts
+    closedContracts = deriveContractState currentTime wallet $
+      getClosedContracts contracts
+  in
+    { contactsState: Contacts.initialState
+    , walletCompanionStatus: WaitingToSync
+    , menuOpen: false
+    , card: Nothing
+    , cardOpen: false
+    , runningContracts
+    , closedContracts
+    , contractFilter: Running
+    , selectedContractMarloweParams: Nothing
+    , templateState: Template.dummyState
+    }
+
+deriveContractState
+  :: Instant
+  -> PABConnectedWallet
+  -> Array Execution.State
+  -> Array ContractState
+deriveContractState currentTime wallet = map \executionState ->
+  let
+    { marloweParams, contract } = executionState
+    userParties = contractUserParties wallet marloweParams contract
+  in
+    { executionState
+    , contractUserParties: userParties
+    , namedActions: userNamedActions userParties
+        $ fromMaybe []
+        $ hush
+        $ extractNamedActions currentTime executionState
+    }
 
 handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadTime m
   => ManageMarloweStorage m
   => ManageMarlowe m
   => MainFrameLoop m
@@ -136,10 +135,20 @@ handleAction
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
+handleAction { currentTime, wallet, contracts } Receive = do
+  let
+    runningContracts = deriveContractState currentTime wallet $
+      getRunningContracts contracts
+    closedContracts = deriveContractState currentTime wallet $
+      getClosedContracts contracts
+  modify_
+    ( set _runningContracts runningContracts
+        <<< set _closedContracts closedContracts
+    )
+
 {- [UC-WALLET-3][0] Disconnect a wallet -}
 handleAction { wallet } DisconnectWallet = do
-  contracts <- use _contracts
-  updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet contracts
+  updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet
 
 handleAction _ (ContactsAction contactsAction) =
   case contactsAction of
@@ -178,26 +187,13 @@ handleAction _ CloseCard = assign _cardOpen false
 handleAction _ (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
 
-handleAction _ (SelectContract mFollowerAppId) = assign
-  _selectedContractFollowerAppId
-  mFollowerAppId
+handleAction _ (SelectContract marloweParams) = assign
+  _selectedContractMarloweParams
+  marloweParams
 
-{- [UC-CONTRACT-1][2] Start a Marlowe contract
--- FIXME-3208 redo comments
-After starting a new Marlowe contract, we should receive a WebSocket notification informing us of
-the `MarloweParams` and initial `MarloweData` for that contract (via a status update for our
-`WalletCompanion` app). We now need to start following that contract with a `MarloweFollower` app.
-If we started the contract ourselves, we already created a `MarloweFollower` app as a placeholder.
-So here we need to check whether there is an existing `MarloweFollower` app with the right metadata
-(and no `MarloweParams`) - and potentially use that instead of creating a new one.
-If someone else started the contract, and gave us a role, we will have no placeholder
-`MarloweFollower` app, and so we simply create a new one and start following immediately.
--}
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
-handleAction { wallet } (UpdateFollowerApps companionAppState) = do
+handleAction { wallet, contracts } (UpdateFollowerApps companionAppState) = do
   walletCompanionStatus <- use _walletCompanionStatus
-  -- FIXME-3208: We should use Input here instead of getStore
-  contracts <- _.contracts <$> getStore
   let
     contractExists marloweParams = followerContractExists marloweParams
       contracts
@@ -209,61 +205,8 @@ handleAction { wallet } (UpdateFollowerApps companionAppState) = do
   when (walletCompanionStatus == WaitingToSync) $ assign
     _walletCompanionStatus
     WalletCompanionSynced
-  -- for_ newContractsArray \(marloweParams /\ marloweData) ->
   for_ newContractsArray \(marloweParams /\ _) ->
     followContract wallet marloweParams
-
-{- [UC-CONTRACT-1][4] Start a contract
-   [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
-If we started a contract (or someone else started one and gave us a role in it), we will have
-created a `MarloweFollower` app for that contract, and started following the contract with that
-`MarloweFollower` app. Since we will also be subscribed to that app, we will receive an update
-about its initial state through the WebSocket. We potentially use that to change the corresponding
-`Contract.State` from `Starting` to `Started`.
--}
-{- [UC-CONTRACT-3][2] Apply an input to a contract -}
-handleAction
-  input@{ currentSlot, wallet }
-  (UpdateContract followerAppId contractHistory) = do
-  let
-    marloweParams /\ marloweData = view _chParams contractHistory
-    walletId = view _walletId wallet
-  -- Before we update the contract state we need to update the total funds to see if there has
-  -- been a change in the role tokens.
-  -- There is a chance that the data is not fully synced
-  -- See note [polling updateTotalFunds]
-  _ <- updateTotalFunds walletId
-  contracts <- use _contracts
-  mContractNickname <- getContractNickname marloweParams <<< _.contracts <$>
-    getStore
-  case lookup followerAppId contracts of
-    Just contractState -> do
-      let
-        chHistory = view _chHistory contractHistory
-      selectedStep <- peruse $ _selectedContract <<< _Started <<<
-        _selectedStep
-      modifying _contracts $ insert followerAppId $ Contract.updateState
-        wallet
-        marloweParams
-        marloweData
-        currentSlot
-        chHistory
-        contractState
-      -- if the modification changed the currently selected step, that means the card for the contract
-      -- that was changed is currently open, so we need to realign the step cards
-      selectedStep' <- peruse $ _selectedContract <<< _Started <<<
-        _selectedStep
-      when (selectedStep /= selectedStep')
-        $ for_ selectedStep'
-            ( handleAction input <<< ContractAction followerAppId <<<
-                Contract.MoveToStep
-            )
-    Nothing -> for_
-      ( Contract.mkInitialState wallet currentSlot
-          mContractNickname
-          contractHistory
-      )
-      (modifying _contracts <<< insert followerAppId)
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -276,66 +219,38 @@ we thought it would be more user-friendly for now to trigger this automatically 
 integrate with real wallets, I'm pretty sure we will need to provide a UI for the user to do it
 manually (and sign the transaction). So this will almost certainly have to change.
 -}
-handleAction { wallet } (RedeemPayments followerAppId) = do
-  mStartedContract <- peruse $ _contracts <<< ix followerAppId <<< _Started
-  for_ mStartedContract \{ executionState, marloweParams, userParties } ->
-    let
-      payments = getAllPayments executionState
+handleAction _ (RedeemPayments _) = pure unit
+{-
+  -- FIXME-3559 Fix redeem logic
+handleAction { wallet } (RedeemPayments marloweParams) = do
+ mStartedContract <- peruse $ _contracts <<< ix marloweParams <<< _Started
+for_ mStartedContract \{ executionState, userParties } ->
+  let
+    payments = getAllPayments executionState
+    { marloweParams } = executionState
+    isToParty party (Payment _ payee _) = case payee of
+      Party p -> p == party
+      _ -> false
+  in
+    for (List.fromFoldable userParties) \party ->
+      let
+        paymentsToParty = List.filter (isToParty party) payments
+      in
+        for paymentsToParty \payment -> case payment of
+          Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
+            marloweParams
+            tokenName
+          _ -> pure unit
+-}
 
-      isToParty party (Payment _ payee _) = case payee of
-        Party p -> p == party
-        _ -> false
-    in
-      for (List.fromFoldable userParties) \party ->
-        let
-          paymentsToParty = List.filter (isToParty party) payments
-        in
-          for paymentsToParty \payment -> case payment of
-            Payment _ (Party (Role tokenName)) _ -> void $ redeem wallet
-              marloweParams
-              tokenName
-            _ -> pure unit
-
-handleAction input@{ currentSlot } AdvanceTimedoutSteps = do
-  selectedStep <- peruse $ _selectedContract <<< _Started <<< _selectedStep
-  modifying
-    ( _contracts
-        <<< traversed
-        <<< _Started
-        <<< filtered
-          ( \contract ->
-              contract.executionState.mNextTimeout /= Nothing
-                && contract.executionState.mNextTimeout
-                  <= Just currentSlot
-          )
-    )
-    (applyTimeout currentSlot)
-  selectedContractFollowerAppId <- use _selectedContractFollowerAppId
-  for_ selectedContractFollowerAppId \followerAppId -> do
-    -- If the modification changed the currently selected step, that means the screen for the
-    -- contract that was changed is currently open, so we need to realign the step cards. We also
-    -- call the CancelConfirmation action - because if the user had the action confirmation card
-    -- open for an action in the current step, we want to close it (otherwise they could confirm an
-    -- action that is no longer possible).
-    selectedStep' <- peruse $ _selectedContract <<< _Started <<< _selectedStep
-    when (selectedStep /= selectedStep') do
-      for_ selectedStep'
-        ( handleAction input <<< ContractAction followerAppId <<<
-            Contract.MoveToStep
-        )
-      handleAction input $ ContractAction followerAppId $
-        Contract.CancelConfirmation
-
-handleAction
-  input@{ currentSlot, wallet }
-  (TemplateAction templateAction) =
+handleAction input@{ wallet } (TemplateAction templateAction) =
   case templateAction of
     Template.OpenCreateWalletCard tokenName -> do
       modify_
         $ set _card (Just $ ContactsCard)
             <<< set (_contactsState <<< _cardSection)
               (NewWallet $ Just tokenName)
-    {- [UC-CONTRACT-1][0] Starting a Marlowe contract
+    {- [UC-CONTRACT-1][0] Start a new marlowe contract
      The flow of creating a new marlowe contract starts when we submit the
      Template form. In here we apply the contract parameters to the Marlowe
      Extended contract to receive a Marlowe Core contract, and we call the
@@ -344,7 +259,8 @@ handleAction
     -}
     Template.OnStartContract template params -> do
       let { nickname, roles } = params
-      case instantiateExtendedContract currentSlot template params of
+      currentInstant <- now
+      case instantiateExtendedContract currentInstant template params of
         Nothing -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
             (Milliseconds 600.0)
@@ -352,8 +268,7 @@ handleAction
           addToast $ errorToast "Failed to instantiate contract." $ Just
             "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
         Just contract -> do
-          ajaxCreateContract <-
-            createContract wallet (A.toPubKeyHash <$> roles) contract
+          ajaxCreateContract <- createContract wallet roles contract
           case ajaxCreateContract of
             -- TODO: make this error message more informative
             Left ajaxError -> do
@@ -361,22 +276,27 @@ handleAction
                 SubmitResult (Milliseconds 600.0) (Left "Error")
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
-            Right reqId -> do
-              -- FIXME-3208
-              -- insertIntoContractNicknames followerAppId nickname
+            Right (reqId /\ mMarloweParams) -> do
               let metaData = template.metaData
               -- We save in the store the request of a created contract with
               -- the information relevant to show a placeholder of a starting contract.
-              updateStore $ Store.AddStartingContract $ reqId
-                /\ nickname
-                /\
-                  metaData
+              updateStore
+                $ Store.AddStartingContract
+                $ reqId /\ nickname /\ metaData
               handleAction input CloseCard
               void $ tell _submitButtonSlot "action-pay-and-start" $
                 SubmitResult (Milliseconds 600.0) (Right "")
               addToast $ successToast
                 "The request to initialise this contract has been submitted."
               assign _templateState Template.initialState
+              marloweParams <- liftAff mMarloweParams
+              ajaxFollow <- followContract wallet marloweParams
+              case ajaxFollow of
+                Left _ ->
+                  addToast $ errorToast "Can't follow the contract" Nothing
+                Right (_ /\ _) -> do
+                  -- TODO: SCP-3487 swap store contract from new to running
+                  addToast $ successToast "Contract initialised."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
@@ -397,34 +317,15 @@ handleAction _ (SetContactForRole _ _) = do
 -- assign _card $ Just ContractTemplateCard
 
 handleAction
-  input@{ wallet, currentSlot, tzOffset }
-  (ContractAction followerAppId contractAction) = do
-  startedState <- peruse
-    $ _contracts
-        <<< at followerAppId
-        <<< _Just
-        <<< _Started
+  input@{ contracts, wallet }
+  (OnAskContractActionConfirmation marloweParams action chosenNum) = do
   let
-    contractInput = { currentSlot, wallet, followerAppId, tzOffset }
-  mContractState <- peruse $ _contract followerAppId
-  case contractAction of
-    Contract.AskConfirmation action ->
-      for_ startedState \contractState ->
-        handleAction input $ OpenCard
-          $ ContractActionConfirmationCard
-              followerAppId
-              { action
-              , contractState
-              , currentSlot
-              , transactionFeeQuote: transactionFee
-              , userNickname: wallet ^. _walletNickname
-              , walletBalance: getAda $ wallet ^. _assets
-              }
-    Contract.CancelConfirmation -> handleAction input CloseCard
-    _ -> for_ mContractState \s -> toContract
-      followerAppId
-      s
-      (Contract.handleAction contractInput contractAction)
+    mExecutionState = getContract marloweParams contracts
+  for_ mExecutionState \executionState ->
+    handleAction input
+      $ OpenCard
+      $ ContractActionConfirmationCard
+          { action, chosenNum, executionState, wallet }
 
 updateTotalFunds
   :: forall m
@@ -454,17 +355,3 @@ toTemplate
   => HalogenM Template.State Template.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
 toTemplate = mapSubmodule _templateState TemplateAction
-
--- see note [dummyState] in MainFrame.State
-toContract
-  :: forall m msg slots
-   . Functor m
-  => PlutusAppId
-  -> Contract.State
-  -> HalogenM Contract.State Contract.Action slots msg m Unit
-  -> HalogenM State Action slots msg m Unit
-toContract followerAppId s =
-  mapAction (ContractAction followerAppId)
-    <<< imapState (lens (fromMaybe s <<< preview trav) (flip (set trav)))
-  where
-  trav = _contract followerAppId

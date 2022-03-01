@@ -38,13 +38,13 @@ component =
 
     -- | These hooks modify internal state through handlers
     -- | so we have to turn all our handlers are `HookM m Unit`.
-    slotParameterDescriptions <- useApplySortable
-      (raise' <<< MoveSlotParameterDescription)
+    timeParameterDescriptions <- useApplySortable
+      (raise' <<< MoveTimeParameterDescription)
     valueParameterInfos <- useApplySortable
       (raise' <<< MoveValueParameterDescription)
 
     let
-      dragging = { slotParameterDescriptions, valueParameterInfos }
+      dragging = { timeParameterDescriptions, valueParameterInfos }
       handlers =
         { raise: raise'
         , dragging

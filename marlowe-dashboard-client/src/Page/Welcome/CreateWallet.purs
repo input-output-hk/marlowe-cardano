@@ -3,13 +3,14 @@ module Page.Welcome.CreateWallet (component, _createWallet) where
 import Prologue
 
 import AppM (passphrase) as AppM
-import Capability.Marlowe (class ManageMarlowe, NewWalletDetails, createWallet)
+import Capability.Toast (class Toast, addToast)
+import Capability.Wallet (class ManageWallet, createWallet)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
 import Data.Lens (is, (^?))
 import Data.Maybe (fromMaybe)
-import Data.Variant (match) as Variant
+import Data.Wallet (mkWalletDetails)
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
@@ -23,10 +24,18 @@ import Halogen.HTML.Events as HE
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (CreateResponse(..))
 import Network.RemoteData (RemoteData(..), _Failure, _Loading)
-import Page.Welcome.CreateWallet.Types (Component, Input, Msg(..), _nickname)
+import Page.Welcome.CreateWallet.Types
+  ( Component
+  , Input
+  , Msg(..)
+  , NewWalletDetails
+  , _nickname
+  )
 import Page.Welcome.Forms.Render (mkNicknameInput, renderForm)
 import Store as Store
+import Toast.Types (ajaxErrorToast)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
@@ -59,7 +68,8 @@ _createWallet = Proxy :: Proxy "createWallet"
 component
   :: forall m
    . MonadAff m
-  => ManageMarlowe m
+  => ManageWallet m
+  => Toast m
   => MonadStore Store.Action Store.Store m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
@@ -80,7 +90,12 @@ initialState { context } =
   }
 
 handleAction
-  :: forall m. MonadEffect m => ManageMarlowe m => Action -> DSL m Unit
+  :: forall m
+   . MonadEffect m
+  => Toast m
+  => ManageWallet m
+  => Action
+  -> DSL m Unit
 handleAction = case _ of
   OnInit -> do
     H.tell _nickname unit $ Input.Focus
@@ -97,19 +112,14 @@ handleAction = case _ of
     response <- lift $ createWallet nickname AppM.passphrase
     case response of
       Left err -> do
+        addToast $ ajaxErrorToast "Failed to create wallet" err
         H.modify_ _
-          { newWalletDetails = err
-              #
-                ( Variant.match
-                    { serverError: const
-                        "We have encountered some serious problem which was already reported. Sorry for inconvenience and please try again later."
-                    , clientServerError: const
-                        "Unable to connect to the server. Please check your internet connection."
-                    }
-                )
-              # Failure
+          { newWalletDetails = Failure "Failed to create wallet"
           }
-      Right newWalletDetails -> do
+      Right (CreateResponse { walletInfo, mnemonic }) -> do
+        let
+          newWalletDetails =
+            { walletDetails: mkWalletDetails nickname walletInfo, mnemonic }
         H.modify_ _ { newWalletDetails = Success newWalletDetails }
         H.raise $ WalletCreated newWalletDetails
 

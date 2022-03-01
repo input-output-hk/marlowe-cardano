@@ -5,6 +5,7 @@ import Prologue
 
 import Control.Bind (bindFlipped)
 import Control.Monad.Gen (class MonadGen, chooseInt, elements, oneOf)
+import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (StateT, evalStateT, execState, get, gets, lift)
 import Data.Array.NonEmpty (NonEmptyArray, fromArray)
@@ -26,6 +27,7 @@ import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
 import Examples.PureScript.Swap as Swap
 import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
+import Marlowe.Extended (resolveRelativeTimes)
 import Marlowe.Extended as EM
 import Marlowe.Holes (Term(..), fromTerm)
 import Marlowe.Holes as T
@@ -41,6 +43,7 @@ import Marlowe.Semantics
   , TransactionWarning
   )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (secondsSinceShelley, shelleyEpoch, unixEpoch)
 import Page.Simulation.State (mkStateBase)
 import Page.Simulation.Types as Simulation
 import Partial.Unsafe (unsafePartial)
@@ -55,7 +58,7 @@ import Simulator.Lenses
   , _transactionError
   , _transactionWarnings
   )
-import Simulator.State (applyInput, getAllActions, moveToSlot, startSimulation)
+import Simulator.State (advanceTime, applyInput, getAllActions, startSimulation)
 import Simulator.Types (ActionInput(..))
 import Test.QuickCheck (Result(..))
 import Test.QuickCheck.Gen (Gen)
@@ -78,8 +81,13 @@ all =
 -- We don't currently have a function that goes from semantic contract to term contract, so for the purposes
 -- of these test we print it and parse it.
 toTerm :: EM.Contract -> Term T.Contract
-toTerm contract = unsafePartial $ fromJust $ hush $ parseContract $ show $
-  pretty contract
+toTerm contract = unsafePartial
+  $ fromJust
+  $ hush
+  $ parseContract
+  $ show
+  $ pretty
+  $ resolveRelativeTimes shelleyEpoch contract
 
 contractToExtended :: String -> Maybe EM.Contract
 contractToExtended = fromTerm <=< hush <<< parseContract
@@ -126,12 +134,12 @@ filledEscrow =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent:
+            { timeContent:
                 Map.fromFoldable
-                  [ "Payment deadline" /\ BigInt.fromInt 10
-                  , "Complaint response deadline" /\ BigInt.fromInt 50
-                  , "Complaint deadline" /\ BigInt.fromInt 100
-                  , "Mediation deadline" /\ BigInt.fromInt 1000
+                  [ "Payment deadline" /\ secondsSinceShelley 10
+                  , "Complaint response deadline" /\ secondsSinceShelley 50
+                  , "Complaint deadline" /\ secondsSinceShelley 100
+                  , "Mediation deadline" /\ secondsSinceShelley 1000
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -147,7 +155,7 @@ filledEscrowWithCollateral =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: Map.empty
+            { timeContent: Map.empty
             , valueContent:
                 Map.fromFoldable
                   [ "Price" /\ BigInt.fromInt 450
@@ -163,10 +171,10 @@ filledZeroCouponBond =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent:
+            { timeContent:
                 Map.fromFoldable
-                  [ "Interest" /\ BigInt.fromInt 100
-                  , "Amount" /\ BigInt.fromInt 200
+                  [ "Interest" /\ secondsSinceShelley 100
+                  , "Amount" /\ secondsSinceShelley 200
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -183,7 +191,7 @@ filledCouponBondGuaranteed =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: Map.empty
+            { timeContent: Map.empty
             , valueContent:
                 Map.fromFoldable
                   [ "Interest instalment" /\ BigInt.fromInt 100
@@ -199,7 +207,7 @@ filledSwap =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent: Map.empty
+            { timeContent: Map.empty
             , valueContent:
                 Map.fromFoldable
                   [ "Amount of Ada" /\ BigInt.fromInt 1500000
@@ -215,14 +223,14 @@ filledContractForDifferences =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent:
+            { timeContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInt.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
-                  , "First window beginning" /\ BigInt.fromInt 30
-                  , "First window deadline" /\ BigInt.fromInt 40
-                  , "Second window beginning" /\ BigInt.fromInt 100
-                  , "Second window deadline" /\ BigInt.fromInt 110
+                  [ "Party deposit deadline" /\ secondsSinceShelley 10
+                  , "Counterparty deposit deadline" /\ secondsSinceShelley 20
+                  , "First window beginning" /\ secondsSinceShelley 30
+                  , "First window deadline" /\ secondsSinceShelley 40
+                  , "Second window beginning" /\ secondsSinceShelley 100
+                  , "Second window deadline" /\ secondsSinceShelley 110
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -239,14 +247,14 @@ filledContractForDifferencesWithOracle =
   toTerm
     ( fillTemplate
         ( TemplateContent
-            { slotContent:
+            { timeContent:
                 Map.fromFoldable
-                  [ "Party deposit deadline" /\ BigInt.fromInt 10
-                  , "Counterparty deposit deadline" /\ BigInt.fromInt 20
-                  , "First window beginning" /\ BigInt.fromInt 30
-                  , "First window deadline" /\ BigInt.fromInt 40
-                  , "Second window beginning" /\ BigInt.fromInt 100
-                  , "Second window deadline" /\ BigInt.fromInt 110
+                  [ "Party deposit deadline" /\ secondsSinceShelley 10
+                  , "Counterparty deposit deadline" /\ secondsSinceShelley 20
+                  , "First window beginning" /\ secondsSinceShelley 30
+                  , "First window deadline" /\ secondsSinceShelley 40
+                  , "Second window beginning" /\ secondsSinceShelley 100
+                  , "Second window deadline" /\ secondsSinceShelley 110
                   ]
             , valueContent:
                 Map.fromFoldable
@@ -275,7 +283,7 @@ escrowSimpleFlow =
 
       finalState =
         (flip execState mkState) do
-          startSimulation zero filledEscrow
+          startSimulation unixEpoch filledEscrow
           applyInput deposit
           applyInput choice1
           applyInput choice2
@@ -314,7 +322,7 @@ contractHasNoErrors contractName contract =
   where
   property :: StateT Simulation.State Gen Result
   property = do
-    startSimulation zero contract
+    startSimulation unixEpoch contract
     runContract (Just contract)
 
   -- When the possible action is a Choose, we need to generate a random value inside the provided Bound.
@@ -348,18 +356,15 @@ contractHasNoErrors contractName contract =
       Nothing -> pure $ Failed "no available actions"
       Just possibleActions -> do
         action <- lift $ elements possibleActions
-        case action of
-          MoveToSlot slot -> moveToSlot slot
-          DepositInput accountId party token value -> applyInput $ IDeposit
-            accountId
-            party
-            token
-            value
-          ChoiceInput choiceId bounds value -> do
+        mRunActionResult <- case action of
+          MoveToTime newTime -> runMaybeT $ advanceTime newTime
+          DepositInput accountId party token value -> pure
+            <$> applyInput (IDeposit accountId party token value)
+          ChoiceInput choiceId bounds value -> pure <$> do
             randomValue <- lift $ oneOf $ pure value :|
               (genValueInBound <$> bounds)
             applyInput $ IChoice choiceId randomValue
-          NotifyInput -> applyInput INotify
+          NotifyInput -> pure <$> applyInput INotify
         (mError :: Maybe TransactionError) <- gets $ preview
           ( _currentMarloweState <<< _executionState <<< _SimulationRunning
               <<< _transactionError
@@ -370,9 +375,9 @@ contractHasNoErrors contractName contract =
               _transactionWarnings
           )
         mContract <- gets (preview _currentContract)
-        case mError, mWarnings of
+        case mRunActionResult, mError, mWarnings of
           -- TODO: If we run into this message, we'll need to implement the refactor described in runContract to know how to reach this state
-          Nothing, Just [] -> runContract mContract
-          Just _, _ -> pure $ Failed "it has errors"
-          _, Just _ -> pure $ Failed "it has warnings"
-          _, _ -> pure $ Failed "Wrong simulation state"
+          Just _, Nothing, Just [] -> runContract mContract
+          Just _, Just _, _ -> pure $ Failed "it has errors"
+          Just _, _, Just _ -> pure $ Failed "it has warnings"
+          _, _, _ -> pure $ Failed "Wrong simulation state"

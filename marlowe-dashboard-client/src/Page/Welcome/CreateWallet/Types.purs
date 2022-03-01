@@ -1,10 +1,16 @@
 module Page.Welcome.CreateWallet.Types where
 
-import Capability.Marlowe (NewWalletDetails)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.Wallet (WalletDetails)
 import Halogen as H
 import Type.Proxy (Proxy(..))
 
 type Input = {}
+
+type NewWalletDetails =
+  { mnemonic :: MnemonicPhrase
+  , walletDetails :: WalletDetails
+  }
 
 data Msg
   = CancelClicked

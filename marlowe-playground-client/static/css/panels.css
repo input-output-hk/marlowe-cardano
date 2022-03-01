@@ -11,11 +11,11 @@
   transform: rotate(180deg);
 }
 
-.initial-slot-input {
+.initial-time-input {
   margin: 1rem 0rem;
 }
 
-.initial-slot-input > span {
+.initial-time-input > span {
   margin-right: 1rem;
 }
 
@@ -230,7 +230,7 @@ button.minus-btn:hover {
   margin: 0.5rem 0;
 }
 
-.slot-input {
+.time-input {
   display: flex;
   flex-wrap: wrap;
   line-height: normal;

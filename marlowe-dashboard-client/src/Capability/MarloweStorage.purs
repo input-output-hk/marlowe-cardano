@@ -15,6 +15,8 @@ import Prologue
 
 import AppM (AppM)
 import Control.Monad.Except (lift)
+import Control.Monad.Maybe.Trans (MaybeT)
+import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
@@ -50,9 +52,7 @@ contractNicknamesLocalStorageKey = Key "contractNicknames"
 walletRoleContractsLocalStorageKey :: Key
 walletRoleContractsLocalStorageKey = Key "walletRoleContracts"
 
-class
-  Monad m <=
-  ManageMarloweStorage m where
+class Monad m <= ManageMarloweStorage m where
   clearAllLocalStorage :: m Unit
   -- Address book
   modifyAddressBook :: (AddressBook -> AddressBook) -> m AddressBook
@@ -62,7 +62,8 @@ class
     -> m LocalContractNicknames
   -- Wallet
   updateWallet
-    :: Maybe (WalletNickname /\ WalletId /\ PaymentPubKeyHash) -> m Unit
+    :: Maybe (WalletNickname /\ WalletId /\ PaymentPubKeyHash /\ Address)
+    -> m Unit
   getWallet :: m (Maybe WalletDetails)
 
 modifyAddressBook_
@@ -86,7 +87,7 @@ getContractNicknames = decodeContractNicknames <$> getItem
     fromMaybe emptyLocalContractNicknames $ hush <<< parseDecodeJson =<<
       mContractNicknames
 
-instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
+instance ManageMarloweStorage AppM where
   clearAllLocalStorage =
     liftEffect do
       removeItem addressBookLocalStorageKey
@@ -119,15 +120,22 @@ instance manageMarloweStorageAppM :: ManageMarloweStorage AppM where
       walletLocalStorageKey
     pure do
       walletJson <- mWalletJson
-      walletNickName /\ walletId /\ pubKeyHash <- hush $ parseDecodeJson
-        walletJson
+      walletNickName /\ walletId /\ pubKeyHash /\ address <-
+        hush $ parseDecodeJson walletJson
       let
-        walletInfo = WalletInfo { walletId, pubKeyHash }
+        walletInfo = WalletInfo { walletId, pubKeyHash, address }
       pure $ mkWalletDetails walletNickName walletInfo
 
-instance manageMarloweStorageHalogenM ::
+instance
   ManageMarloweStorage m =>
   ManageMarloweStorage (HalogenM state action slots msg m) where
+  clearAllLocalStorage = lift clearAllLocalStorage
+  modifyAddressBook = lift <<< modifyAddressBook
+  modifyContractNicknames = lift <<< modifyContractNicknames
+  updateWallet = lift <<< updateWallet
+  getWallet = lift getWallet
+
+instance ManageMarloweStorage m => ManageMarloweStorage (MaybeT m) where
   clearAllLocalStorage = lift clearAllLocalStorage
   modifyAddressBook = lift <<< modifyAddressBook
   modifyContractNicknames = lift <<< modifyContractNicknames

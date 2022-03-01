@@ -1,32 +1,31 @@
 module Page.Contract.Lenses
   ( _Started
   , _Starting
+  , _contract
+  , _contractUserParties
   , _executionState
   , _expandPayments
   , _marloweParams
   , _metadata
   , _namedActions
   , _nickname
-  , _participants
-  , _pendingTransaction
   , _previousSteps
   , _resultingPayments
   , _selectedStep
-  , _stateMetadata
   , _tab
-  , _userParties
   ) where
 
 import Prologue
 
-import Data.Lens (Lens', Prism', lens', prism')
+import Data.Lens (Lens', Prism', prism')
 import Data.Lens.Record (prop)
-import Data.Tuple.Nested ((/\))
-import Marlowe.Extended.Metadata (MetaData)
-import Page.Contract.Types (StartedState, StartingState, State(..))
+import Page.Contract.Types (ContractState(..), StartedState, StartingState)
 import Type.Proxy (Proxy(..))
 
-_Starting :: Prism' State StartingState
+_contract :: forall a r. Lens' { contract :: a | r } a
+_contract = prop (Proxy :: _ "contract")
+
+_Starting :: Prism' ContractState StartingState
 _Starting =
   prism'
     Starting
@@ -35,7 +34,7 @@ _Starting =
         _ -> Nothing
     )
 
-_Started :: Prism' State StartedState
+_Started :: Prism' ContractState StartedState
 _Started =
   prism'
     Started
@@ -53,9 +52,6 @@ _tab = prop (Proxy :: _ "tab")
 _executionState :: forall a r. Lens' { executionState :: a | r } a
 _executionState = prop (Proxy :: _ "executionState")
 
-_pendingTransaction :: forall a r. Lens' { pendingTransaction :: a | r } a
-_pendingTransaction = prop (Proxy :: _ "pendingTransaction")
-
 _previousSteps :: forall a r. Lens' { previousSteps :: a | r } a
 _previousSteps = prop (Proxy :: _ "previousSteps")
 
@@ -68,18 +64,8 @@ _selectedStep = prop (Proxy :: _ "selectedStep")
 _metadata :: forall a r. Lens' { metadata :: a | r } a
 _metadata = prop (Proxy :: _ "metadata")
 
-_stateMetadata :: Lens' State MetaData
-_stateMetadata = lens' go
-  where
-  go (Starting s) = s.metadata /\ Starting <<< s { metadata = _ }
-
-  go (Started s) = s.metadata /\ Started <<< s { metadata = _ }
-
-_participants :: forall a r. Lens' { participants :: a | r } a
-_participants = prop (Proxy :: _ "participants")
-
-_userParties :: forall a r. Lens' { userParties :: a | r } a
-_userParties = prop (Proxy :: _ "userParties")
+_contractUserParties :: forall a r. Lens' { contractUserParties :: a | r } a
+_contractUserParties = prop (Proxy :: _ "contractUserParties")
 
 _namedActions :: forall a r. Lens' { namedActions :: a | r } a
 _namedActions = prop (Proxy :: _ "namedActions")

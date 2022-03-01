@@ -54,9 +54,9 @@ import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
 import Language.Marlowe.SemanticsTypes (AccountId, Accounts, Action (..), Case (..), Contract (..), Environment (..),
                                         Input (..), InputContent (..), IntervalError (..), IntervalResult (..), Money,
-                                        Observation (..), Party, Payee (..), SlotInterval, State (..), Token (..),
-                                        Value (..), ValueId, getAction, getInputContent, inBounds)
-import Ledger (POSIXTime, Slot (..), ValidatorHash)
+                                        Observation (..), Party, Payee (..), State (..), TimeInterval, Token (..),
+                                        Value (..), ValueId, emptyState, getAction, getInputContent, inBounds)
+import Ledger (POSIXTime (..), ValidatorHash)
 import Ledger.Value (CurrencySymbol (..))
 import qualified Ledger.Value as Val
 import PlutusTx (makeIsDataIndexed)
@@ -120,13 +120,13 @@ data ReduceWarning = ReduceNoWarning
 -- | Result of 'reduceContractStep'
 data ReduceStepResult = Reduced ReduceWarning ReduceEffect State Contract
                       | NotReduced
-                      | AmbiguousSlotIntervalReductionError
+                      | AmbiguousTimeIntervalReductionError
   deriving stock (Haskell.Show)
 
 
 -- | Result of 'reduceContractUntilQuiescent'
 data ReduceResult = ContractQuiescent Bool [ReduceWarning] [Payment] State Contract
-                  | RRAmbiguousSlotIntervalError
+                  | RRAmbiguousTimeIntervalError
   deriving stock (Haskell.Show)
 
 
@@ -146,7 +146,7 @@ data ApplyResult = Applied ApplyWarning State Contract
 -- | Result of 'applyAllInputs'
 data ApplyAllResult = ApplyAllSuccess Bool [TransactionWarning] [Payment] State Contract
                     | ApplyAllNoMatchError
-                    | ApplyAllAmbiguousSlotIntervalError
+                    | ApplyAllAmbiguousTimeIntervalError
                     | ApplyAllHashMismatch
   deriving stock (Haskell.Show)
 
@@ -164,7 +164,7 @@ data TransactionWarning = TransactionNonPositiveDeposit Party AccountId Token In
 
 
 -- | Transaction error
-data TransactionError = TEAmbiguousSlotIntervalError
+data TransactionError = TEAmbiguousTimeIntervalError
                       | TEApplyNoMatchError
                       | TEIntervalError IntervalError
                       | TEUselessTransaction
@@ -176,7 +176,7 @@ data TransactionError = TEAmbiguousSlotIntervalError
 {-| Marlowe transaction input.
 -}
 data TransactionInput = TransactionInput
-    { txInterval :: SlotInterval
+    { txInterval :: TimeInterval
     , txInputs   :: [Input] }
   deriving stock (Haskell.Show, Haskell.Eq)
 
@@ -211,28 +211,27 @@ data MarloweData = MarloweData {
 
 data MarloweParams = MarloweParams {
         rolePayoutValidatorHash :: ValidatorHash,
-        rolesCurrency           :: CurrencySymbol,
-        slotConfig              :: (Integer, POSIXTime)  -- FIXME: This is temporary, until SCP-3050 is completed.
+        rolesCurrency           :: CurrencySymbol
     }
   deriving stock (Haskell.Show,Generic,Haskell.Eq,Haskell.Ord)
   deriving anyclass (FromJSON,ToJSON)
 
 
 {- Checks 'interval' and trim it if necessary. -}
-fixInterval :: SlotInterval -> State -> IntervalResult
+fixInterval :: TimeInterval -> State -> IntervalResult
 fixInterval interval state =
     case interval of
         (low, high)
           | high < low -> IntervalError (InvalidInterval interval)
           | otherwise -> let
-            curMinSlot = minSlot state
-            -- newLow is both new "low" and new "minSlot" (the lower bound for slotNum)
-            newLow = max low curMinSlot
+            curMinTime = minTime state
+            -- newLow is both new "low" and new "minTime" (the lower bound for slotNum)
+            newLow = max low curMinTime
             -- We know high is greater or equal than newLow (prove)
             curInterval = (newLow, high)
-            env = Environment { slotInterval = curInterval }
-            newState = state { minSlot = newLow }
-            in if high < curMinSlot then IntervalError (IntervalInPastError curMinSlot interval)
+            env = Environment { timeInterval = curInterval }
+            newState = state { minTime = newLow }
+            in if high < curMinTime then IntervalError (IntervalInPastError curMinTime interval)
             else IntervalTrimmed env newState
 
 
@@ -265,8 +264,8 @@ evalValue env state value = let
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
                 Nothing -> 0
-        SlotIntervalStart    -> getSlot (fst (slotInterval env))
-        SlotIntervalEnd      -> getSlot (snd (slotInterval env))
+        TimeIntervalStart    -> getPOSIXTime (fst (timeInterval env))
+        TimeIntervalEnd      -> getPOSIXTime (snd (timeInterval env))
         UseValue valId       ->
             case Map.lookup valId (boundValues state) of
                 Just x  -> x
@@ -379,14 +378,14 @@ reduceContractStep env state contract = case contract of
         in Reduced ReduceNoWarning ReduceNoPayment state cont
 
     When _ timeout cont -> let
-        startSlot = fst (slotInterval env)
-        endSlot   = snd (slotInterval env)
+        startSlot = fst (timeInterval env)
+        endSlot   = snd (timeInterval env)
         -- if timeout in future – do not reduce
         in if endSlot < timeout then NotReduced
         -- if timeout in the past – reduce to timeout continuation
         else if timeout <= startSlot then Reduced ReduceNoWarning ReduceNoPayment state cont
-        -- if timeout in the slot range – issue an ambiguity error
-        else AmbiguousSlotIntervalReductionError
+        -- if timeout in the time range – issue an ambiguity error
+        else AmbiguousTimeIntervalReductionError
 
     Let valId val cont -> let
         evaluatedValue = evalValue env state val
@@ -418,7 +417,7 @@ reduceContractUntilQuiescent env state contract = let
                     ReduceWithPayment payment -> payment : payments
                     ReduceNoPayment           -> payments
                 in reductionLoop True env newState cont newWarnings newPayments
-            AmbiguousSlotIntervalReductionError -> RRAmbiguousSlotIntervalError
+            AmbiguousTimeIntervalReductionError -> RRAmbiguousTimeIntervalError
             -- this is the last invocation of reductionLoop, so we can reverse lists
             NotReduced -> ContractQuiescent reduced (reverse warnings) (reverse payments) state contract
 
@@ -502,7 +501,7 @@ applyAllInputs env state contract inputs = let
         -> ApplyAllResult
     applyAllLoop contractChanged env state contract inputs warnings payments =
         case reduceContractUntilQuiescent env state contract of
-            RRAmbiguousSlotIntervalError -> ApplyAllAmbiguousSlotIntervalError
+            RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
             ContractQuiescent reduced reduceWarns pays curState cont -> case inputs of
                 [] -> ApplyAllSuccess
                     (contractChanged || reduced)
@@ -551,13 +550,40 @@ computeTransaction tx state contract = let
                                            , txOutState = newState
                                            , txOutContract = cont }
             ApplyAllNoMatchError -> Error TEApplyNoMatchError
-            ApplyAllAmbiguousSlotIntervalError -> Error TEAmbiguousSlotIntervalError
+            ApplyAllAmbiguousTimeIntervalError -> Error TEAmbiguousTimeIntervalError
             ApplyAllHashMismatch -> Error TEHashMismatch
         IntervalError error -> Error (TEIntervalError error)
 
+playTraceAux :: TransactionOutput -> [TransactionInput] -> TransactionOutput
+playTraceAux res [] = res
+playTraceAux TransactionOutput
+                { txOutWarnings = warnings
+                , txOutPayments = payments
+                , txOutState = state
+                , txOutContract = cont } (h:t) =
+    let transRes = computeTransaction h state cont
+     in case transRes of
+          TransactionOutput{..} ->
+              playTraceAux TransactionOutput
+                              { txOutPayments = payments ++ txOutPayments
+                              , txOutWarnings = warnings ++ txOutWarnings
+                              , txOutState
+                              , txOutContract
+                              } t
+          Error _ -> transRes
+playTraceAux err@(Error _) _ = err
+
+playTrace :: POSIXTime -> Contract -> [TransactionInput] -> TransactionOutput
+playTrace minTime c = playTraceAux TransactionOutput
+                                 { txOutWarnings = []
+                                 , txOutPayments = []
+                                 , txOutState = emptyState minTime
+                                 , txOutContract = c
+                                 }
+
 
 -- | Calculates an upper bound for the maximum lifespan of a contract (assuming is not merkleized)
-contractLifespanUpperBound :: Contract -> Slot
+contractLifespanUpperBound :: Contract -> POSIXTime
 contractLifespanUpperBound contract = case contract of
     Close -> 0
     Pay _ _ _ _ cont -> contractLifespanUpperBound cont
@@ -587,24 +613,24 @@ validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList acco
 
 instance FromJSON TransactionInput where
   parseJSON (Object v) =
-        TransactionInput <$> (parseSlotInterval =<< (v .: "tx_interval"))
+        TransactionInput <$> (parseTimeInterval =<< (v .: "tx_interval"))
                          <*> ((v .: "tx_inputs") >>=
                    withArray "Transaction input list" (\cl ->
                      mapM parseJSON (F.toList cl)
                                                       ))
-    where parseSlotInterval = withObject "SlotInterval" (\v ->
-            do from <- Slot <$> (withInteger =<< (v .: "from"))
-               to <- Slot <$> (withInteger =<< (v .: "to"))
+    where parseTimeInterval = withObject "TimeInterval" (\v ->
+            do from <- POSIXTime <$> (withInteger =<< (v .: "from"))
+               to <- POSIXTime <$> (withInteger =<< (v .: "to"))
                return (from, to)
                                                       )
   parseJSON _ = Haskell.fail "TransactionInput must be an object"
 
 instance ToJSON TransactionInput where
-  toJSON (TransactionInput (Slot from, Slot to) txInps) = object
-      [ "tx_interval" .= slotIntervalJSON
+  toJSON (TransactionInput (POSIXTime from, POSIXTime to) txInps) = object
+      [ "tx_interval" .= timeIntervalJSON
       , "tx_inputs" .= toJSONList (map toJSON txInps)
       ]
-    where slotIntervalJSON = object [ "from" .= from
+    where timeIntervalJSON = object [ "from" .= from
                                     , "to" .= to
                                     ]
 

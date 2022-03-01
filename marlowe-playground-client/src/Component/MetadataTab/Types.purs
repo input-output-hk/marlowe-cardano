@@ -15,9 +15,9 @@ data MetadataAction
   | SetContractLongDescription String
   | SetRoleDescription S.TokenName String
   | DeleteRoleDescription S.TokenName
-  | SetSlotParameterDescription String String
-  | DeleteSlotParameterDescription String
-  | MoveSlotParameterDescription Unfoldable.Move
+  | SetTimeParameterDescription String String
+  | DeleteTimeParameterDescription String
+  | MoveTimeParameterDescription Unfoldable.Move
   | SetValueParameterDescription String String
   | MoveValueParameterDescription Unfoldable.Move
   | SetValueParameterFormat String NumberFormat
@@ -34,12 +34,12 @@ instance metadataActionShowConstructor :: ShowConstructor MetadataAction where
   showConstructor (SetContractLongDescription _) = "SetContractLongDescription"
   showConstructor (SetRoleDescription _ _) = "SetRoleDescription"
   showConstructor (DeleteRoleDescription _) = "DeleteRoleDescription"
-  showConstructor (SetSlotParameterDescription _ _) =
-    "SetSlotParameterDescription"
-  showConstructor (MoveSlotParameterDescription _) =
-    "MoveSlotParameterDescription"
-  showConstructor (DeleteSlotParameterDescription _) =
-    "DeleteSlotParameterDescription"
+  showConstructor (SetTimeParameterDescription _ _) =
+    "SetTimeParameterDescription"
+  showConstructor (MoveTimeParameterDescription _) =
+    "MoveTimeParameterDescription"
+  showConstructor (DeleteTimeParameterDescription _) =
+    "DeleteTimeParameterDescription"
   showConstructor (SetValueParameterDescription _ _) =
     "SetValueParameterDescription"
   showConstructor (MoveValueParameterDescription _) =

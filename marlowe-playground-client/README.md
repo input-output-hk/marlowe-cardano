@@ -4,25 +4,25 @@
 
 Make sure you have a local backend server running first:
 ```bash
-$(nix-build -A marlowe-playground.server)/bin/marlowe-playground-server webserver
+[nix-shell] $ marlowe-playground-server
 ```
 
 Check the [backend documentation](../marlowe-playground-server/README.md) for more information on how to setup the Github OAuth application.
 
 Now we will build and run the front end:
 ```bash
-cd marlowe-playground-client
+[nix-shell] $ cd marlowe-playground-client
 # Generate the purescript bridge files
-$(nix-build ../default.nix -A marlowe-playground.generate-purescript)/bin/marlowe-playground-generate-purs
+[nix-shell] $ marlowe-playground-generate-purs
 # Download javascript dependencies
-npm install
+[nix-shell] $ npm install
 # Install purescript depdendencies
-npm run build:spago
+[nix-shell] $ npm run build:spago
 # Precompile js dependencies bundle
-npm run build:webpack:dev:vendor
+[nix-shell] $ npm run build:webpack:dev:vendor
+# Run aun auto-reloading dev build on http://localhost:8010
+[nix-shell] $ npm run build:webpack:dev
 ```
-
-Then run `npm run build:webpack:dev` for an auto-reloading dev build on https://localhost:8009
 
 ## Adding dependencies
 

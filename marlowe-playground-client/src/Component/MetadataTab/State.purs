@@ -31,7 +31,7 @@ import Marlowe.Extended.Metadata
   , _contractShortDescription
   , _contractType
   , _roleDescriptions
-  , _slotParameterDescriptions
+  , _timeParameterDescriptions
   , _valueParameterInfo
   , updateChoiceInfo
   , updateValueParameterInfo
@@ -66,12 +66,12 @@ carryMetadataAction action = do
       Map.insert tokenName description
     DeleteRoleDescription tokenName -> over _roleDescriptions $ Map.delete
       tokenName
-    SetSlotParameterDescription slotParam description ->
-      over _slotParameterDescriptions $ OMap.insert slotParam description
-    MoveSlotParameterDescription move -> over _slotParameterDescriptions $
+    SetTimeParameterDescription timeParam description ->
+      over _timeParameterDescriptions $ OMap.insert timeParam description
+    MoveTimeParameterDescription move -> over _timeParameterDescriptions $
       moveTo move
-    DeleteSlotParameterDescription slotParam -> over _slotParameterDescriptions
-      $ OMap.delete slotParam
+    DeleteTimeParameterDescription timeParam -> over _timeParameterDescriptions
+      $ OMap.delete timeParam
     SetValueParameterDescription valueParameterName description ->
       over _valueParameterInfo $ updateValueParameterInfo
         (setValueParameterDescription description)

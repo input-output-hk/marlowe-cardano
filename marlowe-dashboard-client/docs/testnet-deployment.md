@@ -32,7 +32,7 @@ nodeServerConfig:
   pscKeptBlocks: 2160
   pscNetworkId: "1564"
   pscSlotConfig:
-    scSlotZeroTime: 1638215277000
+    scSlotZeroTime: 1644929640000
     scSlotLength: 1000
   pscFeeConfig:
     fcConstantFee:
@@ -165,11 +165,18 @@ git clone git@github.com:input-output-hk/daedalus.git -b 4.7.0
 # Patch Daedalus for use with the Marlowe testnet.
 pushd daedalus.git
 git apply << EOI
+diff --git a/installer-clusters.cfg b/installer-clusters.cfg
+index aa6f7770b..a26dfe400 100644
+--- a/installer-clusters.cfg
++++ b/installer-clusters.cfg
+@@ -1 +1 @@
+-mainnet mainnet_flight testnet shelley_qa staging alonzo_purple
++alonzo_purple
 diff --git a/nix/launcher-config.nix b/nix/launcher-config.nix
-index 905e636fd..9f995d904 100644
+index 905e636fd..64a1cc213 100644
 --- a/nix/launcher-config.nix
 +++ b/nix/launcher-config.nix
-@@ -27,7 +27,41 @@ let
+@@ -27,7 +27,36 @@ let
        networkName = "mainnet";
      };
      alonzo_purple = {
@@ -178,27 +185,22 @@ index 905e636fd..9f995d904 100644
 +        private = true;
 +        nodeConfig = networkConfig // cardanoLib.defaultLogConfig;
 +        networkConfig = {
-+          ByronGenesisFile = ../../node/byron-genesis.json;
-+          ByronGenesisHash = "0cb403802a38d5ca4609517e4837c81b42f4760015d450fd33193e8c8b76c579";
-+          ShelleyGenesisFile = ../../node/shelley-genesis.json;
-+          ShelleyGenesisHash = "40de53f76f83eb808e08b3bf5c3183868f0bf8c61f1f38be656cdbb7b48c588d";
-+          AlonzoGenesisFile = ../../node/alonzo-genesis.json;
++          ByronGenesisFile = ../../marlowe-cardano/bitte/node/config/byron-genesis.json;
++          ByronGenesisHash = "2f1e13c4116da44b22e555ca6249ee284788308bdca3ee635dc1b7fff1ca8cc1";
++          ShelleyGenesisFile = ../../marlowe-cardano/bitte/node/config/shelly-genesis.json;
++          ShelleyGenesisHash = "56e7a4a5813a270cd4249ff1515ecb15ce444afda33c62c2e862452077d01ea5";
++          AlonzoGenesisFile = ../../marlowe-cardano/bitte/node/config/alonzo-genesis.json;
 +          AlonzoGenesisHash = "7e94a15f55d1e82d10f09203fa1d40f8eede58fd8066542cf6566008068ed874";
 +          Protocol = "Cardano";
 +          RequiresNetworkMagic = "RequiresMagic";
-+          MaxKnownMajorProtocolVersion = 5;
-+          LastKnownBlockVersion-Major = 5;
-+          LastKnownBlockVersion-Minor = 1;
++          MaxKnownMajorProtocolVersion = 2;
++          LastKnownBlockVersion-Major = 3;
++          LastKnownBlockVersion-Minor = 0;
 +          LastKnownBlockVersion-Alt = 0;
 +          ApplicationName = "cardano-sl";
 +          ApplicationVersion = 0;
 +          MaxConcurrencyDeadline = 4;
 +          PBftSignatureThreshold = 1.1;
-+          TestAllegraHardForkAtEpoch = 2;
-+          TestAlonzoHardForkAtEpoch = 4;
-+          TestEnableDevelopmentHardForkEras = false;
-+          TestEnableDevelopmentNetworkProtocols = false;
-+          TestMaryHardForkAtEpoch = 3;
 +          TestShelleyHardForkAtEpoch = 1;
 +        };
 +        relays = "europe.relays.marlowe-testnet.dev.cardano.org";
@@ -261,6 +263,7 @@ index c193bf71b..3bda328b7 100755
 +}
 EOI
 popd
+```
 
 # Build Daedalus.
 pushd daedalus

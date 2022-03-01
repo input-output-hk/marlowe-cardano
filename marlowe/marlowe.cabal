@@ -75,6 +75,7 @@ library
     scientific -any,
     wl-pprint -any,
     semigroups -any,
+    unordered-containers -any,
     uuid -any
   if !(impl(ghcjs) || os(ghcjs))
     build-depends: plutus-tx-plugin -any
@@ -83,6 +84,7 @@ library
     Language.Marlowe.Extended
     Language.Marlowe.Semantics
     Language.Marlowe.SemanticsTypes
+    Language.Marlowe.FindInputs
     Language.Marlowe.Client
     Language.Marlowe.Client.History
     Language.Marlowe.Util
@@ -151,6 +153,7 @@ test-suite marlowe-test
         MarloweContract
     build-depends:
         aeson -any,
+        cardano-api -any,
         base >=4.9 && <5,
         containers -any,
         data-default  -any,
@@ -158,6 +161,7 @@ test-suite marlowe-test
         lens -any,
         bytestring -any,
         freer-simple -any,
+        freer-extras -any,
         tasty -any,
         tasty-hunit -any,
         tasty-quickcheck,

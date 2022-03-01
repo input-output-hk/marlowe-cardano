@@ -1,11 +1,15 @@
 module Component.ContractSetup.Types where
 
+import Prologue
+
 import Data.Address (Address)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractTimeout (ContractTimeout)
 import Data.ContractValue (ContractValue)
+import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Set (Set)
+import Data.Show.Generic (genericShow)
 import Halogen as H
 import Halogen.Form.Input (FieldState)
 import Marlowe.Extended.Metadata (NumberFormat)
@@ -24,6 +28,10 @@ data Msg
   = BackClicked
   | ReviewClicked ContractParams
   | FieldsUpdated ContractFields
+
+derive instance Generic Msg _
+instance Show Msg where
+  show = genericShow
 
 data Query (a :: Type)
 

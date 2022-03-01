@@ -3,12 +3,13 @@ module Examples.PureScript.EscrowWithCollateral
   , fullExtendedContract
   , metaData
   , fixedTimeoutContract
-  , defaultSlotContent
+  , defaultTimeContent
   ) where
 
 import Prelude
 
-import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut (BigInt)
+import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
@@ -30,6 +31,7 @@ import Marlowe.Semantics
   , Token(..)
   )
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Marlowe.Time (unsafeInstantFromInt)
 
 contractTemplate :: ContractTemplate
 contractTemplate = { metaData, extendedContract: fullExtendedContract }
@@ -38,20 +40,20 @@ fixedTimeoutContract :: Contract
 fixedTimeoutContract =
   fillTemplate
     ( TemplateContent
-        { slotContent: defaultSlotContent
+        { timeContent: defaultTimeContent
         , valueContent: Map.empty
         }
     )
     fullExtendedContract
 
-defaultSlotContent :: Map String BigInt
-defaultSlotContent =
+defaultTimeContent :: Map String Instant
+defaultTimeContent =
   Map.fromFoldable
-    [ "Collateral deposit by seller timeout" /\ fromInt 600
-    , "Deposit of collateral by buyer timeout" /\ fromInt 1200
-    , "Deposit of price by buyer timeout" /\ fromInt 1800
-    , "Dispute by buyer timeout" /\ fromInt 3000
-    , "Complaint deadline" /\ fromInt 3600
+    [ "Collateral deposit by seller timeout" /\ unsafeInstantFromInt 600000
+    , "Deposit of collateral by buyer timeout" /\ unsafeInstantFromInt 1200000
+    , "Deposit of price by buyer timeout" /\ unsafeInstantFromInt 1800000
+    , "Dispute by buyer timeout" /\ unsafeInstantFromInt 3000000
+    , "Complaint deadline" /\ unsafeInstantFromInt 3600000
     ]
 
 metaData :: MetaData
@@ -77,19 +79,19 @@ collateral :: Value
 collateral = ConstantParam "Collateral amount"
 
 sellerCollateralTimeout :: Timeout
-sellerCollateralTimeout = SlotParam "Collateral deposit by seller timeout"
+sellerCollateralTimeout = TimeParam "Collateral deposit by seller timeout"
 
 buyerCollateralTimeout :: Timeout
-buyerCollateralTimeout = SlotParam "Deposit of collateral by buyer timeout"
+buyerCollateralTimeout = TimeParam "Deposit of collateral by buyer timeout"
 
 depositTimeout :: Timeout
-depositTimeout = SlotParam "Deposit of price by buyer timeout"
+depositTimeout = TimeParam "Deposit of price by buyer timeout"
 
 disputeTimeout :: Timeout
-disputeTimeout = SlotParam "Dispute by buyer timeout"
+disputeTimeout = TimeParam "Dispute by buyer timeout"
 
 answerTimeout :: Timeout
-answerTimeout = SlotParam "Complaint deadline"
+answerTimeout = TimeParam "Complaint deadline"
 
 depositCollateral :: Party -> Timeout -> Contract -> Contract -> Contract
 depositCollateral party timeout timeoutContinuation continuation =

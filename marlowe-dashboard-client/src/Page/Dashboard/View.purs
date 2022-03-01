@@ -5,9 +5,16 @@ module Page.Dashboard.View
 
 import Prologue hiding (Either(..), div)
 
+import Capability.Marlowe (class ManageMarlowe)
+import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.Toast (class Toast)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
-import Component.ConfirmInput.View as ConfirmInput
+import Component.ConfirmContractActionDialog.State as ConfirmContractActionDialog
+import Component.ConfirmContractActionDialog.Types
+  ( Msg(..)
+  , _confirmActionDialog
+  )
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.View (contactsCard)
 import Component.ContractPreview.View (contractPreviewCard)
@@ -17,29 +24,31 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
+import Control.Monad.Now (class MonadTime)
+import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
+import Data.Array as Array
 import Data.Compactable (compact)
+import Data.DateTime.Instant (Instant)
 import Data.Int (round)
-import Data.Lens (preview, view, (^.))
-import Data.Map (Map, filter, isEmpty, toUnfoldable)
+import Data.Lens (view, (^.))
 import Data.Maybe (isJust)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
+  , _address
   , _assets
-  , _pubKeyHash
   , _syncStatus
   , _walletNickname
   )
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
 import Data.String (take)
-import Data.Tuple.Nested ((/\))
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
+import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (mapComponentAction, renderSubmodule)
+import Halogen.Extra (renderSubmodule)
 import Halogen.HTML
   ( HTML
   , a
@@ -55,6 +64,7 @@ import Halogen.HTML
   , main
   , nav
   , p
+  , slot
   , span
   , span_
   , text
@@ -68,35 +78,44 @@ import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (PubKey, Slot)
-import Page.Contract.Lenses (_Started, _executionState)
-import Page.Contract.Types (State) as Contract
-import Page.Contract.View (contractScreen)
+import Marlowe.Semantics (PubKey)
+import Page.Contract.State as ContractPage
+import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
   , _contactsState
   , _contractFilter
   , _menuOpen
-  , _selectedContract
-  , _selectedContractFollowerAppId
+  , _selectedContractMarloweParams
   , _templateState
   )
 import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
   , ContractFilter(..)
+  , ContractState
   , Input
   , State
   , WalletCompanionStatus(..)
   )
 import Store as Store
+import Store.Contracts (getContract)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
-  :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
-dashboardScreen { currentSlot, tzOffset, wallet } state =
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => MonadTime m
+  => ManageMarlowe m
+  => ManageMarloweStorage m
+  => Toast m
+  => MonadStore Store.Action Store.Store m
+  => Input
+  -> State
+  -> ComponentHTML Action ChildSlots m
+dashboardScreen { currentTime, wallet, contracts } state =
   let
     walletNickname = wallet ^. _walletNickname
 
@@ -104,11 +123,11 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
 
     cardOpen = state ^. _cardOpen
 
-    selectedContractFollowerAppId = state ^. _selectedContractFollowerAppId
+    selectedContractMarloweParams = state ^. _selectedContractMarloweParams
 
-    selectedContract = preview
-      (_selectedContract <<< _Started <<< _executionState)
-      state
+    selectedContract = do
+      marloweParams <- selectedContractMarloweParams
+      getContract marloweParams contracts
   in
     div
       [ classNames
@@ -130,21 +149,21 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
               [ dashboardBreadcrumb selectedContract
               , main
                   [ classNames [ "relative" ] ]
-                  case selectedContractFollowerAppId of
-                    Just followerAppId ->
-                      [ renderSubmodule
-                          _selectedContract
-                          (ContractAction followerAppId)
-                          ( contractScreen
-                              { currentSlot
-                              , tzOffset
-                              , wallet
-                              , followerAppId
-                              }
+                  case selectedContractMarloweParams of
+                    Just marloweParams ->
+                      [ slot
+                          _contractPage
+                          unit
+                          ContractPage.component
+                          { wallet, marloweParams }
+                          ( \(AskConfirmation namedAction num) ->
+                              OnAskContractActionConfirmation
+                                marloweParams
+                                namedAction
+                                num
                           )
-                          state
                       ]
-                    _ -> [ contractsScreen currentSlot state ]
+                    _ -> [ contractsScreen currentTime state ]
               ]
           ]
       , dashboardFooter
@@ -153,6 +172,9 @@ dashboardScreen { currentSlot, tzOffset, wallet } state =
 dashboardCard
   :: forall m
    . MonadAff m
+  => MonadTime m
+  => ManageMarlowe m
+  => Toast m
   => MonadStore Store.Action Store.Store m
   => Input
   -> State
@@ -184,10 +206,14 @@ dashboardCard { addressBook, wallet } state = case view _card state of
                     TemplateAction
                     (contractTemplateCard assets)
                     state
-                  ContractActionConfirmationCard contractId input ->
-                    mapComponentAction
-                      (ContractAction contractId)
-                      (ConfirmInput.render input)
+
+                  ContractActionConfirmationCard input ->
+                    slot
+                      _confirmActionDialog
+                      unit
+                      ConfirmContractActionDialog.component
+                      input
+                      (\DialogClosed -> CloseCard)
               ]
         ]
   Nothing -> div_ []
@@ -415,8 +441,12 @@ link label url =
 
 ------------------------------------------------------------
 contractsScreen
-  :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
-contractsScreen currentSlot state =
+  :: forall m
+   . MonadAff m
+  => Instant
+  -> State
+  -> ComponentHTML Action ChildSlots m
+contractsScreen currentTime state =
   let
     contractFilter = view _contractFilter state
   in
@@ -440,7 +470,7 @@ contractsScreen currentSlot state =
           ]
           [ div
               [ classNames $ Css.maxWidthContainer <> [ "relative", "h-full" ] ]
-              [ contractCards currentSlot state ]
+              [ contractCards currentTime state ]
           ]
       , div
           [ classNames [ "absolute", "inset-0" ] ]
@@ -549,22 +579,27 @@ contractNavigation contractFilter =
       ]
 
 contractCards
-  :: forall m. MonadAff m => Slot -> State -> ComponentHTML Action ChildSlots m
+  :: forall m
+   . MonadAff m
+  => Instant
+  -> State
+  -> ComponentHTML Action ChildSlots m
 contractCards
-  currentSlot
-  { walletCompanionStatus, contractFilter: Running, contracts } =
+  currentTime
+  { walletCompanionStatus, contractFilter, runningContracts, closedContracts } =
   case walletCompanionStatus of
     WalletCompanionSynced ->
       let
-        -- FIXME-3208: Change the Dashboard state to include two Maps/List, one for
-        --        runningContracts and one for completedContracts
-        -- runningContracts = filter (not isContractClosed) contracts
-        runningContracts = filter (const true) contracts
+        filteredContracts =
+          if contractFilter == Running then
+            runningContracts
+          else
+            closedContracts
       in
-        if isEmpty runningContracts then
-          noContractsMessage Running
+        if Array.null filteredContracts then
+          noContractsMessage contractFilter
         else
-          contractGrid currentSlot Running runningContracts
+          contractGrid currentTime contractFilter filteredContracts
     WaitingToSync ->
       div
         [ classNames
@@ -577,17 +612,6 @@ contractCards
             , text "Checking for new contracts..."
             ]
         ]
-
-contractCards currentSlot { contractFilter: Completed, contracts } =
-  let
-    -- FIXME-3208: Same as `runningContracts`
-    -- completedContracts = filter isContractClosed contracts
-    completedContracts = filter (const false) contracts
-  in
-    if isEmpty completedContracts then
-      noContractsMessage Completed
-    else
-      contractGrid currentSlot Completed completedContracts
 
 noContractsMessage :: forall p. ContractFilter -> HTML p Action
 noContractsMessage contractFilter =
@@ -619,11 +643,11 @@ noContractsMessage contractFilter =
 contractGrid
   :: forall m
    . MonadAff m
-  => Slot
+  => Instant
   -> ContractFilter
-  -> Map PlutusAppId Contract.State
+  -> Array ContractState
   -> ComponentHTML Action ChildSlots m
-contractGrid currentSlot contractFilter contracts =
+contractGrid currentTime contractFilter contracts =
   div
     [ classNames
         [ "grid"
@@ -645,7 +669,7 @@ contractGrid currentSlot contractFilter contracts =
       case contractFilter of
         Running -> [ newContractCard ]
         Completed -> []
-        <> (dashboardContractCard <$> toUnfoldable contracts)
+        <> (dashboardContractCard <$> contracts)
   where
   newContractCard =
     a
@@ -667,18 +691,19 @@ contractGrid currentSlot contractFilter contracts =
       , span_ [ text "New smart contract from template" ]
       ]
 
-  dashboardContractCard (followerAppId /\ contractState) =
-    mapComponentAction (ContractAction followerAppId) $ contractPreviewCard
-      currentSlot
-      contractState
+  dashboardContractCard { executionState, contractUserParties, namedActions } =
+    contractPreviewCard
+      currentTime
+      executionState
+      contractUserParties
+      namedActions
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =
   let
     walletNickname = view _walletNickname wallet
 
-    address = view (_pubKeyHash <<< _PaymentPubKeyHash)
-      wallet
+    address = view _address wallet
 
     assets = view _assets wallet
 
@@ -706,7 +731,7 @@ currentWalletCard wallet =
               [ classNames [ "font-semibold", "text-lg" ] ]
               [ text $ WN.toString walletNickname ]
           , copyAddress <$> Address.render
-              (Address.defaultInput $ A.fromPubKeyHash address)
+              (Address.defaultInput address)
           , div_
               [ h4
                   [ classNames [ "font-semibold" ] ]

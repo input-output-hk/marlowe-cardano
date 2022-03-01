@@ -12,19 +12,22 @@ import Prologue
 
 import Data.BigInt.Argonaut (BigInt)
 import Data.ContractNickname (ContractNickname)
+import Data.DateTime.Instant (Instant)
+import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Map (Map)
+import Data.Show.Generic (genericShow)
+import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( AccountId
   , Accounts
   , Bound
   , ChoiceId
-  , ChosenNum
   , Contract
+  , MarloweParams
   , Observation
   , Party
   , Payment
-  , Slot
   , Token
   , TransactionInput
   , ValueId
@@ -37,21 +40,24 @@ import Marlowe.Semantics (State) as Semantic
 -- transaction input, and for timeouts we store the missed actions. This information is needed
 -- only by the contract carousel (only 1 open at a time), but it's pre-calculated for all
 -- contracts (even the closed ones).
--- FIXME-3208
--- At a later point, we might want to refactor the execution state to live outside the component
--- state, as a global state (using https://github.com/thomashoneyman/purescript-halogen-store),
--- and minimize the amount of cached information.
+-- TODO: Consider using Lazy computations
 type State =
   { contractNickname :: Maybe ContractNickname
   , semanticState :: Semantic.State
   , contract :: Contract
+  , metadata :: MetaData
+  , marloweParams :: MarloweParams
   , history :: Array PastState
+  -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
+  -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
+  , mPendingTransaction :: Maybe TransactionInput
+
   , mPendingTimeouts :: Maybe PendingTimeouts
-  , mNextTimeout :: Maybe Slot
+  , mNextTimeout :: Maybe Instant
   }
 
 type TimeoutInfo =
-  { slot :: Slot
+  { time :: Instant
   , missedActions :: Array NamedAction
   }
 
@@ -98,7 +104,7 @@ data NamedAction
   -- Equivalent to Semantics.Action(Choice) but has ChosenNum since it is a stateful element that
   -- stores the users choice
   -- Creates IChoice
-  | MakeChoice ChoiceId (Array Bound) (Maybe ChosenNum)
+  | MakeChoice ChoiceId (Array Bound)
   -- Equivalent to Semantics.Action(Notify) (can be applied by any user)
   -- Creates INotify
   | MakeNotify Observation
@@ -112,4 +118,7 @@ data NamedAction
   -- Creates empty tx
   | CloseContract
 
-derive instance eqNamedAction :: Eq NamedAction
+derive instance Eq NamedAction
+derive instance Generic NamedAction _
+instance Show NamedAction where
+  show = genericShow

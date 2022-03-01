@@ -1,154 +1,88 @@
 module Page.Contract.State
-  ( applyTimeout
-  , applyTx
-  , currentStep
-  , dummyState
+  ( component
   , handleAction
-  , mkInitialState
   , mkPlaceholderState
-  , partyToParticipant
-  , paymentToTransfer
-  , toInput
-  , updateState
   ) where
 
 import Prologue
 
-import Capability.MainFrameLoop (class MainFrameLoop, callMainFrameAction)
-import Capability.Marlowe (class ManageMarlowe, applyTransactionInput)
+import Capability.Marlowe (class ManageMarlowe)
 import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , modifyContractNicknames
   )
 import Capability.Toast (class Toast, addToast)
-import Component.Contacts.State (adaToken, getAda)
-import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
-import Component.Transfer.Types (Participant, Termini(..), Transfer)
+import Component.Contacts.State (adaToken)
+import Control.Monad.Maybe.Extra (hoistMaybe)
+import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Data.Array
-  ( difference
-  , filter
-  , foldl
-  , index
-  , length
-  , mapMaybe
-  , modifyAt
-  , null
-  )
-import Data.Array as Array
-import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Array.NonEmpty as NonEmptyArray
+import Control.Monad.State.Class (modify_)
+import Data.Array (index, length, mapMaybe, modifyAt)
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
-import Data.Foldable (foldMap, for_)
+import Data.ContractUserParties (contractUserParties, getParticipants)
+import Data.DateTime.Instant (Instant)
+import Data.Foldable (for_)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens
-  ( assign
-  , modifying
-  , over
-  , set
-  , to
-  , toArrayOf
-  , traversed
-  , view
-  , (^.)
-  )
+import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Lens.Index (ix)
-import Data.Lens.Lens.Tuple (_2)
 import Data.List (toUnfoldable)
 import Data.LocalContractNicknames (insertContractNickname)
-import Data.Map (Map)
-import Data.Map as Map
-import Data.Newtype (unwrap)
+import Data.Maybe (fromMaybe)
 import Data.Ord (abs)
-import Data.PABConnectedWallet (PABConnectedWallet, _assets, _pubKeyHash)
-import Data.PaymentPubKeyHash (_PaymentPubKeyHash)
-import Data.PubKeyHash (_PubKeyHash)
-import Data.Set (Set)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set as Set
-import Data.Time.Duration (Milliseconds(..))
+import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
-import Data.Unfoldable as Unfoldable
-import Data.WalletNickname (WalletNickname)
+import Data.UserNamedActions (userNamedActions)
+import Data.UserNamedActions as UserNamedActions
 import Effect (Effect)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Exception.Unsafe (unsafeThrow)
+import Effect.Class (liftEffect)
 import Env (Env(..))
-import Halogen
-  ( HalogenM
-  , getHTMLElementRef
-  , liftEffect
-  , put
-  , subscribe
-  , tell
-  , unsubscribe
-  )
+import Halogen (HalogenM, raise)
+import Halogen as H
+import Halogen.Store.Connect (Connected, connect)
+import Halogen.Store.Monad (class MonadStore)
+import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
-import MainFrame.Types (Action(..)) as MainFrame
-import MainFrame.Types (ChildSlots, Msg)
-import Marlowe.Client (ContractHistory, _chHistory, _chParams)
-import Marlowe.Deinstantiate (findTemplate)
-import Marlowe.Execution.Lenses
-  ( _contract
-  , _history
-  , _pendingTimeouts
-  , _previousTransactions
-  , _semanticState
-  )
-import Marlowe.Execution.State
-  ( expandBalances
-  , extractNamedActions
-  , getActionParticipant
-  , mkTx
-  , nextState
-  , timeoutState
-  )
-import Marlowe.Execution.State (mkInitialState) as Execution
-import Marlowe.Execution.Types (NamedAction(..), PastAction(..))
+import Halogen.Time (subscribeTime')
+import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
+import Marlowe.Execution.State (expandBalances, extractNamedActions)
+import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (MetaData, emptyContractMetadata)
-import Marlowe.HasParties (getParties)
-import Marlowe.Semantics
-  ( Contract
-  , MarloweData
-  , MarloweParams
-  , Party(..)
-  , Slot
-  , TransactionInput
-  , _accounts
-  , _marloweContract
-  , _marloweState
-  , _minSlot
-  , _rolesCurrency
-  )
-import Marlowe.Semantics (Input(..)) as Semantic
-import Marlowe.Semantics as Semantics
+import Marlowe.Semantics (_accounts)
 import Page.Contract.Lenses
   ( _Started
+  , _contract
+  , _contractUserParties
   , _executionState
   , _expandPayments
-  , _namedActions
-  , _participants
-  , _pendingTransaction
   , _previousSteps
   , _selectedStep
-  , _userParties
   )
 import Page.Contract.Types
   ( Action(..)
+  , ContractState(..)
+  , DSL
   , Input
+  , Msg(..)
   , PreviousStep
   , PreviousStepState(..)
   , StartedState
-  , State(..)
+  , State
   , Tab(..)
   , scrollContainerRef
   )
-import Page.Dashboard.Types (Action(..)) as Dashboard
-import Toast.Types (ajaxErrorToast, successToast)
+import Page.Contract.View (contractScreen)
+import Store as Store
+import Store.Contracts (ContractStore, getContract)
+import Toast.Types (errorToast)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -162,238 +96,140 @@ import Web.HTML (HTMLElement)
 import Web.HTML.HTMLElement (getBoundingClientRect, offsetLeft)
 import Web.HTML.HTMLElement as HTMLElement
 
--- see note [dummyState] in MainFrame.State
-dummyState :: State
+component
+  :: forall query m
+   . MonadAff m
+  => MonadAsk Env m
+  => MonadTime m
+  => ManageMarlowe m
+  => ManageMarloweStorage m
+  => Toast m
+  => MonadStore Store.Action Store.Store m
+  => H.Component query Input Msg m
+component =
+  connect (selectEq _.contracts) $
+    H.mkComponent
+      { initialState: deriveState
+      , render: contractScreen
+      , eval: H.mkEval H.defaultEval
+          { handleAction = handleAction
+          , receive = Just <<< Receive
+          , initialize = Just Init
+          }
+      }
+
+dummyState :: ContractState
 dummyState =
   Starting
     { nickname: ContractNickname.unknown
     , metadata: emptyContractMetadata
     }
 
--- FIXME-3208: Almost sure delete this
+deriveState :: Connected ContractStore Input -> State
+deriveState
+  { context
+  , input: { wallet, marloweParams }
+  } =
+  let
+    mExecutionState = getContract marloweParams context
+    -- FIXME-3487 we might want to represent an error state instead of dummyState
+    contract = fromMaybe dummyState $ mkInitialState wallet <$> mExecutionState
+  in
+    { contract
+    , currentTime: bottom
+    , tzOffset: Minutes 0.0 -- This will be set in Init
+    , wallet
+    }
+
+-- TODO: SCP-3487 Fix the flow that creates a contract
 -- this is for making a placeholder state for the user who created the contract, used for displaying
 -- something before we get the MarloweParams back from the WalletCompanion app
-mkPlaceholderState :: ContractNickname -> MetaData -> State
+mkPlaceholderState :: ContractNickname -> MetaData -> ContractState
 mkPlaceholderState nickname metaData =
   Starting
     { nickname
     , metadata: metaData
     }
 
--- this is for making a fully fleshed out state from nothing, used when someone who didn't create the
--- contract is given a role in it, and gets the MarloweParams at the same time as they hear about
--- everything else
 mkInitialState
   :: PABConnectedWallet
-  -> Slot
-  -> Maybe ContractNickname
-  -> ContractHistory
-  -> Maybe State
-mkInitialState wallet currentSlot mNickname contractHistory =
+  -> Execution.State
+  -> ContractState
+mkInitialState wallet executionState =
   let
-    marloweParams /\ marloweData = view _chParams contractHistory
-    chHistory = view _chHistory contractHistory
-    contract = view _marloweContract marloweData
-    mTemplate = findTemplate contract
-    minSlot = view (_marloweState <<< _minSlot) marloweData
-    initialExecutionState = Execution.mkInitialState minSlot mNickname contract
+    { marloweParams, contract } = executionState
+    initialState =
+      { tab: Tasks
+      , executionState
+      , previousSteps: mempty
+      , selectedStep: 0
+      -- FIXME-3208: Check, because I think the contract in the executionState is the current
+      --             continuation and not the initial contract, so getParticipants might be wrong
+      , contractUserParties: contractUserParties wallet marloweParams contract
+      , namedActions: UserNamedActions.empty
+      }
   in
-    flip map mTemplate \template ->
-      let
-        initialState =
-          { tab: Tasks
-          , executionState: initialExecutionState
-          , pendingTransaction: Nothing
-          , previousSteps: mempty
-          , marloweParams
-          , selectedStep: 0
-          , metadata: template.metaData
-          , participants: getParticipants contract
-          , userParties: getUserParties wallet marloweParams
-          , namedActions: mempty
-          }
-        updateExecutionState = over _executionState
-          (applyTransactionInputs chHistory)
-      in
-        initialState
-          # updateExecutionState
-          # regenerateStepCards currentSlot
-          # selectLastStep
-          # Started
-
--- Note 1: We filter out PK parties from the participants of the contract. This is because
--- we don't have a design for displaying them anywhere, and because we are currently only
--- using one in a special case (in the Escrow with Collateral contract), where it doesn't
--- make much sense to show it to the user anyway. If we ever want to use PK parties for
--- other purposes, we will need to rethink this.
--- Note 2: In general there is no way to map parties to wallet nicknames. It is possible
--- for the user who created the contract and distributed the role tokens, but this
--- information will be lost when the browser is closed. And other participants don't have
--- this information in the first place. Also, in the future it could be possible to give
--- role tokens to other wallets, and we wouldn't know about that either. Still, we're
--- keeping the `Maybe WalletNickname` in here for now, in case a way of making it generally
--- available (e.g. through the metadata server) ever becomes apparent.
-getParticipants :: Contract -> Map Party (Maybe WalletNickname)
-getParticipants contract = Map.fromFoldable $ map (\x -> x /\ Nothing)
-  (getRoleParties contract)
-
-getRoleParties :: Contract -> Array Party
-getRoleParties contract = filter isRoleParty $ Set.toUnfoldable $ getParties
-  contract
-  where
-  isRoleParty party = case party of
-    Role _ -> true
-    _ -> false
-
--- FIXME-3208 Move contract state to halogen store
-updateState
-  :: PABConnectedWallet
-  -> MarloweParams
-  -> MarloweData
-  -> Slot
-  -> Array TransactionInput
-  -> State
-  -> State
-updateState
-  wallet
-  marloweParams
-  marloweData
-  currentSlot
-  transactionInputs
-  state =
-  let
-    state' = case state of
-      Starting { nickname, metadata } ->
-        let
-          contract = marloweData ^. _marloweContract
-          participants = getParticipants contract
-        in
-          { tab: Tasks
-          , executionState: Execution.mkInitialState currentSlot (Just nickname)
-              contract
-          , pendingTransaction: Nothing
-          , previousSteps: []
-          , marloweParams
-          , selectedStep: 0
-          , metadata
-          , participants
-          , userParties: getUserParties wallet marloweParams
-          , namedActions: []
-          }
-      Started s -> s
-
-    previousTransactionInputs = toArrayOf
-      (_executionState <<< _previousTransactions)
-      state'
-
-    newTransactionInputs = difference transactionInputs
-      previousTransactionInputs
-
-    -- If there are new transaction inputs to apply, we need to clear the `pendingTransaction`. If
-    -- we wanted to be really careful, we could check that the new transaction input matches the
-    -- pending one, but I can't see how it wouldn't (and I don't think it matters anyway).
-    mClearPendingTransaction =
-      if not $ null newTransactionInputs then
-        set _pendingTransaction Nothing
-      else
-        identity
-
-    updateExecutionState = over _executionState
-      (applyTransactionInputs newTransactionInputs)
-  in
-    state'
-      # mClearPendingTransaction
-      # updateExecutionState
-      # regenerateStepCards currentSlot
+    initialState
       # selectLastStep
       # Started
-
--- This function creates a Set of the different Contract `Party` a `logged-user`
--- may hold. It is the sum of the role tokens we hold for the contract and any
--- direct usage through the PK (Public Key) constructor
-getUserParties :: PABConnectedWallet -> MarloweParams -> Set Party
-getUserParties wallet marloweParams =
-  let
-    -- the Payment PubKeyHash of the `logged-user`
-    pubKeyHash = view
-      (_pubKeyHash <<< _PaymentPubKeyHash <<< _PubKeyHash)
-      wallet
-
-    assets = view _assets wallet
-
-    rolesCurrency = view _rolesCurrency marloweParams
-
-    -- See if we have any role for the currencySymbol of the contract
-    mCurrencyTokens = Map.lookup rolesCurrency (unwrap assets)
-
-    -- Convert it to a Set of Role's
-    roleTokens = foldMap (Set.map Role <<< Map.keys <<< Map.filter ((/=) zero))
-      mCurrencyTokens
-  in
-    -- Add a reference to PK directly
-    Set.insert (PK pubKeyHash) roleTokens
 
 withStarted
   :: forall action slots msg m
    . Monad m
   => (StartedState -> HalogenM State action slots msg m Unit)
   -> HalogenM State action slots msg m Unit
-withStarted f = peruse _Started >>= traverse_ f
+withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
+
+updateCards
+  :: forall m. Toast m => MonadTime m => Maybe Execution.State -> DSL m Unit
+updateCards mExecutionState = void $ runMaybeT do
+  startedContract <- MaybeT $ peruse $ _contract <<< _Started
+  executionState <- hoistMaybe mExecutionState
+  currentTime <- now
+  let
+    mNewContractState = map Started
+      $ regenerateStepCards currentTime
+      $ set _executionState executionState startedContract
+  case mNewContractState of
+    Left error ->
+      addToast $ errorToast "Error updating contract card state" $ Just error
+    Right newContractState -> assign _contract newContractState
 
 handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => MainFrameLoop m
+  => MonadTime m
   => ManageMarlowe m
   => ManageMarloweStorage m
+  => MonadStore Store.Action Store.Store m
   => Toast m
-  => Input
-  -> Action
-  -> HalogenM State Action ChildSlots Msg m Unit
-handleAction { followerAppId } SelectSelf = callMainFrameAction
-  $ MainFrame.DashboardAction
-  $ Dashboard.SelectContract
-  $ Just followerAppId
-
-handleAction _ (SetNickname nickname) =
-  withStarted \{ marloweParams } -> do
+  => Action
+  -> DSL m Unit
+handleAction (Tick currentTime) = do
+  H.modify_ _ { currentTime = currentTime }
+  updateCards =<< peruse (_contract <<< _Started <<< _executionState)
+handleAction Init = do
+  tzOffset <- timezoneOffset
+  modify_ _ { tzOffset = tzOffset }
+  selectedStep <- peruse $ _contract <<< _Started <<< _selectedStep
+  mElement <- H.getHTMLElementRef scrollContainerRef
+  for_ (Tuple <$> mElement <*> selectedStep) \(elm /\ step) -> do
+    -- When the carousel is opened we want to assure that the selected step is
+    -- in the center without any animation
+    liftEffect $ scrollStepToCenter Auto step elm
+    subscribeToSelectCenteredStep
+  subscribeTime' (Seconds 1.0) Tick
+handleAction (Receive { input, context }) = do
+  let mExecutionState = getContract input.marloweParams context
+  updateCards mExecutionState
+handleAction (SetNickname nickname) =
+  withStarted \{ executionState: { marloweParams } } -> do
     void $ modifyContractNicknames $ insertContractNickname marloweParams
       nickname
 
-{- [UC-CONTRACT-3][0] Apply an input to a contract -}
-handleAction { currentSlot, wallet } (ConfirmAction namedAction) =
-  withStarted \started@{ executionState, marloweParams } -> do
-    let
-      contractInput = toInput namedAction
-
-      txInput = mkTx currentSlot (executionState ^. _contract)
-        (Unfoldable.fromMaybe contractInput)
-    ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput
-    case ajaxApplyInputs of
-      Left ajaxError -> do
-        void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult
-          (Milliseconds 600.0)
-          (Left "Error")
-        addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
-      Right _ -> do
-        put $ Started started { pendingTransaction = Just txInput }
-        void $ tell _submitButtonSlot "action-confirm-button" $ SubmitResult
-          (Milliseconds 600.0)
-          (Right "")
-        addToast $ successToast "Transaction submitted, awating confirmation."
-
-handleAction _ (ChangeChoice choiceId chosenNum) = modifying
-  (_Started <<< _namedActions <<< traversed <<< _2 <<< traversed)
-  changeChoice
-  where
-  changeChoice (MakeChoice choiceId' bounds _)
-    | choiceId == choiceId' = MakeChoice choiceId bounds chosenNum
-
-  changeChoice namedAction = namedAction
-
-handleAction _ (SelectTab stepNumber tab) =
-  modifying _Started \started@{ previousSteps } ->
+handleAction (SelectTab stepNumber tab) =
+  modifying (_contract <<< _Started) \started@{ previousSteps } ->
     case
       modifyAt stepNumber (\previousStep -> previousStep { tab = tab })
         previousSteps
@@ -404,123 +240,58 @@ handleAction _ (SelectTab stepNumber tab) =
       -- otherwise we update the tab of the current step
       Nothing -> started { tab = tab }
 
-handleAction _ (ToggleExpandPayment stepNumber) = modifying
-  (_Started <<< _previousSteps <<< ix stepNumber <<< _expandPayments)
+handleAction (ToggleExpandPayment stepNumber) = modifying
+  ( _contract <<< _Started <<< _previousSteps <<< ix stepNumber <<<
+      _expandPayments
+  )
   not
 
-handleAction _ (AskConfirmation _) = pure unit -- Managed by Dashboard.State
+handleAction (OnActionSelected action num) = raise $ AskConfirmation action num
 
-handleAction _ CancelConfirmation = pure unit -- Managed by Dashboard.State
+handleAction CancelConfirmation = pure unit -- Managed by Dashboard.State
 
-handleAction _ (SelectStep stepNumber) = assign (_Started <<< _selectedStep)
+handleAction (SelectStep stepNumber) = assign
+  (_contract <<< _Started <<< _selectedStep)
   stepNumber
 
-handleAction _ (MoveToStep stepNumber) = do
+handleAction (MoveToStep stepNumber) = do
   -- The MoveToStep action is called when a new step is added (either via an apply transaction or
   -- a timeout). We unsubscribe and resubscribe to update the tracked elements.
   unsubscribeFromSelectCenteredStep
   subscribeToSelectCenteredStep
-  mElement <- getHTMLElementRef scrollContainerRef
+  mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement $ liftEffect <<< scrollStepToCenter Smooth stepNumber
-
-handleAction _ CarouselOpened = do
-  selectedStep <- peruse $ _Started <<< _selectedStep
-  mElement <- getHTMLElementRef scrollContainerRef
-  for_ (Tuple <$> mElement <*> selectedStep) \(elm /\ step) -> do
-    -- When the carousel is opened we want to assure that the selected step is
-    -- in the center without any animation
-    liftEffect $ scrollStepToCenter Auto step elm
-    subscribeToSelectCenteredStep
-
-handleAction _ CarouselClosed = unsubscribeFromSelectCenteredStep
-
-applyTransactionInputs
-  :: Array TransactionInput -> Execution.State -> Execution.State
-applyTransactionInputs transactionInputs state = foldl (flip nextState) state
-  transactionInputs
-
-currentStep :: StartedState -> Int
-currentStep = length <<< view _previousSteps
-
-applyTx :: Slot -> TransactionInput -> StartedState -> StartedState
-applyTx currentSlot txInput state =
-  let
-    updateExecutionState = over _executionState $ nextState txInput
-  in
-    state
-      # updateExecutionState
-      # regenerateStepCards currentSlot
-      # selectLastStep
-
-applyTimeout :: Slot -> StartedState -> StartedState
-applyTimeout currentSlot state =
-  let
-    updateExecutionState = over _executionState (timeoutState currentSlot)
-  in
-    state
-      # set _pendingTransaction Nothing
-      # updateExecutionState
-      # regenerateStepCards currentSlot
-      # selectLastStep
-
-toInput :: NamedAction -> Maybe Semantic.Input
-toInput (MakeDeposit accountId party token value) = Just $ Semantic.IDeposit
-  accountId
-  party
-  token
-  value
-
-toInput (MakeChoice choiceId _ (Just chosenNum)) = Just $ Semantic.IChoice
-  choiceId
-  chosenNum
-
--- WARNING:
---       This is possible in the types but should never happen in runtime. And I prefer to explicitly throw
---       an error if it happens than silently omit it by returning Nothing (which in case of Input, it has
---       the semantics of an empty transaction).
---       The reason we use Maybe in the chosenNum is that we use the same NamedAction data type
---       for triggering the action and to display to the user what choice did he/she made. And we need
---       to represent that initialy no choice is made, and eventually you can type an option and delete it.
---       Another way to do this would be to duplicate the NamedAction data type with just that difference, which
---       seems like an overkill.
-toInput (MakeChoice _ _ Nothing) = unsafeThrow
-  "A choice action has been triggered"
-
-toInput (MakeNotify _) = Just $ Semantic.INotify
-
-toInput _ = Nothing
 
 transactionsToStep :: StartedState -> Execution.PastState -> PreviousStep
 transactionsToStep
   state
   { balancesAtStart, balancesAtEnd, txInput, resultingPayments, action } =
   let
-    participants = state ^. _participants
+    participants = getParticipants $ state ^. _contractUserParties
 
     -- TODO: When we add support for multiple tokens we should extract the possible tokens from the
     --       contract, store it in ContractState and pass them here.
     expandedBalancesAtStart = expandBalances
-      (Set.toUnfoldable $ Map.keys participants)
+      (Set.toUnfoldable participants)
       [ adaToken ]
       balancesAtStart
 
     expandedBalancesAtEnd = expandBalances
-      (Set.toUnfoldable $ Map.keys participants)
+      (Set.toUnfoldable participants)
       [ adaToken ]
       balancesAtEnd
 
     stepState = case action of
       TimeoutAction act ->
         let
-          userParties = state ^. _userParties
+          contractUserParties = state ^. _contractUserParties
 
           missedActions =
-            expandAndGroupByRole
-              userParties
-              (Map.keys participants)
+            userNamedActions
+              contractUserParties
               act.missedActions
         in
-          TimeoutStep { slot: act.slot, missedActions }
+          TimeoutStep { time: act.time, missedActions }
       InputAction -> TransactionStep txInput
   in
     { tab: Tasks
@@ -535,15 +306,15 @@ transactionsToStep
     }
 
 timeoutToStep :: StartedState -> Execution.TimeoutInfo -> PreviousStep
-timeoutToStep state { slot, missedActions } =
+timeoutToStep state { time, missedActions } =
   let
     balances = state ^. (_executionState <<< _semanticState <<< _accounts)
 
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    participants = state ^. _participants
+    participants = getParticipants contractUserParties
 
-    expandedBalances = expandBalances (Set.toUnfoldable $ Map.keys participants)
+    expandedBalances = expandBalances (Set.toUnfoldable participants)
       [ adaToken ]
       balances
   in
@@ -557,17 +328,16 @@ timeoutToStep state { slot, missedActions } =
         }
     , state:
         TimeoutStep
-          { slot
+          { time
           , missedActions:
-              expandAndGroupByRole
-                userParties
-                (Map.keys participants)
+              userNamedActions
+                contractUserParties
                 missedActions
           }
     }
 
-regenerateStepCards :: Slot -> StartedState -> StartedState
-regenerateStepCards currentSlot state =
+regenerateStepCards :: Instant -> StartedState -> Either String StartedState
+regenerateStepCards currentTime state =
   -- TODO: This regenerates all the previous step cards, resetting them to their default state (showing
   -- the Tasks tab). If any of them are showing the Balances tab, it would be nice to keep them that way.
   -- TODO: Performance optimization
@@ -594,56 +364,13 @@ regenerateStepCards currentSlot state =
 
     executionState = state ^. _executionState
 
-    userParties = state ^. _userParties
-
-    participants = state ^. _participants
+    contractUserParties = state ^. _contractUserParties
 
     namedActions =
-      expandAndGroupByRole
-        userParties
-        (Map.keys participants)
-        (extractNamedActions currentSlot executionState)
+      userNamedActions contractUserParties
+        <$> extractNamedActions currentTime executionState
   in
-    state { previousSteps = previousSteps, namedActions = namedActions }
-
--- This helper function expands actions that can be taken by anybody,
--- then groups by participant and sorts it so that the owner starts first and the rest go
--- in alphabetical order
-expandAndGroupByRole
-  :: Set Party
-  -> Set Party
-  -> Array NamedAction
-  -> Array (Tuple Party (Array NamedAction))
-expandAndGroupByRole userParties allParticipants actions =
-  expandedActions
-    # Array.sortBy currentPartiesFirst
-    # Array.groupBy sameParty
-    # map extractGroupedParty
-  where
-  -- If an action has a participant, just use that, if it doesn't expand it to all
-  -- participants
-  expandedActions :: Array (Tuple Party NamedAction)
-  expandedActions =
-    actions
-      # foldMap \action -> case getActionParticipant action of
-          Just participant -> [ participant /\ action ]
-          Nothing -> Set.toUnfoldable allParticipants <#> \participant ->
-            participant /\ action
-
-  isUserParty party = Set.member party userParties
-
-  currentPartiesFirst (Tuple party1 _) (Tuple party2 _)
-    | isUserParty party1 == isUserParty party2 = compare party1 party2
-    | otherwise = if isUserParty party1 then LT else GT
-
-  sameParty a b = fst a == fst b
-
-  extractGroupedParty
-    :: NonEmptyArray (Tuple Party NamedAction)
-    -> Tuple Party (Array NamedAction)
-  extractGroupedParty group = case NonEmptyArray.unzip group of
-    tokens /\ actions' -> NonEmptyArray.head tokens /\ NonEmptyArray.toArray
-      actions'
+    state { previousSteps = previousSteps, namedActions = _ } <$> namedActions
 
 selectLastStep :: StartedState -> StartedState
 selectLastStep state@{ previousSteps } = state
@@ -659,27 +386,27 @@ unsubscribeFromSelectCenteredStep
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => HalogenM State Action ChildSlots Msg m Unit
+  => DSL m Unit
 unsubscribeFromSelectCenteredStep = do
   mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
   mSubscription <- liftAff $ AVar.tryTake mutex
-  for_ mSubscription unsubscribe
+  for_ mSubscription H.unsubscribe
 
 subscribeToSelectCenteredStep
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => HalogenM State Action ChildSlots Msg m Unit
+  => DSL m Unit
 subscribeToSelectCenteredStep = do
-  mElement <- getHTMLElementRef scrollContainerRef
+  mElement <- H.getHTMLElementRef scrollContainerRef
   for_ mElement \elm -> do
-    subscription <- subscribe $ selectCenteredStepEventSource elm
+    subscription <- H.subscribe $ selectCenteredStepEventSource elm
     -- We try to update the subscription without blocking, and if we cant (because another
     -- subscription is already present, then we clean this one, so only one subscription can
     -- be active at a time)
     mutex <- asks \(Env e) -> e.contractStepCarouselSubscription
     mutexUpdated <- liftAff $ AVar.tryPut subscription mutex
-    when (not mutexUpdated) $ unsubscribe subscription
+    when (not mutexUpdated) $ H.unsubscribe subscription
 
 scrollStepToCenter
   :: ScrollBehavior
@@ -754,26 +481,3 @@ selectCenteredStepEventSource scrollContainer =
     pure do
       unsubscribeSelectEventListener
       unsubscribeSnapEventListener
-
-paymentToTransfer :: StartedState -> Semantics.Payment -> Transfer
-paymentToTransfer state (Semantics.Payment sender payee money) = case payee of
-  Semantics.Party recipient ->
-    makeTransfer recipient
-      $ AccountToWallet sender recipient
-  Semantics.Account recipient ->
-    makeTransfer recipient
-      $ AccountToAccount sender recipient
-  where
-  makeTransfer recipient termini =
-    { sender: partyToParticipant state sender
-    , recipient: partyToParticipant state recipient
-    , token: adaToken
-    , quantity: getAda money
-    , termini
-    }
-
-partyToParticipant :: StartedState -> Semantics.Party -> Participant
-partyToParticipant { participants, userParties } party =
-  { nickname: join $ Map.lookup party $ participants
-  , isCurrentUser: Set.member party userParties
-  }

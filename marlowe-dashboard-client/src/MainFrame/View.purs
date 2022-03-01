@@ -3,8 +3,13 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
+import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.Toast (class Toast)
+import Control.Monad.Now (class MonadTime)
+import Control.Monad.Reader (class MonadAsk)
 import Data.Lens ((^.), (^?))
 import Effect.Aff.Class (class MonadAff)
+import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
 import Halogen.Extra (renderSubmodule)
@@ -13,7 +18,7 @@ import Halogen.HTML as H
 import Halogen.Store.Monad (class MonadStore)
 import MainFrame.Lenses
   ( _addressBook
-  , _currentSlot
+  , _currentTime
   , _dashboardState
   , _store
   , _subState
@@ -23,7 +28,7 @@ import MainFrame.Lenses
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
 import Page.Dashboard.View (dashboardCard, dashboardScreen)
 import Page.Welcome.View (welcomeCard, welcomeScreen)
-import Store (_wallet)
+import Store (_contracts, _wallet)
 import Store as Store
 import Store.Wallet (_connectedWallet)
 import Toast.State as Toast
@@ -31,21 +36,27 @@ import Toast.State as Toast
 render
   :: forall m
    . MonadAff m
-  => MonadStore Store.Action Store.Store m
+  => MonadAsk Env m
+  => MonadTime m
   => ManageMarlowe m
+  => ManageMarloweStorage m
+  => Toast m
+  => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =
   let
     addressBook = state ^. _addressBook
 
-    currentSlot = state ^. _currentSlot
+    currentTime = state ^. _currentTime
 
     tzOffset = state ^. _tzOffset
 
     subState = state ^. _subState
 
     mWallet = state ^? _store <<< _wallet <<< _connectedWallet
+
+    contracts = state ^. _store <<< _contracts
   in
     div [ classNames [ "h-full" ] ]
       $
@@ -56,7 +67,7 @@ render state =
                 DashboardAction
                 ( \dashboardState ->
                     dashboardScreen
-                      { addressBook, currentSlot, tzOffset, wallet }
+                      { addressBook, currentTime, tzOffset, wallet, contracts }
                       dashboardState
                 )
                 state
@@ -65,7 +76,7 @@ render state =
                 DashboardAction
                 ( \dashboardState ->
                     dashboardCard
-                      { addressBook, currentSlot, tzOffset, wallet }
+                      { addressBook, currentTime, tzOffset, wallet, contracts }
                       dashboardState
                 )
                 state

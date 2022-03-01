@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -37,16 +36,17 @@ import Control.Concurrent.Chan (Chan)
 import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.PAB (ApiRunner, WsRunner)
-import Language.Marlowe.CLI.Types (SomePaymentSigningKey)
+import Language.Marlowe.CLI.PAB (WsRunner)
+import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
 import Language.Marlowe.Client (MarloweClientInput, MarloweContractState)
 import Language.Marlowe.Contract (MarloweContract)
 import Language.Marlowe.Semantics (MarloweParams)
-import Language.Marlowe.SemanticsTypes (Contract, SlotInterval, State)
+import Language.Marlowe.SemanticsTypes (Contract, State, TimeInterval)
 import Plutus.Contract (ContractInstanceId)
 import Plutus.PAB.Webserver.Client (PabClient)
 import Plutus.V1.Ledger.Api (PubKeyHash)
-import Servant.Client (BaseUrl)
+import Plutus.V1.Ledger.Time (DiffMilliSeconds, POSIXTime)
+import Servant.Client (BaseUrl, ClientM)
 import Wallet.Emulator.Wallet (WalletId)
 
 import qualified Cardano.Wallet.Primitive.Types as W (WalletId)
@@ -133,6 +133,11 @@ data PabOperation =
       poOwner :: RoleName
     , poValue :: Value
     }
+  | ReturnFunds
+    {
+      poOwner     :: RoleName
+    , poInstances :: [RoleName]
+    }
   | CheckFunds
     {
       poOwner       :: RoleName
@@ -140,7 +145,7 @@ data PabOperation =
     , poMaximumFees :: Lovelace
     , poInstances   :: [RoleName]
     }
-  -- TODO: Check funds at script addresses.
+  -- TODO: Also support checking funds at script addresses.
   | ActivateApp
     {
       poOwner    :: RoleName
@@ -161,7 +166,7 @@ data PabOperation =
       poInstance :: InstanceNickname
     , poOwner    :: RoleName
     , poInputs   :: [MarloweClientInput]
-    , poSlots    :: Maybe SlotInterval
+    , poTimes    :: Maybe TimeInterval
     }
   | AwaitApplyInputs
     {
@@ -188,19 +193,36 @@ data PabOperation =
   | PrintState
   | PrintWallet
     {
-      poOwner    :: RoleName
+      poOwner :: RoleName
+    }
+  | WaitFor
+    {
+      poRelativeTime :: DiffMilliSeconds
+    }
+  | WaitUntil
+    {
+      poAbsoluteTime :: POSIXTime
+    }
+  | Timeout
+    {
+      poTimeoutSeconds :: Int
+    , poOperation      :: PabOperation
+    }
+  | ShouldFail
+    {
+      poOperations :: [PabOperation]
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
 
-data PabAccess m =
+data PabAccess =
   PabAccess
   {
-    client          :: PabClient MarloweContract WalletId  -- ^ The PAB client.
-  , runWallet       :: forall b. ApiRunner m b             -- ^ The HTTP runner for the wallet.
-  , runApi          :: forall b. ApiRunner m b             -- ^ The HTTP runner for the PAB.
-  , runWs           :: WsRunner IO ()                      -- ^ The Websockets runner.
+    client          :: PabClient MarloweContract WalletId             -- ^ The PAB client.
+  , runWallet       :: forall a. ClientM a -> IO (Either CliError a)  -- ^ The HTTP runner for the wallet.
+  , runApi          :: forall a. ClientM a -> IO (Either CliError a)  -- ^ The HTTP runner for the PAB.
+  , runWs           :: WsRunner IO ()                                 -- ^ The Websockets runner.
   , localConnection :: LocalNodeConnectInfo CardanoMode
 }
 

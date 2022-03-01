@@ -13,10 +13,9 @@ import Data.Lens (Iso', iso)
 import Data.Map (Map, fromFoldable, toUnfoldable) as Front
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Semantics (Assets(..), Slot(..)) as Front
+import Marlowe.Semantics (Assets(..)) as Front
 import Network.RemoteData (RemoteData)
 import Plutus.V1.Ledger.Crypto (PubKey(..)) as Back
-import Plutus.V1.Ledger.Slot (Slot(..)) as Back
 import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value(..)) as Back
 import PlutusTx.AssocMap (Map(..)) as Back
 
@@ -89,10 +88,6 @@ instance mapBridge ::
   Bridge (Back.Map a b) (Front.Map c d) where
   toFront map = Front.fromFoldable $ toFront <$> unwrap map
   toBack map = Back.Map $ toBack <$> Front.toUnfoldable map
-
-instance slotBridge :: Bridge Back.Slot Front.Slot where
-  toFront (Back.Slot { getSlot }) = Front.Slot getSlot
-  toBack (Front.Slot slot) = Back.Slot { getSlot: slot }
 
 instance bigIntegerBridge :: Bridge BigInt BigInt where
   toFront = identity

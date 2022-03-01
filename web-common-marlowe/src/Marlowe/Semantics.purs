@@ -27,7 +27,7 @@ import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Either (note')
-import Data.Foldable (class Foldable, any, foldl, minimum)
+import Data.Foldable (class Foldable, any, foldl, maximum, minimum)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Lens', over, to, view)
@@ -44,6 +44,9 @@ import Data.String (joinWith, toLower)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Foreign.Object (Object)
+import Marlowe.Time (unixEpoch)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
+import Plutus.V1.Ledger.Time as POSIXTime
 import Text.Pretty
   ( class Args
   , class Pretty
@@ -158,7 +161,7 @@ instance hasArgsParty :: Args Party where
   hasNestedArgs = genericHasNestedArgs
 
 type Timeout
-  = Slot
+  = POSIXTime
 
 type Money
   = Assets
@@ -254,36 +257,6 @@ instance semigroupAssets :: Semigroup Assets where
 
 instance monoidAssets :: Monoid Assets where
   mempty = Assets Map.empty
-
-newtype Slot
-  = Slot BigInt
-
-derive newtype instance encodeJsonSlot :: EncodeJson Slot
-
-derive newtype instance decodeJsonSlot :: DecodeJson Slot
-
-derive instance genericSlot :: Generic Slot _
-
-derive instance newtypeSlot :: Newtype Slot _
-
-derive instance eqSlot :: Eq Slot
-
-derive instance ordSlot :: Ord Slot
-
-instance showSlot :: Show Slot where
-  show (Slot s) = BigInt.toString s
-
-derive newtype instance semiRingSlot :: Semiring Slot
-
-derive newtype instance ringSlot :: Ring Slot
-
-instance commutativeRingSlot :: CommutativeRing Slot
-
-derive newtype instance euclideanRingSlot :: EuclideanRing Slot
-
-derive newtype instance prettySlot :: Pretty Slot
-
-derive newtype instance hasArgsSlot :: Args Slot
 
 newtype Ada
   = Lovelace BigInt
@@ -416,8 +389,8 @@ data Value
   | MulValue Value Value
   | DivValue Value Value
   | ChoiceValue ChoiceId
-  | SlotIntervalStart
-  | SlotIntervalEnd
+  | TimeIntervalStart
+  | TimeIntervalEnd
   | UseValue ValueId
   | Cond Observation Value Value
 
@@ -462,8 +435,8 @@ instance encodeJsonValue :: EncodeJson Value where
     encodeJson
       { value_of_choice: choiceId
       }
-  encodeJson SlotIntervalStart = encodeJson "slot_interval_start"
-  encodeJson SlotIntervalEnd = encodeJson "slot_interval_end"
+  encodeJson TimeIntervalStart = encodeJson "time_interval_start"
+  encodeJson TimeIntervalEnd = encodeJson "time_interval_end"
   encodeJson (UseValue valueId) =
     encodeJson
       { use_value: valueId
@@ -482,8 +455,8 @@ instance decodeJsonValue :: DecodeJson Value where
     where
     valueConstants =
       Map.fromFoldable
-        [ Tuple "slot_interval_start" SlotIntervalStart
-        , Tuple "slot_interval_end" SlotIntervalEnd
+        [ Tuple "time_interval_start" TimeIntervalStart
+        , Tuple "time_interval_end" TimeIntervalEnd
         ]
 
     decodeObject =
@@ -635,39 +608,40 @@ instance hasArgsObservation :: Args Observation where
   hasArgs a = genericHasArgs a
   hasNestedArgs a = genericHasNestedArgs a
 
-validInterval :: SlotInterval -> Boolean
-validInterval (SlotInterval from to) = from <= to
+validInterval :: TimeInterval -> Boolean
+validInterval (TimeInterval from to) = from <= to
 
-above :: Slot -> SlotInterval -> Boolean
-above v (SlotInterval _ to) = v > to
+above :: POSIXTime -> TimeInterval -> Boolean
+above v (TimeInterval _ to) = v > to
 
-anyWithin :: forall f. Foldable f => Slot -> f SlotInterval -> Boolean
-anyWithin v = any (\(SlotInterval from to) -> v >= from && v <= to)
+anyWithin :: forall f. Foldable f => POSIXTime -> f TimeInterval -> Boolean
+anyWithin v = any (\(TimeInterval from to) -> v >= from && v <= to)
 
 -- TODO: extract module
-data SlotInterval
-  = SlotInterval Slot Slot
+data TimeInterval
+  = TimeInterval POSIXTime POSIXTime
 
-derive instance genericSlotInterval :: Generic SlotInterval _
+derive instance genericTimeInterval :: Generic TimeInterval _
 
-derive instance eqSlotInterval :: Eq SlotInterval
+derive instance eqTimeInterval :: Eq TimeInterval
 
-derive instance ordSlotInterval :: Ord SlotInterval
+derive instance ordTimeInterval :: Ord TimeInterval
 
-instance showSlotInterval :: Show SlotInterval where
-  show (SlotInterval from to) = "(Slot " <> show from <> " " <> show to <> ")"
+instance showTimeInterval :: Show TimeInterval where
+  show (TimeInterval from to) = "(POSIXTime " <> show from <> " " <> show to <>
+    ")"
 
-instance genericEncodeSlotInterval :: EncodeJson SlotInterval where
-  encodeJson (SlotInterval a b) = encodeArray encodeJson [ a, b ]
+instance genericEncodeTimeInterval :: EncodeJson TimeInterval where
+  encodeJson (TimeInterval a b) = encodeArray encodeJson [ a, b ]
 
-instance genericDecodeJsonSlotInterval :: DecodeJson SlotInterval where
-  decodeJson = array "SlotInterval" $ SlotInterval <$> next <*> next
+instance genericDecodeJsonTimeInterval :: DecodeJson TimeInterval where
+  decodeJson = array "TimeInterval" $ TimeInterval <$> next <*> next
 
-ivFrom :: SlotInterval -> Slot
-ivFrom (SlotInterval from _) = from
+ivFrom :: TimeInterval -> POSIXTime
+ivFrom (TimeInterval from _) = from
 
-ivTo :: SlotInterval -> Slot
-ivTo (SlotInterval _ to) = to
+ivTo :: TimeInterval -> POSIXTime
+ivTo (TimeInterval _ to) = to
 
 -- TODO: extract module
 data Bound
@@ -941,7 +915,7 @@ newtype State = State
   -- The reason we keep track of it, is so that we can refine transaction intervals.
   -- If in a new transaction we have a lowSlot that is smaller than the minSlot, we can narrow the interval
   -- from [lowSlot, highSlot] to [minSlot, highSlot]
-  , minSlot :: Slot
+  , minTime :: POSIXTime
   }
 
 derive instance genericState :: Generic State _
@@ -949,8 +923,6 @@ derive instance genericState :: Generic State _
 derive instance newtypeState :: Newtype State _
 
 derive instance eqState :: Eq State
-
-derive instance ordState :: Ord State
 
 instance showState :: Show State where
   show v = genericShow v
@@ -968,11 +940,11 @@ _choices = _Newtype <<< prop (Proxy :: _ "choices")
 _boundValues :: Lens' State (Map ValueId BigInt)
 _boundValues = _Newtype <<< prop (Proxy :: _ "boundValues")
 
-_minSlot :: Lens' State Slot
-_minSlot = _Newtype <<< prop (Proxy :: _ "minSlot")
+_minTime :: Lens' State POSIXTime
+_minTime = _Newtype <<< prop (Proxy :: _ "minTime")
 
 newtype Environment
-  = Environment { slotInterval :: SlotInterval }
+  = Environment { timeInterval :: TimeInterval }
 
 derive instance genericEnvironment :: Generic Environment _
 
@@ -985,12 +957,13 @@ derive instance ordEnvironment :: Ord Environment
 instance showEnvironment :: Show Environment where
   show v = genericShow v
 
-_slotInterval :: Lens' Environment SlotInterval
-_slotInterval = _Newtype <<< prop (Proxy :: _ "slotInterval")
+_timeInterval :: Lens' Environment TimeInterval
+_timeInterval = _Newtype <<< prop (Proxy :: _ "timeInterval")
 
-makeEnvironment :: BigInt -> BigInt -> Environment
+makeEnvironment :: POSIXTime -> POSIXTime -> Environment
 makeEnvironment l h = Environment
-  { slotInterval: SlotInterval (Slot h) (Slot l) }
+  { timeInterval: TimeInterval l h
+  }
 
 data Input
   -- TODO: fix primitive obsession
@@ -1046,10 +1019,10 @@ instance decodeJsonInput :: DecodeJson Input where
             )
               <|> (IChoice <$> forChoiceId <*> inputThatChoosesNum)
 
--- Processing of slot interval
+-- Processing of time interval
 data IntervalError
-  = InvalidInterval SlotInterval
-  | IntervalInPastError Slot SlotInterval
+  = InvalidInterval TimeInterval
+  | IntervalInPastError POSIXTime TimeInterval
 
 derive instance genericIntervalError :: Generic IntervalError _
 
@@ -1059,8 +1032,8 @@ derive instance ordIntervalError :: Ord IntervalError
 
 instance showIntervalError :: Show IntervalError where
   show (InvalidInterval interval) = "Invalid interval: " <> show interval
-  show (IntervalInPastError slot interval) =
-    "Interval is in the past, the current slot is " <> show slot
+  show (IntervalInPastError time interval) =
+    "Interval is in the past, the current time is " <> show time
       <> " but the interval is "
       <> show interval
 
@@ -1087,8 +1060,6 @@ data IntervalResult
 derive instance genericIntervalResult :: Generic IntervalResult _
 
 derive instance eqIntervalResult :: Eq IntervalResult
-
-derive instance ordIntervalResult :: Ord IntervalResult
 
 instance showIntervalResult :: Show IntervalResult where
   show v = genericShow v
@@ -1148,7 +1119,7 @@ instance showReduceWarning :: Show ReduceWarning where
 data ReduceStepResult
   = Reduced ReduceWarning ReduceEffect State Contract
   | NotReduced
-  | AmbiguousSlotIntervalReductionError
+  | AmbiguousTimeIntervalReductionError
 
 derive instance genericReduceStepResult :: Generic ReduceStepResult _
 
@@ -1159,7 +1130,7 @@ instance showReduceStepResult :: Show ReduceStepResult where
 
 data ReduceResult
   = ContractQuiescent Boolean (List ReduceWarning) (List Payment) State Contract
-  | RRAmbiguousSlotIntervalError
+  | RRAmbiguousTimeIntervalError
 
 derive instance genericReduceResult :: Generic ReduceResult _
 
@@ -1190,8 +1161,6 @@ derive instance genericApplyResult :: Generic ApplyResult _
 
 derive instance eqApplyResult :: Eq ApplyResult
 
-derive instance ordApplyResult :: Ord ApplyResult
-
 instance showApplyResult :: Show ApplyResult where
   show = genericShow
 
@@ -1204,7 +1173,7 @@ data ApplyAllResult
       State
       Contract
   | ApplyAllNoMatchError
-  | ApplyAllAmbiguousSlotIntervalError
+  | ApplyAllAmbiguousTimeIntervalError
 
 derive instance genericApplyAllResult :: Generic ApplyAllResult _
 
@@ -1317,7 +1286,7 @@ instance decodeTransactionWarning :: DecodeJson TransactionWarning where
 
 -- | Transaction error
 data TransactionError
-  = TEAmbiguousSlotIntervalError
+  = TEAmbiguousTimeIntervalError
   | TEApplyNoMatchError
   | TEIntervalError IntervalError
   | TEUselessTransaction
@@ -1329,7 +1298,7 @@ derive instance eqTransactionError :: Eq TransactionError
 derive instance ordTransactionError :: Ord TransactionError
 
 instance showTransactionError :: Show TransactionError where
-  show TEAmbiguousSlotIntervalError = "Abiguous slot interval"
+  show TEAmbiguousTimeIntervalError = "Abiguous time interval"
   show TEApplyNoMatchError =
     "At least one of the inputs in the transaction is not allowed by the contract"
   show (TEIntervalError err) = show err
@@ -1337,8 +1306,8 @@ instance showTransactionError :: Show TransactionError where
 
 instance genericEncodeTransactionError :: EncodeJson TransactionError where
   encodeJson = case _ of
-    TEAmbiguousSlotIntervalError -> E.encodeTagged
-      "TEAmbiguousSlotIntervalError"
+    TEAmbiguousTimeIntervalError -> E.encodeTagged
+      "TEAmbiguousTimeIntervalError"
       unit
       E.null
     TEApplyNoMatchError -> E.encodeTagged "TEApplyNoMatchError" unit E.null
@@ -1350,8 +1319,8 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
     D.decode
       $ D.sumType "TransactionError"
       $ Map.fromFoldable
-          [ "TEAmbiguousSlotIntervalError" /\ D.content
-              (TEAmbiguousSlotIntervalError <$ D.null)
+          [ "TEAmbiguousTimeIntervalError" /\ D.content
+              (TEAmbiguousTimeIntervalError <$ D.null)
           , "TEApplyNoMatchError" /\ D.content (TEApplyNoMatchError <$ D.null)
           , "TEIntervalError" /\ D.content (TEIntervalError <$> D.value)
           , "TEUselessTransaction" /\ D.content (TEUselessTransaction <$ D.null)
@@ -1359,7 +1328,7 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
 
 newtype TransactionInput
   = TransactionInput
-  { interval :: SlotInterval
+  { interval :: TimeInterval
   , inputs :: (List Input)
   }
 
@@ -1376,16 +1345,9 @@ instance showTransactionInput :: Show TransactionInput where
 
 instance encodeTransactionInput :: EncodeJson TransactionInput where
   encodeJson
-    ( TransactionInput
-        { interval: (SlotInterval (Slot fromSlot) (Slot toSlot))
-        , inputs: txInps
-        }
-    ) =
+    (TransactionInput { interval: (TimeInterval from to), inputs: txInps }) =
     encodeJson
-      { tx_interval:
-          { from: fromSlot
-          , to: toSlot
-          }
+      { tx_interval: { from, to }
       , tx_inputs: txInps
       }
 
@@ -1396,12 +1358,12 @@ instance decodeTransactionInput :: DecodeJson TransactionInput where
       inputs <- requireProp "tx_inputs"
       interval <-
         ReaderT \_ ->
-          flip (object "nested SlotInterval") intervalObject
+          flip (object "nested TimeInterval") intervalObject
             $ Just
                 <$>
-                  ( SlotInterval
-                      <$> (Slot <$> requireProp "from")
-                      <*> (Slot <$> requireProp "to")
+                  ( TimeInterval
+                      <$> requireProp "from"
+                      <*> requireProp "to"
                   )
       pure $ Just $ TransactionInput { interval, inputs: inputs }
 
@@ -1446,11 +1408,6 @@ newtype MarloweParams = MarloweParams
   { rolePayoutValidatorHash :: ValidatorHash
   -- TODO: write a custom decoder/encoder to get rid of this unnecessary record
   , rolesCurrency :: { unCurrencySymbol :: CurrencySymbol } -- this is to ensure the serialisation matches the backend
-  -- FIXME: This is temporary, until SCP-3050 is completed.
-  -- The numbers are opaque for the frontend. We just need to receive and resend whatever the
-  -- backend provides. In the backend this is represented as a Tuple, in which the
-  -- first value matches scSlotLength and the second scSlotZeroTime
-  , slotConfig :: Array BigInt
   }
 
 derive instance eqMarloweParams :: Eq MarloweParams
@@ -1479,13 +1436,13 @@ _rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop
 type ValidatorHash
   = String
 
-emptyState :: Slot -> State
-emptyState sn =
+emptyState :: State
+emptyState =
   State
     { accounts: Map.empty
     , choices: Map.empty
     , boundValues: Map.empty
-    , minSlot: sn
+    , minTime: POSIXTime unixEpoch
     }
 
 inBounds :: ChosenNum -> Array Bound -> Boolean
@@ -1499,22 +1456,22 @@ boundTo (Bound _ to) = to
 
 -- Note: We use guards here because currently nested ifs break purty formatting
 --       We need to upgrade purty and purescript to fix
-fixInterval :: SlotInterval -> State -> IntervalResult
-fixInterval interval@(SlotInterval from to) (State state)
+fixInterval :: TimeInterval -> State -> IntervalResult
+fixInterval interval@(TimeInterval from to) (State state)
   | (not <<< validInterval) interval = IntervalError (InvalidInterval interval)
-  | state.minSlot `above` interval = IntervalError
-      (IntervalInPastError state.minSlot interval)
+  | state.minTime `above` interval = IntervalError
+      (IntervalInPastError state.minTime interval)
   | otherwise =
       let
         -- newLow is both new "low" and new "minSlot" (the lower bound for slotNum)
-        newLow = max from state.minSlot
+        newLow = max from state.minTime
 
         -- We know high is greater or equal than newLow (prove)
-        currentInterval = SlotInterval newLow to
+        currentInterval = TimeInterval newLow to
 
-        env = Environment { slotInterval: currentInterval }
+        env = Environment { timeInterval: currentInterval }
 
-        newState = State (state { minSlot = newLow })
+        newState = State (state { minTime = newLow })
       in
         IntervalTrimmed env newState
 
@@ -1566,8 +1523,10 @@ evalValue env state value =
                       if qIsEven then q else q + signum n * signum d
       ChoiceValue choiceId -> fromMaybe zero $ Map.lookup choiceId
         (unwrap state).choices
-      SlotIntervalStart -> view (_slotInterval <<< to ivFrom <<< to unwrap) env
-      SlotIntervalEnd -> view (_slotInterval <<< to ivTo <<< to unwrap) env
+      TimeIntervalStart ->
+        POSIXTime.toBigInt $ ivFrom $ (unwrap env).timeInterval
+      TimeIntervalEnd ->
+        POSIXTime.toBigInt $ ivTo $ (unwrap env).timeInterval
       UseValue valId -> fromMaybe zero $ Map.lookup valId
         (unwrap state).boundValues
       Cond cond thn els ->
@@ -1706,16 +1665,16 @@ reduceContractStep env state contract = case contract of
       Reduced ReduceNoWarning ReduceNoPayment state cont
   When _ timeout nextContract ->
     let
-      startSlot = view (_slotInterval <<< to ivFrom) env
+      startTime = view (_timeInterval <<< to ivFrom) env
 
-      endSlot = view (_slotInterval <<< to ivTo) env
+      endTime = view (_timeInterval <<< to ivTo) env
     in
-      if endSlot < timeout then
+      if endTime < timeout then
         NotReduced
-      else if timeout <= startSlot then
+      else if timeout <= startTime then
         Reduced ReduceNoWarning ReduceNoPayment state nextContract
       else
-        AmbiguousSlotIntervalReductionError
+        AmbiguousTimeIntervalReductionError
   Let valId val nextContract ->
     let
       evaluatedValue = evalValue env state val
@@ -1762,7 +1721,7 @@ reduceContractUntilQuiescent startEnv startState startContract =
               ReduceNoPayment -> payments
           in
             reductionLoop true env newState nextContract newWarnings newPayments
-        AmbiguousSlotIntervalReductionError -> RRAmbiguousSlotIntervalError
+        AmbiguousTimeIntervalReductionError -> RRAmbiguousTimeIntervalError
         -- this is the last invocation of reductionLoop, so we can reverse lists
         NotReduced -> ContractQuiescent reduced (reverse warnings)
           (reverse payments)
@@ -1851,7 +1810,7 @@ applyAllInputs startEnv startState startContract startInputs =
       -> ApplyAllResult
     applyAllLoop contractChanged env state contract inputs warnings payments =
       case reduceContractUntilQuiescent env state contract of
-        RRAmbiguousSlotIntervalError -> ApplyAllAmbiguousSlotIntervalError
+        RRAmbiguousTimeIntervalError -> ApplyAllAmbiguousTimeIntervalError
         ContractQuiescent reduced reduceWarns pays curState cont ->
           case inputs of
             Nil ->
@@ -1901,8 +1860,8 @@ computeTransaction tx state contract =
                 , txOutContract: cont
                 }
           ApplyAllNoMatchError -> Error TEApplyNoMatchError
-          ApplyAllAmbiguousSlotIntervalError -> Error
-            TEAmbiguousSlotIntervalError
+          ApplyAllAmbiguousTimeIntervalError -> Error
+            TEAmbiguousTimeIntervalError
       IntervalError error -> Error (TEIntervalError error)
 
 moneyInContract :: State -> Money
@@ -1925,7 +1884,7 @@ class HasTimeout a where
   timeouts :: a -> Timeouts
 
 instance hasTimeoutContract :: HasTimeout Contract where
-  timeouts Close = Timeouts { maxTime: zero, minTime: Nothing }
+  timeouts Close = Timeouts { maxTime: POSIXTime unixEpoch, minTime: Nothing }
   timeouts (Pay _ _ _ _ contract) = timeouts contract
   timeouts (If _ contractTrue contractFalse) = timeouts
     [ contractTrue, contractFalse ]
@@ -1951,7 +1910,7 @@ else instance hasTimeoutArray :: HasTimeout a => HasTimeout (Array a) where
   timeouts vs = timeouts $ map timeouts vs
 
 maxOf :: Array Timeout -> Timeout
-maxOf = foldl max zero
+maxOf = fromMaybe (POSIXTime unixEpoch) <<< maximum
 
 minOf :: Array (Maybe Timeout) -> Maybe Timeout
 minOf as = minimum $ catMaybes as

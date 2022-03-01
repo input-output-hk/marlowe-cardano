@@ -341,18 +341,6 @@ let
         installPhase = "ln -s $src $out";
       };
 
-    "errors" = pkgs.stdenv.mkDerivation {
-        name = "errors";
-        version = "v4.1.0";
-        src = pkgs.fetchgit {
-          url = "https://github.com/passy/purescript-errors.git";
-          rev = "30abf43a6e6b62552e18769c0b624c1d7ef10f7d";
-          sha256 = "09xph8rhd25l24az1bfyjkbrp0h7ymxm4b8kw180f8kn2qx6q99a";
-        };
-        phases = "installPhase";
-        installPhase = "ln -s $src $out";
-      };
-
     "exceptions" = pkgs.stdenv.mkDerivation {
         name = "exceptions";
         version = "v5.0.0";
@@ -1375,11 +1363,11 @@ let
 
     "web-common" = pkgs.stdenv.mkDerivation {
         name = "web-common";
-        version = "v2.0.1";
+        version = "v3.0.1";
         src = pkgs.fetchgit {
           url = "https://github.com/input-output-hk/purescript-web-common";
-          rev = "fa101cd785ef6aa2f7aa908b38c2195aa2c2ff3d";
-          sha256 = "0sbngaydgrmn948hyvx1ifdanvph1wchsdmjmvc1b25z2zrdc74q";
+          rev = "ff2dc31ea6598aac817466ec9857cba1adfda5d3";
+          sha256 = "0l5ah18k7sl72dbjx9nwa8nbs0ccwp2phi7p6p4iwr83vh3rr760";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";

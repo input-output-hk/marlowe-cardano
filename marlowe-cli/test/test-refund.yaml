@@ -1,0 +1,61 @@
+ptTestName: Returning Funds
+
+ptPabOperations:
+
+- tag: CreateWallet
+  poOwner: PAB
+
+- tag: FundWallet
+  poOwner: PAB
+  poValue:
+    lovelace: 80000000
+
+- tag: ActivateApp
+  poOwner: PAB
+  poInstance: App
+
+- tag: CallCreate
+  poInstance: App
+  poOwners:
+  - PAB
+  poContract:
+    when:
+    - case:
+        party:
+          role_token: PAB
+        deposits: 15000000
+        into_account:
+          role_token: PAB
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+      then:
+        when:
+        - case:
+            notify_if: true
+          then: close
+        timeout: 1961123625000
+        timeout_continuation: close
+    timeout: 1929587625000
+    timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: App
+
+- tag: PrintWallet
+  poOwner: PAB
+
+- tag: ReturnFunds
+  poOwner: PAB
+  poInstances:
+  - App
+
+- tag: CheckFunds
+  poOwner: PAB
+  poValue:
+    lovelace: 0
+  poMaximumFees: 0
+  poInstances: []
+
+- tag: Stop
+  poInstance: App

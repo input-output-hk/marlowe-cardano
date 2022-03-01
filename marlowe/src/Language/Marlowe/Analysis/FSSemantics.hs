@@ -19,7 +19,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
-import Ledger (Slot (..))
+import Ledger (POSIXTime (..))
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
@@ -42,14 +42,14 @@ data SymInput = SymDeposit AccountId Party Token SInteger
 -- Symbolic trace is composed of:
 --
 -- *** Current transaction info
--- lowSlot, highSlot -- slot interval for the most recent transaction
+-- lowTime, highTime -- time interval for the most recent transaction
 -- symInput -- input for the most recent transaction
 -- whenPos -- position in the When for the most recen transaction (see trace and paramTrace)
 --
 -- *** Previous transaction info
 -- traces -- symbolic information about previous transactions (when we reach a When we
 --           consider adding the current transaction to this list)
---           first integer is lowSlot, second is highSlot, last integer is the position in
+--           first integer is lowTime, second is highTime, last integer is the position in
 --           the When (which case of the When the input corresponds to 0 is timeout)
 -- *** Input parameter transaction info
 -- paramTrace -- this is actually an input parameter, we get it as input for the SBV
@@ -63,10 +63,10 @@ data SymInput = SymDeposit AccountId Party Token SInteger
 -- The rest of the symbolic state just corresponds directly to State with symbolic values:
 -- symAccounts, symChoices, and symBoundValues
 --
--- minSlot just corresponds to lowSlot, because it is just a lower bound for the minimum
--- slot, and it gets updated with the minimum slot.
-data SymState = SymState { lowSlot        :: SInteger
-                         , highSlot       :: SInteger
+-- minTime just corresponds to lowTime, because it is just a lower bound for the minimum
+-- time, and it gets updated with the minimum time.
+data SymState = SymState { lowTime        :: SInteger
+                         , highTime       :: SInteger
                          , traces         :: [(SInteger, SInteger, Maybe SymInput, Integer)]
                          , paramTrace     :: [(SInteger, SInteger, SInteger, SInteger)]
                          , symInput       :: Maybe SymInput
@@ -108,8 +108,8 @@ toSymMap = foldAssocMapWithKey toSymItem mempty
 mkInitialSymState :: [(SInteger, SInteger, SInteger, SInteger)] -> Maybe State
                   -> Symbolic SymState
 mkInitialSymState pt Nothing = do (ls, hs) <- generateSymbolicInterval Nothing
-                                  return $ SymState { lowSlot = ls
-                                                    , highSlot = hs
+                                  return $ SymState { lowTime = ls
+                                                    , highTime = hs
                                                     , traces = []
                                                     , paramTrace = pt
                                                     , symInput = Nothing
@@ -120,10 +120,10 @@ mkInitialSymState pt Nothing = do (ls, hs) <- generateSymbolicInterval Nothing
 mkInitialSymState pt (Just State { accounts = accs
                                  , choices = cho
                                  , boundValues = bVal
-                                 , minSlot = ms }) =
-  do (ls, hs) <- generateSymbolicInterval (Just (getSlot ms))
-     return $ SymState { lowSlot = ls
-                       , highSlot = hs
+                                 , minTime = ms }) =
+  do (ls, hs) <- generateSymbolicInterval (Just (getPOSIXTime ms))
+     return $ SymState { lowTime = ls
+                       , highTime = hs
                        , traces = []
                        , paramTrace = pt
                        , symInput = Nothing
@@ -136,8 +136,8 @@ mkInitialSymState pt (Just State { accounts = accs
 -- this is a minimalistic representation of the counter-example trace that aims
 -- to minimise the functionalities from SBV that we use (just integers) for efficiency.
 -- The integers in the tuple represent:
--- 1st - slot interval min slot
--- 2nd - slot interval max slot
+-- 1st - time interval min time
+-- 2nd - time interval max time
 -- 3rd - When clause used (0 for timeout branch)
 -- 4rd - Symbolic value (money in deposit, chosen value in choice)
 --
@@ -202,8 +202,8 @@ symEvalVal (DivValue lhs rhs) symState =
               q)
 symEvalVal (ChoiceValue choId) symState =
   M.findWithDefault (literal 0) choId (symChoices symState)
-symEvalVal SlotIntervalStart symState = lowSlot symState
-symEvalVal SlotIntervalEnd symState = highSlot symState
+symEvalVal TimeIntervalStart symState = lowTime symState
+symEvalVal TimeIntervalEnd symState = highTime symState
 symEvalVal (UseValue valId) symState =
   M.findWithDefault (literal 0) valId (symBoundValues symState)
 symEvalVal (Cond cond v1 v2) symState = ite (symEvalObs cond symState)
@@ -256,44 +256,44 @@ updateSymInput (Just SymNotify) symState = return symState
 -- interval with the current When, because that would mean the transaction is invalid.
 -- In the case of timeout it is possible we don't actually need a new transaction,
 -- we can reuse the previous transaction, we model this by allowing both low and high
--- slot to be equal to the ones of the previous transaction. That will typically make one
+-- time to be equal to the ones of the previous transaction. That will typically make one
 -- of the transactions useless, but we discard useless transactions by the end so that
 -- is fine.
 addTransaction :: SInteger -> SInteger -> Maybe SymInput -> Timeout -> SymState -> Integer
                -> Symbolic (SBool, SymState)
 addTransaction newLowSlot newHighSlot Nothing slotTim
-               symState@SymState { lowSlot = oldLowSlot
-                                 , highSlot = oldHighSlot
+               symState@SymState { lowTime = oldLowSlot
+                                 , highTime = oldHighSlot
                                  , traces = oldTraces
                                  , symInput = prevSymInp
                                  , whenPos = oldPos } pos =
-  do let tim = getSlot slotTim
+  do let tim = getPOSIXTime slotTim
      constrain (newLowSlot .<= newHighSlot)
      let conditions = ((oldHighSlot .< literal tim) .||
                       ((oldLowSlot .== newLowSlot) .&& (oldHighSlot .== newHighSlot))) .&&
                       (newLowSlot .>= literal tim)
      uSymInput <- updateSymInput Nothing
-                                 (symState { lowSlot = newLowSlot
-                                           , highSlot = newHighSlot
+                                 (symState { lowTime = newLowSlot
+                                           , highTime = newHighSlot
                                            , traces = (oldLowSlot, oldHighSlot,
                                                        prevSymInp, oldPos):oldTraces
                                            , symInput = Nothing
                                            , whenPos = pos })
      return (conditions, uSymInput)
 addTransaction newLowSlot newHighSlot newSymInput slotTim
-               symState@SymState { lowSlot = oldLowSlot
-                                 , highSlot = oldHighSlot
+               symState@SymState { lowTime = oldLowSlot
+                                 , highTime = oldHighSlot
                                  , traces = oldTraces
                                  , symInput = prevSymInp
                                  , whenPos = oldPos } pos =
-  do let tim = getSlot slotTim
+  do let tim = getPOSIXTime slotTim
      constrain (newLowSlot .<= newHighSlot)
      let conditions = (oldHighSlot .< literal tim) .&&
                       (newHighSlot .< literal tim) .&&
                       (newLowSlot .>= oldLowSlot)
      uSymInput <- updateSymInput newSymInput
-                        (symState { lowSlot = newLowSlot
-                                  , highSlot = newHighSlot
+                        (symState { lowTime = newLowSlot
+                                  , highTime = newHighSlot
                                   , traces = (oldLowSlot, oldHighSlot, prevSymInp, oldPos)
                                              :oldTraces
                                   , symInput = newSymInput
@@ -322,7 +322,7 @@ onlyAssertionsPatch b p1 p2
 isValidAndFailsAux :: Bool -> SBool -> Contract -> SymState
                    -> Symbolic SBool
 isValidAndFailsAux oa hasErr Close sState =
-  return (hasErr .&& convertToSymbolicTrace ((lowSlot sState, highSlot sState,
+  return (hasErr .&& convertToSymbolicTrace ((lowTime sState, highTime sState,
                                               symInput sState, whenPos sState)
                                               :traces sState) (paramTrace sState))
 isValidAndFailsAux oa hasErr (Pay accId payee token val cont) sState =
@@ -383,7 +383,7 @@ addFreshSlotsToState :: SymState -> Symbolic (SInteger, SInteger, SymState)
 addFreshSlotsToState sState =
   do newLowSlot <- sInteger_
      newHighSlot <- sInteger_
-     return (newLowSlot, newHighSlot, sState {lowSlot = newLowSlot, highSlot = newHighSlot})
+     return (newLowSlot, newHighSlot, sState {lowTime = newLowSlot, highTime = newHighSlot})
 
 -- Analysis loop for When construct. Essentially, it iterates over all the cases and
 -- branches the static analysis. All parameters are the same as isValidAndFailsAux except
@@ -620,29 +620,29 @@ executeAndInterpret sta ((l, h, v, b):t) cont
                                   [caseToInput cases b v] sta cont t
              _ -> error "Cannot interpret result"
          _ -> error "Error reducing contract when interpreting result"
-  where mySlotInterval = (Slot l, Slot h)
-        env = Environment { slotInterval = mySlotInterval }
-        transaction inputs = TransactionInput { txInterval = mySlotInterval
+  where myTimeInterval = (POSIXTime l, POSIXTime h)
+        env = Environment { timeInterval = myTimeInterval }
+        transaction inputs = TransactionInput { txInterval = myTimeInterval
                                               , txInputs = inputs
                                               }
 
 -- It wraps executeAndInterpret so that it takes an optional State, and also
 -- combines the results of executeAndInterpret in one single tuple.
 interpretResult :: [(Integer, Integer, Integer, Integer)] -> Contract -> Maybe State
-                -> (Slot, [TransactionInput], [TransactionWarning])
+                -> (POSIXTime, [TransactionInput], [TransactionWarning])
 interpretResult [] _ _ = error "Empty result"
-interpretResult t@((l, _, _, _):_) c maybeState = (Slot l, tin, twa)
+interpretResult t@((l, _, _, _):_) c maybeState = (POSIXTime l, tin, twa)
    where (tin, twa) = foldl' (\(accInp, accWarn) (elemInp, elemWarn) ->
                                  (accInp ++ elemInp, accWarn ++ elemWarn)) ([], []) $
                              executeAndInterpret initialState t c
          initialState = case maybeState of
-                          Nothing -> emptyState (Slot l)
+                          Nothing -> emptyState (POSIXTime l)
                           Just x  -> x
 
 -- It interprets the counter example found by SBV (SMTModel), given the contract,
 -- and initial state (optional), and the list of variables used.
 extractCounterExample :: SMTModel -> Contract -> Maybe State -> [String]
-                      -> (Slot, [TransactionInput], [TransactionWarning])
+                      -> (POSIXTime, [TransactionInput], [TransactionWarning])
 extractCounterExample smtModel cont maybeState maps = interpretedResult
   where assocs = map (\(a, b) -> (a, fromCV b :: Integer)) $ modelAssocs smtModel
         counterExample = groupResult maps (M.fromList assocs)
@@ -654,7 +654,7 @@ warningsTraceCustom :: Bool
               -> Contract
               -> Maybe State
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTraceCustom onlyAssertions con maybeState =
     do thmRes@(ThmResult result) <- satCommand
        return (case result of
@@ -673,20 +673,20 @@ warningsTraceCustom onlyAssertions con maybeState =
 warningsTraceWithState :: Contract
               -> Maybe State
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTraceWithState = warningsTraceCustom False
 
 -- Like warningsTraceCustom but only checks assertions.
 onlyAssertionsWithState :: Contract
               -> Maybe State
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 onlyAssertionsWithState = warningsTraceCustom True
 
 -- Like warningsTraceWithState but without initialState.
 warningsTrace :: Contract
               -> IO (Either ThmResult
-                            (Maybe (Slot, [TransactionInput], [TransactionWarning])))
+                            (Maybe (POSIXTime, [TransactionInput], [TransactionWarning])))
 warningsTrace con = warningsTraceWithState con Nothing
 
 

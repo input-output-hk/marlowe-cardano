@@ -2,9 +2,15 @@ module Component.Transfer.Types where
 
 import Prologue
 
+import Component.Contacts.State (adaToken, getAda)
 import Data.BigInt.Argonaut (BigInt)
+import Data.ContractUserParties
+  ( ContractUserParties
+  , getNickname
+  , isCurrentUser
+  )
 import Data.WalletNickname (WalletNickname)
-import Marlowe.Semantics (AccountId, Party, Token)
+import Marlowe.Semantics (AccountId, Party, Payee(..), Payment(..), Token)
 
 -- Here's my justification for why this module should exist:
 -- In the semantics, there are two types that are used to represent the
@@ -35,4 +41,28 @@ data Termini
 type Participant =
   { nickname :: Maybe WalletNickname
   , isCurrentUser :: Boolean
+  }
+
+paymentToTransfer :: ContractUserParties -> Payment -> Transfer
+paymentToTransfer contractUserParties (Payment sender payee money) =
+  case payee of
+    Party recipient ->
+      makeTransfer recipient
+        $ AccountToWallet sender recipient
+    Account recipient ->
+      makeTransfer recipient
+        $ AccountToAccount sender recipient
+  where
+  makeTransfer recipient termini =
+    { sender: partyToParticipant contractUserParties sender
+    , recipient: partyToParticipant contractUserParties recipient
+    , token: adaToken
+    , quantity: getAda money
+    , termini
+    }
+
+partyToParticipant :: ContractUserParties -> Party -> Participant
+partyToParticipant contractUserParties party =
+  { nickname: getNickname party contractUserParties
+  , isCurrentUser: isCurrentUser party contractUserParties
   }

@@ -4,16 +4,31 @@ import Prologue
 
 import Data.Argonaut (Json)
 import Data.Argonaut.Decode (JsonDecodeError)
-import Network.RemoteData (RemoteData)
+import Data.Variant (Variant)
+import Data.Variant as Variant
 import Servant.PureScript (AjaxError)
+import Type.Proxy (Proxy(..))
 
 type JsonAjaxError = AjaxError JsonDecodeError Json
 
+type JsonAjaxErrorRow r = (jsonAjaxError :: AjaxError JsonDecodeError Json | r)
+
+jsonAjaxError :: forall r. JsonAjaxError -> Variant (JsonAjaxErrorRow r)
+jsonAjaxError = Variant.inj (Proxy :: Proxy "jsonAjaxError")
+
+type MetadataNotFoundErrorRow r = (metadataNotFoundError :: Unit | r)
+
+metadataNotFoundError :: forall r. Variant (MetadataNotFoundErrorRow r)
+metadataNotFoundError = Variant.inj (Proxy :: Proxy "metadataNotFoundError")
+  unit
+
+type JsonDecodeErrorRow r = (jsonDecodeError :: JsonDecodeError | r)
+
+jsonDecodeError :: forall r. JsonDecodeError -> Variant (JsonDecodeErrorRow r)
+jsonDecodeError = Variant.inj (Proxy :: Proxy "jsonDecodeError")
+
 type AjaxResponse
   = Either JsonAjaxError
-
-type WebData
-  = RemoteData JsonAjaxError
 
 type DecodedAjaxError
   = Either JsonAjaxError JsonDecodeError
@@ -21,14 +36,3 @@ type DecodedAjaxError
 type DecodedAjaxResponse
   = Either DecodedAjaxError
 
-type DecodedWebData
-  = RemoteData DecodedAjaxError
-
-type NotFoundAjaxError
-  = Maybe JsonAjaxError
-
-type NotFoundAjaxResponse
-  = Either NotFoundAjaxError
-
-type NotFoundWebData
-  = RemoteData NotFoundAjaxError

@@ -25,7 +25,7 @@
     pscKeptBlocks = 2160;
     pscNetworkId = network-id;
     pscSlotConfig = {
-      scSlotZeroTime = 1638215277000;
+      scSlotZeroTime = 1644929640000;
       scSlotLength = 1000;
     };
     pscFeeConfig = {
@@ -39,7 +39,7 @@
     pscProtocolParametersJsonPath = protocol-parameters;
   };
   chainIndexConfig = {
-    ciBaseUrl = "http://0.0.0.0:9083";
+    ciBaseUrl = "http://chain-index:9083";
     ciWatchedAddresses = [ ];
   };
   requestProcessingConfig = {

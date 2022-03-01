@@ -1,6 +1,7 @@
 module Contrib.Data.List.Infinite.Finalize where
 
 import Prelude
+
 import Data.Foldable (class Foldable, foldl)
 import Data.List (List(..), reverse, uncons) as List
 import Data.List.Infinite (List, uncons) as Infinite

@@ -39,15 +39,15 @@ _otherActions = _Newtype <<< ix otherActionsParty
 _moveToAction :: Lens' Parties (Maybe ActionInput)
 _moveToAction = lens get' set'
   where
-  get' = preview (_actionInput otherActionsParty MoveToSlotId)
+  get' = preview (_actionInput otherActionsParty MoveToTimeId)
 
   set' p ma =
     let
       m = case preview _otherActions p, ma of
         Nothing, Nothing -> Nothing
-        Just m', Nothing -> Just $ Map.delete MoveToSlotId m'
-        Nothing, Just a -> Just $ Map.singleton MoveToSlotId a
-        Just m', Just a -> Just $ Map.insert MoveToSlotId a m'
+        Just m', Nothing -> Just $ Map.delete MoveToTimeId m'
+        Nothing, Just a -> Just $ Map.singleton MoveToTimeId a
+        Just m', Just a -> Just $ Map.insert MoveToTimeId a m'
     in
       set (_Newtype <<< at otherActionsParty) m p
 
@@ -69,8 +69,8 @@ _transactionError = prop (Proxy :: _ "transactionError")
 _transactionWarnings :: forall s a. Lens' { transactionWarnings :: a | s } a
 _transactionWarnings = prop (Proxy :: _ "transactionWarnings")
 
-_slot :: forall s a. Lens' { slot :: a | s } a
-_slot = prop (Proxy :: _ "slot")
+_time :: forall s a. Lens' { time :: a | s } a
+_time = prop (Proxy :: _ "time")
 
 _moneyInContract :: forall s a. Lens' { moneyInContract :: a | s } a
 _moneyInContract = prop (Proxy :: _ "moneyInContract")
@@ -84,8 +84,8 @@ _log = prop (Proxy :: _ "log")
 --------------------------------------------------------------------------
 -- InitialConditionsRecord Lenses
 --
-_initialSlot :: forall s a. Lens' { initialSlot :: a | s } a
-_initialSlot = prop (Proxy :: _ "initialSlot")
+_initialTime :: forall s a. Lens' { initialTime :: a | s } a
+_initialTime = prop (Proxy :: _ "initialTime")
 
 _termContract :: forall s a. Lens' { termContract :: a | s } a
 _termContract = prop (Proxy :: _ "termContract")

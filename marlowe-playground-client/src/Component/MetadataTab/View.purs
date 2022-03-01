@@ -64,8 +64,8 @@ import Marlowe.Extended.Metadata
   , _choiceNames
   , _roleDescriptions
   , _roles
-  , _slotParameterDescriptions
-  , _slotParameters
+  , _timeParameterDescriptions
+  , _timeParameters
   , _valueParameterInfo
   , _valueParameters
   , defaultForFormatType
@@ -466,7 +466,7 @@ type DraggingState a =
   }
 
 type Dragging a =
-  { slotParameterDescriptions :: DraggingState a
+  { timeParameterDescriptions :: DraggingState a
   , valueParameterInfos :: DraggingState a
   }
 
@@ -573,15 +573,15 @@ metadataView handlers metadataHints metadata = div_
       do
         let
           actions =
-            { delete: handlers.raise <<< DeleteSlotParameterDescription
-            , dragging: handlers.dragging.slotParameterDescriptions
-            , set: map handlers.raise <<< SetSlotParameterDescription
+            { delete: handlers.raise <<< DeleteTimeParameterDescription
+            , dragging: handlers.dragging.timeParameterDescriptions
+            , set: map handlers.raise <<< SetTimeParameterDescription
             }
           render = onlyDescriptionRenderer actions
         generateSortableMetadataList
           actions
-          _slotParameterDescriptions
-          _slotParameters
+          _timeParameterDescriptions
+          _timeParameters
           render
           "Slot parameter"
           "slot parameter"
@@ -650,4 +650,3 @@ metadataView handlers metadataHints metadata = div_
       render
       label
       labelLower
-

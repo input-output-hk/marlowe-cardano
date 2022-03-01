@@ -60,6 +60,7 @@
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
           (hsPkgs."semigroups" or (errorHandler.buildDepError "semigroups"))
+          (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
           (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
           ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"));
         buildable = true;
@@ -68,6 +69,7 @@
           "Language/Marlowe/Extended"
           "Language/Marlowe/Semantics"
           "Language/Marlowe/SemanticsTypes"
+          "Language/Marlowe/FindInputs"
           "Language/Marlowe/Client"
           "Language/Marlowe/Client/History"
           "Language/Marlowe/Util"
@@ -180,6 +182,7 @@
         "marlowe-test" = {
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
@@ -187,6 +190,7 @@
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."freer-simple" or (errorHandler.buildDepError "freer-simple"))
+            (hsPkgs."freer-extras" or (errorHandler.buildDepError "freer-extras"))
             (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
             (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))

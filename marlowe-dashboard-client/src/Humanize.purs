@@ -5,7 +5,6 @@ module Humanize
   , formatDate'
   , formatTime
   , formatTime'
-  , getTimezoneOffset
   , humanizeInterval
   , humanizeValue
   , humanizeOffset
@@ -16,24 +15,24 @@ import Prologue
 
 import Data.BigInt.Argonaut (BigInt, toNumber)
 import Data.DateTime (DateTime, adjust)
+import Data.DateTime.Instant (toDateTime)
 import Data.Formatter.DateTime (FormatterCommand(..), format) as DateTime
 import Data.Formatter.Number (Formatter(..), format) as Number
 import Data.Int (floor, round)
 import Data.Int (toNumber) as Int
 import Data.List as List
 import Data.Maybe (fromMaybe)
-import Data.Newtype (unwrap, wrap)
+import Data.Newtype (over, unwrap)
 import Data.Ord (abs)
 import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
-import Effect (Effect)
-import Effect.Now as Now
 import Halogen.HTML (HTML, img)
 import Halogen.HTML.Properties (src)
 import Images (cfdIcon, loanIcon, purchaseIcon)
 import Marlowe.Extended (ContractType(..))
-import Marlowe.Semantics (Slot, SlotInterval(..), Token(..))
-import Marlowe.Slot (slotToDateTime)
+import Marlowe.Semantics (TimeInterval(..), Token(..))
+import Plutus.V1.Ledger.Time (POSIXTime)
+import Plutus.V1.Ledger.Time as POSIXTime
 
 humanizeDuration :: Seconds -> String
 humanizeDuration (Seconds seconds)
@@ -62,16 +61,12 @@ humanizeDuration (Seconds seconds)
         else
           show days <> "days left"
 
-humanizeInterval :: Minutes -> SlotInterval -> String
-humanizeInterval tzOffset (SlotInterval from to) = humanize
-  (formatSlot tzOffset from)
-  (formatSlot tzOffset to)
+humanizeInterval :: Minutes -> TimeInterval -> String
+humanizeInterval tzOffset (TimeInterval from to) = humanize
+  (formatPOSIXTime tzOffset from)
+  (formatPOSIXTime tzOffset to)
   where
-  humanize Nothing _ = "invalid interval"
-
-  humanize _ Nothing = "invalid interval"
-
-  humanize (Just (fromDate /\ fromTime)) (Just (toDate /\ toTime))
+  humanize ((fromDate /\ fromTime)) ((toDate /\ toTime))
     | fromDate == toDate && fromTime == toTime = "on " <> fromDate <> " at " <>
         fromTime
     | fromDate == toDate = "on " <> fromDate <> " between " <> fromTime
@@ -81,26 +76,20 @@ humanizeInterval tzOffset (SlotInterval from to) = humanize
         <> " "
         <> toTime
 
-formatSlot :: Minutes -> Slot -> Maybe (Tuple String String)
-formatSlot tzOffset slot =
-  slotToDateTime slot
-    <#> \slotDT ->
-      let
-        adjustedDt = adjustTimeZone tzOffset slotDT
-      in
-        formatDate' adjustedDt /\ formatTime' adjustedDt
+formatPOSIXTime :: Minutes -> POSIXTime -> (Tuple String String)
+formatPOSIXTime tzOffset time =
+  let
+    localDateTime = fromMaybe (toDateTime $ unwrap time)
+      $ POSIXTime.toLocalDateTime tzOffset time
+  in
+    formatDate' localDateTime /\ formatTime' localDateTime
 
--- This is a small wrapper around Now.getTimezoneOffset to be used in conjunction with
--- adjustTimeZone. We need to negate the value in order to substract when we do the
--- adjust, and Minutes does not have a Ring instance, so we need to unwrap and re-wrap
-getTimezoneOffset :: Effect Minutes
-getTimezoneOffset = wrap <<< negate <<< unwrap <$> Now.getTimezoneOffset
-
--- Adjusts a DateTime via an offset (that can be obtained using getTimezoneOffset)
+-- Adjusts a DateTime via an offset (that can be obtained using timezoneOffset)
 -- The `adjust` function can overflow, if that happens (it shouldn't) we resolve to
 -- the original value
 adjustTimeZone :: Minutes -> DateTime -> DateTime
-adjustTimeZone tzOffset dt = fromMaybe dt (adjust tzOffset dt)
+adjustTimeZone tzOffset dt =
+  fromMaybe dt (adjust (over Minutes negate tzOffset :: Minutes) dt)
 
 minutesFormatter :: Number.Formatter
 minutesFormatter =

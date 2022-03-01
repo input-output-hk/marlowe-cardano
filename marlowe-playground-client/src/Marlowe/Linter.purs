@@ -38,7 +38,7 @@ import Marlowe.Extended.Metadata
   ( MetadataHintInfo
   , _choiceNames
   , _roles
-  , _slotParameters
+  , _timeParameters
   , _valueParameters
   )
 import Marlowe.Holes
@@ -61,10 +61,12 @@ import Marlowe.Holes
   , getLocation
   , insertHole
   )
-import Marlowe.Holes as Holes
-import Marlowe.Semantics (Slot(..), emptyState, evalValue, makeEnvironment)
+import Marlowe.Holes as MH
+import Marlowe.Semantics (emptyState, evalValue, makeEnvironment)
 import Marlowe.Semantics as S
+import Marlowe.Time (unixEpoch)
 import Monaco (TextEdit)
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Pretty (showPrettyMoney, showPrettyParty, showPrettyToken)
 import StaticAnalysis.Reachability (initializePrefixMap, stepPrefixMap)
 import StaticAnalysis.Types (ContractPath, ContractPathStep(..), PrefixMap)
@@ -72,7 +74,7 @@ import Text.Pretty (hasArgs, pretty)
 import Type.Proxy (Proxy(..))
 
 newtype MaxTimeout
-  = MaxTimeout Slot
+  = MaxTimeout POSIXTime
 
 derive instance newtypeMaxTimeout :: Newtype MaxTimeout _
 
@@ -84,7 +86,7 @@ instance semigroupMax :: Semigroup MaxTimeout where
   append a b = max a b
 
 instance monoidMaxTimeout :: Monoid MaxTimeout where
-  mempty = MaxTimeout zero
+  mempty = MaxTimeout bottom
 
 -- We could eventually see if we can make Warning polymorphic on the location, even if Term cannot be.
 -- for the moment we don't have static guarantees on the Location type, but runtype exceptions if it
@@ -206,7 +208,7 @@ _metadataHints :: Lens' State MetadataHintInfo
 _metadataHints = _Newtype <<< prop (Proxy :: _ "metadataHints")
 
 hasHoles :: State -> Boolean
-hasHoles = not Holes.isEmpty <<< view _holes
+hasHoles = not MH.isEmpty <<< view _holes
 
 addRoleFromPartyTerm :: Term Party -> CMS.State State Unit
 addRoleFromPartyTerm (Term (Role role) _) =
@@ -214,9 +216,9 @@ addRoleFromPartyTerm (Term (Role role) _) =
 
 addRoleFromPartyTerm _ = pure unit
 
-addSlotParameter :: String -> CMS.State State Unit
-addSlotParameter slotParam = modifying (_metadataHints <<< _slotParameters) $
-  OSet.insert slotParam
+addTimeParameter :: String -> CMS.State State Unit
+addTimeParameter timeParam = modifying (_metadataHints <<< _timeParameters) $
+  OSet.insert timeParam
 
 addValueParameter :: String -> CMS.State State Unit
 addValueParameter valueParam = modifying (_metadataHints <<< _valueParameters) $
@@ -244,7 +246,7 @@ _choicesMade = _Newtype <<< prop (Proxy :: _ "choicesMade")
 _letBindings :: Lens' LintEnv (Set S.ValueId)
 _letBindings = _Newtype <<< prop (Proxy :: _ "letBindings")
 
-_maxTimeout :: Lens' LintEnv Slot
+_maxTimeout :: Lens' LintEnv POSIXTime
 _maxTimeout = _Newtype <<< prop (Proxy :: _ "maxTimeout") <<< _Newtype
 
 _deposits :: Lens' LintEnv (Map (S.AccountId /\ S.Token) (Maybe BigInt))
@@ -500,11 +502,11 @@ lintContract env (Term (If obs c1 c2) _) = do
   lintContract c1NewEnv c1
   lintContract c2NewEnv c2
 
-lintContract env (Term (When cases (Term (Holes.Slot timeout) pos) cont) _) = do
-  when (Slot timeout <= view _maxTimeout env)
+lintContract env (Term (When cases (Term (MH.TimeValue time) pos) cont) _) = do
+  when (time <= view _maxTimeout env)
     (addWarning TimeoutNotIncreasing pos)
   let
-    tmpEnv = (over _maxTimeout (max $ Slot timeout)) env
+    tmpEnv = (over _maxTimeout (max time)) env
   traverseWithIndex_ (lintCase tmpEnv) cases
   newEnv <- stepPrefixMapEnv_ tmpEnv WhenTimeoutPath
   lintContract newEnv cont
@@ -512,7 +514,7 @@ lintContract env (Term (When cases (Term (Holes.Slot timeout) pos) cont) _) = do
 
 lintContract env (Term (When cases t cont) _) = do
   case t of
-    Term (Holes.SlotParam slotParamName) _ -> addSlotParameter slotParamName
+    Term (MH.TimeParam timeParamName) _ -> addTimeParameter timeParamName
     _ -> pure unit
   modifying _holes (insertHole t)
   traverseWithIndex_ (lintCase env) cases
@@ -735,8 +737,9 @@ lintValue env t@(Term (DivValue a b) pos) = do
   case sa /\ sb of
     (ConstantSimp _ _ v1 /\ ConstantSimp _ _ v2) ->
       let
-        evaluated = evalValue (makeEnvironment zero zero)
-          (emptyState (Slot zero))
+        evaluated = evalValue
+          (makeEnvironment (POSIXTime unixEpoch) (POSIXTime unixEpoch))
+          emptyState
           (S.DivValue (S.Constant v1) (S.Constant v2))
       in
         pure (ConstantSimp pos true evaluated)
@@ -765,9 +768,9 @@ lintValue env t@(Term (ChoiceValue choiceId@(ChoiceId choiceName party)) pos) =
     modifying _holes (getHoles choiceId)
     pure (ValueSimp pos false t)
 
-lintValue _ t@(Term SlotIntervalStart pos) = pure (ValueSimp pos false t)
+lintValue _ t@(Term TimeIntervalStart pos) = pure (ValueSimp pos false t)
 
-lintValue _ t@(Term SlotIntervalEnd pos) = pure (ValueSimp pos false t)
+lintValue _ t@(Term TimeIntervalEnd pos) = pure (ValueSimp pos false t)
 
 lintValue env t@(Term (UseValue (TermWrapper valueId _)) pos) = do
   when

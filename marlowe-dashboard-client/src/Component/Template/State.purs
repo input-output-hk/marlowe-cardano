@@ -12,7 +12,9 @@ import Component.ContractSetup.Types as CS
 import Component.Template.Types (Action(..), State(..))
 import Data.ContractTimeout as CT
 import Data.ContractValue (_value)
+import Data.DateTime.Instant (Instant, instant, unInstant)
 import Data.Either (hush)
+import Data.Filterable (filterMap)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens (view)
 import Data.Map as Map
@@ -37,7 +39,7 @@ import Marlowe.Extended.Metadata
   )
 import Marlowe.HasParties (getParties)
 import Marlowe.Semantics (Contract) as Semantic
-import Marlowe.Semantics (Party(..), Slot)
+import Marlowe.Semantics (Party(..))
 import Marlowe.Template
   ( TemplateContent(..)
   , fillTemplate
@@ -58,26 +60,26 @@ setup { metaData, extendedContract } mFields = Setup
   { templateRoles: getParties extendedContract # Set.mapMaybe case _ of
       Role name -> Just name
       _ -> Nothing
-  , templateTimeouts: Map.mapMaybeWithKey getTimeout slotContent
+  , templateTimeouts: Map.mapMaybeWithKey getTimeout timeContent
   , templateValues: mapWithIndex getValue valueContent
   , templateName: metaData.contractName
   , fields: fromMaybe blank mFields
   }
   where
-  TemplateContent { slotContent, valueContent } =
+  TemplateContent { timeContent, valueContent } =
     initializeTemplateContent $ getPlaceholderIds extendedContract
-  defaultSlotContent = case metaData.contractType of
-    Escrow -> Escrow.defaultSlotContent
-    EscrowWithCollateral -> EscrowWithCollateral.defaultSlotContent
-    Swap -> Swap.defaultSlotContent
-    ZeroCouponBond -> ZeroCouponBond.defaultSlotContent
-    ContractForDifferences -> ContractForDifferences.defaultSlotContent
+  defaultTimeContent = case metaData.contractType of
+    Escrow -> Escrow.defaultTimeContent
+    EscrowWithCollateral -> EscrowWithCollateral.defaultTimeContent
+    Swap -> Swap.defaultTimeContent
+    ZeroCouponBond -> ZeroCouponBond.defaultTimeContent
+    ContractForDifferences -> ContractForDifferences.defaultTimeContent
     _ -> Map.empty
   getTimeout key value =
     let
-      bigIntValue = fromMaybe value $ Map.lookup key defaultSlotContent
+      instant = fromMaybe value $ Map.lookup key defaultTimeContent
     in
-      hush $ CT.fromBigInt bigIntValue
+      hush $ CT.fromDuration $ unInstant instant
   getValue key _ = maybe DefaultFormat _.valueParameterFormat
     $ OMap.lookup key metaData.valueParameterInfo
 
@@ -117,22 +119,22 @@ handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
     s -> s
 
 instantiateExtendedContract
-  :: Slot -> ContractTemplate -> ContractParams -> Maybe Semantic.Contract
+  :: Instant -> ContractTemplate -> ContractParams -> Maybe Semantic.Contract
 
-instantiateExtendedContract currentSlot template params =
+instantiateExtendedContract now template params =
   let
     extendedContract = view (_extendedContract) template
 
     { timeouts, values } = params
 
-    slotContent = CT.toBigInt <$> timeouts
+    timeContent = filterMap (instant <<< CT.toDuration) timeouts
 
     valueContent = view _value <$> values
 
-    templateContent = TemplateContent { slotContent, valueContent }
+    templateContent = TemplateContent { timeContent, valueContent }
 
     filledContract = fillTemplate templateContent extendedContract
 
-    absoluteFilledContract = resolveRelativeTimes currentSlot filledContract
+    absoluteFilledContract = resolveRelativeTimes now filledContract
   in
     toCore absoluteFilledContract

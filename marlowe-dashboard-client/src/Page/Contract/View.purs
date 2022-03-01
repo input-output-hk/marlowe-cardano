@@ -6,13 +6,14 @@ import Prologue hiding (div)
 
 import Component.Contacts.State (adaToken)
 import Component.Contract.View
-  ( currentStepActions
-  , firstLetterInCircle
+  ( firstLetterInCircle
   , participantWithNickname
   , renderParty
   , startingStepActions
   , timeoutString
   )
+import Component.CurrentStepActions.State as CurrentStepActions
+import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
 import Component.Hint.State (hint)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
@@ -20,7 +21,11 @@ import Component.Popper (Placement(..))
 import Component.Progress.Circular as Progress
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
-import Component.Transfer.Types (Termini(..))
+import Component.Transfer.Types
+  ( Termini(..)
+  , partyToParticipant
+  , paymentToTransfer
+  )
 import Component.Transfer.View (transfer)
 import Data.Array (fromFoldable, intercalate, length)
 import Data.Array as Array
@@ -29,25 +34,30 @@ import Data.Array.NonEmpty as NonEmptyArray
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
+import Data.ContractUserParties (getParticipants, isCurrentUser)
+import Data.DateTime.Instant (Instant, toDateTime)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens ((^.))
 import Data.List.NonEmpty (foldr)
-import Data.Map (intersectionWith, keys, toUnfoldable) as Map
+import Data.Map (intersectionWith, toUnfoldable) as Map
 import Data.Maybe (isJust, maybe, maybe')
 import Data.Set as Set
 import Data.String (take)
-import Data.Tuple (uncurry)
+import Data.Time.Duration (Minutes)
 import Data.Tuple.Nested ((/\))
+import Data.UserNamedActions
+  ( getParticipantsWithAction
+  , haveActions
+  , mapActions
+  )
 import Effect.Aff.Class (class MonadAff)
-import Halogen (ComponentHTML)
+import Halogen as H
 import Halogen.Css (applyWhen, classNames)
-import Halogen.Extra (LifecycleEvent(..), lifeCycleSlot)
-import Halogen.HTML (HTML, a, button, div, div_, h4_, span, span_, text)
+import Halogen.HTML (HTML, a, button, div, div_, h4_, slot, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (IProp, enabled, id, ref)
 import Humanize (formatDate, formatTime, humanizeOffset, humanizeValue)
-import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.Lenses (_semanticState)
 import Marlowe.Execution.State (expandBalances, isClosed)
 import Marlowe.Execution.Types (NamedAction(..))
@@ -55,54 +65,55 @@ import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics
   ( ChoiceId(..)
   , Party(..)
-  , SlotInterval(..)
+  , TimeInterval(..)
   , Token
   , TransactionInput(..)
   , _accounts
   )
 import Marlowe.Semantics (Input(..)) as S
-import Marlowe.Slot (slotToDateTime)
 import Page.Contract.Lenses
-  ( _executionState
+  ( _contractUserParties
+  , _executionState
   , _expandPayments
+  , _marloweParams
   , _namedActions
-  , _participants
-  , _pendingTransaction
   , _previousSteps
   , _resultingPayments
   , _selectedStep
-  , _userParties
   )
-import Page.Contract.State (currentStep, partyToParticipant, paymentToTransfer)
 import Page.Contract.Types
   ( Action(..)
-  , Input
+  , ChildSlots
+  , ComponentHTML
+  , ContractState(..)
   , PreviousStep
   , PreviousStepState(..)
   , StartedState
-  , State(..)
+  , State
   , StepBalance
   , Tab(..)
   , TimeoutInfo
+  , currentStep
   , scrollContainerRef
   )
+import Plutus.V1.Ledger.Time (POSIXTime(..))
 
 -------------------------------------------------------------------------------
 -- Top-level views
 -------------------------------------------------------------------------------
 contractScreen
-  :: forall m. MonadAff m => Input -> State -> ComponentHTML Action ChildSlots m
-contractScreen viewInput state =
+  :: forall m. MonadAff m => State -> ComponentHTML m
+contractScreen state =
   let
-    cards = case state of
+    cards = case state.contract of
       Started started ->
         let
           pastStepsCards =
             mapWithIndex
-              (renderPastStep viewInput started)
+              (renderPastStep state.tzOffset started)
               (started ^. _previousSteps)
 
-          currentStepCard = [ renderCurrentStep viewInput started ]
+          currentStepCard = [ renderCurrentStep state.currentTime started ]
 
           cardForStep stepNumber
             | stepNumber == started.selectedStep = card
@@ -151,13 +162,11 @@ contractScreen viewInput state =
           , "relative"
           ]
       ]
-      [ lifeCycleSlot "carousel-lifecycle" case _ of
-          OnInit -> CarouselOpened
-          OnFinalize -> CarouselClosed
-      -- NOTE: The card is allowed to grow in an h-full container and the navigation buttons are absolute positioned
-      --       because the cards x-scrolling can't coexist with a visible y-overflow. To avoid clipping the cards shadow
-      --       we need the cards container to grow (hence the flex-grow).
-      , div [ classNames [ "flex-grow", "w-full" ] ]
+      [
+        -- NOTE: The card is allowed to grow in an h-full container and the navigation buttons are absolute positioned
+        --       because the cards x-scrolling can't coexist with a visible y-overflow. To avoid clipping the cards shadow
+        --       we need the cards container to grow (hence the flex-grow).
+        div [ classNames [ "flex-grow", "w-full" ] ]
           [ div
               [ classNames
                   [ "flex"
@@ -173,29 +182,33 @@ contractScreen viewInput state =
                   <> cards
                   <> paddingElement
           ]
-      , cardNavigationButtons state
+      , cardNavigationButtons state.contract
       , div [ classNames [ "self-end", "pb-4", "pr-4", "font-bold" ] ]
-          [ text $ statusIndicatorMessage state ]
+          [ text $ statusIndicatorMessage state.contract ]
       ]
 
 -------------------------------------------------------------------------------
 -- UI components
 -------------------------------------------------------------------------------
 
-statusIndicatorMessage :: State -> String
+statusIndicatorMessage :: ContractState -> String
 statusIndicatorMessage (Starting _) = "Starting contract…"
 
 statusIndicatorMessage (Started state) =
   let
-    userParties = state ^. _userParties
+    contractUserParties = state ^. _contractUserParties
 
-    participantsWithAction = Set.fromFoldable $ map fst $ state ^. _namedActions
+    participantsWithAction = getParticipantsWithAction $ state ^. _namedActions
 
     executionState = state ^. _executionState
   in
     if isClosed executionState then
       "Contract completed"
-    else if Set.isEmpty (Set.intersection userParties participantsWithAction) then
+    else if
+      Set.isEmpty
+        ( Set.filter (flip isCurrentUser $ contractUserParties)
+            participantsWithAction
+        ) then
       "Waiting for "
         <>
           if Set.size participantsWithAction > 1 then
@@ -208,7 +221,7 @@ statusIndicatorMessage (Started state) =
       "Your turn…"
 
 cardNavigationButtons
-  :: forall m. MonadAff m => State -> ComponentHTML Action ChildSlots m
+  :: forall m. MonadAff m => ContractState -> ComponentHTML m
 cardNavigationButtons (Starting _) = div [] []
 
 cardNavigationButtons (Started state) =
@@ -275,12 +288,12 @@ cardNavigationButtons (Started state) =
 renderPastStep
   :: forall m
    . MonadAff m
-  => Input
+  => Minutes
   -> StartedState
   -> Int
   -> PreviousStep
-  -> Array (ComponentHTML Action ChildSlots m)
-renderPastStep viewInput state stepNumber step =
+  -> Array (ComponentHTML m)
+renderPastStep tzOffset state stepNumber step =
   [ tabBar step.tab $ Just (SelectTab stepNumber)
   , cardBody []
       $
@@ -300,16 +313,16 @@ renderPastStep viewInput state stepNumber step =
             ]
         , case step.tab, step of
             Tasks, { state: TransactionStep txInput } -> cardContent [ "p-4" ]
-              [ renderPastStepTasksTab viewInput stepNumber state txInput step ]
+              [ renderPastStepTasksTab tzOffset stepNumber state txInput step ]
             Tasks, { state: TimeoutStep timeoutInfo } -> cardContent [ "p-4" ]
-              [ renderTimeout viewInput state stepNumber timeoutInfo ]
+              [ renderTimeout tzOffset state stepNumber timeoutInfo ]
             Balances, { balances } -> cardContent []
               [ renderBalances stepNumber state balances ]
         ]
   ]
 
 type InputsByParty
-  = { inputs :: Array S.Input, interval :: SlotInterval, party :: Party }
+  = { inputs :: Array S.Input, interval :: TimeInterval, party :: Party }
 
 -- Normally we would expect that a TransactionInput has either no inputs or a single one
 -- but the types allows for them to be a list of different inputs, possibly made by different
@@ -339,13 +352,13 @@ groupTransactionInputByParticipant (TransactionInput { inputs, interval }) =
 renderPastStepTasksTab
   :: forall m
    . MonadAff m
-  => Input
+  => Minutes
   -> Int
   -> StartedState
   -> TransactionInput
   -> PreviousStep
-  -> ComponentHTML Action ChildSlots m
-renderPastStepTasksTab viewInput stepNumber state txInput step =
+  -> ComponentHTML m
+renderPastStepTasksTab tzOffset stepNumber state txInput step =
   let
     actionsByParticipant = groupTransactionInputByParticipant txInput
 
@@ -359,7 +372,7 @@ renderPastStepTasksTab viewInput stepNumber state txInput step =
         ]
       else
         append
-          (renderPartyPastActions viewInput state <$> actionsByParticipant)
+          (renderPartyPastActions tzOffset state <$> actionsByParticipant)
           if length resultingPayments == 0 then
             []
           else
@@ -370,8 +383,9 @@ renderPaymentSummary
 renderPaymentSummary stepNumber state step =
   let
     expanded = step ^. _expandPayments
-
-    transfers = paymentToTransfer state <$> step ^. _resultingPayments
+    contractUserPartes = state ^. _contractUserParties
+    transfers = paymentToTransfer contractUserPartes <$> step ^.
+      _resultingPayments
 
     expandIcon = if expanded then Icon.ExpandLess else Icon.ExpandMore
   in
@@ -412,26 +426,28 @@ renderPaymentSummary stepNumber state step =
 renderPartyPastActions
   :: forall m action
    . MonadAff m
-  => Input
+  => Minutes
   -> StartedState
   -> InputsByParty
-  -> ComponentHTML action ChildSlots m
-renderPartyPastActions { tzOffset } state { inputs, interval, party } =
+  -> H.ComponentHTML action ChildSlots m
+renderPartyPastActions tzOffset state { inputs, interval, party } =
   let
     -- We don't know exactly when a transaction was executed, we have an interval. But
     -- the design asks for an exact date so we use the lower end of the interval so that
     -- we don't show a value in the future
-    (SlotInterval intervalFrom _) = interval
+    (TimeInterval (POSIXTime intervalFrom) _) = interval
 
-    mTransactionDateTime = slotToDateTime intervalFrom
+    mTransactionDateTime = toDateTime intervalFrom
 
-    transactionDate = maybe "-" (formatDate tzOffset) mTransactionDateTime
+    transactionDate = formatDate tzOffset mTransactionDateTime
 
-    transactionTime = maybe "-" (formatTime tzOffset) mTransactionDateTime
+    transactionTime = formatTime tzOffset mTransactionDateTime
+
+    contractUserParties = state ^. _contractUserParties
 
     renderPartyHeader =
       div [ classNames [ "flex", "justify-between", "items-center", "p-4" ] ]
-        [ renderParty state party
+        [ renderParty contractUserParties party
         , div
             [ classNames
                 [ "flex", "flex-col", "items-end", "text-xxs", "font-semibold" ]
@@ -461,8 +477,8 @@ renderPartyPastActions { tzOffset } state { inputs, interval, party } =
     renderPastAction = case _ of
       S.IDeposit recipient sender token quantity ->
         transfer
-          { sender: partyToParticipant state sender
-          , recipient: partyToParticipant state recipient
+          { sender: partyToParticipant contractUserParties sender
+          , recipient: partyToParticipant contractUserParties recipient
           , token
           , quantity
           , termini: WalletToAccount sender recipient
@@ -489,14 +505,14 @@ renderPartyPastActions { tzOffset } state { inputs, interval, party } =
       ]
 
 renderTimeout
-  :: forall p a. Input -> StartedState -> Int -> TimeoutInfo -> HTML p a
-renderTimeout { tzOffset } state _ timeoutInfo =
+  :: forall p a. Minutes -> StartedState -> Int -> TimeoutInfo -> HTML p a
+renderTimeout tzOffset state _ timeoutInfo =
   let
-    mTimeoutDateTime = slotToDateTime timeoutInfo.slot
+    timeoutDateTime = toDateTime timeoutInfo.time
 
-    timeoutDate = maybe "-" (formatDate tzOffset) mTimeoutDateTime
+    timeoutDate = formatDate tzOffset timeoutDateTime
 
-    timeoutTime = maybe "-" (formatTime tzOffset) mTimeoutDateTime
+    timeoutTime = formatTime tzOffset timeoutDateTime
 
     header =
       div
@@ -537,7 +553,7 @@ renderTimeout { tzOffset } state _ timeoutInfo =
 
 renderMissingActions
   :: forall p a. StartedState -> TimeoutInfo -> Array (HTML p a)
-renderMissingActions _ { missedActions: [] } =
+renderMissingActions _ { missedActions } | haveActions missedActions == false =
   [ div [ classNames [ "font-semibold", "text-xs", "leading-none" ] ]
       [ text
           "There were no tasks to complete at this step and the contract has timeouted as expected."
@@ -550,13 +566,13 @@ renderMissingActions state { missedActions } =
         [ text "The step timed out before the following actions could be made."
         ]
     ]
-    (missedActions <#> uncurry (renderPartyMissingActions state))
+    (renderPartyMissingActions state `mapActions` missedActions)
 
 renderPartyMissingActions
   :: forall p a. StartedState -> Party -> Array NamedAction -> HTML p a
 renderPartyMissingActions state party actions =
   let
-    renderMissingAction (MakeChoice (ChoiceId name _) _ _) = span_
+    renderMissingAction (MakeChoice (ChoiceId name _) _) = span_
       [ text "Make a choice for "
       , span [ classNames [ "font-semibold" ] ] [ text name ]
       ]
@@ -568,6 +584,8 @@ renderPartyMissingActions state party actions =
 
     renderMissingAction _ = span [] [ text "invalid action" ]
 
+    contractUserParties = state ^. _contractUserParties
+
     actionsSeparatedByOr =
       intercalate
         [ div [ classNames [ "font-semibold", "text-xs" ] ] [ text "or" ]
@@ -575,20 +593,20 @@ renderPartyMissingActions state party actions =
         (Array.singleton <<< renderMissingAction <$> actions)
   in
     div [ classNames [ "border-l-2", "border-black", "pl-2", "space-y-2" ] ]
-      $ Array.cons (renderParty state party) actionsSeparatedByOr
+      $ Array.cons (renderParty contractUserParties party) actionsSeparatedByOr
 
 renderCurrentStep
   :: forall m
    . MonadAff m
-  => Input
+  => Instant
   -> StartedState
-  -> Array (ComponentHTML Action ChildSlots m)
-renderCurrentStep viewInput state =
+  -> Array (ComponentHTML m)
+renderCurrentStep currentSlot state =
   let
     stepNumber = currentStep state
 
-    pendingTransaction = state ^. _pendingTransaction
     executionState = state ^. _executionState
+    isPendingTransaction = isJust executionState.mPendingTransaction
     contractIsClosed = isClosed executionState
   in
     [ tabBar state.tab $ Just (SelectTab stepNumber)
@@ -597,33 +615,47 @@ renderCurrentStep viewInput state =
           [ titleBar []
               [ numberedStepTitle stepNumber
               , stepStatus []
-                  $ case contractIsClosed, isJust pendingTransaction of
+                  $ case contractIsClosed, isPendingTransaction of
                       true, _ -> [ stepStatusText "Contract closed" [] ]
                       _, true -> [ stepStatusText "Awaiting confirmation" [] ]
                       _, _ ->
                         [ stepStatusText
-                            (timeoutString viewInput.currentSlot executionState)
+                            (timeoutString currentSlot executionState)
                             []
                         , icon Icon.Timer []
                         ]
               ]
           , case state.tab of
-              Tasks -> cardContent [ "bg-wite", "p-4" ]
-                [ currentStepActions stepNumber state ]
+              Tasks ->
+                let
+                  marloweParams = state ^. (_executionState <<< _marloweParams)
+                  contractUserParties = state ^. _contractUserParties
+                  namedActions = state ^. _namedActions
+                in
+                  cardContent [ "bg-wite", "p-4" ]
+                    [ slot
+                        _currentStepActions
+                        marloweParams
+                        CurrentStepActions.component
+                        { executionState, contractUserParties, namedActions }
+                        case _ of
+                          ActionSelected action num ->
+                            OnActionSelected action num
+                    ]
               Balances ->
                 let
-                  participants = state ^. _participants
+                  participants = getParticipants $ state ^. _contractUserParties
 
                   balancesAtStart = state ^.
                     (_executionState <<< _semanticState <<< _accounts)
 
                   atStart = expandBalances
-                    (Set.toUnfoldable $ Map.keys participants)
+                    (Set.toUnfoldable participants)
                     [ adaToken ]
                     balancesAtStart
 
                   atEnd =
-                    if isJust state.pendingTransaction then Just atStart
+                    if isPendingTransaction then Just atStart
                     else Nothing
                 in
                   cardContent [ "bg-gray" ]
@@ -652,12 +684,12 @@ accountIndicator { colorStyles, otherStyles, name } =
     ]
 
 renderBalances
-  :: forall m a
+  :: forall m action
    . MonadAff m
   => Int
   -> StartedState
   -> StepBalance
-  -> ComponentHTML a ChildSlots m
+  -> H.ComponentHTML action ChildSlots m
 renderBalances stepNumber state stepBalance =
   let
     -- TODO: Right now we only have one type of Token (ada), but when we support multiple tokens we may want to group by
@@ -680,6 +712,8 @@ renderBalances stepNumber state stepBalance =
                   balancesAtEnd
             )
             stepBalance.atEnd
+
+    contractUserParties = state ^. _contractUserParties
   in
     div [ classNames [ "text-xs", "space-y-4" ] ]
       [ div
@@ -702,7 +736,9 @@ renderBalances stepNumber state stepBalance =
               <#>
                 ( \((party /\ token) /\ balance) ->
                     let
-                      participantName = participantWithNickname state party
+                      participantName = participantWithNickname
+                        contractUserParties
+                        party
                     in
                       div
                         [ classNames

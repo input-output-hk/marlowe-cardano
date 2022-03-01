@@ -40,13 +40,16 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, Local
                     StakeAddressReference (..), TxId, TxIn, TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
                     calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue,
                     writeFileTextEnvelope)
+import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.List (groupBy)
+import qualified Data.Map.Strict as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
+import qualified Data.Set as S (singleton)
 import Language.Marlowe.CLI.Export (buildDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, buildRoleValidator,
                                     buildValidator)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, readSigningKey)
@@ -59,18 +62,14 @@ import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), 
                                    TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
+import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
-import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum, TokenName, toData)
-import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.Api (Address (..), CostModelParams, Credential (..), Datum, POSIXTime, TokenName, toData)
 import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue)
+import qualified PlutusTx.AssocMap as AM (toList)
 import Prettyprinter.Extras (Pretty (..))
 import System.IO (hPutStrLn, stderr)
-
-import qualified Cardano.Api as Api (Value)
-import qualified Data.Map.Strict as M (toList)
-import qualified Data.Set as S (singleton)
-import qualified PlutusTx.AssocMap as AM (toList)
 
 
 -- | Serialise a deposit input to a file.
@@ -113,6 +112,7 @@ makeNotification outputFile =
 initializeTransaction :: MonadError CliError m
               => MonadIO m
               => MarloweParams          -- ^ The Marlowe contract parameters.
+              -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
               -> CostModelParams        -- ^ The cost model parameters.
               -> NetworkId              -- ^ The network ID.
               -> StakeAddressReference  -- ^ The stake address.
@@ -121,12 +121,12 @@ initializeTransaction :: MonadError CliError m
               -> Maybe FilePath         -- ^ The output JSON file for the validator information.
               -> Bool                   -- ^ Whether to print statistics about the validator.
               -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransaction marloweParams costModelParams network stake contractFile stateFile outputFile printStats =
+initializeTransaction marloweParams slotConfig costModelParams network stake contractFile stateFile outputFile printStats =
   do
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
     initializeTransactionImpl
-      marloweParams costModelParams network stake
+      marloweParams slotConfig costModelParams network stake
       contract state
       outputFile
       printStats
@@ -136,6 +136,7 @@ initializeTransaction marloweParams costModelParams network stake contractFile s
 initializeTransactionImpl :: MonadError CliError m
                           => MonadIO m
                           => MarloweParams          -- ^ The Marlowe contract parameters.
+                          -> SlotConfig             -- ^ The POSIXTime-to-slot configuration.
                           -> CostModelParams        -- ^ The cost model parameters.
                           -> NetworkId              -- ^ The network ID.
                           -> StakeAddressReference  -- ^ The stake address.
@@ -144,7 +145,7 @@ initializeTransactionImpl :: MonadError CliError m
                           -> Maybe FilePath         -- ^ The output JSON file for the validator information.
                           -> Bool                   -- ^ Whether to print statistics about the validator.
                           -> m ()                   -- ^ Action to export the validator information to a file.
-initializeTransactionImpl marloweParams costModelParams network stake mtContract mtState outputFile printStats =
+initializeTransactionImpl marloweParams mtSlotConfig costModelParams network stake mtContract mtState outputFile printStats =
   do
      let
        mtRoles = rolesCurrency marloweParams
@@ -169,16 +170,16 @@ prepareTransaction :: MonadError CliError m
                => MonadIO m
                => FilePath        -- ^ The JSON file with the Marlowe initial state and initial contract.
                -> [Input]         -- ^ The contract's inputs.
-               -> SlotNo          -- ^ The first valid slot for the transaction.
-               -> SlotNo          -- ^ The last valid slot for the transaction.
+               -> POSIXTime       -- ^ The first valid time for the transaction.
+               -> POSIXTime       -- ^ The last valid time for the transaction.
                -> Maybe FilePath  -- ^ The output JSON file with the results of the computation.
                -> Bool            -- ^ Whether to print statistics about the result.
                -> m ()            -- ^ Action to compute the next step in the contract.
-prepareTransaction marloweFile txInputs (SlotNo minimumSlot) (SlotNo maximumSlot) outputFile printStats =
+prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile printStats =
   do
     marloweIn <- decodeFileStrict marloweFile
     let
-      txInterval = (fromIntegral minimumSlot, fromIntegral maximumSlot)
+      txInterval = (minimumTime, maximumTime)
     (warnings, marloweOut@MarloweTransaction{..}) <-
       makeMarlowe
         (marloweIn :: MarloweTransaction AlonzoEra)  -- FIXME: Generalize eras.
@@ -236,7 +237,8 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{.
                                    }
                                  )
                                    where
-                                     convertSlot = SlotNo . fromIntegral . getSlot
+                                     convertSlot = SlotNo . fromIntegral . posixTimeToEnclosingSlot mtSlotConfig
+
 
 
 -- | Run a Marlowe transaction.

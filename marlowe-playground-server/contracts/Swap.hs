@@ -18,8 +18,8 @@ amountOfLovelace = MulValue lovelacePerAda amountOfAda
 amountOfDollars = ConstantParam "Amount of dollars"
 
 adaDepositTimeout, dollarDepositTimeout :: Timeout
-adaDepositTimeout = SlotParam "Timeout for Ada deposit"
-dollarDepositTimeout = SlotParam "Timeout for dollar deposit"
+adaDepositTimeout = TimeParam "Timeout for Ada deposit"
+dollarDepositTimeout = TimeParam "Timeout for dollar deposit"
 
 dollars :: Token
 dollars = Token "85bb65" "dollar"

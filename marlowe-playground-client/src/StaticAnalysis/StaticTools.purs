@@ -65,7 +65,7 @@ analyseContract extendedContract = do
       -- when editor and simulator were together the analyse contract could be made
       -- at any step of the simulator. Now that they are separate, it can only be done
       -- with initial state
-      response <- checkContractForWarnings emptySemanticState contract
+      response <- checkContractForWarnings emptyState contract
       assign (_analysisState <<< _analysisExecutionState) $ WarningAnalysis
         $ lmap WarningAnalysisAjaxError
         $ fromEither
@@ -74,8 +74,6 @@ analyseContract extendedContract = do
       $ WarningAnalysis
       $ Failure WarningAnalysisIsExtendedMarloweError
   where
-  emptySemanticState = emptyState zero
-
   checkContractForWarnings state contract =
     traverse logAndStripDuration =<< lift
       ( Server.postApiMarloweanalysis
