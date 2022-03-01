@@ -24,6 +24,7 @@ import Halogen.Css (classNames)
 import Halogen.HTML (a, button, div, h1, img, span, span_, text)
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Properties (href, src, target)
+import Halogen.HTML.Properties.ARIA (label)
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
@@ -36,7 +37,10 @@ import Network.RemoteData (_Success)
 render :: forall m. State -> ComponentHTML Action ChildSlots m
 render state =
   div [ classNames [ "flex", "flex-col", "items-center", "my-16" ] ]
-    [ h1 [ classNames [ "font-semibold", "text-4xl", "mb-16" ] ]
+    [ h1
+        [ classNames [ "font-semibold", "text-4xl", "mb-16" ]
+        , label "Get started"
+        ]
         [ text "Get started" ]
     , div [ classNames [ "mb-6" ] ]
         [ button
@@ -44,6 +48,7 @@ render state =
                 ( secondaryButton <>
                     [ "mr-small", "w-56", "text-base", "cursor-pointer" ]
                 )
+            , label "Open existing project"
             , onClick \_ ->
                 if
                   has
@@ -61,12 +66,16 @@ render state =
                 ( primaryButton <>
                     [ "ml-small", "w-56", "text-base", "cursor-pointer" ]
                 )
+            , label "Open an example"
             , onClick ((const <<< OpenModal) OpenDemo)
             ]
             [ text "Open an example" ]
         ]
     , span [ classNames [ "text-base", "mb-4" ] ] [ text "Or" ]
-    , div [ classNames [ "mb-16", "text-base" ] ]
+    , div
+        [ classNames [ "mb-16", "text-base" ]
+        , label "Choose a starting environment that's right for you"
+        ]
         [ span [ classNames [ "font-bold" ] ] [ text "Choose" ]
         , span_ [ text " a starting environment that's right for you." ]
         ]
@@ -74,6 +83,7 @@ render state =
         [ classNames [ "flex", "mb-8" ] ]
         [ div
             [ classNames (newProjectClasses <> [ "mr-24" ])
+            , label "Start in Javascript"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Javascript)
             ]
@@ -84,6 +94,7 @@ render state =
             ]
         , div
             [ classNames (newProjectClasses <> [ "mr-24" ])
+            , label "Start in Haskell"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Haskell)
             ]
@@ -104,6 +115,7 @@ render state =
             []
         , div
             [ classNames (newProjectClasses <> [ "ml-24", "mr-4" ])
+            , label "Start in Marlowe"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Marlowe)
             ]
@@ -117,6 +129,7 @@ render state =
             ]
         , div
             [ classNames (newProjectClasses <> [ "ml-4", "mr-1" ])
+            , label "Start in Blockly"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Blockly)
             ]
