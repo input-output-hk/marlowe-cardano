@@ -12,7 +12,6 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import Data.ContractNickname as ContractNickname
-import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
 import Data.NewContract (NewContract(..))
