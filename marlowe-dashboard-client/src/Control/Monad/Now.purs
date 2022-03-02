@@ -13,7 +13,7 @@ import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.RWS (RWST)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Reader.Class (class MonadAsk, class MonadReader)
-import Control.Monad.Rec.Class (class MonadRec, forever)
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (StateT, gets)
 import Control.Monad.State.Class (class MonadState, state)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
@@ -31,6 +31,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, delay, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Now as EN
+import Effect.Ref as Ref
 import Halogen (HalogenM)
 import Halogen.Store.Monad (StoreT(..))
 import Halogen.Subscription (Emitter)
@@ -65,10 +66,12 @@ instance MonadTime Effect where
   now = EN.now
   timezoneOffset = EN.getTimezoneOffset
   makeClock d = pure $ HS.makeEmitter \push -> do
-    launchAff_ $ forever do
+    cancelled <- Ref.new false
+    launchAff_ $ unlessM (liftEffect $ Ref.read cancelled) do
       liftEffect $ push =<< now
       delay $ fromDuration d
-    pure $ pure unit
+    pure do
+      Ref.write true cancelled
 
 instance MonadTime Aff where
   now = liftEffect now
