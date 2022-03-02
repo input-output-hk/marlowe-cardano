@@ -64,12 +64,11 @@ nowTime = time <<< toDateTime <$> now
 instance MonadTime Effect where
   now = EN.now
   timezoneOffset = EN.getTimezoneOffset
-  makeClock d = do
-    { emitter, listener } <- HS.create
+  makeClock d = pure $ HS.makeEmitter \push -> do
     launchAff_ $ forever do
-      liftEffect $ HS.notify listener =<< now
+      liftEffect $ push =<< now
       delay $ fromDuration d
-    pure emitter
+    pure $ pure unit
 
 instance MonadTime Aff where
   now = liftEffect now
