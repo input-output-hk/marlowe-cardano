@@ -19,6 +19,7 @@ import Data.AddressBook (AddressBook)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
+import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.UserNamedActions (UserNamedActions)
@@ -41,6 +42,7 @@ type State =
   , card :: Maybe Card
   -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
+  , newContracts :: Array NewContract
   , runningContracts :: Array ContractState
   , closedContracts :: Array ContractState
   , contractFilter :: ContractFilter

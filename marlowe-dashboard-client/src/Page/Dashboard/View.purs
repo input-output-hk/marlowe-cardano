@@ -17,7 +17,10 @@ import Component.ConfirmContractActionDialog.Types
   )
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.View (contactsCard)
-import Component.ContractPreview.View (contractPreviewCard)
+import Component.ContractPreview.View
+  ( contractPreviewCard
+  , contractStartingPreviewCard
+  )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.Popper (Placement(..))
@@ -94,7 +97,6 @@ import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
   , ContractFilter(..)
-  , ContractState
   , Input
   , State
   , WalletCompanionStatus(..)
@@ -586,20 +588,12 @@ contractCards
   -> ComponentHTML Action ChildSlots m
 contractCards
   currentTime
-  { walletCompanionStatus, contractFilter, runningContracts, closedContracts } =
+  state@{ walletCompanionStatus, contractFilter } =
   case walletCompanionStatus of
     WalletCompanionSynced ->
-      let
-        filteredContracts =
-          if contractFilter == Running then
-            runningContracts
-          else
-            closedContracts
-      in
-        if Array.null filteredContracts then
-          noContractsMessage contractFilter
-        else
-          contractGrid currentTime contractFilter filteredContracts
+      case contractFilter of
+        Running -> contractGridRunning currentTime state
+        Completed -> contractGridCompleted currentTime state
     WaitingToSync ->
       div
         [ classNames
@@ -640,36 +634,38 @@ noContractsMessage contractFilter =
                 [ text "You have no completed contracts." ]
             ]
 
-contractGrid
+contractGridClasses :: Array String
+contractGridClasses =
+  [ "grid"
+  , "pt-4"
+  , "pb-20"
+  , "lg:pb-4"
+  , "gap-8"
+  , "auto-rows-min"
+  , "mx-auto"
+  , "max-w-contracts-grid-sm"
+  , "md:max-w-none"
+  , "md:w-contracts-grid-md"
+  , "md:grid-cols-2"
+  , "lg:w-contracts-grid-lg"
+  , "lg:grid-cols-3"
+  ]
+
+contractGridRunning
   :: forall m
    . MonadAff m
   => Instant
-  -> ContractFilter
-  -> Array ContractState
+  -> State
   -> ComponentHTML Action ChildSlots m
-contractGrid currentTime contractFilter contracts =
-  div
-    [ classNames
-        [ "grid"
-        , "pt-4"
-        , "pb-20"
-        , "lg:pb-4"
-        , "gap-8"
-        , "auto-rows-min"
-        , "mx-auto"
-        , "max-w-contracts-grid-sm"
-        , "md:max-w-none"
-        , "md:w-contracts-grid-md"
-        , "md:grid-cols-2"
-        , "lg:w-contracts-grid-lg"
-        , "lg:grid-cols-3"
-        ]
-    ]
-    $
-      case contractFilter of
-        Running -> [ newContractCard ]
-        Completed -> []
-        <> (dashboardContractCard <$> contracts)
+contractGridRunning currentTime { runningContracts, newContracts } =
+  if Array.null runningContracts && Array.null newContracts then
+    noContractsMessage Running
+  else
+    div
+      [ classNames contractGridClasses ]
+      $ [ newContractCard ]
+          <> (contractStartingPreviewCard <$> newContracts)
+          <> (contractPreviewCard currentTime <$> runningContracts)
   where
   newContractCard =
     a
@@ -691,12 +687,18 @@ contractGrid currentTime contractFilter contracts =
       , span_ [ text "New smart contract from template" ]
       ]
 
-  dashboardContractCard { executionState, contractUserParties, namedActions } =
-    contractPreviewCard
-      currentTime
-      executionState
-      contractUserParties
-      namedActions
+contractGridCompleted
+  :: forall m
+   . MonadAff m
+  => Instant
+  -> State
+  -> ComponentHTML Action ChildSlots m
+contractGridCompleted currentTime { closedContracts } =
+  if Array.null closedContracts then noContractsMessage Completed
+  else
+    div
+      [ classNames contractGridClasses ]
+      (contractPreviewCard currentTime <$> closedContracts)
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =

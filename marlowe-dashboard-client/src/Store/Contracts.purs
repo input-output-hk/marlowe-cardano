@@ -10,6 +10,7 @@ module Store.Contracts
   , getContractNickname
   , getContractNicknames
   , getFollowerContract
+  , getNewContracts
   , getRunningContracts
   , mkContractStore
   , modifyContract
@@ -22,7 +23,7 @@ import Control.Apply (lift2)
 import Data.Array (filter)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
-import Data.ContractNickname (ContractNickname)
+import Data.ContractNickname (ContractNickname, unknown)
 import Data.DateTime.Instant (Instant)
 import Data.Either (note)
 import Data.Lens
@@ -46,8 +47,10 @@ import Data.LocalContractNicknames
 import Data.LocalContractNicknames as LocalContractNicknames
 import Data.Map (Map)
 import Data.Map as Map
+import Data.NewContract (NewContract(..))
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.UUID.Argonaut (UUID)
+import Data.UUID.Argonaut (UUID, emptyUUID)
+import Examples.Metadata (escrow)
 import Marlowe.Client (ContractHistory, _chParams)
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
@@ -69,7 +72,7 @@ type ContractStoreFields =
   -- request id of calling the create endpoint, the value is what is needed to
   -- show a "loading" card.
   -- See UC-CONTRACT-1
-  , newContracts :: Map UUID (ContractNickname /\ MetaData)
+  , newContracts :: Map UUID NewContract
   -- This bimap help us have one Follower contract per Marlowe contract.
   , contractIndex :: Bimap MarloweParams PlutusAppId
   , contractNicknames :: LocalContractNicknames
@@ -86,7 +89,7 @@ _ContractStore = iso
 _syncedContracts :: Lens' ContractStore (Map MarloweParams Execution.State)
 _syncedContracts = _ContractStore <<< prop (Proxy :: _ "syncedContracts")
 
-_newContracts :: Lens' ContractStore (Map UUID (ContractNickname /\ MetaData))
+_newContracts :: Lens' ContractStore (Map UUID NewContract)
 _newContracts = _ContractStore <<< prop (Proxy :: _ "newContracts")
 
 _contractIndex :: Lens' ContractStore (Bimap MarloweParams PlutusAppId)
@@ -99,7 +102,9 @@ _contractNicknames = _ContractStore <<< prop (Proxy :: _ "contractNicknames")
 emptyContractStore :: ContractStore
 emptyContractStore = ContractStore
   { syncedContracts: Map.empty
-  , newContracts: Map.empty
+  -- , newContracts: Map.empty
+  -- FIXME-3487
+  , newContracts: Map.singleton emptyUUID (NewContract unknown escrow)
   , contractIndex: Bimap.empty
   , contractNicknames: emptyLocalContractNicknames
   }
@@ -113,7 +118,7 @@ addStartingContract
   -> ContractStore
   -> ContractStore
 addStartingContract (reqId /\ contractNickname /\ metadata) =
-  over _newContracts $ Map.insert reqId (contractNickname /\ metadata)
+  over _newContracts $ Map.insert reqId (NewContract contractNickname metadata)
 
 addFollowerContract
   :: Instant
@@ -187,10 +192,19 @@ getContractNickname marloweParams =
     getContractNicknames
 
 getRunningContracts :: ContractStore -> Array Execution.State
-getRunningContracts = filter (not <<< Execution.isClosed) <<< map snd
+getRunningContracts = filter (not <<< Execution.isClosed)
+  <<< map snd
   <<< Map.toUnfoldable
   <<< view _syncedContracts
 
 getClosedContracts :: ContractStore -> Array Execution.State
-getClosedContracts = filter Execution.isClosed <<< map snd <<< Map.toUnfoldable
+getClosedContracts = filter Execution.isClosed
+  <<< map snd
+  <<< Map.toUnfoldable
   <<< view _syncedContracts
+
+getNewContracts :: ContractStore -> Array NewContract
+getNewContracts =
+  map snd
+    <<< Map.toUnfoldable
+    <<< view _newContracts

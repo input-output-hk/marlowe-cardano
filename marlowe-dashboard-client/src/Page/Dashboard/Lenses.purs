@@ -5,6 +5,7 @@ module Page.Dashboard.Lenses
   , _contactsState
   , _contractFilter
   , _menuOpen
+  , _newContracts
   , _runningContracts
   , _selectedContractMarloweParams
   , _templateState
@@ -17,6 +18,7 @@ import Component.Contacts.Types (State) as Contacts
 import Component.Template.Types (State) as Template
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
+import Data.NewContract (NewContract)
 import Marlowe.Semantics (MarloweParams)
 import Page.Dashboard.Types
   ( Card
@@ -58,3 +60,5 @@ _runningContracts = prop (Proxy :: _ "runningContracts")
 _closedContracts :: Lens' State (Array ContractState)
 _closedContracts = prop (Proxy :: _ "closedContracts")
 
+_newContracts :: Lens' State (Array NewContract)
+_newContracts = prop (Proxy :: _ "newContracts")

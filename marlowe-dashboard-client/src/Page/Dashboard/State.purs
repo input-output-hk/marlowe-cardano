@@ -56,6 +56,7 @@ import Page.Dashboard.Lenses
   , _contactsState
   , _contractFilter
   , _menuOpen
+  , _newContracts
   , _runningContracts
   , _selectedContractMarloweParams
   , _templateState
@@ -76,6 +77,7 @@ import Store.Contracts
   , followerContractExists
   , getClosedContracts
   , getContract
+  , getNewContracts
   , getRunningContracts
   )
 import Store.Wallet as Wallet
@@ -96,6 +98,7 @@ mkInitialState currentTime wallet contracts =
     , menuOpen: false
     , card: Nothing
     , cardOpen: false
+    , newContracts: getNewContracts contracts
     , runningContracts
     , closedContracts
     , contractFilter: Running
@@ -141,9 +144,11 @@ handleAction { currentTime, wallet, contracts } Receive = do
       getRunningContracts contracts
     closedContracts = deriveContractState currentTime wallet $
       getClosedContracts contracts
+    newContracts = getNewContracts contracts
   modify_
     ( set _runningContracts runningContracts
         <<< set _closedContracts closedContracts
+        <<< set _newContracts newContracts
     )
 
 {- [UC-WALLET-3][0] Disconnect a wallet -}
