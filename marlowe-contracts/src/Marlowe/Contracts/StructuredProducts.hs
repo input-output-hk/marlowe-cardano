@@ -83,7 +83,7 @@ reverseConvertible investor fixing maturity settlement currency underlying strik
   zcb `both` shortCall
   where
     zcb =
-      zeroCouponBond
+      zeroCouponBond'
         investor
         (Role "BondProvider")
         fixing

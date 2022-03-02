@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 
 module Language.Marlowe.CLI.Examples.ZeroCouponBond (
@@ -20,11 +21,11 @@ module Language.Marlowe.CLI.Examples.ZeroCouponBond (
 ) where
 
 
+import Language.Marlowe.Extended (Contract (..), Party (..), Timeout, Value (..), toCore)
 import Language.Marlowe.Semantics (MarloweData (..))
-import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..), State (..),
-                                        Token (..), Value (..))
-import Ledger (POSIXTime)
+import Language.Marlowe.SemanticsTypes (State (..), Token (..))
 import Ledger.Ada (adaSymbol, adaToken)
+import Marlowe.Contracts.ZeroCouponBond (zeroCouponBond)
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
@@ -35,8 +36,8 @@ makeZeroCouponBond :: Integer      -- ^ Lovelace that the lender contributes to 
                    -> Party        -- ^ The borrower.
                    -> Integer      -- ^ The principal.
                    -> Integer      -- ^ The interest.
-                   -> POSIXTime         -- ^ The lending deadline.
-                   -> POSIXTime         -- ^ The payback deadline.
+                   -> Timeout      -- ^ The lending deadline.
+                   -> Timeout      -- ^ The payback deadline.
                    -> MarloweData  -- ^ Swap contract and initial state.
 makeZeroCouponBond minAda lender borrower principal interest lendingDeadline paybackDeadline =
   let
@@ -51,21 +52,15 @@ makeZeroCouponBond minAda lender borrower principal interest lendingDeadline pay
       }
     principal' = Constant principal
     interest' = Constant interest
-    marloweContract =
-      When
-        [
-          Case (Deposit lender lender ada principal')
-            $ Pay lender (Party borrower) ada principal'
-            $ When
-              [
-                Case (Deposit borrower borrower ada (principal' `AddValue` interest'))
-                  $ Pay borrower (Party lender) ada (principal' `AddValue` interest')
-                  Close
-              ]
-              paybackDeadline
-              Close
-        ]
+    Just marloweContract = toCore $
+      zeroCouponBond
+        lender
+        borrower
         lendingDeadline
+        paybackDeadline
+        principal'
+        (principal' `AddValue` interest')
+        ada
         Close
   in
     MarloweData{..}

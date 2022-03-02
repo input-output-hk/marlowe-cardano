@@ -92,6 +92,7 @@ library
     http-client,
     lens,
     marlowe,
+    marlowe-contracts,
     memory,
     mtl,
     network,

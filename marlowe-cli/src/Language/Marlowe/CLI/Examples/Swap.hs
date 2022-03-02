@@ -12,7 +12,7 @@
 
 
 {-# LANGUAGE RecordWildCards #-}
-
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Marlowe.CLI.Examples.Swap (
 -- * Contract
@@ -20,11 +20,11 @@ module Language.Marlowe.CLI.Examples.Swap (
 ) where
 
 
+import Language.Marlowe.Extended (Contract (..), Party (..), Timeout, Value (..), toCore)
 import Language.Marlowe.Semantics (MarloweData (..))
-import Language.Marlowe.SemanticsTypes (Action (..), Case (..), Contract (..), Party (..), Payee (..), State (..),
-                                        Token (..), Value (..))
-import Ledger (POSIXTime)
+import Language.Marlowe.SemanticsTypes (State (..), Token (..))
 import Ledger.Ada (adaSymbol, adaToken)
+import Marlowe.Contracts.Swap (swap)
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
@@ -34,11 +34,11 @@ makeSwapContract :: Integer      -- ^ Lovelace that the first party contributes 
                  -> Party        -- ^ First party.
                  -> Token        -- ^ First party's token.
                  -> Integer      -- ^ Amount of first party's token.
-                 -> POSIXTime         -- ^ Timeout for first party's deposit.
+                 -> Timeout      -- ^ Timeout for first party's deposit.
                  -> Party        -- ^ Second party.
                  -> Token        -- ^ Second party's token.
                  -> Integer      -- ^ Amount of second party's token.
-                 -> POSIXTime         -- ^ Timeout for second party's deposit
+                 -> Timeout      -- ^ Timeout for second party's deposit
                  -> MarloweData  -- ^ Swap contract and initial state.
 makeSwapContract minAda aParty aToken aAmount aTimeout bParty bToken bAmount bTimeout =
   let
@@ -50,21 +50,16 @@ makeSwapContract minAda aParty aToken aAmount aTimeout bParty bToken bAmount bTi
       , boundValues = AM.empty
       , minTime     = 1
       }
-    marloweContract =
-      When
-        [
-          Case (Deposit aParty aParty aToken $ Constant aAmount)
-            $ When
-              [
-                Case (Deposit bParty bParty bToken $ Constant bAmount)
-                $ Pay aParty (Party bParty) aToken (Constant aAmount)
-                $ Pay bParty (Party aParty) bToken (Constant bAmount)
-                Close
-              ]
-              bTimeout
-              Close
-        ]
+    Just marloweContract = toCore $
+      swap
+        aParty
+        aToken
+        (Constant aAmount)
         aTimeout
+        bParty
+        bToken
+        (Constant bAmount)
+        bTimeout
         Close
   in
     MarloweData{..}
