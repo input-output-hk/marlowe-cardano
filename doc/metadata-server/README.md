@@ -314,7 +314,14 @@ txMetadata = {
 
 If both `on` and `off` parts are defined we treat `on` values as fallback ([`sequnenceNumber = 0`](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0026#sequence-numbers)) and prioritize responses from the server. We allow servers to respond with local redirects so entries can be lifted to subjects or even different REST resources i.e. `/metadata/{subject}/property/exteneded` could possibly redirect to `/extended/{extContractId}/`.
 
+## Implementation
 
+### Prototyping metadata server
 
+For an initial protyping phase of the metadata server we can use libraries from (`input-output-hk/offchain-metadata-tools`)[`https://github.com/input-output-hk/offchain-metadata-tools`]. This project provides a basic server and simple database layer (based on `postgresql`) for key-value service which implements [CIP-0026 - Cardano Off-Chain Metadata](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0026).
+In the case of Marketplace we want to probably expose only metadata subjects for the instances of contracts (like `/metadata/{ insId }/`) and expose templates and their metadata using other routing patterns (like `/extended/{ extContractId }/`) and use redirects for properties (`/metadata/{ insId }/property/extended`). Of course if we want to flatten both resources into the metadata subjects we can do this by using some encoding for inheritance on the `SQL` level but this comes with its own overhead and makes typing and schema of the API more complicated.
 
+### `TxMetadata`
+
+In the current implementation we use `PAB` to submit a transaction to the blockchain. It seems like support for the metadatadata handling is not implemented [by this layer](https://github.com/input-output-hk/plutus-apps/issues/93#issuecomment-1055562155).
 
