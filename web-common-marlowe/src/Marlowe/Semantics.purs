@@ -1319,11 +1319,10 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
     D.decode
       $ D.sumType "TransactionError"
       $ Map.fromFoldable
-          [ "TEAmbiguousTimeIntervalError" /\ D.content
-              (TEAmbiguousTimeIntervalError <$ D.null)
-          , "TEApplyNoMatchError" /\ D.content (TEApplyNoMatchError <$ D.null)
+          [ "TEAmbiguousTimeIntervalError" /\ pure TEAmbiguousTimeIntervalError
+          , "TEApplyNoMatchError" /\ pure TEApplyNoMatchError
           , "TEIntervalError" /\ D.content (TEIntervalError <$> D.value)
-          , "TEUselessTransaction" /\ D.content (TEUselessTransaction <$ D.null)
+          , "TEUselessTransaction" /\ pure TEUselessTransaction
           ]
 
 newtype TransactionInput
