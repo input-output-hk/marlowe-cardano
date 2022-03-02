@@ -31,7 +31,6 @@ import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
-import Data.Maybe (fromMaybe)
 import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Time.Duration (Milliseconds(..))
@@ -120,8 +119,6 @@ deriveContractState currentTime wallet = map \executionState ->
     { executionState
     , contractUserParties: userParties
     , namedActions: userNamedActions userParties
-        $ fromMaybe []
-        $ hush
         $ extractNamedActions currentTime executionState
     }
 

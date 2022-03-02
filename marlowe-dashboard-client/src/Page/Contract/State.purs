@@ -10,7 +10,7 @@ import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , modifyContractNicknames
   )
-import Capability.Toast (class Toast, addToast)
+import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -83,7 +83,6 @@ import Page.Contract.Types
 import Page.Contract.View (contractScreen)
 import Store as Store
 import Store.Contracts (ContractStore, getContract, getNewContract)
-import Toast.Types (errorToast)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -179,13 +178,10 @@ updateCards mExecutionState = void $ runMaybeT do
   executionState <- hoistMaybe mExecutionState
   currentTime <- now
   let
-    mNewContractState = map Started
+    newContractState = Started
       $ regenerateStepCards currentTime
       $ set _executionState executionState startedContract
-  case mNewContractState of
-    Left error ->
-      addToast $ errorToast "Error updating contract card state" $ Just error
-    Right newContractState -> assign _contract newContractState
+  assign _contract newContractState
 
 handleAction
   :: forall m
@@ -333,7 +329,7 @@ timeoutToStep state { time, missedActions } =
           }
     }
 
-regenerateStepCards :: Instant -> StartedState -> Either String StartedState
+regenerateStepCards :: Instant -> StartedState -> StartedState
 regenerateStepCards currentTime state =
   -- TODO: This regenerates all the previous step cards, resetting them to their default state (showing
   -- the Tasks tab). If any of them are showing the Balances tab, it would be nice to keep them that way.
@@ -363,11 +359,10 @@ regenerateStepCards currentTime state =
 
     contractUserParties = state ^. _contractUserParties
 
-    namedActions =
-      userNamedActions contractUserParties
-        <$> extractNamedActions currentTime executionState
+    namedActions = userNamedActions contractUserParties
+      $ extractNamedActions currentTime executionState
   in
-    state { previousSteps = previousSteps, namedActions = _ } <$> namedActions
+    state { previousSteps = previousSteps, namedActions = namedActions }
 
 selectLastStep :: StartedState -> StartedState
 selectLastStep state@{ previousSteps } = state
