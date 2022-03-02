@@ -73,7 +73,15 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
-import Env (Env, _applyInputListeners, _createListeners, _redeemListeners)
+import Env
+  ( Env
+  , PollingSources
+  , Sources
+  , _applyInputListeners
+  , _createListeners
+  , _redeemListeners
+  , _sources
+  )
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -105,12 +113,9 @@ import MainFrame.Lenses
 import MainFrame.Types
   ( Action(..)
   , ChildSlots
-  , Input
   , Msg
-  , PollingSources
   , Query(..)
   , Slice
-  , Sources
   , State
   , WebSocketStatus(..)
   )
@@ -164,7 +169,7 @@ mkMainFrame
   => Toast m
   => MonadClipboard m
   => MainFrameLoop m
-  => Component Query Input Msg m
+  => Component Query Unit Msg m
 mkMainFrame =
   connect
     ( selectEq \{ addressBook, wallet, contracts, currentTime } ->
@@ -177,7 +182,7 @@ mkMainFrame =
           mkEval defaultEval
             { handleQuery = handleQuery
             , handleAction = handleAction
-            , receive = Just <<< Receive
+            , receive = Just <<< Receive <<< _.context
             , initialize = Just Init
             }
       }
@@ -193,20 +198,14 @@ emptyState =
       , contracts: emptyContractStore
       , currentTime: bottom
       }
-  , sources:
-      { pabWebsocket: empty
-      , clock: empty
-      , polling: { walletRegular: empty, walletSync: empty }
-      }
   }
 
-deriveState :: State -> Connected Slice Input -> State
-deriveState state { context, input } = state
+deriveState :: State -> Connected Slice Unit -> State
+deriveState state { context } = state
   { subState = case state.subState of
       Right ds -> Right ds
       Left ws -> Left ws
   , store = context
-  , sources = input.sources
   }
 
 handleQuery
@@ -288,9 +287,9 @@ handleAction Init = do
     mWalletDetails
   assign _tzOffset =<< timezoneOffset
 
-handleAction (Receive input) = do
+handleAction (Receive context) = do
   oldStore <- use _store
-  { store } <- H.modify $ flip deriveState input
+  { store } <- H.modify $ flip deriveState { context, input: unit }
   -- Persist the wallet details so that when we Init, we can try to recover it
   updateWallet
     $ map
@@ -600,11 +599,11 @@ activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
 
 subscribeToSources
   :: forall m msg slots
-   . MonadStore Store.Action Store.Store m
+   . MonadAsk Env m
+  => MonadStore Store.Action Store.Store m
   => HalogenM State Action slots msg m Unit
-
 subscribeToSources = do
-  sources <- H.gets _.sources
+  sources <- asks $ view _sources
   walletInitial <- liftEffect HS.create
   walletUpdates <- liftEffect HS.create
   storeEmitter <- emitSelected $ selectEq $ preview $ _wallet <<< _Connected
@@ -738,7 +737,6 @@ toWelcome
   => Welcome.State
   -> HalogenM Welcome.State Welcome.Action slots msg m Unit
   -> HalogenM State Action slots msg m Unit
-
 toWelcome s = mapAction WelcomeAction <<< imapState (lens getter setter)
   where
   getter = fromMaybe s <<< preview _welcomeState

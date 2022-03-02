@@ -21,8 +21,6 @@ import Data.Wallet (SyncStatus)
 import Data.WalletId (WalletId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
-import Halogen.Store.Connect (Connected)
-import Halogen.Subscription (Emitter)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams)
@@ -33,33 +31,16 @@ import Page.Welcome.CreateWallet.Types as CreateWallet
 import Page.Welcome.RestoreWallet.Types as RestoreWallet
 import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.Contract.Effects (ActiveEndpoint)
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Store.Contracts (ContractStore)
 import Store.Wallet (WalletStore)
 import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
-import WebSocket.Support (FromSocket)
 
 type Slice =
   { addressBook :: AddressBook
   , wallet :: WalletStore
   , contracts :: ContractStore
   , currentTime :: Instant
-  }
-
-type PollingSources =
-  { walletRegular :: Emitter Unit
-  , walletSync :: Emitter Unit
-  }
-
-type Sources =
-  { pabWebsocket :: Emitter (FromSocket CombinedWSStreamToClient)
-  , clock :: Emitter Unit
-  , polling :: PollingSources
-  }
-
-type Input =
-  { sources :: Sources
   }
 
 -- The app exists in one of two main subStates: the "welcome" state for when you have
@@ -70,7 +51,6 @@ type State =
   , tzOffset :: Minutes
   , store :: Slice
   , subState :: Either Welcome.State Dashboard.State
-  , sources :: Sources
   }
 
 data WebSocketStatus
@@ -117,7 +97,7 @@ data Msg
 data Action
   = WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
-  | Receive (Connected Slice Input)
+  | Receive Slice
   | Init
   | Tick
   | OnPoll SyncStatus WalletId

@@ -49,9 +49,11 @@ import Data.Variant.Generic (class Constructors, mkConstructors')
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
 import Effect.Aff (Aff)
-import Env (Env(..))
-import Halogen (HalogenM, liftAff)
+import Effect.Class (liftEffect)
+import Env (_sinks)
+import Halogen (HalogenM)
 import Halogen.Store.Monad (getStore, updateStore)
+import Halogen.Subscription as HS
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
@@ -76,7 +78,6 @@ import Types
   , JsonDecodeErrorRow
   , MetadataNotFoundErrorRow
   )
-import WebSocket.Support as WS
 
 type FollowContractError = Variant
   (JsonAjaxErrorRow + MetadataNotFoundErrorRow + JsonDecodeErrorRow + ())
@@ -213,10 +214,8 @@ invalidWalletIdToPubKeyHash = PKH.fromString <<< WI.toString
 
 sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
 sendWsMessage msg = do
-  wsManager <- asks \(Env e) -> e.wsManager
-  liftAff
-    $ WS.managerWriteOutbound wsManager
-    $ WS.SendMessage msg
+  { pabWebsocket } <- asks $ view _sinks
+  liftEffect $ HS.notify pabWebsocket msg
 
 instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) where
   followContract walletDetails marloweParams = lift $ followContract

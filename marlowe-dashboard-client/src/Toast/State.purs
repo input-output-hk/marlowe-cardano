@@ -8,7 +8,6 @@ import Data.Lens.Extra (peruse)
 import Data.Maybe (fromMaybe)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse)
-import Debug (traceM)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)

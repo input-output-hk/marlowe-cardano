@@ -12,7 +12,7 @@ import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Effect.AVar (AVar)
 import Halogen (SubscriptionId)
-import Halogen.Subscription (Listener, Subscription)
+import Halogen.Subscription (Emitter, Listener, Subscription)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import Plutus.PAB.Webserver.Types
@@ -20,7 +20,7 @@ import Plutus.PAB.Webserver.Types
   , CombinedWSStreamToServer
   )
 import Type.Proxy (Proxy(..))
-import WebSocket.Support (WebSocketManager) as WS
+import WebSocket.Support (FromSocket)
 
 -- A two-layer mapping of semaphores. The keys of the outer Map correspond to
 -- the app IDs of the different plutus apps, the keys of the inner Map
@@ -30,6 +30,21 @@ import WebSocket.Support (WebSocketManager) as WS
 -- prospective clients of that endpoint will need to wait until it becomes
 -- available again).
 type EndpointSemaphores = Map PlutusAppId (Map String (AVar Unit))
+
+type PollingSources =
+  { walletRegular :: Emitter Unit
+  , walletSync :: Emitter Unit
+  }
+
+type Sources =
+  { pabWebsocket :: Emitter (FromSocket CombinedWSStreamToClient)
+  , clock :: Emitter Unit
+  , polling :: PollingSources
+  }
+
+type Sinks =
+  { pabWebsocket :: Listener CombinedWSStreamToServer
+  }
 
 -- Application enviroment configuration
 newtype Env = Env
@@ -49,13 +64,13 @@ newtype Env = Env
       AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams))
   , applyInputListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
   , redeemListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
-  , wsManager :: WebSocketManager
+  -- | All the outbound communication channels to the outside world
+  , sinks :: Sinks
+  -- | All the inbound communication channels from the outside world
+  , sources :: Sources
   }
 
 derive instance newtypeEnv :: Newtype Env _
-
-type WebSocketManager
-  = WS.WebSocketManager CombinedWSStreamToClient CombinedWSStreamToServer
 
 _createListeners :: Lens' Env
   (AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams)))
@@ -71,3 +86,9 @@ _redeemListeners = _Newtype <<< prop (Proxy :: _ "redeemListeners")
 
 _endpointSemaphores :: Lens' Env (AVar EndpointSemaphores)
 _endpointSemaphores = _Newtype <<< prop (Proxy :: _ "endpointSemaphores")
+
+_sources :: Lens' Env Sources
+_sources = _Newtype <<< prop (Proxy :: _ "sources")
+
+_sinks :: Lens' Env Sinks
+_sinks = _Newtype <<< prop (Proxy :: _ "sinks")
