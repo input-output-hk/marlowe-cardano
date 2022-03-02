@@ -627,6 +627,7 @@ actionsFromSources
   :: Emitter (Maybe PABConnectedWallet)
   -> Sources
   -> Emitter (Maybe Action)
+
 actionsFromSources wallet { pabWebsocket, clock, polling } =
   actionFromWebsocket <$> wallet <*> pabWebsocket
     <|> switchEmitter (pollWallet polling <$> wallet)

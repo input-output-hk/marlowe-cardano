@@ -67,9 +67,12 @@ instance MonadTime Effect where
   timezoneOffset = EN.getTimezoneOffset
   makeClock d = pure $ HS.makeEmitter \push -> do
     cancelled <- Ref.new false
-    launchAff_ $ unlessM (liftEffect $ Ref.read cancelled) do
-      liftEffect $ push =<< now
-      delay $ fromDuration d
+    let
+      loop = unlessM (liftEffect $ Ref.read cancelled) do
+        liftEffect $ push =<< now
+        delay $ fromDuration d
+        loop
+    launchAff_ loop
     pure do
       Ref.write true cancelled
 
