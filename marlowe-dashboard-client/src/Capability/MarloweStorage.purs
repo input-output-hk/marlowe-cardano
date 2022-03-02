@@ -16,11 +16,13 @@ import Prologue
 import AppM (AppM)
 import Control.Monad.Except (lift)
 import Control.Monad.Maybe.Trans (MaybeT)
+import Control.Monad.Reader (asks)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Either (hush)
+import Data.Lens (view)
 import Data.LocalContractNicknames
   ( LocalContractNicknames
   , emptyLocalContractNicknames
@@ -33,9 +35,11 @@ import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.Class (liftEffect)
+import Env (_localStorage)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (getStore, updateStore)
-import LocalStorage (Key(..), getItem, removeItem, setItem)
+import LocalStorage (Key(..))
+import LocalStorage as LS
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Store (Action(..))
 import Store.Contracts as ContractStore
@@ -74,13 +78,13 @@ modifyAddressBook_
 modifyAddressBook_ = void <<< modifyAddressBook
 
 getAddressBook :: Effect AddressBook
-getAddressBook = decodeAddressBook <$> getItem addressBookLocalStorageKey
+getAddressBook = decodeAddressBook <$> LS.getItem addressBookLocalStorageKey
   where
   decodeAddressBook mAddressBookJson = fromMaybe AddressBook.empty $
     hush <<< parseDecodeJson =<< mAddressBookJson
 
 getContractNicknames :: Effect LocalContractNicknames
-getContractNicknames = decodeContractNicknames <$> getItem
+getContractNicknames = decodeContractNicknames <$> LS.getItem
   contractNicknamesLocalStorageKey
   where
   decodeContractNicknames mContractNicknames =
@@ -88,12 +92,15 @@ getContractNicknames = decodeContractNicknames <$> getItem
       mContractNicknames
 
 instance ManageMarloweStorage AppM where
-  clearAllLocalStorage =
+  clearAllLocalStorage = do
+    { removeItem } <- asks $ view _localStorage
     liftEffect do
       removeItem addressBookLocalStorageKey
       removeItem contractNicknamesLocalStorageKey
       removeItem walletRoleContractsLocalStorageKey
+
   modifyAddressBook f = do
+    { setItem } <- asks $ view _localStorage
     updateStore $ ModifyAddressBook f
     addressBook <- _.addressBook <$> getStore
     liftEffect
@@ -102,6 +109,7 @@ instance ManageMarloweStorage AppM where
     pure addressBook
 
   modifyContractNicknames f = do
+    { setItem } <- asks $ view _localStorage
     updateStore $ ModifyContractNicknames f
     contractNicknames <- ContractStore.getContractNicknames <<< _.contracts <$>
       getStore
@@ -111,11 +119,16 @@ instance ManageMarloweStorage AppM where
     pure contractNicknames
 
   -- Wallet
-  updateWallet Nothing = liftEffect $ removeItem walletLocalStorageKey
-  updateWallet (Just wallet) = liftEffect $ setItem walletLocalStorageKey $
-    encodeStringifyJson
-      wallet
+  updateWallet Nothing = do
+    { removeItem } <- asks $ view _localStorage
+    liftEffect $ removeItem walletLocalStorageKey
+
+  updateWallet (Just wallet) = do
+    { setItem } <- asks $ view _localStorage
+    liftEffect $ setItem walletLocalStorageKey $ encodeStringifyJson wallet
+
   getWallet = do
+    { getItem } <- asks $ view _localStorage
     mWalletJson <- liftEffect $ getItem
       walletLocalStorageKey
     pure do

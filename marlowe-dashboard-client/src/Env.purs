@@ -10,10 +10,12 @@ import Data.Map (Map)
 import Data.Newtype (class Newtype)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
+import Effect (Effect)
 import Effect.AVar (AVar)
 import Effect.Aff (Aff)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener, Subscription)
+import LocalStorage (Key)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import Plutus.PAB.Webserver.Types
@@ -46,6 +48,12 @@ type Sources =
 
 type Sinks =
   { pabWebsocket :: Listener CombinedWSStreamToServer
+  }
+
+type LocalStorageApi =
+  { removeItem :: Key -> Effect Unit
+  , getItem :: Key -> Effect (Maybe String)
+  , setItem :: Key -> String -> Effect Unit
   }
 
 -- Newtype wrapper for this callback because PureScript doesn't like pualified
@@ -83,6 +91,7 @@ newtype Env = Env
   -- | This allows us to inject a custom HTTP request effect, overriding the
   -- | default one for testing or global extension purposes.
   , handleRequest :: HandleRequest
+  , localStorage :: LocalStorageApi
   }
 
 derive instance newtypeEnv :: Newtype Env _
@@ -110,3 +119,6 @@ _sinks = _Newtype <<< prop (Proxy :: _ "sinks")
 
 _handleRequest :: Lens' Env HandleRequest
 _handleRequest = _Newtype <<< prop (Proxy :: _ "handleRequest")
+
+_localStorage :: Lens' Env LocalStorageApi
+_localStorage = _Newtype <<< prop (Proxy :: _ "localStorage")

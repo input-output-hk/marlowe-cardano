@@ -28,6 +28,7 @@ import Env (Env(..), HandleRequest(..), Sinks, Sources)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
+import LocalStorage (getItem, removeItem, setItem)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
 import MainFrame.Types as MainFrame
@@ -70,6 +71,11 @@ mkEnv sources sinks webpackBuildMode = do
     , sinks
     , sources
     , handleRequest: HandleRequest (request unit)
+    , localStorage:
+        { getItem
+        , setItem
+        , removeItem
+        }
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a
