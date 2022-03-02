@@ -27,6 +27,7 @@ module Language.Marlowe.CLI.Command.Parse (
 , parseSlot
 , parseSlotNo
 , parseStakeAddressReference
+, parseTimeout
 , parseToken
 , parseTokenName
 , parseTxId
@@ -48,6 +49,7 @@ import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
 import Control.Applicative ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.Client (MarloweClientInput (..))
+import qualified Language.Marlowe.Extended as E (Timeout (..))
 import Language.Marlowe.SemanticsTypes (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
@@ -92,6 +94,11 @@ parseSlot = Slot <$> O.auto
 -- | Parser for POSIXTime.
 parsePOSIXTime :: O.ReadM POSIXTime
 parsePOSIXTime = POSIXTime <$> O.auto
+
+
+-- | Parser for Timeout.
+parseTimeout :: O.ReadM E.Timeout
+parseTimeout = E.POSIXTime <$> O.auto
 
 
 -- | Parser for currency symbol.

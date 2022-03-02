@@ -56,19 +56,19 @@ coin = Token "" "coin"
 swapTest :: IO ()
 swapTest =
   testNoWarnings $
-    swap partyA ada (Constant 1) partyB coin (Constant 10) (POSIXTime 10) Close
+    swap partyA ada (Constant 1) (POSIXTime 10) partyB coin (Constant 10) (POSIXTime 10) Close
 
 sequentiallySwapTwiceTest :: IO ()
 sequentiallySwapTwiceTest =
   testNoWarnings $
-    swap partyA ada (Constant 1) partyB coin (Constant 10) (POSIXTime 10) $
-    swap partyA coin (Constant 10) partyB ada (Constant 1) (POSIXTime 10) Close
+    swap partyA ada (Constant 1) (POSIXTime 10) partyB coin (Constant 10) (POSIXTime 10) $
+    swap partyA coin (Constant 10) (POSIXTime 10) partyB ada (Constant 1) (POSIXTime 10) Close
 
 concurrentlySwapTwiceTest :: IO ()
 concurrentlySwapTwiceTest =
   testNoWarnings $
-    let s1 = swap partyA ada (Constant 1) partyB coin (Constant 10) (POSIXTime 10) Close
-        s2 = swap partyA coin (Constant 10) partyB ada (Constant 1) (POSIXTime 10) Close
+    let s1 = swap partyA ada (Constant 1) (POSIXTime 10) partyB coin (Constant 10) (POSIXTime 10) Close
+        s2 = swap partyA coin (Constant 10) (POSIXTime 10) partyB ada (Constant 1) (POSIXTime 10) Close
      in s1 `both` s2
 
 coveredCallTest :: IO ()
