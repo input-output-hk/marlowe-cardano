@@ -53,17 +53,17 @@ data TemplateCommand =
     -- | Template for escrow contract.
   | TemplateEscrow
     {
-      minAda            :: Integer    -- ^ Lovelace in the initial state.
-    , price             :: Integer    -- ^ Price of the item for sale, in lovelace.
-    , seller            :: Party      -- ^ The seller.
-    , buyer             :: Party      -- ^ The buyer.
-    , mediator          :: Party      -- ^ The mediator.
-    , paymentDeadline   :: POSIXTime  -- ^ The deadline for the buyer to pay.
-    , complaintDeadline :: POSIXTime  -- ^ The deadline for the buyer to complain.
-    , disputeDeadline   :: POSIXTime  -- ^ The deadline for the seller to dispute a complaint.
-    , mediationDeadline :: POSIXTime  -- ^ The deadline for the mediator to decide.
-    , contractFile      :: FilePath   -- ^ The output JSON file representing the Marlowe contract.
-    , stateFile         :: FilePath   -- ^ The output JSON file representing the Marlowe contract's state.
+      minAda            :: Integer  -- ^ Lovelace in the initial state.
+    , price             :: Integer  -- ^ Price of the item for sale, in lovelace.
+    , seller            :: Party    -- ^ The seller.
+    , buyer             :: Party    -- ^ The buyer.
+    , mediator          :: Party    -- ^ The mediator.
+    , paymentDeadline   :: Timeout  -- ^ The deadline for the buyer to pay.
+    , complaintDeadline :: Timeout  -- ^ The deadline for the buyer to complain.
+    , disputeDeadline   :: Timeout  -- ^ The deadline for the seller to dispute a complaint.
+    , mediationDeadline :: Timeout  -- ^ The deadline for the mediator to decide.
+    , contractFile      :: FilePath -- ^ The output JSON file representing the Marlowe contract.
+    , stateFile         :: FilePath -- ^ The output JSON file representing the Marlowe contract's state.
     }
     -- | Template for swap contract.
   | TemplateSwap
@@ -187,17 +187,17 @@ templateEscrowCommand =
 templateEscrowOptions :: O.Parser TemplateCommand
 templateEscrowOptions =
   TemplateEscrow
-    <$> O.option O.auto         (O.long "minimum-ada"        <> O.metavar "INTEGER"       <> O.help "Lovelace in the initial state."                                            )
-    <*> O.option O.auto         (O.long "price"              <> O.metavar "INTEGER"       <> O.help "The price of the sale, in lovelace."                                       )
-    <*> O.option parseParty     (O.long "seller"             <> O.metavar "PARTY"         <> O.help "The seller."                                                               )
-    <*> O.option parseParty     (O.long "buyer"              <> O.metavar "PARTY"         <> O.help "The buyer."                                                                )
-    <*> O.option parseParty     (O.long "mediator"           <> O.metavar "PARTY"         <> O.help "The mediator."                                                             )
-    <*> O.option parsePOSIXTime (O.long "payment-deadline"   <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the buyer to pay, in POSIX milliseconds."                 )
-    <*> O.option parsePOSIXTime (O.long "complaint-deadline" <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the buyer to complain, in POSIX milliseconds."            )
-    <*> O.option parsePOSIXTime (O.long "dispute-deadline"   <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the seller to dispute a complaint, in POSIX milliseconds.")
-    <*> O.option parsePOSIXTime (O.long "mediation-deadline" <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the mediator to decide, in POSIX milliseconds."           )
-    <*> O.strOption             (O.long "out-contract-file"  <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."                                        )
-    <*> O.strOption             (O.long "out-state-file"     <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state."                                )
+    <$> O.option O.auto       (O.long "minimum-ada"        <> O.metavar "INTEGER"       <> O.help "Lovelace in the initial state."                                            )
+    <*> O.option O.auto       (O.long "price"              <> O.metavar "INTEGER"       <> O.help "The price of the sale, in lovelace."                                       )
+    <*> O.option parseParty   (O.long "seller"             <> O.metavar "PARTY"         <> O.help "The seller."                                                               )
+    <*> O.option parseParty   (O.long "buyer"              <> O.metavar "PARTY"         <> O.help "The buyer."                                                                )
+    <*> O.option parseParty   (O.long "mediator"           <> O.metavar "PARTY"         <> O.help "The mediator."                                                             )
+    <*> O.option parseTimeout (O.long "payment-deadline"   <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the buyer to pay, in POSIX milliseconds."                 )
+    <*> O.option parseTimeout (O.long "complaint-deadline" <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the buyer to complain, in POSIX milliseconds."            )
+    <*> O.option parseTimeout (O.long "dispute-deadline"   <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the seller to dispute a complaint, in POSIX milliseconds.")
+    <*> O.option parseTimeout (O.long "mediation-deadline" <> O.metavar "POSIX_TIME"    <> O.help "The deadline for the mediator to decide, in POSIX milliseconds."           )
+    <*> O.strOption           (O.long "out-contract-file"  <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."                                        )
+    <*> O.strOption           (O.long "out-state-file"     <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state."                                )
 
 
 -- | Parser for the "swap" command.

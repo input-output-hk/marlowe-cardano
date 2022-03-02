@@ -13,6 +13,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 
 module Language.Marlowe.CLI.Examples.Escrow (
@@ -21,30 +22,27 @@ module Language.Marlowe.CLI.Examples.Escrow (
 ) where
 
 
+import Language.Marlowe.Extended
 import Language.Marlowe.Semantics (MarloweData (..))
-import Language.Marlowe.SemanticsTypes (Action (..), Bound (..), Case (..), ChoiceId (..), Contract (..), Party (..),
-                                        Payee (..), State (..), Token (..), Value (..))
-import Ledger (POSIXTime)
-import Ledger.Ada (adaSymbol, adaToken)
+import Language.Marlowe.SemanticsTypes (State (..))
+import Marlowe.Contracts.Escrow
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 
 -- | An escrow contract with mediation.
-makeEscrowContract :: Integer      -- ^ Lovelace in the initial state.
-                   -> Integer      -- ^ Price of the item, in lovelace.
-                   -> Party        -- ^ The seller.
-                   -> Party        -- ^ The buyer.
-                   -> Party        -- ^ The mediator.
-                   -> POSIXTime    -- ^ The deadline for the buyer to pay.
-                   -> POSIXTime    -- ^ The deadline for the buyer to complain.
-                   -> POSIXTime    -- ^ The deadline for the seller to dispute a complaint.
-                   -> POSIXTime    -- ^ The deadline for the mediator to decide.
-                   -> MarloweData  -- ^ The escrow contract and initial state.
+makeEscrowContract :: Integer     -- ^ Lovelace in the initial state.
+                   -> Integer     -- ^ Price of the item, in lovelace.
+                   -> Party       -- ^ The seller.
+                   -> Party       -- ^ The buyer.
+                   -> Party       -- ^ The mediator.
+                   -> Timeout     -- ^ The deadline for the buyer to pay.
+                   -> Timeout     -- ^ The deadline for the buyer to complain.
+                   -> Timeout     -- ^ The deadline for the seller to dispute a complaint.
+                   -> Timeout     -- ^ The deadline for the mediator to decide.
+                   -> MarloweData -- ^ The escrow contract and initial state.
 makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintDeadline disputeDeadline mediationDeadline =
   let
-    ada = Token adaSymbol adaToken
-    price' = Constant price
     marloweState =
       State
       {
@@ -53,39 +51,15 @@ makeEscrowContract minAda price seller buyer mediator paymentDeadline complaintD
       , boundValues = AM.empty
       , minTime     = 1
       }
-    marloweContract =
-      When
-        [
-          Case (Deposit seller buyer ada price')
-            $ When
-              [
-                Case (Choice (ChoiceId "Everything is alright" buyer) [Bound 0 0])
-                  Close
-              , Case (Choice (ChoiceId "Report problem" buyer) [Bound 1 1])
-                  $ Pay seller (Account buyer) ada price'
-                  $ When
-                    [
-                      Case (Choice (ChoiceId "Confirm problem" seller) [Bound 1 1])
-                        Close
-                    , Case (Choice (ChoiceId "Dispute problem" seller) [Bound 0 0])
-                      $ When
-                        [
-                          Case (Choice (ChoiceId "Dismiss claim" mediator) [Bound 0 0])
-                            $ Pay buyer (Account seller) ada price'
-                            Close
-                        , Case (Choice (ChoiceId "Confirm claim" mediator) [Bound 1 1])
-                            Close
-                        ]
-                        mediationDeadline
-                        Close
-                    ]
-                    disputeDeadline
-                  Close
-              ]
-              complaintDeadline
-              Close
-        ]
+    Just marloweContract = toCore $
+      escrow
+        (Constant price)
+        seller
+        buyer
+        mediator
         paymentDeadline
-        Close
+        complaintDeadline
+        disputeDeadline
+        mediationDeadline
   in
     MarloweData{..}
