@@ -39,6 +39,7 @@
         buildable = true;
         modules = [
           "Marlowe/Contracts/Common"
+          "Marlowe/Contracts/Escrow"
           "Marlowe/Contracts/Futures"
           "Marlowe/Contracts/Options"
           "Marlowe/Contracts/StructuredProducts"
