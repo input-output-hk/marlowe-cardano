@@ -11,6 +11,7 @@ import Data.Newtype (class Newtype)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Effect.AVar (AVar)
+import Effect.Aff (Aff)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener, Subscription)
 import Marlowe.PAB (PlutusAppId)
@@ -19,6 +20,7 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
   )
+import Servant.PureScript (class ContentType, AjaxError, Request)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -46,6 +48,16 @@ type Sinks =
   { pabWebsocket :: Listener CombinedWSStreamToServer
   }
 
+-- Newtype wrapper for this callback because PureScript doesn't like pualified
+-- types to appear in records.
+newtype HandleRequest = HandleRequest
+  ( forall decodeError resContent reqContent req res
+     . ContentType reqContent
+    => ContentType resContent
+    => Request reqContent resContent decodeError req res
+    -> Aff (Either (AjaxError decodeError resContent) res)
+  )
+
 -- Application enviroment configuration
 newtype Env = Env
   {
@@ -68,6 +80,9 @@ newtype Env = Env
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
+  -- | This allows us to inject a custom HTTP request effect, overriding the
+  -- | default one for testing or global extension purposes.
+  , handleRequest :: HandleRequest
   }
 
 derive instance newtypeEnv :: Newtype Env _
@@ -92,3 +107,6 @@ _sources = _Newtype <<< prop (Proxy :: _ "sources")
 
 _sinks :: Lens' Env Sinks
 _sinks = _Newtype <<< prop (Proxy :: _ "sinks")
+
+_handleRequest :: Lens' Env HandleRequest
+_handleRequest = _Newtype <<< prop (Proxy :: _ "handleRequest")

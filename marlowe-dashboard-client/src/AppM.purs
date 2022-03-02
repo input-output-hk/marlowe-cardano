@@ -1,4 +1,4 @@
-module AppM (AppM, passphrase, runAppM) where
+module AppM (AppM, handleRequest, passphrase, runAppM) where
 
 import Prologue
 
@@ -9,6 +9,7 @@ import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader
   ( class MonadReader
   , ReaderT
+  , asks
   , mapReaderT
   , runReaderT
   , withReaderT
@@ -17,7 +18,7 @@ import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec, tailRecM)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
-import Data.Lens (Lens', over)
+import Data.Lens (Lens', over, view)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
 import Data.Newtype (un)
@@ -26,7 +27,7 @@ import Data.Passphrase as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (Env(..))
+import Env (Env(..), HandleRequest(..), _handleRequest)
 import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad
@@ -40,7 +41,13 @@ import Halogen.Store.Monad
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
-import Servant.PureScript (class MonadAjax, Request, request)
+import Servant.PureScript
+  ( class ContentType
+  , class MonadAjax
+  , AjaxError
+  , Request
+  , request
+  )
 import Store as Store
 import Type.Proxy (Proxy(..))
 import URI (Fragment, Host, Path, RelativeRef, UserInfo)
@@ -123,10 +130,18 @@ prependPath prefix =
     (_uri <<< _relPart <<< _relPath)
     (Just <<< append prefix <<< join <<< A.fromFoldable)
 
+handleRequest
+  :: forall decodeError resContent reqContent req res
+   . ContentType reqContent
+  => ContentType resContent
+  => Request reqContent resContent decodeError req res
+  -> AppM (Either (AjaxError decodeError resContent) res)
+handleRequest req = do
+  HandleRequest handle <- asks $ view _handleRequest
+  liftAff $ handle req
+
 instance MonadAjax PAB.Api AppM where
-  request api = liftAff <<< request api <<< handleRequest
-    where
-    handleRequest = prependPath [ "pab" ]
+  request api = liftAff <<< request api <<< prependPath [ "pab" ]
 
 instance MonadAjax MarloweRun.Api AppM where
   request api = liftAff <<< request api

@@ -24,13 +24,14 @@ import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (error, forkAff, launchAff_)
 import Effect.Class (liftEffect)
-import Env (Env(..), Sinks, Sources)
+import Env (Env(..), HandleRequest(..), Sinks, Sources)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
 import MainFrame.Types as MainFrame
+import Servant.PureScript (request)
 import Store (mkStore)
 import WebSocket.Support as WS
 
@@ -68,6 +69,7 @@ mkEnv sources sinks webpackBuildMode = do
     , redeemListeners
     , sinks
     , sources
+    , handleRequest: HandleRequest (request unit)
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a
