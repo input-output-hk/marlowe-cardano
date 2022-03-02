@@ -14,8 +14,9 @@ import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Now (class MonadTime, now, timezoneOffset)
+import Control.Monad.Now (class MonadTime, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.State (gets)
 import Control.Monad.State.Class (modify_)
 import Data.Array (index, length, mapMaybe, modifyAt)
 import Data.ContractNickname as ContractNickname
@@ -34,7 +35,7 @@ import Data.NewContract (NewContract(..))
 import Data.Ord (abs)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set as Set
-import Data.Time.Duration (Minutes(..), Seconds(..))
+import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (emptyUUID)
@@ -51,7 +52,6 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
-import Halogen.Time (subscribeTime')
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
 import Marlowe.Execution.State (expandBalances, extractNamedActions)
 import Marlowe.Execution.Types (PastAction(..))
@@ -75,6 +75,7 @@ import Page.Contract.Types
   , Msg(..)
   , PreviousStep
   , PreviousStepState(..)
+  , Slice
   , StartedState
   , State
   , Tab(..)
@@ -82,7 +83,7 @@ import Page.Contract.Types
   )
 import Page.Contract.View (contractScreen)
 import Store as Store
-import Store.Contracts (ContractStore, getContract, getNewContract)
+import Store.Contracts (getContract, getNewContract)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -107,7 +108,7 @@ component
   => MonadStore Store.Action Store.Store m
   => H.Component query Input Msg m
 component =
-  connect (selectEq _.contracts) $
+  connect (selectEq \{ contracts, currentTime } -> { contracts, currentTime }) $
     H.mkComponent
       { initialState: deriveState
       , render: contractScreen
@@ -122,22 +123,22 @@ dummyState :: ContractState
 dummyState = Starting $
   NewContract emptyUUID ContractNickname.unknown emptyContractMetadata
 
-deriveState :: Connected ContractStore Input -> State
+deriveState :: Connected Slice Input -> State
 deriveState
   { context
   , input: { wallet, contractIndex }
   } =
   let
     mContract = case contractIndex of
-      Starting reqId -> Starting <$> getNewContract reqId context
+      Starting reqId -> Starting <$> getNewContract reqId context.contracts
       Started marloweParams ->
-        mkInitialState wallet <$> getContract marloweParams context
+        mkInitialState wallet <$> getContract marloweParams context.contracts
 
     -- TODO: We might want to represent an error state instead of dummyState
     contract = fromMaybe dummyState $ mContract
   in
     { contract
-    , currentTime: bottom
+    , currentTime: context.currentTime
     , tzOffset: Minutes 0.0 -- This will be set in Init
     , wallet
     }
@@ -171,12 +172,11 @@ withStarted
   -> HalogenM State action slots msg m Unit
 withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
 
-updateCards
-  :: forall m. Toast m => MonadTime m => Maybe Execution.State -> DSL m Unit
+updateCards :: forall m. Toast m => Maybe Execution.State -> DSL m Unit
 updateCards mExecutionState = void $ runMaybeT do
   startedContract <- MaybeT $ peruse $ _contract <<< _Started
   executionState <- hoistMaybe mExecutionState
-  currentTime <- now
+  currentTime <- gets _.currentTime
   let
     newContractState = Started
       $ regenerateStepCards currentTime
@@ -194,9 +194,6 @@ handleAction
   => Toast m
   => Action
   -> DSL m Unit
-handleAction (Tick currentTime) = do
-  H.modify_ _ { currentTime = currentTime }
-  updateCards =<< peruse (_contract <<< _Started <<< _executionState)
 handleAction Init = do
   tzOffset <- timezoneOffset
   modify_ _ { tzOffset = tzOffset }
@@ -207,12 +204,12 @@ handleAction Init = do
     -- in the center without any animation
     liftEffect $ scrollStepToCenter Auto step elm
     subscribeToSelectCenteredStep
-  subscribeTime' (Seconds 1.0) Tick
-handleAction (Receive { input, context }) =
+handleAction (Receive { input, context }) = do
+  modify_ _ { currentTime = context.currentTime }
   case input.contractIndex of
     Started marloweParams ->
       let
-        mExecutionState = getContract marloweParams context
+        mExecutionState = getContract marloweParams context.contracts
       in
         updateCards mExecutionState
     _ -> pure unit

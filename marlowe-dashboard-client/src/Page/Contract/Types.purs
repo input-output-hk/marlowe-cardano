@@ -9,6 +9,7 @@ module Page.Contract.Types
   , PreviousStep
   , PreviousStepState(..)
   , Query(..)
+  , Slice
   , Slot
   , StartedState
   , State
@@ -106,6 +107,11 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
+type Slice =
+  { contracts :: ContractStore
+  , currentTime :: Instant
+  }
+
 type Input =
   { wallet :: PABConnectedWallet
   , contractIndex :: ContractStatusId
@@ -116,8 +122,7 @@ data Msg
 
 data Action
   = Init
-  | Tick Instant
-  | Receive (Connected ContractStore Input)
+  | Receive (Connected Slice Input)
   | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
@@ -148,7 +153,6 @@ type Slot m = H.Slot Query Msg m
 instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
   toEvent (Receive _) = Nothing
-  toEvent (Tick _) = Nothing
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
