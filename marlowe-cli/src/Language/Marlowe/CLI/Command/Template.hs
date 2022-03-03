@@ -12,6 +12,7 @@
 
 
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 
 
 module Language.Marlowe.CLI.Command.Template (
@@ -23,16 +24,16 @@ module Language.Marlowe.CLI.Command.Template (
 
 
 import Control.Monad.Except (MonadIO)
-import Language.Marlowe.CLI.Command.Parse (parsePOSIXTime, parseParty, parseTimeout, parseToken)
+import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken)
 import Language.Marlowe.CLI.Examples (makeExample)
-import Language.Marlowe.CLI.Examples.Escrow (makeEscrowContract)
-import Language.Marlowe.CLI.Examples.Swap (makeSwapContract)
-import Language.Marlowe.CLI.Examples.Trivial (makeTrivialContract)
-import Language.Marlowe.CLI.Examples.ZeroCouponBond (makeZeroCouponBond)
-import Language.Marlowe.Extended (Party, Timeout, Token)
-import Ledger (POSIXTime)
+import Language.Marlowe.Extended as E (AccountId, Contract (..), Party, Timeout, Token, Value (..), toCore)
+import Language.Marlowe.Semantics (MarloweData (..))
+import Language.Marlowe.SemanticsTypes as C (Contract, State (..))
+import Language.Marlowe.Util (ada)
+import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
 import qualified Options.Applicative as O
+import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 
 -- | Marlowe CLI commands and options for contract templates.
@@ -40,15 +41,14 @@ data TemplateCommand =
     -- | Template for trivial contract.
     TemplateTrivial
     {
-      bystander          :: Party     -- ^ The party providing the min-ADA.
-    , minAda             :: Integer   -- ^ Lovelace in the initial state.
-    , minTime            :: POSIXTime -- ^ The minimum POSIX time.
-    , party              :: Party     -- ^ The party.
-    , depositLovelace    :: Integer   -- ^ Lovelace in the deposit.
-    , withdrawalLovelace :: Integer   -- ^ Lovelace in the withdrawal.
-    , timeout            :: POSIXTime -- ^ The timeout.
-    , contractFile       :: FilePath  -- ^ The output JSON file representing the Marlowe contract.
-    , stateFile          :: FilePath  -- ^ The output JSON file representing the Marlowe contract's state.
+      bystander          :: Party    -- ^ The party providing the min-ADA.
+    , minAda             :: Integer  -- ^ Lovelace in the initial state.
+    , party              :: Party    -- ^ The party.
+    , depositLovelace    :: Integer  -- ^ Lovelace in the deposit.
+    , withdrawalLovelace :: Integer  -- ^ Lovelace in the withdrawal.
+    , timeout            :: Timeout  -- ^ The timeout.
+    , contractFile       :: FilePath -- ^ The output JSON file representing the Marlowe contract.
+    , stateFile          :: FilePath -- ^ The output JSON file representing the Marlowe contract's state.
     }
     -- | Template for escrow contract.
   | TemplateEscrow
@@ -93,52 +93,106 @@ data TemplateCommand =
     , contractFile    :: FilePath  -- ^ The output JSON file representing the Marlowe contract.
     , stateFile       :: FilePath  -- ^ The output JSON file representing the Marlowe contract's state.
     }
+    -- | Template for covered call.
+  | TemplateCoveredCall
+    {
+      minAda         :: Integer   -- ^ Lovelace that the lender contributes to the initial state.
+    , buyer          :: Party     -- ^ The lender.
+    , seller         :: Party     -- ^ The borrower.
+    , currency       :: Token     -- ^ Second party's token.
+    , underlying     :: Token     -- ^ Second party's token.
+    , strike         :: Integer   -- ^ The principal.
+    , amount         :: Integer   -- ^ The interest.
+    , issueDate      :: Timeout   -- ^ The lending deadline.
+    , maturityDate   :: Timeout   -- ^ The payback deadline.
+    , settlementDate :: Timeout   -- ^ The payback deadline.
+    , contractFile   :: FilePath  -- ^ The output JSON file representing the Marlowe contract.
+    , stateFile      :: FilePath  -- ^ The output JSON file representing the Marlowe contract's state.
+    }
 
 
 -- | Create a contract from a template.
 runTemplateCommand :: MonadIO m
                    => TemplateCommand  -- ^ The command.
                    -> m ()             -- ^ Action for runninng the command.
-runTemplateCommand TemplateTrivial{..}        = makeExample contractFile stateFile
-                                                  $ makeTrivialContract
-                                                      bystander
-                                                      minAda
-                                                      minTime
-                                                      party
-                                                      depositLovelace
-                                                      withdrawalLovelace
-                                                      timeout
-runTemplateCommand TemplateEscrow{..}         = makeExample contractFile stateFile
-                                                  $ makeEscrowContract
-                                                      minAda
-                                                      price
-                                                      seller
-                                                      buyer
-                                                      mediator
-                                                      paymentDeadline
-                                                      complaintDeadline
-                                                      disputeDeadline
-                                                      mediationDeadline
-runTemplateCommand TemplateSwap{..}           = makeExample contractFile stateFile
-                                                  $ makeSwapContract
-                                                      minAda
-                                                      aParty
-                                                      aToken
-                                                      aAmount
-                                                      aTimeout
-                                                      bParty
-                                                      bToken
-                                                      bAmount
-                                                      bTimeout
-runTemplateCommand TemplateZeroCouponBond{..} = makeExample contractFile stateFile
-                                                  $ makeZeroCouponBond
-                                                      minAda
-                                                      lender
-                                                      borrower
-                                                      principal
-                                                      interest
-                                                      lendingDeadline
-                                                      paybackDeadline
+runTemplateCommand TemplateTrivial{..}        = do marloweContract <- makeContract $
+                                                     trivial
+                                                       party
+                                                       depositLovelace
+                                                       withdrawalLovelace
+                                                       timeout
+                                                   let marloweState = initialMarloweState bystander minAda
+                                                   makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateEscrow{..}         = do marloweContract <- makeContract $
+                                                      escrow
+                                                        (Constant price)
+                                                        seller
+                                                        buyer
+                                                        mediator
+                                                        paymentDeadline
+                                                        complaintDeadline
+                                                        disputeDeadline
+                                                        mediationDeadline
+                                                   let marloweState = initialMarloweState mediator minAda
+                                                   makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateSwap{..}           = do marloweContract <- makeContract $
+                                                     swap
+                                                       aParty
+                                                       aToken
+                                                       (Constant aAmount)
+                                                       aTimeout
+                                                       bParty
+                                                       bToken
+                                                       (Constant bAmount)
+                                                       bTimeout
+                                                       Close
+                                                   let marloweState = initialMarloweState aParty minAda
+                                                   makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateZeroCouponBond{..} = do marloweContract <- makeContract $
+                                                     zeroCouponBond
+                                                       lender
+                                                       borrower
+                                                       lendingDeadline
+                                                       paybackDeadline
+                                                       (Constant principal)
+                                                       (Constant principal `AddValue` Constant interest)
+                                                       ada
+                                                       Close
+                                                   let marloweState = initialMarloweState lender minAda
+                                                   makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateCoveredCall{..}    = do marloweContract <- makeContract $
+                                                     coveredCall
+                                                       buyer
+                                                       seller
+                                                       currency
+                                                       underlying
+                                                       (Constant strike)
+                                                       (Constant amount)
+                                                       issueDate
+                                                       maturityDate
+                                                       settlementDate
+                                                   let marloweState = initialMarloweState buyer minAda
+                                                   makeExample contractFile stateFile MarloweData{..}
+
+
+-- | Translation from Extended Marlowe to Core Marlowe.
+makeContract :: MonadIO m => E.Contract -> m C.Contract
+makeContract = errorHandling . toCore
+  where
+    errorHandling (Just contract) = return contract
+    errorHandling Nothing         = error "Unexpected" -- TODO: throw exception
+
+
+-- | Build the initial Marlowe state.
+initialMarloweState :: AccountId -> Integer -> State
+initialMarloweState party minAda =
+  State
+  {
+    accounts    = AM.singleton (party, ada) minAda
+  , choices     = AM.empty
+  , boundValues = AM.empty
+  , minTime     = 1
+  }
 
 
 -- | Parser for template commands.
@@ -150,6 +204,7 @@ parseTemplateCommand =
     <> templateTrivialCommand
     <> templateSwapCommand
     <> templateZeroCouponBondCommand
+    <> templateCoveredCallCommand
 
 
 -- | Parser for the "simple" command.
@@ -164,15 +219,14 @@ templateTrivialCommand =
 templateTrivialOptions :: O.Parser TemplateCommand
 templateTrivialOptions =
   TemplateTrivial
-    <$> O.option parseParty     (O.long "bystander"           <> O.metavar "PARTY"         <> O.help "The party providing the min-ADA."          )
-    <*> O.option O.auto         (O.long "minimum-ada"         <> O.metavar "INTEGER"       <> O.help "Lovelace in the initial state."            )
-    <*> O.option parsePOSIXTime (O.long "minimum-time"        <> O.metavar "POSIX_TIME"    <> O.help "The minimum time, in POSIX milliseconds."  )
-    <*> O.option parseParty     (O.long "party"               <> O.metavar "PARTY"         <> O.help "The party."                                )
-    <*> O.option O.auto         (O.long "deposit-lovelace"    <> O.metavar "INTEGER"       <> O.help "Lovelace in the deposit."                  )
-    <*> O.option O.auto         (O.long "withdrawal-lovelace" <> O.metavar "INTEGER"       <> O.help "Lovelace in the withdrawal."               )
-    <*> O.option parsePOSIXTime (O.long "timeout"             <> O.metavar "POSIX_TIME"    <> O.help "The timeout, in POSIX milliseconds."       )
-    <*> O.strOption             (O.long "out-contract-file"   <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."        )
-    <*> O.strOption             (O.long "out-state-file"      <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state.")
+    <$> O.option parseParty   (O.long "bystander"           <> O.metavar "PARTY"         <> O.help "The party providing the min-ADA."          )
+    <*> O.option O.auto       (O.long "minimum-ada"         <> O.metavar "INTEGER"       <> O.help "Lovelace in the initial state."            )
+    <*> O.option parseParty   (O.long "party"               <> O.metavar "PARTY"         <> O.help "The party."                                )
+    <*> O.option O.auto       (O.long "deposit-lovelace"    <> O.metavar "INTEGER"       <> O.help "Lovelace in the deposit."                  )
+    <*> O.option O.auto       (O.long "withdrawal-lovelace" <> O.metavar "INTEGER"       <> O.help "Lovelace in the withdrawal."               )
+    <*> O.option parseTimeout (O.long "timeout"             <> O.metavar "POSIX_TIME"    <> O.help "The timeout, in POSIX milliseconds."       )
+    <*> O.strOption           (O.long "out-contract-file"   <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."        )
+    <*> O.strOption           (O.long "out-state-file"      <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state.")
 
 
 -- | Parser for the "escrow" command.
@@ -246,3 +300,29 @@ templateZeroCouponBondOptions =
     <*> O.option parseTimeout (O.long "repayment-deadline" <> O.metavar "POSIX_TIME"    <> O.help "The repayment deadline, in POSIX milliseconds."            )
     <*> O.strOption           (O.long "out-contract-file"  <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."                        )
     <*> O.strOption           (O.long "out-state-file"     <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state."                )
+
+
+-- | Parser for the "coveredCall" command.
+templateCoveredCallCommand :: O.Mod O.CommandFields TemplateCommand
+templateCoveredCallCommand =
+  O.command "coveredCall"
+    $ O.info templateCoveredCallOptions
+    $ O.progDesc "Create a covered call Option."
+
+
+-- | Parser for the "coveredCall" options.
+templateCoveredCallOptions :: O.Parser TemplateCommand
+templateCoveredCallOptions =
+  TemplateCoveredCall
+    <$> O.option O.auto       (O.long "minimum-ada"       <> O.metavar "INTEGER"       <> O.help "Lovelace that the lender contributes to the initial state." )
+    <*> O.option parseParty   (O.long "buyer"             <> O.metavar "PARTY"         <> O.help "The buyer."                                                 )
+    <*> O.option parseParty   (O.long "seller"            <> O.metavar "PARTY"         <> O.help "The seller."                                                )
+    <*> O.option parseToken   (O.long "currency"          <> O.metavar "TOKEN"         <> O.help "The curreny."                                               )
+    <*> O.option parseToken   (O.long "underlying"        <> O.metavar "TOKEN"         <> O.help "The underlying asset."                                      )
+    <*> O.option O.auto       (O.long "strike"            <> O.metavar "INTEGER"       <> O.help "The strike, in currency."                                   )
+    <*> O.option O.auto       (O.long "amount"            <> O.metavar "INTEGER"       <> O.help "The amount of underlying"                                   )
+    <*> O.option parseTimeout (O.long "issue-date"        <> O.metavar "POSIX_TIME"    <> O.help "The issue date, in POSIX milliseconds."                     )
+    <*> O.option parseTimeout (O.long "maturity-date"     <> O.metavar "POSIX_TIME"    <> O.help "The maturity date, in POSIX milliseconds."                  )
+    <*> O.option parseTimeout (O.long "settlement-date"   <> O.metavar "POSIX_TIME"    <> O.help "The settlement date, in POSIX milliseconds."                )
+    <*> O.strOption           (O.long "out-contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."                         )
+    <*> O.strOption           (O.long "out-state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state."                 )
