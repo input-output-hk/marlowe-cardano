@@ -108,7 +108,7 @@ choose choiceId cont =
         cont
     )
 
--- |A /Covered Call/ is an option strategie constructed by writing a call on a token
+-- |A /Covered Call/ is an option strategy constructed by writing a call on a token
 -- and in addition providing the token as cover/collateral as part of the contract
 coveredCall ::
      Party    -- ^ Buyer
