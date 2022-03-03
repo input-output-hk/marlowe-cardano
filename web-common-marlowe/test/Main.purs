@@ -10,19 +10,25 @@ import Data.Argonaut
   , decodeJson
   , encodeJson
   )
+import Data.Argonaut.Core (stringify)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.Foldable (for_)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Tuple.Nested ((/\))
+import Data.Maybe (Maybe(..))
+import Data.Tuple.Nested (type (/\), (/\))
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Class.Console (log)
 import Examples.PureScript.Swap (fixedTimeoutContract) as Swap
 import Marlowe.Extended (toCore)
+import Marlowe.Semantics (Contract)
 import Marlowe.Semantics as S
 import Marlowe.Template (TemplateContent(..), fillTemplate)
+import Node.Encoding (Encoding(UTF8))
+import Node.FS.Sync as FS
+import Node.Path (FilePath)
 
---   [ "swap.json" /\ swap ]
 mkContracts :: Maybe (Array (FilePath /\ Contract))
 mkContracts = do
   let
@@ -39,12 +45,7 @@ mkContracts = do
     [ "swap.json" /\ swap
     ]
 
-writeTextFile
-  :: Encoding
-  -> FilePath
-  -> String
-  -> Effect Unit
-
+-- FIX ME: must wrap main do with Data.BigInt.Argonaut.withJsonPatch. but adapted for Effect
 main :: Effect Unit
 main = do
   case mkContracts of
@@ -53,9 +54,9 @@ main = do
     Just contracts -> do
       for_ contracts \(fileName /\ contract) -> do
         fileExists <- FS.exists fileName
-        if fileExists
-          then pure unit
+        if fileExists then pure unit
         else
+          FS.writeTextFile UTF8 fileName $ stringify $ encodeJson contract
 
 -- for_ - goes through the loop but does not aggregate results
 
