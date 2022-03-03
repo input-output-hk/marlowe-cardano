@@ -2,7 +2,6 @@ module Store.Contracts
   ( ContractStore
   , addFollowerContract
   , addStartingContract
-  , tick
   , emptyContractStore
   , followerContractExists
   , getClosedContracts
@@ -10,11 +9,13 @@ module Store.Contracts
   , getContractNickname
   , getContractNicknames
   , getFollowerContract
+  , getNewContract
   , getNewContracts
   , getRunningContracts
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
+  , tick
   ) where
 
 import Prologue
@@ -104,7 +105,7 @@ emptyContractStore = ContractStore
   { syncedContracts: Map.empty
   -- , newContracts: Map.empty
   -- FIXME-3487
-  , newContracts: Map.singleton emptyUUID (NewContract unknown escrow)
+  , newContracts: Map.singleton emptyUUID (NewContract emptyUUID unknown escrow)
   , contractIndex: Bimap.empty
   , contractNicknames: emptyLocalContractNicknames
   }
@@ -118,7 +119,8 @@ addStartingContract
   -> ContractStore
   -> ContractStore
 addStartingContract (reqId /\ contractNickname /\ metadata) =
-  over _newContracts $ Map.insert reqId (NewContract contractNickname metadata)
+  over _newContracts $ Map.insert reqId
+    (NewContract reqId contractNickname metadata)
 
 addFollowerContract
   :: Instant
@@ -182,6 +184,10 @@ getFollowerContract marloweParams = view
 getContract :: MarloweParams -> ContractStore -> Maybe Execution.State
 getContract marloweParams = view
   (_syncedContracts <<< at marloweParams)
+
+getNewContract :: UUID -> ContractStore -> Maybe NewContract
+getNewContract reqId = view
+  (_newContracts <<< at reqId)
 
 getContractNicknames :: ContractStore -> LocalContractNicknames
 getContractNicknames = view _contractNicknames

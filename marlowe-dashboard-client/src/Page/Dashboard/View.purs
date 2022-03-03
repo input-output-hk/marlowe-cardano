@@ -33,10 +33,13 @@ import Css as Css
 import Data.Address as A
 import Data.Array as Array
 import Data.Compactable (compact)
+import Data.ContractNickname as ContractNickname
+import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Int (round)
 import Data.Lens (view, (^.))
 import Data.Maybe (isJust)
+import Data.NewContract (getContractNickname)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _address
@@ -48,6 +51,7 @@ import Data.String (take)
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
+import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
@@ -80,7 +84,6 @@ import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
-import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Semantics (PubKey)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
@@ -90,7 +93,7 @@ import Page.Dashboard.Lenses
   , _contactsState
   , _contractFilter
   , _menuOpen
-  , _selectedContractMarloweParams
+  , _selectedContractIndex
   , _templateState
   )
 import Page.Dashboard.Types
@@ -102,7 +105,7 @@ import Page.Dashboard.Types
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (getContract)
+import Store.Contracts (getContract, getNewContract)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
@@ -125,11 +128,16 @@ dashboardScreen { currentTime, wallet, contracts } state =
 
     cardOpen = state ^. _cardOpen
 
-    selectedContractMarloweParams = state ^. _selectedContractMarloweParams
+    mSelectedContractIndex = state ^. _selectedContractIndex
 
-    selectedContract = do
-      marloweParams <- selectedContractMarloweParams
-      getContract marloweParams contracts
+    mSelectedContractStringId = do
+      contractIndex <- mSelectedContractIndex
+      case contractIndex of
+        Starting reqId -> ContractNickname.toString <<< getContractNickname <$>
+          getNewContract reqId contracts
+        Started marloweParams -> Execution.contractName <$> getContract
+          marloweParams
+          contracts
   in
     div
       [ classNames
@@ -148,21 +156,26 @@ dashboardScreen { currentTime, wallet, contracts } state =
           [ classNames [ "relative" ] ] -- this wrapper is relative because the mobile menu is absolutely positioned inside it
           [ mobileMenu menuOpen
           , div [ classNames [ "h-full", "grid", "grid-rows-auto-1fr" ] ]
-              [ dashboardBreadcrumb selectedContract
+              [ dashboardBreadcrumb mSelectedContractStringId
               , main
                   [ classNames [ "relative" ] ]
-                  case selectedContractMarloweParams of
-                    Just marloweParams ->
+                  case mSelectedContractIndex of
+                    Just contractIndex ->
                       [ slot
                           _contractPage
                           unit
                           ContractPage.component
-                          { wallet, marloweParams }
+                          { wallet, contractIndex }
                           ( \(AskConfirmation namedAction num) ->
-                              OnAskContractActionConfirmation
-                                marloweParams
-                                namedAction
-                                num
+                              case contractIndex of
+                                -- This should never happen (famous last words)
+                                Starting _ -> unsafeThrow
+                                  "Cant fire a confirmation dialog to take an action for a starting contract"
+                                Started marloweParams ->
+                                  OnAskContractActionConfirmation
+                                    marloweParams
+                                    namedAction
+                                    num
                           )
                       ]
                     _ -> [ contractsScreen currentTime state ]
@@ -366,20 +379,20 @@ mobileMenu menuOpen =
 dashboardBreadcrumb
   :: forall m
    . MonadAff m
-  => (Maybe Execution.State)
+  => Maybe String
   -> ComponentHTML Action ChildSlots m
-dashboardBreadcrumb mSelectedContractState =
+dashboardBreadcrumb mSelectedContractStringId =
   div [ classNames [ "border-b", "border-gray" ] ]
     [ nav [ classNames $ Css.maxWidthContainer <> [ "flex", "gap-2", "py-2" ] ]
         $
           [ a
               ( compact
                   [ Just $ id "goToDashboard"
-                  , mSelectedContractState $> onClick
+                  , mSelectedContractStringId $> onClick
                       (const $ SelectContract Nothing)
                   , Just
                       $ classNames
-                          if (isJust mSelectedContractState) then
+                          if (isJust mSelectedContractStringId) then
                             [ "text-lightpurple", "font-bold" ]
                           else
                             [ "cursor-default" ]
@@ -387,16 +400,14 @@ dashboardBreadcrumb mSelectedContractState =
               )
               [ text "Dashboard" ]
           ]
-            <> case mSelectedContractState of
-              Just state ->
+            <> case mSelectedContractStringId of
+              Just nickname ->
                 [ icon_ Icon.Next
                 , tooltip "Go to dashboard" (RefId "goToDashboard") Bottom
                 , span_
                     [ text nickname
                     ]
                 ]
-                where
-                nickname = Execution.contractName state
               Nothing -> []
     ]
 

@@ -17,15 +17,17 @@ module Page.Contract.Lenses
 
 import Prologue
 
+import Data.ContractStatus (ContractStatus(..))
 import Data.Lens (Lens', Prism', prism')
 import Data.Lens.Record (prop)
-import Page.Contract.Types (ContractState(..), StartedState, StartingState)
+import Data.NewContract (NewContract)
+import Page.Contract.Types (ContractState, StartedState)
 import Type.Proxy (Proxy(..))
 
 _contract :: forall a r. Lens' { contract :: a | r } a
 _contract = prop (Proxy :: _ "contract")
 
-_Starting :: Prism' ContractState StartingState
+_Starting :: Prism' ContractState NewContract
 _Starting =
   prism'
     Starting

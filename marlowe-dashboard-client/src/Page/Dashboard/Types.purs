@@ -16,6 +16,7 @@ import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialo
 import Component.Contacts.Types (Action, State) as Contacts
 import Component.Template.Types (Action, State) as Template
 import Data.AddressBook (AddressBook)
+import Data.ContractStatus (ContractStatusId)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Map (Map)
@@ -46,7 +47,7 @@ type State =
   , runningContracts :: Array ContractState
   , closedContracts :: Array ContractState
   , contractFilter :: ContractFilter
-  , selectedContractMarloweParams :: Maybe MarloweParams
+  , selectedContractIndex :: Maybe ContractStatusId
   , templateState :: Template.State
   }
 
@@ -90,7 +91,7 @@ data Action
   | OpenCard Card
   | CloseCard
   | SetContractFilter ContractFilter
-  | SelectContract (Maybe MarloweParams)
+  | SelectContract (Maybe ContractStatusId)
   | UpdateFollowerApps (Map MarloweParams MarloweData)
   | RedeemPayments MarloweParams
   | OnAskContractActionConfirmation MarloweParams NamedAction (Maybe ChosenNum)

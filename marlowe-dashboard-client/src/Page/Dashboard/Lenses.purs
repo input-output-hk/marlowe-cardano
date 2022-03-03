@@ -7,7 +7,7 @@ module Page.Dashboard.Lenses
   , _menuOpen
   , _newContracts
   , _runningContracts
-  , _selectedContractMarloweParams
+  , _selectedContractIndex
   , _templateState
   , _walletCompanionStatus
   ) where
@@ -16,10 +16,10 @@ import Prologue
 
 import Component.Contacts.Types (State) as Contacts
 import Component.Template.Types (State) as Template
+import Data.ContractStatus (ContractStatusId)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.NewContract (NewContract)
-import Marlowe.Semantics (MarloweParams)
 import Page.Dashboard.Types
   ( Card
   , ContractFilter
@@ -47,9 +47,9 @@ _cardOpen = prop (Proxy :: _ "cardOpen")
 _contractFilter :: Lens' State ContractFilter
 _contractFilter = prop (Proxy :: _ "contractFilter")
 
-_selectedContractMarloweParams :: Lens' State (Maybe MarloweParams)
-_selectedContractMarloweParams = prop
-  (Proxy :: _ "selectedContractMarloweParams")
+_selectedContractIndex :: Lens' State (Maybe ContractStatusId)
+_selectedContractIndex = prop
+  (Proxy :: _ "selectedContractIndex")
 
 _templateState :: Lens' State Template.State
 _templateState = prop (Proxy :: _ "templateState")

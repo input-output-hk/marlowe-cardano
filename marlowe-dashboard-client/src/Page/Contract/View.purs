@@ -34,6 +34,7 @@ import Data.Array.NonEmpty as NonEmptyArray
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Compactable (compact)
+import Data.ContractStatus (ContractStatus(..))
 import Data.ContractUserParties (getParticipants, isCurrentUser)
 import Data.DateTime.Instant (Instant, toDateTime)
 import Data.FunctorWithIndex (mapWithIndex)
@@ -85,7 +86,7 @@ import Page.Contract.Types
   ( Action(..)
   , ChildSlots
   , ComponentHTML
-  , ContractState(..)
+  , ContractState
   , PreviousStep
   , PreviousStepState(..)
   , StartedState

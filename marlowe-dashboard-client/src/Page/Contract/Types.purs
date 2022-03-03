@@ -11,7 +11,6 @@ module Page.Contract.Types
   , Query(..)
   , Slot
   , StartedState
-  , StartingState
   , State
   , StepBalance
   , Tab(..)
@@ -29,8 +28,10 @@ import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
+import Data.ContractStatus (ContractStatus, ContractStatusId)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
+import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.UserNamedActions (UserNamedActions)
@@ -39,7 +40,6 @@ import Halogen as H
 import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( Accounts
   , ChosenNum
@@ -50,22 +50,13 @@ import Marlowe.Semantics
 import Store.Contracts (ContractStore)
 import Type.Proxy (Proxy(..))
 
-data ContractState
-  = Starting StartingState
-  | Started StartedState
-
-derive instance Eq ContractState
+type ContractState = ContractStatus NewContract StartedState
 
 type State =
   { contract :: ContractState
   , currentTime :: Instant
   , tzOffset :: Minutes
   , wallet :: PABConnectedWallet
-  }
-
-type StartingState =
-  { nickname :: ContractNickname
-  , metadata :: MetaData
   }
 
 type StartedState =
@@ -117,9 +108,7 @@ derive instance eqTab :: Eq Tab
 
 type Input =
   { wallet :: PABConnectedWallet
-  -- TODO-3487 Instead of just MarloweParms this should be a custom data type or a
-  --            Either UUID MarloweParams to be able to work with Starting and Started contracts.
-  , marloweParams :: MarloweParams
+  , contractIndex :: ContractStatusId
   }
 
 data Msg

@@ -58,7 +58,7 @@ import Page.Dashboard.Lenses
   , _menuOpen
   , _newContracts
   , _runningContracts
-  , _selectedContractMarloweParams
+  , _selectedContractIndex
   , _templateState
   , _walletCompanionStatus
   )
@@ -102,7 +102,7 @@ mkInitialState currentTime wallet contracts =
     , runningContracts
     , closedContracts
     , contractFilter: Running
-    , selectedContractMarloweParams: Nothing
+    , selectedContractIndex: Nothing
     , templateState: Template.dummyState
     }
 
@@ -193,7 +193,7 @@ handleAction _ (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
 
 handleAction _ (SelectContract marloweParams) = assign
-  _selectedContractMarloweParams
+  _selectedContractIndex
   marloweParams
 
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}

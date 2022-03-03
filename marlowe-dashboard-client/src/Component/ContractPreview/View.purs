@@ -12,6 +12,7 @@ import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
 import Data.ContractNickname as ContractNickname
+import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
 import Data.NewContract (NewContract(..))
@@ -94,7 +95,7 @@ contractPreviewCard
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              , onClick_ $ SelectContract $ Just marloweParams
+              , onClick_ $ SelectContract $ Just $ Started marloweParams
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]
           ]
@@ -109,7 +110,7 @@ contractPreviewCard
 -- FIXME-3487: Factor out commonalities between contractStartingPreviewCard and contractPreviewCard
 contractStartingPreviewCard
   :: forall m. MonadAff m => NewContract -> ComponentHTML Action ChildSlots m
-contractStartingPreviewCard (NewContract contractNickname metadata) =
+contractStartingPreviewCard (NewContract reqId contractNickname metadata) =
   let
     nickname = ContractNickname.toString contractNickname
 
@@ -162,8 +163,7 @@ contractStartingPreviewCard (NewContract contractNickname metadata) =
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              -- TODO: SCP-3487 Fix the flow that creates a contract
-              -- , onClick_ SelectSelf
+              , onClick_ $ SelectContract $ Just $ Starting reqId
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]
           ]
