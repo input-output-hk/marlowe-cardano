@@ -33,6 +33,7 @@ import Type.Proxy (Proxy(..))
 newtype ContractHistory = ContractHistory
   { chParams :: Maybe (Tuple MarloweParams MarloweData)
   , chHistory :: Array TransactionInput
+  -- FIXME-3603: Modify contract history so that these are always present
   , chAddress :: Maybe Address
   }
 

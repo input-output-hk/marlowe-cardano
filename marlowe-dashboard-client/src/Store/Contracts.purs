@@ -15,6 +15,7 @@ module Store.Contracts
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
+  , swapStartingToStartedContract
   , tick
   ) where
 
@@ -24,7 +25,7 @@ import Control.Apply (lift2)
 import Data.Array (filter)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
-import Data.ContractNickname (ContractNickname, unknown)
+import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
 import Data.Either (note)
 import Data.Lens
@@ -44,14 +45,13 @@ import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
   ( LocalContractNicknames
   , emptyLocalContractNicknames
+  , insertContractNickname
   )
 import Data.LocalContractNicknames as LocalContractNicknames
 import Data.Map (Map)
 import Data.Map as Map
 import Data.NewContract (NewContract(..))
-import Data.Tuple.Nested (type (/\), (/\))
-import Data.UUID.Argonaut (UUID, emptyUUID)
-import Examples.Metadata (escrow)
+import Data.UUID.Argonaut (UUID)
 import Marlowe.Client (ContractHistory, _chParams)
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
@@ -103,9 +103,7 @@ _contractNicknames = _ContractStore <<< prop (Proxy :: _ "contractNicknames")
 emptyContractStore :: ContractStore
 emptyContractStore = ContractStore
   { syncedContracts: Map.empty
-  -- , newContracts: Map.empty
-  -- FIXME-3487
-  , newContracts: Map.singleton emptyUUID (NewContract emptyUUID unknown escrow)
+  , newContracts: Map.empty
   , contractIndex: Bimap.empty
   , contractNicknames: emptyLocalContractNicknames
   }
@@ -115,12 +113,11 @@ mkContractStore nicknames = modifyContractNicknames (const nicknames) $
   emptyContractStore
 
 addStartingContract
-  :: (UUID /\ ContractNickname /\ MetaData)
+  :: NewContract
   -> ContractStore
   -> ContractStore
-addStartingContract (reqId /\ contractNickname /\ metadata) =
-  over _newContracts $ Map.insert reqId
-    (NewContract reqId contractNickname metadata)
+addStartingContract newContract@(NewContract reqId _ _) =
+  over _newContracts $ Map.insert reqId newContract
 
 addFollowerContract
   :: Instant
@@ -128,6 +125,7 @@ addFollowerContract
   -> MetaData
   -> ContractHistory
   -> ContractStore
+  -- FIXME-3603: Modify contract history data type so this always return a Contract Store
   -> Either String ContractStore
 addFollowerContract currentTime followerId metadata history store = do
   marloweParams <- note "params not available" $ history ^? _chParams <<< _1
@@ -143,6 +141,27 @@ addFollowerContract currentTime followerId metadata history store = do
           )
           <<< pure
   updateIndexes <$> updateSyncedContracts store
+
+swapStartingToStartedContract
+  :: NewContract
+  -> Instant
+  -> PlutusAppId
+  -> ContractHistory
+  -> ContractStore
+  -- FIXME-3603: Modify contract history data type so this always return a Contract Store
+  -> Either String ContractStore
+swapStartingToStartedContract
+  (NewContract reqId nickname metadata)
+  currentTime
+  followerId
+  history
+  store = do
+  marloweParams <- note "params not available" $ history ^? _chParams <<< _1
+  store' <- pure $
+    store
+      # modifyContractNicknames (insertContractNickname marloweParams nickname)
+      # over _newContracts (Map.delete reqId)
+  addFollowerContract currentTime followerId metadata history store'
 
 modifyContractNicknames
   :: (LocalContractNicknames -> LocalContractNicknames)

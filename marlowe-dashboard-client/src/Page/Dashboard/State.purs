@@ -32,6 +32,7 @@ import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
 import Data.Maybe (fromMaybe)
+import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
@@ -282,12 +283,10 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
               addToast $ ajaxErrorToast "Failed to initialise contract."
                 ajaxError
             Right (reqId /\ mMarloweParams) -> do
-              let metaData = template.metaData
+              let newContract = NewContract reqId nickname template.metaData
               -- We save in the store the request of a created contract with
               -- the information relevant to show a placeholder of a starting contract.
-              updateStore
-                $ Store.AddStartingContract
-                $ reqId /\ nickname /\ metaData
+              updateStore $ Store.AddStartingContract newContract
               handleAction input CloseCard
               void $ tell _submitButtonSlot "action-pay-and-start" $
                 SubmitResult (Milliseconds 600.0) (Right "")
@@ -299,8 +298,13 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
               case ajaxFollow of
                 Left _ ->
                   addToast $ errorToast "Can't follow the contract" Nothing
-                Right (_ /\ _) -> do
-                  -- TODO: SCP-3487 swap store contract from new to running
+                Right (followerId /\ history) -> do
+                  updateStore $
+                    Store.SwapStartingToStartedContract
+                      newContract
+                      currentInstant
+                      followerId
+                      history
                   addToast $ successToast "Contract initialised."
     _ -> do
       toTemplate $ Template.handleAction templateAction

@@ -3,13 +3,11 @@ module Store where
 import Prologue
 
 import Data.AddressBook (AddressBook)
-import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
-import Data.Tuple.Nested (type (/\))
-import Data.UUID.Argonaut (UUID)
+import Data.NewContract (NewContract)
 import Marlowe.Client (ContractHistory)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
@@ -23,6 +21,7 @@ import Store.Contracts
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
+  , swapStartingToStartedContract
   , tick
   )
 import Store.Wallet (WalletAction, WalletStore)
@@ -69,10 +68,12 @@ data Action
   -- Time
   = Tick Instant
   -- Contract
-  | AddStartingContract (UUID /\ ContractNickname /\ MetaData)
+  | AddStartingContract NewContract
   | AddFollowerContract PlutusAppId MetaData ContractHistory
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
+  | SwapStartingToStartedContract NewContract Instant PlutusAppId
+      ContractHistory
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -104,6 +105,7 @@ reduce store = case _ of
           store.contracts
     }
   AddFollowerContract followerId metadata history ->
+    -- FIXME-3603: Modify contract history data type so this always return a Contract Store
     let
       mContracts = addFollowerContract
         store.currentTime
@@ -124,6 +126,22 @@ reduce store = case _ of
   ModifySyncedContract marloweParams f -> store
     { contracts = modifyContract marloweParams f store.contracts
     }
+  SwapStartingToStartedContract newContract instant plutusAppId history ->
+    -- FIXME-3603: Modify contract history data type so this always return a Contract Store
+    let
+      mContracts = swapStartingToStartedContract
+        newContract
+        instant
+        plutusAppId
+        history
+        store.contracts
+    in
+      case mContracts of
+        Left error -> reduce store
+          $ ShowToast
+          $ errorToast "Error creating a contract"
+          $ Just error
+        Right contracts -> store { contracts = contracts }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
   -- Wallet
