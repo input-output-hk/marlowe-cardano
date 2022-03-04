@@ -74,7 +74,6 @@ library
     sbv >= 8.4,
     scientific -any,
     wl-pprint -any,
-    semigroups -any,
     unordered-containers -any,
     uuid -any
   if !(impl(ghcjs) || os(ghcjs))

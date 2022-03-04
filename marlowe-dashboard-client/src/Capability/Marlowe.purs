@@ -62,7 +62,8 @@ import Effect.Aff (Aff)
 import Env (Env(..))
 import Halogen (HalogenM, liftAff)
 import Halogen.Store.Monad (getStore, updateStore)
-import Marlowe.Client (ContractHistory, getContract)
+import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
@@ -171,12 +172,9 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           $ decodeJson
           $ observableStateJson
 
-      let
-        mContract = getContract contractHistory
-
       metadata <- ExceptT $ pure
         $ note followContractError.metadataNotFoundError
-        $ _.metaData <$> (findTemplate =<< mContract)
+        $ _.metaData <$> (findTemplate $ getContract contractHistory)
 
       lift
         $ updateStore

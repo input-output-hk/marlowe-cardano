@@ -1388,15 +1388,17 @@ newtype MarloweData = MarloweData
   , marloweState :: State
   }
 
-derive instance eqMarloweData :: Eq MarloweData
+derive instance Eq MarloweData
 
-derive instance newtypeMarloweData :: Newtype MarloweData _
+derive instance Newtype MarloweData _
 
-derive instance genericMarloweData :: Generic MarloweData _
+derive instance Generic MarloweData _
 
-derive newtype instance encodeMarloweData :: EncodeJson MarloweData
+derive newtype instance EncodeJson MarloweData
 
-derive newtype instance decodeMarloweData :: DecodeJson MarloweData
+derive newtype instance DecodeJson MarloweData
+
+derive newtype instance Show MarloweData
 
 _marloweContract :: Lens' MarloweData Contract
 _marloweContract = _Newtype <<< prop (Proxy :: _ "marloweContract")

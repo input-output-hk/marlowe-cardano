@@ -27,7 +27,6 @@ import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
-import Data.Either (note)
 import Data.Lens
   ( Lens'
   , _1
@@ -38,7 +37,7 @@ import Data.Lens
   , traverseOf
   , traversed
   , view
-  , (^?)
+  , (^.)
   )
 import Data.Lens.At (at)
 import Data.Lens.Record (prop)
@@ -52,7 +51,8 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.NewContract (NewContract(..))
 import Data.UUID.Argonaut (UUID)
-import Marlowe.Client (ContractHistory, _chParams)
+import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Client (_chParams)
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
@@ -125,11 +125,11 @@ addFollowerContract
   -> MetaData
   -> ContractHistory
   -> ContractStore
-  -- FIXME-3603: Modify contract history data type so this always return a Contract Store
+  -- TODO: change String for a proper error type
   -> Either String ContractStore
-addFollowerContract currentTime followerId metadata history store = do
-  marloweParams <- note "params not available" $ history ^? _chParams <<< _1
+addFollowerContract currentTime followerId metadata history store =
   let
+    marloweParams = history ^. _chParams <<< _1
     mContractNickname = getContractNickname marloweParams store
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams followerId
     updateSyncedContracts = traverseOf _syncedContracts
@@ -140,7 +140,8 @@ addFollowerContract currentTime followerId metadata history store = do
               history
           )
           <<< pure
-  updateIndexes <$> updateSyncedContracts store
+  in
+    updateIndexes <$> updateSyncedContracts store
 
 swapStartingToStartedContract
   :: NewContract
@@ -148,20 +149,23 @@ swapStartingToStartedContract
   -> PlutusAppId
   -> ContractHistory
   -> ContractStore
-  -- FIXME-3603: Modify contract history data type so this always return a Contract Store
+  -- TODO: change String for a proper error type
   -> Either String ContractStore
 swapStartingToStartedContract
   (NewContract reqId nickname metadata)
   currentTime
   followerId
   history
-  store = do
-  marloweParams <- note "params not available" $ history ^? _chParams <<< _1
-  store' <- pure $
-    store
-      # modifyContractNicknames (insertContractNickname marloweParams nickname)
-      # over _newContracts (Map.delete reqId)
-  addFollowerContract currentTime followerId metadata history store'
+  store =
+  let
+    marloweParams = history ^. _chParams <<< _1
+    store' =
+      store
+        # modifyContractNicknames
+            (insertContractNickname marloweParams nickname)
+        # over _newContracts (Map.delete reqId)
+  in
+    addFollowerContract currentTime followerId metadata history store'
 
 modifyContractNicknames
   :: (LocalContractNicknames -> LocalContractNicknames)

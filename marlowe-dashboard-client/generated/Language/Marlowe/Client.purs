@@ -17,13 +17,68 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
+import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
-import Marlowe.Semantics (MarloweParams, TransactionError)
+import Marlowe.Semantics
+  ( MarloweData
+  , MarloweParams
+  , TransactionError
+  , TransactionInput
+  )
+import Plutus.V1.Ledger.Address (Address)
 import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (ContractError)
+
+newtype ContractHistory = ContractHistory
+  { chParams :: Tuple MarloweParams MarloweData
+  , chHistory :: Array TransactionInput
+  , chAddress :: Address
+  }
+
+derive instance Eq ContractHistory
+
+instance Show ContractHistory where
+  show a = genericShow a
+
+instance EncodeJson ContractHistory where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { chParams:
+            (E.tuple (E.value >/\< E.value)) :: _
+              (Tuple MarloweParams MarloweData)
+        , chHistory: E.value :: _ (Array TransactionInput)
+        , chAddress: E.value :: _ Address
+        }
+    )
+
+instance DecodeJson ContractHistory where
+  decodeJson = defer \_ -> D.decode $
+    ( ContractHistory <$> D.record "ContractHistory"
+        { chParams:
+            (D.tuple (D.value </\> D.value)) :: _
+              (Tuple MarloweParams MarloweData)
+        , chHistory: D.value :: _ (Array TransactionInput)
+        , chAddress: D.value :: _ Address
+        }
+    )
+
+derive instance Generic ContractHistory _
+
+derive instance Newtype ContractHistory _
+
+--------------------------------------------------------------------------------
+
+_ContractHistory :: Iso' ContractHistory
+  { chParams :: Tuple MarloweParams MarloweData
+  , chHistory :: Array TransactionInput
+  , chAddress :: Address
+  }
+_ContractHistory = _Newtype
+
+--------------------------------------------------------------------------------
 
 data EndpointResponse a e
   = EndpointSuccess UUID a

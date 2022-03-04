@@ -8,7 +8,8 @@ import Prologue
 
 import Data.Traversable (for_)
 import Halogen.Store.Monad (class MonadStore, updateStore)
-import Marlowe.Client (ContractHistory, getContract)
+import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Store as Store
@@ -33,8 +34,7 @@ onNewObservableState
   -> m Unit
 onNewObservableState followerAppId contractHistory = do
   let
-    contract = getContract contractHistory
-    mMetadata = _.metaData <$> (findTemplate =<< contract)
+    mMetadata = _.metaData <$> (findTemplate $ getContract contractHistory)
   -- FIXME-3208 I don't like that this step requires to find the metadata again
   --            but I wanted to reutilize the logic of always regenerating the Execution
   --            state from the contract history. I may need to move back the metadata to a

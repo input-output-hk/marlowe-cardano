@@ -8,7 +8,7 @@ import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
 import Data.NewContract (NewContract)
-import Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -105,7 +105,6 @@ reduce store = case _ of
           store.contracts
     }
   AddFollowerContract followerId metadata history ->
-    -- FIXME-3603: Modify contract history data type so this always return a Contract Store
     let
       mContracts = addFollowerContract
         store.currentTime
@@ -127,7 +126,6 @@ reduce store = case _ of
     { contracts = modifyContract marloweParams f store.contracts
     }
   SwapStartingToStartedContract newContract instant plutusAppId history ->
-    -- FIXME-3603: Modify contract history data type so this always return a Contract Store
     let
       mContracts = swapStartingToStartedContract
         newContract

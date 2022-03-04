@@ -36,9 +36,7 @@ import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust, isNothing, listToMaybe, mapMaybe)
-import Data.Monoid (First (..))
-import Data.Semigroup.Generic (GenericSemigroupMonoid (..))
+import Data.Maybe (fromJust, listToMaybe, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
@@ -145,14 +143,22 @@ type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 
 data ContractHistory =
     ContractHistory
-        { chParams  :: First (MarloweParams, MarloweData)
+        { chParams  :: (MarloweParams, MarloweData)
         , chHistory :: [TransactionInput]
-        , chAddress :: First Address
+        , chAddress :: Address
         }
         deriving stock (Show, Generic)
         deriving anyclass (FromJSON, ToJSON)
-        deriving (Semigroup, Monoid) via (GenericSemigroupMonoid ContractHistory)
 
+instance Semigroup ContractHistory where
+    first <> second  =
+        ContractHistory
+            { chParams = chParams first
+            , chHistory = chHistory first <> chHistory second
+            , chAddress = chAddress first
+            }
+
+type FollowerContractState = Maybe ContractHistory
 
 newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
 
@@ -165,18 +171,37 @@ data WaitingResult t
   deriving anyclass (ToJSON, FromJSON)
 
 
-created :: MarloweParams -> MarloweData -> ContractHistory
-created p d = mempty
-              {
-                chParams = First (Just (p, d)),
-                chAddress = First . Just . Typed.validatorAddress $ mkMarloweTypedValidator p
+created :: MarloweParams -> MarloweData -> FollowerContractState
+created p d = Just $ ContractHistory
+              { chParams = (p, d)
+              , chHistory = []
+              , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator p
               }
 
-transition :: TransactionInput -> ContractHistory
-transition i = mempty{chHistory = [i] }
-
-isEmpty :: ContractHistory -> Bool
-isEmpty = isNothing . getFirst . chParams
+transition :: MarloweParams -> TransactionInput -> FollowerContractState
+transition marloweParams input =
+    let
+        -- WARNING: The FollowerContractState needs to be a monoid so we can have a mempty
+        --          value when the contract is created, and then a Semigroup to be able to
+        --          add data to the contract state. The semigroup instance has the semantics
+        --          of choosing the first Params, Data and Address and to concatenate history.
+        --          We don't always have MarloweData in the context of a transition (for example
+        --          with Close), so we always use a dummyMarloweData that "should" be discarded.
+        --          The intended flow is that the State is initially Nothing, then the first real
+        --          value is forged with `created` and then we add more transactions to history
+        --          with this function. We wouldn't need this hack if we were able to query the
+        --          contract state from the Contract monad.
+        dummyMarloweData =
+            MarloweData
+                { marloweContract = Close
+                , marloweState = emptyState 0
+                }
+    in
+        Just $ ContractHistory
+              { chParams = (marloweParams, dummyMarloweData)
+              , chHistory = [input]
+              , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator p
+              }
 
 data ContractProgress = InProgress | Finished
   deriving stock (Show, Eq, Generic)
@@ -219,7 +244,7 @@ minLovelaceDeposit :: Integer
 minLovelaceDeposit = 2000000
 
 
-marloweFollowContract :: Contract ContractHistory MarloweFollowSchema MarloweError ()
+marloweFollowContract :: Contract FollowerContractState MarloweFollowSchema MarloweError ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
     let typedValidator = mkMarloweTypedValidator params
@@ -238,20 +263,20 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
                 Timeout t -> absurd t
                 Transition Closed{..} -> do
                     logInfo $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
-                    tell @ContractHistory (transition historyInput)
+                    tell @FollowerContractState (transition params historyInput)
                     pure (Right Finished)
                 Transition InputApplied{..} -> do
                     logInfo $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
-                    tell @ContractHistory (transition historyInput)
+                    tell @FollowerContractState (transition params historyInput)
                     pure (Right InProgress)
                 Transition Created{..} -> do
                     logInfo $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
-                    tell @ContractHistory (created params historyData)
+                    tell @FollowerContractState (created params historyData)
                     pure (Right InProgress)
 
     updateHistory :: MarloweParams
                   -> History
-                  -> Contract ContractHistory MarloweFollowSchema MarloweError ContractProgress
+                  -> Contract FollowerContractState MarloweFollowSchema MarloweError ContractProgress
     updateHistory params Created{..} =
       do
         logInfo $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
@@ -260,12 +285,12 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
     updateHistory params InputApplied{..} =
       do
         logInfo $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
-        tell $ transition historyInput
+        tell $ transition params historyInput
         maybe (pure InProgress) (updateHistory params) historyNext
-    updateHistory _ Closed{..} =
+    updateHistory params Closed{..} =
       do
         logInfo $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
-        tell $ transition historyInput
+        tell $ transition params historyInput
         pure Finished
 
 {-  This is a control contract.

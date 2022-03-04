@@ -23,8 +23,7 @@ import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Halogen.Store.Connect (Connected)
 import Halogen.Subscription (Emitter)
-import Language.Marlowe.Client (MarloweError)
-import Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams)
 import Page.Contract.Types as ContractPage

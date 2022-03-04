@@ -25,14 +25,15 @@ import Data.ContractNickname as ContractNickname
 import Data.DateTime.Instant (Instant)
 import Data.Either (note)
 import Data.Function (on)
-import Data.Lens (view, (^.), (^?))
+import Data.Lens (view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, fromMaybe', maybe, maybe')
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
-import Marlowe.Client (ContractHistory, _chHistory, _chParams)
+import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Client (_chHistory, _chParams)
 import Marlowe.Execution.Lenses (_resultingPayments)
 import Marlowe.Execution.Types
   ( NamedAction(..)
@@ -100,9 +101,8 @@ restoreState
   -> ContractHistory
   -> Either String State
 restoreState currentTime contractNickname metadata history = do
-  Tuple marloweParams marloweData <-
-    note "params not available" $ history ^? _chParams
   let
+    Tuple marloweParams marloweData = history ^. _chParams
     contract = view _marloweContract marloweData
     initialSemanticState = view _marloweState marloweData
     inputs = view _chHistory history
@@ -136,6 +136,7 @@ setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state
   { mPendingTransaction = Just txInput }
 
+-- TODO: Use a proper error type instead of string
 nextState :: TransactionInput -> State -> Either String State
 nextState txInput state = do
   let

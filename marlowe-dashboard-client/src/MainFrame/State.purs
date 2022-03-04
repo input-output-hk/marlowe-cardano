@@ -88,7 +88,11 @@ import Halogen.Store.Monad
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
-import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
+import Language.Marlowe.Client
+  ( ContractHistory
+  , EndpointResponse(..)
+  , MarloweEndpointResult(..)
+  )
 import MainFrame.Lenses
   ( _addressBook
   , _dashboardState
@@ -111,7 +115,7 @@ import MainFrame.Types
   , WebSocketStatus(..)
   )
 import MainFrame.View (render)
-import Marlowe.Client (ContractHistory, _chParams, getContract)
+import Marlowe.Client (_chParams, getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract(..))
@@ -425,17 +429,16 @@ handleAction (RedeemFailed reqId error) = void $ runMaybeT $ do
   addToast $ errorToast "Failed to redeem payment" $ Just $ show error
   liftEffect $ traverse_ HS.unsubscribe subscription
 
-handleAction (ContractHistoryUpdated plutusAppId contractHistory) =
-  void $ runMaybeT do
-    marloweParams <- hoistMaybe $ preview (_chParams <<< _1) contractHistory
-    {- [UC-CONTRACT-1][3] Start a contract -}
-    {- [UC-CONTRACT-3][1] Apply an input to a contract -}
-    H.lift $ FollowerApp.onNewObservableState plutusAppId contractHistory
-    {- [UC-CONTRACT-4][0] Redeem payments -}
-    H.lift
-      $ handleAction
-      $ DashboardAction
-      $ Dashboard.RedeemPayments marloweParams
+handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
+  let
+    marloweParams = view (_chParams <<< _1) contractHistory
+  {- [UC-CONTRACT-1][3] Start a contract -}
+  {- [UC-CONTRACT-3][1] Apply an input to a contract -}
+  FollowerApp.onNewObservableState plutusAppId contractHistory
+  {- [UC-CONTRACT-4][0] Redeem payments -}
+  handleAction
+    $ DashboardAction
+    $ Dashboard.RedeemPayments marloweParams
 
 handleAction (NewActiveEndpoints plutusAppId activeEndpoints) = do
   -- TODO move into main directly and remove this from the PAB capability API
@@ -525,8 +528,8 @@ enterDashboardState disconnectedWallet = do
           for_ followerApps \(followerAppId /\ contractHistory) -> do
             subscribeToPlutusApp followerAppId
             let
-              contract = getContract contractHistory
-              mMetadata = _.metaData <$> (findTemplate =<< contract)
+              mMetadata = _.metaData <$>
+                (findTemplate $ getContract contractHistory)
             for_ mMetadata \metadata ->
               updateStore $ Store.AddFollowerContract
                 followerAppId
@@ -550,8 +553,15 @@ filterFollowerApps plutusContracts =
       let
         plutusId = view _cicContract cic
         observableStateJson = view (_cicCurrentState <<< _observableState) cic
+
+        -- The FollowerContract state is a `Maybe ContractHistory`, the outer
+        -- Maybe is the result of an invalid serialization. Eventually we
+        -- join the Maybes and we don't care if we couldn't get the state
+        -- because there wasn't one yet or because we couldn't decode it it
+        mmContractHistory :: Maybe (Maybe ContractHistory)
+        mmContractHistory = hush $ decodeJson observableStateJson
       in
-        Tuple plutusId <$> (hush $ decodeJson observableStateJson)
+        Tuple plutusId <$> join mmContractHistory
   in
     mapMaybe idAndHistory $ Array.filter isActiveFollowerContract
       plutusContracts
