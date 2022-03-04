@@ -8,6 +8,7 @@ import Data.Maybe (fromMaybe, maybe)
 import Halogen.Css (classNames)
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
+import Halogen.HTML.Properties.ARIA as HPA
 import Marlowe.Extended.Metadata (NumberFormat(..))
 
 renderLabel :: forall w i. String -> String -> HH.HTML w i
@@ -15,10 +16,10 @@ renderLabel id label =
   HH.label [ classNames $ Css.labelBox <> Css.labelText, HP.for id ]
     [ HH.text label ]
 
-renderErrorLabel :: forall w i. String -> Maybe String -> HH.HTML w i
-renderErrorLabel id error = HH.label
+renderErrorLabel :: forall w i. Maybe String -> HH.HTML w i
+renderErrorLabel error = HH.span
   [ classNames $ Css.inputError <> maybe [ "invisible" ] (const []) error
-  , HP.for id
+  , HPA.role "alert"
   ]
   [ HH.text $ fromMaybe "Valid" error ]
 
@@ -52,7 +53,7 @@ renderTextInput id label error props renderError =
   HH.div [ classNames [ "relative" ] ]
     [ renderLabel id label
     , renderInputBox error [] [ renderInput id props ]
-    , renderErrorLabel id $ renderError <$> error
+    , renderErrorLabel $ renderError <$> error
     ]
 
 renderNumberInput
@@ -76,5 +77,5 @@ renderNumberInput format id label error props renderError =
             TimeFormat -> [ HH.span_ [ HH.text "minutes" ] ]
             _ -> []
         ]
-    , renderErrorLabel id $ renderError <$> error
+    , renderErrorLabel $ renderError <$> error
     ]

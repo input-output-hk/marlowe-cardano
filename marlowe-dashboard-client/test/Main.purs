@@ -20,6 +20,7 @@ import Test.Data.Address.Bech32.HRP as Bech32HRP
 import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
+import Test.Marlowe.Run.Simple as MRSimple
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
@@ -39,6 +40,7 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
   Bech32HRP.spec
   DataPartCodePoint.spec
   HRPCodePoint.spec
+  MRSimple.spec
   testingLibrarySpec
   halogenTestingLibrarySpec
 

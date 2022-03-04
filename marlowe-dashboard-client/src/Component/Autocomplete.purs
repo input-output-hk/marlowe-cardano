@@ -207,7 +207,7 @@ render { visited, fieldState, id, label, options, filtered } =
                 )
             , guard isOpen $> dropdown
             ]
-        , renderErrorLabel id error
+        , renderErrorLabel error
         ]
 
 handleAction

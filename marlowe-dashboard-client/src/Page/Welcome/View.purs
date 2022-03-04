@@ -38,6 +38,7 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, src, title)
+import Halogen.HTML.Properties.ARIA (role)
 import Halogen.Store.Monad (class MonadStore)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
@@ -90,7 +91,7 @@ welcomeCard state =
       if card == Just GetStartedHelpCard then Css.videoCard else Css.card
   in
     div
-      [ classNames $ Css.cardOverlay cardOpen ]
+      [ classNames $ Css.cardOverlay cardOpen, role "dialog" ]
       [ div
           [ classNames $ cardClasses cardOpen ]
           $ (flip foldMap card) \cardType -> case cardType of
