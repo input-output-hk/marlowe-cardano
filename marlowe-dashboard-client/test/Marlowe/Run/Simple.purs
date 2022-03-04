@@ -3,14 +3,15 @@ module Test.Marlowe.Run.Simple where
 import Prologue
 
 import Data.HTTP.Method (Method(..))
+import Data.String (Pattern(..), joinWith, split)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.String.Regex.Unsafe (unsafeRegex)
-import Test.Marlowe.Run
+import Test.Marlowe.Run (marloweRunTest)
+import Test.Network.HTTP
   ( expectJsonContent
   , expectJsonRequest
   , expectMethod
   , expectUri
-  , marloweRunTest
   )
 import Test.Spec (Spec, describe)
 import Test.Web.DOM.Assertions
@@ -21,7 +22,7 @@ import Test.Web.DOM.Assertions
   , shouldNotBeDisabled
   , shouldNotHaveClass
   )
-import Test.Web.DOM.Query (getBy, name, queryBy, role, text)
+import Test.Web.DOM.Query (findBy, getBy, name, role, text)
 import Test.Web.Event.User (ShiftState(..), click, tab, type_)
 import Test.Web.Monad (withContainer)
 import Web.ARIA (ARIARole(..))
@@ -59,33 +60,40 @@ spec = do
         errorMessage `shouldNotHaveClass` "invisible"
         errorMessage `shouldHaveText` "Required."
 
+        let nickname = "Nickname"
+
         click nicknameField
-        type_ nicknameField "Nickname" Nothing
+        type_ nicknameField nickname Nothing
 
         errorMessage `shouldHaveClass` "invisible"
         shouldNotBeDisabled createWalletButton
 
         let
-          mnemonic =
+          mnemonic = split (Pattern " ")
             "praise nut achieve misery coil shrimp post change view crumble taxi artwork hold list snap subject shiver actress video summer stone vicious trigger inmate"
+          passphrase = "fixme-allow-pass-per-wallet"
+          walletId = "b57c4784ed9c9d087053f6f04219aec82fca839a"
+          pubKeyHash = "pk"
+          address =
+            "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
 
         expectJsonRequest ado
           expectMethod POST
           expectUri "/api/wallet/v1/centralized-testnet/create"
           expectJsonContent
-            { getCreatePassphrase: "fixme-allow-pass-per-wallet"
-            , getCreateWalletName: "Nickname"
+            { getCreatePassphrase: passphrase
+            , getCreateWalletName: nickname
             }
           in
             { mnemonic
             , walletInfo:
-                { walletId: "b57c4784ed9c9d087053f6f04219aec82fca839a"
-                , pubKeyHash: "pk"
-                , address:
-                    "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
+                { walletId
+                , pubKeyHash:
+                    { unPaymentPubKeyHash: { getPubKeyHash: pubKeyHash } }
+                , address
                 }
             }
 
         click createWalletButton
 
-        void $ queryBy text $ pure mnemonic
+        void $ findBy text $ pure $ joinWith " " mnemonic

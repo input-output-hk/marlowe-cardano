@@ -24,7 +24,6 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
   )
-import Servant.PureScript (class ContentType)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -61,11 +60,7 @@ type LocalStorageApi =
 -- Newtype wrapper for this callback because PureScript doesn't like pualified
 -- types to appear in records.
 newtype HandleRequest = HandleRequest
-  ( forall decodeError a
-     . ContentType decodeError a
-    => Affjax.Request a
-    -> Aff (Either Affjax.Error (Response a))
-  )
+  (forall a. Affjax.Request a -> Aff (Either Affjax.Error (Response a)))
 
 -- Application enviroment configuration
 newtype Env = Env
