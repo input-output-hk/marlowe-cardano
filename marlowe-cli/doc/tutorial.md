@@ -2,6 +2,78 @@
 
 The granular workflow for `marlowe-cli` follows the data flow in the diagram below. The address, validator, datum, and redeemer for a transaction are built separately, but then combined into a transaction.
 
+```mermaid
+flowchart LR;
+  
+classDef command font-family:monospace,font-size: medium;  
+      
+Network(Mainnet<br>or Testnet)
+StakeAddress(Stake<br>Address)
+RolesCurrency(Currency<br>for Roles)
+
+AddressCommand[marlowe-cli contract address]
+class AddressCommand command
+
+Network       -. "<span style=font-family:monospace>--testnet-magic</span>" .-> AddressCommand
+StakeAddress  -. "<span style=font-family:monospace>--stake-address</span>" .-> AddressCommand
+RolesCurrency -. "<span style=font-family:monospace>--roles-currency</span>" .-> AddressCommand
+    
+ValidatorAddress(Validator\nAddress)
+AddressCommand -- "<span style=font-family:monospace>/dev/stdout</span>" --> ValidatorAddress
+    
+ValidatorCommand[marlowe-cli contract validator]
+class ValidatorCommand command
+    
+Network       -.-> ValidatorCommand
+StakeAddress  -.-> ValidatorCommand
+RolesCurrency -.-> ValidatorCommand
+    
+ValidatorFile>Marlowe Validator<br>Plutus File]
+
+ValidatorCommand -- "<span style=font-family:monospace>/dev/stdout</span>" --> ValidatorAddress
+ValidatorCommand -- "<span style=font-family:monospace>--out-file</span>"  --> ValidatorFile
+
+ContractFile>Marlowe Contract<br>JSON File]
+StateFile>Marlowe State<br>JSON File]
+    
+DatumCommand[marlowe-cli contract datum]
+class DatumCommand command
+
+ContractFile -- "<span style=font-family:monospace>--contract-file</span>" --> DatumCommand
+StateFile    -- "<span style=font-family:monospace>--state-file</span>"    --> DatumCommand
+    
+DatumFile>Marlowe Datum<br>JSON File]
+DatumHash[Marlowe Datum<br>Hash]
+    
+DatumCommand -- "<span style=font-family:monospace>--out-file</span>" --> DatumFile
+DatumCommand -- "<span style=font-family:monospace>/dev/stdout</span>" --> DatumHash
+    
+InputsFile>Marlowe Inputs<br>JSON File]
+MinSlot[Minimum<br>Slot]
+MaxSlot[Maximum<br>Slot]
+    
+RedeemerCommand[marlowe-cli contract redeemer]
+class RedeemerCommand command
+
+InputsFile -. "<span style=font-family:monospace>--inputs-file</span>" .-> RedeemerCommand
+
+RedeemerFile>Marlowe Redeemer<br>JSON File]
+    
+RedeemerCommand -- "<span style=font-family:monospace>--out-file</span>" --> RedeemerFile
+
+CardanoCLI[marlowe-cli transaction]
+class CardanoCLI command
+
+ValidatorAddress -- "<span style=font-family:monospace>--script-address</span>" --> CardanoCLI
+ValidatorFile    -- "<span style=font-family:monospace>--tx-in-script-file</span>" --> CardanoCLI 
+DatumFile        -- "<span style=font-family:monospace>--tx-in-datum-file</span>"--> CardanoCLI
+RedeemerFile     -- "<span style=font-family:monospace>--tx-in-redeemer-file</span>"--> CardanoCLI
+MinSlot          -- "<span style=font-family:monospace>--invalid-before</span>"--> CardanoCLI
+MaxSlot          -- "<span style=font-family:monospace>--invalid-hereafter</span>"--> CardanoCLI
+    
+TxBodyFile>Tx Body<br>File]
+CardanoCLI -- "<span style=font-family:monospace>--out-file</span>" --> TxBodyFile
+```
 ![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](diagrams/workflow.svg)
 
 This tutorial is embodied in the `bash` script [example.sh](example.sh).
