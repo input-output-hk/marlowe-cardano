@@ -6,6 +6,7 @@ The granular workflow for `marlowe-cli` follows the data flow in the diagram bel
 flowchart LR;
   
 classDef command font-family:monospace,font-size: medium;  
+classDef file fill:#ffc,stroke:#111;
       
 Network(Mainnet<br>or Testnet)
 StakeAddress(Stake<br>Address)
@@ -29,12 +30,15 @@ StakeAddress  -.-> ValidatorCommand
 RolesCurrency -.-> ValidatorCommand
     
 ValidatorFile>Marlowe Validator<br>Plutus File]
+class ValidatorFile file
 
 ValidatorCommand -- "<span style=font-family:monospace>/dev/stdout</span>" --> ValidatorAddress
 ValidatorCommand -- "<span style=font-family:monospace>--out-file</span>"  --> ValidatorFile
 
 ContractFile>Marlowe Contract<br>JSON File]
 StateFile>Marlowe State<br>JSON File]
+class ContractFile file
+class StateFile file
     
 DatumCommand[marlowe-cli contract datum]
 class DatumCommand command
@@ -43,14 +47,16 @@ ContractFile -- "<span style=font-family:monospace>--contract-file</span>" --> D
 StateFile    -- "<span style=font-family:monospace>--state-file</span>"    --> DatumCommand
     
 DatumFile>Marlowe Datum<br>JSON File]
+class DatumFile file
 DatumHash[Marlowe Datum<br>Hash]
-    
+
 DatumCommand -- "<span style=font-family:monospace>--out-file</span>" --> DatumFile
 DatumCommand -- "<span style=font-family:monospace>/dev/stdout</span>" --> DatumHash
     
 InputsFile>Marlowe Inputs<br>JSON File]
-MinSlot[Minimum<br>Slot]
-MaxSlot[Maximum<br>Slot]
+class InputsFile file
+MinSlot(Minimum<br>Slot)
+MaxSlot(Maximum<br>Slot)
     
 RedeemerCommand[marlowe-cli contract redeemer]
 class RedeemerCommand command
@@ -58,7 +64,8 @@ class RedeemerCommand command
 InputsFile -. "<span style=font-family:monospace>--inputs-file</span>" .-> RedeemerCommand
 
 RedeemerFile>Marlowe Redeemer<br>JSON File]
-    
+class RedeemerFile file
+
 RedeemerCommand -- "<span style=font-family:monospace>--out-file</span>" --> RedeemerFile
 
 CardanoCLI[marlowe-cli transaction]
@@ -72,6 +79,7 @@ MinSlot          -- "<span style=font-family:monospace>--invalid-before</span>"-
 MaxSlot          -- "<span style=font-family:monospace>--invalid-hereafter</span>"--> CardanoCLI
     
 TxBodyFile>Tx Body<br>File]
+class TxBodyFile file
 CardanoCLI -- "<span style=font-family:monospace>--out-file</span>" --> TxBodyFile
 ```
 ![Marlowe workflow using `marlowe-cli` and `cardano-cli`.](diagrams/workflow.svg)
