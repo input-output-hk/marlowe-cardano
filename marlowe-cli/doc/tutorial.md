@@ -25,9 +25,9 @@ AddressCommand -- "<span style=font-family:monospace>/dev/stdout</span>" --> Val
 ValidatorCommand[marlowe-cli contract validator]
 class ValidatorCommand command
     
-Network       -.-> ValidatorCommand
-StakeAddress  -.-> ValidatorCommand
-RolesCurrency -.-> ValidatorCommand
+Network       -. "<span style=font-family:monospace>--testnet-magic</span>" .-> ValidatorCommand
+StakeAddress  -. "<span style=font-family:monospace>--stake-address</span>" .-> ValidatorCommand
+RolesCurrency -. "<span style=font-family:monospace>--roles-currency</span>" .-> ValidatorCommand
     
 ValidatorFile>Marlowe Validator<br>Plutus File]
 class ValidatorFile file
