@@ -141,23 +141,36 @@ data PartyAction
 
 type RoleOwners = AssocMap.Map Val.TokenName (AddressInEra ShelleyEra)
 
+-- This data type contains all the information needed to reconstruct the
+-- state of a Marlowe Contract.
 data ContractHistory =
     ContractHistory
-        { chParams  :: (MarloweParams, MarloweData)
-        , chHistory :: [TransactionInput]
-        , chAddress :: Address
+        { chParams      :: MarloweParams      -- ^ The "instance id" of the contract
+        , chInitialData :: MarloweData        -- ^ The initial Contract + State
+        , chHistory     :: [TransactionInput] -- ^ All the transaction that affected the contract.
+                                              --   The current state and intermediate states can
+                                              --   be recalculated by using computeTransaction
+                                              --   of each TransactionInput to the initial state
+        , chAddress     :: Address            -- ^ The script address of the marlowe contract
         }
         deriving stock (Show, Generic)
         deriving anyclass (FromJSON, ToJSON)
 
+-- We need a semigroup instance to be able to update the state of the FollowerContract via `tell`.
+-- For most of the fields we just use the initial values as they are not expected to change,
+-- and we only concatenate new TransactionInputs
 instance Semigroup ContractHistory where
     first <> second  =
         ContractHistory
             { chParams = chParams first
+            , chInitialData = chInitialData first
             , chHistory = chHistory first <> chHistory second
             , chAddress = chAddress first
             }
 
+-- The FollowerContractState is a Maybe because the Contract monad requires the state
+-- to have a Monoid instance. `Nothing` is the initial state of the contract, and then
+-- with the first `tell` we have a valid initial ContractHistory
 type FollowerContractState = Maybe ContractHistory
 
 newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
@@ -172,10 +185,11 @@ data WaitingResult t
 
 
 created :: MarloweParams -> MarloweData -> FollowerContractState
-created p d = Just $ ContractHistory
-              { chParams = (p, d)
+created marloweParams marloweData = Just $ ContractHistory
+              { chParams = marloweParams
+              , chInitialData = marloweData
               , chHistory = []
-              , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator p
+              , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator marloweParams
               }
 
 transition :: MarloweParams -> TransactionInput -> FollowerContractState
@@ -198,9 +212,10 @@ transition marloweParams input =
                 }
     in
         Just $ ContractHistory
-              { chParams = (marloweParams, dummyMarloweData)
+              { chParams = marloweParams
+              , chInitialData = dummyMarloweData
               , chHistory = [input]
-              , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator p
+              , chAddress = Typed.validatorAddress $ mkMarloweTypedValidator marloweParams
               }
 
 data ContractProgress = InProgress | Finished

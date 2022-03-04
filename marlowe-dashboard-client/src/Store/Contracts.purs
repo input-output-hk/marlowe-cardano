@@ -27,18 +27,7 @@ import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
-import Data.Lens
-  ( Lens'
-  , _1
-  , filtered
-  , iso
-  , over
-  , to
-  , traverseOf
-  , traversed
-  , view
-  , (^.)
-  )
+import Data.Lens (Lens', filtered, iso, over, to, traverseOf, traversed, view)
 import Data.Lens.At (at)
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
@@ -52,7 +41,7 @@ import Data.Map as Map
 import Data.NewContract (NewContract(..))
 import Data.UUID.Argonaut (UUID)
 import Language.Marlowe.Client (ContractHistory)
-import Marlowe.Client (_chParams)
+import Marlowe.Client (getMarloweParams)
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
@@ -129,14 +118,17 @@ addFollowerContract
   -> Either String ContractStore
 addFollowerContract currentTime followerId metadata history store =
   let
-    marloweParams = history ^. _chParams <<< _1
+    marloweParams = getMarloweParams history
     mContractNickname = getContractNickname marloweParams store
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams followerId
     updateSyncedContracts = traverseOf _syncedContracts
       $
         lift2
           (Map.insert marloweParams)
-          ( Execution.restoreState currentTime mContractNickname metadata
+          ( Execution.restoreState
+              currentTime
+              mContractNickname
+              metadata
               history
           )
           <<< pure
@@ -158,7 +150,7 @@ swapStartingToStartedContract
   history
   store =
   let
-    marloweParams = history ^. _chParams <<< _1
+    marloweParams = getMarloweParams history
     store' =
       store
         # modifyContractNicknames

@@ -13,19 +13,12 @@ module Capability.Marlowe
 
 import Prologue
 
-import API.Lenses
-  ( _cicContract
-  , _cicCurrentState
-  , _cicDefinition
-  , _observableState
-  )
 import AppM (AppM)
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PAB (class ManagePAB)
 import Capability.PAB
   ( activateContract
   , getContractInstanceObservableState
-  , getWalletContractInstances
   , invokeEndpoint
   ) as PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
@@ -34,12 +27,11 @@ import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (asks)
 import Data.Address (Address)
-import Data.Argonaut.Decode (JsonDecodeError, decodeJson)
-import Data.Array (filter) as Array
+import Data.Argonaut.Decode (decodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (note)
 import Data.Lens (view)
-import Data.Map (Map, fromFoldable)
+import Data.Map (Map)
 import Data.Maybe (maybe')
 import Data.PABConnectedWallet
   ( PABConnectedWallet
@@ -50,7 +42,6 @@ import Data.PABConnectedWallet
   )
 import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
-import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Variant (Variant)
@@ -73,10 +64,7 @@ import Marlowe.Semantics
   , TransactionInput
   )
 import MarloweContract (MarloweContract(..))
-import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToServer(..)
-  , ContractInstanceClientState
-  )
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToServer(..))
 import Store as Store
 import Store.Contracts (getFollowerContract)
 import Type.Proxy (Proxy(..))

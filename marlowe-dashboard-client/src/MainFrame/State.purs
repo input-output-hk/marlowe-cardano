@@ -50,7 +50,7 @@ import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (_1, assign, lens, preview, set, use, view, (^.), (^?))
+import Data.Lens (assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
 import Data.Map as Map
 import Data.Maybe (fromMaybe, maybe)
@@ -115,7 +115,7 @@ import MainFrame.Types
   , WebSocketStatus(..)
   )
 import MainFrame.View (render)
-import Marlowe.Client (_chParams, getContract)
+import Marlowe.Client (getContract, getMarloweParams)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract(..))
@@ -431,7 +431,7 @@ handleAction (RedeemFailed reqId error) = void $ runMaybeT $ do
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   let
-    marloweParams = view (_chParams <<< _1) contractHistory
+    marloweParams = getMarloweParams contractHistory
   {- [UC-CONTRACT-1][3] Start a contract -}
   {- [UC-CONTRACT-3][1] Apply an input to a contract -}
   FollowerApp.onNewObservableState plutusAppId contractHistory

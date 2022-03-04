@@ -33,7 +33,7 @@ import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Language.Marlowe.Client (ContractHistory)
-import Marlowe.Client (_chHistory, _chParams)
+import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
 import Marlowe.Execution.Lenses (_resultingPayments)
 import Marlowe.Execution.Types
   ( NamedAction(..)
@@ -51,6 +51,7 @@ import Marlowe.Semantics
   , Contract(..)
   , Environment(..)
   , Input
+  , MarloweData(..)
   , MarloweParams
   , Party
   , Payment
@@ -61,8 +62,6 @@ import Marlowe.Semantics
   , TransactionInput(..)
   , TransactionOutput(..)
   , _accounts
-  , _marloweContract
-  , _marloweState
   , _rolesCurrency
   , computeTransaction
   , emptyState
@@ -102,21 +101,20 @@ restoreState
   -> Either String State
 restoreState currentTime contractNickname metadata history = do
   let
-    Tuple marloweParams marloweData = history ^. _chParams
-    contract = view _marloweContract marloweData
-    initialSemanticState = view _marloweState marloweData
-    inputs = view _chHistory history
+    MarloweData { marloweContract, marloweState } = getInitialData history
+    marloweParams = getMarloweParams history
+    inputs = getTransactionInputs history
     -- Derive the initial params from the Follower Contract params
     initialState =
-      { semanticState: initialSemanticState
+      { semanticState: marloweState
       , contractNickname
-      , contract
+      , contract: marloweContract
       , metadata
       , marloweParams
       , history: mempty
       , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
-      , mNextTimeout: nextTimeout contract
+      , mNextTimeout: nextTimeout marloweContract
       }
   -- Apply all the transaction inputs
   foldl (flip (bindFlipped <<< nextState)) (pure initialState) inputs

@@ -19,7 +19,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
-import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Marlowe.Semantics
@@ -33,7 +32,8 @@ import Type.Proxy (Proxy(Proxy))
 import Wallet.Types (ContractError)
 
 newtype ContractHistory = ContractHistory
-  { chParams :: Tuple MarloweParams MarloweData
+  { chParams :: MarloweParams
+  , chInitialData :: MarloweData
   , chHistory :: Array TransactionInput
   , chAddress :: Address
   }
@@ -46,9 +46,8 @@ instance Show ContractHistory where
 instance EncodeJson ContractHistory where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
-        { chParams:
-            (E.tuple (E.value >/\< E.value)) :: _
-              (Tuple MarloweParams MarloweData)
+        { chParams: E.value :: _ MarloweParams
+        , chInitialData: E.value :: _ MarloweData
         , chHistory: E.value :: _ (Array TransactionInput)
         , chAddress: E.value :: _ Address
         }
@@ -57,9 +56,8 @@ instance EncodeJson ContractHistory where
 instance DecodeJson ContractHistory where
   decodeJson = defer \_ -> D.decode $
     ( ContractHistory <$> D.record "ContractHistory"
-        { chParams:
-            (D.tuple (D.value </\> D.value)) :: _
-              (Tuple MarloweParams MarloweData)
+        { chParams: D.value :: _ MarloweParams
+        , chInitialData: D.value :: _ MarloweData
         , chHistory: D.value :: _ (Array TransactionInput)
         , chAddress: D.value :: _ Address
         }
@@ -72,7 +70,8 @@ derive instance Newtype ContractHistory _
 --------------------------------------------------------------------------------
 
 _ContractHistory :: Iso' ContractHistory
-  { chParams :: Tuple MarloweParams MarloweData
+  { chParams :: MarloweParams
+  , chInitialData :: MarloweData
   , chHistory :: Array TransactionInput
   , chAddress :: Address
   }
