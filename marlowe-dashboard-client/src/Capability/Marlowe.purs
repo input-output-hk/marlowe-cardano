@@ -5,7 +5,6 @@ module Capability.Marlowe
   , applyTransactionInput
   , redeem
   , getRoleContracts
-  , getFollowerApps
   , subscribeToWallet
   , unsubscribeFromWallet
   , subscribeToPlutusApp
@@ -127,9 +126,6 @@ class
   getRoleContracts
     :: PABConnectedWallet
     -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
-  getFollowerApps
-    :: WalletId
-    -> m (DecodedAjaxResponse (Map PlutusAppId ContractHistory))
 
   -- TODO: SCP-3543 Remove this endpoint from here and Encapsultate subscribe/unsubscribe logic into
   --       a separate capability
@@ -214,33 +210,6 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
       observableStateJson <- withExceptT Left $ ExceptT $
         PAB.getContractInstanceObservableState companionAppId
       except $ lmap Right $ decodeJson observableStateJson
-  -- get all MarloweFollower apps for a given wallet
-  getFollowerApps walletId =
-    runExceptT do
-      runningApps <- withExceptT Left $ ExceptT $
-        PAB.getWalletContractInstances walletId
-      let
-        followerApps = Array.filter
-          (\cic -> view _cicDefinition cic == MarloweFollower)
-          runningApps
-      case traverse decodeFollowerAppState followerApps of
-        Left decodingError -> except $ Left $ Right decodingError
-        Right decodedFollowerApps -> ExceptT $ pure $ Right $ fromFoldable
-          decodedFollowerApps
-    where
-    decodeFollowerAppState
-      :: ContractInstanceClientState MarloweContract
-      -> Either JsonDecodeError (Tuple PlutusAppId ContractHistory)
-    decodeFollowerAppState contractInstanceClientState =
-      let
-        plutusAppId = view _cicContract contractInstanceClientState
-
-        rawJson = view (_cicCurrentState <<< _observableState)
-          contractInstanceClientState
-      in
-        case decodeJson rawJson of
-          Left decodingErrors -> Left decodingErrors
-          Right observableState -> Right (plutusAppId /\ observableState)
   subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
   subscribeToWallet =
     sendWsMessage <<< Subscribe <<< Right <<< invalidWalletIdToPubKeyHash
@@ -272,7 +241,6 @@ instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) wh
   redeem walletDetails marloweParams tokenName =
     lift $ redeem walletDetails marloweParams tokenName
   getRoleContracts = lift <<< getRoleContracts
-  getFollowerApps = lift <<< getFollowerApps
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
   subscribeToWallet = lift <<< subscribeToWallet
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
@@ -289,7 +257,6 @@ instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
   redeem walletDetails marloweParams tokenName =
     lift $ redeem walletDetails marloweParams tokenName
   getRoleContracts = lift <<< getRoleContracts
-  getFollowerApps = lift <<< getFollowerApps
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
   subscribeToWallet = lift <<< subscribeToWallet
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
