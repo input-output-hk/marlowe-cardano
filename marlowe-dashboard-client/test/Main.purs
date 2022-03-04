@@ -5,7 +5,6 @@ import Prologue
 import Control.Monad.State (class MonadState)
 import Data.Int (decimal)
 import Data.Int as Int
-import Data.Undefinable (toUndefinable)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
@@ -27,7 +26,7 @@ import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
 import Test.Web (runTestMInBody)
 import Test.Web.DOM.Assertions (shouldHaveId, shouldHaveTagName, shouldHaveText)
-import Test.Web.DOM.Query (byRoleDefault, findBy, getBy, role, role')
+import Test.Web.DOM.Query (findBy, getBy, name, role)
 import Test.Web.Event.User (click, clickM, runUserM)
 import Test.Web.Monad (getContainer)
 import Web.ARIA (ARIARole(..))
@@ -57,11 +56,11 @@ testingLibrarySpec = do
         body <- getContainer
         body `shouldHaveTagName` "body"
         liftEffect $ setupTestApp body
-        paragraph <- getBy $ role Paragraph
+        paragraph <- getBy role $ pure Paragraph
         paragraph `shouldHaveId` "para"
         paragraph `shouldHaveTagName` "p"
         paragraph `shouldHaveText` "Test content"
-        clickM $ findBy $ role Button
+        clickM $ findBy role $ pure Button
         paragraph `shouldHaveText` "It worked!"
 
 -------------------------------------------------------------------------------
@@ -118,24 +117,24 @@ halogenTestingLibrarySpec = do
 
     it "Receives the initial input" do
       runUITest counter 10 do
-        span <- getBy $ role Textbox
+        span <- getBy role $ pure Textbox
         span `shouldHaveText` "10"
 
     it "Receives new input" do
       runUITest counter 0 do
         TH.sendInput 20
-        span <- getBy $ role Textbox
+        span <- getBy role $ pure Textbox
         span `shouldHaveText` "20"
 
     it "Handles user interaction" do
       runUITest counter 0 do
-        decrement <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "-"
-          }
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        span <- getBy (role Textbox)
+        decrement <- getBy role do
+          name "-"
+          pure Button
+        increment <- getBy role do
+          name "+"
+          pure Button
+        span <- getBy role $ pure Textbox
         click increment
         span `shouldHaveText` "1"
         click decrement
@@ -144,12 +143,12 @@ halogenTestingLibrarySpec = do
 
     it "Sends messages" do
       runUITest counter 0 do
-        decrement <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "-"
-          }
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
+        decrement <- getBy role do
+          name "-"
+          pure Button
+        increment <- getBy role do
+          name "+"
+          pure Button
         click increment
         click decrement
         expectMessages [ 1, 0 ]
@@ -158,10 +157,10 @@ halogenTestingLibrarySpec = do
 
     it "Handles queries" do
       runUITest counter 0 do
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        span <- getBy (role Textbox)
+        increment <- getBy role do
+          name "+"
+          pure Button
+        span <- getBy role $ pure Textbox
         click increment
         click increment
         value <- TH.request GetValue
