@@ -2,6 +2,8 @@ module Env where
 
 import Prologue
 
+import Affjax (Response)
+import Affjax as Affjax
 import Control.Logger.Effect (Logger)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -22,7 +24,7 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
   )
-import Servant.PureScript (class ContentType, AjaxError, Request)
+import Servant.PureScript (class ContentType)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -59,11 +61,10 @@ type LocalStorageApi =
 -- Newtype wrapper for this callback because PureScript doesn't like pualified
 -- types to appear in records.
 newtype HandleRequest = HandleRequest
-  ( forall decodeError resContent reqContent req res
-     . ContentType reqContent
-    => ContentType resContent
-    => Request reqContent resContent decodeError req res
-    -> Aff (Either (AjaxError decodeError resContent) res)
+  ( forall decodeError a
+     . ContentType decodeError a
+    => Affjax.Request a
+    -> Aff (Either Affjax.Error (Response a))
   )
 
 -- Application enviroment configuration

@@ -46,7 +46,8 @@ import Servant.PureScript
   , class MonadAjax
   , AjaxError
   , Request
-  , request
+  , prepareRequest
+  , prepareResponse
   )
 import Store as Store
 import Type.Proxy (Proxy(..))
@@ -131,20 +132,22 @@ prependPath prefix =
     (Just <<< append prefix <<< join <<< A.fromFoldable)
 
 handleRequest
-  :: forall decodeError resContent reqContent req res
-   . ContentType reqContent
-  => ContentType resContent
-  => Request reqContent resContent decodeError req res
-  -> AppM (Either (AjaxError decodeError resContent) res)
+  :: forall resDecodeError reqDecodeError resContent reqContent req res
+   . ContentType reqDecodeError reqContent
+  => ContentType resDecodeError resContent
+  => Request reqContent resContent resDecodeError req res
+  -> AppM (Either (AjaxError resDecodeError resContent) res)
 handleRequest req = do
   HandleRequest handle <- asks $ view _handleRequest
-  liftAff $ handle req
+  liftAff $ prepareResponse req.decode aReq <$> handle aReq
+  where
+  aReq = prepareRequest req
 
 instance MonadAjax PAB.Api AppM where
-  request api = liftAff <<< request api <<< prependPath [ "pab" ]
+  request _ = handleRequest <<< prependPath [ "pab" ]
 
 instance MonadAjax MarloweRun.Api AppM where
-  request api = liftAff <<< request api
+  request _ = handleRequest
 
 instance MonadLogger String AppM where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`

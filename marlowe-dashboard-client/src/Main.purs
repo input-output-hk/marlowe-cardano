@@ -4,6 +4,7 @@ module Main
 
 import Prologue
 
+import Affjax as Affjax
 import AppM (runAppM)
 import Capability.MarloweStorage as MarloweStorage
 import Control.Logger.Effect.Console (logger) as Console
@@ -32,7 +33,6 @@ import LocalStorage (getItem, removeItem, setItem)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
 import MainFrame.Types as MainFrame
-import Servant.PureScript (request)
 import Store (mkStore)
 import WebSocket.Support as WS
 
@@ -70,7 +70,7 @@ mkEnv sources sinks webpackBuildMode = do
     , redeemListeners
     , sinks
     , sources
-    , handleRequest: HandleRequest (request unit)
+    , handleRequest: HandleRequest Affjax.request
     , localStorage:
         { getItem
         , setItem
