@@ -60,7 +60,8 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), Balan
                     makeTransactionBodyAutoBalance, negateValue, queryNodeLocalState, readFileTextEnvelope,
                     selectLovelace, serialiseToCBOR, signShelleyTransaction, submitTxToNodeLocal, txOutValueToValue,
                     valueFromList, valueToList, valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxTxExUnits, protocolParamMaxTxSize)
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
+                            protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Control.Concurrent (threadDelay)
@@ -389,9 +390,11 @@ buildBody :: MonadError CliError m
 buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats invalid =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
-    start    <- queryAny    connection   QuerySystemStart
-    history  <- queryAny    connection $ QueryEraHistory CardanoModeIsMultiEra
-    protocol <- queryAlonzo connection   QueryProtocolParameters
+    start <- queryAny connection   QuerySystemStart
+    history <- queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
+    protocol <-
+      (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp})
+        <$> queryAlonzo connection QueryProtocolParameters
     let
       txInsCollateral   = TxInsCollateral CollateralInAlonzoEra $ maybeToList collateral
       txFee             = TxFeeExplicit TxFeesExplicitInAlonzoEra 0
