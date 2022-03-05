@@ -30,7 +30,7 @@ import Cardano.Api.Shelley (StakeCredential (..))
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Lens
 import Control.Monad (forM_, void)
-import Control.Monad.Error.Lens (catching, throwing, throwing_)
+import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
 import Control.Monad.Extra (concatMapM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import qualified Data.List.NonEmpty as NonEmpty
@@ -733,7 +733,7 @@ findMarloweContractsOnChainByRoleCurrency
 findMarloweContractsOnChainByRoleCurrency curSym = do
     let params = marloweParams curSym
     let typedValidator = mkMarloweTypedValidator params
-    maybeState <- getOnChainState typedValidator
+    maybeState <- handling _AmbiguousOnChainState (const $ pure Nothing) $ getOnChainState typedValidator
     case maybeState of
         Just (OnChainState{ocsTxOutRef}, _) -> do
             let marloweData = toMarloweState ocsTxOutRef
