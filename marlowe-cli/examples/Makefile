@@ -2,7 +2,7 @@
 #!nix-shell -i "make -f" -p gnumake
 
 
-SUBDIRS:=simple swap zcb escrow
+SUBDIRS:=simple swap zcb cfd escrow
 
 
 all: $(SUBDIRS)
