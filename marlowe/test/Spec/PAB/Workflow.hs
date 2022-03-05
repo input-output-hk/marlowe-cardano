@@ -197,9 +197,7 @@ extractMarloweParams vl = do
 
 extractFollowState :: Aeson.Value -> Maybe Marlowe.ContractHistory
 extractFollowState vl = do
-    s <- either (const Nothing) Just (Aeson.parseEither Aeson.parseJSON vl)
-    guard (not $ Marlowe.isEmpty s)
-    pure s
+    either (const Nothing) Just (Aeson.parseEither Aeson.parseJSON vl)
 
 tests :: TestTree
 tests = testGroup "Marlowe Workflow tests" []
