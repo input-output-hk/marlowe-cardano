@@ -91,13 +91,20 @@ instance ToJSON MarloweClientInput where
   toJSON (ClientMerkleizedInput content contract) = toJSON (content, contract)
 
 
+type CreateEndpointSchema = (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract)
+type ApplyInputsEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [MarloweClientInput])
+type ApplyInputsNonMerkleizedEndpointSchema = (UUID, MarloweParams, Maybe TimeInterval, [InputContent])
+type AutoEndpointSchema = (UUID, MarloweParams, Party, POSIXTime)
+type RedeemEndpointSchema = (UUID, MarloweParams, TokenName, AddressInEra ShelleyEra)
+type CloseEndpointSchema = UUID
+
 type MarloweSchema =
-        Endpoint "create" (UUID, AssocMap.Map Val.TokenName (AddressInEra ShelleyEra), Marlowe.Contract)
-        .\/ Endpoint "apply-inputs" (UUID, MarloweParams, Maybe TimeInterval, [MarloweClientInput])
-        .\/ Endpoint "apply-inputs-nonmerkleized" (UUID, MarloweParams, Maybe TimeInterval, [InputContent])
-        .\/ Endpoint "auto" (UUID, MarloweParams, Party, POSIXTime)
-        .\/ Endpoint "redeem" (UUID, MarloweParams, TokenName, AddressInEra ShelleyEra)
-        .\/ Endpoint "close" UUID
+        Endpoint "create" CreateEndpointSchema
+        .\/ Endpoint "apply-inputs" ApplyInputsEndpointSchema
+        .\/ Endpoint "apply-inputs-nonmerkleized" ApplyInputsNonMerkleizedEndpointSchema
+        .\/ Endpoint "auto" AutoEndpointSchema
+        .\/ Endpoint "redeem" RedeemEndpointSchema
+        .\/ Endpoint "close" CloseEndpointSchema
 
 data MarloweEndpointResult =
     CreateResponse MarloweParams

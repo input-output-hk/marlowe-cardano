@@ -50,8 +50,9 @@ import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, maybeWriteJson)
 import Language.Marlowe.CLI.Types (CliError (..))
-import Language.Marlowe.Client (CompanionState, ContractHistory, EndpointResponse (..), MarloweClientInput,
-                                MarloweContractState, MarloweEndpointResult (CreateResponse), MarloweError)
+import Language.Marlowe.Client (ApplyInputsEndpointSchema, CompanionState, CreateEndpointSchema, EndpointResponse (..),
+                                FollowerContractState, MarloweClientInput, MarloweContractState,
+                                MarloweEndpointResult (CreateResponse), MarloweError, RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Semantics (MarloweParams)
 import Language.Marlowe.SemanticsTypes (Contract)
@@ -126,7 +127,7 @@ runFollower :: MonadError CliError m
             -> WalletId                            -- ^ The wallet ID.
             -> Maybe FilePath                      -- ^ The output file for the instance ID.
             -> m ()                                -- ^ Action for running the follower contract.
-runFollower = runContract MarloweFollower (Proxy :: Proxy ContractHistory) reportStatus
+runFollower = runContract MarloweFollower (Proxy :: Proxy FollowerContractState) reportStatus
 
 
 -- | Run the WalletCompanion contract.
@@ -253,10 +254,10 @@ callCreate pabClient runApi instanceFile contractFile owners =
   do
     contract <- decodeFileStrict contractFile
     call pabClient runApi instanceFile "create"
-      (
+      ((
       , AM.fromList $ second anyAddressInShelleyBasedEra <$> owners :: AM.Map TokenName (AddressInEra ShelleyEra)
       , contract :: Contract
-      )
+      ) :: UUID -> CreateEndpointSchema)
 
 
 -- | Call the "apply-inputs" endpoint.
@@ -274,11 +275,11 @@ callApplyInputs pabClient runApi instanceFile paramsFile inputs minimumTime maxi
   do
     params <- decodeFileStrict paramsFile
     call pabClient runApi instanceFile "apply-inputs"
-      (
+      ((
       , params :: MarloweParams
       , Just (minimumTime, maximumTime)
       , inputs
-      )
+      ) :: UUID -> ApplyInputsEndpointSchema)
 
 
 -- | Call the "redeem" endpoint.
@@ -294,11 +295,11 @@ callRedeem pabClient runApi instanceFile paramsFile (ownerName, ownerAddress) =
   do
     params <- decodeFileStrict paramsFile
     call pabClient runApi instanceFile "redeem"
-      (
+      ((
       , params :: MarloweParams
       , ownerName
       , anyAddressInShelleyBasedEra ownerAddress :: AddressInEra ShelleyEra
-      )
+      ) :: UUID -> RedeemEndpointSchema)
 
 
 -- | Call the "follow" endpoint.
