@@ -55,7 +55,8 @@ import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), InstanceNickname, 
                                         psBurnAddress, psFaucetAddress, psFaucetKey, psPassphrase, psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
-import Language.Marlowe.Client (EndpointResponse (..), MarloweEndpointResult (..))
+import Language.Marlowe.Client (ApplyInputsEndpointSchema, CreateEndpointSchema, EndpointResponse (..),
+                                MarloweEndpointResult (..), RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Semantics (MarloweParams (rolesCurrency))
 import Network.WebSockets (Connection)
@@ -229,7 +230,7 @@ interpret access CallCreate{..} =
         )
         poOwners
     lift
-      $ call access aiInstance "create" (uuid, AM.fromList owners, poContract)
+      $ call access aiInstance "create" ((uuid, AM.fromList owners, poContract) :: CreateEndpointSchema)
     liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show (unContractInstanceId aiInstance) <> " for owners " <> show owners <> "."
 interpret _ AwaitCreate{..} =
   do
@@ -246,8 +247,9 @@ interpret access CallApplyInputs{..} =
   do
     uuid <- liftIO nextRandom
     AppInstanceInfo{..} <- findInstance poInstance
+    params <- maybe (throwError $ CliError "[CallApplyInputs] Contract parameters are not known.") pure aiParams
     lift
-      $ call access aiInstance "apply-inputs" (uuid, aiParams, poTimes, poInputs)
+      $ call access aiInstance "apply-inputs" ((uuid, params, poTimes, poInputs) :: ApplyInputsEndpointSchema)
     liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
 interpret _ AwaitApplyInputs{..} =
   do
@@ -260,14 +262,15 @@ interpret access CallRedeem{..} =
     uuid <- liftIO nextRandom
     AppInstanceInfo{..} <- findInstance poInstance
     WalletInfo{..} <- findOwner poOwner
+    params <- maybe (throwError $ CliError "[CallRedeem] Contract parameters are not known.") pure aiParams
     lift
       $ call access aiInstance "redeem"
-      (
+      ((
         uuid
-      , aiParams
+      , params
       , TokenName . toBuiltin $ BS8.pack poOwner
       , anyAddressInShelleyBasedEra wiAddress :: AddressInEra ShelleyEra
-      )
+      ) :: RedeemEndpointSchema)
     liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
 interpret _ AwaitRedeem{..} =
   do
