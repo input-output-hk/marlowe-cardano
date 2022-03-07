@@ -41,7 +41,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.UUID (UUID)
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Client.History (History (..), MarloweTxOutRef, marloweHistory, marloweHistoryFrom,
                                         marloweUtxoStatesAt, toMarloweState)
@@ -68,7 +68,8 @@ import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
 import Plutus.ChainIndex (ChainIndexTx (..), _ValidTx, citxOutputs)
 import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
-import qualified Plutus.Contract as Contract (ContractError (..))
+import Plutus.Contract as Contract
+import Plutus.Contract.Types (Promise (..))
 import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
@@ -181,13 +182,10 @@ type FollowerContractState = Maybe ContractHistory
 
 newtype OnChainState = OnChainState {ocsTxOutRef :: MarloweTxOutRef}
 
-
 -- | The outcome of 'waitForUpdateTimeout'
-data WaitingResult t
-    = Timeout t          -- ^ The timeout happened before any change of the on-chain state was detected
-    | Transition History -- ^ The state machine instance transitioned to a new state
-  deriving stock (Show,Generic,Functor)
-  deriving anyclass (ToJSON, FromJSON)
+newtype Transition = Transition History     -- ^ The state machine instance transitioned to a new state
+    deriving stock (Show, Generic)
+    deriving anyclass (ToJSON, FromJSON)
 
 
 created :: MarloweParams -> MarloweData -> FollowerContractState
@@ -280,18 +278,17 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             logInfo $ "MarloweFollower found finished contract with " <> show params <> "."
             pure $ Right InProgress -- do not close the contract so we can see it in Marlowe Run history
         InProgress -> do
-            result <- waitForUpdateTimeout typedValidator never >>= awaitPromise
-            case result of
-                Timeout t -> absurd t
-                Transition Closed{..} -> do
+            waitForTransition typedValidator >>= \case
+              Transition result -> case result of
+                Closed{..} -> do
                     logInfo $ "MarloweFollower found contract closed with " <> show historyInput <> " by TxId " <> show historyTxId <> "."
                     tell @FollowerContractState (transition params historyInput)
                     pure (Right Finished)
-                Transition InputApplied{..} -> do
+                InputApplied{..} -> do
                     logInfo $ "MarloweFollower found contract transitioned with " <> show historyInput <> " by " <> show historyTxOutRef <> "."
                     tell @FollowerContractState (transition params historyInput)
                     pure (Right InProgress)
-                Transition Created{..} -> do
+                Created{..} -> do
                     logInfo $ "MarloweFollower found contract created with " <> show historyData <> " by " <> show historyTxOutRef <> "."
                     tell @FollowerContractState (created params historyData)
                     pure (Right InProgress)
@@ -443,23 +440,23 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                     tell $ Just $ EndpointSuccess reqId AutoResponse
                     marlowePlutusContract
 
-        maybeState <- getOnChainState typedValidator
-        case maybeState of
+        getMarloweTxOutRef typedValidator >>= \case
             Nothing -> do
-                wr <- waitForUpdateUntilTime typedValidator untilTime
+                wr <- waitForTimeoutOrTransition typedValidator untilTime
                 case wr of
-                    Transition Closed{} -> do
-                        logInfo @String $ "Contract Ended for party " <> show party
-                        tell $ Just $ EndpointSuccess reqId AutoResponse
-                        marlowePlutusContract
-                    Timeout{} -> do
+                    Left _ -> do
                         logInfo @String $ "Contract Timeout for party " <> show party
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
-                    Transition InputApplied{historyData} -> continueWith historyData
-                    Transition Created{historyData} -> continueWith historyData
-            Just (OnChainState{ocsTxOutRef=st}, _) -> do
-                let marloweData = toMarloweState st
+                    Right (Transition t) -> case t of
+                      Closed{} -> do
+                          logInfo @String $ "Contract Ended for party " <> show party
+                          tell $ Just $ EndpointSuccess reqId AutoResponse
+                          marlowePlutusContract
+                      InputApplied{historyData} -> continueWith historyData
+                      Created{historyData} -> continueWith historyData
+            Just marloweTxOutRef -> do
+                let marloweData = toMarloweState marloweTxOutRef
                 continueWith marloweData
     -- The MarloweApp contract is closed implicitly by not returning
     -- itself (marlowePlutusContract) as a continuation
@@ -493,17 +490,18 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                 continueWith marloweData
             WaitOtherActionUntil timeout -> do
                 logInfo @String $ "WaitOtherActionUntil " <> show timeout
-                wr <- waitForUpdateUntilTime typedValidator timeout
+                wr <- waitForTimeoutOrTransition typedValidator timeout
                 case wr of
-                    Transition Closed{} -> do
+                    Left _ -> do
+                        logInfo @String $ "Contract Timeout"
+                        continueWith marloweData
+                    Right (Transition t) -> case t of
+                      Closed{} -> do
                         logInfo @String $ "Contract Ended"
                         tell $ Just $ EndpointSuccess reqId AutoResponse
                         marlowePlutusContract
-                    Timeout{} -> do
-                        logInfo @String $ "Contract Timeout"
-                        continueWith marloweData
-                    Transition InputApplied{historyData} -> continueWith historyData
-                    Transition Created{historyData} -> continueWith historyData
+                      InputApplied{historyData} -> continueWith historyData
+                      Created{historyData} -> continueWith historyData
 
             CloseContract -> do
                 logInfo @String $ "CloseContract"
@@ -773,10 +771,9 @@ findMarloweContractsOnChainByRoleCurrency
 findMarloweContractsOnChainByRoleCurrency curSym = do
     let params = marloweParams curSym
     let typedValidator = mkMarloweTypedValidator params
-    maybeState <- handling _AmbiguousOnChainState (const $ pure Nothing) $ getOnChainState typedValidator
-    case maybeState of
-        Just (OnChainState{ocsTxOutRef}, _) -> do
-            let marloweData = toMarloweState ocsTxOutRef
+    getMarloweTxOutRef typedValidator >>= \case
+        Just marloweTxOutRef -> do
+            let marloweData = toMarloweState marloweTxOutRef
             pure $ Just (params, marloweData)
         Nothing -> pure Nothing
 
@@ -794,6 +791,10 @@ getOnChainState validator = do
         [outRef] -> pure $ Just (OnChainState outRef, utxos)
         _        -> throwing_ _AmbiguousOnChainState
 
+getMarloweTxOutRef ::
+    SmallTypedValidator
+    -> Contract w schema MarloweError (Maybe MarloweTxOutRef)
+getMarloweTxOutRef validator = fmap (ocsTxOutRef . fst) <$> handling _AmbiguousOnChainState (const $ pure Nothing) (getOnChainState validator)
 
 mkStep ::
     MarloweParams
@@ -935,43 +936,41 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
 
 
 
-waitForUpdateTimeout ::
-    forall t w schema.
+waitForTransition ::
+    forall w schema.
        SmallTypedValidator
-    -> Promise w schema MarloweError t -- ^ The timeout
-    -> Contract w schema MarloweError (Promise w schema MarloweError (WaitingResult t))
-waitForUpdateTimeout typedValidator timeout = do
+    -> Contract w schema MarloweError Transition
+waitForTransition typedValidator = do
     let addr = validatorAddress typedValidator
-    currentState <- getOnChainState typedValidator
-    let success = case currentState of
+    history <- getMarloweTxOutRef typedValidator >>= \case
             Nothing ->
                 -- There is no on-chain state, so we wait for an output to appear
                 -- at the address. Any output that appears needs to be checked
                 -- with scChooser'
-                promiseBind (utxoIsProduced addr) $ \txns -> do
+                -- QUESTION: Shouldn't we just pattern match on `txns` to extract a single element
+                --           and not concatnate here anything?
+                awaitPromise (utxoIsProduced addr) >>= \txns -> do
                     produced <- concatMapM (marloweHistoryFrom typedValidator) $ NonEmpty.toList txns
                     case produced of
                         -- empty list shouldn't be possible, because we're waiting for txns with OnChainState
-                        [history] -> pure $ Transition history
+                        [history] -> pure history
                         _         -> throwing_ _AmbiguousOnChainState
-            Just (OnChainState{ocsTxOutRef=Typed.TypedScriptTxOutRef{Typed.tyTxOutRefRef}}, _) ->
-                promiseBind (utxoIsSpent tyTxOutRefRef) $ \txn -> do
+            Just Typed.TypedScriptTxOutRef{ Typed.tyTxOutRefRef } ->
+                awaitPromise (utxoIsSpent tyTxOutRefRef) >>= \txn -> do
                     spent <- marloweHistoryFrom typedValidator txn
                     case spent of
-                        [history] -> pure $ Transition history
+                        [history] -> pure history
                         _         -> throwing_ _UnableToExtractTransition
-    pure $ select success (Timeout <$> timeout)
+    pure $ Transition history
 
-
-waitForUpdateUntilTime ::
+waitForTimeoutOrTransition ::
     forall w schema.
        SmallTypedValidator
     -> POSIXTime
-    -> Contract w schema MarloweError (WaitingResult POSIXTime)
-waitForUpdateUntilTime client timeout =
-    awaitPromise
-      =<< waitForUpdateTimeout client (isTime timeout)
-
+    -> Contract w schema MarloweError (Either POSIXTime Transition)
+waitForTimeoutOrTransition typedValidator timeout = do
+    let transition = waitForTransition typedValidator
+    awaitPromise $ selectEither (isTime timeout) (Promise transition)
 
 getInput ::
     forall i.
