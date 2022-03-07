@@ -1,6 +1,6 @@
 # Test of a Swap Contract
 
-[This swap contract](../../src/Language/Marlowe/CLI/Examples/Swap.hs) swaps native tokens between two parties.
+[This swap contract](../../../marlowe-contracts/src/Marlowe/Contracts/Swap.hs) swaps native tokens between two parties.
 
 ## Prerequisites
 
