@@ -13,10 +13,9 @@ import Capability.MarloweStorage
 import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
-import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.State (gets)
 import Control.Monad.State.Class (modify_)
 import Data.Array (index, length, mapMaybe, modifyAt)
 import Data.ContractNickname as ContractNickname
@@ -131,8 +130,8 @@ deriveState
   let
     mContract = case contractIndex of
       Starting reqId -> Starting <$> getNewContract reqId context.contracts
-      Started marloweParams ->
-        mkInitialState wallet <$> getContract marloweParams context.contracts
+      Started marloweParams -> mkInitialState context.currentTime wallet
+        <$> getContract marloweParams context.contracts
 
     -- TODO: We might want to represent an error state instead of dummyState
     contract = fromMaybe dummyState $ mContract
@@ -144,10 +143,8 @@ deriveState
     }
 
 mkInitialState
-  :: PABConnectedWallet
-  -> Execution.State
-  -> ContractState
-mkInitialState wallet executionState =
+  :: Instant -> PABConnectedWallet -> Execution.State -> ContractState
+mkInitialState currentTime wallet executionState =
   let
     { marloweParams, contract } = executionState
     initialState =
@@ -162,6 +159,7 @@ mkInitialState wallet executionState =
       }
   in
     initialState
+      # regenerateStepCards currentTime
       # selectLastStep
       # Started
 
@@ -171,17 +169,6 @@ withStarted
   => (StartedState -> HalogenM State action slots msg m Unit)
   -> HalogenM State action slots msg m Unit
 withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
-
-updateCards :: forall m. Toast m => Maybe Execution.State -> DSL m Unit
-updateCards mExecutionState = void $ runMaybeT do
-  startedContract <- MaybeT $ peruse $ _contract <<< _Started
-  executionState <- hoistMaybe mExecutionState
-  currentTime <- gets _.currentTime
-  let
-    newContractState = Started
-      $ regenerateStepCards currentTime
-      $ set _executionState executionState startedContract
-  assign _contract newContractState
 
 handleAction
   :: forall m
@@ -207,11 +194,11 @@ handleAction Init = do
 handleAction (Receive { input, context }) = do
   modify_ _ { currentTime = context.currentTime }
   case input.contractIndex of
-    Started marloweParams ->
-      let
-        mExecutionState = getContract marloweParams context.contracts
-      in
-        updateCards mExecutionState
+    Started marloweParams -> void $ runMaybeT do
+      executionState <- hoistMaybe $ getContract marloweParams context.contracts
+      modifying (_contract <<< _Started) $
+        regenerateStepCards context.currentTime
+          <<< set _executionState executionState
     _ -> pure unit
 handleAction (SetNickname nickname) =
   withStarted \{ executionState: { marloweParams } } -> do
