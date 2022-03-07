@@ -15,7 +15,7 @@ The following flow chart illustrates the actions and decisions involved.
 
 ## Marlowe Contract
 
-The [Marlowe escrow contract](../../src/Language/Marlowe/CLI/Examples/Escrow.hs) embodies the logic for this contract:
+The [Marlowe escrow contract](../../../marlowe-contracts/src/Marlowe/Contracts/Escrow.hs) embodies the logic for this contract:
 
 <table>
 <tr>
