@@ -20,12 +20,13 @@ import Data.Argonaut
   )
 import Data.Either (either)
 import Data.Map as Map
-import Data.Time.Duration (Milliseconds(..), Seconds(..))
+import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (error, forkAff, launchAff_)
 import Effect.Class (liftEffect)
-import Env (Env(..), HandleRequest(..), Sinks, Sources)
+import Effect.Now (getTimezoneOffset)
+import Env (Env(..), HandleRequest(..), MakeClock(..), Sinks, Sources)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
@@ -51,13 +52,20 @@ instance DecodeJson MainArgs where
       else Production
     in MainArgs { pollingInterval, webpackBuildMode }
 
-mkEnv :: Sources -> Sinks -> WebpackBuildMode -> Effect Env
-mkEnv sources sinks webpackBuildMode = do
+mkEnv
+  :: Milliseconds
+  -> Milliseconds
+  -> Sources
+  -> Sinks
+  -> WebpackBuildMode
+  -> Effect Env
+mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
   contractStepCarouselSubscription <- AVar.empty
   endpointSemaphores <- AVar.new Map.empty
   createListeners <- AVar.new Map.empty
   applyInputListeners <- AVar.new Map.empty
   redeemListeners <- AVar.new Map.empty
+  timezoneOffset <- getTimezoneOffset
   pure $ Env
     { contractStepCarouselSubscription
     , logger: case webpackBuildMode of
@@ -71,11 +79,15 @@ mkEnv sources sinks webpackBuildMode = do
     , sinks
     , sources
     , handleRequest: HandleRequest Affjax.request
+    , timezoneOffset
+    , makeClock: MakeClock makeClock
     , localStorage:
         { getItem
         , setItem
         , removeItem
         }
+    , regularPollInterval
+    , syncPollInterval
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a
@@ -102,17 +114,18 @@ main args = do
       $ liftEffect
       $ HS.subscribe pabWebsocketOut.emitter
       $ launchAff_ <<< WS.managerWriteOutbound wsManager <<< WS.SendMessage
-    clock <- liftEffect $ map void $ makeClock $ Seconds 1.0
-    walletRegular <- liftEffect $ map void $ makeClock pollingInterval
-    walletSync <- liftEffect $ map void $ makeClock $ Milliseconds 500.0
     let
       sources =
         { pabWebsocket: pabWebsocketIn.emitter
-        , clock
-        , polling: { walletRegular, walletSync }
+        , currentTime: now
         }
       sinks = { pabWebsocket: pabWebsocketOut.listener }
-    env <- liftEffect $ mkEnv sources sinks webpackBuildMode
+    env <- liftEffect $ mkEnv
+      pollingInterval
+      (Milliseconds 500.0)
+      sources
+      sinks
+      webpackBuildMode
     currentTime <- now
     let store = mkStore currentTime addressBook contractNicknames
     body <- awaitBody

@@ -39,6 +39,7 @@
   , "identity"
   , "integers"
   , "json-helpers"
+  , "lazy"
   , "lists"
   , "logging"
   , "maybe"

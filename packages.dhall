@@ -213,3 +213,4 @@ in  upstream
         ]
         "https://github.com/jhbertra/purescript-halogen-nselect"
         "v1.0.0"
+  with servant-support = ../purescript-servant-support/spago.dhall as Location

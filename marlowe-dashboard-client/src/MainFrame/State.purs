@@ -34,7 +34,7 @@ import Control.Logger.Capability as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Now (class MonadTime, now, timezoneOffset)
+import Control.Monad.Now (class MonadTime, makeClock, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
@@ -63,7 +63,7 @@ import Data.PABConnectedWallet
   )
 import Data.PABConnectedWallet as Connected
 import Data.String (joinWith)
-import Data.Time.Duration (Minutes(..))
+import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
@@ -75,12 +75,12 @@ import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Env
   ( Env
-  , PollingSources
-  , Sources
   , _applyInputListeners
   , _createListeners
   , _redeemListeners
+  , _regularPollInterval
   , _sources
+  , _syncPollInterval
   )
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
@@ -600,10 +600,10 @@ activateOrRestorePlutusCompanionContracts walletId plutusContracts = runExceptT
 subscribeToSources
   :: forall m msg slots
    . MonadAsk Env m
+  => MonadTime m
   => MonadStore Store.Action Store.Store m
   => HalogenM State Action slots msg m Unit
 subscribeToSources = do
-  sources <- asks $ view _sources
   walletInitial <- liftEffect HS.create
   walletUpdates <- liftEffect HS.create
   storeEmitter <- emitSelected $ selectEq $ preview $ _wallet <<< _Connected
@@ -617,31 +617,40 @@ subscribeToSources = do
     wallet =
       walletInitial.emitter <|> walletUpdates.emitter :: Emitter
         (Maybe PABConnectedWallet)
-  void $ H.subscribe $ compactEmitter $ actionsFromSources wallet sources
+  void <<< H.subscribe <<< compactEmitter =<< actionsFromSources wallet
   store <- getStore
   liftEffect
     $ HS.notify walletInitial.listener
     $ store ^? _wallet <<< _Connected
 
 actionsFromSources
-  :: Emitter (Maybe PABConnectedWallet)
-  -> Sources
-  -> Emitter (Maybe Action)
-
-actionsFromSources wallet { pabWebsocket, clock, polling } =
-  actionFromWebsocket <$> wallet <*> pabWebsocket
-    <|> switchEmitter (pollWallet polling <$> wallet)
+  :: forall m
+   . MonadTime m
+  => MonadAsk Env m
+  => Emitter (Maybe PABConnectedWallet)
+  -> m (Emitter (Maybe Action))
+actionsFromSources wallet = do
+  clock <- makeClock $ Seconds 1.0
+  syncPoll <- makeClock =<< asks (view _syncPollInterval)
+  regularPoll <- makeClock =<< asks (view _regularPollInterval)
+  let walletPoller = switchEmitter $ pollWallet syncPoll regularPoll <$> wallet
+  { pabWebsocket } <- asks $ view _sources
+  pure $ actionFromWebsocket <$> wallet <*> pabWebsocket
+    <|> walletPoller
     <|> Just Tick <$ clock
 
 pollWallet
-  :: PollingSources -> Maybe PABConnectedWallet -> Emitter (Maybe Action)
-pollWallet { walletRegular, walletSync } = case _ of
+  :: Emitter Unit
+  -> Emitter Unit
+  -> Maybe PABConnectedWallet
+  -> Emitter (Maybe Action)
+pollWallet syncPoll regularPoll = case _ of
   Nothing -> empty
   Just wallet ->
-    Just (OnPoll (wallet ^. _syncStatus) (wallet ^. Connected._walletId)) <$
-      case wallet ^. _syncStatus of
-        Synchronizing _ -> walletSync
-        _ -> walletRegular
+    Just (OnPoll (wallet ^. _syncStatus) (wallet ^. Connected._walletId))
+      <$ case wallet ^. _syncStatus of
+        Synchronizing _ -> syncPoll
+        _ -> regularPoll
 
 actionFromWebsocket
   :: Maybe PABConnectedWallet

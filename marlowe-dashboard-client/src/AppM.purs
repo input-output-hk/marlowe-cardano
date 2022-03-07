@@ -18,7 +18,7 @@ import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec, tailRecM)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
-import Data.Lens (Lens', over, view)
+import Data.Lens (Lens', over, to, view)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
 import Data.Newtype (un)
@@ -27,7 +27,15 @@ import Data.Passphrase as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (Env(..), HandleRequest(..), _handleRequest)
+import Env
+  ( Env(..)
+  , HandleRequest(..)
+  , MakeClock(..)
+  , _handleRequest
+  , _makeClock
+  , _sources
+  , _timezoneOffset
+  )
 import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad
@@ -87,7 +95,12 @@ derive newtype instance MonadEffect AppM
 
 derive newtype instance MonadAff AppM
 
-derive newtype instance MonadTime AppM
+instance MonadTime AppM where
+  now = liftEffect =<< (asks $ view $ _sources <<< to _.currentTime)
+  timezoneOffset = asks $ view _timezoneOffset
+  makeClock interval = do
+    MakeClock mkClock <- asks $ view _makeClock
+    liftEffect $ mkClock interval
 
 -- TODO use newtype deriving when MonadRec instance is added to StoreT
 instance MonadRec AppM where
