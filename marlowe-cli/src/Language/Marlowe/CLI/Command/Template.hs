@@ -115,15 +115,15 @@ data TemplateCommand =
 runTemplateCommand :: MonadIO m
                    => TemplateCommand  -- ^ The command.
                    -> m ()             -- ^ Action for runninng the command.
-runTemplateCommand TemplateTrivial{..}        = do marloweContract <- makeContract $
+runTemplateCommand TemplateTrivial{..}        = let marloweContract = makeContract $
                                                      trivial
                                                        party
                                                        depositLovelace
                                                        withdrawalLovelace
                                                        timeout
-                                                   let marloweState = initialMarloweState bystander minAda
-                                                   makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateEscrow{..}         = do marloweContract <- makeContract $
+                                                    marloweState = initialMarloweState bystander minAda
+                                                 in makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateEscrow{..}         = let marloweContract = makeContract $
                                                       escrow
                                                         (Constant price)
                                                         seller
@@ -133,9 +133,9 @@ runTemplateCommand TemplateEscrow{..}         = do marloweContract <- makeContra
                                                         complaintDeadline
                                                         disputeDeadline
                                                         mediationDeadline
-                                                   let marloweState = initialMarloweState mediator minAda
-                                                   makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateSwap{..}           = do marloweContract <- makeContract $
+                                                    marloweState = initialMarloweState mediator minAda
+                                                 in makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateSwap{..}           = let marloweContract = makeContract $
                                                      swap
                                                        aParty
                                                        aToken
@@ -146,9 +146,9 @@ runTemplateCommand TemplateSwap{..}           = do marloweContract <- makeContra
                                                        (Constant bAmount)
                                                        bTimeout
                                                        Close
-                                                   let marloweState = initialMarloweState aParty minAda
-                                                   makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateZeroCouponBond{..} = do marloweContract <- makeContract $
+                                                    marloweState = initialMarloweState aParty minAda
+                                                 in makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateZeroCouponBond{..} = let marloweContract = makeContract $
                                                      zeroCouponBond
                                                        lender
                                                        borrower
@@ -158,9 +158,9 @@ runTemplateCommand TemplateZeroCouponBond{..} = do marloweContract <- makeContra
                                                        (Constant principal `AddValue` Constant interest)
                                                        ada
                                                        Close
-                                                   let marloweState = initialMarloweState lender minAda
-                                                   makeExample contractFile stateFile MarloweData{..}
-runTemplateCommand TemplateCoveredCall{..}    = do marloweContract <- makeContract $
+                                                    marloweState = initialMarloweState lender minAda
+                                                 in makeExample contractFile stateFile MarloweData{..}
+runTemplateCommand TemplateCoveredCall{..}    = let marloweContract = makeContract $
                                                      coveredCall
                                                        buyer
                                                        seller
@@ -171,16 +171,16 @@ runTemplateCommand TemplateCoveredCall{..}    = do marloweContract <- makeContra
                                                        issueDate
                                                        maturityDate
                                                        settlementDate
-                                                   let marloweState = initialMarloweState buyer minAda
-                                                   makeExample contractFile stateFile MarloweData{..}
+                                                    marloweState = initialMarloweState buyer minAda
+                                                 in makeExample contractFile stateFile MarloweData{..}
 
 
--- | Translation from Extended Marlowe to Core Marlowe.
-makeContract :: MonadIO m => E.Contract -> m C.Contract
+-- | Conversion from Extended to Core Marlowe.
+makeContract :: E.Contract -> C.Contract
 makeContract = errorHandling . toCore
   where
-    errorHandling (Just contract) = return contract
-    errorHandling Nothing         = error "Unexpected" -- TODO: throw exception
+    errorHandling (Just contract) = contract
+    errorHandling Nothing         = error "Conversion from Extended to Core Marlowe failed!"
 
 
 -- | Build the initial Marlowe state.
