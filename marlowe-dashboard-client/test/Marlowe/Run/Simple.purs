@@ -9,8 +9,8 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Test.Marlowe.Run (marloweRunTest)
 import Test.Network.HTTP
   ( expectJsonContent
-  , expectJsonRequest
   , expectMethod
+  , expectNextJsonRequest
   , expectUri
   )
 import Test.Spec (Spec, describe)
@@ -77,7 +77,7 @@ spec = do
           address =
             "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
 
-        expectJsonRequest ado
+        expectNextJsonRequest ado
           expectMethod POST
           expectUri "/api/wallet/v1/centralized-testnet/create"
           expectJsonContent

@@ -41,6 +41,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.Unfoldable (unfoldr)
 import Effect (Effect)
 import Effect.Aff (Aff, Error, bracket, error, finally, launchAff_)
+import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -65,7 +66,6 @@ import Test.Network.HTTP
   , MatcherError
   , RequestMatcherBox
   , boxRequestMatcher
-  , fallbackMatcher
   , unboxRequestMatcher
   )
 import Test.Spec (Spec, it)
@@ -125,7 +125,14 @@ derive newtype instance
 
 instance MonadAff m => MonadMockHTTP (MarloweTestM m) where
   expectRequest responseFormat matcher = do
-    matchers <- asks _.requestMatchers
+    fallbackMatcher <- asks _.fallbackMatcher
+    liftAff do
+      fallback <- AVar.take fallbackMatcher
+      AVar.put
+        (fallback <> boxRequestMatcher responseFormat matcher)
+        fallbackMatcher
+  expectNextRequest responseFormat matcher = do
+    matchers <- asks _.nextMatchers
     liftAff $ Queue.write matchers $ boxRequestMatcher responseFormat matcher
 
 instance (MonadEffect m, MonadThrow Error m) => MonadMockTime (MarloweTestM m) where
@@ -155,6 +162,7 @@ runMarloweTestM (MarloweTestM m) = runReaderT m
 
 mkTestEnv :: Aff (Env /\ Coenv /\ Emitter Error)
 mkTestEnv = do
+  fallbackMatcher <- liftAff $ AVar.new mempty
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointSemaphores <- liftAff $ AVar.new Map.empty
   createListeners <- liftAff $ AVar.new Map.empty
@@ -164,7 +172,7 @@ mkTestEnv = do
   pabWebsocketOut <- liftEffect $ HS.create
   errors <- liftEffect $ HS.create
   pabWebsocketOutQueue <- Queue.new
-  requestMatchers <- Queue.new
+  nextMatchers <- Queue.new
   sub <- liftEffect $ HS.subscribe pabWebsocketOut.emitter \msg ->
     launchAff_ $ Queue.write pabWebsocketOutQueue msg
   localStorage <- liftEffect $ Ref.new Map.empty
@@ -193,11 +201,10 @@ mkTestEnv = do
       , sinks
       , sources
       , handleRequest: HandleRequest \request -> marshallErrors do
-          queuedMatcher <- Queue.tryRead requestMatchers
+          nextMatcher <- Queue.tryRead nextMatchers
+          fallbackMatcher' <- AVar.read fallbackMatcher
           let
-            matcher = fromMaybe
-              (boxRequestMatcher request.responseFormat fallbackMatcher)
-              queuedMatcher
+            matcher = fromMaybe fallbackMatcher' nextMatcher
 
           case unboxRequestMatcher matcher request of
             Left error -> failMultiline error
@@ -220,7 +227,8 @@ mkTestEnv = do
       , clocks
       , pabWebsocketIn: pabWebsocketIn.listener
       , pabWebsocketOut: pabWebsocketOutQueue
-      , requestMatchers
+      , nextMatchers
+      , fallbackMatcher
       , dispose: do
           HS.unsubscribe sub
       }
@@ -230,7 +238,8 @@ mkTestEnv = do
 -- become sinks, sinks sources).
 type Coenv =
   { pabWebsocketOut :: Queue CombinedWSStreamToServer
-  , requestMatchers :: Queue RequestMatcherBox
+  , fallbackMatcher :: AVar RequestMatcherBox
+  , nextMatchers :: Queue RequestMatcherBox
   , pabWebsocketIn :: Listener (FromSocket CombinedWSStreamToClient)
   , currentTime :: Ref Instant
   , clocks :: Ref (Map Int TestClock)

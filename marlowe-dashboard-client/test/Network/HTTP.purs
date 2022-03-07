@@ -1,8 +1,8 @@
 module Test.Network.HTTP
   ( class MonadMockHTTP
+  , MatcherError(..)
   , RequestMatcher
   , RequestMatcherBox
-  , MatcherError(..)
   , boxRequestMatcher
   , expectCondition
   , expectContent
@@ -11,13 +11,16 @@ module Test.Network.HTTP
   , expectJsonRequest
   , expectMaybe
   , expectMethod
+  , expectNextJsonRequest
+  , expectNextRequest
+  , expectNextRequest'
+  , expectNextTextRequest
   , expectNoContent
   , expectRequest
   , expectRequest'
   , expectTextContent
   , expectTextRequest
   , expectUri
-  , fallbackMatcher
   , requestMatcher
   , runRequestMatcher
   , unboxRequestMatcher
@@ -31,7 +34,7 @@ import Affjax.RequestBody as Request
 import Affjax.ResponseFormat (ResponseFormat(..))
 import Affjax.ResponseFormat as Response
 import Affjax.StatusCode (StatusCode(..))
-import Control.Alt (class Alt, alt)
+import Control.Alt (class Alt, alt, (<|>))
 import Control.Apply (lift2)
 import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
 import Data.Array (fromFoldable)
@@ -51,6 +54,41 @@ class Monad m <= MonadMockHTTP m where
      . ResponseFormat a
     -> RequestMatcher (Either Error (Response a))
     -> m Unit
+  expectNextRequest
+    :: forall a
+     . ResponseFormat a
+    -> RequestMatcher (Either Error (Response a))
+    -> m Unit
+
+expectNextTextRequest
+  :: forall m
+   . MonadMockHTTP m
+  => RequestMatcher String
+  -> m Unit
+expectNextTextRequest = expectNextRequest' Response.string
+
+expectNextJsonRequest
+  :: forall a m
+   . EncodeJson a
+  => MonadMockHTTP m
+  => RequestMatcher a
+  -> m Unit
+expectNextJsonRequest = expectNextRequest' Response.json <<< map encodeJson
+
+expectNextRequest'
+  :: forall a m
+   . MonadMockHTTP m
+  => ResponseFormat a
+  -> RequestMatcher a
+  -> m Unit
+expectNextRequest' format = expectNextRequest format <<< map
+  ( Right <<<
+      { status: StatusCode 200
+      , statusText: "OK"
+      , headers: []
+      , body: _
+      }
+  )
 
 expectTextRequest
   :: forall m
@@ -90,6 +128,17 @@ newtype RequestMatcherBox = RequestMatcherBox
      . Request content
     -> Either MatcherError (Either Error (Response content))
   )
+
+instance Semigroup RequestMatcherBox where
+  append (RequestMatcherBox a) (RequestMatcherBox b) =
+    RequestMatcherBox \request -> a request <|> b request
+
+instance Monoid RequestMatcherBox where
+  mempty = boxRequestMatcher Response.ignore
+    ( RequestMatcher
+        ( const $ Left $ MatcherError [ "Unexpected HTTP Request" ]
+        )
+    )
 
 boxRequestMatcher
   :: forall a
@@ -197,10 +246,6 @@ instance Semigroup MatcherError where
 
 instance Monoid MatcherError where
   mempty = MatcherError mempty
-
-fallbackMatcher :: forall a. RequestMatcher a
-fallbackMatcher = RequestMatcher
-  (const $ Left $ MatcherError [ "Unexpected HTTP Request" ])
 
 requestMatcher
   :: forall a
