@@ -164,11 +164,20 @@ data PabOperation =
   | CallApplyInputs
     {
       poInstance :: InstanceNickname
-    , poOwner    :: RoleName
     , poInputs   :: [MarloweClientInput]
     , poTimes    :: Maybe TimeInterval
     }
   | AwaitApplyInputs
+    {
+      poInstance :: InstanceNickname
+    }
+  | CallAuto
+    {
+      poInstance     :: InstanceNickname
+    , poOwner        :: RoleName
+    , poAbsoluteTime :: POSIXTime
+    }
+  | AwaitAuto
     {
       poInstance :: InstanceNickname
     }
@@ -178,6 +187,14 @@ data PabOperation =
     , poOwner    :: RoleName
     }
   | AwaitRedeem
+    {
+      poInstance :: InstanceNickname
+    }
+  | CallClose
+    {
+      poInstance :: InstanceNickname
+    }
+  | AwaitClose
     {
       poInstance :: InstanceNickname
     }

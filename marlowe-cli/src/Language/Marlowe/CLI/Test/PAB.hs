@@ -55,10 +55,11 @@ import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), InstanceNickname, 
                                         psBurnAddress, psFaucetAddress, psFaucetKey, psPassphrase, psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
-import Language.Marlowe.Client (ApplyInputsEndpointSchema, CreateEndpointSchema, EndpointResponse (..),
-                                MarloweEndpointResult (..), RedeemEndpointSchema)
+import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
+                                EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Semantics (MarloweParams (rolesCurrency))
+import Language.Marlowe.SemanticsTypes (Party (Role))
 import Network.WebSockets (Connection)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (PabClient, activateContract, instanceClient))
@@ -257,6 +258,26 @@ interpret _ AwaitApplyInputs{..} =
     if result == ApplyInputsResponse
       then liftIO . putStrLn $ "[AwaitApplyInputs] Input application confirmed."
       else throwError . CliError $ "[AwaitApplyInputs] received unexpected response " <> show result <> "."
+interpret access CallAuto{..} =
+  do
+    uuid <- liftIO nextRandom
+    AppInstanceInfo{..} <- findInstance poInstance
+    params <- maybe (throwError $ CliError "[CallAuto] Contract parameters are not known.") pure aiParams
+    lift
+      $ call access aiInstance "auto"
+      ((
+        uuid
+      , params
+      , Role . TokenName . toBuiltin $ BS8.pack poOwner
+      , poAbsoluteTime
+      ) :: AutoEndpointSchema)
+    liftIO . putStrLn $ "[CallAuto] Endpoint \"auto\" called on " <> show (unContractInstanceId aiInstance) <> " on behalf of role " <> show poOwner <> " until time " <> show poAbsoluteTime <> "."
+interpret _ AwaitAuto{..} =
+  do
+    result <- awaitApp poInstance (-1)
+    if result == AutoResponse
+      then liftIO . putStrLn $ "[AwaitAuto] Automatic execution confirmed."
+      else throwError . CliError $ "[AwaitAuto] received unexpected response " <> show result <> "."
 interpret access CallRedeem{..} =
   do
     uuid <- liftIO nextRandom
@@ -278,6 +299,19 @@ interpret _ AwaitRedeem{..} =
     if result == RedeemResponse
       then liftIO . putStrLn $ "[AwaitRedeem] Redemption confirmed."
       else throwError . CliError $ "[AwaitRedeem] received unexpected response " <> show result <> "."
+interpret access CallClose{..} =
+  do
+    uuid <- liftIO nextRandom
+    AppInstanceInfo{..} <- findInstance poInstance
+    lift
+      $ call access aiInstance "close" uuid
+    liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on " <> show (unContractInstanceId aiInstance) <> "."
+interpret _ AwaitClose{..} =
+  do
+    result <- awaitApp poInstance (-1)
+    if result == CloseResponse
+      then liftIO . putStrLn $ "[AwaitClose] Closing application confirmed."
+      else throwError . CliError $ "[AwaitClose] received unexpected response " <> show result <> "."
 interpret PabAccess{..} Stop{..} =
   do
     AppInstanceInfo{..} <- findInstance poInstance
