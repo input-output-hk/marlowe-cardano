@@ -81,6 +81,7 @@ import Page.Contract.Lenses
   , _previousSteps
   , _resultingPayments
   , _selectedStep
+  , _tab
   )
 import Page.Contract.Types
   ( Action(..)
@@ -294,8 +295,9 @@ renderPastStep
   -> Int
   -> PreviousStep
   -> Array (ComponentHTML m)
-renderPastStep tzOffset state stepNumber step =
-  [ tabBar step.tab $ Just (SelectTab stepNumber)
+renderPastStep tzOffset state stepNumber step = do
+  let tab = state ^. _tab stepNumber
+  [ tabBar tab $ Just (SelectTab stepNumber)
   , cardBody []
       $
         [ titleBar []
@@ -312,7 +314,7 @@ renderPastStep tzOffset state stepNumber step =
                     , stepStatusText "Completed" [ "text-green" ]
                     ]
             ]
-        , case step.tab, step of
+        , case tab, step of
             Tasks, { state: TransactionStep txInput } -> cardContent [ "p-4" ]
               [ renderPastStepTasksTab tzOffset stepNumber state txInput step ]
             Tasks, { state: TimeoutStep timeoutInfo } -> cardContent [ "p-4" ]
@@ -383,7 +385,7 @@ renderPaymentSummary
   :: forall p. Int -> StartedState -> PreviousStep -> HTML p Action
 renderPaymentSummary stepNumber state step =
   let
-    expanded = step ^. _expandPayments
+    expanded = state ^. _expandPayments stepNumber
     contractUserPartes = state ^. _contractUserParties
     transfers = paymentToTransfer contractUserPartes <$> step ^.
       _resultingPayments
@@ -605,12 +607,12 @@ renderCurrentStep
 renderCurrentStep currentSlot state =
   let
     stepNumber = currentStep state
-
+    tab = state ^. _tab stepNumber
     executionState = state ^. _executionState
     isPendingTransaction = isJust executionState.mPendingTransaction
     contractIsClosed = isClosed executionState
   in
-    [ tabBar state.tab $ Just (SelectTab stepNumber)
+    [ tabBar tab $ Just (SelectTab stepNumber)
     , cardBody []
         $
           [ titleBar []
@@ -626,7 +628,7 @@ renderCurrentStep currentSlot state =
                         , icon Icon.Timer []
                         ]
               ]
-          , case state.tab of
+          , case tab of
               Tasks ->
                 let
                   marloweParams = state ^. (_executionState <<< _marloweParams)

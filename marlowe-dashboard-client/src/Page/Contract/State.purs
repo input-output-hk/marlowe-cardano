@@ -17,7 +17,7 @@ import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (class MonadTime, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State.Class (modify_)
-import Data.Array (index, length, mapMaybe, modifyAt)
+import Data.Array (index, length, mapMaybe)
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.ContractUserParties (contractUserParties, getParticipants)
@@ -26,9 +26,9 @@ import Data.Foldable (for_)
 import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
 import Data.Lens.Extra (peruse)
-import Data.Lens.Index (ix)
 import Data.List (toUnfoldable)
 import Data.LocalContractNicknames (insertContractNickname)
+import Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.NewContract (NewContract(..))
 import Data.Ord (abs)
@@ -63,8 +63,8 @@ import Page.Contract.Lenses
   , _contractUserParties
   , _executionState
   , _expandPayments
-  , _previousSteps
   , _selectedStep
+  , _tab
   )
 import Page.Contract.Types
   ( Action(..)
@@ -77,7 +77,6 @@ import Page.Contract.Types
   , Slice
   , StartedState
   , State
-  , Tab(..)
   , scrollContainerRef
   )
 import Page.Contract.View (contractScreen)
@@ -148,7 +147,8 @@ mkInitialState currentTime wallet executionState =
   let
     { marloweParams, contract } = executionState
     initialState =
-      { tab: Tasks
+      { tabs: Map.empty
+      , expandPayments: Map.empty
       , executionState
       , previousSteps: mempty
       , selectedStep: 0
@@ -206,21 +206,10 @@ handleAction (SetNickname nickname) =
       nickname
 
 handleAction (SelectTab stepNumber tab) =
-  modifying (_contract <<< _Started) \started@{ previousSteps } ->
-    case
-      modifyAt stepNumber (\previousStep -> previousStep { tab = tab })
-        previousSteps
-      of
-      -- if the stepNumber is in the range of the previousSteps, we update that step
-      Just modifiedPreviousSteps -> started
-        { previousSteps = modifiedPreviousSteps }
-      -- otherwise we update the tab of the current step
-      Nothing -> started { tab = tab }
+  assign (_contract <<< _Started <<< _tab stepNumber) tab
 
 handleAction (ToggleExpandPayment stepNumber) = modifying
-  ( _contract <<< _Started <<< _previousSteps <<< ix stepNumber <<<
-      _expandPayments
-  )
+  (_contract <<< _Started <<< _expandPayments stepNumber)
   not
 
 handleAction (OnActionSelected action num) = raise $ AskConfirmation action num
@@ -271,9 +260,7 @@ transactionsToStep
           TimeoutStep { time: act.time, missedActions }
       InputAction -> TransactionStep txInput
   in
-    { tab: Tasks
-    , expandPayments: false
-    , resultingPayments: toUnfoldable resultingPayments
+    { resultingPayments: toUnfoldable resultingPayments
     , balances:
         { atStart:
             expandedBalancesAtStart
@@ -295,10 +282,8 @@ timeoutToStep state { time, missedActions } =
       [ adaToken ]
       balances
   in
-    { tab: Tasks
-    , expandPayments: false
-    -- FIXME: Revisit how should we treat payments from timeout steps, for now they are not displayed
-    , resultingPayments: []
+    { -- FIXME: Revisit how should we treat payments from timeout steps, for now they are not displayed
+      resultingPayments: []
     , balances:
         { atStart: expandedBalances
         , atEnd: Nothing

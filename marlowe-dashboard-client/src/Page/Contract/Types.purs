@@ -32,6 +32,7 @@ import Data.ContractNickname (ContractNickname)
 import Data.ContractStatus (ContractStatus, ContractStatusId)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
+import Data.Map (Map)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
@@ -61,8 +62,7 @@ type State =
   }
 
 type StartedState =
-  { tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
-  , executionState :: Execution.State
+  { executionState :: Execution.State
   , previousSteps :: Array PreviousStep
   -- Which step is selected. This index is 0 based and should be between [0, previousSteps.length]
   -- (both sides inclusive). This is because the array represent the past steps and the
@@ -74,6 +74,8 @@ type StartedState =
   , contractUserParties :: ContractUserParties
   -- These are the possible actions a user can make in the current step (grouped by party).
   , namedActions :: UserNamedActions
+  , tabs :: Map Int Tab
+  , expandPayments :: Map Int Boolean
   }
 
 type StepBalance =
@@ -83,9 +85,7 @@ type StepBalance =
 
 -- Represents a historical step in a contract's life.
 type PreviousStep =
-  { tab :: Tab
-  , expandPayments :: Boolean
-  , resultingPayments :: Array Payment
+  { resultingPayments :: Array Payment
   , balances :: StepBalance
   , state :: PreviousStepState
   }
