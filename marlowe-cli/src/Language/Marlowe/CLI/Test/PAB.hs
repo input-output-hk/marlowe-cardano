@@ -1,3 +1,15 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Test Marlowe contracts using the PAB.
+--
+-----------------------------------------------------------------------------
+
 
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE FlexibleContexts   #-}
@@ -12,6 +24,7 @@
 
 
 module Language.Marlowe.CLI.Test.PAB (
+-- * Testing
   pabTest
 ) where
 
@@ -87,19 +100,21 @@ import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
 
 
+-- | Whether to report verbosely.
 verbose :: Bool
 verbose = True
 
 
+-- | Test a Marlowe contract on the PAB.
 pabTest :: MonadError CliError m
         => MonadIO m
-        => PabAccess
-        -> SomePaymentSigningKey
-        -> AddressAny
-        -> AddressAny
-        -> String
-        -> PabTest
-        -> m ()
+        => PabAccess              -- ^ Access to the PAB APIs.
+        -> SomePaymentSigningKey  -- ^ The key to the faucet.
+        -> AddressAny             -- ^ The faucet address.
+        -> AddressAny             -- ^ The address for burning tokens.
+        -> String                 -- ^ The wallet passphrase.
+        -> PabTest                -- ^ The tests to be run.
+        -> m ()                   -- ^ Action for running the tests.
 pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
   do
     liftIO $ putStrLn ""
@@ -121,17 +136,20 @@ pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
     liftIO $ putStrLn "***** SUCCEEDED *****"
 
 
+-- | Execute a test operation.
 interpret :: MonadError CliError m
           => MonadIO m
-          => PabAccess
-          -> PabOperation
-          -> StateT PabState m ()
+          => PabAccess             -- ^ Access to the PAB APIs.
+          -> PabOperation          -- ^ The test operation.
+          -> StateT PabState m ()  -- ^ Action for running the test.
+
 interpret access CreateWallet{..} =
   do
     passphrase <- use psPassphrase
     wi <- lift $ createWallet access poOwner passphrase
     liftIO . putStrLn $ "[CreateWallet] Created wallet " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
     psWallets %= M.insert poOwner wi
+
 interpret PabAccess{..} FundWallet{..} =
   do
     WalletInfo{..} <- findOwner poOwner
@@ -144,6 +162,7 @@ interpret PabAccess{..} FundWallet{..} =
           faucetAddress faucetKey
           (Just 600)
     liftIO . putStrLn $ "[FundWallet] Funded wallet " <> show (W.getWalletId wiWalletId) <> " for role " <> show poOwner <> " with " <> show poValue <> "."
+
 interpret PabAccess{..} ReturnFunds{..} =
   do
     WalletInfo{..} <- findOwner poOwner
@@ -188,6 +207,7 @@ interpret PabAccess{..} ReturnFunds{..} =
           faucetAddress faucetKey
           (Just 600)
     liftIO . putStrLn $ "[ReturnFunds] Returned funds from wallet " <> show (W.getWalletId wiWalletId) <> "."
+
 interpret access CheckFunds{..} =
   do
     WalletInfo{..} <- findOwner poOwner
@@ -208,6 +228,7 @@ interpret access CheckFunds{..} =
       . CliError
       $ "[CheckFunds]: Wallet for role " <> show poOwner <> " contains unexpected tokens " <> show (actualTokens <> negateValue expectedTokens <> negateValue roleTokens) <> "."
     liftIO . putStrLn $ "[CheckFunds] Wallet for role " <> show poOwner <> " contains " <> show actual <> "."
+
 interpret access ActivateApp{..} =
   do
     WalletInfo{..} <- findOwner poOwner
@@ -216,6 +237,7 @@ interpret access ActivateApp{..} =
       aiParams = Nothing
     liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
     psAppInstances %= M.insert poInstance AppInstanceInfo{..}
+
 interpret access CallCreate{..} =
   do
     uuid <- liftIO nextRandom
@@ -233,6 +255,7 @@ interpret access CallCreate{..} =
     lift
       $ call access aiInstance "create" ((uuid, AM.fromList owners, poContract) :: CreateEndpointSchema)
     liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show (unContractInstanceId aiInstance) <> " for owners " <> show owners <> "."
+
 interpret _ AwaitCreate{..} =
   do
     result <- awaitApp poInstance (-1)
@@ -244,6 +267,7 @@ interpret _ AwaitCreate{..} =
                                      poInstance
                                  liftIO . putStrLn $ "[AwaitCreate] Creation confirmed with " <> show params <> "."
       _                     -> throwError . CliError $ "[AwaitCreate] received unexpected response " <> show result <> "."
+
 interpret access CallApplyInputs{..} =
   do
     uuid <- liftIO nextRandom
@@ -252,12 +276,14 @@ interpret access CallApplyInputs{..} =
     lift
       $ call access aiInstance "apply-inputs" ((uuid, params, poTimes, poInputs) :: ApplyInputsEndpointSchema)
     liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
+
 interpret _ AwaitApplyInputs{..} =
   do
     result <- awaitApp poInstance (-1)
     if result == ApplyInputsResponse
       then liftIO . putStrLn $ "[AwaitApplyInputs] Input application confirmed."
       else throwError . CliError $ "[AwaitApplyInputs] received unexpected response " <> show result <> "."
+
 interpret access CallAuto{..} =
   do
     uuid <- liftIO nextRandom
@@ -272,12 +298,14 @@ interpret access CallAuto{..} =
       , poAbsoluteTime
       ) :: AutoEndpointSchema)
     liftIO . putStrLn $ "[CallAuto] Endpoint \"auto\" called on " <> show (unContractInstanceId aiInstance) <> " on behalf of role " <> show poOwner <> " until time " <> show poAbsoluteTime <> "."
+
 interpret _ AwaitAuto{..} =
   do
     result <- awaitApp poInstance (-1)
     if result == AutoResponse
       then liftIO . putStrLn $ "[AwaitAuto] Automatic execution confirmed."
       else throwError . CliError $ "[AwaitAuto] received unexpected response " <> show result <> "."
+
 interpret access CallRedeem{..} =
   do
     uuid <- liftIO nextRandom
@@ -293,12 +321,14 @@ interpret access CallRedeem{..} =
       , anyAddressInShelleyBasedEra wiAddress :: AddressInEra ShelleyEra
       ) :: RedeemEndpointSchema)
     liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
+
 interpret _ AwaitRedeem{..} =
   do
     result <- awaitApp poInstance (-1)
     if result == RedeemResponse
       then liftIO . putStrLn $ "[AwaitRedeem] Redemption confirmed."
       else throwError . CliError $ "[AwaitRedeem] received unexpected response " <> show result <> "."
+
 interpret access CallClose{..} =
   do
     uuid <- liftIO nextRandom
@@ -306,12 +336,14 @@ interpret access CallClose{..} =
     lift
       $ call access aiInstance "close" uuid
     liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on " <> show (unContractInstanceId aiInstance) <> "."
+
 interpret _ AwaitClose{..} =
   do
     result <- awaitApp poInstance (-1)
     if result == CloseResponse
       then liftIO . putStrLn $ "[AwaitClose] Closing application confirmed."
       else throwError . CliError $ "[AwaitClose] received unexpected response " <> show result <> "."
+
 interpret PabAccess{..} Stop{..} =
   do
     AppInstanceInfo{..} <- findInstance poInstance
@@ -322,6 +354,7 @@ interpret PabAccess{..} Stop{..} =
       $ runApi stopInstance
     -- TODO: Update state.
     liftIO . putStrLn $ "[Stop] Instance " <> show (unContractInstanceId aiInstance) <> " stopped."
+
 interpret _ Follow{..} =
   do
     aiThis <- findInstance poInstance
@@ -331,23 +364,28 @@ interpret _ Follow{..} =
         (\ai -> ai {aiParams = aiParams aiOther})
         poInstance
     liftIO . putStrLn $ "[Follow] Instance " <> show (unContractInstanceId $ aiInstance aiThis) <> " now follows instance " <> show (unContractInstanceId $ aiInstance aiOther) <> "."
+
 interpret _ PrintState =
   do
     ps <- get
     liftIO . putStrLn $ "[PrintState] " <> show ps <> "."
+
 interpret access PrintWallet{..} =
   do
     WalletInfo{..} <- findOwner poOwner
     actual <- lift $ totalBalance access wiWalletId
     liftIO . putStrLn $ "[PrintWallet] Wallet for role " <> show poOwner <> " contains " <> show actual <> "."
+
 interpret _ Comment{..} =
   liftIO . putStrLn $ "[Comment] " <> poComment
+
 interpret _ WaitFor{..} =
   do
     let
       DiffMilliSeconds delta = poRelativeTime
     liftIO . threadDelay $ 1000 * fromIntegral delta
     liftIO . putStrLn $ "[WaitFor] Waited for " <> show delta <> " milliseconds."
+
 interpret _ WaitUntil{..} =
   do
     now <- liftIO $ floor . (1000 *) . nominalDiffTimeToSeconds <$> Time.getPOSIXTime
@@ -355,6 +393,7 @@ interpret _ WaitUntil{..} =
       delta = maximum [0, getPOSIXTime poAbsoluteTime - now]
     liftIO . threadDelay $ 1000 * fromIntegral delta
     liftIO . putStrLn $ "[WaitUntil] Waited for " <> show delta <> " milliseconds until POSIX " <> show (getPOSIXTime poAbsoluteTime) <> " milliseconds."
+
 interpret access Timeout{..} =
   do
     state <- get
@@ -368,6 +407,7 @@ interpret access Timeout{..} =
                                liftIO . putStrLn $ "[Timeout] Operation completed within " <> show poTimeoutSeconds <> " seconds."
       Just (Left e)       -> throwError e
       Nothing             -> throwError . CliError $ "[Timeout] Operation did not complete within " <> show poTimeoutSeconds <> " seconds: " <> show poOperation <> "."
+
 interpret access ShouldFail{..} =
   do
     state <- get
@@ -380,21 +420,23 @@ interpret access ShouldFail{..} =
       Left e       -> liftIO . putStrLn $ "[ShouldFail] Operations failed as expected: " <> show e <> " occurred for " <> show poOperations <> "."
 
 
+-- | Execut test operations into the IO monad.
 runOperationsToIO :: PabAccess
-                  -> [PabOperation]
-                  -> PabState
-                  -> IO (Either CliError PabState)
+                  -> [PabOperation]                 -- ^ The test operations.
+                  -> PabState                       -- ^ The state of the PAB instances and wallets.
+                  -> IO (Either CliError PabState)  -- ^ Action for running the test operations, or an error.
 runOperationsToIO access operations =
   runExceptT
     . execStateT (mapM_ (interpret access) operations)
 
 
+-- | Wait for a websocket message from the PAB.
 awaitApp :: MonadError CliError m
          => MonadIO m
          => MonadState PabState m
-         => InstanceNickname
-         -> Int
-         -> m MarloweEndpointResult
+         => InstanceNickname         -- ^ The contract instance.
+         -> Int                      -- ^ How many empty responses to tolerate before failing.
+         -> m MarloweEndpointResult  -- ^ Action to return the endpoint result from the websocket channel.
 awaitApp nickname nothings =
   do
     AppInstanceInfo{..} <- findInstance nickname
@@ -412,31 +454,34 @@ awaitApp nickname nothings =
     go nothings
 
 
+-- | Find the wallet for a role.
 findOwner :: MonadError CliError m
           => MonadState PabState m
-          => RoleName
-          -> m WalletInfo
+          => RoleName      -- ^ The role name.
+          -> m WalletInfo  -- ^ Action for finding the role's wallet.
 findOwner owner =
   liftCliMaybe ("[findOwner] Wallet not found for role " <> show owner <> ".")
     . M.lookup owner
     =<< use psWallets
 
 
+-- | Find the contract instance corresponding to an instance nickname.
 findInstance :: MonadError CliError m
              => MonadState PabState m
-             => InstanceNickname
-             -> m AppInstanceInfo
+             => InstanceNickname   -- ^ The nickname.
+             -> m AppInstanceInfo  -- ^ Action returning the instance.
 findInstance nickname =
   liftCliMaybe ("[findInstance] Instance not found for nickname " <> show nickname <> ".")
     . M.lookup nickname
     =<< use psAppInstances
 
 
+-- | Find the role tokens for the given instances.
 findRoleTokens :: MonadError CliError m
                => MonadState PabState m
-               => RoleName
-               -> [InstanceNickname]
-               -> m C.Value
+               => RoleName            -- ^ The role name of the owner.
+               -> [InstanceNickname]  -- ^ The instance to search for role currencies.
+               -> m C.Value           -- ^ Action returning the role tokens for the owner from the instances.
 findRoleTokens poOwner poInstances =
   valueFromList
     <$> sequence
@@ -458,12 +503,13 @@ findRoleTokens poOwner poInstances =
     ]
 
 
+-- | Create a new, random wallet.
 createWallet :: MonadError CliError m
              => MonadIO m
-             => PabAccess
-             -> RoleName
-             -> Passphrase "raw"
-             -> m WalletInfo
+             => PabAccess         -- ^ Access to the PAB API.
+             -> RoleName          -- ^ The name of the owner.
+             -> Passphrase "raw"  -- ^ The passphrase for the wallet.
+             -> m WalletInfo      -- ^ Action returning the new wallet information.
 createWallet PabAccess{..} owner passphrase' =
   do
     mnemonicSentence <-
@@ -506,11 +552,12 @@ createWallet PabAccess{..} owner passphrase' =
     pure WalletInfo{..}
 
 
+-- | Compute the total balance of a wallet.
 totalBalance :: MonadError CliError m
              => MonadIO m
-             => PabAccess
-             -> W.WalletId
-             -> m C.Value
+             => PabAccess   -- ^ Access to the PAB APIs.
+             -> W.WalletId  -- ^ The wallet identifier.
+             -> m C.Value   -- ^ Action returning the total balance.
 totalBalance PabAccess{..} walletId =
   do
     ApiWallet{balance,assets} <- liftCliIO $ runWallet (getWallet walletClient $ ApiT walletId)
@@ -534,13 +581,14 @@ totalBalance PabAccess{..} walletId =
       $ lovelaceToValue lovelace' <> valueFromList assets'
 
 
+-- | Run a contract instance.
 runContract :: MonadError CliError m
             => MonadIO m
             => FromJSON a
-            => PabAccess
-            -> MarloweContract
-            -> WalletId
-            -> m (ContractInstanceId, Chan a)
+            => PabAccess                       -- ^ Access to the PAB APIs.
+            -> MarloweContract                 -- ^ The contract to be run.
+            -> WalletId                        -- ^ The wallet to be associated with the instance.
+            -> m (ContractInstanceId, Chan a)  -- ^ Action returning the contract's instance identifier and the channel for messages from the PAB.
 runContract PabAccess{..} contract walletId =
   do
     let
@@ -576,14 +624,15 @@ runContract PabAccess{..} contract walletId =
     pure (instanceId, instanceChan)
 
 
+-- | Call the endpoint of a contract instance.
 call :: MonadError CliError m
      => MonadIO m
      => ToJSON a
-     => PabAccess
-     -> ContractInstanceId
-     -> String
-     -> a
-     -> m ()
+     => PabAccess           -- ^ Access to the PAB APIs.
+     -> ContractInstanceId  -- ^ The instance identifier for the contract.
+     -> String              -- ^ The name of the endpoint.
+     -> a                   -- ^ The arguments to the endpoint call.
+     -> m ()                -- ^ Action for calling the endpoint.
 call PabAccess{..} instanceId endpoint arguments =
   let
     PabClient{..} = client
