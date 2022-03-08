@@ -37,9 +37,39 @@ Available options:
 *   Simple one-party contract
     *   [input file](test-simple.yaml)
     *   [output file](test-simple.log)
+*   Escrow
+    *   [input file](test-escrow.yaml)
+    *   [output file](test-escrow.log)
+*   Escrow with collateral
+    *   [input file](test-escrow-with-collateral.yaml)
+    *   [output file](test-escrow-with-collateral.log)
 *   Zero-coupon bond
     *   [input file](test-zcb.yaml)
     *   [output file](test-zcb.log)
+*   Zero coupon bond, with an attempt at an overdue payment
+    *   [input file](test-zero-coupon-bond-too-late.yaml)
+    *   [output file](test-zero-coupon-bond-too-late.log)
+*   Zero coupon bond, with timeout immediately
+    *   [input file](test-zero-coupon-bond-immediate-timeout.yaml)
+    *   [output file](test-zero-coupon-bond-immediate-timeout.log)
+*   Zero coupon bond, with timeout after a delay
+    *   [input file](test-zero-coupon-bond-delayed-timeout.yaml)
+    *   [output file](test-zero-coupon-bond-delayed-timeout.log)
+*   Coupon bond guaranteed
+    *   [input file](test-coupon-bond-guaranteed.yaml)
+    *   [output file](test-coupon-bond-guaranteed.log)
+*   Contract for differences
+    *   [input file](test-contract-for-differences.yaml)
+    *   [output file](test-contract-for-differences.log)
+*   Contract for differences, with oracle
+    *   [input file](test-contract-for-differences-with-oracle.yaml)
+    *   [output file](test-contract-for-differences-with-oracle.log)
+*   Swap of ADA for ADA
+    *   [input file](test-swap-of-ada-for-ada.yaml)
+    *   [output file](test-swap-of-ada-for-ada.log)
+*   Swap of ADA and dollar tokens
+    *   [input file](test-swap-of-ada-and-dollar-tokens.yaml)
+    *   [output file](test-swap-of-ada-and-dollar-tokens.log)
 
 
 ## Input File

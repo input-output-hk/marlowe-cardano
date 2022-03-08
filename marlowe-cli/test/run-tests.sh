@@ -11,7 +11,7 @@ FAUCET_ADDRESS=addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j
 BURN_ADDRESS=addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7
 PAB_PASSPHRASE=fixme-allow-pass-per-wallet
 
-for t in test-{wait,refund,simple,escrow,escrow-with-collateral,zero-coupon-bond,zero-coupon-bond-immediate-timeout,contract-for-differences,swap-of-ada-for-ada}.yaml
+for t in test-{wait,refund,simple,escrow,escrow-with-collateral,zero-coupon-bond,zero-coupon-bond-too-late,zero-coupon-bond-immediate-timeout,coupon-bond-guaranteed,contract-for-differences,contract-for-differences-with-oracle,swap-of-ada-for-ada}.yaml
 do
   marlowe-cli test contracts "${MAGIC[@]}"                             \
                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \

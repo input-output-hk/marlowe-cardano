@@ -359,7 +359,7 @@ ptPabOperations:
   poInstance: OracleApp
 
 - tag: Comment
-  poComment: The oracle should still have 16 ADA now because they received their original min-ADA deposit back, but they may have paid up to another 2 ADA in fees.
+  poComment: The oracle should have 16 ADA now because they received their original min-ADA deposit back, but they may have paid up to another 2 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Oracle
