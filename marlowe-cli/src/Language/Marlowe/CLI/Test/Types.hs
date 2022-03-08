@@ -212,6 +212,10 @@ data PabOperation =
     {
       poOwner :: RoleName
     }
+  | Comment
+    {
+      poComment :: String
+    }
   | WaitFor
     {
       poRelativeTime :: DiffMilliSeconds

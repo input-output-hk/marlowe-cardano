@@ -340,6 +340,8 @@ interpret access PrintWallet{..} =
     WalletInfo{..} <- findOwner poOwner
     actual <- lift $ totalBalance access wiWalletId
     liftIO . putStrLn $ "[PrintWallet] Wallet for role " <> show poOwner <> " contains " <> show actual <> "."
+interpret _ Comment{..} =
+  liftIO . putStrLn $ "[Comment] " <> poComment
 interpret _ WaitFor{..} =
   do
     let

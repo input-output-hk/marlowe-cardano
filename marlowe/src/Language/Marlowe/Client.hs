@@ -370,19 +370,24 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         let address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
         utxos <- utxosAt address
         let
-          spendPayoutConstraints tx ref txout = do
-            let expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData role)
-                amount = view Ledger.ciTxOutValue txout
-                dh = either id Ledger.datumHash <$> preview Ledger.ciTxOutDatum txout
-            case dh of
-                Just datumHash | datumHash == expectedDatumHash ->
-                    -- we spend the rolePayoutScript address
-                    (Constraints.mustSpendScriptOutput ref unitRedeemer <>)
-                    -- and pay to a token owner
-                        <$> mustPayToShelleyAddress paymentAddress amount
-                _ -> tx
+          spendable txout =
+            let
+              expectedDatumHash = datumHash (Datum $ PlutusTx.toBuiltinData role)
+              dh = either id Ledger.datumHash <$> preview Ledger.ciTxOutDatum txout
+            in
+              dh == Just expectedDatumHash
+          utxosToSpend = Map.filter spendable utxos
+          spendPayoutConstraints tx ref txout =
+            do
+              let amount = view Ledger.ciTxOutValue txout
+              previousConstraints <- tx
+              payOwner <- mustPayToShelleyAddress paymentAddress amount
+              pure
+                $ previousConstraints
+                <> payOwner -- pay to a token owner
+                <> Constraints.mustSpendScriptOutput ref unitRedeemer -- spend the rolePayoutScript address
 
-        spendPayouts <- Map.foldlWithKey spendPayoutConstraints (pure mempty) utxos
+        spendPayouts <- Map.foldlWithKey spendPayoutConstraints (pure mempty) utxosToSpend
         if spendPayouts == mempty
         then do
             logInfo $ "MarloweApp contract redemption empty for role " <> show role <> "."
@@ -397,7 +402,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             ownAddressLookups <- ownShelleyAddress paymentAddress
             let
               lookups = Constraints.otherScript validator
-                  <> Constraints.unspentOutputs utxos
+                  <> Constraints.unspentOutputs utxosToSpend
                   <> ownAddressLookups
             tx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx @Void lookups constraints)
             _ <- submitTxConfirmed $ Constraints.adjustUnbalancedTx tx

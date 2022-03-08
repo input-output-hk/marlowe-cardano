@@ -2,8 +2,8 @@ ptTestName: Escrow
 
 ptPabOperations:
 
-  # Create the wallet for the buyer, fund it with 80 ADA, and activate the
-  # Marlowe endpoints.
+- tag: Comment
+  poComment: Create the wallet for the buyer, fund it with 80 ADA, and activate the Marlowe endpoints.
 
 - tag: CreateWallet
   poOwner: Buyer
@@ -17,8 +17,8 @@ ptPabOperations:
   poOwner: Buyer
   poInstance: BuyerApp
 
-  # Create the wallet for the seller, fund it with 15 ADA, and activate the
-  # Marlowe endpoints.
+- tag: Comment
+  poComment: Create the wallet for the seller, fund it with 15 ADA, and activate the Marlowe endpoints.
 
 - tag: CreateWallet
   poOwner: Seller
@@ -32,8 +32,8 @@ ptPabOperations:
   poOwner: Seller
   poInstance: SellerApp
 
-  # Create the wallet for the mediator, fund it with 20 ADA, and activate the
-  # Marlowe endpoints.
+- tag: Comment
+  poComment: Create the wallet for the mediator, fund it with 20 ADA, and activate the Marlowe endpoints.
 
 - tag: CreateWallet
   poOwner: Mediator
@@ -47,8 +47,8 @@ ptPabOperations:
   poOwner: Mediator
   poInstance: MediatorApp
 
-  # The mediator creates the escrow contract, which was downloaded from Marlowe
-  # Playground. The purchase price is 50 ADA.
+- tag: Comment
+  poComment: The mediator creates the escrow contract, which was downloaded from Marlowe Playground. The purchase price is 50 ADA.
 
 - tag: CallCreate
   poInstance: MediatorApp
@@ -157,10 +157,8 @@ ptPabOperations:
 - tag: AwaitCreate
   poInstance: MediatorApp
 
-  # The mediator should have 14 ADA now, since 2 ADA was sent to the script
-  # address when creating the contract and 2 ADA each was sent to the buyer and
-  # seller along with their role tokens, and up to 1 ADA in fees might have been
-  # paid.
+- tag: Comment
+  poComment: The mediator should have 14 ADA now, since 2 ADA was sent to the script address when creating the contract and 2 ADA each was sent to the buyer and seller along with their role tokens, and up to 1 ADA in fees might have been paid.
 
 - tag: CheckFunds
   poOwner: Mediator
@@ -170,8 +168,8 @@ ptPabOperations:
   poInstances:
   - MediatorApp
 
-  # The buyer and seller should each now have an additional 2 ADA that arrived
-  # with their role token.
+- tag: Comment
+  poComment: The buyer and seller should each now have an additional 2 ADA that arrived with their role token.
 
 - tag: CheckFunds
   poOwner: Buyer
@@ -189,8 +187,8 @@ ptPabOperations:
   poInstances:
   - MediatorApp
 
-  # The buyer and seller each need to follow the contract created by the
-  # mediator.
+- tag: Comment
+  poComment: The buyer and seller each need to follow the contract created by the mediator.
 
 - tag: Follow
   poInstance: BuyerApp
@@ -200,11 +198,11 @@ ptPabOperations:
   poInstance: SellerApp
   poOtherInstance: MediatorApp
 
-  # The buyer deposits the 50 ADA purchase price.
+- tag: Comment
+  poComment: The buyer deposits the 50 ADA purchase price.
 
 - tag: CallApplyInputs
   poInstance: BuyerApp
-  poOwner: Buyer
   poInputs:
   - input_from_party:
       role_token: Buyer
@@ -221,8 +219,8 @@ ptPabOperations:
 - tag: AwaitApplyInputs
   poInstance: BuyerApp
 
-  # The buyer should have about 32 ADA now, since they paid 50 ADA for the
-  # purchase, but there is up to an additional 2 ADA in fees.
+- tag: Comment
+  poComment: The buyer should have about 32 ADA now, since they paid 50 ADA for the purchase, but there is up to an additional 2 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Buyer
@@ -232,11 +230,11 @@ ptPabOperations:
   poInstances:
   - BuyerApp
 
-  # The buyer receives the purchase and reports that everything is alright.
+- tag: Comment
+  poComment: The buyer receives the purchase and reports that everything is alright.
 
 - tag: CallApplyInputs
   poInstance: BuyerApp
-  poOwner: Buyer
   poInputs:
   - for_choice_id:
       choice_name: Everything is alright
@@ -250,8 +248,8 @@ ptPabOperations:
 - tag: AwaitApplyInputs
   poInstance: BuyerApp
 
-  # The buyer should still have 32 ADA now, but they may have paid up to another
-  # 2 ADA in fees.
+- tag: Comment
+  poComment: The buyer should still have 32 ADA now, but they may have paid up to another 2 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Buyer
@@ -261,9 +259,8 @@ ptPabOperations:
   poInstances:
   - BuyerApp
 
-  # The mediator should have 16 ADA now because they received back their
-  # initial 2 ADA that was contributed when creating the contract, but they did
-  # not pay additional fees
+- tag: Comment
+  poComment: The mediator should have 16 ADA now because they received back their initial 2 ADA that was contributed when creating the contract, but they did not pay additional fees
 
 - tag: CheckFunds
   poOwner: Mediator
@@ -273,7 +270,8 @@ ptPabOperations:
   poInstances:
   - MediatorApp
 
-  # Now the seller redeems the 50 ADA from the payout script.
+- tag: Comment
+  poComment: Now the seller redeems the 50 ADA from the payout script.
 
 - tag: CallRedeem
   poInstance: SellerApp
@@ -282,8 +280,8 @@ ptPabOperations:
 - tag: AwaitRedeem
   poInstance: SellerApp
 
-  # The seller should now have 67 ADA, but they may have paid up to 1 ADA in
-  # fees.
+- tag: Comment
+  poComment: The seller should now have 67 ADA, but they may have paid up to 1 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Seller
@@ -293,7 +291,8 @@ ptPabOperations:
   poInstances:
   - SellerApp
 
-  # Stop the Marlowe application.
+- tag: Comment
+  poComment: Stop the Marlowe application.
 
 - tag: Stop
   poInstance: BuyerApp

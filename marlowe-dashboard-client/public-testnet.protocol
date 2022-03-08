@@ -8,19 +8,19 @@
     "extraPraosEntropy": null,
     "collateralPercentage": 150,
     "stakePoolTargetNum": 500,
-    "maxBlockBodySize": 73728,
+    "maxBlockBodySize": 98304,
     "minPoolCost": 340000000,
     "maxTxSize": 16384,
     "treasuryCut": 0.2,
     "maxBlockExecutionUnits": {
-        "memory": 50000000,
+        "memory": 80000000,
         "steps": 40000000000
     },
     "maxCollateralInputs": 3,
     "maxValueSize": 5000,
     "maxBlockHeaderSize": 1100,
     "maxTxExecutionUnits": {
-        "memory": 12500000,
+        "memory": 16000000,
         "steps": 10000000000
     },
     "costModels": {

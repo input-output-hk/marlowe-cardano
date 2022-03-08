@@ -2,7 +2,8 @@ ptTestName: Simple Example
 
 ptPabOperations:
 
-  # Create and fund the wallet.
+- tag: Comment
+  poComment: Create and fund the wallet.
 
 - tag: CreateWallet
   poOwner: PAB
@@ -12,13 +13,15 @@ ptPabOperations:
   poValue:
     lovelace: 100000000
 
-  # Activate the Marlowe application.
+- tag: Comment
+  poComment: Activate the Marlowe application.
 
 - tag: ActivateApp
   poOwner: PAB
   poInstance: App
 
-  # Create the contract.
+- tag: Comment
+  poComment: Create the contract.
 
 - tag: CallCreate
   poInstance: App
@@ -48,11 +51,11 @@ ptPabOperations:
 - tag: AwaitCreate
   poInstance: App
 
-  # Deposit funds.
+- tag: Comment
+  poComment: Deposit funds.
 
 - tag: CallApplyInputs
   poInstance: App
-  poOwner: PAB
   poInputs:
   - input_from_party:
       role_token: PAB
@@ -69,11 +72,11 @@ ptPabOperations:
 - tag: AwaitApplyInputs
   poInstance: App
 
-  # Notify.
+- tag: Comment
+  poComment: Notify.
 
 - tag: CallApplyInputs
   poInstance: App
-  poOwner: PAB
   poInputs:
   - input_notify
   poTimes:
@@ -83,7 +86,8 @@ ptPabOperations:
 - tag: AwaitApplyInputs
   poInstance: App
 
-  # Redeem the funds.
+- tag: Comment
+  poComment: Redeem the funds.
 
 - tag: CallRedeem
   poInstance: App
@@ -92,12 +96,14 @@ ptPabOperations:
 - tag: AwaitRedeem
   poInstance: App
 
-  # Stop the application.
+- tag: Comment
+  poComment: Stop the application.
 
 - tag: Stop
   poInstance: App
 
-  # Check the balance.
+- tag: Comment
+  poComment: Check the balance.
 
 - tag: CheckFunds
   poOwner: PAB
@@ -107,7 +113,8 @@ ptPabOperations:
   poInstances:
   - App
 
-  # Return unused funds.
+- tag: Comment
+  poComment: Return unused funds.
 
 - tag: ReturnFunds
   poOwner: PAB

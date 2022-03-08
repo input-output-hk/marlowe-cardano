@@ -2,8 +2,8 @@ ptTestName: Swap of ADA and Dollar Tokens
 
 ptPabOperations:
 
-  # Create the wallet for the ADA provider, fund it with 50 ADA, and activate
-  # the Marlowe endpoints.
+- tag: Comment
+  poComment: Create the wallet for the ADA provider, fund it with 50 ADA, and activate the Marlowe endpoints.
 
 - tag: CreateWallet
   poOwner: Ada provider
@@ -17,9 +17,8 @@ ptPabOperations:
   poOwner: Ada provider
   poInstance: AdaApp
 
-  # Create the wallet for the dollar provider, fund it with 35 ADA and 100
-  # dollars, and activate the Marlowe endpoints. In order that there be a UTxO
-  # for collateral, send the funds in two batches.
+- tag: Comment
+  poComment: Create the wallet for the dollar provider, fund it with 35 ADA and 100 dollars, and activate the Marlowe endpoints. In order that there be a UTxO for collateral, send the funds in two batches.
 
 - tag: CreateWallet
   poOwner: Dollar provider
@@ -40,7 +39,8 @@ ptPabOperations:
   poOwner: Dollar provider
   poInstance: DollarApp
 
-  # The ADA provider creates the swap contract for 30 ADA to 50 dollars.
+- tag: Comment
+  poComment: The ADA provider creates the swap contract for 30 ADA to 50 dollars.
 
 - tag: CallCreate
   poInstance: AdaApp
@@ -102,9 +102,8 @@ ptPabOperations:
 - tag: AwaitCreate
   poInstance: AdaApp
 
-  # The ADA provider should have 48 ADA now, since 2 ADA was sent to the script
-  # when creating the contract and 2 ADA was sent to the dollar provider along
-  # with their role token, and up to 1 ADA in fees might have been paid.
+- tag: Comment
+  poComment: The ADA provider should have 48 ADA now, since 2 ADA was sent to the script when creating the contract and 2 ADA was sent to the dollar provider along with their role token, and up to 1 ADA in fees might have been paid.
 
 - tag: CheckFunds
   poOwner: Ada provider
@@ -114,7 +113,8 @@ ptPabOperations:
   poInstances:
   - AdaApp
 
-  # The dollar provider should have 37 ADA now and 100 USD.
+- tag: Comment
+  poComment: The dollar provider should have 37 ADA now and 100 USD.
 
 - tag: CheckFunds
   poOwner: Dollar provider
@@ -126,18 +126,18 @@ ptPabOperations:
   poInstances:
   - AdaApp
 
-  # The dollar provider needs to followe the contract created by the ada
-  # provider.
+- tag: Comment
+  poComment: The dollar provider needs to followe the contract created by the ada provider.
 
 - tag: Follow
   poInstance: DollarApp
   poOtherInstance: AdaApp
 
-  # The ADA provider deposits their 30 ADA for the swap.
+- tag: Comment
+  poComment: The ADA provider deposits their 30 ADA for the swap.
 
 - tag: CallApplyInputs
   poInstance: AdaApp
-  poOwner: Ada provider
   poInputs:
   - input_from_party:
       role_token: Ada provider
@@ -154,8 +154,8 @@ ptPabOperations:
 - tag: AwaitApplyInputs
   poInstance: AdaApp
 
-  # The ADA provider should have 16 ADA now, since they paid 30 ADA for the
-  # swap, minus up to an additional 2 ADA in fees.
+- tag: Comment
+  poComment: The ADA provider should have 16 ADA now, since they paid 30 ADA for the swap, minus up to an additional 2 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Ada provider
@@ -165,11 +165,11 @@ ptPabOperations:
   poInstances:
   - AdaApp
 
-  # The dollar provider deposits their 40 USD for the swap.
+- tag: Comment
+  poComment: The dollar provider deposits their 40 USD for the swap.
 
 - tag: CallApplyInputs
   poInstance: DollarApp
-  poOwner: Dollar provider
   poInputs:
   - input_from_party:
       role_token: Dollar provider
@@ -186,8 +186,8 @@ ptPabOperations:
 - tag: AwaitApplyInputs
   poInstance: DollarApp
 
-  # The dollar provider should have 37 ADA and 60 USD now, since they paid 50
-  # USD for the swap, minus up to an additional 2 ADA in fees.
+- tag: Comment
+  poComment: The dollar provider should have 37 ADA and 60 USD now, since they paid 50 USD for the swap, minus up to an additional 2 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Dollar provider
@@ -199,7 +199,8 @@ ptPabOperations:
   poInstances:
   - DollarApp
 
-  # Now the ADA provider redeems the 2 ADA and 40 USD from the payout script.
+- tag: Comment
+  poComment: Now the ADA provider redeems the 2 ADA and 40 USD from the payout script.
 
 - tag: CallRedeem
   poInstance: AdaApp
@@ -208,8 +209,8 @@ ptPabOperations:
 - tag: AwaitRedeem
   poInstance: AdaApp
 
-  # The ADA provider should now have 18 ADA and 40 USD, but they may have paid
-  # up to 4 ADA in fees.
+- tag: Comment
+  poComment: The ADA provider should now have 18 ADA and 40 USD, but they may have paid up to 4 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Ada provider
@@ -221,7 +222,8 @@ ptPabOperations:
   poInstances:
   - AdaApp
 
-  # Now the dollar provider redeems the 30 USD from the payout script.
+- tag: Comment
+  poComment: Now the dollar provider redeems the 30 USD from the payout script.
 
 - tag: CallRedeem
   poInstance: DollarApp
@@ -230,8 +232,8 @@ ptPabOperations:
 - tag: AwaitRedeem
   poInstance: DollarApp
 
-  # The ADA provider should now have 67 ADA and 60 USD, but they may have paid
-  # up to 3 ADA in fees.
+- tag: Comment
+  poComment: The ADA provider should now have 67 ADA and 60 USD, but they may have paid up to 3 ADA in fees.
 
 - tag: CheckFunds
   poOwner: Dollar provider
@@ -243,10 +245,11 @@ ptPabOperations:
   poInstances:
   - DollarApp
 
-  # Stop the Marlowe application.
+- tag: Comment
+  poComment: Stop the Marlowe application.
 
 - tag: Stop
   poInstance: AdaApp
 
 - tag: Stop
-  poInstance: AdarApp
+  poInstance: DollarApp

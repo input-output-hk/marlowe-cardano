@@ -1,36 +1,50 @@
+
 ***** Test "Zero-Coupon Bond with Immediate Timeout" *****
-[CreateWallet] Created wallet a2958824052888be0c11a80b2c5b088651330150 for role "Lender".
-[FundWallet] Funded wallet a2958824052888be0c11a80b2c5b088651330150 for role "Lender" with valueFromList [(AdaAssetId,80000000)].
-[ActivateApp] Activated MarloweApp instance c6668071-5255-417c-936b-dfca21ba956f for role "Lender".
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewObservableState Null.
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewYieldedExportTxs [].
-[CreateWallet] Created wallet df7394b443cf99564a2786b542715fa4a67955e7 for role "Borrower".
-[FundWallet] Funded wallet df7394b443cf99564a2786b542715fa4a67955e7 for role "Borrower" with valueFromList [(AdaAssetId,10000000)].
-[ActivateApp] Activated MarloweApp instance 423bf3e5-2456-4815-be99-885be78bac53 for role "Borrower".
-[runContract] Instance 423bf3e5-2456-4815-be99-885be78bac53 received NewObservableState Null.
-[runContract] Instance 423bf3e5-2456-4815-be99-885be78bac53 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
-[runContract] Instance 423bf3e5-2456-4815-be99-885be78bac53 received NewYieldedExportTxs [].
+[Comment] is test case closes the contract immediately after creation.
+[Comment] Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
+[CreateWallet] Created wallet dfb816fa4847b3acc5e1dacb03a9b8a47d2fc154 for role "Lender".
+[FundWallet] Funded wallet dfb816fa4847b3acc5e1dacb03a9b8a47d2fc154 for role "Lender" with valueFromList [(AdaAssetId,80000000)].
+[ActivateApp] Activated MarloweApp instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d for role "Lender".
+[Comment] Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewObservableState Null.
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewYieldedExportTxs [].
+[CreateWallet] Created wallet 318804e45d98b94082f726b6dbb58e5a5bc9ad7c for role "Borrower".
+[FundWallet] Funded wallet 318804e45d98b94082f726b6dbb58e5a5bc9ad7c for role "Borrower" with valueFromList [(AdaAssetId,10000000)].
+[ActivateApp] Activated MarloweApp instance 44c4d1bc-56e3-40f3-9f7f-18d0f501fea6 for role "Borrower".
+[Comment] Show the contents of the wallets.
+[runContract] Instance 44c4d1bc-56e3-40f3-9f7f-18d0f501fea6 received NewObservableState Null.
+[runContract] Instance 44c4d1bc-56e3-40f3-9f7f-18d0f501fea6 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 44c4d1bc-56e3-40f3-9f7f-18d0f501fea6 received NewYieldedExportTxs [].
 [PrintWallet] Wallet for role "Lender" contains valueFromList [(AdaAssetId,80000000)].
 [PrintWallet] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,10000000)].
-[CallCreate] Endpoint "create" called on instance c6668071-5255-417c-936b-dfca21ba956f for owners [("Lender",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "445e6e5de69ba609f7e90b4fc3cdfe568f6a3b99d6fe0cd0b02796f6")) (StakeRefBase (KeyHashObj (KeyHash "da193ad3160f1251a3c98e9e7408260221f2e6f2d926d040d2bfef31"))))),("Borrower",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "e4743722b281ba60d23875c1cabb07380ca6784fa349c250fedc2aee")) (StakeRefBase (KeyHashObj (KeyHash "346f8474321a6ca69a827bcfe8fdd7c4003ada40d9a38893b13dbf33")))))].
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewActiveEndpoints [].
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewObservableState (Object (fromList [("contents",Array [String "567742a5-d962-4448-aa28-528e23c06849",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "7cb4af3b1ab91ed1a79ae4f12de369baa6214f623d317a876110d0d0"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "9a1c3f0cf7fecd79d332470e6f93002378dd34b61034a1ba683285b0")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
-[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 7cb4af3b1ab91ed1a79ae4f12de369baa6214f623d317a876110d0d0, rolesCurrency = 9a1c3f0cf7fecd79d332470e6f93002378dd34b61034a1ba683285b0}.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75509500),(AssetId "9a1c3f0cf7fecd79d332470e6f93002378dd34b61034a1ba683285b0" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "9a1c3f0cf7fecd79d332470e6f93002378dd34b61034a1ba683285b0" "Borrower",1)].
-[Follow] Instance 423bf3e5-2456-4815-be99-885be78bac53 now follows instance c6668071-5255-417c-936b-dfca21ba956f.
-[CallApplyInputs] Endpoint "apply-inputs" called on c6668071-5255-417c-936b-dfca21ba956f for inputs [] and times Just (POSIXTime {getPOSIXTime = 1646094122000},POSIXTime {getPOSIXTime = 1898051625000}).
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewActiveEndpoints [].
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewObservableState (Object (fromList [("contents",Array [String "1f524d36-abea-4db8-aada-3d5e96a9b162",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[Comment] The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
+[CallCreate] Endpoint "create" called on instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d for owners [("Lender",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "5ceeae2452b090c4d1af853a5eeca58e3f9d50811bc0beb064e2daed")) (StakeRefBase (KeyHashObj (KeyHash "1598f23166b61134b6aa2072f0936a31c4d7b14278125c2c5657de74"))))),("Borrower",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "fdd7d166541c569cd9dcd15330d58d6f6a608759eed7d6152bfc7f53")) (StakeRefBase (KeyHashObj (KeyHash "c54a77a285306cef4df4ac09e625def1e65542e4615e386221f72b7e")))))].
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewActiveEndpoints [].
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewObservableState (Object (fromList [("contents",Array [String "bad03897-416b-4f03-b3d6-0d642da8618e",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "ce4979667d0ad2153699f11b0f2755f4c1c50e6511fd6056152c6b32"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "e574aea4d3ff6aa988eaa6baebfc7e6d2a5efe8c9d207796c73603bb")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = ce4979667d0ad2153699f11b0f2755f4c1c50e6511fd6056152c6b32, rolesCurrency = e574aea4d3ff6aa988eaa6baebfc7e6d2a5efe8c9d207796c73603bb}.
+[Comment] The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75509500),(AssetId "e574aea4d3ff6aa988eaa6baebfc7e6d2a5efe8c9d207796c73603bb" "Lender",1)].
+[Comment] The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "e574aea4d3ff6aa988eaa6baebfc7e6d2a5efe8c9d207796c73603bb" "Borrower",1)].
+[Comment] The borrower needs to follow this contract in order to interact with it.
+[Follow] Instance 44c4d1bc-56e3-40f3-9f7f-18d0f501fea6 now follows instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d.
+[Comment] Since the timeout has expired, the lender closes the contract, receiving their 2 ADA back.
+[CallApplyInputs] Endpoint "apply-inputs" called on 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d for inputs [] and times Just (POSIXTime {getPOSIXTime = 1646094122000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewActiveEndpoints [].
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewObservableState (Object (fromList [("contents",Array [String "a5dd4cbb-e09b-4302-a1bc-a1bc2393933c",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
 [AwaitApplyInputs] Input application confirmed.
-[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,76496288),(AssetId "9a1c3f0cf7fecd79d332470e6f93002378dd34b61034a1ba683285b0" "Lender",1)].
-[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "9a1c3f0cf7fecd79d332470e6f93002378dd34b61034a1ba683285b0" "Borrower",1)].
-[ReturnFunds] Returned funds from wallet a2958824052888be0c11a80b2c5b088651330150.
-[ReturnFunds] Returned funds from wallet df7394b443cf99564a2786b542715fa4a67955e7.
-[runContract] Instance c6668071-5255-417c-936b-dfca21ba956f received ContractFinished Nothing.
-[Stop] Instance c6668071-5255-417c-936b-dfca21ba956f stopped.
-[Stop] Instance 423bf3e5-2456-4815-be99-885be78bac53 stopped.
+[Comment] The lender now has paid up to another 2 ADA in fees.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,76500732),(AssetId "e574aea4d3ff6aa988eaa6baebfc7e6d2a5efe8c9d207796c73603bb" "Lender",1)].
+[Comment] The borrower's funds are unchanged.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "e574aea4d3ff6aa988eaa6baebfc7e6d2a5efe8c9d207796c73603bb" "Borrower",1)].
+[Comment] Return unused funds.
+[ReturnFunds] Returned funds from wallet dfb816fa4847b3acc5e1dacb03a9b8a47d2fc154.
+[ReturnFunds] Returned funds from wallet 318804e45d98b94082f726b6dbb58e5a5bc9ad7c.
+[Comment] Stop the Marlowe application.
+[runContract] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d received ContractFinished Nothing.
+[Stop] Instance 8d62c337-9fe5-411e-bfe3-d46cb9d3a57d stopped.
+[Stop] Instance 44c4d1bc-56e3-40f3-9f7f-18d0f501fea6 stopped.
 ***** SUCCEEDED *****
