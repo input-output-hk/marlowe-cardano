@@ -23,6 +23,8 @@ import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
 import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Capability as Logger
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk)
 import Data.ContractUserParties (contractUserParties)
@@ -41,6 +43,7 @@ import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (Env)
+import Errors (debuggableString)
 import Halogen (HalogenM, modify_, tell)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Store.Monad (class MonadStore, updateStore)
@@ -82,7 +85,7 @@ import Store.Contracts
   )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (ajaxErrorToast, errorToast, successToast)
+import Toast.Types (errorToast, explainableErrorToast, successToast)
 
 mkInitialState
   :: Instant -> PABConnectedWallet -> ContractStore -> State
@@ -125,6 +128,7 @@ deriveContractState currentTime wallet = map \executionState ->
 handleAction
   :: forall m
    . MonadAff m
+  => MonadLogger String m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarloweStorage m
@@ -277,8 +281,12 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
             Left ajaxError -> do
               void $ tell _submitButtonSlot "action-pay-and-start" $
                 SubmitResult (Milliseconds 600.0) (Left "Error")
-              addToast $ ajaxErrorToast "Failed to initialise contract."
+              addToast $ explainableErrorToast
+                "Failed to initialise contract."
                 ajaxError
+              Logger.error $ "Can't follow the contract: " <> debuggableString
+                ajaxError
+
             Right (reqId /\ mMarloweParams) -> do
               let newContract = NewContract reqId nickname template.metaData
               -- We save in the store the request of a created contract with
@@ -293,8 +301,11 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
               marloweParams <- liftAff mMarloweParams
               ajaxFollow <- followContract wallet marloweParams
               case ajaxFollow of
-                Left _ ->
-                  addToast $ errorToast "Can't follow the contract" Nothing
+                Left err -> do
+                  addToast $ explainableErrorToast "Can't follow the contract"
+                    err
+                  Logger.error $ "Can't follow the contract: " <>
+                    debuggableString err
                 Right (followerId /\ history) -> do
                   updateStore $
                     Store.SwapStartingToStartedContract

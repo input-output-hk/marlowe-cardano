@@ -38,13 +38,7 @@ import Control.Monad.Now (class MonadTime, makeClock, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
-import Data.Argonaut
-  ( Json
-  , decodeJson
-  , jsonNull
-  , printJsonDecodeError
-  , stringify
-  )
+import Data.Argonaut (Json, decodeJson, jsonNull, stringify)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
@@ -73,15 +67,8 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
-import Env
-  ( Env
-  , _applyInputListeners
-  , _createListeners
-  , _redeemListeners
-  , _regularPollInterval
-  , _sources
-  , _syncPollInterval
-  )
+import Env (Env, _applyInputListeners, _createListeners, _redeemListeners)
+import Errors (debuggableString)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -143,7 +130,13 @@ import Store.Contracts (emptyContractStore)
 import Store.Wallet (WalletStore(..), _Connected, _connectedWallet, _walletId)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (ajaxErrorToast, errorToast, infoToast, successToast)
+import Toast.Types
+  ( ajaxErrorToast
+  , errorToast
+  , explainableErrorToast
+  , infoToast
+  , successToast
+  )
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
 import WebSocket.Support (FromSocket)
@@ -367,10 +360,12 @@ handleAction (NewWebSocketStatus status) = do
     -- reason.
     _ -> pure unit
 
-handleAction (NotificationParseFailed whatFailed _ error) = do
-  addToast $ errorToast
-    ("Failed to parse " <> whatFailed <> " from websocket message")
-    (Just $ printJsonDecodeError error)
+handleAction (NotificationParseFailed whatFailed value error) = do
+  let
+    shortDescription = "Failed to parse " <> whatFailed <>
+      " from websocket message"
+  addToast $ explainableErrorToast shortDescription error
+  Logger.error $ shortDescription <> ": " <> debuggableString { value, error }
 
 handleAction (CompanionAppStateUpdated companionAppState) = do
   handleAction

@@ -76,6 +76,7 @@ import Types
   , DecodedAjaxResponse
   , JsonAjaxErrorRow
   , JsonDecodeErrorRow
+  , MetadataNotFoundError(..)
   , MetadataNotFoundErrorRow
   )
 
@@ -158,7 +159,7 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
           $ observableStateJson
 
       metadata <- ExceptT $ pure
-        $ note followContractError.metadataNotFoundError
+        $ note (followContractError.metadataNotFoundError MetadataNotFoundError)
         $ _.metaData <$> (findTemplate $ getContract contractHistory)
 
       lift

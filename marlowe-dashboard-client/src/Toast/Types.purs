@@ -1,13 +1,14 @@
 module Toast.Types
-  ( ToastMessage
-  , Action(..)
-  , ToastState
+  ( Action(..)
   , State
-  , infoToast
-  , successToast
-  , errorToast
+  , ToastMessage
+  , ToastState
   , ajaxErrorToast
   , decodingErrorToast
+  , errorToast
+  , explainableErrorToast
+  , infoToast
+  , successToast
   ) where
 
 import Prologue
@@ -16,6 +17,7 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.Icons (Icon(..))
 import Data.Argonaut.Decode (JsonDecodeError)
+import Errors (class Explain, explainString)
 import Halogen (SubscriptionId)
 import Types (JsonAjaxError)
 
@@ -90,10 +92,17 @@ errorToast shortDescription longDescription =
   , timeout: 5000.0
   }
 
+explainableErrorToast :: forall a. Explain a => String -> a -> ToastMessage
+explainableErrorToast shortDescription error = errorToast shortDescription
+  $ Just
+  $ explainString error
+
+-- TODO: replace with explainableErrorToast
 ajaxErrorToast :: String -> JsonAjaxError -> ToastMessage
 ajaxErrorToast shortDescription _ = errorToast shortDescription $ Just
   "A request was made to the server, but the expected response was not returned."
 
+-- TODO: replace with explainableErrorToast
 decodingErrorToast :: String -> JsonDecodeError -> ToastMessage
 decodingErrorToast shortDescription _ = errorToast shortDescription $ Just
   "Some data was received from the server, but the browser was unable to parse it."
