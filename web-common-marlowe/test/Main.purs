@@ -20,7 +20,16 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Class.Console (log)
-import Examples.PureScript.Swap (fixedTimeoutContract) as Swap
+import Examples.PureScript.ContractForDifferences
+  ( defaultSlotContent
+  , fixedTimeoutContract
+  ) as ContractForDifferences
+import Examples.PureScript.Escrow (defaultSlotContent, fixedTimeoutContract) as Escrow
+import Examples.PureScript.Swap (defaultSlotContent, fixedTimeoutContract) as Swap
+import Examples.PureScript.ZeroCouponBond
+  ( defaultSlotContent
+  , fixedTimeoutContract
+  ) as ZeroCouponBond
 import Marlowe.Extended (toCore)
 import Marlowe.Semantics (Contract)
 import Marlowe.Semantics as S
@@ -35,14 +44,45 @@ mkContracts = do
     swapContent =
       TemplateContent
         { slotContent: Map.empty
-        , valueContent: Map.fromFoldable
-            [ "Amount of Ada" /\ fromInt 500
-            , "Amount of dollars" /\ fromInt 1100
-            ]
+        , valueContent: Map.insert "Amount of Ada" (fromInt 500) $ Map.insert
+            "Amount of dollars"
+            (fromInt 1100)
+            Swap.defaultSlotContent
         }
+    escrowContent =
+      TemplateContent
+        { slotContent: Map.empty
+        , valueContent: Map.insert "Price" (fromInt 1500)
+            Escrow.defaultSlotContent
+        }
+    zeroCouponBondContent =
+      TemplateContent
+        { slotContent: Map.empty
+        , valueContent: Map.insert "Amount" (fromInt 2000) $ Map.insert
+            "Interest"
+            (fromInt 3)
+            ZeroCouponBond.defaultSlotContent
+        }
+    contractForDifferencesContent =
+      TemplateContent
+        { slotContent: Map.empty
+        , valueContent: Map.insert "Amount paid by party" (fromInt 2000) $
+            Map.insert "Amount paid by counterparty" (fromInt 3000)
+              ContractForDifferences.defaultSlotContent
+        }
+
   swap <- toCore $ fillTemplate swapContent Swap.fixedTimeoutContract
+  escrow <- toCore $ fillTemplate escrowContent Escrow.fixedTimeoutContract
+  zeroCouponBond <- toCore $ fillTemplate zeroCouponBondContent
+    ZeroCouponBond.fixedTimeoutContract
+  contractForDifferences <- toCore $ fillTemplate contractForDifferencesContent
+    ContractForDifferences.fixedTimeoutContract
+  -- traceM $ fillTemplate zeroCouponBondContent ZeroCouponBond.fixedTimeoutContract
   pure
     [ "swap.json" /\ swap
+    , "escrow.json" /\ escrow
+    , "zeroCouponBond.json" /\ zeroCouponBond
+    , "contractForDifferences.json" /\ contractForDifferences
     ]
 
 -- FIX ME: must wrap main do with Data.BigInt.Argonaut.withJsonPatch. but adapted for Effect
@@ -57,11 +97,3 @@ main = do
         if fileExists then pure unit
         else
           FS.writeTextFile UTF8 fileName $ stringify $ encodeJson contract
-
--- for_ - goes through the loop but does not aggregate results
-
--- contracts.each do |contract|
--- if !File.open(contract.file_name).exists?
---   file = File.create(contract.file_name ) = contract.json
---   file.save
--- end
