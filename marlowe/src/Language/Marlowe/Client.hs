@@ -367,7 +367,10 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         logInfo $ "MarloweApp contract input-application confirmed for inputs " <> show inputs <> "."
         marlowePlutusContract
     redeem = promiseMap (mapError (review _MarloweError)) $ endpoint @"redeem" $ \(reqId, MarloweParams{rolesCurrency}, role, paymentAddress) -> catchError reqId "redeem" $ do
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:redeem] rolesCurrency = " <> show rolesCurrency
         let address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
+        logInfo $ "[DEBUG:redeem] address = " <> show address
         utxos <- utxosAt address
         let
           spendable txout =
@@ -399,12 +402,18 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                   <> Constraints.mustSpendAtLeast (Val.singleton rolesCurrency role 1)
               -- lookup for payout validator and role payouts
               validator = rolePayoutScript rolesCurrency
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:redeem] constraints = " <> show constraints
             ownAddressLookups <- ownShelleyAddress paymentAddress
             let
               lookups = Constraints.otherScript validator
                   <> Constraints.unspentOutputs utxosToSpend
                   <> ownAddressLookups
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:redeem] lookups = " <> show lookups
             tx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx @Void lookups constraints)
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:redeem] tx = " <> show tx
             _ <- submitTxConfirmed $ Constraints.adjustUnbalancedTx tx
             logInfo $ "MarloweApp contract redemption confirmed for role " <> show role <> "."
             tell $ Just $ EndpointSuccess reqId RedeemResponse
@@ -639,11 +648,15 @@ applyInputs :: AsMarloweError e
     -> [MarloweClientInput]
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
+    -- TODO: Move to debug log.
+    logInfo $ "[DEBUG:applyInputs] params = " <> show params
+    logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
     timeRange <- case timeInterval of
             Just si -> pure si
             Nothing -> do
                 time <- currentTime
                 pure (time, time + defaultTxValidationRange)
+    logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
     mkStep params typedValidator timeRange inputs
 
 marloweParams :: CurrencySymbol -> MarloweParams
@@ -781,11 +794,18 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
         Nothing -> throwError OnChainStateNotFound
         Just (OnChainState{ocsTxOutRef}, utxo) -> do
             let currentState = toMarloweState ocsTxOutRef
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] currentState = " <> show currentState
             let marloweTxOutRef = Typed.tyTxOutRefRef ocsTxOutRef
 
             (allConstraints, marloweData) <- evaluateTxContstraints currentState times marloweTxOutRef
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] allConstraints = " <> show allConstraints
+            logInfo $ "[DEBUG:mkStep] marloweData = " <> show marloweData
 
             pk <- Contract.ownPaymentPubKeyHash
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] pk = " <> show pk
             let lookups1 = Constraints.typedValidatorLookups typedValidator
                     <> Constraints.unspentOutputs utxo
             let lookups:: ScriptLookups TypedMarloweValidator
@@ -798,6 +818,8 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                             unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
                         , unBalancedTxValidityTimeRange = times
                         }
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] utx' = " <> show utx'
             submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
             pure marloweData
   where
