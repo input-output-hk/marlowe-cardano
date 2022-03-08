@@ -4,7 +4,7 @@ import Prologue hiding (div)
 
 import Component.Projects.Types (Action(..), State, _projects)
 import Control.Monad.Trans.Class (lift)
-import Data.Argonaut (decodeJson, fromString, printJsonDecodeError, stringify)
+import Data.Argonaut (decodeJson, fromString)
 import Data.Array (sortBy)
 import Data.Bifunctor (lmap, rmap)
 import Data.DateTime (DateTime)
@@ -34,7 +34,7 @@ handleAction LoadProjects = do
   resp <- lift $ RemoteData.fromEither <$> getApiGists
   assign _projects
     $ rmap sortGists
-    $ lmap (printAjaxError stringify printJsonDecodeError)
+    $ lmap printAjaxError
     $ resp
 
 handleAction (LoadProject _ _) = pure unit

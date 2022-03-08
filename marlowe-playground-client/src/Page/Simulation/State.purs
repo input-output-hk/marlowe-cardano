@@ -11,7 +11,7 @@ import Component.BottomPanel.State (handleAction) as BottomPanel
 import Component.BottomPanel.Types (Action(..), State, initialState) as BottomPanel
 import Control.Monad.Except (lift, runExcept)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Data.Argonaut (encodeJson, printJsonDecodeError, stringify)
+import Data.Argonaut (encodeJson, stringify)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt, fromString)
 import Data.Decimal (fromNumber, truncated)
@@ -310,7 +310,7 @@ getPrice inverse exchange pair = do
       NotAsked -> pure "0"
       Loading -> pure "0"
       Failure e -> do
-        log $ "Failure" <> printAjaxError stringify printJsonDecodeError e
+        log $ "Failure" <> printAjaxError e
         pure "0"
       Success (RawJson json) -> do
         let
