@@ -18,6 +18,7 @@ import Data.Argonaut
   , printJsonDecodeError
   , (.:)
   )
+import Data.DateTime.Instant (Instant)
 import Data.Either (either)
 import Data.Map as Map
 import Data.Time.Duration (Milliseconds(..))
@@ -35,6 +36,8 @@ import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
 import MainFrame.Types as MainFrame
 import Store (mkStore)
+import Transcript (Transcript, TranscriptEvent(..))
+import WebSocket.Support (FromSocket(..))
 import WebSocket.Support as WS
 
 newtype MainArgs = MainArgs
@@ -51,6 +54,9 @@ instance DecodeJson MainArgs where
       if _ then Development
       else Production
     in MainArgs { pollingInterval, webpackBuildMode }
+
+foreign import transcribe :: Tuple Instant TranscriptEvent -> Effect Unit
+foreign import setShowTranscript :: (Transcript -> String) -> Effect Unit
 
 mkEnv
   :: Milliseconds
@@ -99,6 +105,7 @@ main :: Json -> Effect Unit
 main args = do
   MainArgs { pollingInterval, webpackBuildMode } <- either exitBadArgs pure $
     decodeJson args
+  setShowTranscript show
   addressBook <- MarloweStorage.getAddressBook
   contractNicknames <- MarloweStorage.getContractNicknames
   runHalogenAff do
@@ -106,14 +113,23 @@ main args = do
     pabWebsocketIn <- liftEffect HS.create
     void $ forkAff $ WS.runWebSocketManager
       (WS.URI "/pab/ws")
-      (liftEffect <<< HS.notify pabWebsocketIn.listener)
+      ( \msg -> liftEffect do
+          case msg of
+            ReceiveMessage msg' -> do
+              currentTime <- now
+              transcribe $ Tuple currentTime $ WebSocketMsgReceived msg'
+            _ -> pure unit
+          HS.notify pabWebsocketIn.listener msg
+      )
       wsManager
     pabWebsocketOut <- liftEffect HS.create
     void
       $ forkAff
       $ liftEffect
-      $ HS.subscribe pabWebsocketOut.emitter
-      $ launchAff_ <<< WS.managerWriteOutbound wsManager <<< WS.SendMessage
+      $ HS.subscribe pabWebsocketOut.emitter \msg -> do
+          currentTime <- now
+          transcribe $ Tuple currentTime $ WebSocketMsgSent msg
+          launchAff_ $ WS.managerWriteOutbound wsManager $ WS.SendMessage msg
     let
       sources =
         { pabWebsocket: pabWebsocketIn.emitter
