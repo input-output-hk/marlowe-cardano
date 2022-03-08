@@ -1,7 +1,6 @@
 module Errors
   ( class Debuggable
   , debuggable
-  , debuggableString
   , class DebuggableRecordFields
   , debuggableRecordFields
   , class Explain
@@ -107,10 +106,12 @@ instance Debuggable Number where
 instance debuggableArray :: Debuggable a => Debuggable (Array a) where
   debuggable = Json.fromArray <<< map debuggable
 
+instance debuggableMaybe :: Debuggable a => Debuggable (Maybe a) where
+  debuggable Nothing = Json.fromString "Nothing"
+  debuggable (Just a) = debuggable a
+
 instance Debuggable (AjaxError JsonDecodeError Json) where
-  debuggable error = Json.fromString $ printAjaxError Json.stringify
-    Json.printJsonDecodeError
-    error
+  debuggable = Json.fromString <<< printAjaxError
 
 instance Debuggable JsonDecodeError where
   debuggable = Json.fromString <<< show
@@ -178,6 +179,3 @@ instance debuggableVariant ::
       body = V.lookup "debuggable" v.type tags explains v.value
     in
       body
-
-debuggableString :: forall a. Debuggable a => a -> String
-debuggableString = Json.stringify <<< debuggable

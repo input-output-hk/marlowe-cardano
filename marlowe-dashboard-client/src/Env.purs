@@ -5,6 +5,7 @@ import Prologue
 import Affjax (Response)
 import Affjax as Affjax
 import Control.Logger.Effect (Logger)
+import Control.Logger.Structured (StructuredLog)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -22,10 +23,7 @@ import Halogen.Subscription (Emitter, Listener, Subscription)
 import LocalStorage (Key)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
-import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient
-  , CombinedWSStreamToServer
-  )
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient, CombinedWSStreamToServer)
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -75,7 +73,7 @@ newtype Env = Env
     --    creation functions didn't require that, so it seemed wrong to lift several functions into Effect.
     --    In contrast, the Env is created in Main, where we already have access to Effect
     contractStepCarouselSubscription :: AVar SubscriptionId
-  , logger :: Logger String
+  , logger :: Logger StructuredLog
   , endpointSemaphores :: AVar EndpointSemaphores
   , createListeners ::
       AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams))

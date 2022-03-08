@@ -7,7 +7,7 @@ import Prologue
 import Affjax as Affjax
 import AppM (runAppM)
 import Capability.MarloweStorage as MarloweStorage
-import Control.Logger.Effect.Console (logger) as Console
+import Control.Logger.Effect.Console (structuredLogger) as Console
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Now (makeClock, now)
 import Data.Argonaut
@@ -77,7 +77,7 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
     , logger: case webpackBuildMode of
         -- Add backend logging capability
         Production -> mempty
-        Development -> Console.logger identity
+        Development -> Console.structuredLogger
     , endpointSemaphores
     , createListeners
     , applyInputListeners

@@ -5,6 +5,7 @@ import Prologue
 import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader
   ( class MonadReader
@@ -162,7 +163,7 @@ instance MonadAjax PAB.Api AppM where
 instance MonadAjax MarloweRun.Api AppM where
   request _ = handleRequest
 
-instance MonadLogger String AppM where
+instance MonadLogger StructuredLog AppM where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`
   log m = AppM $ withReaderT (un Env) (Control.Monad.Effect.Class.log' m)
 

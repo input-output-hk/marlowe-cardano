@@ -2,35 +2,20 @@ module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
 
-import API.Lenses
-  ( _cicContract
-  , _cicCurrentState
-  , _cicDefinition
-  , _cicStatus
-  , _observableState
-  )
+import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicStatus, _observableState)
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , subscribeToPlutusApp
-  , subscribeToWallet
-  , unsubscribeFromPlutusApp
-  , unsubscribeFromWallet
-  )
-import Capability.MarloweStorage
-  ( class ManageMarloweStorage
-  , getWallet
-  , updateWallet
-  )
-import Capability.PAB (class ManagePAB, onNewActiveEndpoints)
+import Capability.Marlowe (class ManageMarlowe, subscribeToPlutusApp, subscribeToWallet, unsubscribeFromPlutusApp, unsubscribeFromWallet)
+import Capability.MarloweStorage (class ManageMarloweStorage, getWallet, updateWallet)
 import Capability.PAB (activateContract, getWalletContractInstances) as PAB
+import Capability.PAB (class ManagePAB, onNewActiveEndpoints)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Control.Alt ((<|>))
 import Control.Alternative (empty)
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Capability as Logger
+import Control.Logger.Structured (StructuredLog)
+import Control.Logger.Structured as Logger
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -38,7 +23,7 @@ import Control.Monad.Now (class MonadTime, makeClock, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
-import Data.Argonaut (Json, decodeJson, jsonNull, stringify)
+import Data.Argonaut (Json, decodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
@@ -47,16 +32,9 @@ import Data.Foldable (for_, traverse_)
 import Data.Lens (assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, maybe)
-import Data.PABConnectedWallet
-  ( PABConnectedWallet
-  , _companionAppId
-  , _marloweAppId
-  , _syncStatus
-  , connectWallet
-  )
+import Data.Maybe (fromMaybe)
+import Data.PABConnectedWallet (PABConnectedWallet, _companionAppId, _marloweAppId, _syncStatus, connectWallet)
 import Data.PABConnectedWallet as Connected
-import Data.String (joinWith)
 import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -67,45 +45,19 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
-import Env (Env, _applyInputListeners, _createListeners, _redeemListeners)
-import Errors (debuggableString)
+import Env (Env, _applyInputListeners, _createListeners, _redeemListeners, _regularPollInterval, _sources, _syncPollInterval)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad
-  ( class MonadStore
-  , emitSelected
-  , getStore
-  , updateStore
-  )
+import Halogen.Store.Monad (class MonadStore, emitSelected, getStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
-import Language.Marlowe.Client
-  ( ContractHistory
-  , EndpointResponse(..)
-  , MarloweEndpointResult(..)
-  )
-import MainFrame.Lenses
-  ( _addressBook
-  , _dashboardState
-  , _store
-  , _subState
-  , _tzOffset
-  , _webSocketStatus
-  , _welcomeState
-  )
-import MainFrame.Types
-  ( Action(..)
-  , ChildSlots
-  , Msg
-  , Query(..)
-  , Slice
-  , State
-  , WebSocketStatus(..)
-  )
+import Language.Marlowe.Client (ContractHistory, EndpointResponse(..), MarloweEndpointResult(..))
+import MainFrame.Lenses (_addressBook, _dashboardState, _store, _subState, _tzOffset, _webSocketStatus, _welcomeState)
+import MainFrame.Types (Action(..), ChildSlots, Msg, Query(..), Slice, State, WebSocketStatus(..))
 import MainFrame.View (render)
 import Marlowe.Client (getContract, getMarloweParams)
 import Marlowe.Deinstantiate (findTemplate)
@@ -116,27 +68,15 @@ import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient(..)
-  , ContractInstanceClientState
-  )
-import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient
-  , InstanceStatusToClient(..)
-  ) as PAB
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient(..), ContractInstanceClientState)
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient, InstanceStatusToClient(..)) as PAB
 import Store (_contracts, _wallet)
 import Store as Store
 import Store.Contracts (emptyContractStore)
 import Store.Wallet (WalletStore(..), _Connected, _connectedWallet, _walletId)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types
-  ( ajaxErrorToast
-  , errorToast
-  , explainableErrorToast
-  , infoToast
-  , successToast
-  )
+import Toast.Types (ajaxErrorToast, errorToast, explainableErrorToast, infoToast, successToast)
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
 import WebSocket.Support (FromSocket)
@@ -154,7 +94,7 @@ moves you back into the `Welcome` state.
 mkMainFrame
   :: forall m
    . MonadAff m
-  => MonadLogger String m
+  => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m
   => MonadTime m
@@ -204,7 +144,7 @@ deriveState state { context } = state
 handleQuery
   :: forall a m
    . MonadAff m
-  => MonadLogger String m
+  => MonadLogger StructuredLog m
   => MonadTime m
   => MonadAsk Env m
   => ManageMarlowe m
@@ -222,7 +162,7 @@ handleQuery = case _ of
 reActivatePlutusScript
   :: forall m
    . MonadState State m
-  => MonadLogger String m
+  => MonadLogger StructuredLog m
   => MonadStore Store.Action Store.Store m
   => ManagePAB m
   => MarloweContract
@@ -230,12 +170,9 @@ reActivatePlutusScript
   -> MaybeT m Unit
 reActivatePlutusScript contractType mVal = do
   walletId <- MaybeT $ peruse $ _store <<< _wallet <<< _walletId
-  Logger.error $ joinWith " "
-    [ "Plutus script"
-    , show contractType
-    , "has closed unexpectedly:"
-    , maybe "" stringify mVal
-    ]
+  Logger.error
+    ("Plutus script " <> show contractType <> " has closed unexpectedly")
+    mVal
   newAppId <- MaybeT $ hush <$> PAB.activateContract contractType walletId
   H.lift
     $ updateStore
@@ -256,7 +193,7 @@ handleAction
    . MonadAff m
   => MonadAsk Env m
   => MonadTime m
-  => MonadLogger String m
+  => MonadLogger StructuredLog m
   => ManageMarlowe m
   => ManageMarloweStorage m
   => Toast m
@@ -365,7 +302,7 @@ handleAction (NotificationParseFailed whatFailed value error) = do
     shortDescription = "Failed to parse " <> whatFailed <>
       " from websocket message"
   addToast $ explainableErrorToast shortDescription error
-  Logger.error $ shortDescription <> ": " <> debuggableString { value, error }
+  Logger.error shortDescription { value, error }
 
 handleAction (CompanionAppStateUpdated companionAppState) = do
   handleAction
@@ -477,7 +414,7 @@ and subscribe to notifications.
 enterDashboardState
   :: forall m
    . ManagePAB m
-  => MonadLogger String m
+  => MonadLogger StructuredLog m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m
   => Toast m
@@ -511,7 +448,7 @@ enterDashboardState disconnectedWallet = do
           subscribeToPlutusApp companionAppId
           -- Get notified of the results of our control app
           subscribeToPlutusApp marloweAppId
-          Logger.info $ "Subscribed to companion app " <> show companionAppId
+          Logger.info' $ "Subscribed to companion app " <> show companionAppId
             <> " and control app "
             <> show marloweAppId
           -- Get notified on contract changes
