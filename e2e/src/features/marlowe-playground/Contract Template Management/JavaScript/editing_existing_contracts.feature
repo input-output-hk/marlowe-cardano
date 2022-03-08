@@ -1,4 +1,4 @@
-Feature: Editing existing contracts
+Feature: Editing existing contracts with Javascript
 
   As a user, I would like to edit an existing contract template,
   so that I can apply updates to or customize a contract

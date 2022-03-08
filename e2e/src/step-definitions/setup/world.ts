@@ -5,17 +5,18 @@ import playwright, {
   BrowserContext,
   BrowserType
 } from 'playwright';
-
 import { env } from '../../env/parseEnv'
-
 import { World, IWorldOptions, setWorldConstructor } from "@cucumber/cucumber";
-
 import { GlobalConfig, GlobalVariables } from '../../env/global';
+
+import { getDocument } from 'playwright-testing-library';
+import { ElementHandle } from 'playwright-testing-library/dist/typedefs';
 
 export type Screen = {
   browser: Browser;
   context: BrowserContext;
   page: Page;
+  document: ElementHandle;
 }
 
 export class ScenarioWorld extends World {
@@ -39,8 +40,9 @@ export class ScenarioWorld extends World {
     const browser = await this.newBrowser();
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
+    const document = await getDocument(page);
 
-    this.screen = { browser, context, page };
+    this.screen = { browser, context, page, document };
 
     return this.screen
   }

@@ -1,6 +1,5 @@
 import { Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
-import { ElementKey } from '../../env/global'
 import { getElementLocator } from '../../support/web-element-helper';
 
 Then(
@@ -13,22 +12,24 @@ Then(
       globalConfig,
     } = this;
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalVariables, globalConfig)
+    const elementIdentifier = getElementLocator(page, elementKey, globalVariables, globalConfig);
+    const locator = page.locator(elementIdentifier);
 
-    await expect(elementIdentifier).toBeVisible();
+    await expect(locator).toBeVisible();
   }
 );
 
 Then(
   /^I should see a button with "([^"]*)" text$/,
-  async function(text: string) {
+  async function(elementKey: string) {
     const {
       screen: { page },
       globalVariables,
       globalConfig,
     } = this;
 
-    const locator = await page.locator(`button >> text=${text}`);
+    const elementIdentifier = getElementLocator(page, elementKey, globalVariables, globalConfig);
+    const locator = page.locator(elementIdentifier);
 
     await expect(locator).toBeVisible();
   }
