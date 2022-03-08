@@ -1,1 +1,183 @@
-{}
+[
+  {
+    "description": "    As a user I should be able to navigate to the marlowe playground home page and\n    see all the starting point options available",
+    "elements": [
+      {
+        "description": "",
+        "id": "as-a-user-i-should-be-able-to-see-the-marlowe-playground-home-page;as-a-user-i-expect-to-be-able-to-see-the-available-languages",
+        "keyword": "Scenario",
+        "line": 9,
+        "name": "As a user I expect to be able to see the available languages",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 413000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "I am on the \"home\" page",
+            "match": {
+              "location": "src/step-definitions/navigation.ts:7"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 3923000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 12,
+            "name": "I should see \"Start in Javascript\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 35000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "I should see \"Start in Haskell\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "I should see \"Start in Marlowe\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "I should see \"Start in Blockly\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "I should see \"Start in Haskell\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "I should see a button with \"Open existing project\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:22"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 13000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 18,
+            "name": "I should see a button with \"Open an example\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:22"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 12000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 20,
+            "name": "I click \"Open existing project\" button",
+            "match": {
+              "location": "src/step-definitions/actions.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 88000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 21,
+            "name": "I should see \"Login with github\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 29000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@dev",
+            "line": 6
+          },
+          {
+            "name": "@smoke",
+            "line": 7
+          },
+          {
+            "name": "@regression",
+            "line": 8
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "as-a-user-i-should-be-able-to-see-the-marlowe-playground-home-page",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "As a user I should be able to see the Marlowe Playground home page",
+    "tags": [],
+    "uri": "src/features/marlowe-playground/home-page.feature"
+  }
+]

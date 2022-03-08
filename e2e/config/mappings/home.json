@@ -1,3 +1,9 @@
 {
-  
+  "Start in Javascript": "text=Start in Javascript",
+  "Start in Haskell": "text=Start in Haskell",
+  "Start in Marlowe": "text=Start in Marlowe",
+  "Start in Blockly": "text=Start in Blockly",
+  "Open existing project": "button >> text=Open existing project",
+  "Open an example": "button >> text=Open an example",
+  "Login with github": "h2 >> text=Login with github"
 }

@@ -11,17 +11,9 @@ export const navigateToPage = async (
   } = process.env
 
   const hostPath = hostsConfig[`${hostName}`];
-
-  console.log("hostPath ", hostPath);
-
   const url = new URL(hostPath);
-
-  console.log("url ", url)
-
   const pagesConfigItem = pagesConfig[pageId];
   url.pathname = pagesConfigItem.route;
-
-  console.log("pages route ", url.pathname)
 
   await page.goto(url.href);
 }
