@@ -1,49 +1,118 @@
 module Control.Concurrent.EventBus
   ( EventBus
+  , BusEmitter
+  , BusListener
   , create
   , notify
+  , makeBusEmitter
   , subscribe
+  , subscribeAll
   , subscribeOnce
   ) where
 
 import Prologue
 
-import Data.Traversable (for_)
+import Control.Alt (class Alt, (<|>))
+import Control.Alternative (class Plus)
+import Control.Plus (empty)
+import Data.Bifunctor (class Bifunctor, bimap)
+import Data.Compactable (class Compactable, compact, separate)
+import Data.Either (either, hush)
+import Data.Filterable (class Filterable, filterDefault, partitionDefault)
+import Data.Functor.Contravariant (class Contravariant, cmap)
+import Data.Profunctor (lcmap)
+import Data.Traversable (for_, sequence, traverse)
+import Data.Tuple (curry, uncurry)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Aff as Aff
 import Effect.Ref as Ref
-import Halogen.Subscription (SubscribeIO)
 import Halogen.Subscription as HS
 
--- This type allows producers to `notify` events and for consumers to `subscribe`
--- to particular events on a channel
-newtype EventBus channel event = EventBus
-  (SubscribeIO (channel /\ event))
+-- | The output end of an EventBus. Allows a specific channel to be subscribed
+-- | to.
+newtype BusEmitter channel event = BusEmitter
+  (HS.Emitter (channel /\ event))
+
+derive instance Functor (BusEmitter channel)
+
+instance Alt (BusEmitter channel) where
+  alt (BusEmitter a) (BusEmitter b) = BusEmitter $ a <|> b
+
+instance Plus (BusEmitter channel) where
+  empty = BusEmitter empty
+
+instance Bifunctor BusEmitter where
+  bimap f g (BusEmitter emitter) = BusEmitter $ map (bimap f g) emitter
+
+instance Compactable (BusEmitter channel) where
+  compact (BusEmitter emitter) = BusEmitter $ HS.makeEmitter $
+    pure <<< HS.unsubscribe
+      <=< HS.subscribe emitter <<< lcmap sequence <<< traverse
+  separate (BusEmitter emitter) =
+    { left:
+        compact $ BusEmitter $ (map $ either Just (const Nothing)) <$> emitter
+    , right: compact $ BusEmitter $ map hush <$> emitter
+    }
+
+instance Filterable (BusEmitter channel) where
+  filter p = filterDefault p
+  partition p = partitionDefault p
+  filterMap f = compact <<< map f
+  partitionMap f = separate <<< map f
+
+-- | The input end of an EventBus. Allows events to be sent to a specific
+-- | channel.
+newtype BusListener channel event = BusListener
+  (HS.Listener (channel /\ event))
+
+instance Contravariant (BusListener channel) where
+  cmap f (BusListener listener) = BusListener $ cmap (map f) listener
+
+-- | Allows events to be sent to specific channels and for those channels to be
+-- | listened to.
+type EventBus channel event =
+  { emitter :: BusEmitter channel event, listener :: BusListener channel event }
+
+makeBusEmitter
+  :: forall channel event
+   . ((channel -> event -> Effect Unit) -> Effect (Effect Unit))
+  -> BusEmitter channel event
+makeBusEmitter f = BusEmitter $ HS.makeEmitter $ lcmap curry f
 
 create :: forall channel event. Effect (EventBus channel event)
-create = EventBus <$> HS.create
+create = do
+  { listener, emitter } <- HS.create
+  pure { listener: BusListener listener, emitter: BusEmitter emitter }
 
 -- Subscribe to events under a particular channel
 subscribe
   :: forall channel event r
    . Eq channel
-  => EventBus channel event
+  => BusEmitter channel event
   -> channel
   -> (event -> Effect r)
   -> Effect HS.Subscription
-subscribe (EventBus { emitter }) channel =
+subscribe (BusEmitter emitter) channel =
   HS.subscribe emitter'
   where
   emitter' =
     snd <$> HS.filter (\(channel' /\ _) -> channel' == channel) emitter
 
+-- Subscribe to events on all channels
+subscribeAll
+  :: forall channel event r
+   . BusEmitter channel event
+  -> (channel -> event -> Effect r)
+  -> Effect HS.Subscription
+subscribeAll (BusEmitter emitter) = HS.subscribe emitter <<< uncurry
+
 -- Helper function to subscribe for the first notification on a channel.
 subscribeOnce
   :: forall channel event
    . Eq channel
-  => EventBus channel event
+  => BusEmitter channel event
   -> channel
   -> Aff event
 subscribeOnce bus channel =
@@ -63,10 +132,9 @@ subscribeOnce bus channel =
 
 notify
   :: forall channel event
-   . EventBus channel event
+   . BusListener channel event
   -> channel
   -> event
   -> Effect Unit
-notify (EventBus { listener }) channel event = HS.notify listener $ channel /\
-  event
-
+notify (BusListener listener) channel event =
+  HS.notify listener $ channel /\ event
