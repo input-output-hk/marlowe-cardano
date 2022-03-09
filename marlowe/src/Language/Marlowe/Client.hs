@@ -333,8 +333,14 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         -- Create a transaction with the role tokens and pay them to the contract creator
         -- See Note [The contract is not ready]
         ownPubKey <- unPaymentPubKeyHash <$> Contract.ownPaymentPubKeyHash
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] ownPubKey = " <> show ownPubKey
         let roles = extractNonMerkleizedContractRoles contract
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] roles = " <> show roles
         (params, distributeRoleTokens, lkps) <- setupMarloweParams owners roles
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] params = " <> show params
         time <- currentTime
         logInfo $ "Marlowe contract created with parameters: " <> show params <> " at " <> show time
         let marloweData = MarloweData {
@@ -344,12 +350,20 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                     , choices  = AssocMap.empty
                     , boundValues = AssocMap.empty
                     , minTime = time } }
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] marloweData = " <> show marloweData
         let minAdaTxOut = lovelaceValueOf minLovelaceDeposit
         let typedValidator = mkMarloweTypedValidator params
         let tx = mustPayToTheScript marloweData minAdaTxOut <> distributeRoleTokens
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] tx = " <> show tx
         let lookups = Constraints.typedValidatorLookups typedValidator <> lkps
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] lookups = " <> show lookups
         -- Create the Marlowe contract and pay the role tokens to the owners
         utx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx lookups tx)
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] utx = " <> show utx
         submitTxConfirmed utx
         logInfo $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
         tell $ Just $ EndpointSuccess reqId $ CreateResponse params
@@ -528,7 +542,11 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $ do
     then do
         let tokens = (, 1) <$> Set.toList roles
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:setupMarloweParams] txOutRef = " <> show txOutRef
         txOut <- fromJust <$> txOutFromRef txOutRef  -- TODO: Review for safety.
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:setupMarloweParams] txOut = " <> show txOut
         let utxo = Map.singleton txOutRef txOut
         let theCurrency = Currency.OneShotCurrency
                 { curRefTransactionOutput = (h, i)
