@@ -3,10 +3,11 @@ import { PageId } from '../env/global';
 import {
   navigateToPage
 } from '../support/navigation-behavior';
+import { ScenarioWorld } from './setup/world';
 
 Given(
   /^I am on the "([^"]*)" page$/,
-  async function(pageId: PageId) {
+  async function(this: ScenarioWorld, pageId: PageId) {
     // Anything we pull off from `this` variable is defined in cucumber world
     const {
       screen: { page },

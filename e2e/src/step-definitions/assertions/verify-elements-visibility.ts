@@ -1,10 +1,12 @@
 import { Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
+import { ElementKey } from '../../env/global';
 import { getElementLocator } from '../../support/web-element-helper';
+import { ScenarioWorld } from '../setup/world'
 
 Then(
   /^I should see "([^"]*)" text$/,
-  async function(elementKey: string) {
+  async function(this: ScenarioWorld, elementKey: ElementKey) {
 
     const {
       screen: { page },
@@ -21,7 +23,7 @@ Then(
 
 Then(
   /^I should see a button with "([^"]*)" text$/,
-  async function(elementKey: string) {
+  async function(this: ScenarioWorld, elementKey: ElementKey) {
     const {
       screen: { page },
       globalVariables,
