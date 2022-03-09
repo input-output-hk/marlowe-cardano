@@ -36,7 +36,7 @@ import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust, listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
@@ -544,7 +544,11 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $ do
         txOutRef@(Ledger.TxOutRef h i) <- getUnspentOutput
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:setupMarloweParams] txOutRef = " <> show txOutRef
-        txOut <- fromJust <$> txOutFromRef txOutRef  -- TODO: Review for safety.
+        txOut <-
+          maybe
+            (throwing _ContractError . OtherError . T.pack $ show txOutRef <> " was not found on the chain index. Please verify that plutus-chain-index is 100% synced.")
+            pure
+            =<< txOutFromRef txOutRef
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:setupMarloweParams] txOut = " <> show txOut
         let utxo = Map.singleton txOutRef txOut
