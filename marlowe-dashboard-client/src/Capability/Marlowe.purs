@@ -1,7 +1,7 @@
 module Capability.Marlowe
   ( class ManageMarlowe
   , followContract
-  , createContract
+  , initializeContract
   , applyTransactionInput
   , redeem
   , getRoleContracts
@@ -23,16 +23,22 @@ import Capability.PAB
   ) as PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
 import Capability.Wallet (class ManageWallet)
+import Component.ContractSetup.Types (ContractParams)
+import Component.Template.State
+  ( InstantiateContractErrorRow
+  , instantiateExtendedContract
+  )
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (asks)
-import Data.Address (Address)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Bifunctor (lmap)
+import Data.DateTime.Instant (Instant)
 import Data.Either (note)
 import Data.Lens (view)
 import Data.Map (Map)
 import Data.Maybe (maybe')
+import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _address
@@ -43,7 +49,6 @@ import Data.PABConnectedWallet
 import Data.PubKeyHash (PubKeyHash)
 import Data.PubKeyHash as PKH
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.UUID.Argonaut (UUID)
 import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
 import Data.WalletId (WalletId)
@@ -57,10 +62,10 @@ import Halogen.Subscription as HS
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
+import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
-  ( Contract
-  , MarloweData
+  ( MarloweData
   , MarloweParams
   , TokenName
   , TransactionInput
@@ -86,6 +91,14 @@ type FollowContractError = Variant
 followContractError :: forall c. Constructors FollowContractError c => c
 followContractError = mkConstructors' (Proxy :: Proxy FollowContractError)
 
+type InitializeContractError = Variant
+  (JsonAjaxErrorRow + InstantiateContractErrorRow + ())
+
+initializeContractError
+  :: forall c. Constructors InitializeContractError c => c
+initializeContractError = mkConstructors'
+  (Proxy :: Proxy InitializeContractError)
+
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
 -- capabilities with functions specific to Marlowe.
 class
@@ -98,11 +111,12 @@ class
     :: PABConnectedWallet
     -> MarloweParams
     -> m (Either FollowContractError (PlutusAppId /\ ContractHistory))
-  createContract
-    :: PABConnectedWallet
-    -> Map TokenName Address
-    -> Contract
-    -> m (AjaxResponse (UUID /\ Aff MarloweParams))
+  initializeContract
+    :: Instant
+    -> ContractTemplate
+    -> ContractParams
+    -> PABConnectedWallet
+    -> m (Either InitializeContractError (NewContract /\ Aff MarloweParams))
   applyTransactionInput
     :: PABConnectedWallet
     -> MarloweParams
@@ -166,17 +180,38 @@ instance manageMarloweAppM :: ManageMarlowe AppM where
         $ updateStore
         $ Store.AddFollowerContract followAppId metadata contractHistory
       pure $ followAppId /\ contractHistory
-  -- "create" a Marlowe contract on the blockchain
-  -- FIXME: if we want users to be able to follow contracts that they don't have roles in, we need this function
-  -- to return the MarloweParams of the created contract - but this isn't currently possible in the PAB
-  -- UPDATE to this FIXME: it is possible this won't be a problem, as it seems role tokens are first paid into
-  -- the wallet that created the contract, and distributed to other wallets from there - but this remains to be
-  -- seen when all the parts are working together as they should be...
-  createContract walletDetails roles contract =
-    let
-      marloweAppId = view _marloweAppId walletDetails
-    in
-      MarloweApp.createContract marloweAppId roles contract
+
+  initializeContract currentInstant template params wallet =
+    runExceptT do
+      let
+        { instantiateContractError, jsonAjaxError } = initializeContractError
+        { nickname, roles } = params
+        marloweAppId = view _marloweAppId wallet
+      -- To initialize a Marlowe Contract we first need to make an instance
+      -- of a Core.Marlowe contract. We do this by replazing template parameters
+      -- from the Extended.Marlowe template and then calling toCore. This can
+      -- fail with `instantiateContractError` if not all params were provided.
+      contract <-
+        withExceptT instantiateContractError
+          $ ExceptT
+          $ pure
+          $ instantiateExtendedContract
+              currentInstant
+              template
+              params
+      -- Call the PAB to create the new contract. It returns a request id and a function
+      -- that we can use to block and wait for the response
+      reqId /\ awaitContractCreation <-
+        withExceptT jsonAjaxError $ ExceptT $
+          MarloweApp.createContract marloweAppId roles contract
+
+      -- We save in the store the request of a created contract with
+      -- the information relevant to show a placeholder of a starting contract.
+      let newContract = NewContract reqId nickname template.metaData
+      lift $ updateStore $ Store.AddStartingContract newContract
+
+      pure $ newContract /\ awaitContractCreation
+
   -- "apply-inputs" to a Marlowe contract on the blockchain
   applyTransactionInput wallet marloweParams transactionInput =
     let
@@ -222,8 +257,8 @@ instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) wh
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams
-  createContract walletDetails roles contract =
-    lift $ createContract walletDetails roles contract
+  initializeContract currentInstant template params wallet =
+    lift $ initializeContract currentInstant template params wallet
   applyTransactionInput walletDetails marloweParams transactionInput =
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
   redeem walletDetails marloweParams tokenName =
@@ -238,8 +273,8 @@ instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
   followContract walletDetails marloweParams = lift $ followContract
     walletDetails
     marloweParams
-  createContract walletDetails roles contract =
-    lift $ createContract walletDetails roles contract
+  initializeContract currentInstant template params wallet =
+    lift $ initializeContract currentInstant template params wallet
   applyTransactionInput walletDetails marloweParams transactionInput =
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
   redeem walletDetails marloweParams tokenName =

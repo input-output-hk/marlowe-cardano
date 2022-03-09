@@ -1,7 +1,9 @@
 module Component.Template.State
-  ( dummyState
-  , initialState
+  ( InstantiateContractError(..)
+  , InstantiateContractErrorRow
+  , dummyState
   , handleAction
+  , initialState
   , instantiateExtendedContract
   ) where
 
@@ -10,10 +12,11 @@ import Prologue
 import Component.ContractSetup.Types (ContractFields, ContractParams)
 import Component.ContractSetup.Types as CS
 import Component.Template.Types (Action(..), State(..))
+import Data.Argonaut (encodeJson)
 import Data.ContractTimeout as CT
 import Data.ContractValue (_value)
 import Data.DateTime.Instant (Instant, instant, unInstant)
-import Data.Either (hush)
+import Data.Either (hush, note')
 import Data.Filterable (filterMap)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens (view)
@@ -22,6 +25,7 @@ import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Set as Set
 import Effect.Aff.Class (class MonadAff)
+import Errors (class Debuggable, class Explain)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral
@@ -46,6 +50,7 @@ import Marlowe.Template
   , getPlaceholderIds
   , initializeTemplateContent
   )
+import Text.Pretty (text)
 
 -- see note [dummyState] in MainFrame.State
 dummyState :: State
@@ -118,8 +123,30 @@ handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
     Setup template input -> Setup template input { fields = fields }
     s -> s
 
+data InstantiateContractError
+  = InstantiateContractError Instant ContractTemplate ContractParams
+
+instance Explain InstantiateContractError where
+  explain _ = text
+    "We couldn't create an instance of the contract with the provided parameters"
+
+instance Debuggable InstantiateContractError where
+  debuggable (InstantiateContractError currentTime template params) =
+    encodeJson
+      { errorType: "Contract instantiation"
+      , currentTime: show currentTime
+      , template
+      , params
+      }
+
+type InstantiateContractErrorRow r =
+  (instantiateContractError :: InstantiateContractError | r)
+
 instantiateExtendedContract
-  :: Instant -> ContractTemplate -> ContractParams -> Maybe Semantic.Contract
+  :: Instant
+  -> ContractTemplate
+  -> ContractParams
+  -> Either InstantiateContractError Semantic.Contract
 
 instantiateExtendedContract now template params =
   let
@@ -137,4 +164,6 @@ instantiateExtendedContract now template params =
 
     absoluteFilledContract = resolveRelativeTimes now filledContract
   in
-    toCore absoluteFilledContract
+    note'
+      (\_ -> InstantiateContractError now template params)
+      $ toCore absoluteFilledContract

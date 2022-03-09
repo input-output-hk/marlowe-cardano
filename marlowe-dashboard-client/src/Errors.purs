@@ -14,7 +14,7 @@ module Errors
 
 import Prologue
 
-import Data.Argonaut (Json, JsonDecodeError)
+import Data.Argonaut (Json, JsonDecodeError, encodeJson)
 import Data.Argonaut as Json
 import Data.Array (cons)
 import Data.Int as Int
@@ -107,14 +107,20 @@ instance debuggableArray :: Debuggable a => Debuggable (Array a) where
   debuggable = Json.fromArray <<< map debuggable
 
 instance debuggableMaybe :: Debuggable a => Debuggable (Maybe a) where
-  debuggable Nothing = Json.fromString "Nothing"
+  debuggable Nothing = Json.fromString "Debug information not available"
   debuggable (Just a) = debuggable a
 
 instance Debuggable (AjaxError JsonDecodeError Json) where
-  debuggable = Json.fromString <<< printAjaxError
+  debuggable e = encodeJson
+    { type: "AjaxError"
+    , error: Json.fromString $ printAjaxError e
+    }
 
 instance Debuggable JsonDecodeError where
-  debuggable = Json.fromString <<< show
+  debuggable e = encodeJson
+    { type: "JsonDecodeError"
+    , error: Json.fromString $ show e
+    }
 
 instance debuggableRecord ::
   ( RL.RowToList row list

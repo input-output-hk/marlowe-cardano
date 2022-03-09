@@ -6,6 +6,7 @@
   , "argonaut"
   , "argonaut-codecs"
   , "argonaut-core"
+  , "argonaut-generic"
   , "arrays"
   , "avar"
   , "bifunctors"

@@ -8,7 +8,11 @@ import Prologue
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe (class ManageMarlowe, createContract, followContract)
+import Capability.Marlowe
+  ( class ManageMarlowe
+  , followContract
+  , initializeContract
+  )
 import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -21,7 +25,6 @@ import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..))
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
-import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
@@ -34,7 +37,6 @@ import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use, (^.))
 import Data.Map (filterKeys, toUnfoldable)
-import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
@@ -85,7 +87,7 @@ import Store.Contracts
   )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (errorToast, explainableErrorToast, successToast)
+import Toast.Types (explainableErrorToast, successToast)
 
 mkInitialState
   :: Instant -> PABConnectedWallet -> ContractStore -> State
@@ -265,53 +267,39 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
      a placeholder so the user can see that that the contract is being created
     -}
     Template.OnStartContract template params -> do
-      let { nickname, roles } = params
       currentInstant <- now
-      case instantiateExtendedContract currentInstant template params of
-        Nothing -> do
-          void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
-            (Milliseconds 600.0)
-            (Left "Error")
-          addToast $ errorToast "Failed to instantiate contract." $ Just
-            "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
-        Just contract -> do
-          ajaxCreateContract <- createContract wallet roles contract
-          case ajaxCreateContract of
-            -- TODO: make this error message more informative
-            Left ajaxError -> do
-              void $ tell _submitButtonSlot "action-pay-and-start" $
-                SubmitResult (Milliseconds 600.0) (Left "Error")
-              addToast $ explainableErrorToast
-                "Failed to initialise contract."
-                ajaxError
-              Logger.error "Can't follow the contract: " ajaxError
-
-            Right (reqId /\ mMarloweParams) -> do
-              let newContract = NewContract reqId nickname template.metaData
-              -- We save in the store the request of a created contract with
-              -- the information relevant to show a placeholder of a starting contract.
-              updateStore $ Store.AddStartingContract newContract
-              handleAction input CloseCard
-              void $ tell _submitButtonSlot "action-pay-and-start" $
-                SubmitResult (Milliseconds 600.0) (Right "")
-              addToast $ successToast
-                "The request to initialise this contract has been submitted."
-              assign _templateState Template.initialState
-              marloweParams <- liftAff mMarloweParams
-              ajaxFollow <- followContract wallet marloweParams
-              case ajaxFollow of
-                Left err -> do
-                  addToast $ explainableErrorToast "Can't follow the contract"
-                    err
-                  Logger.error "Can't follow the contract: " err
-                Right (followerId /\ history) -> do
-                  updateStore $
-                    Store.SwapStartingToStartedContract
-                      newContract
-                      currentInstant
-                      followerId
-                      history
-                  addToast $ successToast "Contract initialised."
+      instantiateResponse <- initializeContract currentInstant template params
+        wallet
+      case instantiateResponse of
+        Left error -> do
+          void $ tell _submitButtonSlot "action-pay-and-start" $
+            SubmitResult (Milliseconds 600.0) (Left "Error")
+          addToast $ explainableErrorToast "Failed to initialize contract."
+            error
+          Logger.error "Failed to initialize contract." error
+        Right (newContract /\ awaitContractCreation) -> do
+          handleAction input CloseCard
+          void $ tell _submitButtonSlot "action-pay-and-start" $
+            SubmitResult (Milliseconds 600.0) (Right "")
+          addToast $ successToast
+            "The request to initialize this contract has been submitted."
+          -- We reset the template component (TODO: this wont be needed after the SCP-3464 refactor)
+          assign _templateState Template.initialState
+          marloweParams <- liftAff awaitContractCreation
+          ajaxFollow <- followContract wallet marloweParams
+          case ajaxFollow of
+            Left err -> do
+              addToast $ explainableErrorToast "Can't follow the contract"
+                err
+              Logger.error "Can't follow the contract: " err
+            Right (followerId /\ history) -> do
+              updateStore $
+                Store.SwapStartingToStartedContract
+                  newContract
+                  currentInstant
+                  followerId
+                  history
+              addToast $ successToast "Contract initialised."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
