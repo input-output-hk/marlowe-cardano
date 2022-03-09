@@ -1,5 +1,6 @@
 {
   "home": {
-    "route": "/"
+    "route": "/",
+    "regex": "^/$"
   }
 }
