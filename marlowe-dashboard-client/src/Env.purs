@@ -4,6 +4,7 @@ import Prologue
 
 import Affjax (Response)
 import Affjax as Affjax
+import Control.Concurrent.EventBus (EventBus)
 import Control.Logger.Effect (Logger)
 import Control.Logger.Structured (StructuredLog)
 import Data.DateTime.Instant (Instant)
@@ -20,10 +21,14 @@ import Effect.AVar (AVar)
 import Effect.Aff (Aff)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener, Subscription)
+import Language.Marlowe.Client (ContractHistory)
 import LocalStorage (Key)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient, CombinedWSStreamToServer)
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient
+  , CombinedWSStreamToServer
+  )
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
 
@@ -79,6 +84,7 @@ newtype Env = Env
       AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams))
   , applyInputListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
   , redeemListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
+  , followerBus :: EventBus PlutusAppId ContractHistory
   -- | All the outbound communication channels to the outside world
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
@@ -106,6 +112,9 @@ _applyInputListeners = _Newtype <<< prop (Proxy :: _ "applyInputListeners")
 _redeemListeners :: Lens' Env
   (AVar (Map UUID (Maybe Subscription /\ Listener Unit)))
 _redeemListeners = _Newtype <<< prop (Proxy :: _ "redeemListeners")
+
+_followerBus :: Lens' Env (EventBus PlutusAppId ContractHistory)
+_followerBus = _Newtype <<< prop (Proxy :: _ "followerBus")
 
 _endpointSemaphores :: Lens' Env (AVar EndpointSemaphores)
 _endpointSemaphores = _Newtype <<< prop (Proxy :: _ "endpointSemaphores")
