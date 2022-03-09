@@ -7,6 +7,7 @@ import Prologue
 import Affjax as Affjax
 import AppM (runAppM)
 import Capability.MarloweStorage as MarloweStorage
+import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect.Console (structuredLogger) as Console
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Now (makeClock, now)
@@ -71,6 +72,7 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
   createListeners <- AVar.new Map.empty
   applyInputListeners <- AVar.new Map.empty
   redeemListeners <- AVar.new Map.empty
+  followerBus <- EventBus.create
   timezoneOffset <- getTimezoneOffset
   pure $ Env
     { contractStepCarouselSubscription
@@ -78,6 +80,7 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
         -- Add backend logging capability
         Production -> mempty
         Development -> Console.structuredLogger
+    , followerBus
     , endpointSemaphores
     , createListeners
     , applyInputListeners

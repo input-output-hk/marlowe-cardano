@@ -6,9 +6,22 @@ import AppM (runAppM)
 import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
 import Control.Bind (bindFlipped)
+import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect.Console as Console
-import Control.Monad.Error.Class (class MonadError, class MonadThrow, catchError, throwError)
-import Control.Monad.Reader (class MonadAsk, class MonadReader, ReaderT, ask, asks, runReaderT)
+import Control.Monad.Error.Class
+  ( class MonadError
+  , class MonadThrow
+  , catchError
+  , throwError
+  )
+import Control.Monad.Reader
+  ( class MonadAsk
+  , class MonadReader
+  , ReaderT
+  , ask
+  , asks
+  , runReaderT
+  )
 import Control.Parallel (parallel, sequential)
 import Data.AddressBook as AddressBook
 import Data.Array (sortWith)
@@ -42,11 +55,26 @@ import LocalStorage (Key(..))
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types as MF
 import Marlowe.Time (unixEpoch)
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient, CombinedWSStreamToServer)
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient
+  , CombinedWSStreamToServer
+  )
 import Store (mkStore)
 import Test.Control.Monad.Time (class MonadMockTime)
 import Test.Halogen (class MonadHalogenTest, runUITest)
-import Test.Network.HTTP (class MonadMockHTTP, MatcherError, RequestMatcherBox, boxRequestMatcher, unboxRequestMatcher)
+import Test.Marlowe.Run.Action.Types (WalletName)
+import Test.Network.HTTP
+  ( class MonadMockHTTP
+  , MatcherError
+  , RequestMatcherBox
+  , boxRequestMatcher
+  , unboxRequestMatcher
+  )
+import Test.Network.HTTP
+  ( class MonadMockHTTP
+  , RequestBox(..)
+  , runRequestMatcher
+  )
 import Test.Spec (Spec, it)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
@@ -147,6 +175,7 @@ mkTestEnv = do
   createListeners <- liftAff $ AVar.new Map.empty
   applyInputListeners <- liftAff $ AVar.new Map.empty
   redeemListeners <- liftAff $ AVar.new Map.empty
+  followerBus <- liftEffect $ EventBus.create
   pabWebsocketIn <- liftEffect $ HS.create
   pabWebsocketOut <- liftEffect $ HS.create
   errors <- liftEffect $ HS.create
@@ -177,6 +206,7 @@ mkTestEnv = do
       , createListeners
       , applyInputListeners
       , redeemListeners
+      , followerBus
       , sinks
       , sources
       , handleRequest: HandleRequest \request -> marshallErrors do
