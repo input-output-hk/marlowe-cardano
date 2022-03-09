@@ -29,6 +29,7 @@ import Effect.Aff (Aff)
 import Effect.Aff as Aff
 import Effect.Ref as Ref
 import Halogen.Subscription as HS
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | The output end of an EventBus. Allows a specific channel to be subscribed
 -- | to.
@@ -69,6 +70,24 @@ newtype BusListener channel event = BusListener
 
 instance Contravariant (BusListener channel) where
   cmap f (BusListener listener) = BusListener $ cmap (map f) listener
+
+instance Semigroup (BusListener channel event) where
+  append (BusListener a) (BusListener b) =
+    BusListener
+      $ unsafeWrapListener
+          \event -> unsafeUnwrapListener a event *> unsafeUnwrapListener b event
+    where
+    unsafeWrapListener :: forall a. (a -> Effect Unit) -> HS.Listener a
+    unsafeWrapListener = unsafeCoerce
+
+    unsafeUnwrapListener :: forall a. HS.Listener a -> (a -> Effect Unit)
+    unsafeUnwrapListener = unsafeCoerce
+
+instance Monoid (BusListener channel event) where
+  mempty = BusListener $ unsafeWrapListener $ const $ pure unit
+    where
+    unsafeWrapListener :: forall a. (a -> Effect Unit) -> HS.Listener a
+    unsafeWrapListener = unsafeCoerce
 
 -- | Allows events to be sent to specific channels and for those channels to be
 -- | listened to.
