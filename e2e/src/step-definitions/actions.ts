@@ -9,11 +9,10 @@ When(
   async function(this: ScenarioWorld, elementKey: ElementKey) {
     const {
       screen: { document, page },
-      globalVariables,
       globalConfig,
     } = this;
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalVariables, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
     const locator = page.locator(elementIdentifier);
 
 
