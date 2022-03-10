@@ -1,6 +1,10 @@
 {
   "home": {
     "route": "/",
-    "regex": "^/$"
+    "regex": "^/#/$"
+  },
+  "marlowe-playground-js": {
+    "route": "/#/javascript",
+    "regex": "^/#/javascript$"
   }
 }

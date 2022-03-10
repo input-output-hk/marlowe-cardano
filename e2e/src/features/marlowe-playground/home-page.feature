@@ -3,7 +3,7 @@ Feature: As a user I should be able to see the Marlowe Playground home page
     As a user I should be able to navigate to the marlowe playground home page and
     see all the starting point options available
 
-    @dev
+    # @dev
     @smoke
     @regression
     Scenario: As a user I expect to be able to see the available languages
