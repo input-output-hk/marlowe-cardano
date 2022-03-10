@@ -92,6 +92,7 @@ library
     memory,
     mtl,
     network,
+    one-line-aeson-text,
     openapi3,
     optparse-applicative,
     ouroboros-network,
@@ -113,6 +114,7 @@ library
     unordered-containers,
     uuid,
     websockets,
+    vector,
     yaml,
 
 executable marlowe-cli

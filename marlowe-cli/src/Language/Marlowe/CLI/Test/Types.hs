@@ -16,6 +16,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TemplateHaskell            #-}
@@ -34,6 +35,8 @@ module Language.Marlowe.CLI.Test.Types (
 , PabState(PabState)
 , WalletInfo(..)
 , AppInstanceInfo(..)
+, FollowerInstanceInfo(..)
+, PatternJSON(..)
 -- * Lenses
 , psFaucetKey
 , psFaucetAddress
@@ -41,14 +44,16 @@ module Language.Marlowe.CLI.Test.Types (
 , psPassphrase
 , psWallets
 , psAppInstances
+, psFollowerInstances
 ) where
 
 
 import Cardano.Api (AddressAny, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, Value)
 import Cardano.Wallet.Primitive.AddressDerivation (Passphrase)
+import Control.Applicative ((<|>))
 import Control.Concurrent.Chan (Chan)
 import Control.Lens (makeLenses)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON (..), ToJSON (..), object, (.:), (.=))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.PAB (WsRunner)
 import Language.Marlowe.CLI.Types (CliError, SomePaymentSigningKey)
@@ -64,6 +69,7 @@ import Servant.Client (BaseUrl, ClientM)
 import Wallet.Emulator.Wallet (WalletId)
 
 import qualified Cardano.Wallet.Primitive.Types as W (WalletId)
+import qualified Data.Aeson as A (Value (..))
 import qualified Data.Map.Strict as M (Map)
 
 
@@ -137,6 +143,20 @@ data ScriptOperation =
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
+data PatternJSON
+  = Exact A.Value
+  | Parts A.Value
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON PatternJSON where
+  parseJSON (A.Object v) =
+    Parts <$> v .: "parts"
+    <|> Exact  <$> v .: "exact"
+  parseJSON _ = fail "JSONPattern should be a singleton object"
+
+instance ToJSON PatternJSON where
+  toJSON (Parts json) = object $ pure $ "parts" .= json
+  toJSON (Exact json) = object $ pure $ "exact" .= json
 
 -- | On- and off-chain test operations for Marlowe contracts, via the Marlowe PAB.
 data PabOperation =
@@ -242,6 +262,20 @@ data PabOperation =
     }
     -- | Print the state of the PAB.
   | PrintState
+  | ActivateFollower
+    {
+      poOwner    :: RoleName
+    , poInstance :: InstanceNickname
+    }
+  | CallFollow
+    {
+      poInstance :: InstanceNickname
+    }
+  | AwaitFollow
+    {
+      poInstance :: InstanceNickname
+    , poResponse :: PatternJSON
+    }
     -- | Print the contents of a wallet.
   | PrintWallet
     {
@@ -318,17 +352,34 @@ instance Show AppInstanceInfo where
                            <> show aiParams
                            <> "}"
 
+data FollowerInstanceInfo =
+  FollowerInstanceInfo
+  {
+    fiInstance :: ContractInstanceId
+  , fiChannel  :: Chan A.Value
+  , fiParams   :: Maybe MarloweParams
+  }
+    deriving (Eq)
+
+instance Show FollowerInstanceInfo where
+  show FollowerInstanceInfo{..} =  "FollowerInstanceInfo {fiInstance = "
+                           <> show fiInstance
+                           <> ", fiParams = "
+                           <> show fiParams
+                           <> "}"
+
 
 -- | The state of the PAB test framework.
 data PabState =
   PabState
   {
-    _psFaucetKey     :: SomePaymentSigningKey                   -- ^ The key to the faucet.
-  , _psFaucetAddress :: AddressAny                              -- ^ The address of the faucet.
-  , _psBurnAddress   :: AddressAny                              -- ^ The address for burning role tokens.
-  , _psPassphrase    :: Passphrase "raw"                        -- ^ The wallet passphrase.
-  , _psWallets       :: M.Map RoleName WalletInfo               -- ^ The wallets being managed.
-  , _psAppInstances  :: M.Map InstanceNickname AppInstanceInfo  -- ^ The PAB contract instances being managed.
+    _psFaucetKey         :: SomePaymentSigningKey
+  , _psFaucetAddress     :: AddressAny
+  , _psBurnAddress       :: AddressAny
+  , _psPassphrase        :: Passphrase "raw"
+  , _psWallets           :: M.Map RoleName WalletInfo
+  , _psAppInstances      :: M.Map InstanceNickname AppInstanceInfo
+  , _psFollowerInstances :: M.Map InstanceNickname FollowerInstanceInfo
   }
     deriving (Show)
 
