@@ -22,9 +22,13 @@ import Effect (Effect)
 import Effect.Class.Console (log)
 import Examples.PureScript.ContractForDifferences
   ( defaultSlotContent
-  , fixedTimeoutContract
+  , extendedContract
   ) as ContractForDifferences
 import Examples.PureScript.Escrow (defaultSlotContent, fixedTimeoutContract) as Escrow
+import Examples.PureScript.EscrowWithCollateral
+  ( defaultSlotContent
+  , fixedTimeoutContract
+  ) as EscrowWithCollateral
 import Examples.PureScript.Swap (defaultSlotContent, fixedTimeoutContract) as Swap
 import Examples.PureScript.ZeroCouponBond
   ( defaultSlotContent
@@ -55,6 +59,13 @@ mkContracts = do
         , valueContent: Map.insert "Price" (fromInt 1500)
             Escrow.defaultSlotContent
         }
+    escrowWithCollateralContent =
+      TemplateContent
+        { slotContent: Map.empty
+        , valueContent: Map.insert "Collateral amount" (fromInt 5000) $
+            Map.insert "Price" (fromInt 15000)
+              EscrowWithCollateral.defaultSlotContent
+        }
     zeroCouponBondContent =
       TemplateContent
         { slotContent: Map.empty
@@ -63,26 +74,25 @@ mkContracts = do
             (fromInt 3)
             ZeroCouponBond.defaultSlotContent
         }
-    contractForDifferencesContent =
-      TemplateContent
-        { slotContent: Map.empty
-        , valueContent: Map.insert "Amount paid by party" (fromInt 2000) $
-            Map.insert "Amount paid by counterparty" (fromInt 3000)
-              ContractForDifferences.defaultSlotContent
-        }
-
+  --   contractForDifferencesContent =
+  --     TemplateContent
+  --       { slotContent: Map.empty
+  --       , valueContent: ContractForDifferences.defaultSlotContent
+  --       }
   swap <- toCore $ fillTemplate swapContent Swap.fixedTimeoutContract
   escrow <- toCore $ fillTemplate escrowContent Escrow.fixedTimeoutContract
+  escrowWithCollateral <- toCore $ fillTemplate escrowWithCollateralContent
+    EscrowWithCollateral.fixedTimeoutContract
   zeroCouponBond <- toCore $ fillTemplate zeroCouponBondContent
     ZeroCouponBond.fixedTimeoutContract
-  contractForDifferences <- toCore $ fillTemplate contractForDifferencesContent
-    ContractForDifferences.fixedTimeoutContract
-  -- traceM $ fillTemplate zeroCouponBondContent ZeroCouponBond.fixedTimeoutContract
+  -- contractForDifferences <- toCore ContractForDifferences.extendedContract
+  -- traceM $ fillTemplate escrowWithCollateralContent EscrowWithCollateral.fixedTimeoutContract
   pure
     [ "swap.json" /\ swap
     , "escrow.json" /\ escrow
+    , "escrowWithCollateral.json" /\ escrowWithCollateral
     , "zeroCouponBond.json" /\ zeroCouponBond
-    , "contractForDifferences.json" /\ contractForDifferences
+    -- , "contractForDifferences.json" /\ contractForDifferences
     ]
 
 -- FIX ME: must wrap main do with Data.BigInt.Argonaut.withJsonPatch. but adapted for Effect
