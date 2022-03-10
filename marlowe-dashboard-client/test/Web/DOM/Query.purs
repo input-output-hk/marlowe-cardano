@@ -19,6 +19,7 @@ module Test.Web.DOM.Query
   , labelText
   , level
   , name
+  , nameRegex
   , normalizer
   , placeholderText
   , pressed
@@ -41,7 +42,11 @@ import Control.Promise (Promise, toAffE)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Function.Uncurried (mkFn2)
 import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable)
+import Data.Nullable as N
 import Data.String.Regex (Regex)
+import Data.String.Regex.Flags (RegexFlags)
+import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Tuple (Tuple(..))
 import Data.Undefinable (Undefinable, toMaybe, toUndefinable)
 import Effect (Effect)
@@ -269,6 +274,9 @@ queryFallbacks = ByRoleBuilder
   <<< const
   <<< defined
 
+nameRegex :: String -> RegexFlags -> ByRoleBuilder Unit
+nameRegex regex = name <<< unsafeRegex regex
+
 name :: forall matcher. IsMatcher matcher => matcher -> ByRoleBuilder Unit
 name = ByRoleBuilder
   <<< modify_
@@ -427,27 +435,27 @@ queryBy
   -> m (Maybe Element)
 queryBy build builder = case build builder of
   AltText matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByAltText matcher options
   DisplayValue matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByDisplayValue matcher options
   LabelText matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByLabelText matcher options
   PlaceholderText matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByPlaceholderText matcher options
   Role r options ->
-    map toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole r options
+    map N.toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole r options
   TestId matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByTestId matcher options
   Text matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByText matcher options
   Title matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByTitle matcher options
 
 queryAllBy
@@ -563,13 +571,13 @@ foreign import queryAllByRole :: ForeignByRoleFn (Array Element)
 foreign import queryAllByTestId :: ForeignMatcherFn (Array Element)
 foreign import queryAllByText :: ForeignMatcherFn (Array Element)
 foreign import queryAllByTitle :: ForeignMatcherFn (Array Element)
-foreign import queryByAltText :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByDisplayValue :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByLabelText :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByAltText :: ForeignMatcherFn (Nullable Element)
+foreign import queryByDisplayValue :: ForeignMatcherFn (Nullable Element)
+foreign import queryByLabelText :: ForeignMatcherFn (Nullable Element)
 foreign import queryByPlaceholderText
-  :: ForeignMatcherFn (Undefinable Element)
+  :: ForeignMatcherFn (Nullable Element)
 
-foreign import queryByRole :: ForeignByRoleFn (Undefinable Element)
-foreign import queryByTestId :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByText :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByTitle :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByRole :: ForeignByRoleFn (Nullable Element)
+foreign import queryByTestId :: ForeignMatcherFn (Nullable Element)
+foreign import queryByText :: ForeignMatcherFn (Nullable Element)
+foreign import queryByTitle :: ForeignMatcherFn (Nullable Element)

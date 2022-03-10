@@ -1,9 +1,9 @@
 module Test.Network.HTTP
   ( class MonadMockHTTP
   , MatcherError(..)
+  , RequestBox(..)
   , RequestMatcher
-  , RequestMatcherBox
-  , boxRequestMatcher
+  , runRequestMatcher
   , expectCondition
   , expectContent
   , expectCustomMethod
@@ -11,41 +11,49 @@ module Test.Network.HTTP
   , expectJsonRequest
   , expectMaybe
   , expectMethod
-  , expectNextJsonRequest
-  , expectNextRequest
-  , expectNextRequest'
-  , expectNextTextRequest
   , expectNoContent
   , expectRequest
   , expectRequest'
   , expectTextContent
   , expectTextRequest
   , expectUri
+  , renderMatcherError
   , requestMatcher
-  , runRequestMatcher
-  , unboxRequestMatcher
   ) where
 
 import Prelude
 
 import Affjax (Error, Request, Response)
+import Affjax as Affjax
 import Affjax.RequestBody (RequestBody)
 import Affjax.RequestBody as Request
 import Affjax.ResponseFormat (ResponseFormat(..))
 import Affjax.ResponseFormat as Response
 import Affjax.StatusCode (StatusCode(..))
-import Control.Alt (class Alt, alt, (<|>))
+import Control.Alt (class Alt, alt)
 import Control.Apply (lift2)
+import Control.Monad.Cont (ContT)
+import Control.Monad.Error.Class (throwError)
+import Control.Monad.Except (ExceptT)
+import Control.Monad.Maybe.Trans (MaybeT)
+import Control.Monad.RWS (RWST)
+import Control.Monad.Reader (ReaderT)
+import Control.Monad.State (StateT)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Writer (WriterT)
 import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
 import Data.Array (fromFoldable)
-import Data.Bifunctor (bimap, lmap)
+import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either, note)
 import Data.HTTP.Method (CustomMethod, Method, unCustomMethod)
 import Data.Maybe (Maybe(..), isNothing)
-import Data.Newtype (class Newtype, over2, unwrap)
+import Data.Newtype (class Newtype, unwrap)
 import Data.String (Pattern(..), joinWith, split)
 import Data.String.Extra (repeat)
 import Data.Validation.Semigroup (V(..))
+import Effect.Aff (Aff, error)
+import Effect.Aff.AVar (AVar)
+import Effect.Aff.AVar as AVar
 import Unsafe.Coerce (unsafeCoerce)
 
 class Monad m <= MonadMockHTTP m where
@@ -54,41 +62,27 @@ class Monad m <= MonadMockHTTP m where
      . ResponseFormat a
     -> RequestMatcher (Either Error (Response a))
     -> m Unit
-  expectNextRequest
-    :: forall a
-     . ResponseFormat a
-    -> RequestMatcher (Either Error (Response a))
-    -> m Unit
 
-expectNextTextRequest
-  :: forall m
-   . MonadMockHTTP m
-  => RequestMatcher String
-  -> m Unit
-expectNextTextRequest = expectNextRequest' Response.string
+instance MonadMockHTTP m => MonadMockHTTP (ReaderT r m) where
+  expectRequest = map (map lift) expectRequest
 
-expectNextJsonRequest
-  :: forall a m
-   . EncodeJson a
-  => MonadMockHTTP m
-  => RequestMatcher a
-  -> m Unit
-expectNextJsonRequest = expectNextRequest' Response.json <<< map encodeJson
+instance (Monoid w, MonadMockHTTP m) => MonadMockHTTP (WriterT w m) where
+  expectRequest = map (map lift) expectRequest
 
-expectNextRequest'
-  :: forall a m
-   . MonadMockHTTP m
-  => ResponseFormat a
-  -> RequestMatcher a
-  -> m Unit
-expectNextRequest' format = expectNextRequest format <<< map
-  ( Right <<<
-      { status: StatusCode 200
-      , statusText: "OK"
-      , headers: []
-      , body: _
-      }
-  )
+instance MonadMockHTTP m => MonadMockHTTP (StateT s m) where
+  expectRequest = map (map lift) expectRequest
+
+instance MonadMockHTTP m => MonadMockHTTP (ContT r m) where
+  expectRequest = map (map lift) expectRequest
+
+instance MonadMockHTTP m => MonadMockHTTP (ExceptT e m) where
+  expectRequest = map (map lift) expectRequest
+
+instance MonadMockHTTP m => MonadMockHTTP (MaybeT m) where
+  expectRequest = map (map lift) expectRequest
+
+instance (Monoid w, MonadMockHTTP m) => MonadMockHTTP (RWST r w s m) where
+  expectRequest = map (map lift) expectRequest
 
 expectTextRequest
   :: forall m
@@ -123,54 +117,80 @@ expectRequest' format = expectRequest format <<< map
 newtype RequestMatcher a = RequestMatcher
   (forall content. Request content -> Either MatcherError a)
 
-newtype RequestMatcherBox = RequestMatcherBox
-  ( forall content
-     . Request content
-    -> Either MatcherError (Either Error (Response content))
+newtype RequestBox = RequestBox
+  ( forall r
+     . ( forall a
+          . Affjax.Request a
+         -> AVar (Either Affjax.Error (Affjax.Response a))
+         -> r
+       )
+    -> r
   )
 
-instance Semigroup RequestMatcherBox where
-  append (RequestMatcherBox a) (RequestMatcherBox b) =
-    RequestMatcherBox \request -> a request <|> b request
+renderMatcherError :: RequestBox -> MatcherError -> String
+renderMatcherError (RequestBox f) (MatcherError lines) = f \request _ ->
+  joinWith "\n  " $ join
+    [ pure "HTTP request did not meet expectations"
+    , pure ""
+    , lines
+    , pure ""
+    , pure "Request:"
+    , indent 2 $ join
+        [ pure $ joinWith " "
+            [ either show unCustomMethod request.method
+            , request.url
+            ]
+        , map show request.headers
+        , fromFoldable request.content >>=
+            split (Pattern "\n") <<< case _ of
+              Request.ArrayView _ -> "<array view>"
+              Request.Blob _ -> "<blob>"
+              Request.Document _ -> "<document>"
+              Request.String s -> s
+              Request.FormData _ -> "<form data>"
+              Request.FormURLEncoded x -> show x
+              Request.Json json -> stringifyWithIndent 2 json
+        ]
+    ]
 
-instance Monoid RequestMatcherBox where
-  mempty = boxRequestMatcher Response.ignore
-    ( RequestMatcher
-        ( const $ Left $ MatcherError [ "Unexpected HTTP Request" ]
-        )
-    )
-
-boxRequestMatcher
+runRequestMatcher
   :: forall a
    . ResponseFormat a
   -> RequestMatcher (Either Error (Response a))
-  -> RequestMatcherBox
-boxRequestMatcher providedFormat (RequestMatcher matcher) =
-  RequestMatcherBox go
+  -> RequestBox
+  -> Aff Unit
+runRequestMatcher providedFormat (RequestMatcher matcher) (RequestBox f) = f go
   where
   go
     :: forall b
      . Request b
-    -> Either MatcherError (Either Error (Response b))
-  go request = bimap (_ <> requestInfo) (map unsafeCoerceResponse)
-    case request.responseFormat, providedFormat of
-      ArrayBuffer _, ArrayBuffer _ ->
-        matcher request
-      Blob _, Blob _ ->
-        matcher request
-      Document _, Document _ ->
-        matcher request
-      Json _, Json _ ->
-        matcher request
-      String _, String _ ->
-        matcher request
-      Ignore _, _ ->
-        matcher request
-      requiredFormat, _ -> Left $ MatcherError
-        [ "Provided response format: " <> toResponseType providedFormat
-        , "Does not match required response format: "
-            <> toResponseType requiredFormat
-        ]
+    -> AVar (Either Affjax.Error (Affjax.Response b))
+    -> Aff Unit
+  go request responseA = either
+    (throwError <<< error <<< renderMatcherError (RequestBox f))
+    (flip AVar.put responseA)
+    ( map (map unsafeCoerceResponse)
+        case request.responseFormat, providedFormat of
+          ArrayBuffer _, ArrayBuffer _ ->
+            matcher request
+          Blob _, Blob _ ->
+            matcher request
+          Document _, Document _ ->
+            matcher request
+          Json _, Json _ ->
+            matcher request
+          String _, String _ ->
+            matcher request
+          Ignore _, _ ->
+            matcher request
+          _, Ignore _ ->
+            matcher request
+          requiredFormat, _ -> Left $ MatcherError
+            [ "Provided response format: " <> toResponseType providedFormat
+            , "Does not match required response format: "
+                <> toResponseType requiredFormat
+            ]
+    )
     where
     toResponseType :: forall c. ResponseFormat c -> String
     toResponseType = case _ of
@@ -185,33 +205,6 @@ boxRequestMatcher providedFormat (RequestMatcher matcher) =
 
     unsafeCoerceResponse :: Response a -> Response b
     unsafeCoerceResponse = unsafeCoerce
-
-    requestInfo = MatcherError $ join
-      [ pure "Request:"
-      , indent 2 $ join
-          [ pure $ joinWith " "
-              [ either show unCustomMethod request.method
-              , request.url
-              ]
-          , map show request.headers
-          , fromFoldable request.content >>=
-              split (Pattern "\n") <<< case _ of
-                Request.ArrayView _ -> "<array view>"
-                Request.Blob _ -> "<blob>"
-                Request.Document _ -> "<document>"
-                Request.String s -> s
-                Request.FormData _ -> "<form data>"
-                Request.FormURLEncoded x -> show x
-                Request.Json json -> stringifyWithIndent 2 json
-          ]
-      ]
-
-unboxRequestMatcher
-  :: RequestMatcherBox
-  -> forall a
-   . Request a
-  -> Either MatcherError (Either Error (Response a))
-unboxRequestMatcher (RequestMatcherBox f) = f
 
 derive instance Functor RequestMatcher
 
@@ -237,29 +230,14 @@ newtype MatcherError = MatcherError (Array String)
 derive instance Newtype MatcherError _
 derive instance Eq MatcherError
 derive instance Ord MatcherError
-
-instance Show MatcherError where
-  show = joinWith "\n  " <<< unwrap
-
-instance Semigroup MatcherError where
-  append = over2 MatcherError \a b -> a <> [ repeat 80 "=" ] <> b
-
-instance Monoid MatcherError where
-  mempty = MatcherError mempty
+derive newtype instance Semigroup MatcherError
+derive newtype instance Monoid MatcherError
 
 requestMatcher
   :: forall a
    . (forall content. Request content -> Either MatcherError a)
   -> RequestMatcher a
 requestMatcher = RequestMatcher
-
-runRequestMatcher
-  :: forall a
-   . RequestMatcher a
-  -> forall content
-   . Request content
-  -> Either MatcherError a
-runRequestMatcher (RequestMatcher matcher) = matcher
 
 expectMaybe
   :: forall a
@@ -279,21 +257,21 @@ expectCondition condition error = RequestMatcher \request ->
 expectMethod :: Method -> RequestMatcher Unit
 expectMethod method = expectCondition (eq (Left method) <<< _.method) $
   MatcherError
-    [ "Actual method does not match the following expected Method: " <> show
+    [ "✗ Actual method does not match the following expected Method: " <> show
         method
     ]
 
 expectCustomMethod :: CustomMethod -> RequestMatcher Unit
 expectCustomMethod method = expectCondition (eq (Right method) <<< _.method) $
   MatcherError
-    [ "Actual method does not match the following expected Method: " <>
+    [ "✗ Actual method does not match the following expected Method: " <>
         unCustomMethod method
     ]
 
 expectUri :: String -> RequestMatcher Unit
 expectUri uri = expectCondition ((uri == _) <<< _.url) $
   MatcherError
-    [ "Actual URI does not match the following expected URI: " <> uri ]
+    [ "✗ Actual URI does not match the following expected URI: " <> uri ]
 
 expectTextContent :: String -> RequestMatcher Unit
 expectTextContent = expectContent <<< Request.string
@@ -303,7 +281,7 @@ expectJsonContent = expectContent <<< Request.json <<< encodeJson
 
 expectNoContent :: RequestMatcher Unit
 expectNoContent = expectCondition (isNothing <<< _.content) $ MatcherError
-  [ "Expected no content but saw content" ]
+  [ "✗ Expected no content but saw content" ]
 
 expectContent :: RequestBody -> RequestMatcher Unit
 expectContent expected = RequestMatcher \request ->
@@ -313,23 +291,23 @@ expectContent expected = RequestMatcher \request ->
       | expectedJson == actualJson -> Right unit
       | otherwise -> Left $ join
           [ pure
-              "Actual JSON content does not match the following expected content:"
+              "✗ Actual JSON content does not match the following expected content:"
           , indent 2 $ split (Pattern "\n") (stringifyWithIndent 2 expectedJson)
           ]
     Just (Request.String actualStr), Request.String expectedStr
       | expectedStr == actualStr -> Right unit
       | otherwise -> Left $ join
           [ pure
-              "Actual text content does not match the following expected content:"
+              "✗ Actual text content does not match the following expected content:"
           , indent 2 $ split (Pattern "\n") expectedStr
           ]
     Just actualBody, expectedBody
       | toContentType actualBody == toContentType expectedBody -> Left
-          [ "Cannot compare " <> toContentType expectedBody <> " for equality"
+          [ "✗ Cannot compare " <> toContentType expectedBody <> " for equality"
           ]
       | otherwise -> Left
-          [ "Actual content type: " <> toContentType actualBody
-          , "Does not match expected content type: " <> toContentType
+          [ "✗ Actual content type: " <> toContentType actualBody
+          , "✗ Does not match expected content type: " <> toContentType
               expectedBody
           ]
   where

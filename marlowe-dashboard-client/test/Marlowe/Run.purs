@@ -7,7 +7,7 @@ import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
 import Control.Bind (bindFlipped)
 import Control.Concurrent.EventBus as EventBus
-import Control.Logger.Effect.Console as Console
+import Control.Logger.Effect.Test (testLogger)
 import Control.Monad.Error.Class
   ( class MonadError
   , class MonadThrow
@@ -22,10 +22,13 @@ import Control.Monad.Reader
   , asks
   , runReaderT
   )
+import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Control.Parallel (parallel, sequential)
 import Data.AddressBook as AddressBook
 import Data.Array (sortWith)
 import Data.Bifunctor (lmap)
+import Data.Bimap (Bimap)
+import Data.Bimap as Bimap
 import Data.DateTime (adjust)
 import Data.DateTime.Instant (Instant, fromDateTime, toDateTime)
 import Data.Foldable (for_)
@@ -36,13 +39,11 @@ import Data.List.Lazy as LL
 import Data.LocalContractNicknames (emptyLocalContractNicknames)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
 import Data.Time.Duration (Milliseconds, Minutes(..), Seconds(..), fromDuration)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Unfoldable (unfoldr)
 import Effect (Effect)
 import Effect.Aff (Aff, Error, bracket, error, finally, launchAff_)
-import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -63,13 +64,6 @@ import Store (mkStore)
 import Test.Control.Monad.Time (class MonadMockTime)
 import Test.Halogen (class MonadHalogenTest, runUITest)
 import Test.Marlowe.Run.Action.Types (WalletName)
-import Test.Network.HTTP
-  ( class MonadMockHTTP
-  , MatcherError
-  , RequestMatcherBox
-  , boxRequestMatcher
-  , unboxRequestMatcher
-  )
 import Test.Network.HTTP
   ( class MonadMockHTTP
   , RequestBox(..)
@@ -132,15 +126,15 @@ derive newtype instance
 
 instance MonadAff m => MonadMockHTTP (MarloweTestM m) where
   expectRequest responseFormat matcher = do
-    fallbackMatcher <- asks _.fallbackMatcher
-    liftAff do
-      fallback <- AVar.take fallbackMatcher
-      AVar.put
-        (fallback <> boxRequestMatcher responseFormat matcher)
-        fallbackMatcher
-  expectNextRequest responseFormat matcher = do
-    matchers <- asks _.nextMatchers
-    liftAff $ Queue.write matchers $ boxRequestMatcher responseFormat matcher
+    requests <- asks _.httpRequests
+    liftAff $ flip tailRecM 0 \tries ->
+      if tries > 3 then
+        throwError $ error $ "Expected an HTTP request to be made"
+      else
+        Queue.tryRead requests >>= case _ of
+          Nothing -> pure $ Loop $ tries + 1
+          Just request ->
+            Done <$> runRequestMatcher responseFormat matcher request
 
 instance (MonadEffect m, MonadThrow Error m) => MonadMockTime (MarloweTestM m) where
   advanceTime delta = do
@@ -169,7 +163,6 @@ runMarloweTestM (MarloweTestM m) = runReaderT m
 
 mkTestEnv :: Aff (Env /\ Coenv /\ Emitter Error)
 mkTestEnv = do
-  fallbackMatcher <- liftAff $ AVar.new mempty
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointSemaphores <- liftAff $ AVar.new Map.empty
   createListeners <- liftAff $ AVar.new Map.empty
@@ -180,13 +173,15 @@ mkTestEnv = do
   pabWebsocketOut <- liftEffect $ HS.create
   errors <- liftEffect $ HS.create
   pabWebsocketOutQueue <- Queue.new
-  nextMatchers <- Queue.new
+  httpRequests <- Queue.new
+  logMessages <- Queue.new
   sub <- liftEffect $ HS.subscribe pabWebsocketOut.emitter \msg ->
     launchAff_ $ Queue.write pabWebsocketOutQueue msg
   localStorage <- liftEffect $ Ref.new Map.empty
   currentTime <- liftEffect $ Ref.new unixEpoch
   nextClockId <- liftEffect $ Ref.new 0
   clocks <- liftEffect $ Ref.new Map.empty
+  wallets <- liftEffect $ Ref.new Bimap.empty
   let
     sources =
       { pabWebsocket: pabWebsocketIn.emitter
@@ -201,7 +196,7 @@ mkTestEnv = do
       throwError e
     env = Env
       { contractStepCarouselSubscription
-      , logger: Console.structuredLogger
+      , logger: testLogger logMessages
       , endpointSemaphores
       , createListeners
       , applyInputListeners
@@ -209,15 +204,10 @@ mkTestEnv = do
       , followerBus
       , sinks
       , sources
-      , handleRequest: HandleRequest \request -> marshallErrors do
-          nextMatcher <- Queue.tryRead nextMatchers
-          fallbackMatcher' <- AVar.read fallbackMatcher
-          let
-            matcher = fromMaybe fallbackMatcher' nextMatcher
-
-          case unboxRequestMatcher matcher request of
-            Left error -> failMultiline error
-            Right response -> pure response
+      , handleRequest: HandleRequest \request -> marshallErrors $ liftAff do
+          responseA <- AVar.empty
+          Queue.write httpRequests $ RequestBox \next -> next request responseA
+          AVar.take responseA
       , localStorage:
           { getItem: \(Key key) -> Map.lookup key <$> Ref.read localStorage
           , setItem: \(Key key) item ->
@@ -236,10 +226,10 @@ mkTestEnv = do
       , clocks
       , pabWebsocketIn: pabWebsocketIn.listener
       , pabWebsocketOut: pabWebsocketOutQueue
-      , nextMatchers
-      , fallbackMatcher
+      , httpRequests
       , dispose: do
           HS.unsubscribe sub
+      , wallets
       }
   pure $ env /\ coenv /\ errors.emitter
 
@@ -247,20 +237,17 @@ mkTestEnv = do
 -- become sinks, sinks sources).
 type Coenv =
   { pabWebsocketOut :: Queue CombinedWSStreamToServer
-  , fallbackMatcher :: AVar RequestMatcherBox
-  , nextMatchers :: Queue RequestMatcherBox
+  , httpRequests :: Queue RequestBox
   , pabWebsocketIn :: Listener (FromSocket CombinedWSStreamToClient)
   , currentTime :: Ref Instant
   , clocks :: Ref (Map Int TestClock)
   , localStorage :: Ref (Map String String)
   , dispose :: Effect Unit
+  , wallets :: Ref (Bimap WalletName String)
   }
 
 -- Invariant: The instants are in ascending order
 type TestClock = (List (Tuple Instant (Effect Unit)))
-
-failMultiline :: forall m a. MonadThrow Error m => MatcherError -> m a
-failMultiline = throwError <<< error <<< show
 
 makeClock
   :: Ref Instant

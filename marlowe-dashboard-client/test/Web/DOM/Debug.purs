@@ -22,8 +22,8 @@ logTestingPlaygroundURL =
   liftEffect <<< runEffectFn1 _logTestingPlaygroundURL =<< getContainer
 
 debugElement :: forall m. DebugWarning => MonadTest m => Element -> m Unit
-debugElement = liftEffect <<< runEffectFn1 _debugElement
+debugElement element = liftEffect $ runEffectFn1 _debugElement element
 
 debugElements
   :: forall m. DebugWarning => MonadTest m => Array Element -> m Unit
-debugElements = liftEffect <<< runEffectFn1 _debugElements
+debugElements elements = liftEffect $ runEffectFn1 _debugElements elements

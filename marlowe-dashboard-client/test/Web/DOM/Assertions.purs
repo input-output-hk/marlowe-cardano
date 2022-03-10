@@ -2,7 +2,7 @@ module Test.Web.DOM.Assertions where
 
 import Prelude
 
-import Control.Monad.Error.Class (class MonadError)
+import Control.Monad.Error.Class (class MonadThrow)
 import Data.Maybe (Maybe(..))
 import Data.String (toLower)
 import Effect.Aff (Error, error, throwError)
@@ -21,7 +21,7 @@ import Web.HTML.HTMLButtonElement as ButtonElement
 shouldHaveText
   :: forall node m
    . IsNode node
-  => MonadError Error m
+  => MonadThrow Error m
   => MonadEffect m
   => node
   -> String
@@ -31,7 +31,7 @@ shouldHaveText node text =
 
 shouldHaveId
   :: forall element m
-   . MonadError Error m
+   . MonadThrow Error m
   => IsElement element
   => MonadEffect m
   => element
@@ -42,7 +42,7 @@ shouldHaveId element expected =
 
 shouldHaveTagName
   :: forall element m
-   . MonadError Error m
+   . MonadThrow Error m
   => IsElement element
   => element
   -> String
@@ -52,7 +52,7 @@ shouldHaveTagName element expected =
 
 shouldHaveClass
   :: forall element m
-   . MonadError Error m
+   . MonadThrow Error m
   => MonadEffect m
   => IsElement element
   => element
@@ -65,7 +65,7 @@ shouldHaveClass element className = liftEffect do
 
 shouldNotHaveClass
   :: forall element m
-   . MonadError Error m
+   . MonadThrow Error m
   => MonadEffect m
   => IsElement element
   => element
@@ -78,7 +78,7 @@ shouldNotHaveClass element className = liftEffect do
 
 shouldNotBeDisabled
   :: forall m
-   . MonadError Error m
+   . MonadThrow Error m
   => MonadEffect m
   => HTMLButtonElement
   -> m Unit
@@ -88,7 +88,7 @@ shouldNotBeDisabled element = do
 
 shouldBeDisabled
   :: forall m
-   . MonadError Error m
+   . MonadThrow Error m
   => MonadEffect m
   => HTMLButtonElement
   -> m Unit
@@ -102,7 +102,7 @@ shouldCast
   => IsNode el2
   => DOMType el1
   => DOMType el2
-  => MonadError Error m
+  => MonadThrow Error m
   => MonadEffect m
   => el1
   -> m el2

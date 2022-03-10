@@ -83,6 +83,7 @@ data ARIARole
   | Listitem
   | Log
   | Main
+  | Mark
   | Marquee
   | Math
   | Menu
@@ -218,6 +219,7 @@ instance Show ARIARole where
   show Listitem = "listitem"
   show Log = "log"
   show Main = "main"
+  show Mark = "mark"
   show Marquee = "marquee"
   show Math = "math"
   show Menu = "menu"

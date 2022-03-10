@@ -32,7 +32,6 @@ import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
 import Data.Array as Array
-import Data.Compactable (compact)
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
@@ -79,6 +78,8 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id, src)
+import Halogen.HTML.Properties.ARIA (role)
+import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
@@ -204,7 +205,7 @@ dashboardCard { addressBook, wallet } state = case view _card state of
       div
         [ classNames $ Css.sidebarCardOverlay cardOpen ]
         [ div
-            [ classNames $ Css.sidebarCard cardOpen ]
+            [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
             $
               [ a
                   [ classNames [ "absolute", "top-4", "right-4" ]
@@ -282,15 +283,22 @@ dashboardHeader walletNickname menuOpen =
             ]
         , nav
             [ classNames [ "flex", "items-center" ] ]
-            [ navigation (OpenCard ContactsCard) Icon.Contacts "contactsHeader"
-            , tooltip "Contacts" (RefId "contactsHeader") Bottom
-            , navigation (OpenCard TutorialsCard) Icon.Tutorials
+            [ navigation
+                (OpenCard ContactsCard)
+                Icon.Contacts
+                "contactsHeader"
+                "Contacts"
+            , navigation
+                (OpenCard TutorialsCard)
+                Icon.Tutorials
                 "tutorialsHeader"
-            , tooltip "Tutorials" (RefId "tutorialsHeader") Bottom
+                "Tutorials"
             , a
                 [ classNames [ "ml-6", "font-bold", "text-sm" ]
                 , id "currentWalletHeader"
                 , onClick_ $ OpenCard CurrentWalletCard
+                , href "#"
+                , ARIA.label "My wallet"
                 ]
                 [ span
                     [ classNames $
@@ -325,7 +333,7 @@ dashboardHeader walletNickname menuOpen =
                         [ text walletNickname ]
                     ]
                 ]
-            , tooltip "Your wallet" (RefId "currentWalletHeader") Bottom
+            , tooltip "My wallet" (RefId "currentWalletHeader") Bottom
             , a
                 [ classNames [ "ml-4", "md:hidden" ]
                 , onClick_ ToggleMenu
@@ -335,13 +343,17 @@ dashboardHeader walletNickname menuOpen =
         ]
     ]
   where
-  navigation action icon' refId =
-    a
-      [ classNames [ "ml-6", "font-bold", "text-sm" ]
-      , id refId
-      , onClick_ action
+  navigation action icon' refId label =
+    div_
+      [ a
+          [ classNames [ "ml-6", "font-bold", "text-sm" ]
+          , id refId
+          , onClick_ action
+          , ARIA.label label
+          ]
+          [ icon_ icon' ]
+      , tooltip label (RefId refId) Bottom
       ]
-      [ icon_ icon' ]
 
 mobileMenu :: forall p. Boolean -> HTML p Action
 mobileMenu menuOpen =
@@ -386,18 +398,15 @@ dashboardBreadcrumb mSelectedContractStringId =
     [ nav [ classNames $ Css.maxWidthContainer <> [ "flex", "gap-2", "py-2" ] ]
         $
           [ a
-              ( compact
-                  [ Just $ id "goToDashboard"
-                  , mSelectedContractStringId $> onClick
-                      (const $ SelectContract Nothing)
-                  , Just
-                      $ classNames
-                          if (isJust mSelectedContractStringId) then
-                            [ "text-lightpurple", "font-bold" ]
-                          else
-                            [ "cursor-default" ]
-                  ]
-              )
+              [ id "goToDashboard"
+              , onClick $ const $ SelectContract Nothing
+              , href "#"
+              , classNames
+                  if (isJust mSelectedContractStringId) then
+                    [ "text-lightpurple", "font-bold" ]
+                  else
+                    [ "cursor-default" ]
+              ]
               [ text "Dashboard" ]
           ]
             <> case mSelectedContractStringId of
