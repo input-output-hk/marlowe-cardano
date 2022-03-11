@@ -160,7 +160,7 @@ marlowe-cli template zcb --minimum-ada "$MINIMUM_ADA"               \
 
 echo "## Transaction 1. Create the Contract by Providing the Minimum ADA."
 
-echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
+echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it will require."
 
 marlowe-cli run initialize "${MAGIC[@]}"                     \
                            --slot-length "$SLOT_LENGTH"      \
@@ -183,7 +183,7 @@ ROLE_ADDRESS=$(jq -r '.rolesValidator.address' tx-1.marlowe)
 
 echo "The role address is "'`'"$ROLE_ADDRESS"'`.'
 
-echo "The lender $LENDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace requiredd for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
+echo "The lender $LENDER_NAME submits the transaction along with the minimum ADA $MINIMUM_ADA lovelace required for the contract's initial state. Submitting with the "'`'"--print-stats"'`'" switch reveals the network fee for the contract, the size of the transaction, and the execution requirements, relative to the protocol limits."
 
 TX_1=$(
 marlowe-cli run execute "${MAGIC[@]}"                             \

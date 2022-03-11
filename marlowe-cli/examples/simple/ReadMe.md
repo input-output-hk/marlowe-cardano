@@ -219,7 +219,7 @@ marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
 
 ## Transaction 1. Create the Contract by Providing the Minimum ADA
 
-First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require.
+First we create a `.marlowe` file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it will require.
 
 ```
 marlowe-cli run initialize "${MAGIC[@]}"                 \
