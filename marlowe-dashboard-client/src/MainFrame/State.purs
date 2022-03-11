@@ -2,12 +2,30 @@ module MainFrame.State (mkMainFrame, handleAction) where
 
 import Prologue
 
-import API.Lenses (_cicContract, _cicCurrentState, _cicDefinition, _cicStatus, _observableState)
+import API.Lenses
+  ( _cicContract
+  , _cicCurrentState
+  , _cicDefinition
+  , _cicStatus
+  , _observableState
+  )
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe (class ManageMarlowe, subscribeToPlutusApp, subscribeToWallet, unsubscribeFromPlutusApp, unsubscribeFromWallet)
-import Capability.MarloweStorage (class ManageMarloweStorage, getWallet, updateWallet)
+import Capability.Marlowe (class ManageMarlowe)
+import Capability.MarloweStorage
+  ( class ManageMarloweStorage
+  , getWallet
+  , updateWallet
+  )
+import Capability.PAB
+  ( class ManagePAB
+  , onNewActiveEndpoints
+  , subscribeToPlutusApp
+  , subscribeToWallet
+  , unsubscribeFromPlutusApp
+  , unsubscribeFromWallet
+  )
 import Capability.PAB (activateContract, getWalletContractInstances) as PAB
-import Capability.PAB (class ManagePAB, onNewActiveEndpoints)
+import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
@@ -33,7 +51,13 @@ import Data.Lens (assign, lens, preview, set, use, view, (^.), (^?))
 import Data.Lens.Extra (peruse)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Data.PABConnectedWallet (PABConnectedWallet, _companionAppId, _marloweAppId, _syncStatus, connectWallet)
+import Data.PABConnectedWallet
+  ( PABConnectedWallet
+  , _companionAppId
+  , _marloweAppId
+  , _syncStatus
+  , connectWallet
+  )
 import Data.PABConnectedWallet as Connected
 import Data.Time.Duration (Minutes(..), Seconds(..))
 import Data.Traversable (traverse)
@@ -45,19 +69,52 @@ import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
-import Env (Env, _applyInputListeners, _createListeners, _redeemListeners, _regularPollInterval, _sources, _syncPollInterval)
+import Env
+  ( Env
+  , _applyInputListeners
+  , _createListeners
+  , _redeemListeners
+  , _regularPollInterval
+  , _sources
+  , _syncPollInterval
+  )
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore, emitSelected, getStore, updateStore)
+import Halogen.Store.Monad
+  ( class MonadStore
+  , emitSelected
+  , getStore
+  , updateStore
+  )
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
-import Language.Marlowe.Client (ContractHistory, EndpointResponse(..), MarloweEndpointResult(..))
-import MainFrame.Lenses (_addressBook, _dashboardState, _store, _subState, _tzOffset, _webSocketStatus, _welcomeState)
-import MainFrame.Types (Action(..), ChildSlots, Msg, Query(..), Slice, State, WebSocketStatus(..))
+import Language.Marlowe.Client
+  ( ContractHistory
+  , EndpointResponse(..)
+  , MarloweEndpointResult(..)
+  )
+import MainFrame.Lenses
+  ( _addressBook
+  , _dashboardState
+  , _store
+  , _subState
+  , _tzOffset
+  , _webSocketStatus
+  , _welcomeState
+  )
+import MainFrame.Types
+  ( Action(..)
+  , ChildSlots
+  , Msg
+  , Query(..)
+  , Slice
+  , State
+  , WebSocketStatus(..)
+  )
 import MainFrame.View (render)
 import Marlowe.Client (getContract, getMarloweParams)
 import Marlowe.Deinstantiate (findTemplate)
@@ -68,15 +125,27 @@ import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient(..), ContractInstanceClientState)
-import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient, InstanceStatusToClient(..)) as PAB
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient(..)
+  , ContractInstanceClientState
+  )
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient
+  , InstanceStatusToClient(..)
+  ) as PAB
 import Store (_contracts, _wallet)
 import Store as Store
 import Store.Contracts (emptyContractStore)
 import Store.Wallet (WalletStore(..), _Connected, _connectedWallet, _walletId)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (ajaxErrorToast, errorToast, explainableErrorToast, infoToast, successToast)
+import Toast.Types
+  ( ajaxErrorToast
+  , errorToast
+  , explainableErrorToast
+  , infoToast
+  , successToast
+  )
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
 import WebSocket.Support (FromSocket)
@@ -99,6 +168,7 @@ mkMainFrame
   => MonadStore Store.Action Store.Store m
   => MonadTime m
   => ManageMarlowe m
+  => FollowerApp m
   => Toast m
   => MonadClipboard m
   => MainFrameLoop m
@@ -148,6 +218,7 @@ handleQuery
   => MonadTime m
   => MonadAsk Env m
   => ManageMarlowe m
+  => FollowerApp m
   => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m
@@ -195,6 +266,7 @@ handleAction
   => MonadTime m
   => MonadLogger StructuredLog m
   => ManageMarlowe m
+  => FollowerApp m
   => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
@@ -361,12 +433,12 @@ handleAction (RedeemFailed reqId error) = void $ runMaybeT $ do
   liftEffect $ traverse_ HS.unsubscribe subscription
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
-  let
-    marloweParams = getMarloweParams contractHistory
   {- [UC-CONTRACT-1][3] Start a contract -}
   {- [UC-CONTRACT-3][1] Apply an input to a contract -}
   FollowerApp.onNewObservableState plutusAppId contractHistory
   {- [UC-CONTRACT-4][0] Redeem payments -}
+  let
+    marloweParams = getMarloweParams contractHistory
   handleAction
     $ DashboardAction
     $ Dashboard.RedeemPayments marloweParams

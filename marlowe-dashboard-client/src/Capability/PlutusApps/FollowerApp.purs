@@ -1,21 +1,128 @@
 module Capability.PlutusApps.FollowerApp
   ( class FollowerApp
-  , followContract
+  , FollowContractError
+  , ensureFollowerContract
+  , followNewContract
   , onNewObservableState
   ) where
 
 import Prologue
 
+import AppM (AppM)
+import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
+import Capability.PAB as PAB
+import Control.Concurrent.EventBus as EventBus
+import Control.Monad.Cont (lift)
+import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
+import Control.Monad.Reader (class MonadAsk, asks)
+import Data.Argonaut (encodeJson)
+import Data.Either (either)
+import Data.Lens (view, (^.))
+import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Traversable (for_)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Data.Tuple.Nested (type (/\), (/\))
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
+import Env (Env, _followerBus)
+import Errors (class Debuggable, class Explain, debuggable)
+import Halogen (HalogenM)
+import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
+import Marlowe.Semantics (MarloweParams)
+import MarloweContract (MarloweContract(..))
 import Store as Store
+import Store.Contracts (getFollowerContract)
+import Text.Pretty (text)
+import Types (JsonAjaxError)
 
-class FollowerApp m where
-  followContract :: m Unit
+data FollowContractError
+  = ActivateContractError JsonAjaxError
+  | FollowContractError JsonAjaxError
+
+instance Explain FollowContractError where
+  explain (ActivateContractError _) = text "Could not activate the contract"
+  explain (FollowContractError _) = text "Could not follow the contract"
+
+instance Debuggable FollowContractError where
+  debuggable (ActivateContractError error) = encodeJson
+    { type: "FollowContractError.ActivateContractError"
+    , error: debuggable error
+    }
+  debuggable (FollowContractError error) = encodeJson
+    { type: "FollowContractError.FollowContractError"
+    , error: debuggable error
+    }
+
+class ManagePAB m <= FollowerApp m where
+  -- This function makes sure that there is a follower contract for the specified
+  -- marloweParams. It tries to see if we are already following, and if not, it creates
+  -- a new one.
+  ensureFollowerContract
+    :: PABConnectedWallet
+    -> MarloweParams
+    -> m (Either FollowContractError PlutusAppId)
+  -- This function follows a new marlowe contract and returns an await function so
+  -- that the caller knows when the contract is correctly followed
+  followNewContract
+    :: PABConnectedWallet
+    -> MarloweParams
+    -> m (Aff (Either FollowContractError (PlutusAppId /\ ContractHistory)))
+
+instance manageMarloweAppM :: FollowerApp AppM where
+  ensureFollowerContract wallet marloweParams = do
+    contracts <- _.contracts <$> getStore
+    case getFollowerContract marloweParams contracts of
+      -- If we already have a follower contract, we don't need to do anything
+      Just plutusAppId -> pure $ Right plutusAppId
+      -- If we don't, lets activate and follow one
+      Nothing -> activateAndfollowContract wallet marloweParams
+
+  followNewContract wallet marloweParams = do
+    mFollowAppId <- activateAndfollowContract wallet marloweParams
+    bus <- asks $ view _followerBus
+    pure $ either
+      (pure <<< Left)
+      ( \followAppId ->
+          EventBus.subscribeOnce bus.emitter followAppId
+            <#> (\history -> Right $ followAppId /\ history)
+      )
+      mFollowAppId
+
+instance FollowerApp m => FollowerApp (HalogenM state action slots msg m) where
+  ensureFollowerContract wallet marloweParams = lift $ ensureFollowerContract
+    wallet
+    marloweParams
+  followNewContract wallet marloweParams = lift $ followNewContract
+    wallet
+    marloweParams
+
+activateAndfollowContract
+  :: forall m
+   . ManagePAB m
+  => PABConnectedWallet
+  -> MarloweParams
+  -> m (Either FollowContractError PlutusAppId)
+activateAndfollowContract wallet marloweParams = runExceptT do
+  let walletId = wallet ^. _walletId
+  -- Create a new instance of a MarloweFollower plutus contract
+  followAppId <- withExceptT ActivateContractError
+    $ ExceptT
+    $ PAB.activateContract
+        MarloweFollower
+        walletId
+  -- Tell it to follow the Marlowe contract via its MarloweParams
+  withExceptT FollowContractError
+    $ ExceptT
+    $ PAB.invokeEndpoint
+        followAppId
+        "follow"
+        marloweParams
+  -- Subscribe to notifications
+  lift $ subscribeToPlutusApp followAppId
+  pure followAppId
 
 {- [UC-CONTRACT-1][4] Start a new marlowe contract
    [UC-CONTRACT-2][X] Receive a role token for a marlowe contract
@@ -29,10 +136,14 @@ about its initial state through the WebSocket. We potentially use that to change
 onNewObservableState
   :: forall m
    . MonadStore Store.Action Store.Store m
+  => MonadAsk Env m
   => PlutusAppId
   -> ContractHistory
   -> m Unit
 onNewObservableState followerAppId contractHistory = do
+  bus <- asks $ view _followerBus
+  liftEffect $ EventBus.notify bus.listener followerAppId contractHistory
+
   let
     mMetadata = _.metaData <$> (findTemplate $ getContract contractHistory)
   -- FIXME-3208 I don't like that this step requires to find the metadata again

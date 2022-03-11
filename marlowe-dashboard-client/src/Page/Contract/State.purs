@@ -24,7 +24,7 @@ import Data.ContractUserParties (contractUserParties, getParticipants)
 import Data.DateTime.Instant (Instant)
 import Data.Foldable (for_)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
+import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, use, (^.))
 import Data.Lens.Extra (peruse)
 import Data.List (toUnfoldable)
 import Data.LocalContractNicknames (insertContractNickname)
@@ -196,9 +196,18 @@ handleAction (Receive { input, context }) = do
   case input.contractIndex of
     Started marloweParams -> void $ runMaybeT do
       executionState <- hoistMaybe $ getContract marloweParams context.contracts
-      modifying (_contract <<< _Started) $
-        regenerateStepCards context.currentTime
-          <<< set _executionState executionState
+      currentContractState <- use _contract
+      case currentContractState of
+        -- If we are transitioning from a Starting to a Started contract we recreate the Contract initial
+        -- state
+        Starting _ -> assign _contract $ mkInitialState context.currentTime
+          input.wallet
+          executionState
+        -- If we are just receiving a new input but we are already in a Started state, then we just
+        -- update the execution state
+        Started _ -> modifying (_contract <<< _Started) $
+          regenerateStepCards context.currentTime
+            <<< set _executionState executionState
     _ -> pure unit
 handleAction (SetNickname nickname) =
   withStarted \{ executionState: { marloweParams } } -> do

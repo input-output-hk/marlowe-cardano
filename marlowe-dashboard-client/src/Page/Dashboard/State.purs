@@ -8,12 +8,13 @@ import Prologue
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe
-  ( class ManageMarlowe
-  , followContract
-  , initializeContract
-  )
+import Capability.Marlowe (class ManageMarlowe, initializeContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.PlutusApps.FollowerApp
+  ( class FollowerApp
+  , ensureFollowerContract
+  , followNewContract
+  )
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
@@ -31,12 +32,14 @@ import Control.Logger.Structured (StructuredLog)
 import Control.Logger.Structured as Logger
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk)
+import Data.ContractStatus (ContractStatus(..))
 import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Lens (assign, modifying, set, use)
 import Data.Map (filterKeys, toUnfoldable)
+import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
@@ -135,6 +138,7 @@ handleAction
   => MonadTime m
   => ManageMarloweStorage m
   => ManageMarlowe m
+  => FollowerApp m
   => MainFrameLoop m
   => MonadStore Store.Action Store.Store m
   => Toast m
@@ -209,7 +213,7 @@ handleAction { wallet, contracts } (UpdateFollowerApps companionAppState) = do
     _walletCompanionStatus
     WalletCompanionSynced
   for_ newContractsArray \(marloweParams /\ _) ->
-    followContract wallet marloweParams
+    ensureFollowerContract wallet marloweParams
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -280,13 +284,22 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
           -- We reset the template component (TODO: this wont be needed after the SCP-3464 refactor)
           assign _templateState Template.initialState
           marloweParams <- liftAff awaitContractCreation
-          ajaxFollow <- followContract wallet marloweParams
+          awaitContractFollow <- followNewContract wallet marloweParams
+          ajaxFollow <- liftAff awaitContractFollow
+
           case ajaxFollow of
             Left err -> do
               addToast $ explainableErrorToast "Can't follow the contract"
                 err
               Logger.error "Can't follow the contract: " err
             Right (followerId /\ history) -> do
+              -- TODO: Ideally I want this updateStore to live under the FollowerApp capability
+              --       or the ManageMarlowe capability, but in order to do that I need to see how
+              --       feasible is to add a Co-routine.
+              --       After we submit a new contract from the capability, we should yield the flow
+              --       to the UI here so we can show the toast message, then we should give back control
+              --       to the capability via the awaitContractCreation which should do this updateStore
+              --       and then yield back here so we can do the second toast
               updateStore $
                 Store.SwapStartingToStartedContract
                   newContract
@@ -294,6 +307,16 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
                   followerId
                   history
               addToast $ successToast "Contract initialised."
+              -- If the UI is showing the Starting contract we change the index to
+              -- show the newly Started contract
+              let
+                NewContract newContractUUID _ _ = newContract
+              mSelectedContract <- use _selectedContractIndex
+              when (mSelectedContract == (Just $ Starting newContractUUID))
+                do
+                  assign _selectedContractIndex
+                    $ Just
+                    $ Started marloweParams
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
