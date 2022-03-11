@@ -157,10 +157,9 @@ echo "## The Contract"
 
 echo "The contract has a minimum time and a timeout."
 
-MINIMUM_TIME="$NOW"
 TIMEOUT_TIME="$((NOW+24*HOUR))"
 
-echo "The contract starts no sooner than $(date -u -R -d @$((MINIMUM_TIME/1000))) and will automatically close at $(date -u -R -d @$((TIMEOUT_TIME/1000)))."
+echo "The contract will automatically close at $(date -u -R -d @$((TIMEOUT_TIME/1000)))."
 
 echo "The contract also involves various payments."
 
