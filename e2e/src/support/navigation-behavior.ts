@@ -48,23 +48,12 @@ export const getCurrentPageId = (
 ): PageId => {
 
   const { pagesConfig } = globalConfig;
-
-  console.log("pagesConfig ", pagesConfig);
-
   const pageConfigPageIds = Object.keys(pagesConfig);
-
-  console.log("pageConfigPageIds ", pageConfigPageIds);
-
   const { pathname, hash } = new URL(page.url());
   const currentPath = `${pathname}${hash}`;
-  console.log("pageConfigPageIds ", pageConfigPageIds);
-
-  console.log("CURRENT PATH", currentPath);
   const currentPageId = pageConfigPageIds.find(pageId =>
     pathMatchesPageId(currentPath, pageId, globalConfig)
   );
-
-  console.log("currentPageId ", currentPageId);
 
   if (!currentPageId) {
     throw Error(

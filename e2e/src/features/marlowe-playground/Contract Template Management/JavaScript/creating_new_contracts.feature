@@ -12,7 +12,7 @@ Feature: Creating a new contract with Javascript
     And the "editor header" should contain "New Project" text
     # And the "playground editor" should contain "empty javascript contract code" text
 
-    # When I enter "Javascript Escrow Contract Code" into the "playground editor"
+    When I fill in the "playground editor" input with "Close"
     # And I click "Compile" button
 
     # Then the "Send To Simulator" button should be "enabled"

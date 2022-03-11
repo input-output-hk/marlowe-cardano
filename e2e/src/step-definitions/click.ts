@@ -30,7 +30,6 @@ When(
         await clickElement(page, elementIdentifier);
       }
 
-      console.log("PAGE URL ", page.url())
       return result;
       // const locator = await queries.getByRole(document, 'button', { name: elementKey })
     })
