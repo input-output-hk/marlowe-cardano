@@ -53,6 +53,7 @@ import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
 import Plutus.ChainIndex.Tx (ChainIndexTx, ChainIndexTxOutputs (..), citxCardanoTx, citxData, citxInputs, citxOutputs,
                              citxScripts, citxTxId, citxValidRange)
 import Plutus.Contract (Contract, ownPaymentPubKeyHash)
+import Plutus.Contract.Error (AsContractError)
 import Plutus.Contract.Request (txsAt, utxosTxOutTxAt, utxosTxOutTxFromTx)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol (..), Datum (..), Extended (..),
@@ -60,7 +61,6 @@ import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol (..),
                              UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
 import Plutus.V1.Ledger.Scripts (ScriptHash (..))
 import Plutus.V1.Ledger.Tx (txInRef)
-import Wallet.Types (AsContractError)
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo (Data (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo (ScriptPurpose (Spending), ValidatedTx (..), body, indexedRdmrs,

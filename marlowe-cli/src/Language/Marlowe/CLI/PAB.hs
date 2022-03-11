@@ -164,7 +164,7 @@ runContract contract proxy reporter loop PabClient{..} runApi runWs walletId out
         $ ContractActivationArgs
           {
             caID     = contract
-          , caWallet = Just . Wallet $ walletId
+          , caWallet = Just $ Wallet Nothing walletId
           }
     maybeWriteJson outputFile instanceId
     let

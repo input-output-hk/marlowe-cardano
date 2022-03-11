@@ -105,7 +105,10 @@ instance ManagePAB AppM where
     PAB.postApiContractActivate
       $ ContractActivationArgs
           { caID: contractActivationId
-          , caWallet: Just $ Wallet { getWalletId: WalletId.toString wallet }
+          , caWallet: Just $ Wallet
+              { prettyWalletName: Nothing
+              , getWalletId: WalletId.toString wallet
+              }
           }
 
   deactivateContract =

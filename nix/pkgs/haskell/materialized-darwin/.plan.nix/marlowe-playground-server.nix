@@ -113,6 +113,7 @@
             (hsPkgs."marlowe-actus" or (errorHandler.buildDepError "marlowe-actus"))
             (hsPkgs."monad-logger" or (errorHandler.buildDepError "monad-logger"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."plutus-contract" or (errorHandler.buildDepError "plutus-contract"))
             (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."purescript-bridge" or (errorHandler.buildDepError "purescript-bridge"))

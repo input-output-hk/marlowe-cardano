@@ -181,6 +181,9 @@ instance HasBridge MyBridge where
 dto :: SumType 'Haskell -> SumType 'Haskell
 dto = equal . genericShow . argonaut
 
+dtoNoShow :: SumType 'Haskell -> SumType 'Haskell
+dtoNoShow = equal . argonaut
+
 myTypes :: [SumType 'Haskell]
 myTypes = dto <$>
     [ mkSumType @StreamToServer,
@@ -190,16 +193,21 @@ myTypes = dto <$>
       mkSumType @CreatePostData,
       mkSumType @GetTotalFundsResponse,
       mkSumType @(EndpointResponse A E),
-      mkSumType @MarloweError,
       mkSumType @MarloweEndpointResult,
       mkSumType @WalletInfo,
       mkSumType @ContractHistory
+    ]
+
+myTypesNoShow :: [SumType 'Haskell]
+myTypesNoShow = dtoNoShow <$>
+    [ mkSumType @MarloweError
     ]
 
 marloweRunSettings :: Settings
 marloweRunSettings = defaultSettings
   & set apiModuleName "Marlowe.Run.Server"
   & addTypes myTypes
+  & addTypes myTypesNoShow
 
 pabSettings :: Settings
 pabSettings = defaultSettings
@@ -240,6 +248,8 @@ pabSettings = defaultSettings
     , ("Plutus.Contract.Effects", "ActiveEndpoint")
     , ("Plutus.Contract.Effects", "PABReq")
     , ("Plutus.Contract.Effects", "PABResp")
+    , ("Plutus.Contract.Error", "ContractError")
+    , ("Plutus.Contract.StateMachine", "SMContractError")
     ]
 
 argParser :: Parser FilePath

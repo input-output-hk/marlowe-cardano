@@ -58,8 +58,6 @@ import Ledger.Ada (adaSymbol, adaToken, adaValueOf, lovelaceValueOf)
 import Ledger.Address (Address, StakePubKeyHash (StakePubKeyHash), pubKeyHashAddress, scriptHashAddress)
 import Ledger.Constraints
 import qualified Ledger.Constraints as Constraints
-import Ledger.Constraints.OffChain (UnbalancedTx (..))
-import Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
 import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange)
@@ -69,7 +67,8 @@ import qualified Ledger.Typed.Scripts as Typed
 import qualified Ledger.Typed.Tx as Typed
 import qualified Ledger.Value as Val
 import Plutus.ChainIndex (ChainIndexTx (..), _ValidTx, citxOutputs)
-import Plutus.Contract as Contract
+import Plutus.Contract as Contract hiding (OtherContractError, _OtherContractError)
+import qualified Plutus.Contract as Contract (ContractError (..))
 import Plutus.Contract.Unsafe (unsafeGetSlotConfig)
 import Plutus.Contract.Wallet (getUnspentOutput)
 import qualified Plutus.Contracts.Currency as Currency
@@ -361,7 +360,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:create] lookups = " <> show lookups
         -- Create the Marlowe contract and pay the role tokens to the owners
-        utx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx lookups tx)
+        utx <- either (throwing _ConstraintResolutionContractError) pure (Constraints.mkTx lookups tx)
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:create] utx = " <> show utx
         submitTxConfirmed utx
@@ -425,7 +424,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                   <> ownAddressLookups
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:redeem] lookups = " <> show lookups
-            tx <- either (throwing _ConstraintResolutionError) pure (Constraints.mkTx @Void lookups constraints)
+            tx <- either (throwing _ConstraintResolutionContractError) pure (Constraints.mkTx @Void lookups constraints)
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:redeem] tx = " <> show tx
             _ <- submitTxConfirmed $ Constraints.adjustUnbalancedTx tx
@@ -546,7 +545,7 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $ do
         logInfo $ "[DEBUG:setupMarloweParams] txOutRef = " <> show txOutRef
         txOut <-
           maybe
-            (throwing _ContractError . OtherError . T.pack $ show txOutRef <> " was not found on the chain index. Please verify that plutus-chain-index is 100% synced.")
+            (throwing _ContractError . Contract.OtherContractError . T.pack $ show txOutRef <> " was not found on the chain index. Please verify that plutus-chain-index is 100% synced.")
             pure
             =<< txOutFromRef txOutRef
         -- TODO: Move to debug log.
@@ -571,7 +570,7 @@ setupMarloweParams owners roles = mapError (review _MarloweError) $ do
     else do
         let missingRoles = roles `Set.difference` Set.fromList (AssocMap.keys owners)
         let message = T.pack $ "You didn't specify owners of these roles: " <> show missingRoles
-        throwing _ContractError $ OtherError message
+        throwing _ContractError $ Contract.OtherContractError message
 
 ownShelleyAddress
   :: AddressInEra ShelleyEra
@@ -594,19 +593,19 @@ shelleyAddressToKeys
   -> Contract MarloweContractState s MarloweError (PaymentPubKeyHash, Maybe StakePubKeyHash)
 shelleyAddressToKeys (AddressInEra _ (Shelley.ShelleyAddress _ paymentCredential stakeRef)) =
   case Shelley.fromShelleyPaymentCredential paymentCredential of
-    PaymentCredentialByScript _ -> throwError $ OtherContractError $ OtherError "Script payment addresses not supported"
+    PaymentCredentialByScript _ -> throwError $ OtherContractError $ Contract.OtherContractError "Script payment addresses not supported"
     PaymentCredentialByKey hash ->
       let ppkh = PaymentPubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes hash
       in
         case Shelley.fromShelleyStakeReference stakeRef of
           StakeAddressByValue (StakeCredentialByScript _) ->
-            throwError $ OtherContractError $ OtherError "Script stake addresses not supported"
+            throwError $ OtherContractError $ Contract.OtherContractError "Script stake addresses not supported"
           StakeAddressByPointer _ ->
-            throwError $ OtherContractError $ OtherError "Pointer stake addresses not supported"
+            throwError $ OtherContractError $ Contract.OtherContractError "Pointer stake addresses not supported"
           NoStakeAddress -> pure (ppkh, Nothing)
           StakeAddressByValue (StakeCredentialByKey stakeHash) ->
             pure (ppkh,  Just . StakePubKeyHash . PubKeyHash . toBuiltin $ serialiseToRawBytes stakeHash)
-shelleyAddressToKeys _ = throwError $ OtherContractError $ OtherError "Byron Addresses not supported"
+shelleyAddressToKeys _ = throwError $ OtherContractError $ Contract.OtherContractError "Byron Addresses not supported"
 
 getAction :: MarloweTimeRange -> Party -> MarloweData -> PartyAction
 getAction timeRange party MarloweData{marloweContract,marloweState} = let
@@ -832,7 +831,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                     <> Constraints.unspentOutputs utxo
             let lookups:: ScriptLookups TypedMarloweValidator
                 lookups = lookups1 { Constraints.slOwnPaymentPubKeyHash = Just pk }
-            utx <- either (throwing _ConstraintResolutionError)
+            utx <- either (throwing _ConstraintResolutionContractError)
                         pure
                         (Constraints.mkTx lookups allConstraints)
             let utx' = utx
@@ -862,7 +861,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                         marloweState = txOutState }
                 let allConstraints = let
                         ownInputsConstraints =
-                            [ InputConstraint
+                            [ ScriptInputConstraint
                                 { icRedeemer = marloweTxInputsFromInputs inputs
                                 , icTxOutRef = marloweTxOutRef
                                 }
@@ -883,7 +882,7 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                                     totalPayouts = P.foldMap snd payoutsByParty
                                     in contractBalance P.+ totalIncome P.- totalPayouts
                                 in txConstraints { txOwnOutputs =
-                                    [ OutputConstraint
+                                    [ ScriptOutputConstraint
                                         { ocDatum = marloweData
                                         , ocValue = finalBalance
                                         }

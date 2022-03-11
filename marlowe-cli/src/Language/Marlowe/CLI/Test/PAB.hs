@@ -601,7 +601,7 @@ runContract PabAccess{..} contract walletId =
         $ ContractActivationArgs
           {
             caID     = contract
-          , caWallet = Just . Wallet $ walletId
+          , caWallet = Just $ Wallet Nothing walletId
           }
     let
       go :: Connection -> ExceptT CliError IO ()

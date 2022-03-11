@@ -137,7 +137,7 @@ marloweCompanionFollowerContractExample = do
 
   startPab pabConfig
 
-  walletInfo <- runWallet createWallet
+  walletInfo <- runWallet $ createWallet Nothing
 
   let wallet = wiWallet walletInfo
       hash   = unPaymentPubKeyHash $ wiPaymentPubKeyHash walletInfo

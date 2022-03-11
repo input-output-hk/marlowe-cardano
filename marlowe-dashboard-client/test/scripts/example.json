@@ -85,6 +85,7 @@
             "tag": "ExpectJson",
             "content": {
               "caWallet": {
+                "prettyWalletName": null,
                 "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
               },
               "caID": "WalletCompanion"
@@ -114,6 +115,7 @@
             "tag": "ExpectJson",
             "content": {
               "caWallet": {
+                "prettyWalletName": null,
                 "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
               },
               "caID": "MarloweApp"
@@ -211,6 +213,7 @@
             "content": [
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
                 },
                 "cicCurrentState": {
@@ -229,6 +232,7 @@
               },
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
                 },
                 "cicCurrentState": {
@@ -422,6 +426,7 @@
             "tag": "ExpectJson",
             "content": {
               "caWallet": {
+                "prettyWalletName": null,
                 "getWalletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
               },
               "caID": "WalletCompanion"
@@ -451,6 +456,7 @@
             "tag": "ExpectJson",
             "content": {
               "caWallet": {
+                "prettyWalletName": null,
                 "getWalletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
               },
               "caID": "MarloweApp"
@@ -548,6 +554,7 @@
             "content": [
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
                 },
                 "cicCurrentState": {
@@ -566,6 +573,7 @@
               },
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
                 },
                 "cicCurrentState": {
@@ -746,6 +754,7 @@
             "content": [
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
                 },
                 "cicCurrentState": {
@@ -764,6 +773,7 @@
               },
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
                 },
                 "cicCurrentState": {
@@ -919,6 +929,7 @@
             "content": [
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
                 },
                 "cicCurrentState": {
@@ -937,6 +948,7 @@
               },
               {
                 "cicWallet": {
+                  "prettyWalletName": null,
                   "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
                 },
                 "cicCurrentState": {

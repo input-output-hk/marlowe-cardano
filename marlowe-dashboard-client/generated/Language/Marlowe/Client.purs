@@ -27,9 +27,9 @@ import Marlowe.Semantics
   , TransactionError
   , TransactionInput
   )
+import Plutus.Contract.Error (ContractError)
 import Plutus.V1.Ledger.Address (Address)
 import Type.Proxy (Proxy(Proxy))
-import Wallet.Types (ContractError)
 
 newtype ContractHistory = ContractHistory
   { chParams :: MarloweParams
@@ -199,9 +199,6 @@ data MarloweError
   | OtherContractError ContractError
 
 derive instance Eq MarloweError
-
-instance Show MarloweError where
-  show a = genericShow a
 
 instance EncodeJson MarloweError where
   encodeJson = defer \_ -> case _ of

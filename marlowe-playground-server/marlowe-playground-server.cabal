@@ -117,6 +117,7 @@ executable marlowe-playground-server
         marlowe-actus -any,
         monad-logger -any,
         mtl -any,
+        plutus-contract -any,
         plutus-ledger,
         plutus-tx,
         purescript-bridge -any,

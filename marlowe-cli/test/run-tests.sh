@@ -8,7 +8,6 @@ then
 fi
 
 MAGIC=(--testnet-magic 1564)
-CARDANO_NODE_SOCKET_PATH=node.socket
 WALLET_API=http://localhost:8090
 PAB_API=http://localhost:9080
 FAUCET_KEY="$TREASURY"/payment.skey

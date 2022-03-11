@@ -41,7 +41,7 @@ import Control.Monad.Now (class MonadTime, makeClock, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
-import Data.Argonaut (Json, decodeJson, jsonNull)
+import Data.Argonaut (Json, decodeJson, jsonNull, stringify)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
@@ -97,6 +97,7 @@ import Language.Marlowe.Client
   , EndpointResponse(..)
   , MarloweEndpointResult(..)
   )
+import Language.Marlowe.Client (MarloweError(..)) as LMC
 import MainFrame.Lenses
   ( _addressBook
   , _dashboardState
@@ -125,6 +126,7 @@ import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
+import Plutus.Contract.Error (ContractError(..))
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient(..)
   , ContractInstanceClientState
@@ -147,7 +149,7 @@ import Toast.Types
   , successToast
   )
 import Types (AjaxResponse)
-import Wallet.Types (ContractActivityStatus(..))
+import Wallet.Types (ContractActivityStatus(..), EndpointValue(..))
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
 
@@ -415,21 +417,24 @@ handleAction (CreateFailed reqId error) = void $ runMaybeT $ do
   listenersAVar <- asks $ view _createListeners
   listeners <- liftAff $ AVar.read listenersAVar
   subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
-  addToast $ errorToast "Failed to create contract" $ Just $ show error
+  addToast $ errorToast "Failed to create contract" $ Just $ showContractError
+    error
   liftEffect $ traverse_ HS.unsubscribe subscription
 
 handleAction (ApplyInputsFailed reqId error) = void $ runMaybeT $ do
   listenersAVar <- asks $ view _applyInputListeners
   listeners <- liftAff $ AVar.read listenersAVar
   subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
-  addToast $ errorToast "Failed to update contract" $ Just $ show error
+  addToast $ errorToast "Failed to update contract" $ Just $ showContractError
+    error
   liftEffect $ traverse_ HS.unsubscribe subscription
 
 handleAction (RedeemFailed reqId error) = void $ runMaybeT $ do
   listenersAVar <- asks $ view _redeemListeners
   listeners <- liftAff $ AVar.read listenersAVar
   subscription /\ _ <- hoistMaybe $ Map.lookup reqId listeners
-  addToast $ errorToast "Failed to redeem payment" $ Just $ show error
+  addToast $ errorToast "Failed to redeem payment" $ Just $ showContractError
+    error
   liftEffect $ traverse_ HS.unsubscribe subscription
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
@@ -452,6 +457,48 @@ handleAction (MarloweAppClosed mVal) = void $ runMaybeT do
 
 handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
   reActivatePlutusScript WalletCompanion mVal
+
+showContractError :: LMC.MarloweError -> String
+showContractError LMC.TransitionError =
+  "Transition error"
+showContractError LMC.AmbiguousOnChainState =
+  "Ambiguous on chain state"
+showContractError LMC.UnableToExtractTransition =
+  "Unable to extract transition"
+showContractError LMC.OnChainStateNotFound =
+  "On chain state not found"
+showContractError (LMC.MarloweEvaluationError error) =
+  "Marlowe evaluation error: " <> show error
+showContractError (LMC.OtherContractError (WalletContractError error)) =
+  "Wallet error: " <> show error
+showContractError
+  (LMC.OtherContractError (ChainIndexContractError message response)) =
+  "Chain index error " <> message <> ": " <> show response
+showContractError
+  (LMC.OtherContractError (EmulatorAssertionContractError error)) =
+  "Emulator assertion error: " <> show error
+showContractError
+  (LMC.OtherContractError (ConstraintResolutionContractError error)) =
+  "Constraint resolution error: " <> show error
+showContractError (LMC.OtherContractError (ResumableContractError error)) =
+  "Resumable contract error: " <> show error
+showContractError (LMC.OtherContractError (CCheckpointContractError error)) =
+  "Checkpoint error: " <> show error
+showContractError
+  ( LMC.OtherContractError
+      ( EndpointDecodeContractError
+          { eeEndpointDescription
+          , eeEndpointValue: EndpointValue { unEndpointValue: value }
+          , eeErrorMessage
+          }
+      )
+  ) =
+  "Endpoint decode error " <> eeErrorMessage <> ", "
+    <> show eeEndpointDescription
+    <> ", with value "
+    <> stringify value
+showContractError (LMC.OtherContractError (OtherContractError message)) =
+  "Other contract error: " <> message
 
 {- [UC-WALLET-3][1] Disconnect a wallet
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
