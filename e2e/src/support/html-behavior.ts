@@ -16,3 +16,12 @@ export const inputValue = async (
   await page.focus(elementIdentifier);
   await page.fill(elementIdentifier, input);
 }
+
+export const selectValue = async(
+  page: Page,
+  elementIdentifier: ElementLocator,
+  option: string,
+): Promise<void> => {
+  await page.focus(elementIdentifier);
+  await page.selectOption(elementIdentifier, option);
+}
