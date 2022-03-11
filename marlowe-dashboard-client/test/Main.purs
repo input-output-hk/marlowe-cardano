@@ -5,6 +5,7 @@ import Prologue
 import Control.Monad.State (class MonadState)
 import Data.Int (decimal)
 import Data.Int as Int
+import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
@@ -24,7 +25,7 @@ import Test.Marlowe.Run.Action.Eval (runScriptedTest)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
-import Test.Spec.Runner (runSpec)
+import Test.Spec.Runner (defaultConfig, runSpec')
 import Test.Web (runTestMInBody)
 import Test.Web.DOM.Assertions (shouldHaveId, shouldHaveTagName, shouldHaveText)
 import Test.Web.DOM.Query (findBy, getBy, name, role)
@@ -34,15 +35,18 @@ import Web.ARIA (ARIARole(..))
 import Web.DOM (Element)
 
 main :: Effect Unit
-main = launchAff_ $ runSpec [ consoleReporter ] do
-  Bech32Address.spec
-  Bech32DataPart.spec
-  Bech32HRP.spec
-  DataPartCodePoint.spec
-  HRPCodePoint.spec
-  testingLibrarySpec
-  halogenTestingLibrarySpec
-  testScripts
+main = launchAff_ $ runSpec'
+  defaultConfig { timeout = Just $ Milliseconds 5000.0 }
+  [ consoleReporter ]
+  do
+    Bech32Address.spec
+    Bech32DataPart.spec
+    Bech32HRP.spec
+    DataPartCodePoint.spec
+    HRPCodePoint.spec
+    testingLibrarySpec
+    halogenTestingLibrarySpec
+    testScripts
 
 testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do

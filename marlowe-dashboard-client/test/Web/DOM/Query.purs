@@ -37,6 +37,7 @@ module Test.Web.DOM.Query
 
 import Prelude
 
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.State (State, modify_, runState)
 import Control.Promise (Promise, toAffE)
 import Data.Array.NonEmpty (NonEmptyArray)
@@ -50,6 +51,7 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Tuple (Tuple(..))
 import Data.Undefinable (Undefinable, toMaybe, toUndefinable)
 import Effect (Effect)
+import Effect.Aff (Error)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Uncurried (EffectFn3, runEffectFn3)
@@ -329,6 +331,7 @@ title = buildMatch Title
 findBy
   :: forall builder a m
    . MonadTest m
+  => MonadError Error m
   => (builder a -> Match)
   -> builder a
   -> m Element
@@ -355,6 +358,7 @@ findBy build builder = case build builder of
 findAllBy
   :: forall builder a m
    . MonadTest m
+  => MonadError Error m
   => (builder a -> Match)
   -> builder a
   -> m (NonEmptyArray Element)
@@ -382,6 +386,7 @@ findAllBy build builder = case build builder of
 getBy
   :: forall builder a m
    . MonadTest m
+  => MonadError Error m
   => (builder a -> Match)
   -> builder a
   -> m Element
@@ -406,6 +411,7 @@ getBy build builder = case build builder of
 getAllBy
   :: forall builder a m
    . MonadTest m
+  => MonadError Error m
   => (builder a -> Match)
   -> builder a
   -> m (NonEmptyArray Element)
@@ -430,6 +436,7 @@ getAllBy build builder = case build builder of
 queryBy
   :: forall builder a m
    . MonadTest m
+  => MonadError Error m
   => (builder a -> Match)
   -> builder a
   -> m (Maybe Element)
@@ -461,6 +468,7 @@ queryBy build builder = case build builder of
 queryAllBy
   :: forall builder a m
    . MonadTest m
+  => MonadError Error m
   => (builder a -> Match)
   -> builder a
   -> m (Array Element)
@@ -486,6 +494,7 @@ queryAllBy build builder = case build builder of
 callForeignMatcherFn
   :: forall m a
    . MonadTest m
+  => MonadError Error m
   => ForeignMatcherFn a
   -> Matcher
   -> MatcherOptions
@@ -497,6 +506,7 @@ callForeignMatcherFn fn matcher options = do
 callForeignByRoleFn
   :: forall m a
    . MonadTest m
+  => MonadError Error m
   => ForeignByRoleFn a
   -> ARIARole
   -> ByRoleOptions

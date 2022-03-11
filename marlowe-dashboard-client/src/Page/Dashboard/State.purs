@@ -35,9 +35,9 @@ import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_)
-import Data.Lens (assign, modifying, set, use, (^.))
+import Data.Lens (assign, modifying, set, use)
 import Data.Map (filterKeys, toUnfoldable)
-import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -172,14 +172,8 @@ handleAction _ (ClipboardAction action) = do
   Clipboard.handleAction action
   addToast $ successToast "Copied to clipboard"
 
-handleAction { wallet } (OpenCard card) = do
-  -- Most cards requires to show the assets of the current wallet, so we update the funds
-  -- before opening a card.
-  -- See note [polling updateTotalFunds]
-  let
-    walletId = wallet ^. _walletId
-  _ <- updateTotalFunds walletId
-  -- Then we set the card and reset the contact and template card states to their first section
+handleAction _ (OpenCard card) = do
+  -- We set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
     $ set _card (Just card)

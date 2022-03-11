@@ -30,6 +30,7 @@ import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
 import Data.ContractValue as CV
+import Data.Either (either)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Lens (Setter', set)
 import Data.Lens.At (class At, at)
@@ -40,6 +41,7 @@ import Data.Map as Map
 import Data.Maybe (fromMaybe, isJust)
 import Data.Newtype (unwrap)
 import Data.Set as Set
+import Data.These (These(..))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
@@ -243,10 +245,11 @@ nicknameInput fieldState =
   input =
     { fieldState
     , format: CN.toString
-    , validate: CN.fromString
-    , render: \{ error, value } ->
-        renderTextInput id label error (Input.setInputProps value []) case _ of
-          CN.Empty -> "Required."
+    , validate: either This That <<< CN.fromString
+    , render: \{ error, value, result } ->
+        renderTextInput id label result error (Input.setInputProps value [])
+          case _ of
+            CN.Empty -> "Required."
     }
 
 roleInput
@@ -284,12 +287,13 @@ timeoutInput name fieldState =
   input =
     { fieldState
     , format: CT.toString
-    , validate: CT.fromString
-    , render: \{ error, value } ->
+    , validate: either This That <<< CT.fromString
+    , render: \{ error, value, result } ->
         renderNumberInput
           TimeFormat
           id
           name
+          result
           error
           (Input.setInputProps value [])
           case _ of
@@ -315,11 +319,12 @@ valueInput state name fieldState =
   input =
     { fieldState
     , format: CV.toString
-    , validate: case format of
+    , validate: either This That <<< case format of
         DecimalFormat d cs -> CV.currencyFromString cs d
         _ -> CV.fromString
-    , render: \{ error, value } ->
-        renderNumberInput format id name error (Input.setInputProps value [])
+    , render: \{ error, value, result } ->
+        renderNumberInput format id name result error
+          (Input.setInputProps value [])
           case _ of
             CV.Empty -> "Required."
             CV.Invalid -> "Must by a number."

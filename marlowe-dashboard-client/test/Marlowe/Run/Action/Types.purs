@@ -5,7 +5,6 @@ import Prologue
 import Affjax.StatusCode (StatusCode(..))
 import Ansi.Codes (Color(..))
 import Ansi.Output (bold, foreground, withGraphics)
-import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut
   ( class EncodeJson
   , Json
@@ -36,7 +35,7 @@ import Data.String
   , take
   )
 import Data.Time.Duration (Milliseconds)
-import Effect.Aff (Error, error, message)
+import Effect.Aff (Error, message)
 
 type WalletName = String
 
@@ -170,6 +169,7 @@ instance EncodeJson HttpRespond where
 
 data MarloweRunAction
   = CreateWallet { walletName :: WalletName }
+  | DropWallet
   | ConfirmMnemonic { walletName :: WalletName }
   | UseWallet { walletName :: WalletName }
   | PabWebSocketSend { expectPayload :: Json }
@@ -182,6 +182,7 @@ derive instance Generic MarloweRunAction _
 
 instance Show MarloweRunAction where
   show = case _ of
+    DropWallet -> "DropWallet"
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
     ConfirmMnemonic a -> "(ConfirmMnemonic " <> show a <> ")"
     UseWallet a -> "(UseWallet " <> show a <> ")"
@@ -195,6 +196,7 @@ instance DecodeJson MarloweRunAction where
     obj <- decodeJson json
     tag <- obj .: "tag"
     case tag of
+      "DropWallet" -> pure DropWallet
       "CreateWallet" ->
         lmap (Named "CreateWallet") $ CreateWallet <$> obj .: "content"
       "ConfirmMnemonic" ->
@@ -213,6 +215,7 @@ instance DecodeJson MarloweRunAction where
 
 instance EncodeJson MarloweRunAction where
   encodeJson = case _ of
+    DropWallet -> encodeJson { tag: "DropWallet" }
     CreateWallet content -> encodeJson { tag: "CreateWallet", content }
     ConfirmMnemonic content -> encodeJson { tag: "ConfirmMnemonic", content }
     UseWallet content -> encodeJson { tag: "UseWallet", content }
@@ -225,9 +228,9 @@ type MarloweRunScript = Array (Tuple Milliseconds MarloweRunAction)
 
 data ScriptError = ScriptError (Array MarloweRunAction) MarloweRunAction Error
 
-throwScriptError :: forall m a. MonadThrow Error m => ScriptError -> m a
-throwScriptError (ScriptError succeeded failed e) =
-  throwError $ error $ joinWith "\n    " $ join
+renderScriptError :: ScriptError -> String
+renderScriptError (ScriptError succeeded failed e) =
+  joinWith "\n  " $ join
     [ pure "Test script failed at the indicated step:"
     , pure ""
     , reportAction true <$> succeeded
@@ -236,7 +239,7 @@ throwScriptError (ScriptError succeeded failed e) =
     , pure "Error was:"
     , pure ""
     , pure
-        $ replaceAll (Pattern "\n") (Replacement "\n    ")
+        $ replaceAll (Pattern "\n") (Replacement "\n  ")
         $ "  " <> message e
     ]
   where

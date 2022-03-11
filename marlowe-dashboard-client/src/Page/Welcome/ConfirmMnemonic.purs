@@ -5,8 +5,10 @@ import Prologue
 import Capability.Marlowe (class ManageMarlowe)
 import Component.Form (renderTextInput)
 import Data.Bifunctor (lmap)
+import Data.Either (either)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
+import Data.These (These(..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
@@ -133,13 +135,14 @@ mnemonicInput mnemonic fieldState =
   input =
     { fieldState
     , format: MP.toString
-    , validate: matches <=< lmap Right <<< MP.fromString
-    , render: \{ error, value } ->
-        renderTextInput id label error (Input.setInputProps value []) case _ of
-          (Right MP.Empty) -> "Required."
-          (Right MP.WrongWordCount) -> "24 words required."
-          (Right MP.ContainsInvalidWords) -> "Contains invalid words."
-          (Left _) -> "Does not match."
+    , validate: either This That <<< (matches <=< lmap Right <<< MP.fromString)
+    , render: \{ error, value, result } ->
+        renderTextInput id label result error (Input.setInputProps value [])
+          case _ of
+            (Right MP.Empty) -> "Required."
+            (Right MP.WrongWordCount) -> "24 words required."
+            (Right MP.ContainsInvalidWords) -> "Contains invalid words."
+            (Left _) -> "Does not match."
     }
   matches m
     | m /= mnemonic = Left $ Left unit

@@ -198,7 +198,7 @@ render { visited, fieldState, id, label, options, filtered } =
       HH.div (Select.setRootProps ([ classNames rootClasses ]))
         [ renderLabel id label
         , HH.div [ HP.style "height: 54.4px" ] []
-        , renderInputBox error boxClasses $ join
+        , renderInputBox false error boxClasses $ join
             [ pure $ renderInput id
                 ( Select.setInputProps
                     [ HP.value value
@@ -207,7 +207,7 @@ render { visited, fieldState, id, label, options, filtered } =
                 )
             , guard isOpen $> dropdown
             ]
-        , renderErrorLabel error
+        , renderErrorLabel false error
         ]
 
 handleAction
