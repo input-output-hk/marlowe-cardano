@@ -27,10 +27,7 @@ Then(
       screen: { page },
       globalConfig,
     } = this;
-    console.log("elementKey ", elementKey)
-    console.log("expectedValue ", expectedElementText)
     const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
-    console.log("ELEMENT IDENTIFIER ", elementIdentifier);
     await waitFor(async() => {
       const elementText = await page.textContent(elementIdentifier);
       return elementText?.includes(expectedElementText);

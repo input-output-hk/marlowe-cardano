@@ -9,11 +9,7 @@ export const getElementLocator = (
 ): ElementLocator => {
 
   const currentPage = getCurrentPageId(page, globalConfig);
-
-  console.log("PAGE ELEMENT CURRENT PAGE", currentPage)
   const { pageElementMappings } = globalConfig;
-
-  console.log("PAGE ELEMENT MAPPINGS ", pageElementMappings)
 
   return pageElementMappings[currentPage]?.[elementKey] || pageElementMappings.common?.[elementKey]
 }

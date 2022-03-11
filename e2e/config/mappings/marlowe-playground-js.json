@@ -1,6 +1,6 @@
 {
   "editor header": ".project-title >> h1",
-  "playground editor": ".monaco-editor-container >> role=presentation",
+  "playground editor": ".monaco-editor >> .inputarea",
   "Compile": "button >> text=Compile",
   "Send To Simulator": "button >> text=Send To Simulator"
 }
