@@ -2,6 +2,11 @@
 
 set -ev
 
+if [[ -z "${CARDANO_NODE_SOCKET_PATH}" ]]
+then
+  CARDANO_NODE_SOCKET_PATH=node.socket
+fi
+
 MAGIC=(--testnet-magic 1564)
 CARDANO_NODE_SOCKET_PATH=node.socket
 WALLET_API=http://localhost:8090
