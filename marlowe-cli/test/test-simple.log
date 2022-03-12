@@ -1,3 +1,42 @@
 
 ***** Test "Simple Example" *****
 [Comment] Create and fund the wallet.
+[CreateWallet] Created wallet 321a00fc5a4d078c6bd61a1a8f47b87a8ef88252 for role "PAB".
+[FundWallet] Funded wallet 321a00fc5a4d078c6bd61a1a8f47b87a8ef88252 for role "PAB" with valueFromList [(AdaAssetId,100000000)].
+[Comment] Activate the Marlowe application.
+[ActivateApp] Activated MarloweApp instance 98506282-78d0-4e39-a8e0-14acbaa7853f for role "PAB".
+[Comment] Create the contract.
+[CallCreate] Endpoint "create" called on instance 98506282-78d0-4e39-a8e0-14acbaa7853f for owners [("PAB",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "dc0b201e2fa2302bafa62305aec5126fdf727c3574eb4958b23af5d4")) (StakeRefBase (KeyHashObj (KeyHash "4e8afb6a10b48a72ea88f31b78ad9b0ad1233afe369d72a58b8b12c1")))))].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewObservableState Null.
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewYieldedExportTxs [].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewObservableState (Object (fromList [("contents",Array [String "3ba830b1-5f3b-4bd9-a248-db250fb32cab",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "a6a6c87d5f680e17e0097e45ecd51c82038fe8c296382f29ecf552a6"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "cdc7eb317fab0784bb43cc4ec9e5b6e89a117eba4603b2d858271ef0")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = a6a6c87d5f680e17e0097e45ecd51c82038fe8c296382f29ecf552a6, rolesCurrency = cdc7eb317fab0784bb43cc4ec9e5b6e89a117eba4603b2d858271ef0}.
+[Comment] Deposit funds.
+[CallApplyInputs] Endpoint "apply-inputs" called on 98506282-78d0-4e39-a8e0-14acbaa7853f for inputs [ClientInput (IDeposit "PAB" "PAB" (Token "" "") 15000000)] and times Just (POSIXTime {getPOSIXTime = 1645590825000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewObservableState (Object (fromList [("contents",Array [String "13b6cf07-7f32-4430-ae2e-6f8d2eb6449a",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitApplyInputs] Input application confirmed.
+[Comment] Notify.
+[CallApplyInputs] Endpoint "apply-inputs" called on 98506282-78d0-4e39-a8e0-14acbaa7853f for inputs [ClientInput INotify] and times Just (POSIXTime {getPOSIXTime = 1645590825000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewObservableState (Object (fromList [("contents",Array [String "edfdc34f-064d-4a7d-9d03-b081ebfbf80f",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitApplyInputs] Input application confirmed.
+[Comment] Redeem the funds.
+[CallRedeem] Endpoint "redeem" called on 98506282-78d0-4e39-a8e0-14acbaa7853f for role "PAB".
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [].
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewObservableState (Object (fromList [("contents",Array [String "32b20cd4-dcb4-4c64-8a43-868af2500281",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitRedeem] Redemption confirmed.
+[Comment] Stop the application.
+[runContract] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f received ContractFinished Nothing.
+[Stop] Instance 98506282-78d0-4e39-a8e0-14acbaa7853f stopped.
+[Comment] Check the balance.
+[CheckFunds] Wallet for role "PAB" contains valueFromList [(AdaAssetId,97138613),(AssetId "cdc7eb317fab0784bb43cc4ec9e5b6e89a117eba4603b2d858271ef0" "PAB",1)].
+[Comment] Return unused funds.
+[ReturnFunds] Returned funds from wallet 321a00fc5a4d078c6bd61a1a8f47b87a8ef88252.
+***** SUCCEEDED *****

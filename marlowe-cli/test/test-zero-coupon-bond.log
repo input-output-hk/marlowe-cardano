@@ -1,4 +1,79 @@
 
 ***** Test "Zero-Coupon Bond" *****
 [Comment] Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
-[CreateWallet] Created wallet 1a296eb2d14991e84e130543cea3c9d0c49cf783 for role "Lender".
+[CreateWallet] Created wallet 2b205f8865f195b7c2e3e4b9d0ca23c932e2f82d for role "Lender".
+[FundWallet] Funded wallet 2b205f8865f195b7c2e3e4b9d0ca23c932e2f82d for role "Lender" with valueFromList [(AdaAssetId,80000000)].
+[ActivateApp] Activated MarloweApp instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 for role "Lender".
+[Comment] Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewObservableState Null.
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewYieldedExportTxs [].
+[CreateWallet] Created wallet b54540b72f14e45ddf254ca1f52f64603d8febac for role "Borrower".
+[FundWallet] Funded wallet b54540b72f14e45ddf254ca1f52f64603d8febac for role "Borrower" with valueFromList [(AdaAssetId,10000000)].
+[ActivateApp] Activated MarloweApp instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b for role "Borrower".
+[Comment] Show the contents of the wallets.
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewObservableState Null.
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewYieldedExportTxs [].
+[PrintWallet] Wallet for role "Lender" contains valueFromList [(AdaAssetId,80000000)].
+[PrintWallet] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,10000000)].
+[Comment] The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
+[CallCreate] Endpoint "create" called on instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 for owners [("Lender",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "f68e5c13cfd21319e0ffdf393cd1d32faf4b2508aacfe2886b33f1e8")) (StakeRefBase (KeyHashObj (KeyHash "bd8501132a2968658927108239de20259e85c97259f083f517116c4a"))))),("Borrower",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "484df3973fcf684d084c37767917268c766eac4f3bd177e95cbaa12b")) (StakeRefBase (KeyHashObj (KeyHash "cde78c7d8b0d181ef2e348a0feee1a443651c4c0a09d9518a9e29794")))))].
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [].
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewObservableState (Object (fromList [("contents",Array [String "f695e7b8-ac83-49bd-b9f6-68d1ea6164fd",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "6a36053970061c31156d97d817e214f972f6e5d4999fa55f91633551"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 6a36053970061c31156d97d817e214f972f6e5d4999fa55f91633551, rolesCurrency = 24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9}.
+[Comment] The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,75537874),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Lender",1)].
+[Comment] The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Borrower",1)].
+[Comment] The borrower needs to follow this contract in order to interact with it.
+[Follow] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b now follows instance 27e5690b-2320-4efe-bb5a-bab7581cbd90.
+[Comment] The lender deposits the 50 ADA loan amount.
+[CallApplyInputs] Endpoint "apply-inputs" called on 27e5690b-2320-4efe-bb5a-bab7581cbd90 for inputs [ClientInput (IDeposit "Lender" "Lender" (Token "" "") 50000000)] and times Just (POSIXTime {getPOSIXTime = 1645590825000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [].
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewObservableState (Object (fromList [("contents",Array [String "9ca15f54-b0d2-4a8f-95f7-46ee9656152e",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitApplyInputs] Input application confirmed.
+[Comment] The lender will have 50 ADA less for the loan and may have paid up to another 2 ADA in fees, leaving a balance of 26 ADA minus up to 3 ADA in fees.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,24209337),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Lender",1)].
+[Comment] The borrower's funds are unchanged.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,12000000),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Borrower",1)].
+[Comment] Now the borrower redeems the 50 ADA from the payout script.
+[CallRedeem] Endpoint "redeem" called on 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b for role "Borrower".
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewActiveEndpoints [].
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewObservableState (Object (fromList [("contents",Array [String "fd92b8d7-1833-4b1a-8804-bd1e62e2e250",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitRedeem] Redemption confirmed.
+[Comment] The lender's funds are unchanged.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,24209337),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Lender",1)].
+[Comment] The borrower has an additional 50 ADA but may have paid up to 1 ADA in fees for the redemption, leaving a balance of 62 ADA minus up to 1 ADA in fees.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,61569899),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Borrower",1)].
+[Comment] The borrower pays back the 53 ADA of loan plus interest.
+[CallApplyInputs] Endpoint "apply-inputs" called on 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b for inputs [ClientInput (IDeposit "Borrower" "Borrower" (Token "" "") 53000000)] and times Just (POSIXTime {getPOSIXTime = 1645590825000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewActiveEndpoints [].
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewObservableState (Object (fromList [("contents",Array [String "b0bd60e7-d05e-4ee2-a377-dc0461b00c5a",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[AwaitApplyInputs] Input application confirmed.
+[Comment] Because the contract is closed when the borrower makes their deposit, the lender receives back their 2 ADA that they contributed to create the contract.
+[runContract] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,26209337),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Lender",1)].
+[Comment] The borrower has 53 ADA less and may have paid another 2 ADA in fees, leaving a balance of 9 ADA minus up to 3 ADA in fees.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7391222),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Borrower",1)].
+[Comment] The lender redeems the 53 ADA.
+[CallRedeem] Endpoint "redeem" called on 27e5690b-2320-4efe-bb5a-bab7581cbd90 for role "Lender".
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [].
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewObservableState (Object (fromList [("contents",Array [String "c0f351d1-e4fe-4b7b-9a4a-e88f7fda67e8",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitRedeem] Redemption confirmed.
+[Comment] The lender now has an additional 53 ADA but may have paid another 1 ADA in fees, leaving a balance of 81 ADA minus up to 4 ADA in fees.
+[CheckFunds] Wallet for role "Lender" contains valueFromList [(AdaAssetId,78705529),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Lender",1)].
+[Comment] The borrower's funds are unchanged.
+[CheckFunds] Wallet for role "Borrower" contains valueFromList [(AdaAssetId,7391222),(AssetId "24ada5f2477a7c2294449cc643226d053dc6f267328b17c4751dfaa9" "Borrower",1)].
+[Comment] Return unused funds.
+[ReturnFunds] Returned funds from wallet 2b205f8865f195b7c2e3e4b9d0ca23c932e2f82d.
+[ReturnFunds] Returned funds from wallet b54540b72f14e45ddf254ca1f52f64603d8febac.
+[Comment] Stop the Marlowe application.
+[runContract] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 received ContractFinished Nothing.
+[Stop] Instance 27e5690b-2320-4efe-bb5a-bab7581cbd90 stopped.
+[Stop] Instance 38b297e5-cadc-4e9f-bb7d-f265faa2fc7b stopped.
+***** SUCCEEDED *****

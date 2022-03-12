@@ -1,7 +1,71 @@
 
 ***** Test "Escrow" *****
 [Comment] Create the wallet for the buyer, fund it with 80 ADA, and activate the Marlowe endpoints.
-[CreateWallet] Created wallet c5467ca3e11670dc26c986ddfef2460d8fd4badc for role "Buyer".
-[FundWallet] Funded wallet c5467ca3e11670dc26c986ddfef2460d8fd4badc for role "Buyer" with valueFromList [(AdaAssetId,80000000)].
-***** FAILED *****
-CliError {unCliError = "ConnectionError (HttpExceptionRequest Request {\n  host                 = \"localhost\"\n  port                 = 9080\n  secure               = False\n  requestHeaders       = [(\"Accept\",\"application/json;charset=utf-8,application/json\"),(\"Content-Type\",\"application/json;charset=utf-8\")]\n  path                 = \"/api/contract/activate\"\n  queryString          = \"\"\n  method               = \"POST\"\n  proxy                = Nothing\n  rawBody              = False\n  redirectCount        = 10\n  responseTimeout      = ResponseTimeoutDefault\n  requestVersion       = HTTP/1.1\n  proxySecureMode      = ProxySecureWithConnect\n}\n (ConnectionFailure Network.Socket.connect: <socket: 11>: does not exist (Connection refused)))"}
+[CreateWallet] Created wallet 92e7796f48abe762da0fa931e4c48eaede1aa463 for role "Buyer".
+[FundWallet] Funded wallet 92e7796f48abe762da0fa931e4c48eaede1aa463 for role "Buyer" with valueFromList [(AdaAssetId,80000000)].
+[ActivateApp] Activated MarloweApp instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 for role "Buyer".
+[Comment] Create the wallet for the seller, fund it with 15 ADA, and activate the Marlowe endpoints.
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewObservableState Null.
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewYieldedExportTxs [].
+[CreateWallet] Created wallet bdc066a0ed11511e742ace3c21c417737b5d58c1 for role "Seller".
+[FundWallet] Funded wallet bdc066a0ed11511e742ace3c21c417737b5d58c1 for role "Seller" with valueFromList [(AdaAssetId,15000000)].
+[ActivateApp] Activated MarloweApp instance 18eded35-d767-4b30-b8b6-238cb37b9276 for role "Seller".
+[Comment] Create the wallet for the mediator, fund it with 20 ADA, and activate the Marlowe endpoints.
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received NewObservableState Null.
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received NewYieldedExportTxs [].
+[CreateWallet] Created wallet 087f972764daeaa9d3690360e81895e9c6423de0 for role "Mediator".
+[FundWallet] Funded wallet 087f972764daeaa9d3690360e81895e9c6423de0 for role "Mediator" with valueFromList [(AdaAssetId,20000000)].
+[ActivateApp] Activated MarloweApp instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 for role "Mediator".
+[Comment] The mediator creates the escrow contract, which was downloaded from Marlowe Playground. The purchase price is 50 ADA.
+[CallCreate] Endpoint "create" called on instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 for owners [("Buyer",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "74d5925b788b5493e2993666e980e017a6bb2bf0d44975c2ce2c974e")) (StakeRefBase (KeyHashObj (KeyHash "85b07ab265640738397c2cb430d55438c9f5f46c3e9dee5d5aef7fc1"))))),("Seller",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "de663f7aa12562d541454505bfe6ca7ef93b66e0d6198f1c6863305b")) (StakeRefBase (KeyHashObj (KeyHash "ee44704360f199f868254c3d0c7478baf1e6178b2f8739d280b9a706"))))),("Mediator",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "e2851cb93f287118bec264b9688b7cff9e8070cbf2b6b961cd16c995")) (StakeRefBase (KeyHashObj (KeyHash "deb8f7c31d729121221ed4f36ad467cfcb043e43c7417c6811ae6fd8")))))].
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received NewObservableState Null.
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received NewYieldedExportTxs [].
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received NewActiveEndpoints [].
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received NewObservableState (Object (fromList [("contents",Array [String "3f30d41a-879d-49d2-a685-decad7dd1d51",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "6a9ad927f41ad1cf9c59851aacb50c5db04b777c1076b35051e5aba0"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 6a9ad927f41ad1cf9c59851aacb50c5db04b777c1076b35051e5aba0, rolesCurrency = a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715}.
+[Comment] The mediator should have 14 ADA now, since 2 ADA was sent to the script address when creating the contract and 2 ADA each was sent to the buyer and seller along with their role tokens, and up to 1 ADA in fees might have been paid.
+[CheckFunds] Wallet for role "Mediator" contains valueFromList [(AdaAssetId,13472128),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Mediator",1)].
+[Comment] The buyer and seller should each now have an additional 2 ADA that arrived with their role token.
+[CheckFunds] Wallet for role "Buyer" contains valueFromList [(AdaAssetId,82000000),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Buyer",1)].
+[CheckFunds] Wallet for role "Seller" contains valueFromList [(AdaAssetId,17000000),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Seller",1)].
+[Comment] The buyer and seller each need to follow the contract created by the mediator.
+[Follow] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 now follows instance b2e694ec-9cca-4f91-90cf-864f5808a6c6.
+[Follow] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 now follows instance b2e694ec-9cca-4f91-90cf-864f5808a6c6.
+[Comment] The buyer deposits the 50 ADA purchase price.
+[CallApplyInputs] Endpoint "apply-inputs" called on 561ec686-8245-4234-8a93-f6ee75a0d5c5 for inputs [ClientInput (IDeposit "Seller" "Buyer" (Token "" "") 50000000)] and times Just (POSIXTime {getPOSIXTime = 1645590825000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewActiveEndpoints [].
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewObservableState (Object (fromList [("contents",Array [String "c2726fe1-7360-4434-9202-7501f92ee845",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitApplyInputs] Input application confirmed.
+[Comment] The buyer should have about 32 ADA now, since they paid 50 ADA for the purchase, but there is up to an additional 2 ADA in fees.
+[CheckFunds] Wallet for role "Buyer" contains valueFromList [(AdaAssetId,30790915),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Buyer",1)].
+[Comment] The buyer receives the purchase and reports that everything is alright.
+[CallApplyInputs] Endpoint "apply-inputs" called on 561ec686-8245-4234-8a93-f6ee75a0d5c5 for inputs [ClientInput (IChoice (ChoiceId "Everything is alright" "Buyer") 0)] and times Just (POSIXTime {getPOSIXTime = 1645590825000},POSIXTime {getPOSIXTime = 1898051625000}).
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewActiveEndpoints [].
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewObservableState (Object (fromList [("contents",Array [String "fed3a79e-88e5-4279-9d73-66966151bd53",Object (fromList [("tag",String "ApplyInputsResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitApplyInputs] Input application confirmed.
+[Comment] The buyer should still have 32 ADA now, but they may have paid up to another 2 ADA in fees.
+[CheckFunds] Wallet for role "Buyer" contains valueFromList [(AdaAssetId,29638466),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Buyer",1)].
+[Comment] The mediator should have 16 ADA now because they received back their initial 2 ADA that was contributed when creating the contract, but they did not pay additional fees
+[CheckFunds] Wallet for role "Mediator" contains valueFromList [(AdaAssetId,15472128),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Mediator",1)].
+[Comment] Now the seller redeems the 50 ADA from the payout script.
+[CallRedeem] Endpoint "redeem" called on 18eded35-d767-4b30-b8b6-238cb37b9276 for role "Seller".
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received NewActiveEndpoints [].
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received NewObservableState (Object (fromList [("contents",Array [String "bcdd1337-cf82-4074-bf04-36770aaa9289",Object (fromList [("tag",String "RedeemResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitRedeem] Redemption confirmed.
+[Comment] The seller should now have 67 ADA, but they may have paid up to 1 ADA in fees.
+[CheckFunds] Wallet for role "Seller" contains valueFromList [(AdaAssetId,66574417),(AssetId "a09162abb57b16d0c3e06f527eab274fcaf415795ec10c1019c20715" "Seller",1)].
+[Comment] Stop the Marlowe application.
+[runContract] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 received ContractFinished Nothing.
+[Stop] Instance 561ec686-8245-4234-8a93-f6ee75a0d5c5 stopped.
+[Stop] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 stopped.
+[runContract] Instance 18eded35-d767-4b30-b8b6-238cb37b9276 received ContractFinished Nothing.
+[Stop] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 stopped.
+***** SUCCEEDED *****
+[runContract] Instance b2e694ec-9cca-4f91-90cf-864f5808a6c6 received ContractFinished Nothing.
