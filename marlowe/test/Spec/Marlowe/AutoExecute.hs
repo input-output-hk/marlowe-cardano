@@ -22,7 +22,6 @@ import Language.Marlowe.Client
 import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Language.Marlowe.Util
-import System.IO.Unsafe (unsafePerformIO)
 
 import Data.Aeson (decode, encode)
 import Data.Aeson.Text (encodeToLazyText)
@@ -75,7 +74,7 @@ reqId :: UUID
 reqId = UUID.nil
 
 almostAll :: Ledger.Value
-almostAll = defaultLovelaceAmount <> P.inv (lovelaceValueOf 5_000_000)
+almostAll = defaultLovelaceAmount <> P.inv (lovelaceValueOf 6_000_000)
 
 autoexecZCBTest :: TestTree
 autoexecZCBTest = checkPredicate "ZCB Auto Execute Contract"
