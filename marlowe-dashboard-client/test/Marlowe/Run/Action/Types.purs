@@ -38,6 +38,11 @@ import Data.Time.Duration (Milliseconds)
 import Effect.Aff (Error, message)
 
 type WalletName = String
+type WalletMnemonic = String
+type WalletId = String
+type PubKeyHash = String
+type Address = String
+type PlutusAppId = String
 
 data HttpExpectContent
   = ExpectJson Json
@@ -167,10 +172,19 @@ instance EncodeJson HttpRespond where
     (HttpRespond { status: StatusCode status, statusText, headers, content }) =
     encodeJson { status, statusText, headers, content }
 
+type CreateWalletRecord =
+  { walletName :: WalletName
+  , mnemonic :: WalletMnemonic
+  , walletId :: WalletId
+  , pubKeyHash :: PubKeyHash
+  , address :: Address
+  , walletCompanionId :: PlutusAppId
+  , marloweAppId :: PlutusAppId
+  }
+
 data MarloweRunAction
-  = CreateWallet { walletName :: WalletName }
+  = CreateWallet CreateWalletRecord
   | DropWallet
-  | ConfirmMnemonic { walletName :: WalletName }
   | UseWallet { walletName :: WalletName }
   | PabWebSocketSend { expectPayload :: Json }
   | PabWebSocketReceive { payload :: Json }
@@ -184,7 +198,6 @@ instance Show MarloweRunAction where
   show = case _ of
     DropWallet -> "DropWallet"
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
-    ConfirmMnemonic a -> "(ConfirmMnemonic " <> show a <> ")"
     UseWallet a -> "(UseWallet " <> show a <> ")"
     PabWebSocketSend a -> "(PabWebSocketSend " <> encodeStringifyJson a <> ")"
     PabWebSocketReceive a ->
@@ -199,8 +212,6 @@ instance DecodeJson MarloweRunAction where
       "DropWallet" -> pure DropWallet
       "CreateWallet" ->
         lmap (Named "CreateWallet") $ CreateWallet <$> obj .: "content"
-      "ConfirmMnemonic" ->
-        lmap (Named "ConfirmMnemonic") $ ConfirmMnemonic <$> obj .: "content"
       "UseWallet" ->
         lmap (Named "UseWallet") $ UseWallet <$> obj .: "content"
       "PabWebSocketSend" ->
@@ -217,7 +228,6 @@ instance EncodeJson MarloweRunAction where
   encodeJson = case _ of
     DropWallet -> encodeJson { tag: "DropWallet" }
     CreateWallet content -> encodeJson { tag: "CreateWallet", content }
-    ConfirmMnemonic content -> encodeJson { tag: "ConfirmMnemonic", content }
     UseWallet content -> encodeJson { tag: "UseWallet", content }
     PabWebSocketSend content -> encodeJson { tag: "PabWebSocketSend", content }
     PabWebSocketReceive content ->

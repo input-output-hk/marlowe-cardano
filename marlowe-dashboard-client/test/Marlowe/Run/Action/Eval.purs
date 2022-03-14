@@ -7,29 +7,22 @@ import Affjax.ResponseFormat (ResponseFormat)
 import Affjax.ResponseFormat as ResponseFormat
 import Affjax.ResponseHeader (ResponseHeader(..))
 import Concurrent.Queue as Queue
-import Control.Alt ((<|>))
 import Control.Monad.Error.Class (class MonadError, throwError, try)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Data.AddressBook as AB
 import Data.Align (crosswalk)
-import Data.Argonaut
-  ( decodeJson
-  , encodeJson
-  , printJsonDecodeError
-  , stringifyWithIndent
-  )
-import Data.Argonaut.Extra (parseDecodeJson)
+import Data.Argonaut (class EncodeJson, Json, decodeJson, encodeJson, jsonNull, printJsonDecodeError, stringifyWithIndent)
+import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Array (snoc)
 import Data.Bifunctor (lmap)
 import Data.Bimap as Bimap
 import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
 import Data.Foldable (foldM, for_, traverse_)
-import Data.LocalContractNicknames (emptyLocalContractNicknames)
+import Data.HTTP.Method (Method(..))
 import Data.Newtype (over2)
-import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll)
+import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll, split)
 import Data.String.Extra (repeat)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
@@ -39,42 +32,22 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Halogen.Subscription as HS
+import MarloweContract (MarloweContract(..))
 import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Marlowe.Run (Coenv, marloweRunTest)
-import Test.Marlowe.Run.Action.Types
-  ( HttpExpect(..)
-  , HttpExpectContent(..)
-  , HttpRespond(..)
-  , HttpRespondContent(..)
-  , MarloweRunAction(..)
-  , MarloweRunScript
-  , ScriptError(..)
-  , WalletName
-  , renderScriptError
-  )
-import Test.Network.HTTP
-  ( class MonadMockHTTP
-  , MatcherError(..)
-  , expectJsonContent
-  , expectMethod
-  , expectRequest
-  , expectTextContent
-  , expectUri
-  , renderMatcherError
-  )
+import Test.Marlowe.Run.Action.Types (CreateWalletRecord, HttpExpect(..), HttpExpectContent(..), HttpRespond(..), HttpRespondContent(..), MarloweRunAction(..), MarloweRunScript, PlutusAppId, ScriptError(..), WalletId, WalletName, renderScriptError)
+import Test.Network.HTTP (class MonadMockHTTP, MatcherError(..), expectJsonContent, expectJsonRequest, expectMethod, expectRequest, expectTextContent, expectUri, renderMatcherError)
 import Test.Spec (Spec)
 import Test.Spec.Assertions (fail)
-import Test.Web.DOM.Assertions (shouldCast, shouldNotBeDisabled)
-import Test.Web.DOM.Node (toNode)
+import Test.Web.DOM.Assertions (shouldCast, shouldHaveText, shouldNotBeDisabled)
 import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
 import Test.Web.Event.User (click, clickM, type_)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
 import Web.ARIA (ARIARole(..))
-import Web.DOM.Node (textContent)
 import WebSocket.Support (FromSocket(..))
 
 runScriptedTest :: String -> Spec Unit
@@ -176,13 +149,7 @@ evalAction = case _ of
     dropWallet
 
   -- Evaluate a CreateWallet action by performing the create wallet workflow.
-  CreateWallet { walletName } -> do
-    createWallet walletName
-
-  -- Evaluate a ConfirmMnemonic action by copying the mnemonic presented to the
-  -- user and re-entering it. Also save the mnemonic to the test environment.
-  ConfirmMnemonic { walletName } -> do
-    confirmMnemonic walletName
+  CreateWallet r -> createWallet r
 
   -- Evaluate a UseWallet action by performing the restore wallet workflow.
   UseWallet { walletName } -> do
@@ -190,14 +157,7 @@ evalAction = case _ of
 
   -- Evaluate a PabWebSocketSend action by reading from the output queue and
   -- checking the content against the expectations.
-  PabWebSocketSend { expectPayload } -> do
-    queue <- asks _.pabWebsocketOut
-    msg <- liftAff $
-      Queue.tryRead queue <|> Queue.tryRead queue <|> Queue.tryRead queue
-    case msg of
-      Nothing -> throwError $ error $
-        "A websocket message was expected to be sent."
-      Just msg' -> encodeJson msg' `shouldEqualJson` expectPayload
+  PabWebSocketSend { expectPayload } -> expectPabWebsocketSend expectPayload
 
   -- Evaluate a PabWebSocketReceive action by sending the payload to the
   -- listener.
@@ -251,19 +211,70 @@ openMyWallet action = do
   card <- findBy role $ pure Dialog
   withContainer card action
 
+expectPlutusContractSubscribe
+  :: forall m
+   . MonadMockHTTP m
+  => MonadError Error m
+  => MonadAff m
+  => MonadAsk Coenv m
+  => PlutusAppId
+  -> m Unit
+expectPlutusContractSubscribe plutusAppId = do
+  expectPabWebsocketSend
+    { tag: "Subscribe"
+    , contents: { "Left": { unContractInstanceId: plutusAppId } }
+    }
+
+expectPlutusContractActivation
+  :: forall m
+   . MonadMockHTTP m
+  => MonadError Error m
+  => MonadAff m
+  => MonadAsk Coenv m
+  => WalletId
+  -> MarloweContract
+  -> PlutusAppId
+  -> m Unit
+expectPlutusContractActivation walletId contractType plutusAppId = do
+  expectJsonRequest ado
+    expectMethod POST
+    expectUri "/pab/api/contract/activate"
+    expectJsonContent
+      { caWallet: { prettyWalletName: jsonNull, getWalletId: walletId }
+      , caID: encodeJson contractType
+      }
+    in { unContractInstanceId: plutusAppId }
+
 createWallet
   :: forall m
    . MonadTest m
   => MonadError Error m
   => MonadUser m
-  => WalletName
+  => MonadAsk Coenv m
+  => MonadMockHTTP m
+  => CreateWalletRecord
   -> m Unit
-createWallet walletName = do
+createWallet
+  { walletName
+  , mnemonic
+  , walletId
+  , pubKeyHash
+  , address
+  , walletCompanionId
+  , marloweAppId
+  } = do
   clickM $ getBy role do
     nameRegex "generate" ignoreCase
     pure Button
   dialog <- getBy role $ pure Dialog
   withContainer dialog do
+    fillCreateWalletDialog
+    expectCreateHttpRequest
+    fillConfirmMnemonicDialog
+    expectWalletActivation
+  where
+  fillCreateWalletDialog = do
+
     nicknameField <- getBy role do
       nameRegex "wallet nickname" ignoreCase
       pure Textbox
@@ -272,20 +283,29 @@ createWallet walletName = do
     clickM $ getBy role do
       nameRegex "create wallet" ignoreCase
       pure Button
+  expectCreateHttpRequest = do
+    expectJsonRequest ado
+      expectMethod POST
+      expectUri "/api/wallet/v1/centralized-testnet/create"
+      expectJsonContent $
+        { getCreateWalletName: walletName
+        , getCreatePassphrase: "fixme-allow-pass-per-wallet"
+        }
 
-confirmMnemonic
-  :: forall m
-   . MonadTest m
-  => MonadError Error m
-  => MonadUser m
-  => MonadAsk Coenv m
-  => WalletName
-  -> m Unit
-confirmMnemonic walletName = do
-  dialog <- getBy role $ pure Dialog
-  withContainer dialog do
+      in
+        { mnemonic: split (Pattern " ") mnemonic
+        , walletInfo:
+            { walletId
+            , pubKeyHash:
+                { unPaymentPubKeyHash: { getPubKeyHash: pubKeyHash }
+                }
+            , address
+            }
+        }
+
+  fillConfirmMnemonicDialog = do
     mnemonicText <- findBy role $ pure Mark
-    mnemonic <- liftEffect (textContent $ toNode mnemonicText)
+    mnemonicText `shouldHaveText` mnemonic
     clickM $ getBy role do
       nameRegex "ok" ignoreCase
       pure Button
@@ -300,6 +320,21 @@ confirmMnemonic walletName = do
     click okButton
     wallets <- asks _.wallets
     liftEffect $ Ref.modify_ (Bimap.insert walletName mnemonic) wallets
+
+  expectWalletActivation = do
+    expectJsonRequest ado
+      expectMethod GET
+      expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
+      in ([] :: Array Json)
+
+    expectPlutusContractActivation walletId WalletCompanion walletCompanionId
+    expectPlutusContractActivation walletId MarloweApp marloweAppId
+    expectPabWebsocketSend
+      { tag: "Subscribe"
+      , contents: { "Right": { getPubKeyHash: pubKeyHash } }
+      }
+    expectPlutusContractSubscribe walletCompanionId
+    expectPlutusContractSubscribe marloweAppId
 
 restore
   :: forall m
@@ -331,3 +366,21 @@ restore walletName = do
         clickM $ getBy role do
           nameRegex "restore wallet" ignoreCase
           pure Button
+
+expectPabWebsocketSend
+  :: forall m a
+   . MonadAsk Coenv m
+  => MonadError Error m
+  => EncodeJson a
+  => MonadAff m
+  => a
+  -> m Unit
+expectPabWebsocketSend expectPayload = do
+  queue <- asks _.pabWebsocketOut
+  msg <- liftAff $ Queue.tryRead queue
+  case msg of
+    Nothing -> throwError $ error $ joinWith "\n"
+      [ "A websocket message was expected to be sent:"
+      , encodeStringifyJson expectPayload
+      ]
+    Just msg' -> encodeJson msg' `shouldEqualJson` encodeJson expectPayload

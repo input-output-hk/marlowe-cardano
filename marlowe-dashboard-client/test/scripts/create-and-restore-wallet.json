@@ -1,65 +1,19 @@
 [
-  [0, { "tag": "CreateWallet", "content": { "walletName": "Wallet1" } }],
   [
-    5000,
+    0,
     {
-      "tag": "HttpRequest",
+      "tag": "CreateWallet",
       "content": {
-        "expect": {
-          "method": "POST",
-          "uri": "/api/wallet/v1/centralized-testnet/create",
-          "content": {
-            "tag": "ExpectJson",
-            "content": {
-              "getCreateWalletName": "Wallet1",
-              "getCreatePassphrase": "fixme-allow-pass-per-wallet"
-            }
-          }
-        },
-        "respond": {
-          "content": {
-            "tag": "RespondJson",
-            "content": {
-              "mnemonic": [
-                "praise",
-                "nut",
-                "achieve",
-                "misery",
-                "coil",
-                "shrimp",
-                "post",
-                "change",
-                "view",
-                "crumble",
-                "taxi",
-                "artwork",
-                "hold",
-                "list",
-                "snap",
-                "subject",
-                "shiver",
-                "actress",
-                "video",
-                "summer",
-                "stone",
-                "vicious",
-                "trigger",
-                "inmate"
-              ],
-              "walletInfo": {
-                "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a",
-                "pubKeyHash": {
-                  "unPaymentPubKeyHash": { "getPubKeyHash": "pkh1" }
-                },
-                "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
-              }
-            }
-          }
-        }
+        "walletName": "Wallet1",
+        "mnemonic": "praise nut achieve misery coil shrimp post change view crumble taxi artwork hold list snap subject shiver actress video summer stone vicious trigger inmate",
+        "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a",
+        "pubKeyHash": "b57c4784ed9c9d087053f6f04219aec82fca839a",
+        "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga",
+        "walletCompanionId": "863f130d-9b87-4acd-afe1-74bed1211ff3",
+        "marloweAppId": "7b5e06fc-c302-4c7d-b329-38010c53553d"
       }
     }
   ],
-  [5000, { "tag": "ConfirmMnemonic", "content": { "walletName": "Wallet1" } }],
   [
     10000,
     {
@@ -67,36 +21,14 @@
       "content": {
         "expect": {
           "method": "GET",
-          "uri": "/pab/api/contract/instances/wallet/b57c4784ed9c9d087053f6f04219aec82fca839a?"
-        },
-        "respond": { "content": { "tag": "RespondJson", "content": [] } }
-      }
-    }
-  ],
-  [
-    10000,
-    {
-      "tag": "HttpRequest",
-      "content": {
-        "expect": {
-          "method": "POST",
-          "uri": "/pab/api/contract/activate",
-          "content": {
-            "tag": "ExpectJson",
-            "content": {
-              "caWallet": {
-                "prettyWalletName": null,
-                "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
-              },
-              "caID": "WalletCompanion"
-            }
-          }
+          "uri": "/api/wallet/v1/b57c4784ed9c9d087053f6f04219aec82fca839a/total-funds"
         },
         "respond": {
           "content": {
             "tag": "RespondJson",
             "content": {
-              "unContractInstanceId": "863f130d-9b87-4acd-afe1-74bed1211ff3"
+              "assets": [],
+              "sync": 0
             }
           }
         }
@@ -109,74 +41,17 @@
       "tag": "HttpRequest",
       "content": {
         "expect": {
-          "method": "POST",
-          "uri": "/pab/api/contract/activate",
-          "content": {
-            "tag": "ExpectJson",
-            "content": {
-              "caWallet": {
-                "prettyWalletName": null,
-                "getWalletId": "b57c4784ed9c9d087053f6f04219aec82fca839a"
-              },
-              "caID": "MarloweApp"
-            }
-          }
+          "method": "GET",
+          "uri": "/api/wallet/v1/b57c4784ed9c9d087053f6f04219aec82fca839a/total-funds"
         },
         "respond": {
           "content": {
             "tag": "RespondJson",
             "content": {
-              "unContractInstanceId": "7b5e06fc-c302-4c7d-b329-38010c53553d"
+              "assets": [],
+              "sync": 0
             }
           }
-        }
-      }
-    }
-  ],
-  [
-    10000,
-    {
-      "tag": "PabWebSocketSend",
-      "content": {
-        "expectPayload": {
-          "contents": {
-            "Right": {
-              "getPubKeyHash": "b57c4784ed9c9d087053f6f04219aec82fca839a"
-            }
-          },
-          "tag": "Subscribe"
-        }
-      }
-    }
-  ],
-  [
-    10000,
-    {
-      "tag": "PabWebSocketSend",
-      "content": {
-        "expectPayload": {
-          "contents": {
-            "Left": {
-              "unContractInstanceId": "863f130d-9b87-4acd-afe1-74bed1211ff3"
-            }
-          },
-          "tag": "Subscribe"
-        }
-      }
-    }
-  ],
-  [
-    10000,
-    {
-      "tag": "PabWebSocketSend",
-      "content": {
-        "expectPayload": {
-          "contents": {
-            "Left": {
-              "unContractInstanceId": "7b5e06fc-c302-4c7d-b329-38010c53553d"
-            }
-          },
-          "tag": "Subscribe"
         }
       }
     }
@@ -340,185 +215,18 @@
       }
     }
   ],
-  [15000, { "tag": "CreateWallet", "content": { "walletName": "Wallet2" } }],
   [
-    20000,
+    15000,
     {
-      "tag": "HttpRequest",
+      "tag": "CreateWallet",
       "content": {
-        "expect": {
-          "method": "POST",
-          "uri": "/api/wallet/v1/centralized-testnet/create",
-          "content": {
-            "tag": "ExpectJson",
-            "content": {
-              "getCreateWalletName": "Wallet2",
-              "getCreatePassphrase": "fixme-allow-pass-per-wallet"
-            }
-          }
-        },
-        "respond": {
-          "content": {
-            "tag": "RespondJson",
-            "content": {
-              "mnemonic": [
-                "achieve",
-                "actress",
-                "artwork",
-                "change",
-                "coil",
-                "crumble",
-                "hold",
-                "inmate",
-                "list",
-                "misery",
-                "nut",
-                "post",
-                "praise",
-                "shiver",
-                "shrimp",
-                "snap",
-                "stone",
-                "subject",
-                "summer",
-                "taxi",
-                "trigger",
-                "vicious",
-                "video",
-                "view"
-              ],
-              "walletInfo": {
-                "walletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870",
-                "pubKeyHash": {
-                  "unPaymentPubKeyHash": { "getPubKeyHash": "pkh1" }
-                },
-                "address": "addr_test1z76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffgaqp8fta3c0g85dd9pu4fp4tsjq955w2z"
-              }
-            }
-          }
-        }
-      }
-    }
-  ],
-  [20000, { "tag": "ConfirmMnemonic", "content": { "walletName": "Wallet2" } }],
-  [
-    25000,
-    {
-      "tag": "HttpRequest",
-      "content": {
-        "expect": {
-          "method": "GET",
-          "uri": "/pab/api/contract/instances/wallet/53f6f04219aec82fca839ab57c4784ed9c9d0870?"
-        },
-        "respond": { "content": { "tag": "RespondJson", "content": [] } }
-      }
-    }
-  ],
-  [
-    25000,
-    {
-      "tag": "HttpRequest",
-      "content": {
-        "expect": {
-          "method": "POST",
-          "uri": "/pab/api/contract/activate",
-          "content": {
-            "tag": "ExpectJson",
-            "content": {
-              "caWallet": {
-                "prettyWalletName": null,
-                "getWalletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
-              },
-              "caID": "WalletCompanion"
-            }
-          }
-        },
-        "respond": {
-          "content": {
-            "tag": "RespondJson",
-            "content": {
-              "unContractInstanceId": "84d5fa39-3f7c-43ec-9715-d560407df5d3"
-            }
-          }
-        }
-      }
-    }
-  ],
-  [
-    25000,
-    {
-      "tag": "HttpRequest",
-      "content": {
-        "expect": {
-          "method": "POST",
-          "uri": "/pab/api/contract/activate",
-          "content": {
-            "tag": "ExpectJson",
-            "content": {
-              "caWallet": {
-                "prettyWalletName": null,
-                "getWalletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
-              },
-              "caID": "MarloweApp"
-            }
-          }
-        },
-        "respond": {
-          "content": {
-            "tag": "RespondJson",
-            "content": {
-              "unContractInstanceId": "c376cbd9-6fb6-4785-a688-3dd8c01eb878"
-            }
-          }
-        }
-      }
-    }
-  ],
-  [
-    25000,
-    {
-      "tag": "PabWebSocketSend",
-      "content": {
-        "expectPayload": {
-          "contents": {
-            "Right": {
-              "getPubKeyHash": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
-            }
-          },
-          "tag": "Subscribe"
-        }
-      }
-    }
-  ],
-  [
-    25000,
-    {
-      "tag": "PabWebSocketSend",
-      "content": {
-        "expectPayload": {
-          "contents": {
-            "Left": {
-              "unContractInstanceId": "84d5fa39-3f7c-43ec-9715-d560407df5d3"
-            }
-          },
-          "tag": "Subscribe"
-        }
-      }
-    }
-  ],
-  [
-    25000,
-    {
-      "tag": "PabWebSocketSend",
-      "content": {
-        "expectPayload": {
-          "contents": {
-            "Left": {
-              "unContractInstanceId": "c376cbd9-6fb6-4785-a688-3dd8c01eb878"
-            }
-          },
-          "tag": "Subscribe"
-        }
+        "walletName": "Wallet2",
+        "mnemonic": "praise nut achieve misery coil shrimp post view change crumble taxi artwork hold list snap subject shiver actress video summer stone vicious trigger inmate",
+        "walletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870",
+        "pubKeyHash": "53f6f04219aec82fca839ab57c4784ed9c9d0870",
+        "address": "addr_test1z76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffgaqp8fta3c0g85dd9pu4fp4tsjq955w2z",
+        "walletCompanionId": "84d5fa39-3f7c-43ec-9715-d560407df5d3",
+        "marloweAppId": "c376cbd9-6fb6-4785-a688-3dd8c01eb878"
       }
     }
   ],
