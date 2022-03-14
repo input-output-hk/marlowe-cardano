@@ -213,3 +213,24 @@ in  upstream
         ]
         "https://github.com/jhbertra/purescript-halogen-nselect"
         "v1.0.0"
+  with halogen-store =
+      mkPackage
+        [ "aff"
+        , "distributive"
+        , "effect"
+        , "foldable-traversable"
+        , "fork"
+        , "halogen"
+        , "halogen-hooks"
+        , "halogen-subscriptions"
+        , "maybe"
+        , "prelude"
+        , "refs"
+        , "tailrec"
+        , "transformers"
+        , "tuples"
+        , "unsafe-coerce"
+        , "unsafe-reference"
+        ]
+        "https://github.com/thomashoneyman/purescript-halogen-store"
+        "v0.4.1"

@@ -655,24 +655,15 @@ subscribeToSources
   => MonadStore Store.Action Store.Store m
   => HalogenM State Action slots msg m Unit
 subscribeToSources = do
+  let walletSelector = preview $ _wallet <<< _Connected
+  -- emitSelected doesn't send an initial update when a subscription is
+  -- first created, so we need to fire this manually.
   walletInitial <- liftEffect HS.create
-  walletUpdates <- liftEffect HS.create
-  storeEmitter <- emitSelected $ selectEq $ preview $ _wallet <<< _Connected
-  -- emitSelected does not start by emitting the current value in the store, so
-  -- we need to do that ourselves. Because it also uses Refs to track the
-  -- latest value, it can't be used more than once. This means we need to
-  -- manually create a new emitter that can be used to "fan out" one value
-  -- many.
-  _ <- liftEffect $ HS.subscribe storeEmitter $ HS.notify walletUpdates.listener
-  let
-    wallet =
-      walletInitial.emitter <|> walletUpdates.emitter :: Emitter
-        (Maybe PABConnectedWallet)
+  walletUpdates <- emitSelected $ selectEq walletSelector
+  let wallet = walletInitial.emitter <|> walletUpdates
   void <<< H.subscribe <<< compactEmitter =<< actionsFromSources wallet
   store <- getStore
-  liftEffect
-    $ HS.notify walletInitial.listener
-    $ store ^? _wallet <<< _Connected
+  liftEffect $ HS.notify walletInitial.listener $ walletSelector store
 
 actionsFromSources
   :: forall m

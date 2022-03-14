@@ -11,13 +11,11 @@ import Control.Monad.Reader
   ( class MonadReader
   , ReaderT
   , asks
-  , mapReaderT
   , runReaderT
   , withReaderT
   )
 import Control.Monad.Reader.Class (class MonadAsk)
-import Control.Monad.Rec.Class (class MonadRec, tailRecM)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Array as A
 import Data.Lens (Lens', over, to, view)
 import Data.Lens.Record (prop)
@@ -39,14 +37,7 @@ import Env
   )
 import Halogen (Component)
 import Halogen.Component (hoist)
-import Halogen.Store.Monad
-  ( class MonadStore
-  , StoreT(..)
-  , emitSelected
-  , getStore
-  , runStoreT
-  , updateStore
-  )
+import Halogen.Store.Monad (class MonadStore, StoreT, runStoreT)
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
@@ -96,29 +87,20 @@ derive newtype instance MonadEffect AppM
 
 derive newtype instance MonadAff AppM
 
+derive newtype instance MonadRec AppM
+
+derive newtype instance MonadAsk Env AppM
+
+derive newtype instance MonadReader Env AppM
+
+derive newtype instance MonadStore Store.Action Store.Store AppM
+
 instance MonadTime AppM where
   now = liftEffect =<< (asks $ view $ _sources <<< to _.currentTime)
   timezoneOffset = asks $ view _timezoneOffset
   makeClock interval = do
     MakeClock mkClock <- asks $ view _makeClock
     liftEffect $ mkClock interval
-
--- TODO use newtype deriving when MonadRec instance is added to StoreT
-instance MonadRec AppM where
-  tailRecM rec a = AppM $ mapReaderT StoreT $ tailRecM rec' a
-    where
-    rec' = map (mapReaderT unStoreT <<< unAppM) rec
-    unAppM (AppM m) = m
-    unStoreT (StoreT m) = m
-
-instance MonadStore Store.Action Store.Store AppM where
-  getStore = AppM (lift getStore)
-  updateStore = AppM <<< lift <<< updateStore
-  emitSelected = AppM <<< lift <<< emitSelected
-
-derive newtype instance MonadAsk Env AppM
-
-derive newtype instance MonadReader Env AppM
 
 -- TODO move to servant-support and add more lenses
 _uri
