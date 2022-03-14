@@ -264,8 +264,9 @@ data PabOperation =
   | PrintState
   | ActivateFollower
     {
-      poOwner    :: RoleName
-    , poInstance :: InstanceNickname
+      poOwner       :: RoleName
+    , poInstance    :: InstanceNickname
+    , poAppInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance that is being followed.
     }
   | CallFollow
     {
@@ -357,7 +358,7 @@ data FollowerInstanceInfo =
   {
     fiInstance :: ContractInstanceId
   , fiChannel  :: Chan A.Value
-  , fiParams   :: Maybe MarloweParams
+  , fiParams   :: MarloweParams
   }
     deriving (Eq)
 

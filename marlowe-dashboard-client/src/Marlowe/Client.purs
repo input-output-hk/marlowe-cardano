@@ -7,6 +7,7 @@ module Marlowe.Client
   ( getContract
   , getInitialData
   , getMarloweParams
+  , getPayouts
   , getTransactionInputs
   ) where
 
@@ -15,7 +16,7 @@ import Prologue
 import Data.Lens (Lens', view)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Language.Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, Payouts)
 import Marlowe.Semantics
   ( Contract
   , MarloweData
@@ -34,6 +35,9 @@ _chInitialData = _Newtype <<< prop (Proxy :: _ "chInitialData")
 _chHistory :: Lens' ContractHistory (Array TransactionInput)
 _chHistory = _Newtype <<< prop (Proxy :: _ "chHistory")
 
+_chPayouts :: Lens' ContractHistory Payouts
+_chPayouts = _Newtype <<< prop (Proxy :: _ "chPayouts")
+
 -- _chAddress :: Lens' ContractHistory Address
 -- _chAddress = _Newtype <<< prop (Proxy :: _ "chAddress")
 
@@ -48,3 +52,6 @@ getInitialData = view _chInitialData
 
 getMarloweParams :: ContractHistory -> MarloweParams
 getMarloweParams = view _chParams
+
+getPayouts :: ContractHistory -> Payouts
+getPayouts = view _chPayouts

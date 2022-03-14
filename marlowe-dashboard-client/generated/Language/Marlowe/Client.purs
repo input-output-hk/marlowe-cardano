@@ -11,16 +11,20 @@ import Data.Argonaut.Decode.Aeson as D
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Argonaut.Encode.Aeson ((>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
+import Data.Array (nubEq)
 import Data.Generic.Rep (class Generic)
 import Data.Lens (Iso', Lens', Prism', iso, prism')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (class Newtype, unwrap)
+import Data.Semigroup (class Semigroup, append)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
+import Language.Marlowe.Client.History (RolePayout)
 import Marlowe.Semantics
   ( MarloweData
   , MarloweParams
@@ -36,6 +40,7 @@ newtype ContractHistory = ContractHistory
   , chInitialData :: MarloweData
   , chHistory :: Array TransactionInput
   , chAddress :: Address
+  , chUnspentPayouts :: UnspentPayouts
   }
 
 derive instance Eq ContractHistory
@@ -50,6 +55,7 @@ instance EncodeJson ContractHistory where
         , chInitialData: E.value :: _ MarloweData
         , chHistory: E.value :: _ (Array TransactionInput)
         , chAddress: E.value :: _ Address
+        , chUnspentPayouts: E.value :: _ UnspentPayouts
         }
     )
 
@@ -60,6 +66,7 @@ instance DecodeJson ContractHistory where
         , chInitialData: D.value :: _ MarloweData
         , chHistory: D.value :: _ (Array TransactionInput)
         , chAddress: D.value :: _ Address
+        , chUnspentPayouts: D.value :: _ UnspentPayouts
         }
     )
 
@@ -69,13 +76,13 @@ derive instance Newtype ContractHistory _
 
 --------------------------------------------------------------------------------
 
-_ContractHistory
-  :: Iso' ContractHistory
-       { chParams :: MarloweParams
-       , chInitialData :: MarloweData
-       , chHistory :: Array TransactionInput
-       , chAddress :: Address
-       }
+_ContractHistory :: Iso' ContractHistory
+  { chParams :: MarloweParams
+  , chInitialData :: MarloweData
+  , chHistory :: Array TransactionInput
+  , chAddress :: Address
+  , chUnspentPayouts :: UnspentPayouts
+  }
 _ContractHistory = _Newtype
 
 --------------------------------------------------------------------------------
@@ -260,3 +267,34 @@ _OtherContractError :: Prism' MarloweError ContractError
 _OtherContractError = prism' OtherContractError case _ of
   (OtherContractError a) -> Just a
   _ -> Nothing
+
+--------------------------------------------------------------------------------
+
+newtype UnspentPayouts = UnspentPayouts (Array RolePayout)
+
+derive instance Eq UnspentPayouts
+
+instance Show UnspentPayouts where
+  show a = genericShow a
+
+instance EncodeJson UnspentPayouts where
+  encodeJson = defer \_ -> E.encode $ unwrap >$< E.value
+
+instance DecodeJson UnspentPayouts where
+  decodeJson = defer \_ -> D.decode $ (UnspentPayouts <$> D.value)
+
+instance Monoid UnspentPayouts where
+  mempty = UnspentPayouts mempty
+
+instance Semigroup UnspentPayouts where
+  append (UnspentPayouts p1) (UnspentPayouts p2) = UnspentPayouts $ Array.nubEq
+    (append p1 p2)
+
+derive instance Generic UnspentPayouts _
+
+derive instance Newtype UnspentPayouts _
+
+--------------------------------------------------------------------------------
+
+_UnspentPayouts :: Iso' UnspentPayouts (Array RolePayout)
+_UnspentPayouts = _Newtype

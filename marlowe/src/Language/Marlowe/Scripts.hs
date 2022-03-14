@@ -63,6 +63,13 @@ data MarloweTxInput = Input InputContent
   deriving anyclass (Pretty)
 
 
+data TypedRolePayoutValidator
+
+instance Scripts.ValidatorTypes TypedRolePayoutValidator where
+  type instance RedeemerType TypedRolePayoutValidator = ()
+  type instance DatumType TypedRolePayoutValidator = TokenName
+
+
 rolePayoutScript :: CurrencySymbol -> Validator
 rolePayoutScript symbol = mkValidatorScript ($$(PlutusTx.compile [|| wrapped ||]) `PlutusTx.applyCode` PlutusTx.liftCode symbol)
   where

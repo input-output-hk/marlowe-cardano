@@ -675,6 +675,7 @@
         "vault".revision = (((hackage."vault")."0.3.1.5").revisions).default;
         "vault".flags.useghc = true;
         "data-default-instances-old-locale".revision = (((hackage."data-default-instances-old-locale")."0.0.1").revisions).default;
+        "one-line-aeson-text".revision = (((hackage."one-line-aeson-text")."0.1.0.2").revisions).default;
         "optics-core".revision = (((hackage."optics-core")."0.3.0.1").revisions).default;
         "indexed-traversable-instances".revision = (((hackage."indexed-traversable-instances")."0.1.1").revisions).default;
         "primitive-addr".revision = (((hackage."primitive-addr")."0.1.0.2").revisions).default;
@@ -1402,6 +1403,7 @@
           "typed-protocols-examples".components.library.planned = lib.mkOverride 900 true;
           "libBF".components.library.planned = lib.mkOverride 900 true;
           "old-time".components.library.planned = lib.mkOverride 900 true;
+          "one-line-aeson-text".components.library.planned = lib.mkOverride 900 true;
           "byteslice".components.library.planned = lib.mkOverride 900 true;
           "word8".components.library.planned = lib.mkOverride 900 true;
           "http-client".components.library.planned = lib.mkOverride 900 true;

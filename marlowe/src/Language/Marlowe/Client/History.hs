@@ -1,11 +1,11 @@
-
-
 -- | Extraction of Marlowe contracts and history from transaction data.
 
 
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
 
 
@@ -14,12 +14,16 @@ module Language.Marlowe.Client.History (
   History(..)
 , MarloweTxOut
 , MarloweTxOutRef
+, RolePayoutTxOut
+, RolePayoutTxOutRef
+, RolePayout(..)
 -- * Contract History
 , marloweHistory
 , marloweHistoryFrom
 , marloweUtxoStatesAt
 , marloweStatesFrom
 , toMarloweState
+, toRolePayout
 -- * History Queriies
 , history
 , historyFrom
@@ -29,7 +33,9 @@ module Language.Marlowe.Client.History (
 , txDatums
 , txInputs
 , txRedeemers
+, txRoleData
 , toMarlowe
+, toRole
 ) where
 
 
@@ -43,13 +49,15 @@ import Data.List (nub)
 import Data.Maybe (catMaybes, isJust, isNothing, mapMaybe)
 import Data.Tuple.Extra (secondM)
 import GHC.Generics (Generic)
-import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, smallUntypedValidator)
+import Language.Marlowe.Scripts (SmallTypedValidator, TypedMarloweValidator, TypedRolePayoutValidator,
+                                 smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData, MarloweParams (..), TransactionInput (TransactionInput))
 import Ledger (ChainIndexTxOut (..), PaymentPubKeyHash (..), ciTxOutAddress, toTxOut)
 import Ledger.TimeSlot (slotRangeToPOSIXTimeRange)
 import Ledger.Tx.CardanoAPI (SomeCardanoApiTx (SomeTx))
-import Ledger.Typed.Scripts (validatorAddress)
+import Ledger.Typed.Scripts (DatumType, validatorAddress)
 import Ledger.Typed.Tx (TypedScriptTxOut (..), TypedScriptTxOutRef (..))
+import qualified Ledger.Value (TokenName, Value)
 import Plutus.ChainIndex.Tx (ChainIndexTx, ChainIndexTxOutputs (..), citxCardanoTx, citxData, citxInputs, citxOutputs,
                              citxScripts, citxTxId, citxValidRange)
 import Plutus.Contract (Contract, ownPaymentPubKeyHash)
@@ -62,6 +70,7 @@ import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol (..),
                              UpperBound (..), dataToBuiltinData, fromBuiltinData, toBuiltin)
 import Plutus.V1.Ledger.Scripts (ScriptHash (..))
 import Plutus.V1.Ledger.Tx (txInRef)
+import qualified PlutusTx.IsData.Class
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo (Data (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo (ScriptPurpose (Spending), ValidatedTx (..), body, indexedRdmrs,
@@ -79,6 +88,26 @@ type MarloweTxOut = TypedScriptTxOut TypedMarloweValidator
 
 -- | A transaction output specific to Marlowe.
 type MarloweTxOutRef = TypedScriptTxOutRef TypedMarloweValidator
+
+
+-- | A transaction-output reference specific to Marlowe role payout.
+type RolePayoutTxOut = TypedScriptTxOut TypedRolePayoutValidator
+
+
+-- | A transaction output specific to Marlowe role payout.
+type RolePayoutTxOutRef = TypedScriptTxOutRef TypedRolePayoutValidator
+
+
+-- | Role payout
+data RolePayout =
+    RolePayout
+    {
+      rolePayoutTxOutRef :: TxOutRef
+    , rolePayoutName     :: Ledger.Value.TokenName
+    , rolePayoutValue    :: Ledger.Value.Value
+    }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (ToJSON, FromJSON)
 
 
 -- | History of a Marlowe contract.
@@ -260,6 +289,14 @@ toMarloweState :: MarloweTxOutRef  -- ^ The Marlowe-specific output.
 toMarloweState = tyTxOutData . tyTxOutRefOut
 
 
+toRolePayout :: RolePayoutTxOutRef  -- ^ Role payout specific output
+             -> RolePayout          -- ^ The role payout.
+toRolePayout t = RolePayout
+  (tyTxOutRefRef t)
+  (tyTxOutData . tyTxOutRefOut $ t)
+  (txOutValue . tyTxOutTxOut . tyTxOutRefOut $ t)
+
+
 -- | Test whether a transaction created a Marlowe contract.
 creationTxOut :: MarloweParams          -- ^ The Marlowe validator parameters.
               -> Address                -- ^ The Marlowe validator address.
@@ -292,16 +329,39 @@ txMarloweData :: ChainIndexTx       -- ^ The transaction.
               -> [MarloweTxOutRef]  -- ^ The outputs that have Marlowe data.
 txMarloweData citx =
   catMaybes
-    $ uncurry (toMarlowe citx)
+    $ uncurry (toTypedScriptTxOutRef citx)
     <$> txDatums citx
 
 
--- | Make an output specific to Marlowe.
-toMarlowe :: ChainIndexTx           -- ^ The transaction.
-          -> TxOut                  -- ^ The output.
-          -> TxOutRef               -- ^ The output reference.
-          -> Maybe MarloweTxOutRef  -- ^ The Marlowe-specific output, if any.
-toMarlowe citx txOut txOutRef =
+txRoleData :: ChainIndexTx          -- ^ The transaction.
+           -> [RolePayoutTxOutRef]  -- ^ The outputs that have Marlowe data.
+txRoleData citx =
+  catMaybes
+    $ uncurry (toTypedScriptTxOutRef citx)
+    <$> txDatums citx
+
+toMarlowe :: ChainIndexTx
+          -> TxOut
+          -> TxOutRef
+          -> Maybe MarloweTxOutRef
+toMarlowe = toTypedScriptTxOutRef @TypedMarloweValidator
+
+
+toRole :: ChainIndexTx
+        -> TxOut
+        -> TxOutRef
+        -> Maybe RolePayoutTxOutRef
+toRole = toTypedScriptTxOutRef @TypedRolePayoutValidator
+
+
+toTypedScriptTxOutRef :: forall a.
+                         (PlutusTx.IsData.Class.FromData (DatumType a),
+                          PlutusTx.IsData.Class.ToData (DatumType a))
+                      => ChainIndexTx                   -- ^ The transaction.
+                      -> TxOut                          -- ^ The output.
+                      -> TxOutRef                       -- ^ The output reference.
+                      -> Maybe (TypedScriptTxOutRef a)  -- ^ The Marlowe-specific output, if any.
+toTypedScriptTxOutRef citx txOut txOutRef =
   do
     dh <- txOutDatumHash txOut
     dat <- M.lookup dh $ citx ^. citxData

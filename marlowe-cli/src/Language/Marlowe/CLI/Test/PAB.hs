@@ -237,7 +237,7 @@ interpret access CheckFunds{..} =
 interpret access ActivateApp{..} =
   do
     WalletInfo{..} <- findOwner poOwner
-    (aiInstance, aiChannel) <- runContract access MarloweFollower wiWalletId'
+    (aiInstance, aiChannel) <- runContract access MarloweApp wiWalletId'
     let
       aiParams = Nothing
     liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show poInstance <> " with identifier " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
@@ -372,30 +372,42 @@ interpret _ Follow{..} =
 interpret access ActivateFollower{..} =
   do
     WalletInfo{..} <- findOwner poOwner
-    (fiInstance, fiChannel) <- runContract access MarloweApp wiWalletId'
-    let
-      fiParams = Nothing
-    liftIO . putStrLn $ "[activateMarloweContract] Activated MarloweFollower instance " <> show (unContractInstanceId fiInstance) <> " for role " <> show poOwner <> "."
-    psFollowerInstances %= M.insert poInstance FollowerInstanceInfo{..}
+    (fiInstance, fiChannel) <- runContract access MarloweFollower wiWalletId'
+    AppInstanceInfo{..} <- findAppInstance poAppInstance
+    case aiParams of
+      Nothing -> throwError . CliError $ "[ActivateFollower] not able to follow AppInstance with missinng MarloweParams."
+      Just params -> do
+                        let
+                          fiParams = params
+                        liftIO . putStrLn $
+                          "[ActivateFollower] Activated MarloweFollower instance "
+                          <> show (unContractInstanceId fiInstance)
+                          <> " for role "
+                          <> show poOwner
+                          <> "."
+                        psFollowerInstances %= M.insert poInstance FollowerInstanceInfo{..}
 
 interpret access CallFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
-    uuid <- liftIO nextRandom
     lift
-      $ call access fiInstance "follow" uuid
+      $ call access fiInstance "follow" fiParams
     liftIO . putStrLn $ "[CallFollow] Endpoint \"follow\" called on " <> show (unContractInstanceId fiInstance) <> "."
 
 interpret _ AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
+    liftIO . putStrLn $ "[AwaitFollow] fetching channel messages."
+    -- ^ We expect a `null` preceeds any actual response
+    _ <- liftIO $ readChan fiChannel
     contractHistoryJSON <- liftIO $ readChan fiChannel
     let
       extractJSON (Parts json) = json
       extractJSON (Exact json) = json
 
-    unless (matchJSON poResponse contractHistoryJSON) $ do
-      throwError $ CliError $ T.unpack $
+    if matchJSON poResponse contractHistoryJSON
+      then liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
+      else throwError $ CliError $ T.unpack $
         "[AwaitFollow] Received response does not match expected pattern. Expected: "
         <> renderValue (extractJSON poResponse)
         <> ". Received: "
@@ -655,9 +667,13 @@ runContract PabAccess{..} contract walletId =
       go :: Connection -> ExceptT CliError IO ()
       go connection =
         do
+          let
+            repr (NewObservableState s) = T.unpack $ renderValue s
+            repr other                  = show other
+
           status <- receiveStatus connection
           when verbose
-            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> show status <> "."
+            $ liftIO . putStrLn $ "[runContract] Instance " <> show (unContractInstanceId instanceId) <> " received " <> repr status <> "."
           case status of
             NewObservableState s -> do
                                       state <- liftCli $ parseEither parseJSON s
