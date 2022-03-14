@@ -111,8 +111,8 @@ choose choiceId cont =
 -- |A /Covered Call/ is an option strategy constructed by writing a call on a token
 -- and in addition providing the token as cover/collateral as part of the contract
 coveredCall ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
+     Party    -- ^ Issuer of the covered Call
+  -> Party    -- ^ Counter-party
   -> Token    -- ^ Currency
   -> Token    -- ^ Underlying
   -> Value    -- ^ Strike price (in currency)
@@ -121,9 +121,9 @@ coveredCall ::
   -> Timeout  -- ^ Maturity
   -> Timeout  -- ^ Settlement Date
   -> Contract -- ^ Covered Call Contract
-coveredCall buyer seller currency underlying strike ratio issue maturity settlement =
-    deposit buyer buyer (underlying, ratio) issue Close
-  $ option European Call seller buyer (underlying, ratio) (currency, strike) maturity settlement
+coveredCall issuer counterparty currency underlying strike ratio issue maturity settlement =
+    deposit issuer issuer (underlying, ratio) issue Close
+  $ option American Call counterparty issuer (underlying, ratio) (currency, strike) maturity settlement
 
 -- |A /Straddle/ involves simultaneously buying a call and a put option
 -- for the same underlying with the same strike and the same expiry.

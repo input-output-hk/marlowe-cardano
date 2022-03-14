@@ -97,15 +97,15 @@ data TemplateCommand =
   | TemplateCoveredCall
     {
       minAda         :: Integer   -- ^ Lovelace that the lender contributes to the initial state.
-    , buyer          :: Party     -- ^ The lender.
-    , seller         :: Party     -- ^ The borrower.
-    , currency       :: Token     -- ^ Second party's token.
-    , underlying     :: Token     -- ^ Second party's token.
-    , strike         :: Integer   -- ^ The principal.
-    , amount         :: Integer   -- ^ The interest.
-    , issueDate      :: Timeout   -- ^ The lending deadline.
-    , maturityDate   :: Timeout   -- ^ The payback deadline.
-    , settlementDate :: Timeout   -- ^ The payback deadline.
+    , issuer         :: Party     -- ^ The issuer.
+    , counterparty   :: Party     -- ^ The counter-party.
+    , currency       :: Token     -- ^ The currency token.
+    , underlying     :: Token     -- ^ The underlying token.
+    , strike         :: Integer   -- ^ The strike in currency.
+    , amount         :: Integer   -- ^ The amount of underlying.
+    , issueDate      :: Timeout   -- ^ The issue date.
+    , maturityDate   :: Timeout   -- ^ The maturity date.
+    , settlementDate :: Timeout   -- ^ The settlement date.
     , contractFile   :: FilePath  -- ^ The output JSON file representing the Marlowe contract.
     , stateFile      :: FilePath  -- ^ The output JSON file representing the Marlowe contract's state.
     }
@@ -162,8 +162,8 @@ runTemplateCommand TemplateZeroCouponBond{..} = let marloweContract = makeContra
                                                  in makeExample contractFile stateFile MarloweData{..}
 runTemplateCommand TemplateCoveredCall{..}    = let marloweContract = makeContract $
                                                      coveredCall
-                                                       buyer
-                                                       seller
+                                                       issuer
+                                                       counterparty
                                                        currency
                                                        underlying
                                                        (Constant strike)
@@ -171,7 +171,7 @@ runTemplateCommand TemplateCoveredCall{..}    = let marloweContract = makeContra
                                                        issueDate
                                                        maturityDate
                                                        settlementDate
-                                                    marloweState = initialMarloweState buyer minAda
+                                                    marloweState = initialMarloweState issuer minAda
                                                  in makeExample contractFile stateFile MarloweData{..}
 
 
@@ -315,8 +315,8 @@ templateCoveredCallOptions :: O.Parser TemplateCommand
 templateCoveredCallOptions =
   TemplateCoveredCall
     <$> O.option O.auto       (O.long "minimum-ada"       <> O.metavar "INTEGER"       <> O.help "Lovelace that the lender contributes to the initial state." )
-    <*> O.option parseParty   (O.long "buyer"             <> O.metavar "PARTY"         <> O.help "The buyer."                                                 )
-    <*> O.option parseParty   (O.long "seller"            <> O.metavar "PARTY"         <> O.help "The seller."                                                )
+    <*> O.option parseParty   (O.long "issuer"            <> O.metavar "PARTY"         <> O.help "The issuer."                                                )
+    <*> O.option parseParty   (O.long "counter-party"     <> O.metavar "PARTY"         <> O.help "The counter-party."                                         )
     <*> O.option parseToken   (O.long "currency"          <> O.metavar "TOKEN"         <> O.help "The curreny."                                               )
     <*> O.option parseToken   (O.long "underlying"        <> O.metavar "TOKEN"         <> O.help "The underlying asset."                                      )
     <*> O.option O.auto       (O.long "strike"            <> O.metavar "INTEGER"       <> O.help "The strike, in currency."                                   )
