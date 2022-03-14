@@ -11,6 +11,8 @@ module Data.ContractValue
 
 import Prologue
 
+import Data.Argonaut (class EncodeJson)
+import Data.Argonaut.Encode.Generic (genericEncodeJson)
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bounded.Generic (genericBottom, genericTop)
@@ -70,6 +72,9 @@ derive instance Eq ContractValue
 derive instance Ord ContractValue
 instance Show ContractValue where
   show = genericShow
+
+instance EncodeJson ContractValue where
+  encodeJson a = genericEncodeJson a
 
 fromString'
   :: (String -> Either ContractValueError BigInt)

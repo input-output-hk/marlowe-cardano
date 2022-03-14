@@ -15,16 +15,13 @@ import Data.Argonaut (Json, JsonDecodeError)
 import Data.DateTime.Instant (Instant)
 import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
-import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
 import Data.WalletId (WalletId)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
-import Halogen.Store.Connect (Connected)
-import Language.Marlowe.Client (MarloweError)
-import Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweData, MarloweParams)
 import Page.Contract.Types as ContractPage
@@ -92,20 +89,6 @@ _toaster = Proxy
 ------------------------------------------------------------
 data Query a
   = MainFrameActionQuery Action a
-  | GetWallet (PABConnectedWallet -> a)
-  | NewWebSocketStatus WebSocketStatus a
-  | NotificationParseFailed String Json JsonDecodeError a
-  | CompanionAppStateUpdated (Map MarloweParams MarloweData) a
-  | MarloweContractCreated UUID MarloweParams a
-  | InputsApplied UUID a
-  | PaymentRedeemed UUID a
-  | CreateFailed UUID MarloweError a
-  | ApplyInputsFailed UUID MarloweError a
-  | RedeemFailed UUID MarloweError a
-  | ContractHistoryUpdated PlutusAppId ContractHistory a
-  | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint) a
-  | MarloweAppClosed (Maybe Json) a
-  | WalletCompanionAppClosed (Maybe Json) a
 
 data Msg
   = MainFrameActionMsg Action
@@ -114,17 +97,31 @@ data Msg
 data Action
   = WelcomeAction Welcome.Action
   | DashboardAction Dashboard.Action
-  | Receive (Connected Slice Unit)
+  | Receive Slice
   | Init
-  | Tick Instant
+  | Tick
   | OnPoll SyncStatus WalletId
+  | NewWebSocketStatus WebSocketStatus
+  | NotificationParseFailed String Json JsonDecodeError
+  | CompanionAppStateUpdated (Map MarloweParams MarloweData)
+  | MarloweContractCreated UUID MarloweParams
+  | InputsApplied UUID
+  | PaymentRedeemed UUID
+  | CreateFailed UUID MarloweError
+  | ApplyInputsFailed UUID MarloweError
+  | RedeemFailed UUID MarloweError
+  | ContractHistoryUpdated PlutusAppId ContractHistory
+  | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint)
+  | MarloweAppClosed (Maybe Json)
+  | WalletCompanionAppClosed (Maybe Json)
 
 -- | Here we decide which top-level queries to track as GA events, and
 -- how to classify them.
 instance actionIsEvent :: IsEvent Action where
   toEvent (Receive _) = Nothing
-  toEvent (Tick _) = Nothing
+  toEvent (Tick) = Nothing
   toEvent Init = Just $ defaultEvent "Init"
   toEvent (OnPoll _ _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction
+  toEvent _ = Nothing

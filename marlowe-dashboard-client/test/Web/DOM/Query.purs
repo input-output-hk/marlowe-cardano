@@ -1,50 +1,65 @@
 module Test.Web.DOM.Query
-  ( ByRoleOptions
-  , Match(..)
+  ( ByRoleBuilder
+  , Match
   , Matcher
   , MatcherFunction
-  , MatcherOptions
+  , MatchBuilder
   , class IsMatcher
-  , byRoleDefault
-  , toMatcher
-  , findBy
-  , findAllBy
-  , getBy
-  , getAllBy
-  , queryBy
-  , queryAllBy
   , altText
+  , checked
+  , current
   , displayValue
+  , exact
+  , expanded
+  , findAllBy
+  , findBy
+  , getAllBy
+  , getBy
+  , hidden
   , labelText
+  , level
+  , name
+  , nameRegex
+  , normalizer
   , placeholderText
+  , pressed
+  , queryAllBy
+  , queryBy
+  , queryFallbacks
   , role
+  , selected
+  , suggest
   , testId
   , text
   , title
-  , altText'
-  , displayValue'
-  , labelText'
-  , placeholderText'
-  , role'
-  , testId'
-  , text'
-  , title'
+  , toMatcher
   ) where
 
 import Prelude
 
+import Control.Monad.Error.Class (class MonadError)
+import Control.Monad.State (State, modify_, runState)
 import Control.Promise (Promise, toAffE)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Function.Uncurried (mkFn2)
 import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable)
+import Data.Nullable as N
 import Data.String.Regex (Regex)
+import Data.String.Regex.Flags (RegexFlags)
+import Data.String.Regex.Unsafe (unsafeRegex)
+import Data.Tuple (Tuple(..))
 import Data.Undefinable (Undefinable, toMaybe, toUndefinable)
 import Effect (Effect)
+import Effect.Aff (Error)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Uncurried (EffectFn3, runEffectFn3)
 import Foreign (Foreign)
+import Record.Builder (Builder)
+import Record.Builder as Builder
 import Test.Web.Monad (class MonadTest, getContainer)
+import Type.Proxy (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 import Web.ARIA (ARIARole)
 import Web.DOM (Element)
@@ -77,14 +92,81 @@ instance IsMatcher Regex where
 instance IsMatcher MatcherFunction where
   toMatcher fn = unsafeCoerce $ mkFn2 \content -> fn content <<< toMaybe
 
+newtype MatchBuilder a =
+  MatchBuilder (State (Builder MatcherOptions MatcherOptions) a)
+
+derive newtype instance Functor MatchBuilder
+derive newtype instance Apply MatchBuilder
+derive newtype instance Applicative MatchBuilder
+derive newtype instance Bind MatchBuilder
+derive newtype instance Monad MatchBuilder
+
 type MatcherOptions =
-  { exact :: Boolean
-  , normalizer :: String -> String
+  { exact :: Undefinable Boolean
+  , normalizer :: Undefinable (String -> String)
   -- | suppress suggestions for a specific query
-  , suggest :: Boolean
+  , suggest :: Undefinable Boolean
   }
 
-type ByRoleOptions matcher =
+defaultMatcherOptions :: MatcherOptions
+defaultMatcherOptions =
+  { exact: undefined
+  , normalizer: undefined
+  , suggest: undefined
+  }
+
+undefined :: forall a. Undefinable a
+undefined = toUndefinable Nothing
+
+defined :: forall a. a -> Undefinable a
+defined = toUndefinable <<< Just
+
+exact :: Boolean -> MatchBuilder Unit
+exact = MatchBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "exact")
+  <<< const
+  <<< defined
+
+normalizer :: (String -> String) -> MatchBuilder Unit
+normalizer = MatchBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "normalizer")
+  <<< const
+  <<< defined
+
+suggest :: Boolean -> MatchBuilder Unit
+suggest = MatchBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "suggest")
+  <<< const
+  <<< defined
+
+buildMatch
+  :: forall matcher
+   . IsMatcher matcher
+  => (Matcher -> MatcherOptions -> Match)
+  -> MatchBuilder matcher
+  -> Match
+buildMatch mkMatch (MatchBuilder builder) =
+  let
+    Tuple matcher options = runState builder identity
+  in
+    mkMatch (toMatcher matcher) (Builder.build options defaultMatcherOptions)
+
+newtype ByRoleBuilder a =
+  ByRoleBuilder (State (Builder ByRoleOptions ByRoleOptions) a)
+
+derive newtype instance Functor ByRoleBuilder
+derive newtype instance Apply ByRoleBuilder
+derive newtype instance Applicative ByRoleBuilder
+derive newtype instance Bind ByRoleBuilder
+derive newtype instance Monad ByRoleBuilder
+
+type ByRoleOptions =
   {
     -- | If true includes elements in the query set that are usually excluded from
     -- | the accessibility tree. `role="none"` or `role="presentation"` are included
@@ -114,94 +196,146 @@ type ByRoleOptions matcher =
   -- | For example *ByRole('progressbar', {queryFallbacks: true})` will find <div role="meter progressbar">`.
   , queryFallbacks :: Undefinable Boolean
   -- | Only considers elements with the specified accessible name.
-  , name :: Undefinable matcher
+  , name :: Undefinable Matcher
   }
 
-byRoleDefault :: forall matcher. ByRoleOptions matcher
-byRoleDefault =
-  { hidden: toUndefinable Nothing
-  , selected: toUndefinable Nothing
-  , checked: toUndefinable Nothing
-  , pressed: toUndefinable Nothing
-  , current: toUndefinable Nothing
-  , expanded: toUndefinable Nothing
-  , level: toUndefinable Nothing
-  , queryFallbacks: toUndefinable Nothing
-  , name: toUndefinable Nothing
+defaultByRoleOptions :: ByRoleOptions
+defaultByRoleOptions =
+  { hidden: undefined
+  , selected: undefined
+  , checked: undefined
+  , pressed: undefined
+  , current: undefined
+  , expanded: undefined
+  , level: undefined
+  , queryFallbacks: undefined
+  , name: undefined
   }
+
+hidden :: Boolean -> ByRoleBuilder Unit
+hidden = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "hidden")
+  <<< const
+  <<< defined
+
+selected :: Boolean -> ByRoleBuilder Unit
+selected = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "selected")
+  <<< const
+  <<< defined
+
+checked :: Boolean -> ByRoleBuilder Unit
+checked = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "checked")
+  <<< const
+  <<< defined
+
+pressed :: Boolean -> ByRoleBuilder Unit
+pressed = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "pressed")
+  <<< const
+  <<< defined
+
+current :: Boolean -> ByRoleBuilder Unit
+current = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "current")
+  <<< const
+  <<< defined
+
+expanded :: Boolean -> ByRoleBuilder Unit
+expanded = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "expanded")
+  <<< const
+  <<< defined
+
+level :: Int -> ByRoleBuilder Unit
+level = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "level")
+  <<< const
+  <<< defined
+
+queryFallbacks :: Boolean -> ByRoleBuilder Unit
+queryFallbacks = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "queryFallbacks")
+  <<< const
+  <<< defined
+
+nameRegex :: String -> RegexFlags -> ByRoleBuilder Unit
+nameRegex regex = name <<< unsafeRegex regex
+
+name :: forall matcher. IsMatcher matcher => matcher -> ByRoleBuilder Unit
+name = ByRoleBuilder
+  <<< modify_
+  <<< compose
+  <<< Builder.modify (Proxy :: _ "name")
+  <<< const
+  <<< defined
+  <<< toMatcher
 
 data Match
-  = AltText Matcher (Maybe MatcherOptions)
-  | DisplayValue Matcher (Maybe MatcherOptions)
-  | LabelText Matcher (Maybe MatcherOptions)
-  | PlaceholderText Matcher (Maybe MatcherOptions)
-  | Role ARIARole (Maybe (ByRoleOptions Matcher))
-  | TestId Matcher (Maybe MatcherOptions)
-  | Text Matcher (Maybe MatcherOptions)
-  | Title Matcher (Maybe MatcherOptions)
+  = AltText Matcher MatcherOptions
+  | DisplayValue Matcher MatcherOptions
+  | LabelText Matcher MatcherOptions
+  | PlaceholderText Matcher MatcherOptions
+  | Role ARIARole ByRoleOptions
+  | TestId Matcher MatcherOptions
+  | Text Matcher MatcherOptions
+  | Title Matcher MatcherOptions
 
-altText :: forall matcher. IsMatcher matcher => matcher -> Match
-altText matcher = AltText (toMatcher matcher) Nothing
+altText :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+altText = buildMatch AltText
 
-displayValue :: forall matcher. IsMatcher matcher => matcher -> Match
-displayValue matcher = DisplayValue (toMatcher matcher) Nothing
+displayValue
+  :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+displayValue = buildMatch DisplayValue
 
-labelText :: forall matcher. IsMatcher matcher => matcher -> Match
-labelText matcher = LabelText (toMatcher matcher) Nothing
+labelText :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+labelText = buildMatch LabelText
 
-placeholderText :: forall matcher. IsMatcher matcher => matcher -> Match
-placeholderText matcher = PlaceholderText (toMatcher matcher) Nothing
+placeholderText
+  :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+placeholderText = buildMatch PlaceholderText
 
-role :: ARIARole -> Match
-role r = Role r Nothing
+role :: ByRoleBuilder ARIARole -> Match
+role (ByRoleBuilder builder) =
+  let
+    Tuple ariaRole options = runState builder identity
+  in
+    Role ariaRole $ Builder.build options defaultByRoleOptions
 
-testId :: forall matcher. IsMatcher matcher => matcher -> Match
-testId matcher = TestId (toMatcher matcher) Nothing
+testId :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+testId = buildMatch TestId
 
-text :: forall matcher. IsMatcher matcher => matcher -> Match
-text matcher = Text (toMatcher matcher) Nothing
+text :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+text = buildMatch Text
 
-title :: forall matcher. IsMatcher matcher => matcher -> Match
-title matcher = Title (toMatcher matcher) Nothing
+title :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
+title = buildMatch Title
 
-altText'
-  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-altText' matcher = AltText (toMatcher matcher) <<< Just
-
-displayValue'
-  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-displayValue' matcher = DisplayValue (toMatcher matcher) <<< Just
-
-labelText'
-  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-labelText' matcher = LabelText (toMatcher matcher) <<< Just
-
-placeholderText'
-  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-placeholderText' matcher = PlaceholderText (toMatcher matcher) <<< Just
-
-role'
-  :: forall matcher
-   . IsMatcher matcher
-  => ARIARole
-  -> ByRoleOptions matcher
-  -> Match
-role' r options = Role r $ Just options
-  { name = toUndefinable $ toMatcher <$> toMaybe options.name }
-
-testId'
-  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-testId' matcher = TestId (toMatcher matcher) <<< Just
-
-text' :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-text' matcher = Text (toMatcher matcher) <<< Just
-
-title'
-  :: forall matcher. IsMatcher matcher => matcher -> MatcherOptions -> Match
-title' matcher = Title (toMatcher matcher) <<< Just
-
-findBy :: forall m. MonadTest m => Match -> m Element
-findBy = case _ of
+findBy
+  :: forall builder a m
+   . MonadTest m
+  => MonadError Error m
+  => (builder a -> Match)
+  -> builder a
+  -> m Element
+findBy build builder = case build builder of
   AltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findByAltText matcher options
   DisplayValue matcher options ->
@@ -222,11 +356,13 @@ findBy = case _ of
     liftAff <<< toAffE =<< callForeignMatcherFn findByTitle matcher options
 
 findAllBy
-  :: forall m
+  :: forall builder a m
    . MonadTest m
-  => Match
+  => MonadError Error m
+  => (builder a -> Match)
+  -> builder a
   -> m (NonEmptyArray Element)
-findAllBy = case _ of
+findAllBy build builder = case build builder of
   AltText matcher options ->
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByAltText matcher options
   DisplayValue matcher options ->
@@ -248,11 +384,13 @@ findAllBy = case _ of
     liftAff <<< toAffE =<< callForeignMatcherFn findAllByTitle matcher options
 
 getBy
-  :: forall m
+  :: forall builder a m
    . MonadTest m
-  => Match
+  => MonadError Error m
+  => (builder a -> Match)
+  -> builder a
   -> m Element
-getBy = case _ of
+getBy build builder = case build builder of
   AltText matcher options ->
     liftEffect =<< callForeignMatcherFn getByAltText matcher options
   DisplayValue matcher options ->
@@ -271,11 +409,13 @@ getBy = case _ of
     liftEffect =<< callForeignMatcherFn getByTitle matcher options
 
 getAllBy
-  :: forall m
+  :: forall builder a m
    . MonadTest m
-  => Match
+  => MonadError Error m
+  => (builder a -> Match)
+  -> builder a
   -> m (NonEmptyArray Element)
-getAllBy = case _ of
+getAllBy build builder = case build builder of
   AltText matcher options ->
     liftEffect =<< callForeignMatcherFn getAllByAltText matcher options
   DisplayValue matcher options ->
@@ -294,41 +434,45 @@ getAllBy = case _ of
     liftEffect =<< callForeignMatcherFn getAllByTitle matcher options
 
 queryBy
-  :: forall m
+  :: forall builder a m
    . MonadTest m
-  => Match
+  => MonadError Error m
+  => (builder a -> Match)
+  -> builder a
   -> m (Maybe Element)
-queryBy = case _ of
+queryBy build builder = case build builder of
   AltText matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByAltText matcher options
   DisplayValue matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByDisplayValue matcher options
   LabelText matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByLabelText matcher options
   PlaceholderText matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByPlaceholderText matcher options
   Role r options ->
-    map toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole r options
+    map N.toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole r options
   TestId matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByTestId matcher options
   Text matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByText matcher options
   Title matcher options ->
-    map toMaybe $ liftEffect
+    map N.toMaybe $ liftEffect
       =<< callForeignMatcherFn queryByTitle matcher options
 
 queryAllBy
-  :: forall m
+  :: forall builder a m
    . MonadTest m
-  => Match
+  => MonadError Error m
+  => (builder a -> Match)
+  -> builder a
   -> m (Array Element)
-queryAllBy = case _ of
+queryAllBy build builder = case build builder of
   AltText matcher options ->
     liftEffect =<< callForeignMatcherFn queryAllByAltText matcher options
   DisplayValue matcher options ->
@@ -350,31 +494,32 @@ queryAllBy = case _ of
 callForeignMatcherFn
   :: forall m a
    . MonadTest m
+  => MonadError Error m
   => ForeignMatcherFn a
   -> Matcher
-  -> Maybe MatcherOptions
+  -> MatcherOptions
   -> m (Effect a)
 callForeignMatcherFn fn matcher options = do
   container <- getContainer
-  pure $ runEffectFn3 fn container (unsafeCoerce matcher) $ toUndefinable
-    options
+  pure $ runEffectFn3 fn container (unsafeCoerce matcher) options
 
 callForeignByRoleFn
   :: forall m a
    . MonadTest m
+  => MonadError Error m
   => ForeignByRoleFn a
   -> ARIARole
-  -> Maybe (ByRoleOptions Matcher)
+  -> ByRoleOptions
   -> m (Effect a)
 callForeignByRoleFn fn r options = do
   container <- getContainer
-  pure $ runEffectFn3 fn container (show r) $ toUndefinable options
+  pure $ runEffectFn3 fn container (show r) options
 
 type ForeignMatcherFn =
-  EffectFn3 Element Matcher (Undefinable MatcherOptions)
+  EffectFn3 Element Matcher MatcherOptions
 
 type ForeignByRoleFn =
-  EffectFn3 Element String (Undefinable (ByRoleOptions Matcher))
+  EffectFn3 Element String ByRoleOptions
 
 foreign import findAllByAltText
   :: ForeignMatcherFn (Promise (NonEmptyArray Element))
@@ -436,13 +581,13 @@ foreign import queryAllByRole :: ForeignByRoleFn (Array Element)
 foreign import queryAllByTestId :: ForeignMatcherFn (Array Element)
 foreign import queryAllByText :: ForeignMatcherFn (Array Element)
 foreign import queryAllByTitle :: ForeignMatcherFn (Array Element)
-foreign import queryByAltText :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByDisplayValue :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByLabelText :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByAltText :: ForeignMatcherFn (Nullable Element)
+foreign import queryByDisplayValue :: ForeignMatcherFn (Nullable Element)
+foreign import queryByLabelText :: ForeignMatcherFn (Nullable Element)
 foreign import queryByPlaceholderText
-  :: ForeignMatcherFn (Undefinable Element)
+  :: ForeignMatcherFn (Nullable Element)
 
-foreign import queryByRole :: ForeignByRoleFn (Undefinable Element)
-foreign import queryByTestId :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByText :: ForeignMatcherFn (Undefinable Element)
-foreign import queryByTitle :: ForeignMatcherFn (Undefinable Element)
+foreign import queryByRole :: ForeignByRoleFn (Nullable Element)
+foreign import queryByTestId :: ForeignMatcherFn (Nullable Element)
+foreign import queryByText :: ForeignMatcherFn (Nullable Element)
+foreign import queryByTitle :: ForeignMatcherFn (Nullable Element)

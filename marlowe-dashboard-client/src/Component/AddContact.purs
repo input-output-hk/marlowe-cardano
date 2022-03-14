@@ -20,8 +20,10 @@ import Data.Address as A
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AB
 import Data.Bifunctor (lmap)
+import Data.Either (either)
 import Data.Lens (Setter', set)
 import Data.Lens.Record (prop)
+import Data.These (These(..))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Class (class MonadEffect)
@@ -161,13 +163,15 @@ nicknameInput addressBook fieldState =
   input =
     { fieldState
     , format: WN.toString
-    , validate: notInAddressBook <=< lmap Left <<< WN.fromString
-    , render: \{ error, value } ->
-        renderTextInput id label error (Input.setInputProps value []) case _ of
-          Left WN.Empty -> "Required."
-          Left WN.ContainsNonAlphaNumeric ->
-            "Can only contain letters and digits."
-          Right _ -> "Already exists."
+    , validate: either This That <<<
+        (notInAddressBook <=< lmap Left <<< WN.fromString)
+    , render: \{ error, value, result } ->
+        renderTextInput id label result error (Input.setInputProps value [])
+          case _ of
+            Left WN.Empty -> "Required."
+            Left WN.ContainsNonAlphaNumeric ->
+              "Can only contain letters and digits."
+            Right _ -> "Already exists."
     }
   notInAddressBook nickname
     | AB.containsNickname nickname addressBook = Left $ Right unit
@@ -187,12 +191,14 @@ addressInput addressBook fieldState =
   input =
     { fieldState
     , format: A.toString
-    , validate: notInAddressBook <=< lmap Left <<< A.fromString
-    , render: \{ error, value } ->
-        renderTextInput id label error (Input.setInputProps value []) case _ of
-          Left A.Empty -> "Required."
-          Left A.Invalid -> "Invalid."
-          Right nickname -> "Already exists (" <> WN.toString nickname <> ")."
+    , validate:
+        either This That <<< (notInAddressBook <=< lmap Left <<< A.fromString)
+    , render: \{ error, value, result } ->
+        renderTextInput id label result error (Input.setInputProps value [])
+          case _ of
+            Left A.Empty -> "Required."
+            Left A.Invalid -> "Invalid."
+            Right nickname -> "Already exists (" <> WN.toString nickname <> ")."
     }
   notInAddressBook address = case AB.lookupNickname address addressBook of
     Nothing -> Right address

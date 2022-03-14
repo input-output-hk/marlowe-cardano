@@ -22,7 +22,7 @@ import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
-import Language.Marlowe.Client (EndpointResponse, MarloweEndpointResult, MarloweError)
+import Language.Marlowe.Client (ContractHistory, EndpointResponse, MarloweEndpointResult, MarloweError)
 import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), SumType (SumType), TypeInfo (..),
                                    argonaut, buildBridge, typeModule, typeName, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
@@ -95,9 +95,6 @@ psTransactionError =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "Transac
 transactionErrorBridge :: BridgePart
 transactionErrorBridge = typeName ^== "TransactionError" >> return psTransactionError
 
-psMarloweParams :: TypeInfo 'PureScript
-psMarloweParams =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "MarloweParams" []
-
 psPaymentPubKeyHash :: TypeInfo 'PureScript
 psPaymentPubKeyHash = TypeInfo "" "Data.PaymentPubKeyHash" "PaymentPubKeyHash" []
 
@@ -120,8 +117,24 @@ walletBridge :: BridgePart
 walletBridge = do
   walletV1Bridge <|> walletV1CTBridge <|> paymentPubKeyHashBridge <|> pubKeyHashBridge
 
+psMarloweParams :: TypeInfo 'PureScript
+psMarloweParams =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "MarloweParams" []
+
 marloweParamsBridge :: BridgePart
 marloweParamsBridge = typeName ^== "MarloweParams" >> return psMarloweParams
+
+psTransactionInput :: TypeInfo 'PureScript
+psTransactionInput =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "TransactionInput" []
+
+transactionInputBridge :: BridgePart
+transactionInputBridge = typeName ^== "TransactionInput" >> return psTransactionInput
+
+psMarloweData :: TypeInfo 'PureScript
+psMarloweData =  TypeInfo "web-common-marlowe" "Marlowe.Semantics" "MarloweData" []
+
+marloweDataBridge :: BridgePart
+marloweDataBridge = typeName ^== "MarloweData" >> return psMarloweData
+
 
 psPlutusAppId :: TypeInfo 'PureScript
 psPlutusAppId = TypeInfo "" "Marlowe.PAB" "PlutusAppId" []
@@ -148,6 +161,8 @@ myBridge =
     <|> transactionErrorBridge
     <|> marloweParamsBridge
     <|> contractInstanceBridge
+    <|> transactionInputBridge
+    <|> marloweDataBridge
     <|> PSGenerator.Common.aesonBridge
     <|> PSGenerator.Common.containersBridge
     <|> PSGenerator.Common.ledgerBridge
@@ -166,6 +181,9 @@ instance HasBridge MyBridge where
 dto :: SumType 'Haskell -> SumType 'Haskell
 dto = equal . genericShow . argonaut
 
+dtoNoShow :: SumType 'Haskell -> SumType 'Haskell
+dtoNoShow = equal . argonaut
+
 myTypes :: [SumType 'Haskell]
 myTypes = dto <$>
     [ mkSumType @StreamToServer,
@@ -175,15 +193,21 @@ myTypes = dto <$>
       mkSumType @CreatePostData,
       mkSumType @GetTotalFundsResponse,
       mkSumType @(EndpointResponse A E),
-      mkSumType @MarloweError,
       mkSumType @MarloweEndpointResult,
-      mkSumType @WalletInfo
+      mkSumType @WalletInfo,
+      mkSumType @ContractHistory
+    ]
+
+myTypesNoShow :: [SumType 'Haskell]
+myTypesNoShow = dtoNoShow <$>
+    [ mkSumType @MarloweError
     ]
 
 marloweRunSettings :: Settings
 marloweRunSettings = defaultSettings
   & set apiModuleName "Marlowe.Run.Server"
   & addTypes myTypes
+  & addTypes myTypesNoShow
 
 pabSettings :: Settings
 pabSettings = defaultSettings
@@ -224,6 +248,8 @@ pabSettings = defaultSettings
     , ("Plutus.Contract.Effects", "ActiveEndpoint")
     , ("Plutus.Contract.Effects", "PABReq")
     , ("Plutus.Contract.Effects", "PABResp")
+    , ("Plutus.Contract.Error", "ContractError")
+    , ("Plutus.Contract.StateMachine", "SMContractError")
     ]
 
 argParser :: Parser FilePath

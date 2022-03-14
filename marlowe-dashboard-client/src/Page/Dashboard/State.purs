@@ -8,8 +8,13 @@ import Prologue
 
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
-import Capability.Marlowe (class ManageMarlowe, createContract, followContract)
+import Capability.Marlowe (class ManageMarlowe, initializeContract)
 import Capability.MarloweStorage (class ManageMarloweStorage)
+import Capability.PlutusApps.FollowerApp
+  ( class FollowerApp
+  , ensureFollowerContract
+  , followNewContract
+  )
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
@@ -21,18 +26,21 @@ import Component.Contacts.Types (Action(..), State) as Contacts
 import Component.Contacts.Types (CardSection(..))
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
-import Component.Template.State (instantiateExtendedContract)
 import Component.Template.Types (Action(..), State(..)) as Template
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
+import Control.Logger.Structured as Logger
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk)
+import Data.ContractStatus (ContractStatus(..))
 import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_)
-import Data.Lens (assign, modifying, set, use, (^.))
+import Data.Lens (assign, modifying, set, use)
 import Data.Map (filterKeys, toUnfoldable)
-import Data.Maybe (fromMaybe)
-import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
+import Data.NewContract (NewContract(..))
+import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
@@ -56,8 +64,9 @@ import Page.Dashboard.Lenses
   , _contactsState
   , _contractFilter
   , _menuOpen
+  , _newContracts
   , _runningContracts
-  , _selectedContractMarloweParams
+  , _selectedContractIndex
   , _templateState
   , _walletCompanionStatus
   )
@@ -76,11 +85,12 @@ import Store.Contracts
   , followerContractExists
   , getClosedContracts
   , getContract
+  , getNewContracts
   , getRunningContracts
   )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (ajaxErrorToast, errorToast, successToast)
+import Toast.Types (explainableErrorToast, successToast)
 
 mkInitialState
   :: Instant -> PABConnectedWallet -> ContractStore -> State
@@ -96,10 +106,11 @@ mkInitialState currentTime wallet contracts =
     , menuOpen: false
     , card: Nothing
     , cardOpen: false
+    , newContracts: getNewContracts contracts
     , runningContracts
     , closedContracts
     , contractFilter: Running
-    , selectedContractMarloweParams: Nothing
+    , selectedContractIndex: Nothing
     , templateState: Template.dummyState
     }
 
@@ -116,18 +127,18 @@ deriveContractState currentTime wallet = map \executionState ->
     { executionState
     , contractUserParties: userParties
     , namedActions: userNamedActions userParties
-        $ fromMaybe []
-        $ hush
         $ extractNamedActions currentTime executionState
     }
 
 handleAction
   :: forall m
    . MonadAff m
+  => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarloweStorage m
   => ManageMarlowe m
+  => FollowerApp m
   => MainFrameLoop m
   => MonadStore Store.Action Store.Store m
   => Toast m
@@ -141,9 +152,11 @@ handleAction { currentTime, wallet, contracts } Receive = do
       getRunningContracts contracts
     closedContracts = deriveContractState currentTime wallet $
       getClosedContracts contracts
+    newContracts = getNewContracts contracts
   modify_
     ( set _runningContracts runningContracts
         <<< set _closedContracts closedContracts
+        <<< set _newContracts newContracts
     )
 
 {- [UC-WALLET-3][0] Disconnect a wallet -}
@@ -163,14 +176,8 @@ handleAction _ (ClipboardAction action) = do
   Clipboard.handleAction action
   addToast $ successToast "Copied to clipboard"
 
-handleAction { wallet } (OpenCard card) = do
-  -- Most cards requires to show the assets of the current wallet, so we update the funds
-  -- before opening a card.
-  -- See note [polling updateTotalFunds]
-  let
-    walletId = wallet ^. _walletId
-  _ <- updateTotalFunds walletId
-  -- Then we set the card and reset the contact and template card states to their first section
+handleAction _ (OpenCard card) = do
+  -- We set the card and reset the contact and template card states to their first section
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
     $ set _card (Just card)
@@ -188,7 +195,7 @@ handleAction _ (SetContractFilter contractFilter) = assign _contractFilter
   contractFilter
 
 handleAction _ (SelectContract marloweParams) = assign
-  _selectedContractMarloweParams
+  _selectedContractIndex
   marloweParams
 
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
@@ -206,7 +213,7 @@ handleAction { wallet, contracts } (UpdateFollowerApps companionAppState) = do
     _walletCompanionStatus
     WalletCompanionSynced
   for_ newContractsArray \(marloweParams /\ _) ->
-    followContract wallet marloweParams
+    ensureFollowerContract wallet marloweParams
 
 {- [UC-CONTRACT-4][1] Redeem payments
 This action is triggered every time we receive a status update for a `MarloweFollower` app. The
@@ -258,45 +265,58 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
      a placeholder so the user can see that that the contract is being created
     -}
     Template.OnStartContract template params -> do
-      let { nickname, roles } = params
       currentInstant <- now
-      case instantiateExtendedContract currentInstant template params of
-        Nothing -> do
-          void $ tell _submitButtonSlot "action-pay-and-start" $ SubmitResult
-            (Milliseconds 600.0)
-            (Left "Error")
-          addToast $ errorToast "Failed to instantiate contract." $ Just
-            "Something went wrong when trying to instantiate a contract from this template using the parameters you specified."
-        Just contract -> do
-          ajaxCreateContract <- createContract wallet roles contract
-          case ajaxCreateContract of
-            -- TODO: make this error message more informative
-            Left ajaxError -> do
-              void $ tell _submitButtonSlot "action-pay-and-start" $
-                SubmitResult (Milliseconds 600.0) (Left "Error")
-              addToast $ ajaxErrorToast "Failed to initialise contract."
-                ajaxError
-            Right (reqId /\ mMarloweParams) -> do
-              let metaData = template.metaData
-              -- We save in the store the request of a created contract with
-              -- the information relevant to show a placeholder of a starting contract.
-              updateStore
-                $ Store.AddStartingContract
-                $ reqId /\ nickname /\ metaData
-              handleAction input CloseCard
-              void $ tell _submitButtonSlot "action-pay-and-start" $
-                SubmitResult (Milliseconds 600.0) (Right "")
-              addToast $ successToast
-                "The request to initialise this contract has been submitted."
-              assign _templateState Template.initialState
-              marloweParams <- liftAff mMarloweParams
-              ajaxFollow <- followContract wallet marloweParams
-              case ajaxFollow of
-                Left _ ->
-                  addToast $ errorToast "Can't follow the contract" Nothing
-                Right (_ /\ _) -> do
-                  -- TODO: SCP-3487 swap store contract from new to running
-                  addToast $ successToast "Contract initialised."
+      instantiateResponse <- initializeContract currentInstant template params
+        wallet
+      case instantiateResponse of
+        Left error -> do
+          void $ tell _submitButtonSlot "action-pay-and-start" $
+            SubmitResult (Milliseconds 600.0) (Left "Error")
+          addToast $ explainableErrorToast "Failed to initialize contract."
+            error
+          Logger.error "Failed to initialize contract." error
+        Right (newContract /\ awaitContractCreation) -> do
+          handleAction input CloseCard
+          void $ tell _submitButtonSlot "action-pay-and-start" $
+            SubmitResult (Milliseconds 600.0) (Right "")
+          addToast $ successToast
+            "The request to initialize this contract has been submitted."
+          -- We reset the template component (TODO: this wont be needed after the SCP-3464 refactor)
+          assign _templateState Template.initialState
+          marloweParams <- liftAff awaitContractCreation
+          awaitContractFollow <- followNewContract wallet marloweParams
+          ajaxFollow <- liftAff awaitContractFollow
+
+          case ajaxFollow of
+            Left err -> do
+              addToast $ explainableErrorToast "Can't follow the contract"
+                err
+              Logger.error "Can't follow the contract: " err
+            Right (followerId /\ history) -> do
+              -- TODO: Ideally I want this updateStore to live under the FollowerApp capability
+              --       or the ManageMarlowe capability, but in order to do that I need to see how
+              --       feasible is to add a Co-routine.
+              --       After we submit a new contract from the capability, we should yield the flow
+              --       to the UI here so we can show the toast message, then we should give back control
+              --       to the capability via the awaitContractCreation which should do this updateStore
+              --       and then yield back here so we can do the second toast
+              updateStore $
+                Store.SwapStartingToStartedContract
+                  newContract
+                  currentInstant
+                  followerId
+                  history
+              addToast $ successToast "Contract initialised."
+              -- If the UI is showing the Starting contract we change the index to
+              -- show the newly Started contract
+              let
+                NewContract newContractUUID _ _ = newContract
+              mSelectedContract <- use _selectedContractIndex
+              when (mSelectedContract == (Just $ Starting newContractUUID))
+                do
+                  assign _selectedContractIndex
+                    $ Just
+                    $ Started marloweParams
     _ -> do
       toTemplate $ Template.handleAction templateAction
 

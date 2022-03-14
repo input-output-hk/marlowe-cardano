@@ -147,7 +147,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        outConstrs = OutputConstraint
+                        outConstrs = ScriptOutputConstraint
                                     { ocDatum = marloweData
                                     , ocValue = finalBalance
                                     }

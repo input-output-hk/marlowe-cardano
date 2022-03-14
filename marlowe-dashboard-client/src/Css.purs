@@ -169,8 +169,9 @@ pseudoDropdown open =
 unstyledInput :: Array String
 unstyledInput = [ "leading-none", "p-0", "border-0", "focus:ring-0" ]
 
-inputError :: Array String
-inputError = [ "px-3", "mt-1", "text-red", "text-sm" ]
+inputError :: Boolean -> Array String
+inputError isWarning =
+  [ "px-3", "mt-1", if isWarning then "text-black" else "text-red", "text-sm" ]
 
 -- labels
 hasNestedLabel :: Array String

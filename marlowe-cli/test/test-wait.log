@@ -1,6 +1,7 @@
+
 ***** Test "Waiting" *****
 [WaitFor] Waited for 10000 milliseconds.
-[WaitUntil] Waited for 114068 milliseconds until POSIX 1645736000000 milliseconds.
+[WaitUntil] Waited for 0 milliseconds until POSIX 1645736000000 milliseconds.
 [WaitFor] Waited for 5000 milliseconds.
 [Timeout] Operation completed within 10 seconds.
 [ShouldFail] Operations failed as expected: CliError {unCliError = "[Timeout] Operation did not complete within 10 seconds: WaitFor {poRelativeTime = DiffMilliSeconds 15000}."} occurred for [Timeout {poTimeoutSeconds = 10, poOperation = WaitFor {poRelativeTime = DiffMilliSeconds 15000}}].

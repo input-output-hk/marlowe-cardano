@@ -11,6 +11,7 @@ import Data.Maybe (maybe)
 import Effect.Aff.Class (class MonadAff)
 import Halogen (raise)
 import Halogen as H
+import Halogen.Component.Reactive as HR
 import Record as Record
 import Type.Proxy (Proxy(..))
 
@@ -19,17 +20,18 @@ component
    . MonadAff m
   => H.Component query Input Msg m
 component =
-  H.mkComponent
-    { initialState: Record.insert (Proxy :: _ "choiceValues") Map.empty
+  HR.mkReactiveComponent
+    { deriveState: \input ->
+        maybe
+          (Record.insert (Proxy :: _ "choiceValues") Map.empty input)
+          (Record.merge input)
     , render: currentStepActions
-    , eval: H.mkEval H.defaultEval
+    , eval: HR.defaultReactiveEval
         { handleAction = handleAction
         }
     }
 
 handleAction :: forall m. Action -> DSL m Unit
-handleAction (OnReceive input) = H.modify_ $ Record.merge input
-
 handleAction (SelectAction namedAction chosenNum) =
   raise $ ActionSelected namedAction chosenNum
 

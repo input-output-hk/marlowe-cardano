@@ -21,7 +21,6 @@ import Bootstrap
   )
 import Component.ErrorPane (closeableErrorPane)
 import DOM.HTML.Indexed.InputType (InputType(..))
-import Data.Argonaut (printJsonDecodeError, stringify)
 import Data.Lens (view)
 import Data.Maybe (fromMaybe)
 import Gist (Gist, GistId, gistHtmlUrl)
@@ -100,8 +99,8 @@ gistControls { authStatus, createGistResult, gistErrorPaneVisible, gistUrl } =
             ]
         , case createGistResult, gistErrorPaneVisible of
             Success gist, _ -> gistPane gist
-            Failure err, true -> ErrorPaneAction <$> closeableErrorPane
-              (printAjaxError stringify printJsonDecodeError err)
+            Failure err, true ->
+              ErrorPaneAction <$> closeableErrorPane (printAjaxError err)
             Failure _, false -> empty
             _, _ -> empty
         ]

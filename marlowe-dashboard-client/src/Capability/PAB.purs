@@ -11,6 +11,10 @@ module Capability.PAB
   , getWalletContractInstances
   , invokeEndpoint
   , onNewActiveEndpoints
+  , subscribeToWallet
+  , unsubscribeFromWallet
+  , subscribeToPlutusApp
+  , unsubscribeFromPlutusApp
   ) where
 
 import Prologue
@@ -31,6 +35,8 @@ import Data.Map as Map
 import Data.Map.Alignable (AlignableMap(..))
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
+import Data.PubKeyHash (PubKeyHash)
+import Data.PubKeyHash as PKH
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.These (These(..))
@@ -41,9 +47,11 @@ import Effect.Aff (Aff)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (liftAff)
-import Env (_endpointSemaphores)
+import Effect.Class (liftEffect)
+import Env (_endpointSemaphores, _sinks)
 import Foreign.Class (decode)
 import Halogen (HalogenM)
+import Halogen.Subscription as HS
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint)
@@ -51,7 +59,8 @@ import Plutus.Contract.Resumable (Request)
 import Plutus.PAB.Events.ContractInstanceState (PartiallyDecodedResponse)
 import Plutus.PAB.Webserver as PAB
 import Plutus.PAB.Webserver.Types
-  ( ContractActivationArgs(..)
+  ( CombinedWSStreamToServer(..)
+  , ContractActivationArgs(..)
   , ContractInstanceClientState
   , ContractSignatureResponse
   )
@@ -86,13 +95,20 @@ class Monad m <= ManagePAB m where
   getContractDefinitions :: m
     (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
   onNewActiveEndpoints :: PlutusAppId -> Array ActiveEndpoint -> m Unit
+  subscribeToPlutusApp :: PlutusAppId -> m Unit
+  subscribeToWallet :: WalletId -> m Unit
+  unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
+  unsubscribeFromWallet :: WalletId -> m Unit
 
 instance ManagePAB AppM where
   activateContract contractActivationId wallet =
     PAB.postApiContractActivate
       $ ContractActivationArgs
           { caID: contractActivationId
-          , caWallet: Just $ Wallet { getWalletId: WalletId.toString wallet }
+          , caWallet: Just $ Wallet
+              { prettyWalletName: Nothing
+              , getWalletId: WalletId.toString wallet
+              }
           }
 
   deactivateContract =
@@ -209,6 +225,23 @@ instance ManagePAB AppM where
     updateSemaphore (That _) = AVar.new unit
     -- endpoint was in both available endpoints, and semaphores. Unlock it.
     updateSemaphore (Both semaphore _) = AVar.put unit semaphore $> semaphore
+  subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
+  subscribeToWallet =
+    sendWsMessage <<< Subscribe <<< Right <<< invalidWalletIdToPubKeyHash
+  unsubscribeFromPlutusApp = Left >>> Unsubscribe >>> sendWsMessage
+  unsubscribeFromWallet =
+    sendWsMessage <<< Unsubscribe <<< Right <<< invalidWalletIdToPubKeyHash
+
+sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
+sendWsMessage msg = do
+  { pabWebsocket } <- asks $ view _sinks
+  liftEffect $ HS.notify pabWebsocket msg
+
+-- | DO NOT USE! This is incorrect. The WS message type _should_ require a
+-- | wallet ID, not a pub key hash. This is the cost of using strings for types,
+-- | even if wrapped in newtypes!
+invalidWalletIdToPubKeyHash :: WalletId -> PubKeyHash
+invalidWalletIdToPubKeyHash = PKH.fromString <<< WalletId.toString
 
 instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   activateContract contractActivationId wallet = lift $ activateContract
@@ -228,6 +261,10 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   getAllContractInstances = lift getAllContractInstances
   getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
+  subscribeToPlutusApp = lift <<< subscribeToPlutusApp
+  subscribeToWallet = lift <<< subscribeToWallet
+  unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
+  unsubscribeFromWallet = lift <<< unsubscribeFromWallet
 
 instance ManagePAB m => ManagePAB (MaybeT m) where
   activateContract contractActivationId wallet = lift $ activateContract
@@ -247,3 +284,7 @@ instance ManagePAB m => ManagePAB (MaybeT m) where
   getAllContractInstances = lift getAllContractInstances
   getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
+  subscribeToPlutusApp = lift <<< subscribeToPlutusApp
+  subscribeToWallet = lift <<< subscribeToWallet
+  unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
+  unsubscribeFromWallet = lift <<< unsubscribeFromWallet

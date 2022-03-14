@@ -38,11 +38,14 @@
           ];
         buildable = true;
         modules = [
+          "Marlowe/Contracts"
           "Marlowe/Contracts/Common"
+          "Marlowe/Contracts/Escrow"
           "Marlowe/Contracts/Futures"
           "Marlowe/Contracts/Options"
           "Marlowe/Contracts/StructuredProducts"
           "Marlowe/Contracts/Swap"
+          "Marlowe/Contracts/Trivial"
           "Marlowe/Contracts/ZeroCouponBond"
           ];
         hsSourceDirs = [ "src" ];

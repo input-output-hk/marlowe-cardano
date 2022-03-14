@@ -11,6 +11,7 @@ import Data.Traversable (traverse)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
+import Effect.Ref as Ref
 import Halogen
   ( HalogenM
   , RefLabel(..)
@@ -39,7 +40,7 @@ component =
     { initialState: deriveState <<< _.context
     , render: renderToast
     , eval: H.mkEval H.defaultEval
-        { handleAction = \action -> clearSubscription *> handleAction action
+        { handleAction = handleAction
         , receive = Just <<< Receive <<< _.context
         }
     }
@@ -53,10 +54,13 @@ deriveState mToast =
 toastTimeoutSubscription :: ToastMessage -> HS.Emitter Action
 toastTimeoutSubscription toast =
   HS.makeEmitter \push -> do
+    cancelled <- Ref.new false
     Aff.launchAff_ do
       Aff.delay $ Milliseconds toast.timeout
-      liftEffect $ push ToastTimeout
-    pure $ pure unit
+      unlessM (liftEffect $ Ref.read cancelled) do
+        liftEffect $ push ToastTimeout
+    pure do
+      Ref.write true cancelled
 
 handleAction
   :: forall m slots msg
@@ -67,11 +71,15 @@ handleAction
 handleAction (Receive mToast) = do
   unlessM (fromMaybe false <$> peruse _expanded) do
     H.put $ deriveState mToast
+    mSubscriptionId <- peruse _timeoutSubscription
+    for_ mSubscriptionId unsubscribe
     sub <- traverse (subscribe <<< toastTimeoutSubscription) mToast
     H.modify_ _ { timeoutSubscription = sub }
 
 handleAction ExpandToast = do
   assign _expanded true
+  mSubscriptionId <- peruse _timeoutSubscription
+  for_ mSubscriptionId unsubscribe
 
 handleAction CloseToast = do
   assign _expanded false
@@ -82,11 +90,3 @@ handleAction ToastTimeout = do
   for_ mElement $ subscribe <<< animateAndWaitUntilFinishSubscription
     "to-bottom"
     CloseToast
-
-clearSubscription
-  :: forall m slots msg
-   . HalogenM State Action slots msg m Unit
-clearSubscription = do
-  mSubscriptionId <- peruse _timeoutSubscription
-  for_ mSubscriptionId unsubscribe
-  H.modify_ _ { timeoutSubscription = Nothing }

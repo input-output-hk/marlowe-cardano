@@ -17,15 +17,19 @@ module Page.Contract.Lenses
 
 import Prologue
 
-import Data.Lens (Lens', Prism', prism')
+import Data.ContractStatus (ContractStatus(..))
+import Data.Lens (Lens', Prism', lens, prism')
+import Data.Lens.At (at)
 import Data.Lens.Record (prop)
-import Page.Contract.Types (ContractState(..), StartedState, StartingState)
+import Data.Maybe (fromMaybe)
+import Data.NewContract (NewContract)
+import Page.Contract.Types (ContractState, StartedState, Tab(..))
 import Type.Proxy (Proxy(..))
 
 _contract :: forall a r. Lens' { contract :: a | r } a
 _contract = prop (Proxy :: _ "contract")
 
-_Starting :: Prism' ContractState StartingState
+_Starting :: Prism' ContractState NewContract
 _Starting =
   prism'
     Starting
@@ -45,9 +49,6 @@ _Started =
 
 _nickname :: forall a r. Lens' { nickname :: a | r } a
 _nickname = prop (Proxy :: _ "nickname")
-
-_tab :: forall a r. Lens' { tab :: a | r } a
-_tab = prop (Proxy :: _ "tab")
 
 _executionState :: forall a r. Lens' { executionState :: a | r } a
 _executionState = prop (Proxy :: _ "executionState")
@@ -70,8 +71,15 @@ _contractUserParties = prop (Proxy :: _ "contractUserParties")
 _namedActions :: forall a r. Lens' { namedActions :: a | r } a
 _namedActions = prop (Proxy :: _ "namedActions")
 
-_expandPayments :: forall a r. Lens' { expandPayments :: a | r } a
-_expandPayments = prop (Proxy :: _ "expandPayments")
+_expandPayments :: Int -> Lens' StartedState Boolean
+_expandPayments index = prop (Proxy :: _ "expandPayments")
+  <<< at index
+  <<< lens (fromMaybe false) (const Just)
+
+_tab :: Int -> Lens' StartedState Tab
+_tab index = prop (Proxy :: _ "tabs")
+  <<< at index
+  <<< lens (fromMaybe Tasks) (const Just)
 
 _resultingPayments :: forall a r. Lens' { resultingPayments :: a | r } a
 _resultingPayments = prop (Proxy :: _ "resultingPayments")

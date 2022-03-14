@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe-cli
-version: 0.1.0.0
+version: 0.0.0.1
 license: Apache-2.0
 license-files:
   LICENSE
@@ -57,10 +57,6 @@ library
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
     Language.Marlowe.CLI.Examples
-    Language.Marlowe.CLI.Examples.Escrow
-    Language.Marlowe.CLI.Examples.Swap
-    Language.Marlowe.CLI.Examples.Trivial
-    Language.Marlowe.CLI.Examples.ZeroCouponBond
     Language.Marlowe.CLI.Export
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Orphans
@@ -92,6 +88,7 @@ library
     http-client,
     lens,
     marlowe,
+    marlowe-contracts,
     memory,
     mtl,
     network,

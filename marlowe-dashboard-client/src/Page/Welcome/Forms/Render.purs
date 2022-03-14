@@ -9,9 +9,11 @@ import Component.Progress.Circular as Progress
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.Bifunctor (lmap)
+import Data.Either (either)
 import Data.Foldable (foldMap)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
+import Data.These (These(..))
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Halogen.Css (classNames)
@@ -82,26 +84,34 @@ renderForm { body, inProgress, onCancel, onSkip, onSubmit, title } =
 
 mkNicknameInput
   :: forall action m
-   . AddressBook
+   . Boolean
+  -> AddressBook
   -> FieldState WalletNickname
   -> Input.Input action (Either WN.WalletNicknameError Unit) WalletNickname () m
-mkNicknameInput addressBook fieldState =
+
+mkNicknameInput warnOnExists addressBook fieldState =
   { fieldState
   , format: WN.toString
-  , validate: notInAddressBook <=< lmap Left <<< WN.fromString
-  , render: \{ error, value } ->
-      renderTextInput id label error (Input.setInputProps value []) case _ of
-        Left WN.Empty -> "Required."
-        Left WN.ContainsNonAlphaNumeric ->
-          "Can only contain letters and digits."
-        Right _ -> "Already exists."
+  , validate:
+      notInAddressBook <=< either This That <<< lmap Left <<< WN.fromString
+  , render: \{ error, value, result } ->
+      renderTextInput id label result error (Input.setInputProps value [])
+        case _ of
+          Left WN.Empty -> "Required."
+          Left WN.ContainsNonAlphaNumeric ->
+            "Can only contain letters and digits."
+          Right _ ->
+            if warnOnExists then "Warning: already exists."
+            else "Already exists."
   }
   where
   id = "restore-wallet-nickname"
   label = "Wallet nickname"
   notInAddressBook nickname
-    | AddressBook.containsNickname nickname addressBook = Left $ Right unit
-    | otherwise = Right nickname
+    | AddressBook.containsNickname nickname addressBook =
+        if warnOnExists then Both (Right unit) nickname
+        else This (Right unit)
+    | otherwise = That nickname
 
 mkMnemonicInput
   :: forall action m
@@ -110,12 +120,13 @@ mkMnemonicInput
 mkMnemonicInput fieldState =
   { fieldState
   , format: MP.toString
-  , validate: MP.fromString
-  , render: \{ error, value } ->
-      renderTextInput id label error (Input.setInputProps value []) case _ of
-        MP.Empty -> "Required."
-        MP.WrongWordCount -> "24 words required."
-        MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
+  , validate: either This That <<< MP.fromString
+  , render: \{ error, value, result } ->
+      renderTextInput id label result error (Input.setInputProps value [])
+        case _ of
+          MP.Empty -> "Required."
+          MP.WrongWordCount -> "24 words required."
+          MP.ContainsInvalidWords -> "Mnemonic phrase contains invalid words."
   }
   where
   id = "restore-wallet-mnemonic"

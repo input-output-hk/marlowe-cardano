@@ -16,7 +16,6 @@ import Control.Monad.Except (ExceptT(..), lift, runExceptT)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.State (modify_)
-import Data.Argonaut (printJsonDecodeError, stringify)
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.Either (either, hush, note)
@@ -745,7 +744,7 @@ handleGistAction LoadGist = do
             ExceptT
               $ pure
               $ toEither (Left "Gist not loaded.")
-              $ lmap (printAjaxError stringify printJsonDecodeError)
+              $ lmap printAjaxError
               $ fromEither aGist
           lift $ loadGist gist
           pure aGist

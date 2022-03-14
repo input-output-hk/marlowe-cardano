@@ -7,6 +7,6 @@ JSON.stringify = JSONbig.stringify;
 JSON.parse = JSONbig.parse;
 
 require("./output/Main").main({
-  webpackDevelMode: process.env.WEBPACK_DEVEL_MODE,
+  webpackDevelMode: process.env.NODE_ENV === "development",
   pollingInterval: parseInt(process.env.MARLOWE_POLLING_INTERVAL),
 })();

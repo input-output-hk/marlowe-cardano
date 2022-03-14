@@ -1,0 +1,430 @@
+ptTestName: Coupon Bond Guaranteed
+
+ptPabOperations:
+
+- tag: CreateWallet
+  poOwner: Lender
+
+- tag: FundWallet
+  poOwner: Lender
+  poValue:
+    lovelace: 70000000
+
+- tag: ActivateApp
+  poOwner: Lender
+  poInstance: LenderApp
+
+- tag: CreateWallet
+  poOwner: Borrower
+
+- tag: FundWallet
+  poOwner: Borrower
+  poValue:
+    lovelace: 40000000
+
+- tag: ActivateApp
+  poOwner: Borrower
+  poInstance: BorrowerApp
+
+- tag: CreateWallet
+  poOwner: Guarantor
+
+- tag: FundWallet
+  poOwner: Guarantor
+  poValue:
+    lovelace: 90000000
+
+- tag: ActivateApp
+  poOwner: Guarantor
+  poInstance: GuarantorApp
+
+- tag: PrintWallet
+  poOwner: Lender
+
+- tag: PrintWallet
+  poOwner: Borrower
+
+- tag: PrintWallet
+  poOwner: Guarantor
+
+- tag: CallCreate
+  poInstance: GuarantorApp
+  poOwners:
+  - Lender
+  - Borrower
+  - Guarantor
+  poContract:
+    let: Principal
+    be: 50000000
+    then:
+      let: Interest
+      be: 4000000
+      then:
+        when:
+        - case:
+            party:
+              role_token: Guarantor
+            deposits:
+              add:
+                use_value: Principal
+              and:
+                multiply:
+                  use_value: Interest
+                times: 3
+            of_token:
+              currency_symbol: ''
+              token_name: ''
+            into_account:
+              role_token: Lender
+          then:
+            when:
+            - case:
+                party:
+                  role_token: Lender
+                deposits:
+                  use_value: Principal
+                of_token:
+                  currency_symbol: ''
+                  token_name: ''
+                into_account:
+                  role_token: Borrower
+              then:
+                pay:
+                  use_value: Principal
+                token:
+                  currency_symbol: ''
+                  token_name: ''
+                from_account:
+                  role_token: Borrower
+                to:
+                  party:
+                    role_token: Borrower
+                then:
+                  when:
+                  - case:
+                      party:
+                        role_token: Borrower
+                      deposits:
+                        use_value: Interest
+                      of_token:
+                        currency_symbol: ''
+                        token_name: ''
+                      into_account:
+                        role_token: Lender
+                    then:
+                      pay:
+                        use_value: Interest
+                      token:
+                        currency_symbol: ''
+                        token_name: ''
+                      from_account:
+                        role_token: Lender
+                      to:
+                        party:
+                          role_token: Guarantor
+                      then:
+                        when:
+                        - case:
+                            party:
+                              role_token: Borrower
+                            deposits:
+                              use_value: Interest
+                            of_token:
+                              currency_symbol: ''
+                              token_name: ''
+                            into_account:
+                              role_token: Lender
+                          then:
+                            pay:
+                              use_value: Interest
+                            token:
+                              currency_symbol: ''
+                              token_name: ''
+                            from_account:
+                              role_token: Lender
+                            to:
+                              party:
+                                role_token: Guarantor
+                            then:
+                              when:
+                              - case:
+                                  party:
+                                    role_token: Borrower
+                                  deposits:
+                                    add:
+                                      use_value: Principal
+                                    and:
+                                      use_value: Interest
+                                  of_token:
+                                    currency_symbol: ''
+                                    token_name: ''
+                                  into_account:
+                                    role_token: Lender
+                                then:
+                                  pay:
+                                    add:
+                                      use_value: Principal
+                                    and:
+                                      use_value: Interest
+                                  token:
+                                    currency_symbol: ''
+                                    token_name: ''
+                                  from_account:
+                                    role_token: Lender
+                                  to:
+                                    party:
+                                      role_token: Guarantor
+                                  then: close
+                              timeout: 2055731625000
+                              timeout_continuation: close
+                        timeout: 2024195625000
+                        timeout_continuation: close
+                  timeout: 1992659625000
+                  timeout_continuation: close
+            timeout: 1961123625000
+            timeout_continuation:
+              pay:
+                add:
+                  use_value: Principal
+                and:
+                  multiply:
+                    use_value: Interest
+                  times: 3
+              token:
+                currency_symbol: ''
+                token_name: ''
+              from_account:
+                role_token: Lender
+              to:
+                party:
+                  role_token: Guarantor
+              then: close
+        timeout: 1929587625000
+        timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: GuarantorApp
+
+- tag: Follow
+  poInstance: LenderApp
+  poOtherInstance: GuarantorApp
+
+- tag: Follow
+  poInstance: BorrowerApp
+  poOtherInstance: GuarantorApp
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 72000000
+  poMaximumFees: 0
+  poInstances:
+  - LenderApp
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 42000000
+  poMaximumFees: 0
+  poInstances:
+  - BorrowerApp
+
+- tag: CheckFunds
+  poOwner: Guarantor
+  poValue:
+    lovelace: 84000000
+  poMaximumFees: 1000000
+  poInstances:
+  - GuarantorApp
+
+- tag: CallApplyInputs
+  poInstance: GuarantorApp
+  poInputs:
+  - input_from_party:
+      role_token: Guarantor
+    that_deposits: 62000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Lender
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: GuarantorApp
+
+- tag: CheckFunds
+  poOwner: Guarantor
+  poValue:
+    lovelace: 22000000
+  poMaximumFees: 3000000
+  poInstances:
+  - GuarantorApp
+
+- tag: CallApplyInputs
+  poInstance: LenderApp
+  poInputs:
+  - input_from_party:
+      role_token: Lender
+    that_deposits: 50000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Borrower
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: LenderApp
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 22000000
+  poMaximumFees: 2000000
+  poInstances:
+  - LenderApp
+
+- tag: CallRedeem
+  poInstance: BorrowerApp
+  poOwner: Borrower
+
+- tag: AwaitRedeem
+  poInstance: BorrowerApp
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 92000000
+  poMaximumFees: 1000000
+  poInstances:
+  - BorrowerApp
+
+- tag: CallApplyInputs
+  poInstance: BorrowerApp
+  poInputs:
+  - input_from_party:
+      role_token: Borrower
+    that_deposits: 4000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Lender
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: BorrowerApp
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 88000000
+  poMaximumFees: 3000000
+  poInstances:
+  - BorrowerApp
+
+- tag: CallApplyInputs
+  poInstance: BorrowerApp
+  poInputs:
+  - input_from_party:
+      role_token: Borrower
+    that_deposits: 4000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Lender
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: BorrowerApp
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 84000000
+  poMaximumFees: 5000000
+  poInstances:
+  - BorrowerApp
+
+- tag: CallApplyInputs
+  poInstance: BorrowerApp
+  poInputs:
+  - input_from_party:
+      role_token: Borrower
+    that_deposits: 54000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Lender
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: BorrowerApp
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 30000000
+  poMaximumFees: 7000000
+  poInstances:
+  - BorrowerApp
+
+- tag: CheckFunds
+  poOwner: Guarantor
+  poValue:
+    lovelace: 24000000
+  poMaximumFees: 3000000
+  poInstances:
+  - GuarantorApp
+
+- tag: CallRedeem
+  poInstance: LenderApp
+  poOwner: Lender
+
+- tag: AwaitRedeem
+  poInstance: LenderApp
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 84000000
+  poMaximumFees: 3000000
+  poInstances:
+  - LenderApp
+
+- tag: CallRedeem
+  poInstance: GuarantorApp
+  poOwner: Guarantor
+
+- tag: AwaitRedeem
+  poInstance: GuarantorApp
+
+- tag: CheckFunds
+  poOwner: Guarantor
+  poValue:
+    lovelace: 86000000
+  poMaximumFees: 4000000
+  poInstances:
+  - GuarantorApp
+
+- tag: Stop
+  poInstance: LenderApp
+
+- tag: Stop
+  poInstance: BorrowerApp
+
+- tag: Stop
+  poInstance: GuarantorApp

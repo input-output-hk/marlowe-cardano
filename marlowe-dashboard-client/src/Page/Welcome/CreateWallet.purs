@@ -146,7 +146,7 @@ render state = do
             [ nicknameInput addressBook fieldState
             ]
         -- TODO replace with progress buttons when refactored.
-        , HH.p [ classNames Css.inputError ] [ HH.text serverError ]
+        , HH.p [ classNames $ Css.inputError false ] [ HH.text serverError ]
         ]
     , inProgress
     , onCancel:
@@ -172,5 +172,5 @@ nicknameInput addressBook fieldState =
     _nickname
     unit
     Input.component
-    (mkNicknameInput addressBook fieldState)
+    (mkNicknameInput false addressBook fieldState)
     OnNicknameMsg

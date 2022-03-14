@@ -91,5 +91,5 @@ getUserParties :: ContractUserParties -> Set Party
 getUserParties (ContractUserParties { userParties }) = userParties
 
 isCurrentUser :: Party -> ContractUserParties -> Boolean
-isCurrentUser party (ContractUserParties { userParties }) = Set.member party
-  userParties
+isCurrentUser party (ContractUserParties { userParties }) =
+  Set.member party userParties

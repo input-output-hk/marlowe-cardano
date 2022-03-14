@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-cli"; version = "0.1.0.0"; };
+      identifier = { name = "marlowe-cli"; version = "0.0.0.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "brian.bush@iohk.io";
@@ -50,6 +50,7 @@
           (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
@@ -90,10 +91,6 @@
           "Language/Marlowe/CLI/Command/Transaction"
           "Language/Marlowe/CLI/Command/Util"
           "Language/Marlowe/CLI/Examples"
-          "Language/Marlowe/CLI/Examples/Escrow"
-          "Language/Marlowe/CLI/Examples/Swap"
-          "Language/Marlowe/CLI/Examples/Trivial"
-          "Language/Marlowe/CLI/Examples/ZeroCouponBond"
           "Language/Marlowe/CLI/Export"
           "Language/Marlowe/CLI/IO"
           "Language/Marlowe/CLI/Orphans"

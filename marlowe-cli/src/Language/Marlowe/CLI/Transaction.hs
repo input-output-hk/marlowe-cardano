@@ -60,7 +60,8 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), Balan
                     makeTransactionBodyAutoBalance, negateValue, queryNodeLocalState, readFileTextEnvelope,
                     selectLovelace, serialiseToCBOR, signShelleyTransaction, submitTxToNodeLocal, txOutValueToValue,
                     valueFromList, valueToList, valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
-import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxTxExUnits, protocolParamMaxTxSize)
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
+                            protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Control.Concurrent (threadDelay)
@@ -389,10 +390,11 @@ buildBody :: MonadError CliError m
 buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats invalid =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
-    start    <- queryAny    connection   QuerySystemStart
-    history  <- queryAny    connection $ QueryEraHistory CardanoModeIsMultiEra
-    protocol <- queryAlonzo connection   QueryProtocolParameters
+    start <- queryAny connection   QuerySystemStart
+    history <- queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
+    protocol <- queryAlonzo connection QueryProtocolParameters
     let
+      protocol' = (\pp -> pp {protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
       txInsCollateral   = TxInsCollateral CollateralInAlonzoEra $ maybeToList collateral
       txFee             = TxFeeExplicit TxFeesExplicitInAlonzoEra 0
       txValidityRange   = (
@@ -408,7 +410,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
       txMetadata        = TxMetadataNone
       txAuxScripts      = TxAuxScriptsNone
       txExtraKeyWits    = TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra extraSigners
-      txProtocolParams  = BuildTxWith $ Just protocol
+      txProtocolParams  = BuildTxWith $ Just protocol'
       txWithdrawals     = TxWithdrawalsNone
       txCertificates    = TxCertificatesNone
       txUpdateProposal  = TxUpdateProposalNone
@@ -434,7 +436,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
             AlonzoEraInCardanoMode
             start
             history
-            protocol
+            protocol'
             S.empty
             utxo
             TxBodyContent{..}
@@ -447,7 +449,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
           AlonzoEraInCardanoMode
           start
           history
-          protocol
+          protocol'
           S.empty
           utxo
           (TxBodyContent{..} {txOuts = change : txOuts})
@@ -456,14 +458,9 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
       -- Correct for a negative balance in cases where execution units, and hence fees, have increased.
       change' =
         case (change, trial) of
-          (TxOut _ (TxOutValue _ value) _, Left (TxBodyErrorAdaBalanceNegative delta)) -> TxOut
-                                                                                            changeAddress'
-                                                                                            (
-                                                                                              TxOutValue MultiAssetInAlonzoEra
-                                                                                                $ value <> lovelaceToValue delta
-                                                                                            )
-                                                                                            TxOutDatumNone
-          _                                                                            -> change
+          (TxOut _ (TxOutValue _ value) _, Left (TxBodyErrorAdaBalanceNegative delta)) ->
+            TxOut changeAddress' (TxOutValue MultiAssetInAlonzoEra $ value <> lovelaceToValue delta) TxOutDatumNone
+          _ -> change
     -- Construct the body with correct execution units and fees.
     BalancedTxBody txBody _ lovelace <-
       liftCli
@@ -471,7 +468,7 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
             AlonzoEraInCardanoMode
             start
             history
-            protocol
+            protocol'
             S.empty
             utxo
             (TxBodyContent{..} {txOuts = change' : txOuts})

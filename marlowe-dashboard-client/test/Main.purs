@@ -5,7 +5,7 @@ import Prologue
 import Control.Monad.State (class MonadState)
 import Data.Int (decimal)
 import Data.Int as Int
-import Data.Undefinable (toUndefinable)
+import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
@@ -21,27 +21,36 @@ import Test.Data.Address.Bech32.HRP as Bech32HRP
 import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
+import Test.Marlowe.Run.Action.Eval (runScriptedTest)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
-import Test.Spec.Runner (runSpec)
+import Test.Spec.Runner (defaultConfig, runSpec')
 import Test.Web (runTestMInBody)
 import Test.Web.DOM.Assertions (shouldHaveId, shouldHaveTagName, shouldHaveText)
-import Test.Web.DOM.Query (byRoleDefault, findBy, getBy, role, role')
+import Test.Web.DOM.Query (findBy, getBy, name, role)
 import Test.Web.Event.User (click, clickM, runUserM)
 import Test.Web.Monad (getContainer)
 import Web.ARIA (ARIARole(..))
 import Web.DOM (Element)
 
 main :: Effect Unit
-main = launchAff_ $ runSpec [ consoleReporter ] do
-  Bech32Address.spec
-  Bech32DataPart.spec
-  Bech32HRP.spec
-  DataPartCodePoint.spec
-  HRPCodePoint.spec
-  testingLibrarySpec
-  halogenTestingLibrarySpec
+main = launchAff_ $ runSpec'
+  defaultConfig { timeout = Just $ Milliseconds 5000.0 }
+  [ consoleReporter ]
+  do
+    Bech32Address.spec
+    Bech32DataPart.spec
+    Bech32HRP.spec
+    DataPartCodePoint.spec
+    HRPCodePoint.spec
+    testingLibrarySpec
+    halogenTestingLibrarySpec
+    testScripts
+
+testScripts :: Spec Unit
+testScripts = describe "Scripted scenarios" do
+  runScriptedTest "example"
 
 -------------------------------------------------------------------------------
 -- Demo tests for purescript-testing-library
@@ -57,11 +66,11 @@ testingLibrarySpec = do
         body <- getContainer
         body `shouldHaveTagName` "body"
         liftEffect $ setupTestApp body
-        paragraph <- getBy $ role Paragraph
+        paragraph <- getBy role $ pure Paragraph
         paragraph `shouldHaveId` "para"
         paragraph `shouldHaveTagName` "p"
         paragraph `shouldHaveText` "Test content"
-        clickM $ findBy $ role Button
+        clickM $ findBy role $ pure Button
         paragraph `shouldHaveText` "It worked!"
 
 -------------------------------------------------------------------------------
@@ -118,24 +127,24 @@ halogenTestingLibrarySpec = do
 
     it "Receives the initial input" do
       runUITest counter 10 do
-        span <- getBy $ role Textbox
+        span <- getBy role $ pure Textbox
         span `shouldHaveText` "10"
 
     it "Receives new input" do
       runUITest counter 0 do
         TH.sendInput 20
-        span <- getBy $ role Textbox
+        span <- getBy role $ pure Textbox
         span `shouldHaveText` "20"
 
     it "Handles user interaction" do
       runUITest counter 0 do
-        decrement <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "-"
-          }
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        span <- getBy (role Textbox)
+        decrement <- getBy role do
+          name "-"
+          pure Button
+        increment <- getBy role do
+          name "+"
+          pure Button
+        span <- getBy role $ pure Textbox
         click increment
         span `shouldHaveText` "1"
         click decrement
@@ -144,12 +153,12 @@ halogenTestingLibrarySpec = do
 
     it "Sends messages" do
       runUITest counter 0 do
-        decrement <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "-"
-          }
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
+        decrement <- getBy role do
+          name "-"
+          pure Button
+        increment <- getBy role do
+          name "+"
+          pure Button
         click increment
         click decrement
         expectMessages [ 1, 0 ]
@@ -158,10 +167,10 @@ halogenTestingLibrarySpec = do
 
     it "Handles queries" do
       runUITest counter 0 do
-        increment <- getBy $ role' Button byRoleDefault
-          { name = toUndefinable $ Just "+"
-          }
-        span <- getBy (role Textbox)
+        increment <- getBy role do
+          name "+"
+          pure Button
+        span <- getBy role $ pure Textbox
         click increment
         click increment
         value <- TH.request GetValue

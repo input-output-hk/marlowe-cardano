@@ -53,6 +53,7 @@ import qualified Marlowe.Symbolic.Server as MS
 import qualified Marlowe.Symbolic.Types.Request as MSReq
 import qualified Marlowe.Symbolic.Types.Response as MSRes
 import qualified PSGenerator.Common
+import qualified Plutus.Contract.Error as CE (ContractError)
 import qualified PlutusTx.AssocMap as Map
 import Servant ((:<|>), (:>))
 import Servant.PureScript (HasBridge, Settings, addTypes, apiModuleName, defaultBridge, defaultSettings,
@@ -208,6 +209,7 @@ myTypes =
     , argonaut $ mkSumType @Webghc.CompileRequest
     , argonaut $ mkSumType @(SC.CashFlowPoly A)
     , equal . order . genericShow . argonaut $ mkSumType @BV.EventType
+    , equal . argonaut $ mkSumType @CE.ContractError
     ]
 
 mySettings :: Settings

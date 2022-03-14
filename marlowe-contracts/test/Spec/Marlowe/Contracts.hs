@@ -82,7 +82,7 @@ zeroCouponBondTest =
           Close
       txIn =
         [ C.TransactionInput (0, 0)     [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 75_000_000]
-        , C.TransactionInput (100, 110) [C.NormalInput $ C.IDeposit w1Pk w2Pk ada 90_000_000]
+        , C.TransactionInput (100, 110) [C.NormalInput $ C.IDeposit w2Pk w2Pk ada 90_000_000]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
@@ -96,8 +96,8 @@ zeroCouponBondTest =
 swapContractTest :: IO ()
 swapContractTest =
   let Just contract = toCore $
-        swap w1Pk ada (Constant 10_000_000) w2Pk tok (Constant 30) (POSIXTime 100) $
-        swap w2Pk ada (Constant 10_000_000) w1Pk tok (Constant 30) (POSIXTime 200) Close
+        swap w1Pk ada (Constant 10_000_000) (POSIXTime 100) w2Pk tok (Constant 30) (POSIXTime 100) $
+        swap w2Pk ada (Constant 10_000_000) (POSIXTime 100) w1Pk tok (Constant 30) (POSIXTime 200) Close
       txIn =
         [ C.TransactionInput (0, 0)
             [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 10_000_000

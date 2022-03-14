@@ -37,6 +37,7 @@
   "devDependencies": {
     "@webpack-cli/serve": "^1.5.1",
     "autoprefixer": "^10.2.5",
+    "browser-or-node": "^2.0.0",
     "css-loader": "^5.2.4",
     "cssnano": "^5.0.2",
     "file-loader": "^2.0.0",

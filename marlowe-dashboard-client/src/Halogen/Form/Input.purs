@@ -15,11 +15,11 @@ module Halogen.Form.Input
 import Prologue
 
 import Control.Alternative (guard)
-import Data.Either (either, hush, isRight)
 import Data.Foldable (traverse_)
 import Data.Generic.Rep (class Generic)
-import Data.Maybe (maybe)
+import Data.Maybe (isJust, maybe)
 import Data.Show.Generic (genericShow)
+import Data.These (These(..), theseLeft, theseRight)
 import Effect.Class (class MonadEffect)
 import Halogen (RefLabel(..))
 import Halogen as H
@@ -44,7 +44,7 @@ type Render pa error output slots m =
 type Input pa error output slots m =
   { fieldState :: FieldState output
   , format :: output -> String
-  , validate :: String -> Either error output
+  , validate :: String -> These error output
   , render :: Render pa error output slots m
   }
 
@@ -91,8 +91,8 @@ type InternalState pa error output slots m =
   { focused :: Boolean
   , format :: output -> String
   , render :: Render pa error output slots m
-  , result :: Either error output
-  , validate :: String -> Either error output
+  , result :: These error output
+  , validate :: String -> These error output
   , value :: String
   , visited :: Boolean
   }
@@ -161,7 +161,7 @@ initialState { focused, visited } { fieldState, format, validate, render } =
   { result, value } = case fieldState of
     FS.Blank -> { value: "", result: validate "" }
     FS.Incomplete input -> { value: input, result: validate input }
-    FS.Complete output -> { value: format output, result: Right output }
+    FS.Complete output -> { value: format output, result: That output }
 
 modifyWithFormat
   :: forall pa error output slots m
@@ -174,8 +174,8 @@ modifyWithFormat f = formatIfNotFocuesd <<< f
   where
   formatIfNotFocuesd state
     | state.focused = state
-    | otherwise = case state.result of
-        Right result -> state { value = state.format result }
+    | otherwise = case theseRight state.result of
+        Just result -> state { value = state.format result }
         _ -> state
 
 setValue
@@ -194,15 +194,15 @@ setValue f = do
         { result = newResult
         , value =
             if s.focused then newValue
-            else case newResult of
-              Right output -> s.format output
+            else case theseRight newResult of
+              Just output -> s.format output
               _ -> newValue
-        , visited = s.visited || isRight newResult
+        , visited = s.visited || isJust (theseRight newResult)
         }
   let
-    toFieldState v r = case r of
-      Left _ -> FS.Incomplete v
-      Right output -> FS.Complete output
+    toFieldState v r = case theseRight r of
+      Nothing -> FS.Incomplete v
+      Just output -> FS.Complete output
     oldState = toFieldState oldValue oldResult
     newState = toFieldState value result
 
@@ -215,13 +215,13 @@ render'
   -> ComponentHTML pa error output slots m
 render' { result, format, render, value, focused, visited } =
   render
-    { error: guard visited *> either Just (const Nothing) result
+    { error: guard visited *> theseLeft result
     , focused
     , result: mOutput
     , value: maybe value format $ guard (not focused) *> mOutput
     }
   where
-  mOutput = hush result
+  mOutput = theseRight result
 
 handleAction
   :: forall pa error output slots m

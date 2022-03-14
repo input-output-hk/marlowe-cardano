@@ -24,8 +24,7 @@ import Type.Proxy (Proxy(..))
 data Msg = ActionSelected NamedAction (Maybe ChosenNum)
 
 data Action
-  = OnReceive Input
-  | SelectAction NamedAction (Maybe ChosenNum)
+  = SelectAction NamedAction (Maybe ChosenNum)
   | ChangeChoice ChoiceId (Maybe ChosenNum)
 
 type State =

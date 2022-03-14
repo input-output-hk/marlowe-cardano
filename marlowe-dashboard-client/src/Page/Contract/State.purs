@@ -1,7 +1,6 @@
 module Page.Contract.State
   ( component
   , handleAction
-  , mkPlaceholderState
   ) where
 
 import Prologue
@@ -11,32 +10,34 @@ import Capability.MarloweStorage
   ( class ManageMarloweStorage
   , modifyContractNicknames
   )
-import Capability.Toast (class Toast, addToast)
+import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
-import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Now (class MonadTime, now, timezoneOffset)
+import Control.Monad.Maybe.Trans (runMaybeT)
+import Control.Monad.Now (class MonadTime, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State.Class (modify_)
-import Data.Array (index, length, mapMaybe, modifyAt)
-import Data.ContractNickname (ContractNickname)
+import Data.Array (index, length, mapMaybe)
 import Data.ContractNickname as ContractNickname
+import Data.ContractStatus (ContractStatus(..))
 import Data.ContractUserParties (contractUserParties, getParticipants)
 import Data.DateTime.Instant (Instant)
 import Data.Foldable (for_)
 import Data.FoldableWithIndex (foldlWithIndex)
-import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, (^.))
+import Data.Lens (assign, modifying, set, to, toArrayOf, traversed, use, (^.))
 import Data.Lens.Extra (peruse)
-import Data.Lens.Index (ix)
 import Data.List (toUnfoldable)
 import Data.LocalContractNicknames (insertContractNickname)
+import Data.Map as Map
 import Data.Maybe (fromMaybe)
+import Data.NewContract (NewContract(..))
 import Data.Ord (abs)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Set as Set
-import Data.Time.Duration (Minutes(..), Seconds(..))
+import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse, traverse_)
 import Data.Tuple.Nested ((/\))
+import Data.UUID.Argonaut (emptyUUID)
 import Data.UserNamedActions (userNamedActions)
 import Data.UserNamedActions as UserNamedActions
 import Effect (Effect)
@@ -50,12 +51,11 @@ import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
-import Halogen.Time (subscribeTime')
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
 import Marlowe.Execution.State (expandBalances, extractNamedActions)
 import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
-import Marlowe.Extended.Metadata (MetaData, emptyContractMetadata)
+import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.Semantics (_accounts)
 import Page.Contract.Lenses
   ( _Started
@@ -63,26 +63,25 @@ import Page.Contract.Lenses
   , _contractUserParties
   , _executionState
   , _expandPayments
-  , _previousSteps
   , _selectedStep
+  , _tab
   )
 import Page.Contract.Types
   ( Action(..)
-  , ContractState(..)
+  , ContractState
   , DSL
   , Input
   , Msg(..)
   , PreviousStep
   , PreviousStepState(..)
+  , Slice
   , StartedState
   , State
-  , Tab(..)
   , scrollContainerRef
   )
 import Page.Contract.View (contractScreen)
 import Store as Store
-import Store.Contracts (ContractStore, getContract)
-import Toast.Types (errorToast)
+import Store.Contracts (getContract, getNewContract)
 import Web.DOM.Element (getElementsByClassName)
 import Web.DOM.HTMLCollection as HTMLCollection
 import Web.Dom.ElementExtra
@@ -107,7 +106,7 @@ component
   => MonadStore Store.Action Store.Store m
   => H.Component query Input Msg m
 component =
-  connect (selectEq _.contracts) $
+  connect (selectEq \{ contracts, currentTime } -> { contracts, currentTime }) $
     H.mkComponent
       { initialState: deriveState
       , render: contractScreen
@@ -119,47 +118,37 @@ component =
       }
 
 dummyState :: ContractState
-dummyState =
-  Starting
-    { nickname: ContractNickname.unknown
-    , metadata: emptyContractMetadata
-    }
+dummyState = Starting $
+  NewContract emptyUUID ContractNickname.unknown emptyContractMetadata
 
-deriveState :: Connected ContractStore Input -> State
+deriveState :: Connected Slice Input -> State
 deriveState
   { context
-  , input: { wallet, marloweParams }
+  , input: { wallet, contractIndex }
   } =
   let
-    mExecutionState = getContract marloweParams context
-    -- FIXME-3487 we might want to represent an error state instead of dummyState
-    contract = fromMaybe dummyState $ mkInitialState wallet <$> mExecutionState
+    mContract = case contractIndex of
+      Starting reqId -> Starting <$> getNewContract reqId context.contracts
+      Started marloweParams -> mkInitialState context.currentTime wallet
+        <$> getContract marloweParams context.contracts
+
+    -- TODO: We might want to represent an error state instead of dummyState
+    contract = fromMaybe dummyState $ mContract
   in
     { contract
-    , currentTime: bottom
+    , currentTime: context.currentTime
     , tzOffset: Minutes 0.0 -- This will be set in Init
     , wallet
     }
 
--- TODO: SCP-3487 Fix the flow that creates a contract
--- this is for making a placeholder state for the user who created the contract, used for displaying
--- something before we get the MarloweParams back from the WalletCompanion app
-mkPlaceholderState :: ContractNickname -> MetaData -> ContractState
-mkPlaceholderState nickname metaData =
-  Starting
-    { nickname
-    , metadata: metaData
-    }
-
 mkInitialState
-  :: PABConnectedWallet
-  -> Execution.State
-  -> ContractState
-mkInitialState wallet executionState =
+  :: Instant -> PABConnectedWallet -> Execution.State -> ContractState
+mkInitialState currentTime wallet executionState =
   let
     { marloweParams, contract } = executionState
     initialState =
-      { tab: Tasks
+      { tabs: Map.empty
+      , expandPayments: Map.empty
       , executionState
       , previousSteps: mempty
       , selectedStep: 0
@@ -170,6 +159,7 @@ mkInitialState wallet executionState =
       }
   in
     initialState
+      # regenerateStepCards currentTime
       # selectLastStep
       # Started
 
@@ -179,21 +169,6 @@ withStarted
   => (StartedState -> HalogenM State action slots msg m Unit)
   -> HalogenM State action slots msg m Unit
 withStarted f = peruse (_contract <<< _Started) >>= traverse_ f
-
-updateCards
-  :: forall m. Toast m => MonadTime m => Maybe Execution.State -> DSL m Unit
-updateCards mExecutionState = void $ runMaybeT do
-  startedContract <- MaybeT $ peruse $ _contract <<< _Started
-  executionState <- hoistMaybe mExecutionState
-  currentTime <- now
-  let
-    mNewContractState = map Started
-      $ regenerateStepCards currentTime
-      $ set _executionState executionState startedContract
-  case mNewContractState of
-    Left error ->
-      addToast $ errorToast "Error updating contract card state" $ Just error
-    Right newContractState -> assign _contract newContractState
 
 handleAction
   :: forall m
@@ -206,9 +181,6 @@ handleAction
   => Toast m
   => Action
   -> DSL m Unit
-handleAction (Tick currentTime) = do
-  H.modify_ _ { currentTime = currentTime }
-  updateCards =<< peruse (_contract <<< _Started <<< _executionState)
 handleAction Init = do
   tzOffset <- timezoneOffset
   modify_ _ { tzOffset = tzOffset }
@@ -219,31 +191,34 @@ handleAction Init = do
     -- in the center without any animation
     liftEffect $ scrollStepToCenter Auto step elm
     subscribeToSelectCenteredStep
-  subscribeTime' (Seconds 1.0) Tick
 handleAction (Receive { input, context }) = do
-  let mExecutionState = getContract input.marloweParams context
-  updateCards mExecutionState
+  modify_ _ { currentTime = context.currentTime }
+  case input.contractIndex of
+    Started marloweParams -> void $ runMaybeT do
+      executionState <- hoistMaybe $ getContract marloweParams context.contracts
+      currentContractState <- use _contract
+      case currentContractState of
+        -- If we are transitioning from a Starting to a Started contract we recreate the Contract initial
+        -- state
+        Starting _ -> assign _contract $ mkInitialState context.currentTime
+          input.wallet
+          executionState
+        -- If we are just receiving a new input but we are already in a Started state, then we just
+        -- update the execution state
+        Started _ -> modifying (_contract <<< _Started) $
+          regenerateStepCards context.currentTime
+            <<< set _executionState executionState
+    _ -> pure unit
 handleAction (SetNickname nickname) =
   withStarted \{ executionState: { marloweParams } } -> do
     void $ modifyContractNicknames $ insertContractNickname marloweParams
       nickname
 
 handleAction (SelectTab stepNumber tab) =
-  modifying (_contract <<< _Started) \started@{ previousSteps } ->
-    case
-      modifyAt stepNumber (\previousStep -> previousStep { tab = tab })
-        previousSteps
-      of
-      -- if the stepNumber is in the range of the previousSteps, we update that step
-      Just modifiedPreviousSteps -> started
-        { previousSteps = modifiedPreviousSteps }
-      -- otherwise we update the tab of the current step
-      Nothing -> started { tab = tab }
+  assign (_contract <<< _Started <<< _tab stepNumber) tab
 
 handleAction (ToggleExpandPayment stepNumber) = modifying
-  ( _contract <<< _Started <<< _previousSteps <<< ix stepNumber <<<
-      _expandPayments
-  )
+  (_contract <<< _Started <<< _expandPayments stepNumber)
   not
 
 handleAction (OnActionSelected action num) = raise $ AskConfirmation action num
@@ -294,9 +269,7 @@ transactionsToStep
           TimeoutStep { time: act.time, missedActions }
       InputAction -> TransactionStep txInput
   in
-    { tab: Tasks
-    , expandPayments: false
-    , resultingPayments: toUnfoldable resultingPayments
+    { resultingPayments: toUnfoldable resultingPayments
     , balances:
         { atStart:
             expandedBalancesAtStart
@@ -318,10 +291,8 @@ timeoutToStep state { time, missedActions } =
       [ adaToken ]
       balances
   in
-    { tab: Tasks
-    , expandPayments: false
-    -- FIXME: Revisit how should we treat payments from timeout steps, for now they are not displayed
-    , resultingPayments: []
+    { -- FIXME: Revisit how should we treat payments from timeout steps, for now they are not displayed
+      resultingPayments: []
     , balances:
         { atStart: expandedBalances
         , atEnd: Nothing
@@ -336,7 +307,7 @@ timeoutToStep state { time, missedActions } =
           }
     }
 
-regenerateStepCards :: Instant -> StartedState -> Either String StartedState
+regenerateStepCards :: Instant -> StartedState -> StartedState
 regenerateStepCards currentTime state =
   -- TODO: This regenerates all the previous step cards, resetting them to their default state (showing
   -- the Tasks tab). If any of them are showing the Balances tab, it would be nice to keep them that way.
@@ -366,11 +337,10 @@ regenerateStepCards currentTime state =
 
     contractUserParties = state ^. _contractUserParties
 
-    namedActions =
-      userNamedActions contractUserParties
-        <$> extractNamedActions currentTime executionState
+    namedActions = userNamedActions contractUserParties
+      $ extractNamedActions currentTime executionState
   in
-    state { previousSteps = previousSteps, namedActions = _ } <$> namedActions
+    state { previousSteps = previousSteps, namedActions = namedActions }
 
 selectLastStep :: StartedState -> StartedState
 selectLastStep state@{ previousSteps } = state

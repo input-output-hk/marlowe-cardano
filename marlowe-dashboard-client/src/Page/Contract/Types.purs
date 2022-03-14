@@ -9,9 +9,9 @@ module Page.Contract.Types
   , PreviousStep
   , PreviousStepState(..)
   , Query(..)
+  , Slice
   , Slot
   , StartedState
-  , StartingState
   , State
   , StepBalance
   , Tab(..)
@@ -29,8 +29,11 @@ import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Tooltip.Types (ReferenceId)
 import Data.Array (length)
 import Data.ContractNickname (ContractNickname)
+import Data.ContractStatus (ContractStatus, ContractStatusId)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
+import Data.Map (Map)
+import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
 import Data.UserNamedActions (UserNamedActions)
@@ -39,7 +42,6 @@ import Halogen as H
 import Halogen.Store.Connect (Connected)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types (State) as Execution
-import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.Semantics
   ( Accounts
   , ChosenNum
@@ -50,11 +52,7 @@ import Marlowe.Semantics
 import Store.Contracts (ContractStore)
 import Type.Proxy (Proxy(..))
 
-data ContractState
-  = Starting StartingState
-  | Started StartedState
-
-derive instance Eq ContractState
+type ContractState = ContractStatus NewContract StartedState
 
 type State =
   { contract :: ContractState
@@ -63,14 +61,8 @@ type State =
   , wallet :: PABConnectedWallet
   }
 
-type StartingState =
-  { nickname :: ContractNickname
-  , metadata :: MetaData
-  }
-
 type StartedState =
-  { tab :: Tab -- this is the tab of the current (latest) step - previous steps have their own tabs
-  , executionState :: Execution.State
+  { executionState :: Execution.State
   , previousSteps :: Array PreviousStep
   -- Which step is selected. This index is 0 based and should be between [0, previousSteps.length]
   -- (both sides inclusive). This is because the array represent the past steps and the
@@ -82,6 +74,8 @@ type StartedState =
   , contractUserParties :: ContractUserParties
   -- These are the possible actions a user can make in the current step (grouped by party).
   , namedActions :: UserNamedActions
+  , tabs :: Map Int Tab
+  , expandPayments :: Map Int Boolean
   }
 
 type StepBalance =
@@ -91,9 +85,7 @@ type StepBalance =
 
 -- Represents a historical step in a contract's life.
 type PreviousStep =
-  { tab :: Tab
-  , expandPayments :: Boolean
-  , resultingPayments :: Array Payment
+  { resultingPayments :: Array Payment
   , balances :: StepBalance
   , state :: PreviousStepState
   }
@@ -115,11 +107,14 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
+type Slice =
+  { contracts :: ContractStore
+  , currentTime :: Instant
+  }
+
 type Input =
   { wallet :: PABConnectedWallet
-  -- TODO-3487 Instead of just MarloweParms this should be a custom data type or a
-  --            Either UUID MarloweParams to be able to work with Starting and Started contracts.
-  , marloweParams :: MarloweParams
+  , contractIndex :: ContractStatusId
   }
 
 data Msg
@@ -127,8 +122,7 @@ data Msg
 
 data Action
   = Init
-  | Tick Instant
-  | Receive (Connected ContractStore Input)
+  | Receive (Connected Slice Input)
   | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
@@ -159,7 +153,6 @@ type Slot m = H.Slot Query Msg m
 instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
   toEvent (Receive _) = Nothing
-  toEvent (Tick _) = Nothing
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"

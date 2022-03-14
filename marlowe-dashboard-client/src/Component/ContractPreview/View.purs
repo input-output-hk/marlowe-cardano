@@ -11,10 +11,11 @@ import Component.CurrentStepActions.Types (Msg(..), _currentStepActions)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon)
 import Component.Progress.Circular as Progress
-import Data.ContractUserParties (ContractUserParties)
+import Data.ContractNickname as ContractNickname
+import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
-import Data.UserNamedActions (UserNamedActions)
+import Data.NewContract (NewContract(..))
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -24,22 +25,20 @@ import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
-import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Page.Contract.Lenses (_marloweParams, _metadata)
-import Page.Contract.Types (StartingState)
-import Page.Dashboard.Types (Action(..))
+import Page.Dashboard.Types (Action(..), ContractState)
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
 contractPreviewCard
   :: forall m
    . MonadAff m
   => Instant
-  -> Execution.State
-  -> ContractUserParties
-  -> UserNamedActions
+  -> ContractState
   -> ComponentHTML Action ChildSlots m
-contractPreviewCard currentTime executionState contractUserParties namedActions =
+contractPreviewCard
+  currentTime
+  { executionState, contractUserParties, namedActions } =
   let
     contractType = executionState ^. (_metadata <<< _contractType)
     contractName = executionState ^. (_metadata <<< _contractName)
@@ -96,7 +95,7 @@ contractPreviewCard currentTime executionState contractUserParties namedActions 
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              , onClick_ $ SelectContract $ Just marloweParams
+              , onClick_ $ SelectContract $ Just $ Started marloweParams
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]
           ]
@@ -110,14 +109,14 @@ contractPreviewCard currentTime executionState contractUserParties namedActions 
 
 -- FIXME-3487: Factor out commonalities between contractStartingPreviewCard and contractPreviewCard
 contractStartingPreviewCard
-  :: forall m. MonadAff m => StartingState -> ComponentHTML Action ChildSlots m
-contractStartingPreviewCard state =
+  :: forall m. MonadAff m => NewContract -> ComponentHTML Action ChildSlots m
+contractStartingPreviewCard (NewContract reqId contractNickname metadata) =
   let
-    -- nickname = "Unknown"
+    nickname = ContractNickname.toString contractNickname
 
-    contractType = state ^. (_metadata <<< _contractType)
+    contractType = metadata ^. _contractType
 
-    contractName = state ^. (_metadata <<< _contractName)
+    contractName = metadata ^. _contractName
 
     stepPanel =
       div
@@ -149,7 +148,8 @@ contractStartingPreviewCard state =
                   [ contractIcon contractType
                   , text contractName
                   ]
-              -- FIXME-3562
+              -- FIXME-3562: Make an input again
+              , text nickname
               -- , input
               --     [ classNames $ Css.inputNoBorder <> [ "-ml-2", "text-lg" ]
               --     , type_ InputText
@@ -163,8 +163,7 @@ contractStartingPreviewCard state =
               ]
           , a
               [ classNames [ "flex", "items-center" ]
-              -- TODO: SCP-3487 Fix the flow that creates a contract
-              -- , onClick_ SelectSelf
+              , onClick_ $ SelectContract $ Just $ Starting reqId
               ]
               [ icon Icon.ArrowRight [ "text-28px" ] ]
           ]

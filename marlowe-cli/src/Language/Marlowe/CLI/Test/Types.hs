@@ -1,3 +1,15 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Types for testing Marlowe contracts.
+--
+-----------------------------------------------------------------------------
+
 
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveAnyClass             #-}
@@ -10,6 +22,7 @@
 
 
 module Language.Marlowe.CLI.Test.Types (
+-- * Type
   MarloweTests(..)
 , RoleName
 , InstanceNickname
@@ -19,14 +32,15 @@ module Language.Marlowe.CLI.Test.Types (
 , PabOperation(..)
 , PabAccess(..)
 , PabState(PabState)
+, WalletInfo(..)
+, AppInstanceInfo(..)
+-- * Lenses
 , psFaucetKey
 , psFaucetAddress
 , psBurnAddress
 , psPassphrase
 , psWallets
 , psAppInstances
-, WalletInfo(..)
-, AppInstanceInfo(..)
 ) where
 
 
@@ -83,9 +97,11 @@ data MarloweTests a =
     deriving stock (Eq, Generic, Show)
 
 
+-- | The name of a role.
 type RoleName = String
 
 
+-- | A nickname for a PAB contract instance.
 type InstanceNickname = String
 
 
@@ -124,98 +140,144 @@ data ScriptOperation =
 
 -- | On- and off-chain test operations for Marlowe contracts, via the Marlowe PAB.
 data PabOperation =
+    -- | Create a wallet.
     CreateWallet
     {
-      poOwner :: RoleName
+      poOwner :: RoleName  -- ^ The name of the wallet's owner.
     }
+    -- | Fund a wallet.
   | FundWallet
     {
-      poOwner :: RoleName
-    , poValue :: Value
+      poOwner :: RoleName  -- ^ The name of the wallet's owner.
+    , poValue :: Value     -- ^ The value to add to the wallet.
     }
+    -- | Return funds from a wallet.
   | ReturnFunds
     {
-      poOwner     :: RoleName
-    , poInstances :: [RoleName]
+      poOwner     :: RoleName    -- ^ The name of the wallet's owner.
+    , poInstances :: [RoleName]  -- ^ The instances for which to role tokens should be burnt.
     }
+    -- | Check the funds in a wallet.
   | CheckFunds
     {
-      poOwner       :: RoleName
-    , poValue       :: Value
-    , poMaximumFees :: Lovelace
-    , poInstances   :: [RoleName]
+      poOwner       :: RoleName    -- ^ The name of the wallet's owner.
+    , poValue       :: Value       -- ^ The value the wallet should contain.
+    , poMaximumFees :: Lovelace    -- ^ The allowable maximum fee that should have been paid.
+    , poInstances   :: [RoleName]  -- ^ The role tokens that should be in the wallet.
     }
   -- TODO: Also support checking funds at script addresses.
+    -- | Activate the Marlowe `WalletApp` PAB contract.
   | ActivateApp
     {
-      poOwner    :: RoleName
-    , poInstance :: InstanceNickname
+      poOwner    :: RoleName          -- ^ The name of the wallet's owner.
+    , poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     }
+    -- | Call the "create" endpoint of `WalletApp`.
   | CallCreate
     {
-      poInstance :: InstanceNickname
-    , poOwners   :: [RoleName]
-    , poContract :: Contract
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    , poOwners   :: [RoleName]        -- ^ The names of roles in the contract.
+    , poContract :: Contract          -- ^ The Marlowe contract to be created.
     }
+    -- | Wait for confirmation of a call to the "create" endpoint.
   | AwaitCreate
     {
-      poInstance :: InstanceNickname
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     }
+    -- | Call the "apply-inputs" endpoint of `WalletApp`.
   | CallApplyInputs
     {
-      poInstance :: InstanceNickname
-    , poOwner    :: RoleName
-    , poInputs   :: [MarloweClientInput]
-    , poTimes    :: Maybe TimeInterval
+      poInstance :: InstanceNickname      -- ^ The nickname of the PAB contract instance.
+    , poInputs   :: [MarloweClientInput]  -- ^ The inputs to the Marlowe contract.
+    , poTimes    :: Maybe TimeInterval    -- ^ The time interval for the transaction.
     }
+    -- | Wait for confirmation of a call to the "apply-inputs" endpoint.
   | AwaitApplyInputs
     {
-      poInstance :: InstanceNickname
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     }
+    -- | Call the "auto" endpoint of `WalletApp`.
+  | CallAuto
+    {
+      poInstance     :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    , poOwner        :: RoleName          -- ^ The name of the wallet's owner.
+    , poAbsoluteTime :: POSIXTime         -- ^ The maximum time to operate until.
+    }
+    -- | Wait for confirmation of a call to the "auto" endpoint.
+  | AwaitAuto
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
+    -- | Call the "redeem" endpoint of `WalletApp`.
   | CallRedeem
     {
-      poInstance :: InstanceNickname
-    , poOwner    :: RoleName
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    , poOwner    :: RoleName          -- ^ The name of the wallet's owner.
     }
+    -- | Wait for confirmation of a call to the "redeem" endpoint.
   | AwaitRedeem
     {
-      poInstance :: InstanceNickname
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     }
+    -- | Call the "close" endpoint of `WalletApp`.
+  | CallClose
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
+    -- | Wait for confirmation of a call to the "close" endpoint.
+  | AwaitClose
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
+    -- | Follow the same Marlowe contract as another PAB contract instance.
   | Follow
     {
-      poInstance      :: InstanceNickname
-    , poOtherInstance :: InstanceNickname
+      poInstance      :: InstanceNickname  -- ^ The nickname of the PAB contract instance doing the following.
+    , poOtherInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance that is being followed.
     }
+    -- | Stop a PAB instance.
   | Stop
     {
-      poInstance :: InstanceNickname
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
     }
+    -- | Print the state of the PAB.
   | PrintState
+    -- | Print the contents of a wallet.
   | PrintWallet
     {
-      poOwner :: RoleName
+      poOwner :: RoleName  -- ^ The name of the wallet's owner.
     }
+    -- | Print a comment.
+  | Comment
+    {
+      poComment :: String  -- ^ The textual comment.
+    }
+    -- | Wait for a specified amount of time.
   | WaitFor
     {
-      poRelativeTime :: DiffMilliSeconds
+      poRelativeTime :: DiffMilliSeconds  -- ^ The number of milliseconds to wait.
     }
+    -- | Wait until a specified time.
   | WaitUntil
     {
-      poAbsoluteTime :: POSIXTime
+      poAbsoluteTime :: POSIXTime  -- ^ The time until which to wait.
     }
+    -- | Fail if a test operation doesn't complete in time.
   | Timeout
     {
-      poTimeoutSeconds :: Int
-    , poOperation      :: PabOperation
+      poTimeoutSeconds :: Int           -- ^ The number of seconds to wait.
+    , poOperation      :: PabOperation  -- ^ The PAB operation to wait for.
     }
+    -- | Execute test operations that should fail.
   | ShouldFail
     {
-      poOperations :: [PabOperation]
+      poOperations :: [PabOperation]  -- ^ The sequence of PAB operations that should fail.
     }
     deriving stock (Eq, Generic, Show)
     deriving anyclass (FromJSON, ToJSON)
 
 
+-- | Access to the PAB APIs.
 data PabAccess =
   PabAccess
   {
@@ -223,40 +285,29 @@ data PabAccess =
   , runWallet       :: forall a. ClientM a -> IO (Either CliError a)  -- ^ The HTTP runner for the wallet.
   , runApi          :: forall a. ClientM a -> IO (Either CliError a)  -- ^ The HTTP runner for the PAB.
   , runWs           :: WsRunner IO ()                                 -- ^ The Websockets runner.
-  , localConnection :: LocalNodeConnectInfo CardanoMode
+  , localConnection :: LocalNodeConnectInfo CardanoMode               -- ^ The connection to the local node.
 }
 
 
-data PabState =
-  PabState
-  {
-    _psFaucetKey     :: SomePaymentSigningKey
-  , _psFaucetAddress :: AddressAny
-  , _psBurnAddress   :: AddressAny
-  , _psPassphrase    :: Passphrase "raw"
-  , _psWallets       :: M.Map RoleName WalletInfo
-  , _psAppInstances  :: M.Map InstanceNickname AppInstanceInfo
-  }
-    deriving (Show)
-
-
+-- | Wallet information.
 data WalletInfo =
   WalletInfo
   {
-    wiWalletId   :: W.WalletId
-  , wiWalletId'  :: WalletId
-  , wiAddress    :: AddressAny
-  , wiPubKeyHash :: PubKeyHash
+    wiWalletId   :: W.WalletId  -- ^ One wallet identifier.
+  , wiWalletId'  :: WalletId    -- ^ Another wallet identifier
+  , wiAddress    :: AddressAny  -- ^ The first wallet address.
+  , wiPubKeyHash :: PubKeyHash  -- ^ The public key hash of the first wallet address.
   }
     deriving (Eq, Show)
 
 
+-- | PAB instance information.
 data AppInstanceInfo =
   AppInstanceInfo
   {
-    aiInstance :: ContractInstanceId
-  , aiChannel  :: Chan MarloweContractState
-  , aiParams   :: Maybe MarloweParams
+    aiInstance :: ContractInstanceId         -- ^ The PAB contract instance identifier.
+  , aiChannel  :: Chan MarloweContractState  -- ^ The channel for state changes reported by the PAB.
+  , aiParams   :: Maybe MarloweParams        -- ^ The Marlowe contract parameters, if any, for the instance.
   }
     deriving (Eq)
 
@@ -267,5 +318,18 @@ instance Show AppInstanceInfo where
                            <> show aiParams
                            <> "}"
 
+
+-- | The state of the PAB test framework.
+data PabState =
+  PabState
+  {
+    _psFaucetKey     :: SomePaymentSigningKey                   -- ^ The key to the faucet.
+  , _psFaucetAddress :: AddressAny                              -- ^ The address of the faucet.
+  , _psBurnAddress   :: AddressAny                              -- ^ The address for burning role tokens.
+  , _psPassphrase    :: Passphrase "raw"                        -- ^ The wallet passphrase.
+  , _psWallets       :: M.Map RoleName WalletInfo               -- ^ The wallets being managed.
+  , _psAppInstances  :: M.Map InstanceNickname AppInstanceInfo  -- ^ The PAB contract instances being managed.
+  }
+    deriving (Show)
 
 makeLenses ''PabState

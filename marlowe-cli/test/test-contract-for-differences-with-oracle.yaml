@@ -1,0 +1,433 @@
+ptTestName: Contract for Differences with Oracle
+
+ptPabOperations:
+
+- tag: Comment
+  poComment: Create the wallet for the party, fund it with 80 ADA, and activate the Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Party
+
+- tag: FundWallet
+  poOwner: Party
+  poValue:
+    lovelace: 80000000
+
+- tag: ActivateApp
+  poOwner: Party
+  poInstance: PartyApp
+
+- tag: Comment
+  poComment: Create the wallet for the counterparty, fund it with 60 ADA, and activate the Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Counterparty
+
+- tag: FundWallet
+  poOwner: Counterparty
+  poValue:
+    lovelace: 60000000
+
+- tag: ActivateApp
+  poOwner: Counterparty
+  poInstance: CounterpartyApp
+
+- tag: Comment
+  poComment: Create the wallet for the oracle, fund it with 20 ADA, and activate the Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Oracle
+
+- tag: FundWallet
+  poOwner: Oracle
+  poValue:
+    lovelace: 20000000
+
+- tag: ActivateApp
+  poOwner: Oracle
+  poInstance: OracleApp
+
+- tag: Comment
+  poComment: The oracle creates the contract with differences, which was downloaded from Marlowe Playground. The party deposits 20 ADA to cover the margin collateral and the counterparty deposits 30 ADA.
+
+- tag: CallCreate
+  poInstance: OracleApp
+  poOwners:
+    - Party
+    - Counterparty
+    - Oracle
+  poContract:
+    let: ADA asset
+    be: 100000000
+    then:
+      let: Party margin
+      be: 20000000
+      then:
+        let: Counterparty margin
+        be: 30000000
+        then:
+          when:
+          - case:
+              party:
+                role_token: Party
+              deposits:
+                use_value: Party margin
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: Party
+            then:
+              when:
+              - case:
+                  party:
+                    role_token: Counterparty
+                  deposits:
+                    use_value: Counterparty margin
+                  of_token:
+                    currency_symbol: ''
+                    token_name: ''
+                  into_account:
+                    role_token: Counterparty
+                then:
+                  when: []
+                  timeout: 1645590825000
+                  timeout_continuation:
+                    when:
+                    - case:
+                        choose_between:
+                        - from: 0
+                          to: 100000000000
+                        for_choice:
+                          choice_name: ADA/USD
+                          choice_owner:
+                            role_token: Oracle
+                      then:
+                        when: []
+                        timeout: 1645590885000
+                        timeout_continuation:
+                          when:
+                          - case:
+                              choose_between:
+                              - from: 0
+                                to: 100000000000
+                              for_choice:
+                                choice_name: USD/ADA
+                                choice_owner:
+                                  role_token: Oracle
+                            then:
+                              let: Value in second window
+                              be:
+                                divide:
+                                  multiply:
+                                    use_value: ADA asset
+                                  times:
+                                    multiply:
+                                      value_of_choice:
+                                        choice_name: ADA/USD
+                                        choice_owner:
+                                          role_token: Oracle
+                                    times:
+                                      value_of_choice:
+                                        choice_name: USD/ADA
+                                        choice_owner:
+                                          role_token: Oracle
+                                by: 1000000000000
+                              then:
+                                if:
+                                  value:
+                                    use_value: ADA asset
+                                  gt:
+                                    use_value: Value in second window
+                                then:
+                                  let: Decrease in price
+                                  be:
+                                    value:
+                                      use_value: ADA asset
+                                    minus:
+                                      use_value: Value in second window
+                                  then:
+                                    pay:
+                                      if:
+                                        value:
+                                          use_value: Decrease in price
+                                        lt:
+                                          use_value: Counterparty margin
+                                      then:
+                                        use_value: Decrease in price
+                                      else:
+                                        use_value: Counterparty margin
+                                    token:
+                                      currency_symbol: ''
+                                      token_name: ''
+                                    from_account:
+                                      role_token: Counterparty
+                                    to:
+                                      account:
+                                        role_token: Party
+                                    then: close
+                                else:
+                                  if:
+                                    value:
+                                      use_value: ADA asset
+                                    lt:
+                                      use_value: Value in second window
+                                  then:
+                                    let: Increase in price
+                                    be:
+                                      value:
+                                        use_value: Value in second window
+                                      minus:
+                                        use_value: ADA asset
+                                    then:
+                                      pay:
+                                        if:
+                                          value:
+                                            use_value: Increase in price
+                                          lt:
+                                            use_value: Party margin
+                                        then:
+                                          use_value: Increase in price
+                                        else:
+                                          use_value: Party margin
+                                      token:
+                                        currency_symbol: ''
+                                        token_name: ''
+                                      from_account:
+                                        role_token: Party
+                                      to:
+                                        account:
+                                          role_token: Counterparty
+                                      then: close
+                                  else: close
+                          timeout: 2087267625000
+                          timeout_continuation: close
+                    timeout: 2024195625000
+                    timeout_continuation: close
+              timeout: 1961123625000
+              timeout_continuation: close
+          timeout: 1929587625000
+          timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: OracleApp
+
+- tag: Comment
+  poComment: The oracle should have 14 ADA now, since 2 ADA was sent to the script address when creating the contract and 2 ADA each was sent to the party and counterparty along with their role tokens, and up to 1 ADA in fees might have been paid.
+
+- tag: CheckFunds
+  poOwner: Oracle
+  poValue:
+    lovelace: 14000000
+  poMaximumFees: 1000000
+  poInstances:
+  - OracleApp
+
+- tag: Comment
+  poComment: The party and counterpary should each now have an additional 2 ADA that arrived with their role token.
+
+- tag: CheckFunds
+  poOwner: Party
+  poValue:
+    lovelace: 82000000
+  poMaximumFees: 0
+  poInstances:
+  - OracleApp
+
+- tag: CheckFunds
+  poOwner: Counterparty
+  poValue:
+    lovelace: 62000000
+  poMaximumFees: 0
+  poInstances:
+  - OracleApp
+
+- tag: Comment
+  poComment: The party and counterparty each need to follow the contract created by the mediator.
+
+- tag: Follow
+  poInstance: PartyApp
+  poOtherInstance: OracleApp
+
+- tag: Follow
+  poInstance: CounterpartyApp
+  poOtherInstance: OracleApp
+
+- tag: Comment
+  poComment: The party deposits their 20 ADA margin.
+
+- tag: CallApplyInputs
+  poInstance: PartyApp
+  poInputs:
+  - input_from_party:
+      role_token: Party
+    that_deposits: 20000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Party
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: PartyApp
+
+- tag: Comment
+  poComment: The party should have about 62 ADA now, since they paid 20 ADA for the margin, but there is up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Party
+  poValue:
+    lovelace: 62000000
+  poMaximumFees: 2000000
+  poInstances:
+  - PartyApp
+
+- tag: Comment
+  poComment: The counterparty deposits their 30 ADA margin.
+
+- tag: CallApplyInputs
+  poInstance: CounterpartyApp
+  poInputs:
+  - input_from_party:
+      role_token: Counterparty
+    that_deposits: 30000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Counterparty
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: CounterpartyApp
+
+- tag: Comment
+  poComment: The counterparty should have about 32 ADA now, since they paid 30 ADA for the margin purchase, but there is up to an additional 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Counterparty
+  poValue:
+    lovelace: 32000000
+  poMaximumFees: 2000000
+  poInstances:
+  - CounterpartyApp
+
+- tag: Comment
+  poComment: The oracle reports that the price is 1.2 ADA/USD in the first window.
+
+- tag: CallApplyInputs
+  poInstance: OracleApp
+  poInputs:
+  - for_choice_id:
+      choice_name: ADA/USD
+      choice_owner:
+        role_token: Oracle
+    input_that_chooses_num: 1200000
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: OracleApp
+
+- tag: Comment
+  poComment: The oracle should still have 14 ADA now, but they may have paid up to another 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Oracle
+  poValue:
+    lovelace: 14000000
+  poMaximumFees: 3000000
+  poInstances:
+  - OracleApp
+
+- tag: Comment
+  poComment: The oracle reports that the price is 0.700000 USD/ADA in the second window.
+
+- tag: WaitFor
+  poRelativeTime: 12000
+
+- tag: CallApplyInputs
+  poInstance: OracleApp
+  poInputs:
+  - for_choice_id:
+      choice_name: USD/ADA
+      choice_owner:
+        role_token: Oracle
+    input_that_chooses_num: 700000
+  poTimes:
+  - 1645590825000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: OracleApp
+
+- tag: Comment
+  poComment: The oracle should have 16 ADA now because they received their original min-ADA deposit back, but they may have paid up to another 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Oracle
+  poValue:
+    lovelace: 16000000
+  poMaximumFees: 5000000
+  poInstances:
+  - OracleApp
+
+- tag: Comment
+  poComment: Now the party redeems from the payout script their 36 ADA, margin plus profit.
+
+- tag: CallRedeem
+  poInstance: PartyApp
+  poOwner: Party
+
+- tag: AwaitRedeem
+  poInstance: PartyApp
+
+- tag: Comment
+  poComment: The party should now have 98 ADA, but they may have paid up to 1 ADA more in fees.
+
+- tag: CheckFunds
+  poOwner: Party
+  poValue:
+    lovelace: 98000000
+  poMaximumFees: 3000000
+  poInstances:
+  - PartyApp
+
+- tag: Comment
+  poComment: Now the counterparty redeems their remaining 14 ADA margin from the payout script.
+
+- tag: CallRedeem
+  poInstance: CounterpartyApp
+  poOwner: Counterparty
+
+- tag: AwaitRedeem
+  poInstance: CounterpartyApp
+
+- tag: Comment
+  poComment: The counterparty should now have 46 ADA, but they may have paid up to 1 ADA more in fees.
+
+- tag: CheckFunds
+  poOwner: Counterparty
+  poValue:
+    lovelace: 46000000
+  poMaximumFees: 3000000
+  poInstances:
+  - CounterpartyApp
+
+- tag: Comment
+  poComment: Stop the Marlowe application.
+
+- tag: Stop
+  poInstance: PartyApp
+
+- tag: Stop
+  poInstance: CounterpartyApp
+
+- tag: Stop
+  poInstance: OracleApp

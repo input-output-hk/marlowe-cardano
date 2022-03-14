@@ -49,13 +49,13 @@ parseTestCommand :: O.Parser TestCommand
 parseTestCommand =
   O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
-    <> scriptsCommand
+--  <> _scriptsCommand
     <> pabsCommand
 
 
 -- | Parser for the "scripts" command.
-scriptsCommand :: O.Mod O.CommandFields TestCommand
-scriptsCommand =
+_scriptsCommand :: O.Mod O.CommandFields TestCommand
+_scriptsCommand =
   O.command "scripts"
     $ O.info scriptsOptions
     $ O.progDesc "Test Marlowe scripts on-chain."

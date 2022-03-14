@@ -95,7 +95,7 @@ in  upstream
         , "uri"
         ]
         "https://github.com/input-output-hk/purescript-servant-support"
-        "010bc7b3ea8e2707a00c23fd510201aabd4eb13f"
+        "3e0d530a03093da7ec8fbfacc67628e715c1f51b"
   with json-helpers =
       mkPackage
         [ "aff"
@@ -195,7 +195,7 @@ in  upstream
         , "web-uievents"
         ]
         "https://github.com/input-output-hk/purescript-web-common"
-        "v3.0.1"
+        "v3.0.3"
   with halogen-nselect =
       mkPackage
         [ "aff"

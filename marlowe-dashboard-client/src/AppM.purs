@@ -1,14 +1,16 @@
-module AppM (AppM, passphrase, runAppM) where
+module AppM (AppM, handleRequest, passphrase, runAppM) where
 
 import Prologue
 
 import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader
   ( class MonadReader
   , ReaderT
+  , asks
   , mapReaderT
   , runReaderT
   , withReaderT
@@ -17,7 +19,7 @@ import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec, tailRecM)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
-import Data.Lens (Lens', over)
+import Data.Lens (Lens', over, to, view)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
 import Data.Newtype (un)
@@ -26,7 +28,15 @@ import Data.Passphrase as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (Env(..))
+import Env
+  ( Env(..)
+  , HandleRequest(..)
+  , MakeClock(..)
+  , _handleRequest
+  , _makeClock
+  , _sources
+  , _timezoneOffset
+  )
 import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad
@@ -40,7 +50,14 @@ import Halogen.Store.Monad
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
-import Servant.PureScript (class MonadAjax, Request, request)
+import Servant.PureScript
+  ( class ContentType
+  , class MonadAjax
+  , AjaxError
+  , Request
+  , prepareRequest
+  , prepareResponse
+  )
 import Store as Store
 import Type.Proxy (Proxy(..))
 import URI (Fragment, Host, Path, RelativeRef, UserInfo)
@@ -79,7 +96,12 @@ derive newtype instance MonadEffect AppM
 
 derive newtype instance MonadAff AppM
 
-derive newtype instance MonadTime AppM
+instance MonadTime AppM where
+  now = liftEffect =<< (asks $ view $ _sources <<< to _.currentTime)
+  timezoneOffset = asks $ view _timezoneOffset
+  makeClock interval = do
+    MakeClock mkClock <- asks $ view _makeClock
+    liftEffect $ mkClock interval
 
 -- TODO use newtype deriving when MonadRec instance is added to StoreT
 instance MonadRec AppM where
@@ -123,15 +145,25 @@ prependPath prefix =
     (_uri <<< _relPart <<< _relPath)
     (Just <<< append prefix <<< join <<< A.fromFoldable)
 
+handleRequest
+  :: forall resDecodeError reqDecodeError resContent reqContent req res
+   . ContentType reqDecodeError reqContent
+  => ContentType resDecodeError resContent
+  => Request reqContent resContent resDecodeError req res
+  -> AppM (Either (AjaxError resDecodeError resContent) res)
+handleRequest req = do
+  HandleRequest handle <- asks $ view _handleRequest
+  liftAff $ prepareResponse req.decode aReq <$> handle aReq
+  where
+  aReq = prepareRequest req
+
 instance MonadAjax PAB.Api AppM where
-  request api = liftAff <<< request api <<< handleRequest
-    where
-    handleRequest = prependPath [ "pab" ]
+  request _ = handleRequest <<< prependPath [ "pab" ]
 
 instance MonadAjax MarloweRun.Api AppM where
-  request api = liftAff <<< request api
+  request _ = handleRequest
 
-instance MonadLogger String AppM where
+instance MonadLogger StructuredLog AppM where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`
   log m = AppM $ withReaderT (un Env) (Control.Monad.Effect.Class.log' m)
 

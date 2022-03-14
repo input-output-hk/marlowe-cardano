@@ -17,23 +17,21 @@ module Marlowe.Execution.State
 
 import Prologue
 
-import Control.Bind (bindFlipped)
 import Data.Array (foldl, length)
 import Data.Array as Array
 import Data.ContractNickname (ContractNickname)
 import Data.ContractNickname as ContractNickname
 import Data.DateTime.Instant (Instant)
-import Data.Either (note)
 import Data.Function (on)
-import Data.Lens (view, (^.), (^?))
+import Data.Lens (view, (^.))
 import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
-import Data.Maybe (fromMaybe, fromMaybe', maybe, maybe')
-import Data.String (joinWith)
-import Data.Time.Duration (Milliseconds(..), Minutes(..))
-import Data.Traversable (for)
+import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe, maybe')
+import Data.Newtype (unwrap)
+import Data.Time.Duration (Days(..), Milliseconds(..), Minutes(..))
 import Data.Tuple.Nested ((/\))
-import Marlowe.Client (ContractHistory, _chHistory, _chParams)
+import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
 import Marlowe.Execution.Lenses (_resultingPayments)
 import Marlowe.Execution.Types
   ( NamedAction(..)
@@ -51,6 +49,7 @@ import Marlowe.Semantics
   , Contract(..)
   , Environment(..)
   , Input
+  , MarloweData(..)
   , MarloweParams
   , Party
   , Payment
@@ -61,8 +60,6 @@ import Marlowe.Semantics
   , TransactionInput(..)
   , TransactionOutput(..)
   , _accounts
-  , _marloweContract
-  , _marloweState
   , _rolesCurrency
   , computeTransaction
   , emptyState
@@ -72,6 +69,7 @@ import Marlowe.Semantics
   , timeouts
   )
 import Marlowe.Semantics (State) as Semantic
+import Partial.Unsafe (unsafePartial)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Time as POSIXTime
 import Safe.Coerce (coerce)
@@ -100,30 +98,27 @@ restoreState
   -> MetaData
   -> ContractHistory
   -> Either String State
-
 restoreState currentTime contractNickname metadata history = do
-  Tuple marloweParams marloweData <-
-    note "params not available" $ history ^? _chParams
   let
-    contract = view _marloweContract marloweData
-    initialSemanticState = view _marloweState marloweData
-    inputs = view _chHistory history
+    MarloweData { marloweContract, marloweState } = getInitialData history
+    marloweParams = getMarloweParams history
+    inputs = getTransactionInputs history
     -- Derive the initial params from the Follower Contract params
     initialState =
-      { semanticState: initialSemanticState
+      { semanticState: marloweState
       , contractNickname
-      , contract
+      , contract: marloweContract
       , metadata
       , marloweParams
       , history: mempty
       , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
-      , mNextTimeout: nextTimeout contract
+      , mNextTimeout: nextTimeout marloweContract
       }
   -- Apply all the transaction inputs
-  foldl (flip (bindFlipped <<< nextState)) (pure initialState) inputs
+  foldl (flip nextState) initialState inputs
     -- See if any step has timeouted
-    >>= timeoutState currentTime
+    # timeoutState currentTime
 
 -- Each contract should always have a name, if we
 -- have given a Local nickname, we use that, if not we
@@ -138,8 +133,8 @@ setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state
   { mPendingTransaction = Just txInput }
 
-nextState :: TransactionInput -> State -> Either String State
-nextState txInput state = do
+nextState :: TransactionInput -> State -> State
+nextState txInput state =
   let
     { semanticState, contract, history } =
       state
@@ -165,16 +160,18 @@ nextState txInput state = do
       else
         state.mPendingTransaction
 
-  -- For the moment the only way to get an empty transaction is if there was a timeout,
-  -- but later on there could be other reasons to move a contract forward, and we should
-  -- compare with the contract to see the reason.
-  action <- case inputs of
-    Nil ->
-      TimeoutAction <<< { time: minTime, missedActions: _ }
-        <$> extractActionsFromContract minTime semanticState contract
-    _ -> pure InputAction
+    -- For the moment the only way to get an empty transaction is if there was a timeout,
+    -- but later on there could be other reasons to move a contract forward, and we should
+    -- compare with the contract to see the reason.
+    action = case inputs of
+      Nil ->
+        TimeoutAction
+          { time: minTime
+          , missedActions:
+              extractActionsFromContract minTime semanticState contract
+          }
+      _ -> InputAction
 
-  let
     pastState =
       { balancesAtStart: semanticState ^. _accounts
       , action
@@ -182,24 +179,22 @@ nextState txInput state = do
       , balancesAtEnd: txOutState ^. _accounts
       , resultingPayments: txOutPayments
       }
-
-  pure $ state
-    { semanticState = txOutState
-    , contract = txOutContract
-    , history = Array.snoc history pastState
-    , mPendingTransaction = mPendingTransaction
-    , mPendingTimeouts = Nothing
-    , mNextTimeout = nextTimeout txOutContract
-    }
+  in
+    state
+      { semanticState = txOutState
+      , contract = txOutContract
+      , history = Array.snoc history pastState
+      , mPendingTransaction = mPendingTransaction
+      , mPendingTimeouts = Nothing
+      , mNextTimeout = nextTimeout txOutContract
+      }
 
 nextTimeout :: Contract -> Maybe Instant
-
 nextTimeout = timeouts >>> \(Timeouts { minTime }) -> coerce minTime
 
-mkTx :: Instant -> Contract -> List Input -> Either String TransactionInput
+mkTx :: Instant -> Contract -> List Input -> TransactionInput
 mkTx currentTime contract inputs =
-  TransactionInput <<< { interval: _, inputs }
-    <$> mkInterval currentTime contract
+  TransactionInput { interval: mkInterval currentTime contract, inputs }
 
 -- This function checks if the are any new timeouts in the current execution state
 timeoutState :: Instant -> State -> Either String State
@@ -248,8 +243,12 @@ timeoutState currentTime state =
                 Left "RRAmbiguousTimeIntervalError"
 
           let newNextTimeout = nextTimeout txOutContract
-          timeoutInfo <- { time: timeoutTime, missedActions: _ }
-            <$> extractActionsFromContract timeoutTime state' contract'
+          let
+            timeoutInfo =
+              { time: timeoutTime
+              , missedActions: extractActionsFromContract timeoutTime state'
+                  contract'
+              }
           advanceAllTimeouts newNextTimeout
             (Array.snoc newTimeouts timeoutInfo)
             txOutState
@@ -294,11 +293,11 @@ getActionParticipant (MakeChoice (ChoiceId _ party) _) = Just party
 
 getActionParticipant _ = Nothing
 
-extractNamedActions :: Instant -> State -> Either String (Array NamedAction)
+extractNamedActions :: Instant -> State -> Array NamedAction
 extractNamedActions
   _
   { mPendingTimeouts: Just { continuation: { contract: Close } } } =
-  pure [ CloseContract ]
+  [ CloseContract ]
 
 extractNamedActions currentTime { mPendingTimeouts: Just { continuation } } =
   extractActionsFromContract currentTime continuation.state
@@ -309,28 +308,29 @@ extractNamedActions currentTime { semanticState, contract } =
 
 -- a When can only progress if it has timed out or has Cases
 extractActionsFromContract
-  :: Instant -> Semantic.State -> Contract -> Either String (Array NamedAction)
-extractActionsFromContract _ _ Close = pure []
+  :: Instant -> Semantic.State -> Contract -> Array NamedAction
+extractActionsFromContract _ _ Close = []
 
 extractActionsFromContract currentTime semanticState contract@(When cases _ _) =
-  for cases \(Case action _) -> toNamedAction action
+  cases <#> \(Case action _) -> toNamedAction action
   where
-  toNamedAction (Deposit a p t v) = do
-    timeInterval <- mkInterval currentTime contract
+  toNamedAction (Deposit a p t v) =
     let
+      timeInterval = mkInterval currentTime contract
       env = Environment { timeInterval }
       amount = evalValue env semanticState v
-    pure $ MakeDeposit a p t amount
+    in
+      MakeDeposit a p t amount
 
-  toNamedAction (Choice cid bounds) = pure $ MakeChoice cid bounds
+  toNamedAction (Choice cid bounds) = MakeChoice cid bounds
 
-  toNamedAction (Notify obs) = pure $ MakeNotify obs
+  toNamedAction (Notify obs) = MakeNotify obs
 
 -- In reality other situations should never occur as contracts always reduce to When or Close
 -- however someone could in theory publish a contract that starts with another Contract constructor
 -- and we would want to enable moving forward with Evaluate
 extractActionsFromContract _ _ _ =
-  pure [ Evaluate { bindings: Map.empty, payments: [] } ]
+  [ Evaluate { bindings: Map.empty, payments: [] } ]
 
 -- This function expands the balances inside the Semantic.State to all participants and tokens,
 -- using zero if the participant does not have balance for that token.
@@ -345,28 +345,42 @@ expandBalances participants tokens stateAccounts =
         in
           key /\ (fromMaybe zero $ Map.lookup key stateAccounts)
 
-mkInterval :: Instant -> Contract -> Either String TimeInterval
+mkInterval :: Instant -> Contract -> TimeInterval
 mkInterval currentTime contract =
   case nextTimeout contract of
-    Nothing -> map (TimeInterval $ POSIXTime currentTime)
-      $ note "Ten seconds from now is outside the range of valid dates."
-      $ POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
+    Nothing -> TimeInterval
+      (POSIXTime currentTimeAdjustedForSlotDelay)
+      (POSIXTime currentTimeAdjustedForBlockConfirmation)
     Just nextTO
-      | nextTO < currentTime -> map (TimeInterval $ POSIXTime currentTime)
-          $ note "Ten seconds from now is outside the range of valid dates."
-          $ POSIXTime.adjust (Minutes 5.0) (POSIXTime currentTime)
+      -- FIXME SCP-2875 Change hardcoded time in mkInterval
+      | nextTO < currentTimeAdjustedForSlotDelay ->
+          TimeInterval (POSIXTime nextTO) top
       | otherwise ->
-          note
-            ( joinWith "\n"
-                [ "1 millisecond before the next timeout is outside the range of valid dates."
-                , "This is a bug, please report it at https://github.com/input-output-hk/marlowe-cardano/issues with the following information:"
-                , "currentTime: " <> show currentTime
-                , "nextTO: " <> show nextTO
-                ]
-            )
-            $ map (TimeInterval $ POSIXTime currentTime)
-            $ POSIXTime.adjust (Milliseconds (-1.0))
-            $ POSIXTime nextTO
+          TimeInterval (POSIXTime currentTimeAdjustedForSlotDelay)
+            $ unsafePartial
+            $ fromJust
+            $ POSIXTime.adjust (Milliseconds (-1.0)) (POSIXTime nextTO)
+  where
+  -- TODO move this to configuration and possibly process server-side instead.
+  -- If the block is confirmed after the upper bound of the interval, the
+  -- transaction will fail in the validator. Since it takes some time to
+  -- confirm a block, we have to add a buffer to the current time to allow the
+  -- transaction to complete.
+  currentTimeAdjustedForBlockConfirmation = unwrap
+    $ unsafePartial
+    $ fromJust
+    $ POSIXTime.adjust (Days one) (POSIXTime currentTime)
+  -- TODO move this to configuration and possibly process server-side instead.
+  -- This delay is to account for the fact that when converting the current
+  -- POSIX time to slots, we are likely going to get a slot value that is
+  -- higher than the node's current slot, which is updated every time a new
+  -- block is added, and lags behind the real time. This delay will vary from
+  -- network to network, and thus this delay should be configured and not
+  -- hard-coded.
+  currentTimeAdjustedForSlotDelay = unwrap
+    $ unsafePartial
+    $ fromJust
+    $ POSIXTime.adjust (Minutes (-2.0)) (POSIXTime currentTime)
 
 getAllPayments :: State -> List Payment
 getAllPayments { history } = concat $ fromFoldable $ map

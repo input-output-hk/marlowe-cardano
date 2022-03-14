@@ -30,6 +30,7 @@ import Halogen.HTML
   , iframe
   , img
   , main
+  , mark
   , p
   , p_
   , section
@@ -38,6 +39,8 @@ import Halogen.HTML
   )
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, src, title)
+import Halogen.HTML.Properties.ARIA (role)
+import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Images (marloweRunLogo)
 import MainFrame.Types (ChildSlots)
@@ -90,7 +93,7 @@ welcomeCard state =
       if card == Just GetStartedHelpCard then Css.videoCard else Css.card
   in
     div
-      [ classNames $ Css.cardOverlay cardOpen ]
+      [ classNames $ Css.cardOverlay cardOpen, role "dialog" ]
       [ div
           [ classNames $ cardClasses cardOpen ]
           $ (flip foldMap card) \cardType -> case cardType of
@@ -299,7 +302,8 @@ createWalletCard = case _ of
                 [ text
                     "Please save this mnemonic phrase if you want to preserve accesses to your testnet account:"
                 ]
-            , p [ classNames [ "font-bold", "m-2", "mb-6" ] ]
+            , mark
+                [ ARIA.role "mark", classNames [ "font-bold", "m-2", "mb-6" ] ]
                 [ text $ MnemonicPhrase.toString mnemonic ]
             , B.button
                 B.Primary

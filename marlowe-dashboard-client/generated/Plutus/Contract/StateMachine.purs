@@ -20,9 +20,9 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
+import Plutus.Contract.Error (ContractError)
 import Plutus.Contract.StateMachine.OnChain (State)
 import Type.Proxy (Proxy(Proxy))
-import Wallet.Types (ContractError)
 
 newtype InvalidTransition a b = InvalidTransition
   { tfState :: Maybe (State a)
@@ -69,9 +69,6 @@ data SMContractError
   | SMCContractError ContractError
 
 derive instance Eq SMContractError
-
-instance Show SMContractError where
-  show a = genericShow a
 
 instance EncodeJson SMContractError where
   encodeJson = defer \_ -> case _ of

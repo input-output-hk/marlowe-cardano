@@ -54,7 +54,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if false
+if true
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -157,10 +157,9 @@ echo "## The Contract"
 
 echo "The contract has a minimum time and a timeout."
 
-MINIMUM_TIME="$NOW"
 TIMEOUT_TIME="$((NOW+24*HOUR))"
 
-echo "The contract starts no sooner than $(date -u -R -d @$((MINIMUM_TIME/1000))) and will automatically close at $(date -u -R -d @$((TIMEOUT_TIME/1000)))."
+echo "The contract will automatically close at $(date -u -R -d @$((TIMEOUT_TIME/1000)))."
 
 echo "The contract also involves various payments."
 
@@ -175,7 +174,6 @@ echo "We create the contract for the previously specified parameters."
 
 marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
                             --minimum-ada "$MINIMUM_ADA"                 \
-                            --minimum-time "$MINIMUM_TIME"               \
                             --party "PK=$PARTY_PUBKEYHASH"               \
                             --deposit-lovelace "$DEPOSIT_LOVELACE"       \
                             --withdrawal-lovelace "$WITHDRAWAL_LOVELACE" \
@@ -185,7 +183,7 @@ marlowe-cli template simple --bystander "PK=$BYSTANDER_PUBKEYHASH"       \
 
 echo "## Transaction 1. Create the Contract by Providing the Minimum ADA"
 
-echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it wiil require."
+echo "First we create a "'`'".marlowe"'`'" file that contains the initial information needed to run the contract. The bare size and cost of the script provide a lower bound on the resources that running it will require."
 
 marlowe-cli run initialize "${MAGIC[@]}"                 \
                            --slot-length "$SLOT_LENGTH"  \

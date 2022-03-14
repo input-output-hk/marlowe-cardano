@@ -45,5 +45,5 @@ instance HasDefinitions MarloweContract where
 
 handlers :: SimulatorEffectHandlers (Builtin MarloweContract)
 handlers =
-    Simulator.mkSimulatorHandlers def def
+    Simulator.mkSimulatorHandlers def
     $ interpret (contractHandler Builtin.handleBuiltin)

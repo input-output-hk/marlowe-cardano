@@ -1,8 +1,22 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Testing Marlowe contracts.
+--
+-----------------------------------------------------------------------------
+
+
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards  #-}
 
 
 module Language.Marlowe.CLI.Test (
+-- * Testing
   runTests
 ) where
 
@@ -26,10 +40,11 @@ import Plutus.V1.Ledger.Api (POSIXTime (..))
 import Servant.Client (BaseUrl (..), mkClientEnv, runClientM)
 
 
+-- | Run tests of a Marlowe contract.
 runTests :: MonadError CliError m
          => MonadIO m
-         => MarloweTests FilePath
-         -> m ()
+         => MarloweTests FilePath  -- ^ The tests.
+         -> m ()                   -- ^ Action for running the tests.
 runTests ScriptTests{..} =
   do
     let

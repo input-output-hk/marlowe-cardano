@@ -19,7 +19,6 @@ import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.State (get)
 import Data.ContractUserParties (contractUserParties)
 import Data.Time.Duration (Milliseconds(..))
-import Data.Traversable (for)
 import Data.Unfoldable as Unfoldable
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
@@ -31,7 +30,7 @@ import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics (ChosenNum)
 import Marlowe.Semantics as Semantic
 import Store as Store
-import Toast.Types (ajaxErrorToast, errorToast, successToast)
+import Toast.Types (ajaxErrorToast, successToast)
 
 --
 component
@@ -85,25 +84,18 @@ handleAction CancelConfirmation = H.raise DialogClosed
 handleAction (ConfirmAction namedAction) = do
   { wallet, executionState, chosenNum } <- get
   currentTime <- now
-
   let
     { marloweParams, contract } = executionState
     contractInput = toInput namedAction chosenNum
-    mTxInput = mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
-  ajaxApplyInputs <- for mTxInput \txin ->
-    map (Tuple txin) <$> applyTransactionInput wallet marloweParams txin
+    txInput = mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
+  ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput
   case ajaxApplyInputs of
-    Left txError -> do
-      void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
-        (Milliseconds 600.0)
-        (Left "Error")
-      addToast $ errorToast "Failed to create transaction." $ Just txError
-    Right (Left ajaxError) -> do
+    Left ajaxError -> do
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
         (Milliseconds 600.0)
         (Left "Error")
       addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
-    Right (Right (Tuple txInput mResult)) -> do
+    Right mResult -> do
       updateStore $ Store.ModifySyncedContract marloweParams $
         setPendingTransaction txInput
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult

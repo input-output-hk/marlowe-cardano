@@ -17,7 +17,10 @@ import Component.ConfirmContractActionDialog.Types
   )
 import Component.Contacts.State (adaToken, getAda)
 import Component.Contacts.View (contactsCard)
-import Component.ContractPreview.View (contractPreviewCard)
+import Component.ContractPreview.View
+  ( contractPreviewCard
+  , contractStartingPreviewCard
+  )
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon, icon_)
 import Component.Popper (Placement(..))
@@ -29,11 +32,13 @@ import Control.Monad.Reader (class MonadAsk)
 import Css as Css
 import Data.Address as A
 import Data.Array as Array
-import Data.Compactable (compact)
+import Data.ContractNickname as ContractNickname
+import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Int (round)
 import Data.Lens (view, (^.))
 import Data.Maybe (isJust)
+import Data.NewContract (getContractNickname)
 import Data.PABConnectedWallet
   ( PABConnectedWallet
   , _address
@@ -45,6 +50,7 @@ import Data.String (take)
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
 import Effect.Aff.Class (class MonadAff)
+import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (applyWhen, classNames)
@@ -72,12 +78,13 @@ import Halogen.HTML
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id, src)
+import Halogen.HTML.Properties.ARIA (role)
+import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
 import Images (marloweRunNavLogo, marloweRunNavLogoDark)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
-import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Semantics (PubKey)
 import Page.Contract.State as ContractPage
 import Page.Contract.Types (Msg(..), _contractPage)
@@ -87,20 +94,19 @@ import Page.Dashboard.Lenses
   , _contactsState
   , _contractFilter
   , _menuOpen
-  , _selectedContractMarloweParams
+  , _selectedContractIndex
   , _templateState
   )
 import Page.Dashboard.Types
   ( Action(..)
   , Card(..)
   , ContractFilter(..)
-  , ContractState
   , Input
   , State
   , WalletCompanionStatus(..)
   )
 import Store as Store
-import Store.Contracts (getContract)
+import Store.Contracts (getContract, getNewContract)
 
 -- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
@@ -123,11 +129,16 @@ dashboardScreen { currentTime, wallet, contracts } state =
 
     cardOpen = state ^. _cardOpen
 
-    selectedContractMarloweParams = state ^. _selectedContractMarloweParams
+    mSelectedContractIndex = state ^. _selectedContractIndex
 
-    selectedContract = do
-      marloweParams <- selectedContractMarloweParams
-      getContract marloweParams contracts
+    mSelectedContractStringId = do
+      contractIndex <- mSelectedContractIndex
+      case contractIndex of
+        Starting reqId -> ContractNickname.toString <<< getContractNickname <$>
+          getNewContract reqId contracts
+        Started marloweParams -> Execution.contractName <$> getContract
+          marloweParams
+          contracts
   in
     div
       [ classNames
@@ -146,21 +157,26 @@ dashboardScreen { currentTime, wallet, contracts } state =
           [ classNames [ "relative" ] ] -- this wrapper is relative because the mobile menu is absolutely positioned inside it
           [ mobileMenu menuOpen
           , div [ classNames [ "h-full", "grid", "grid-rows-auto-1fr" ] ]
-              [ dashboardBreadcrumb selectedContract
+              [ dashboardBreadcrumb mSelectedContractStringId
               , main
                   [ classNames [ "relative" ] ]
-                  case selectedContractMarloweParams of
-                    Just marloweParams ->
+                  case mSelectedContractIndex of
+                    Just contractIndex ->
                       [ slot
                           _contractPage
                           unit
                           ContractPage.component
-                          { wallet, marloweParams }
+                          { wallet, contractIndex }
                           ( \(AskConfirmation namedAction num) ->
-                              OnAskContractActionConfirmation
-                                marloweParams
-                                namedAction
-                                num
+                              case contractIndex of
+                                -- This should never happen (famous last words)
+                                Starting _ -> unsafeThrow
+                                  "Cant fire a confirmation dialog to take an action for a starting contract"
+                                Started marloweParams ->
+                                  OnAskContractActionConfirmation
+                                    marloweParams
+                                    namedAction
+                                    num
                           )
                       ]
                     _ -> [ contractsScreen currentTime state ]
@@ -189,7 +205,7 @@ dashboardCard { addressBook, wallet } state = case view _card state of
       div
         [ classNames $ Css.sidebarCardOverlay cardOpen ]
         [ div
-            [ classNames $ Css.sidebarCard cardOpen ]
+            [ classNames $ Css.sidebarCard cardOpen, role "dialog" ]
             $
               [ a
                   [ classNames [ "absolute", "top-4", "right-4" ]
@@ -267,15 +283,22 @@ dashboardHeader walletNickname menuOpen =
             ]
         , nav
             [ classNames [ "flex", "items-center" ] ]
-            [ navigation (OpenCard ContactsCard) Icon.Contacts "contactsHeader"
-            , tooltip "Contacts" (RefId "contactsHeader") Bottom
-            , navigation (OpenCard TutorialsCard) Icon.Tutorials
+            [ navigation
+                (OpenCard ContactsCard)
+                Icon.Contacts
+                "contactsHeader"
+                "Contacts"
+            , navigation
+                (OpenCard TutorialsCard)
+                Icon.Tutorials
                 "tutorialsHeader"
-            , tooltip "Tutorials" (RefId "tutorialsHeader") Bottom
+                "Tutorials"
             , a
                 [ classNames [ "ml-6", "font-bold", "text-sm" ]
                 , id "currentWalletHeader"
                 , onClick_ $ OpenCard CurrentWalletCard
+                , href "#"
+                , ARIA.label "My wallet"
                 ]
                 [ span
                     [ classNames $
@@ -310,7 +333,7 @@ dashboardHeader walletNickname menuOpen =
                         [ text walletNickname ]
                     ]
                 ]
-            , tooltip "Your wallet" (RefId "currentWalletHeader") Bottom
+            , tooltip "My wallet" (RefId "currentWalletHeader") Bottom
             , a
                 [ classNames [ "ml-4", "md:hidden" ]
                 , onClick_ ToggleMenu
@@ -320,13 +343,17 @@ dashboardHeader walletNickname menuOpen =
         ]
     ]
   where
-  navigation action icon' refId =
-    a
-      [ classNames [ "ml-6", "font-bold", "text-sm" ]
-      , id refId
-      , onClick_ action
+  navigation action icon' refId label =
+    div_
+      [ a
+          [ classNames [ "ml-6", "font-bold", "text-sm" ]
+          , id refId
+          , onClick_ action
+          , ARIA.label label
+          ]
+          [ icon_ icon' ]
+      , tooltip label (RefId refId) Bottom
       ]
-      [ icon_ icon' ]
 
 mobileMenu :: forall p. Boolean -> HTML p Action
 mobileMenu menuOpen =
@@ -364,37 +391,32 @@ mobileMenu menuOpen =
 dashboardBreadcrumb
   :: forall m
    . MonadAff m
-  => (Maybe Execution.State)
+  => Maybe String
   -> ComponentHTML Action ChildSlots m
-dashboardBreadcrumb mSelectedContractState =
+dashboardBreadcrumb mSelectedContractStringId =
   div [ classNames [ "border-b", "border-gray" ] ]
     [ nav [ classNames $ Css.maxWidthContainer <> [ "flex", "gap-2", "py-2" ] ]
         $
           [ a
-              ( compact
-                  [ Just $ id "goToDashboard"
-                  , mSelectedContractState $> onClick
-                      (const $ SelectContract Nothing)
-                  , Just
-                      $ classNames
-                          if (isJust mSelectedContractState) then
-                            [ "text-lightpurple", "font-bold" ]
-                          else
-                            [ "cursor-default" ]
-                  ]
-              )
+              [ id "goToDashboard"
+              , onClick $ const $ SelectContract Nothing
+              , href "#"
+              , classNames
+                  if (isJust mSelectedContractStringId) then
+                    [ "text-lightpurple", "font-bold" ]
+                  else
+                    [ "cursor-default" ]
+              ]
               [ text "Dashboard" ]
           ]
-            <> case mSelectedContractState of
-              Just state ->
+            <> case mSelectedContractStringId of
+              Just nickname ->
                 [ icon_ Icon.Next
                 , tooltip "Go to dashboard" (RefId "goToDashboard") Bottom
                 , span_
                     [ text nickname
                     ]
                 ]
-                where
-                nickname = Execution.contractName state
               Nothing -> []
     ]
 
@@ -586,20 +608,12 @@ contractCards
   -> ComponentHTML Action ChildSlots m
 contractCards
   currentTime
-  { walletCompanionStatus, contractFilter, runningContracts, closedContracts } =
+  state@{ walletCompanionStatus, contractFilter } =
   case walletCompanionStatus of
     WalletCompanionSynced ->
-      let
-        filteredContracts =
-          if contractFilter == Running then
-            runningContracts
-          else
-            closedContracts
-      in
-        if Array.null filteredContracts then
-          noContractsMessage contractFilter
-        else
-          contractGrid currentTime contractFilter filteredContracts
+      case contractFilter of
+        Running -> contractGridRunning currentTime state
+        Completed -> contractGridCompleted currentTime state
     WaitingToSync ->
       div
         [ classNames
@@ -640,36 +654,38 @@ noContractsMessage contractFilter =
                 [ text "You have no completed contracts." ]
             ]
 
-contractGrid
+contractGridClasses :: Array String
+contractGridClasses =
+  [ "grid"
+  , "pt-4"
+  , "pb-20"
+  , "lg:pb-4"
+  , "gap-8"
+  , "auto-rows-min"
+  , "mx-auto"
+  , "max-w-contracts-grid-sm"
+  , "md:max-w-none"
+  , "md:w-contracts-grid-md"
+  , "md:grid-cols-2"
+  , "lg:w-contracts-grid-lg"
+  , "lg:grid-cols-3"
+  ]
+
+contractGridRunning
   :: forall m
    . MonadAff m
   => Instant
-  -> ContractFilter
-  -> Array ContractState
+  -> State
   -> ComponentHTML Action ChildSlots m
-contractGrid currentTime contractFilter contracts =
-  div
-    [ classNames
-        [ "grid"
-        , "pt-4"
-        , "pb-20"
-        , "lg:pb-4"
-        , "gap-8"
-        , "auto-rows-min"
-        , "mx-auto"
-        , "max-w-contracts-grid-sm"
-        , "md:max-w-none"
-        , "md:w-contracts-grid-md"
-        , "md:grid-cols-2"
-        , "lg:w-contracts-grid-lg"
-        , "lg:grid-cols-3"
-        ]
-    ]
-    $
-      case contractFilter of
-        Running -> [ newContractCard ]
-        Completed -> []
-        <> (dashboardContractCard <$> contracts)
+contractGridRunning currentTime { runningContracts, newContracts } =
+  if Array.null runningContracts && Array.null newContracts then
+    noContractsMessage Running
+  else
+    div
+      [ classNames contractGridClasses ]
+      $ [ newContractCard ]
+          <> (contractStartingPreviewCard <$> newContracts)
+          <> (contractPreviewCard currentTime <$> runningContracts)
   where
   newContractCard =
     a
@@ -691,12 +707,18 @@ contractGrid currentTime contractFilter contracts =
       , span_ [ text "New smart contract from template" ]
       ]
 
-  dashboardContractCard { executionState, contractUserParties, namedActions } =
-    contractPreviewCard
-      currentTime
-      executionState
-      contractUserParties
-      namedActions
+contractGridCompleted
+  :: forall m
+   . MonadAff m
+  => Instant
+  -> State
+  -> ComponentHTML Action ChildSlots m
+contractGridCompleted currentTime { closedContracts } =
+  if Array.null closedContracts then noContractsMessage Completed
+  else
+    div
+      [ classNames contractGridClasses ]
+      (contractPreviewCard currentTime <$> closedContracts)
 
 currentWalletCard :: forall p. PABConnectedWallet -> HTML p Action
 currentWalletCard wallet =

@@ -9,6 +9,8 @@ module Data.ContractTimeout
 
 import Prologue
 
+import Data.Argonaut.Core as Json
+import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Enum (class BoundedEnum, class Enum)
 import Data.Enum.Generic
@@ -61,6 +63,9 @@ newtype ContractTimeout = ContractTimeout Milliseconds
 derive instance Eq ContractTimeout
 derive instance Ord ContractTimeout
 derive newtype instance Show ContractTimeout
+
+instance EncodeJson ContractTimeout where
+  encodeJson (ContractTimeout (Milliseconds ms)) = Json.fromNumber ms
 
 fromString :: String -> Either ContractTimeoutError ContractTimeout
 fromString s

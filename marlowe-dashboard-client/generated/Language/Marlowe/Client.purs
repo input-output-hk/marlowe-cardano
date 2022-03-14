@@ -17,13 +17,67 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
-import Marlowe.Semantics (MarloweParams, TransactionError)
+import Marlowe.Semantics
+  ( MarloweData
+  , MarloweParams
+  , TransactionError
+  , TransactionInput
+  )
+import Plutus.Contract.Error (ContractError)
+import Plutus.V1.Ledger.Address (Address)
 import Type.Proxy (Proxy(Proxy))
-import Wallet.Types (ContractError)
+
+newtype ContractHistory = ContractHistory
+  { chParams :: MarloweParams
+  , chInitialData :: MarloweData
+  , chHistory :: Array TransactionInput
+  , chAddress :: Address
+  }
+
+derive instance Eq ContractHistory
+
+instance Show ContractHistory where
+  show a = genericShow a
+
+instance EncodeJson ContractHistory where
+  encodeJson = defer \_ -> E.encode $ unwrap >$<
+    ( E.record
+        { chParams: E.value :: _ MarloweParams
+        , chInitialData: E.value :: _ MarloweData
+        , chHistory: E.value :: _ (Array TransactionInput)
+        , chAddress: E.value :: _ Address
+        }
+    )
+
+instance DecodeJson ContractHistory where
+  decodeJson = defer \_ -> D.decode $
+    ( ContractHistory <$> D.record "ContractHistory"
+        { chParams: D.value :: _ MarloweParams
+        , chInitialData: D.value :: _ MarloweData
+        , chHistory: D.value :: _ (Array TransactionInput)
+        , chAddress: D.value :: _ Address
+        }
+    )
+
+derive instance Generic ContractHistory _
+
+derive instance Newtype ContractHistory _
+
+--------------------------------------------------------------------------------
+
+_ContractHistory :: Iso' ContractHistory
+  { chParams :: MarloweParams
+  , chInitialData :: MarloweData
+  , chHistory :: Array TransactionInput
+  , chAddress :: Address
+  }
+_ContractHistory = _Newtype
+
+--------------------------------------------------------------------------------
 
 data EndpointResponse a e
   = EndpointSuccess UUID a
@@ -145,9 +199,6 @@ data MarloweError
   | OtherContractError ContractError
 
 derive instance Eq MarloweError
-
-instance Show MarloweError where
-  show a = genericShow a
 
 instance EncodeJson MarloweError where
   encodeJson = defer \_ -> case _ of

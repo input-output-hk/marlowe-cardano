@@ -1,0 +1,278 @@
+ptTestName: Zero-Coupon Bond with Delayed Timeout
+
+ptPabOperations:
+
+- tag: Comment
+  poComment: This test case closes the contract after the first deposit.
+
+- tag: Comment
+  poComment: IMPORTANT: One must adjust the timeouts each time this test case is run.
+
+- tag: Comment
+  poComment: Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Lender
+
+- tag: FundWallet
+  poOwner: Lender
+  poValue:
+    lovelace: 80000000
+
+- tag: ActivateApp
+  poOwner: Lender
+  poInstance: LenderApp
+
+- tag: Comment
+  poComment: Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
+
+- tag: CreateWallet
+  poOwner: Borrower
+
+- tag: FundWallet
+  poOwner: Borrower
+  poValue:
+    lovelace: 10000000
+
+- tag: ActivateApp
+  poOwner: Borrower
+  poInstance: BorrowerApp
+
+- tag: Comment
+  poComment: Show the contents of the wallets.
+
+- tag: PrintWallet
+  poOwner: Lender
+
+- tag: PrintWallet
+  poOwner: Borrower
+
+- tag: Comment
+  poComment: The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
+
+- tag: CallCreate
+  poInstance: LenderApp
+  poOwners:
+  - Lender
+  - Borrower
+  poContract:
+    when:
+    - case:
+        party:
+          role_token: Lender
+        deposits: 50000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Lender
+      then:
+        pay: 50000000
+        token:
+          currency_symbol: ''
+          token_name: ''
+        from_account:
+          role_token: Lender
+        to:
+          party:
+            role_token: Borrower
+        then:
+          when:
+          - case:
+              party:
+                role_token: Borrower
+              deposits:
+                add: 50000000
+                and: 3000000
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: Borrower
+            then:
+              pay:
+                add: 50000000
+                and: 3000000
+              token:
+                currency_symbol: ''
+                token_name: ''
+              from_account:
+                role_token: Borrower
+              to:
+                party:
+                  role_token: Lender
+              then: close
+          timeout: 1646097350000
+          timeout_continuation: close
+    timeout: 1929587625000
+    timeout_continuation: close
+
+- tag: AwaitCreate
+  poInstance: LenderApp
+
+- tag: Comment
+  poComment: The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 76000000
+  poMaximumFees: 1000000
+  poInstances:
+  - LenderApp
+
+- tag: Comment
+  poComment: The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 12000000
+  poMaximumFees: 0
+  poInstances:
+  - LenderApp
+
+- tag: Comment
+  poComment: The borrower needs to follow this contract in order to interact with it.
+
+- tag: Follow
+  poInstance: BorrowerApp
+  poOtherInstance: LenderApp
+
+- tag: Comment
+  poComment: The lender deposits the 50 ADA loan amount.
+
+- tag: CallApplyInputs
+  poInstance: LenderApp
+  poInputs:
+  - input_from_party:
+      role_token: Lender
+    that_deposits: 50000000
+    of_token:
+      currency_symbol: ''
+      token_name: ''
+    into_account:
+      role_token: Lender
+  poTimes:
+  - 1645590825000
+  - 1646097340000
+
+- tag: AwaitApplyInputs
+  poInstance: LenderApp
+
+- tag: Comment
+  poComment: The lender will have 50 ADA less for the loan and may have paid up to another 2 ADA in fees, leaving a balance of 26 ADA minus up to 3 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 26000000
+  poMaximumFees: 3000000
+  poInstances:
+  - LenderApp
+
+- tag: Comment
+  poComment: The borrower's funds are unchanged.
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 12000000
+  poMaximumFees: 0
+  poInstances:
+  - BorrowerApp
+
+- tag: Comment
+  poComment: Now the borrower redeems the 50 ADA from the payout script.
+
+- tag: CallRedeem
+  poInstance: BorrowerApp
+  poOwner: Borrower
+
+- tag: AwaitRedeem
+  poInstance: BorrowerApp
+
+- tag: Comment
+  poComment: The lender's funds are unchanged.
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 26000000
+  poMaximumFees: 3000000
+  poInstances:
+  - LenderApp
+
+- tag: Comment
+  poComment: The borrower has an additional 50 ADA but may have paid up to 1 ADA in fees for the redemption, leaving a balance of 62 ADA minus up to 1 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 62000000
+  poMaximumFees: 1000000
+  poInstances:
+  - BorrowerApp
+
+- tag: Comment
+  poComment: Now wait until the time limit for repaying the loan expires.
+
+- tag: WaitUntil
+  poAbsoluteTime: 1646097490000
+
+- tag: Comment
+  poComment: Since the timeout has expired, the lender closes the contract, receiving their 2 ADA back.
+
+- tag: CallApplyInputs
+  poInstance: LenderApp
+  poInputs: []
+  poTimes:
+  - 1646097380000
+  - 1898051625000
+
+- tag: AwaitApplyInputs
+  poInstance: LenderApp
+
+- tag: Comment
+  poComment: The lender now has paid up to another 2 ADA in fees.
+
+- tag: CheckFunds
+  poOwner: Lender
+  poValue:
+    lovelace: 28000000
+  poMaximumFees: 3000000
+  poInstances:
+  - LenderApp
+
+- tag: Comment
+  poComment: The borrower's funds are unchanged.
+
+- tag: CheckFunds
+  poOwner: Borrower
+  poValue:
+    lovelace: 62000000
+  poMaximumFees: 1000000
+  poInstances:
+  - BorrowerApp
+
+- tag: Comment
+  poComment: Return unused funds.
+
+- tag: ReturnFunds
+  poOwner: Lender
+  poInstances:
+  - LenderApp
+
+- tag: ReturnFunds
+  poOwner: Borrower
+  poInstances:
+  - BorrowerApp
+
+- tag: Comment
+  poComment: Stop the Marlowe application.
+
+- tag: Stop
+  poInstance: LenderApp
+
+- tag: Stop
+  poInstance: BorrowerApp
