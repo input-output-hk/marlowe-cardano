@@ -3,7 +3,6 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
@@ -39,7 +38,6 @@ render
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
-  => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => State

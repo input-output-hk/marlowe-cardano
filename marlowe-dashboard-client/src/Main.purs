@@ -6,11 +6,15 @@ import Prologue
 
 import Affjax as Affjax
 import AppM (runAppM)
-import Capability.MarloweStorage as MarloweStorage
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect.Console (structuredLogger) as Console
 import Control.Monad.Error.Class (throwError)
+import Control.Monad.Maybe.Extra (hoistMaybe)
+import Control.Monad.Maybe.Trans (runMaybeT)
 import Control.Monad.Now (makeClock, now)
+import Data.Address (Address)
+import Data.AddressBook (AddressBook)
+import Data.AddressBook as AddressBook
 import Data.Argonaut
   ( class DecodeJson
   , Json
@@ -19,9 +23,26 @@ import Data.Argonaut
   , printJsonDecodeError
   , (.:)
   )
-import Data.Either (either)
+import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
+import Data.Either (either, hush)
+import Data.Lens (preview, (^.))
+import Data.LocalContractNicknames
+  ( LocalContractNicknames
+  , emptyLocalContractNicknames
+  )
 import Data.Map as Map
+import Data.Maybe (fromMaybe)
+import Data.PABConnectedWallet (_walletDetails)
+import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Time.Duration (Milliseconds(..))
+import Data.Wallet
+  ( WalletDetails
+  , _walletInfo
+  , _walletNickname
+  , mkWalletDetails
+  )
+import Data.WalletId (WalletId)
+import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (error, forkAff, launchAff_)
@@ -29,13 +50,19 @@ import Effect.Class (liftEffect)
 import Effect.Now (getTimezoneOffset)
 import Env (Env(..), HandleRequest(..), MakeClock(..), Sinks, Sources)
 import Halogen.Aff (awaitBody, runHalogenAff)
+import Halogen.Store.Select (selectEmitter, selectEq)
+import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
-import LocalStorage (getItem, removeItem, setItem)
+import LocalStorage (Key(..), getItem, removeItem, setItem)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
 import MainFrame.Types as MainFrame
-import Store (mkStore)
+import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
+import Store (_wallet, mkStore)
+import Store as Store
+import Store.Contracts (getContractNicknames)
+import Store.Wallet (_connectedWallet)
 import WebSocket.Support as WS
 
 newtype MainArgs = MainArgs
@@ -84,11 +111,6 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
     , handleRequest: HandleRequest Affjax.request
     , timezoneOffset
     , makeClock: MakeClock makeClock
-    , localStorage:
-        { getItem
-        , setItem
-        , removeItem
-        }
     , regularPollInterval
     , syncPollInterval
     }
@@ -102,8 +124,6 @@ main :: Json -> Effect Unit
 main args = do
   MainArgs { pollingInterval, webpackBuildMode } <- either exitBadArgs pure $
     decodeJson args
-  addressBook <- MarloweStorage.getAddressBook
-  contractNicknames <- MarloweStorage.getContractNicknames
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
     pabWebsocketIn <- liftEffect HS.create
@@ -129,16 +149,107 @@ main args = do
       sources
       sinks
       webpackBuildMode
-    currentTime <- now
-    let store = mkStore currentTime addressBook contractNicknames
     body <- awaitBody
-    rootComponent <- runAppM env store mkMainFrame
-    driver <- runUI rootComponent unit body
+
+    store <- liftEffect loadStore
+    { component, emitter: storeE } <- runAppM env store mkMainFrame
+    liftEffect $ persistStore storeE
+
+    driver <- runUI component unit body
 
     -- This handler allows us to call an action in the MainFrame from a child component
     -- (more info in the MainFrameLoop capability)
-    void
-      $ liftEffect
-      $ HS.subscribe driver.messages
-      $ \(MainFrameActionMsg action) -> launchAff_ $ void $ driver.query $
-          MainFrame.MainFrameActionQuery action unit
+    void $ liftEffect $ HS.subscribe driver.messages case _ of
+      MainFrameActionMsg action -> launchAff_ $ void $ driver.query $
+        MainFrame.MainFrameActionQuery action unit
+
+-------------------------------------------------------------------------------
+-- Local Storage integeration
+-------------------------------------------------------------------------------
+
+loadStore :: Effect Store.Store
+loadStore = do
+  currentTime <- now
+  addressBook <- loadAddressBook
+  contractNicknames <- loadContractNicknames
+  {- [UC-WALLET-TESTNET-2][4b] Restore a testnet wallet
+  This is another path for "restoring" a wallet. When we initialize the app,
+  if we have some wallet details in the local storage, we try to enter the dashboard
+  state with it.
+  -}
+  wallet <- loadWallet
+  pure $ mkStore currentTime addressBook contractNicknames wallet
+
+persistStore :: Emitter Store.Store -> Effect Unit
+persistStore storeE = do
+  let addressBook = _.addressBook
+  let contractNicknames = getContractNicknames <<< _.contracts
+  let wallet = preview $ _wallet <<< _connectedWallet <<< _walletDetails
+  let
+    fromStore :: forall a. Eq a => (Store.Store -> a) -> Emitter a
+    fromStore f = selectEmitter (selectEq f) storeE
+  void $ HS.subscribe (fromStore addressBook) saveAddressBook
+  void $ HS.subscribe (fromStore contractNicknames) saveContractNicknames
+  void $ HS.subscribe (fromStore wallet) saveWallet
+
+loadAddressBook :: Effect AddressBook
+loadAddressBook =
+  decodeAddressBook <$> getItem addressBookKey
+  where
+  decodeAddressBook mAddressBookJson = fromMaybe AddressBook.empty
+    $ hush <<< parseDecodeJson =<< mAddressBookJson
+
+saveAddressBook :: AddressBook -> Effect Unit
+saveAddressBook addressBook = do
+  let addressBookJson = encodeStringifyJson addressBook
+  setItem addressBookKey addressBookJson
+
+loadContractNicknames :: Effect LocalContractNicknames
+loadContractNicknames =
+  decodeContractNames <$> getItem contractNicknamesKey
+  where
+  decodeContractNames mContractNames = fromMaybe emptyLocalContractNicknames
+    $ hush <<< parseDecodeJson =<< mContractNames
+
+saveContractNicknames :: LocalContractNicknames -> Effect Unit
+saveContractNicknames contractNicknames = do
+  let contractNamesJson = encodeStringifyJson contractNicknames
+  setItem contractNicknamesKey contractNamesJson
+
+type PersistedWalletInfo =
+  { walletNickname :: WalletNickname
+  , walletId :: WalletId
+  , pubKeyHash :: PaymentPubKeyHash
+  , address :: Address
+  }
+
+loadWallet :: Effect (Maybe WalletDetails)
+loadWallet = runMaybeT do
+  mWalletJson <- liftEffect $ getItem walletKey
+  walletJson <- hoistMaybe mWalletJson
+  persistedInfo :: PersistedWalletInfo <-
+    hoistMaybe $ hush $ parseDecodeJson walletJson
+  let { walletNickname, walletId, pubKeyHash, address } = persistedInfo
+  let walletInfo = WalletInfo { walletId, pubKeyHash, address }
+  pure $ mkWalletDetails walletNickname walletInfo
+
+saveWallet :: Maybe WalletDetails -> Effect Unit
+saveWallet Nothing = removeItem walletKey
+saveWallet (Just wallet) = do
+  let
+    walletNickname = wallet ^. _walletNickname
+    WalletInfo { walletId, pubKeyHash, address } = wallet ^. _walletInfo
+
+    persistedInfo :: PersistedWalletInfo
+    persistedInfo = { walletNickname, walletId, pubKeyHash, address }
+    walletJson = encodeStringifyJson persistedInfo
+  setItem walletKey walletJson
+
+addressBookKey :: Key
+addressBookKey = Key "addressBook"
+
+walletKey :: Key
+walletKey = Key "wallet"
+
+contractNicknamesKey :: Key
+contractNicknamesKey = Key "contractNicknames"

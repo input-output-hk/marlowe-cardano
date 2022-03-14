@@ -7,6 +7,7 @@ module Data.PABConnectedWallet
   , _address
   , _syncStatus
   , _walletId
+  , _walletDetails
   , _walletNickname
   , connectWallet
   ) where
@@ -74,3 +75,6 @@ _pubKeyHash = _Wallet <<< Wallet._pubKeyHash
 
 _address :: Lens' PABConnectedWallet Address
 _address = _Wallet <<< Wallet._address
+
+_walletDetails :: Lens' PABConnectedWallet WalletDetails
+_walletDetails = _Wallet

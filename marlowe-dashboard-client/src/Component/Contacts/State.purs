@@ -9,10 +9,6 @@ import Prologue
 
 import Capability.MainFrameLoop (callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage
-  ( class ManageMarloweStorage
-  , modifyAddressBook_
-  )
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
@@ -30,10 +26,12 @@ import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (HalogenM)
 import Halogen.Query.HalogenM (mapAction)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import MainFrame.Types (Action(..)) as MainFrame
 import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Semantics (Assets, CurrencySymbol, Token(..), TokenName)
 import Page.Dashboard.Types as Dashboard
+import Store as Store
 import Toast.Types (successToast)
 
 initialState :: State
@@ -43,8 +41,8 @@ handleAction
   :: forall m
    . MonadAff m
   => MonadAsk Env m
+  => MonadStore Store.Action Store.Store m
   => ManageMarlowe m
-  => ManageMarloweStorage m
   => Toast m
   => MonadClipboard m
   => Action
@@ -59,7 +57,7 @@ handleAction (SetCardSection cardSection) = do
 handleAction
   (OnAddContactMsg mTokenName (AddContact.SaveClicked { nickname, address })) =
   do
-    modifyAddressBook_ (AddressBook.insert nickname address)
+    updateStore $ Store.ModifyAddressBook (AddressBook.insert nickname address)
     addToast $ successToast "Contact added"
     case mTokenName of
       -- if a tokenName was also passed, we are inside a template contract and we need to update role

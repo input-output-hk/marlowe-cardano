@@ -22,7 +22,6 @@ import Effect.Aff (Aff)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener, Subscription)
 import Language.Marlowe.Client (ContractHistory)
-import LocalStorage (Key)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import Plutus.PAB.Webserver.Types
@@ -48,12 +47,6 @@ type Sources =
 
 type Sinks =
   { pabWebsocket :: Listener CombinedWSStreamToServer
-  }
-
-type LocalStorageApi =
-  { removeItem :: Key -> Effect Unit
-  , getItem :: Key -> Effect (Maybe String)
-  , setItem :: Key -> String -> Effect Unit
   }
 
 -- Newtype wrapper for this callback because PureScript doesn't like pualified
@@ -92,7 +85,6 @@ newtype Env = Env
   -- | This allows us to inject a custom HTTP request effect, overriding the
   -- | default one for testing or global extension purposes.
   , handleRequest :: HandleRequest
-  , localStorage :: LocalStorageApi
   , timezoneOffset :: Minutes
   , makeClock :: MakeClock
   , regularPollInterval :: Milliseconds
@@ -130,9 +122,6 @@ _handleRequest = _Newtype <<< prop (Proxy :: _ "handleRequest")
 
 _timezoneOffset :: Lens' Env Minutes
 _timezoneOffset = _Newtype <<< prop (Proxy :: _ "timezoneOffset")
-
-_localStorage :: Lens' Env LocalStorageApi
-_localStorage = _Newtype <<< prop (Proxy :: _ "localStorage")
 
 _makeClock :: Lens' Env MakeClock
 _makeClock = _Newtype <<< prop (Proxy :: _ "makeClock")

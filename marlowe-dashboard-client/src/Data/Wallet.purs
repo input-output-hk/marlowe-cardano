@@ -10,6 +10,7 @@ module Data.Wallet
   , _syncStatus
   , _walletId
   , _walletNickname
+  , _walletInfo
   , mkWalletDetails
   , syncStatusFromNumber
   ) where

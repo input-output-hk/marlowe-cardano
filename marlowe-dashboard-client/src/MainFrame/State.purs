@@ -11,11 +11,6 @@ import API.Lenses
   )
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage
-  ( class ManageMarloweStorage
-  , getWallet
-  , updateWallet
-  )
 import Capability.PAB
   ( class ManagePAB
   , onNewActiveEndpoints
@@ -47,7 +42,7 @@ import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (assign, lens, preview, set, use, view, (^.), (^?))
+import Data.Lens (assign, lens, preview, set, use, view, (^.))
 import Data.Lens.Extra (peruse)
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -138,7 +133,13 @@ import Plutus.PAB.Webserver.Types
 import Store (_contracts, _wallet)
 import Store as Store
 import Store.Contracts (emptyContractStore)
-import Store.Wallet (WalletStore(..), _Connected, _connectedWallet, _walletId)
+import Store.Wallet
+  ( WalletStore(..)
+  , _Connected
+  , _Connecting
+  , _connectedWallet
+  , _walletId
+  )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types
@@ -269,7 +270,6 @@ handleAction
   => MonadLogger StructuredLog m
   => ManageMarlowe m
   => FollowerApp m
-  => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => MonadClipboard m
@@ -280,34 +280,16 @@ handleAction Tick = updateStore <<< Store.Tick =<< now
 
 handleAction Init = do
   subscribeToSources
-  {- [UC-WALLET-TESTNET-2][4b] Restore a testnet wallet
-  This is another path for "restoring" a wallet. When we initialize the app,
-  if we have some wallet details in the local storage, we try to enter the dashboard
-  state with it.
-  -}
-  mWalletDetails <- getWallet
-  traverse_
-    (updateStore <<< Store.Wallet <<< WalletStore.OnConnect)
-    mWalletDetails
   assign _tzOffset =<< timezoneOffset
+  wallet <- peruse $ _store <<< _wallet <<< _Connecting
+  traverse_ enterDashboardState wallet
 
 handleAction (Receive context) = do
   oldStore <- use _store
-  { store } <- H.modify $ flip deriveState { context, input: unit }
-  -- Persist the wallet details so that when we Init, we can try to recover it
-  updateWallet
-    $ map
-        ( \wallet ->
-            (wallet ^. Connected._walletNickname)
-              /\ (wallet ^. Connected._walletId)
-              /\ (wallet ^. Connected._pubKeyHash)
-              /\ (wallet ^. Connected._address)
-        )
-    $ store ^? _wallet <<< _connectedWallet
-  let
-    { contracts } = store
+  { store: { contracts, wallet } } <-
+    H.modify $ flip deriveState { context, input: unit }
   -- React to changes in the wallet store
-  case oldStore.wallet, store.wallet of
+  case oldStore.wallet, wallet of
     Disconnected, Connecting details -> enterDashboardState details
     Connecting _, Connected connectedWallet -> do
       currentTime <- now
@@ -318,7 +300,13 @@ handleAction (Receive context) = do
       enterWelcomeState connectedWallet
     Disconnecting _, Disconnected ->
       assign _subState $ Left Welcome.initialState
-    Connected _, Connected _ ->
+    Connected _, Connected connectedWallet -> do
+      let
+        walletNickname = view Connected._walletNickname connectedWallet
+        address = view Connected._address connectedWallet
+      updateStore
+        $ Store.ModifyAddressBook
+        $ AddressBook.insert walletNickname address
       handleAction $ DashboardAction $ Dashboard.Receive
     _, _ -> pure unit
 

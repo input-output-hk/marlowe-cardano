@@ -6,10 +6,6 @@ module Page.Contract.State
 import Prologue
 
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage
-  ( class ManageMarloweStorage
-  , modifyContractNicknames
-  )
 import Capability.Toast (class Toast)
 import Component.Contacts.State (adaToken)
 import Control.Monad.Maybe.Extra (hoistMaybe)
@@ -48,7 +44,7 @@ import Env (Env(..))
 import Halogen (HalogenM, raise)
 import Halogen as H
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore)
+import Halogen.Store.Monad (class MonadStore, updateStore)
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription as HS
 import Marlowe.Execution.Lenses (_history, _pendingTimeouts, _semanticState)
@@ -101,7 +97,6 @@ component
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
-  => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => H.Component query Input Msg m
@@ -176,7 +171,6 @@ handleAction
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
-  => ManageMarloweStorage m
   => MonadStore Store.Action Store.Store m
   => Toast m
   => Action
@@ -211,8 +205,9 @@ handleAction (Receive { input, context }) = do
     _ -> pure unit
 handleAction (SetNickname nickname) =
   withStarted \{ executionState: { marloweParams } } -> do
-    void $ modifyContractNicknames $ insertContractNickname marloweParams
-      nickname
+    updateStore
+      $ Store.ModifyContractNicknames
+      $ insertContractNickname marloweParams nickname
 
 handleAction (SelectTab stepNumber tab) =
   assign (_contract <<< _Started <<< _tab stepNumber) tab

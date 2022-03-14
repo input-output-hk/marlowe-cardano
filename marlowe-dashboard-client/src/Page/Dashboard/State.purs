@@ -9,7 +9,6 @@ import Prologue
 import Bridge (toFront)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe, initializeContract)
-import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PlutusApps.FollowerApp
   ( class FollowerApp
   , ensureFollowerContract
@@ -136,7 +135,6 @@ handleAction
   => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadTime m
-  => ManageMarloweStorage m
   => ManageMarlowe m
   => FollowerApp m
   => MainFrameLoop m

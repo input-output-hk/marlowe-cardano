@@ -12,6 +12,7 @@ import Control.Monad.Error.Class (class MonadError, throwError, try)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
+import Data.AddressBook as AB
 import Data.Align (crosswalk)
 import Data.Argonaut
   ( decodeJson
@@ -26,6 +27,7 @@ import Data.Bimap as Bimap
 import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
 import Data.Foldable (foldM, for_, traverse_)
+import Data.LocalContractNicknames (emptyLocalContractNicknames)
 import Data.Newtype (over2)
 import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll)
 import Data.String.Extra (repeat)

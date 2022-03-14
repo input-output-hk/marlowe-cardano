@@ -7,7 +7,9 @@ import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
+import Data.Maybe (maybe)
 import Data.NewContract (NewContract)
+import Data.Wallet (WalletDetails)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
@@ -50,11 +52,16 @@ _wallet = prop (Proxy :: _ "wallet")
 _contracts :: forall r a. Lens' { contracts :: a | r } a
 _contracts = prop (Proxy :: _ "contracts")
 
-mkStore :: Instant -> AddressBook -> LocalContractNicknames -> Store
-mkStore currentTime addressBook contractNicknames =
+mkStore
+  :: Instant
+  -> AddressBook
+  -> LocalContractNicknames
+  -> Maybe WalletDetails
+  -> Store
+mkStore currentTime addressBook contractNicknames wallet =
   { -- # Wallet
     addressBook
-  , wallet: Wallet.Disconnected
+  , wallet: maybe Wallet.Disconnected Wallet.Connecting wallet
   -- # Contracts
   , contracts: mkContractStore contractNicknames
   -- # Time

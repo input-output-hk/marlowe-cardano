@@ -37,7 +37,8 @@ import Env
   )
 import Halogen (Component)
 import Halogen.Component (hoist)
-import Halogen.Store.Monad (class MonadStore, StoreT, runStoreT)
+import Halogen.Store.Monad (class MonadStore, StoreT, runAndEmitStoreT)
+import Halogen.Subscription (Emitter)
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
@@ -69,9 +70,9 @@ runAppM
    . Env
   -> Store.Store
   -> Component q i o AppM
-  -> Aff (Component q i o Aff)
+  -> Aff ({ component :: Component q i o Aff, emitter :: Emitter Store.Store })
 runAppM env store =
-  runStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
+  runAndEmitStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
 
 derive newtype instance Functor AppM
 

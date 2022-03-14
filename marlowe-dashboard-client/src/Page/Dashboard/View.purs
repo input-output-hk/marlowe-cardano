@@ -6,7 +6,6 @@ module Page.Dashboard.View
 import Prologue hiding (Either(..), div)
 
 import Capability.Marlowe (class ManageMarlowe)
-import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.Toast (class Toast)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
@@ -115,7 +114,6 @@ dashboardScreen
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
-  => ManageMarloweStorage m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => Input

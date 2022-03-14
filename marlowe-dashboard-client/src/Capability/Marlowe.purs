@@ -9,7 +9,6 @@ module Capability.Marlowe
 import Prologue
 
 import AppM (AppM)
-import Capability.MarloweStorage (class ManageMarloweStorage)
 import Capability.PAB (class ManagePAB)
 import Capability.PAB (getContractInstanceObservableState) as PAB
 import Capability.PlutusApps.MarloweApp as MarloweApp
@@ -63,7 +62,6 @@ initializeContractError = mkConstructors'
 -- capabilities with functions specific to Marlowe.
 class
   ( ManagePAB m
-  , ManageMarloweStorage m
   , ManageWallet m
   ) <=
   ManageMarlowe m where
