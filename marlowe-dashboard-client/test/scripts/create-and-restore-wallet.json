@@ -27,7 +27,7 @@
           "content": {
             "tag": "RespondJson",
             "content": {
-              "assets": [],
+              "assets": { "getValue": [] },
               "sync": 0
             }
           }
@@ -48,7 +48,7 @@
           "content": {
             "tag": "RespondJson",
             "content": {
-              "assets": [],
+              "assets": { "getValue": [] },
               "sync": 0
             }
           }

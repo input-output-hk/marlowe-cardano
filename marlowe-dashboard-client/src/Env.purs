@@ -2,23 +2,18 @@ module Env where
 
 import Prologue
 
-import Affjax (Response)
-import Affjax as Affjax
 import Control.Concurrent.EventBus (EventBus)
 import Control.Logger.Effect (Logger)
 import Control.Logger.Structured (StructuredLog)
-import Data.DateTime.Instant (Instant)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
-import Data.Time.Duration (class Duration, Milliseconds, Minutes)
+import Data.Time.Duration (Milliseconds)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
-import Effect (Effect)
 import Effect.AVar (AVar)
-import Effect.Aff (Aff)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener, Subscription)
 import Language.Marlowe.Client (ContractHistory)
@@ -42,22 +37,11 @@ type EndpointSemaphores = Map PlutusAppId (Map String (AVar Unit))
 
 type Sources =
   { pabWebsocket :: Emitter (FromSocket CombinedWSStreamToClient)
-  , currentTime :: Effect Instant
   }
 
 type Sinks =
   { pabWebsocket :: Listener CombinedWSStreamToServer
   }
-
--- Newtype wrapper for this callback because PureScript doesn't like pualified
--- types to appear in records.
-newtype HandleRequest = HandleRequest
-  (forall a. Affjax.Request a -> Aff (Either Affjax.Error (Response a)))
-
--- Newtype wrapper for this callback because PureScript doesn't like pualified
--- types to appear in records.
-newtype MakeClock = MakeClock
-  (forall d. Duration d => d -> Effect (Emitter Unit))
 
 -- Application enviroment configuration
 newtype Env = Env
@@ -82,11 +66,6 @@ newtype Env = Env
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
-  -- | This allows us to inject a custom HTTP request effect, overriding the
-  -- | default one for testing or global extension purposes.
-  , handleRequest :: HandleRequest
-  , timezoneOffset :: Minutes
-  , makeClock :: MakeClock
   , regularPollInterval :: Milliseconds
   , syncPollInterval :: Milliseconds
   }
@@ -116,15 +95,6 @@ _sources = _Newtype <<< prop (Proxy :: _ "sources")
 
 _sinks :: Lens' Env Sinks
 _sinks = _Newtype <<< prop (Proxy :: _ "sinks")
-
-_handleRequest :: Lens' Env HandleRequest
-_handleRequest = _Newtype <<< prop (Proxy :: _ "handleRequest")
-
-_timezoneOffset :: Lens' Env Minutes
-_timezoneOffset = _Newtype <<< prop (Proxy :: _ "timezoneOffset")
-
-_makeClock :: Lens' Env MakeClock
-_makeClock = _Newtype <<< prop (Proxy :: _ "makeClock")
 
 _syncPollInterval :: Lens' Env Milliseconds
 _syncPollInterval = _Newtype <<< prop (Proxy :: _ "syncPollInterval")

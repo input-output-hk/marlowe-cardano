@@ -3,6 +3,7 @@ module Capability.MainFrameLoop where
 import Prologue
 
 import AppM (AppM)
+import Control.Monad.Reader (ReaderT)
 import Halogen (HalogenM, raise)
 import MainFrame.Types (Action, Msg(..))
 
@@ -16,7 +17,10 @@ class
 
 -- There is nothing pertinent to do inside the AppM, but we need to provide this instance to
 -- satisfy the compiler
-instance mainFrameLoopAppM :: MainFrameLoop AppM where
+instance mainFrameLoopAppM :: Monad m => MainFrameLoop (AppM m) where
+  callMainFrameAction _ = pure unit
+
+instance Monad m => MainFrameLoop (ReaderT r m) where
   callMainFrameAction _ = pure unit
 
 instance mainFrameLoopHalogenM ::

@@ -28,6 +28,7 @@
   , "foreign"
   , "foreign-generic"
   , "foreign-object"
+  , "fork"
   , "formatters"
   , "free"
   , "functions"

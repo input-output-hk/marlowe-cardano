@@ -9,9 +9,8 @@ module Capability.Marlowe
 import Prologue
 
 import AppM (AppM)
-import Capability.PAB (class ManagePAB)
 import Capability.PAB (getContractInstanceObservableState) as PAB
-import Capability.PlutusApps.MarloweApp as MarloweApp
+import Capability.PlutusApps.MarloweApp (applyInputs, createContract, redeem) as MarloweApp
 import Capability.Wallet (class ManageWallet)
 import Component.ContractSetup.Types (ContractParams)
 import Component.Template.State
@@ -20,6 +19,7 @@ import Component.Template.State
   )
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
+import Control.Monad.Reader (ReaderT)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Bifunctor (lmap)
 import Data.DateTime.Instant (Instant)
@@ -36,15 +36,19 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
 import Effect.Aff (Aff)
+import Effect.Aff.Class (class MonadAff)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (updateStore)
 import Marlowe.Extended.Metadata (ContractTemplate)
+import Marlowe.Run.Server (Api) as MarloweApp
 import Marlowe.Semantics
   ( MarloweData
   , MarloweParams
   , TokenName
   , TransactionInput
   )
+import Plutus.PAB.Webserver (Api) as PAB
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Type.Proxy (Proxy(..))
 import Type.Row (type (+))
@@ -61,9 +65,7 @@ initializeContractError = mkConstructors'
 -- The `ManageMarlowe` class provides a window on the `ManagePAB` and `ManageWallet`
 -- capabilities with functions specific to Marlowe.
 class
-  ( ManagePAB m
-  , ManageWallet m
-  ) <=
+  ManageWallet m <=
   ManageMarlowe m where
   initializeContract
     :: Instant
@@ -85,7 +87,12 @@ class
     :: PABConnectedWallet
     -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
 
-instance manageMarloweAppM :: ManageMarlowe AppM where
+instance
+  ( MonadAff m
+  , MonadAjax PAB.Api m
+  , MonadAjax MarloweApp.Api m
+  ) =>
+  ManageMarlowe (AppM m) where
 
   initializeContract currentInstant template params wallet =
     runExceptT do
@@ -151,6 +158,15 @@ instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) wh
   getRoleContracts = lift <<< getRoleContracts
 
 instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
+  initializeContract currentInstant template params wallet =
+    lift $ initializeContract currentInstant template params wallet
+  applyTransactionInput walletDetails marloweParams transactionInput =
+    lift $ applyTransactionInput walletDetails marloweParams transactionInput
+  redeem walletDetails marloweParams tokenName =
+    lift $ redeem walletDetails marloweParams tokenName
+  getRoleContracts = lift <<< getRoleContracts
+
+instance ManageMarlowe m => ManageMarlowe (ReaderT r m) where
   initializeContract currentInstant template params wallet =
     lift $ initializeContract currentInstant template params wallet
   applyTransactionInput walletDetails marloweParams transactionInput =

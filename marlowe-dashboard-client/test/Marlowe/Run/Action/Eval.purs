@@ -9,10 +9,19 @@ import Affjax.ResponseHeader (ResponseHeader(..))
 import Concurrent.Queue as Queue
 import Control.Monad.Error.Class (class MonadError, throwError, try)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
+import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Data.Align (crosswalk)
-import Data.Argonaut (class EncodeJson, Json, decodeJson, encodeJson, jsonNull, printJsonDecodeError, stringifyWithIndent)
+import Data.Argonaut
+  ( class EncodeJson
+  , Json
+  , decodeJson
+  , encodeJson
+  , jsonNull
+  , printJsonDecodeError
+  , stringifyWithIndent
+  )
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Array (snoc)
 import Data.Bifunctor (lmap)
@@ -22,7 +31,14 @@ import Data.Either (either)
 import Data.Foldable (foldM, for_, traverse_)
 import Data.HTTP.Method (Method(..))
 import Data.Newtype (over2)
-import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll, split)
+import Data.String
+  ( Pattern(..)
+  , Replacement(..)
+  , joinWith
+  , null
+  , replaceAll
+  , split
+  )
 import Data.String.Extra (repeat)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
@@ -38,8 +54,31 @@ import Node.FS.Sync as FS
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Marlowe.Run (Coenv, marloweRunTest)
-import Test.Marlowe.Run.Action.Types (CreateWalletRecord, HttpExpect(..), HttpExpectContent(..), HttpRespond(..), HttpRespondContent(..), MarloweRunAction(..), MarloweRunScript, PlutusAppId, ScriptError(..), WalletId, WalletName, renderScriptError)
-import Test.Network.HTTP (class MonadMockHTTP, MatcherError(..), expectJsonContent, expectJsonRequest, expectMethod, expectRequest, expectTextContent, expectUri, renderMatcherError)
+import Test.Marlowe.Run.Action.Types
+  ( CreateWalletRecord
+  , HttpExpect(..)
+  , HttpExpectContent(..)
+  , HttpRespond(..)
+  , HttpRespondContent(..)
+  , MarloweRunAction(..)
+  , MarloweRunScript
+  , PlutusAppId
+  , ScriptError(..)
+  , WalletId
+  , WalletName
+  , renderScriptError
+  )
+import Test.Network.HTTP
+  ( class MonadMockHTTP
+  , MatcherError(..)
+  , expectJsonContent
+  , expectJsonRequest
+  , expectMethod
+  , expectRequest
+  , expectTextContent
+  , expectUri
+  , renderMatcherError
+  )
 import Test.Spec (Spec)
 import Test.Spec.Assertions (fail)
 import Test.Web.DOM.Assertions (shouldCast, shouldHaveText, shouldNotBeDisabled)
@@ -114,6 +153,7 @@ evalScript
   => MonadError Error m
   => MonadMockHTTP m
   => MonadMockTime m
+  => MonadTime m
   => MonadAsk Coenv m
   => MarloweRunScript
   -> m (Either ScriptError Unit)
@@ -126,7 +166,7 @@ evalScript = runExceptT <<< void <<< foldM (map uncurry evalAction') []
     -> ExceptT ScriptError m (Array MarloweRunAction)
   evalAction' succeeded millis action =
     withExceptT (ScriptError succeeded action) $ ExceptT $ try do
-      currentTime <- liftEffect <<< Ref.read =<< asks _.currentTime
+      currentTime <- now
       let currentMillis = unInstant currentTime
       let millisUntilAction = over2 Milliseconds (-) millis currentMillis
       advanceTime (millisUntilAction :: Milliseconds)

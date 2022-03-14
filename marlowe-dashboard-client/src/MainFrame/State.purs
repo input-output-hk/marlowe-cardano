@@ -171,6 +171,7 @@ mkMainFrame
   => MonadStore Store.Action Store.Store m
   => MonadTime m
   => ManageMarlowe m
+  => ManagePAB m
   => FollowerApp m
   => Toast m
   => MonadClipboard m
@@ -220,6 +221,7 @@ handleQuery
   => MonadLogger StructuredLog m
   => MonadTime m
   => MonadAsk Env m
+  => ManagePAB m
   => ManageMarlowe m
   => FollowerApp m
   => MonadStore Store.Action Store.Store m
@@ -268,6 +270,7 @@ handleAction
   => MonadAsk Env m
   => MonadTime m
   => MonadLogger StructuredLog m
+  => ManagePAB m
   => ManageMarlowe m
   => FollowerApp m
   => Toast m
@@ -494,7 +497,7 @@ need to unsubscribe from all the apps related to the wallet that was previously 
 -}
 enterWelcomeState
   :: forall m
-   . ManageMarlowe m
+   . ManagePAB m
   => MonadStore Store.Action Store.Store m
   => PABConnectedWallet
   -> HalogenM State Action ChildSlots Msg m Unit

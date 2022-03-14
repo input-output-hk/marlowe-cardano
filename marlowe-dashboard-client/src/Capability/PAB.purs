@@ -25,7 +25,7 @@ import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
 import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
-import Control.Monad.Reader (asks)
+import Control.Monad.Reader (ReaderT, asks)
 import Data.Align (align)
 import Data.Argonaut (Json, encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
@@ -46,8 +46,8 @@ import Data.WalletId as WalletId
 import Effect.Aff (Aff)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
-import Effect.Aff.Class (liftAff)
-import Effect.Class (liftEffect)
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Class (class MonadEffect, liftEffect)
 import Env (_endpointSemaphores, _sinks)
 import Foreign.Class (decode)
 import Halogen (HalogenM)
@@ -64,7 +64,7 @@ import Plutus.PAB.Webserver.Types
   , ContractInstanceClientState
   , ContractSignatureResponse
   )
-import Servant.PureScript (AjaxError(..), ErrorDescription(..))
+import Servant.PureScript (class MonadAjax, AjaxError(..), ErrorDescription(..))
 import Types (AjaxResponse)
 import Wallet.Emulator.Wallet (Wallet(..))
 
@@ -100,7 +100,7 @@ class Monad m <= ManagePAB m where
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
   unsubscribeFromWallet :: WalletId -> m Unit
 
-instance ManagePAB AppM where
+instance (MonadAff m, MonadAjax PAB.Api m) => ManagePAB (AppM m) where
   activateContract contractActivationId wallet =
     PAB.postApiContractActivate
       $ ContractActivationArgs
@@ -232,7 +232,8 @@ instance ManagePAB AppM where
   unsubscribeFromWallet =
     sendWsMessage <<< Unsubscribe <<< Right <<< invalidWalletIdToPubKeyHash
 
-sendWsMessage :: CombinedWSStreamToServer -> AppM Unit
+sendWsMessage
+  :: forall m. MonadEffect m => CombinedWSStreamToServer -> AppM m Unit
 sendWsMessage msg = do
   { pabWebsocket } <- asks $ view _sinks
   liftEffect $ HS.notify pabWebsocket msg
@@ -267,6 +268,29 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   unsubscribeFromWallet = lift <<< unsubscribeFromWallet
 
 instance ManagePAB m => ManagePAB (MaybeT m) where
+  activateContract contractActivationId wallet = lift $ activateContract
+    contractActivationId
+    wallet
+  deactivateContract = lift <<< deactivateContract
+  getContractInstanceClientState = lift <<< getContractInstanceClientState
+  getContractInstanceCurrentState = lift <<< getContractInstanceCurrentState
+  getContractInstanceObservableState = lift <<<
+    getContractInstanceObservableState
+  getContractInstanceHooks = lift <<< getContractInstanceHooks
+  invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
+    plutusAppId
+    endpointDescription
+    payload
+  getWalletContractInstances = lift <<< getWalletContractInstances
+  getAllContractInstances = lift getAllContractInstances
+  getContractDefinitions = lift getContractDefinitions
+  onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
+  subscribeToPlutusApp = lift <<< subscribeToPlutusApp
+  subscribeToWallet = lift <<< subscribeToWallet
+  unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
+  unsubscribeFromWallet = lift <<< unsubscribeFromWallet
+
+instance ManagePAB m => ManagePAB (ReaderT r m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet

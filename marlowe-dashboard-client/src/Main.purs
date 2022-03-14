@@ -4,14 +4,13 @@ module Main
 
 import Prologue
 
-import Affjax as Affjax
 import AppM (runAppM)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect.Console (structuredLogger) as Console
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
-import Control.Monad.Now (makeClock, now)
+import Control.Monad.Now (now)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -47,8 +46,7 @@ import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (error, forkAff, launchAff_)
 import Effect.Class (liftEffect)
-import Effect.Now (getTimezoneOffset)
-import Env (Env(..), HandleRequest(..), MakeClock(..), Sinks, Sources)
+import Env (Env(..), Sinks, Sources)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Store.Select (selectEmitter, selectEq)
 import Halogen.Subscription (Emitter)
@@ -94,7 +92,6 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
   applyInputListeners <- AVar.new Map.empty
   redeemListeners <- AVar.new Map.empty
   followerBus <- EventBus.create
-  timezoneOffset <- getTimezoneOffset
   pure $ Env
     { contractStepCarouselSubscription
     , logger: case webpackBuildMode of
@@ -108,9 +105,6 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
     , redeemListeners
     , sinks
     , sources
-    , handleRequest: HandleRequest Affjax.request
-    , timezoneOffset
-    , makeClock: MakeClock makeClock
     , regularPollInterval
     , syncPollInterval
     }
@@ -140,7 +134,6 @@ main args = do
     let
       sources =
         { pabWebsocket: pabWebsocketIn.emitter
-        , currentTime: now
         }
       sinks = { pabWebsocket: pabWebsocketOut.listener }
     env <- liftEffect $ mkEnv

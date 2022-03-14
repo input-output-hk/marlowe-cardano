@@ -27,7 +27,7 @@ import Effect.AVar (AVar)
 import Effect.Aff (Aff, effectCanceler, launchAff_)
 import Effect.Aff as Aff
 import Effect.Aff.AVar as AVar
-import Effect.Aff.Class (liftAff)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Env (_applyInputListeners, _createListeners, _redeemListeners)
 import Halogen.Subscription as HS
@@ -39,8 +39,10 @@ import Marlowe.Semantics
   , TokenName
   , TransactionInput(..)
   )
+import Plutus.PAB.Webserver (Api) as PAB
 import Plutus.V1.Ledger.Time (POSIXTime)
 import Plutus.V1.Ledger.Value (TokenName) as Back
+import Servant.PureScript (class MonadAjax)
 import Types (AjaxResponse)
 
 class MarloweApp m where
@@ -63,7 +65,7 @@ class MarloweApp m where
     -> Address
     -> m (AjaxResponse (Aff Unit))
 
-instance marloweAppM :: MarloweApp AppM where
+instance (MonadAff m, MonadAjax PAB.Api m) => MarloweApp (AppM m) where
   createContract plutusAppId roles contract = runExceptT do
     reqId <- liftEffect genUUID
     let

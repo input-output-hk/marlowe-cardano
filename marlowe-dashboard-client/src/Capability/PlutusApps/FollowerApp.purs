@@ -10,11 +10,11 @@ import Prologue
 
 import AppM (AppM)
 import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
-import Capability.PAB as PAB
+import Capability.PAB (activateContract, invokeEndpoint) as PAB
 import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont (lift)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
-import Control.Monad.Reader (class MonadAsk, asks)
+import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
 import Data.Argonaut (encodeJson)
 import Data.Either (either)
 import Data.Lens (view, (^.))
@@ -22,6 +22,7 @@ import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff (Aff)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env, _followerBus)
 import Errors (class Debuggable, class Explain, debuggable)
@@ -33,6 +34,8 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
+import Plutus.PAB.Webserver (Api) as PAB
+import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Store.Contracts (getFollowerContract)
 import Text.Pretty (text)
@@ -56,7 +59,7 @@ instance Debuggable FollowContractError where
     , error: debuggable error
     }
 
-class ManagePAB m <= FollowerApp m where
+class Monad m <= FollowerApp m where
   -- This function makes sure that there is a follower contract for the specified
   -- marloweParams. It tries to see if we are already following, and if not, it creates
   -- a new one.
@@ -71,7 +74,7 @@ class ManagePAB m <= FollowerApp m where
     -> MarloweParams
     -> m (Aff (Either FollowContractError (PlutusAppId /\ ContractHistory)))
 
-instance manageMarloweAppM :: FollowerApp AppM where
+instance (MonadAff m, MonadAjax PAB.Api m) => FollowerApp (AppM m) where
   ensureFollowerContract wallet marloweParams = do
     contracts <- _.contracts <$> getStore
     case getFollowerContract marloweParams contracts of
@@ -92,6 +95,14 @@ instance manageMarloweAppM :: FollowerApp AppM where
       mFollowAppId
 
 instance FollowerApp m => FollowerApp (HalogenM state action slots msg m) where
+  ensureFollowerContract wallet marloweParams = lift $ ensureFollowerContract
+    wallet
+    marloweParams
+  followNewContract wallet marloweParams = lift $ followNewContract
+    wallet
+    marloweParams
+
+instance FollowerApp m => FollowerApp (ReaderT r m) where
   ensureFollowerContract wallet marloweParams = lift $ ensureFollowerContract
     wallet
     marloweParams

@@ -1,4 +1,4 @@
-module AppM (AppM, handleRequest, passphrase, runAppM) where
+module AppM (AppM, passphrase, runAppM) where
 
 import Prologue
 
@@ -6,35 +6,29 @@ import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
 import Control.Logger.Structured (StructuredLog)
+import Control.Monad.Error.Class (class MonadThrow)
+import Control.Monad.Except (class MonadError)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader
   ( class MonadReader
   , ReaderT
-  , asks
   , runReaderT
   , withReaderT
   )
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Data.Array as A
-import Data.Lens (Lens', over, to, view)
+import Data.Lens (Lens', over)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
 import Data.Newtype (un)
 import Data.Passphrase (Passphrase)
 import Data.Passphrase as Passphrase
 import Effect.Aff (Aff)
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env
-  ( Env(..)
-  , HandleRequest(..)
-  , MakeClock(..)
-  , _handleRequest
-  , _makeClock
-  , _sources
-  , _timezoneOffset
-  )
+import Env (Env(..))
 import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad (class MonadStore, StoreT, runAndEmitStoreT)
@@ -42,14 +36,7 @@ import Halogen.Subscription (Emitter)
 import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
-import Servant.PureScript
-  ( class ContentType
-  , class MonadAjax
-  , AjaxError
-  , Request
-  , prepareRequest
-  , prepareResponse
-  )
+import Servant.PureScript (class MonadAjax, Request, request)
 import Store as Store
 import Type.Proxy (Proxy(..))
 import URI (Fragment, Host, Path, RelativeRef, UserInfo)
@@ -63,45 +50,50 @@ passphrase :: Passphrase
 passphrase = unsafePartial $ fromJust $ Passphrase.fromString
   "fixme-allow-pass-per-wallet"
 
-newtype AppM a = AppM (ReaderT Env (StoreT Store.Action Store.Store Aff) a)
+newtype AppM m a = AppM (ReaderT Env (StoreT Store.Action Store.Store m) a)
 
 runAppM
-  :: forall q i o
-   . Env
+  :: forall q i o m
+   . Monad m
+  => Env
   -> Store.Store
-  -> Component q i o AppM
-  -> Aff ({ component :: Component q i o Aff, emitter :: Emitter Store.Store })
+  -> Component q i o (AppM m)
+  -> Aff ({ component :: Component q i o m, emitter :: Emitter Store.Store })
 runAppM env store =
   runAndEmitStoreT store Store.reduce <<< hoist \(AppM r) -> runReaderT r env
 
-derive newtype instance Functor AppM
+derive newtype instance Functor m => Functor (AppM m)
 
-derive newtype instance Apply AppM
+derive newtype instance Apply m => Apply (AppM m)
 
-derive newtype instance Applicative AppM
+derive newtype instance Applicative m => Applicative (AppM m)
 
-derive newtype instance Bind AppM
+derive newtype instance Bind m => Bind (AppM m)
 
-derive newtype instance Monad AppM
+derive newtype instance Monad m => Monad (AppM m)
 
-derive newtype instance MonadEffect AppM
+derive newtype instance MonadThrow e m => MonadThrow e (AppM m)
 
-derive newtype instance MonadAff AppM
+derive newtype instance MonadError e m => MonadError e (AppM m)
 
-derive newtype instance MonadRec AppM
+derive newtype instance MonadEffect m => MonadEffect (AppM m)
 
-derive newtype instance MonadAsk Env AppM
+derive newtype instance MonadAff m => MonadAff (AppM m)
 
-derive newtype instance MonadReader Env AppM
+derive newtype instance MonadRec m => MonadRec (AppM m)
 
-derive newtype instance MonadStore Store.Action Store.Store AppM
+instance MonadTrans AppM where
+  lift = AppM <<< lift <<< lift
 
-instance MonadTime AppM where
-  now = liftEffect =<< (asks $ view $ _sources <<< to _.currentTime)
-  timezoneOffset = asks $ view _timezoneOffset
-  makeClock interval = do
-    MakeClock mkClock <- asks $ view _makeClock
-    liftEffect $ mkClock interval
+derive newtype instance Monad m => MonadAsk Env (AppM m)
+
+derive newtype instance Monad m => MonadReader Env (AppM m)
+
+derive newtype instance
+  MonadEffect m =>
+  MonadStore Store.Action Store.Store (AppM m)
+
+derive newtype instance MonadTime m => MonadTime (AppM m)
 
 -- TODO move to servant-support and add more lenses
 _uri
@@ -128,27 +120,15 @@ prependPath prefix =
     (_uri <<< _relPart <<< _relPath)
     (Just <<< append prefix <<< join <<< A.fromFoldable)
 
-handleRequest
-  :: forall resDecodeError reqDecodeError resContent reqContent req res
-   . ContentType reqDecodeError reqContent
-  => ContentType resDecodeError resContent
-  => Request reqContent resContent resDecodeError req res
-  -> AppM (Either (AjaxError resDecodeError resContent) res)
-handleRequest req = do
-  HandleRequest handle <- asks $ view _handleRequest
-  liftAff $ prepareResponse req.decode aReq <$> handle aReq
-  where
-  aReq = prepareRequest req
+instance MonadAjax PAB.Api m => MonadAjax PAB.Api (AppM m) where
+  request api = lift <<< request api <<< prependPath [ "pab" ]
 
-instance MonadAjax PAB.Api AppM where
-  request _ = handleRequest <<< prependPath [ "pab" ]
+instance MonadAjax MarloweRun.Api m => MonadAjax MarloweRun.Api (AppM m) where
+  request api = lift <<< request api
 
-instance MonadAjax MarloweRun.Api AppM where
-  request _ = handleRequest
-
-instance MonadLogger StructuredLog AppM where
+instance MonadEffect m => MonadLogger StructuredLog (AppM m) where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`
   log m = AppM $ withReaderT (un Env) (Control.Monad.Effect.Class.log' m)
 
-instance MonadClipboard AppM where
+instance MonadEffect m => MonadClipboard (AppM m) where
   copy = liftEffect <<< copy
