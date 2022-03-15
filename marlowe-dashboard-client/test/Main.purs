@@ -22,7 +22,7 @@ import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
 import Test.Marlowe.Run.Action.Eval (runScriptedTest)
-import Test.Spec (Spec, describe, it)
+import Test.Spec (Spec, describe, it, parallel)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (defaultConfig, runSpec')
@@ -39,11 +39,12 @@ main = launchAff_ $ runSpec'
   defaultConfig { timeout = Just $ Milliseconds 5000.0 }
   [ consoleReporter ]
   do
-    Bech32Address.spec
-    Bech32DataPart.spec
-    Bech32HRP.spec
-    DataPartCodePoint.spec
-    HRPCodePoint.spec
+    parallel do
+      Bech32Address.spec
+      Bech32DataPart.spec
+      Bech32HRP.spec
+      DataPartCodePoint.spec
+      HRPCodePoint.spec
     testingLibrarySpec
     halogenTestingLibrarySpec
     testScripts

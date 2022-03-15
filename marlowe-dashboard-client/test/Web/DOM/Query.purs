@@ -37,7 +37,8 @@ module Test.Web.DOM.Query
 
 import Prelude
 
-import Control.Monad.Error.Class (class MonadError)
+import Control.Monad.Error.Class (class MonadError, try)
+import Control.Monad.Error.Extra (toMonadThrow)
 import Control.Monad.State (State, modify_, runState)
 import Control.Promise (Promise, toAffE)
 import Data.Array.NonEmpty (NonEmptyArray)
@@ -52,8 +53,8 @@ import Data.Tuple (Tuple(..))
 import Data.Undefinable (Undefinable, toMaybe, toUndefinable)
 import Effect (Effect)
 import Effect.Aff (Error)
-import Effect.Aff.Class (liftAff)
-import Effect.Class (liftEffect)
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Uncurried (EffectFn3, runEffectFn3)
 import Foreign (Foreign)
 import Record.Builder (Builder)
@@ -328,6 +329,14 @@ text = buildMatch Text
 title :: forall matcher. IsMatcher matcher => MatchBuilder matcher -> Match
 title = buildMatch Title
 
+liftPromise
+  :: forall a m. MonadAff m => MonadError Error m => Effect (Promise a) -> m a
+liftPromise p = toMonadThrow =<< liftAff (try $ toAffE p)
+
+liftForeignEffect
+  :: forall a m. MonadEffect m => MonadError Error m => Effect a -> m a
+liftForeignEffect e = toMonadThrow =<< liftEffect (try e)
+
 findBy
   :: forall builder a m
    . MonadTest m
@@ -337,23 +346,21 @@ findBy
   -> m Element
 findBy build builder = case build builder of
   AltText matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findByAltText matcher options
+    liftPromise =<< callForeignMatcherFn findByAltText matcher options
   DisplayValue matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findByDisplayValue matcher options
+    liftPromise =<< callForeignMatcherFn findByDisplayValue matcher options
   LabelText matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findByLabelText matcher options
+    liftPromise =<< callForeignMatcherFn findByLabelText matcher options
   PlaceholderText matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findByPlaceholderText matcher options
+    liftPromise =<< callForeignMatcherFn findByPlaceholderText matcher options
   Role r options ->
-    liftAff <<< toAffE =<< callForeignByRoleFn findByRole r options
+    liftPromise =<< callForeignByRoleFn findByRole r options
   TestId matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findByTestId matcher options
+    liftPromise =<< callForeignMatcherFn findByTestId matcher options
   Text matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findByText matcher options
+    liftPromise =<< callForeignMatcherFn findByText matcher options
   Title matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findByTitle matcher options
+    liftPromise =<< callForeignMatcherFn findByTitle matcher options
 
 findAllBy
   :: forall builder a m
@@ -364,24 +371,22 @@ findAllBy
   -> m (NonEmptyArray Element)
 findAllBy build builder = case build builder of
   AltText matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findAllByAltText matcher options
+    liftPromise =<< callForeignMatcherFn findAllByAltText matcher options
   DisplayValue matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findAllByDisplayValue matcher options
+    liftPromise =<< callForeignMatcherFn findAllByDisplayValue matcher options
   LabelText matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findAllByLabelText matcher options
+    liftPromise =<< callForeignMatcherFn findAllByLabelText matcher options
   PlaceholderText matcher options ->
-    liftAff <<< toAffE
-      =<< callForeignMatcherFn findAllByPlaceholderText matcher options
+    liftPromise =<< callForeignMatcherFn findAllByPlaceholderText matcher
+      options
   Role r options ->
-    liftAff <<< toAffE =<< callForeignByRoleFn findAllByRole r options
+    liftPromise =<< callForeignByRoleFn findAllByRole r options
   TestId matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findAllByTestId matcher options
+    liftPromise =<< callForeignMatcherFn findAllByTestId matcher options
   Text matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findAllByText matcher options
+    liftPromise =<< callForeignMatcherFn findAllByText matcher options
   Title matcher options ->
-    liftAff <<< toAffE =<< callForeignMatcherFn findAllByTitle matcher options
+    liftPromise =<< callForeignMatcherFn findAllByTitle matcher options
 
 getBy
   :: forall builder a m
@@ -392,21 +397,22 @@ getBy
   -> m Element
 getBy build builder = case build builder of
   AltText matcher options ->
-    liftEffect =<< callForeignMatcherFn getByAltText matcher options
+    liftForeignEffect =<< callForeignMatcherFn getByAltText matcher options
   DisplayValue matcher options ->
-    liftEffect =<< callForeignMatcherFn getByDisplayValue matcher options
+    liftForeignEffect =<< callForeignMatcherFn getByDisplayValue matcher options
   LabelText matcher options ->
-    liftEffect =<< callForeignMatcherFn getByLabelText matcher options
+    liftForeignEffect =<< callForeignMatcherFn getByLabelText matcher options
   PlaceholderText matcher options ->
-    liftEffect =<< callForeignMatcherFn getByPlaceholderText matcher options
+    liftForeignEffect
+      =<< callForeignMatcherFn getByPlaceholderText matcher options
   Role r options ->
-    liftEffect =<< callForeignByRoleFn getByRole r options
+    liftForeignEffect =<< callForeignByRoleFn getByRole r options
   TestId matcher options ->
-    liftEffect =<< callForeignMatcherFn getByTestId matcher options
+    liftForeignEffect =<< callForeignMatcherFn getByTestId matcher options
   Text matcher options ->
-    liftEffect =<< callForeignMatcherFn getByText matcher options
+    liftForeignEffect =<< callForeignMatcherFn getByText matcher options
   Title matcher options ->
-    liftEffect =<< callForeignMatcherFn getByTitle matcher options
+    liftForeignEffect =<< callForeignMatcherFn getByTitle matcher options
 
 getAllBy
   :: forall builder a m
@@ -417,21 +423,23 @@ getAllBy
   -> m (NonEmptyArray Element)
 getAllBy build builder = case build builder of
   AltText matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByAltText matcher options
+    liftForeignEffect =<< callForeignMatcherFn getAllByAltText matcher options
   DisplayValue matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByDisplayValue matcher options
+    liftForeignEffect
+      =<< callForeignMatcherFn getAllByDisplayValue matcher options
   LabelText matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByLabelText matcher options
+    liftForeignEffect =<< callForeignMatcherFn getAllByLabelText matcher options
   PlaceholderText matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByPlaceholderText matcher options
+    liftForeignEffect
+      =<< callForeignMatcherFn getAllByPlaceholderText matcher options
   Role r options ->
-    liftEffect =<< callForeignByRoleFn getAllByRole r options
+    liftForeignEffect =<< callForeignByRoleFn getAllByRole r options
   TestId matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByTestId matcher options
+    liftForeignEffect =<< callForeignMatcherFn getAllByTestId matcher options
   Text matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByText matcher options
+    liftForeignEffect =<< callForeignMatcherFn getAllByText matcher options
   Title matcher options ->
-    liftEffect =<< callForeignMatcherFn getAllByTitle matcher options
+    liftForeignEffect =<< callForeignMatcherFn getAllByTitle matcher options
 
 queryBy
   :: forall builder a m
@@ -442,27 +450,28 @@ queryBy
   -> m (Maybe Element)
 queryBy build builder = case build builder of
   AltText matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByAltText matcher options
   DisplayValue matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByDisplayValue matcher options
   LabelText matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByLabelText matcher options
   PlaceholderText matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByPlaceholderText matcher options
   Role r options ->
-    map N.toMaybe $ liftEffect =<< callForeignByRoleFn queryByRole r options
+    map N.toMaybe $ liftForeignEffect
+      =<< callForeignByRoleFn queryByRole r options
   TestId matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByTestId matcher options
   Text matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByText matcher options
   Title matcher options ->
-    map N.toMaybe $ liftEffect
+    map N.toMaybe $ liftForeignEffect
       =<< callForeignMatcherFn queryByTitle matcher options
 
 queryAllBy
@@ -474,22 +483,24 @@ queryAllBy
   -> m (Array Element)
 queryAllBy build builder = case build builder of
   AltText matcher options ->
-    liftEffect =<< callForeignMatcherFn queryAllByAltText matcher options
+    liftForeignEffect =<< callForeignMatcherFn queryAllByAltText matcher options
   DisplayValue matcher options ->
-    liftEffect =<< callForeignMatcherFn queryAllByDisplayValue matcher options
+    liftForeignEffect
+      =<< callForeignMatcherFn queryAllByDisplayValue matcher options
   LabelText matcher options ->
-    liftEffect =<< callForeignMatcherFn queryAllByLabelText matcher options
+    liftForeignEffect =<< callForeignMatcherFn queryAllByLabelText matcher
+      options
   PlaceholderText matcher options ->
-    liftEffect
+    liftForeignEffect
       =<< callForeignMatcherFn queryAllByPlaceholderText matcher options
   Role r options ->
-    liftEffect =<< callForeignByRoleFn queryAllByRole r options
+    liftForeignEffect =<< callForeignByRoleFn queryAllByRole r options
   TestId matcher options ->
-    liftEffect =<< callForeignMatcherFn queryAllByTestId matcher options
+    liftForeignEffect =<< callForeignMatcherFn queryAllByTestId matcher options
   Text matcher options ->
-    liftEffect =<< callForeignMatcherFn queryAllByText matcher options
+    liftForeignEffect =<< callForeignMatcherFn queryAllByText matcher options
   Title matcher options ->
-    liftEffect =<< callForeignMatcherFn queryAllByTitle matcher options
+    liftForeignEffect =<< callForeignMatcherFn queryAllByTitle matcher options
 
 callForeignMatcherFn
   :: forall m a
