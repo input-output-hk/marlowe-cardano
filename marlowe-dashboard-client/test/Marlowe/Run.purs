@@ -59,7 +59,13 @@ import Test.Control.Monad.Time
   , runMockTimeM
   )
 import Test.Halogen (class MonadHalogenTest, runUITest)
-import Test.Marlowe.Run.Action.Types (WalletName)
+import Test.Marlowe.Run.Action.Types
+  ( Address
+  , PubKeyHash
+  , WalletId
+  , WalletMnemonic
+  , WalletName
+  )
 import Test.Network.HTTP
   ( class MonadMockHTTP
   , MockHttpM
@@ -234,6 +240,13 @@ mkTestEnv = do
       }
   pure $ env /\ coenv /\ errors
 
+type TestWallet =
+  { address :: Address
+  , mnemonic :: WalletMnemonic
+  , pubKeyHash :: PubKeyHash
+  , walletId :: WalletId
+  }
+
 -- Like `Env` but we invert the control of everything in it (i.e. all sources
 -- become sinks, sinks sources).
 type Coenv =
@@ -241,5 +254,5 @@ type Coenv =
   , httpRequests :: Queue RequestBox
   , pabWebsocketIn :: Listener (FromSocket CombinedWSStreamToClient)
   , dispose :: Effect Unit
-  , wallets :: Ref (Bimap WalletName String)
+  , wallets :: Ref (Bimap WalletName TestWallet)
   }

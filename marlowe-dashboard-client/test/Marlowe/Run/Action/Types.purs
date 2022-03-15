@@ -37,6 +37,7 @@ import Data.String
   )
 import Data.Time.Duration (Milliseconds)
 import Effect.Aff (Error, message)
+import MarloweContract (MarloweContract)
 
 type WalletName = String
 type WalletMnemonic = String
@@ -183,12 +184,14 @@ type CreateWalletRecord =
   , marloweAppId :: PlutusAppId
   }
 
+type AppInstance = { type :: MarloweContract, instanceId :: PlutusAppId }
+
 data MarloweRunAction
   = CreateWallet CreateWalletRecord
   | CreateContract {}
   | AddContact { walletName :: WalletName, address :: Address }
   | DropWallet { walletId :: WalletId, pubKeyHash :: PubKeyHash }
-  | UseWallet { walletName :: WalletName }
+  | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
   | PabWebSocketSend { expectPayload :: Json }
   | PabWebSocketReceive { payload :: Json }
   | HttpRequest { expect :: HttpExpect, respond :: HttpRespond }
@@ -203,7 +206,7 @@ instance Show MarloweRunAction where
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
     CreateContract _ -> "(CreateContract)"
     AddContact a -> "(AddContact " <> show a <> ")"
-    UseWallet a -> "(UseWallet " <> show a <> ")"
+    RestoreWallet a -> "(RestoreWallet " <> show a <> ")"
     PabWebSocketSend a -> "(PabWebSocketSend " <> encodeStringifyJson a <> ")"
     PabWebSocketReceive a ->
       "(PabWebSocketReceive " <> encodeStringifyJson a <> ")"
@@ -222,8 +225,8 @@ instance DecodeJson MarloweRunAction where
         lmap (Named "CreateContract") $ CreateContract <$> obj .: "content"
       "AddContact" ->
         lmap (Named "AddContact") $ AddContact <$> obj .: "content"
-      "UseWallet" ->
-        lmap (Named "UseWallet") $ UseWallet <$> obj .: "content"
+      "RestoreWallet" ->
+        lmap (Named "RestoreWallet") $ RestoreWallet <$> obj .: "content"
       "PabWebSocketSend" ->
         lmap (Named "PabWebSocketSend") $ PabWebSocketSend <$> obj .: "content"
       "PabWebSocketReceive" ->
@@ -240,7 +243,7 @@ instance EncodeJson MarloweRunAction where
     CreateWallet content -> encodeJson { tag: "CreateWallet", content }
     CreateContract content -> encodeJson { tag: "CreateContract", content }
     AddContact content -> encodeJson { tag: "AddContact", content }
-    UseWallet content -> encodeJson { tag: "UseWallet", content }
+    RestoreWallet content -> encodeJson { tag: "RestoreWallet", content }
     PabWebSocketSend content -> encodeJson { tag: "PabWebSocketSend", content }
     PabWebSocketReceive content ->
       encodeJson { tag: "PabWebSocketReceive", content }

@@ -19,6 +19,7 @@ import Data.Argonaut
   , Json
   , decodeJson
   , encodeJson
+  , jsonEmptyArray
   , jsonNull
   , printJsonDecodeError
   , stringifyWithIndent
@@ -31,6 +32,7 @@ import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
 import Data.Foldable (foldM, for_, traverse_)
 import Data.HTTP.Method (Method(..))
+import Data.Maybe (maybe)
 import Data.Newtype (over2)
 import Data.String
   ( Pattern(..)
@@ -57,6 +59,7 @@ import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Marlowe.Run (Coenv, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
+  , AppInstance
   , CreateWalletRecord
   , HttpExpect(..)
   , HttpExpectContent(..)
@@ -83,7 +86,6 @@ import Test.Network.HTTP
   , renderMatcherError
   )
 import Test.Spec (Spec)
-import Test.Spec.Assertions (fail)
 import Test.Web.DOM.Assertions (shouldCast, shouldHaveText, shouldNotBeDisabled)
 import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
 import Test.Web.Event.User (click, clickM, type_)
@@ -193,14 +195,10 @@ evalAction
   -> m Unit
 evalAction = case _ of
   DropWallet params -> dropWallet params
-
   CreateWallet params -> createWallet params
-
   CreateContract _ -> pure unit
   AddContact params -> addContact params
-  -- Evaluate a UseWallet action by performing the restore wallet workflow.
-  UseWallet { walletName } -> do
-    restore walletName
+  RestoreWallet params -> restore params
 
   -- Evaluate a PabWebSocketSend action by reading from the output queue and
   -- checking the content against the expectations.
@@ -258,7 +256,7 @@ dropWallet { walletId, pubKeyHash } = openMyWallet do
     expectJsonRequest ado
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
-      in ([] :: Array Json)
+      in jsonEmptyArray
     expectPabWebsocketSend
       { tag: "Unsubscribe"
       , contents: { "Right": { getPubKeyHash: pubKeyHash } }
@@ -407,6 +405,7 @@ createWallet
     expectCreateHttpRequest
     fillConfirmMnemonicDialog
     expectWalletActivation
+
   where
   fillCreateWalletDialog = do
     tell [ "Fill create wallet dialog" ]
@@ -428,7 +427,6 @@ createWallet
         { getCreateWalletName: walletName
         , getCreatePassphrase: "fixme-allow-pass-per-wallet"
         }
-
       in
         { mnemonic: split (Pattern " ") mnemonic
         , walletInfo:
@@ -457,7 +455,9 @@ createWallet
     shouldNotBeDisabled okButton
     click okButton
     wallets <- asks _.wallets
-    liftEffect $ Ref.modify_ (Bimap.insert walletName mnemonic) wallets
+    liftEffect $ Ref.modify_
+      (Bimap.insert walletName { address, mnemonic, pubKeyHash, walletId })
+      wallets
 
   expectWalletActivation = do
     tell [ "Expect GET contract instances" ]
@@ -465,7 +465,6 @@ createWallet
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
       in ([] :: Array Json)
-
     expectPlutusContractActivation walletId WalletCompanion walletCompanionId
     expectPlutusContractActivation walletId MarloweApp marloweAppId
     expectPabWebsocketSend
@@ -479,32 +478,89 @@ restore
   :: forall m
    . MonadTest m
   => MonadUser m
+  => MonadTell (Array String) m
+  => MonadMockHTTP m
   => MonadError Error m
   => MonadAsk Coenv m
-  => WalletName
+  => { walletName :: WalletName, instances :: Array AppInstance }
   -> m Unit
-restore walletName = do
+restore { instances, walletName } = do
   wallets <- asks _.wallets
-  mMnemonic <- liftEffect $ Bimap.lookupL walletName <$> Ref.read wallets
-  case mMnemonic of
-    Nothing -> fail $ "Test error: unknown wallet " <> walletName
-    Just mnemonic -> do
-      clickM $ getBy role do
-        nameRegex "restore" ignoreCase
-        pure Button
-      dialog <- getBy role $ pure Dialog
-      withContainer dialog do
-        nicknameField <- getBy role do
-          nameRegex "wallet nickname" ignoreCase
-          pure Textbox
-        mnemonicField <- getBy role do
-          nameRegex "mnemonic phrase" ignoreCase
-          pure Textbox
-        type_ nicknameField walletName Nothing
-        type_ mnemonicField mnemonic Nothing
-        clickM $ getBy role do
-          nameRegex "restore wallet" ignoreCase
-          pure Button
+  mWallet <- liftEffect $ Bimap.lookupL walletName <$> Ref.read wallets
+  wallet <- maybe
+    (throwError $ error $ "Test error: unknown wallet " <> walletName)
+    pure
+    mWallet
+  clickM $ getBy role do
+    nameRegex "restore" ignoreCase
+    pure Button
+  dialog <- getBy role $ pure Dialog
+  withContainer dialog do
+    fillRestoreWalletDialog wallet.mnemonic
+    expectRestoreHttpRequest wallet
+    expectWalletActivation wallet
+
+  where
+  fillRestoreWalletDialog mnemonic = do
+    tell [ "Fill restore wallet dialog" ]
+    nicknameField <- getBy role do
+      nameRegex "wallet nickname" ignoreCase
+      pure Textbox
+    mnemonicField <- getBy role do
+      nameRegex "mnemonic phrase" ignoreCase
+      pure Textbox
+    type_ nicknameField walletName Nothing
+    type_ mnemonicField mnemonic Nothing
+    clickM $ getBy role do
+      nameRegex "restore wallet" ignoreCase
+      pure Button
+
+  expectRestoreHttpRequest { address, mnemonic, pubKeyHash, walletId } = do
+    tell [ "Expect POST restore wallet" ]
+    expectJsonRequest ado
+      expectMethod POST
+      expectUri "/api/wallet/v1/centralized-testnet/restore"
+      expectJsonContent $
+        { getRestoreWalletName: walletName
+        , getRestorePassphrase: "fixme-allow-pass-per-wallet"
+        , getRestoreMnemonicPhrase: split (Pattern " ") mnemonic
+        }
+      in
+        { walletId
+        , pubKeyHash: { unPaymentPubKeyHash: { getPubKeyHash: pubKeyHash } }
+        , address
+        }
+
+  expectWalletActivation { walletId, pubKeyHash } = do
+    tell [ "Expect GET contract instances" ]
+    expectJsonRequest ado
+      expectMethod GET
+      expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
+      in
+        instances <#> \{ type: contractType, instanceId } ->
+          { cicWallet:
+              { prettyWalletName: jsonNull
+              , getWalletId: walletId
+              }
+          , cicCurrentState:
+              { lastLogs: jsonEmptyArray
+              , err: jsonNull
+              , hooks: jsonEmptyArray
+              , logs: jsonEmptyArray
+              , observableState: jsonEmptyArray
+              }
+          , cicContract:
+              { unContractInstanceId: instanceId
+              }
+          , cicStatus: "Active"
+          , cicYieldedExportTxs: jsonEmptyArray
+          , cicDefinition: contractType
+          }
+    expectPabWebsocketSend
+      { tag: "Subscribe"
+      , contents: { "Right": { getPubKeyHash: pubKeyHash } }
+      }
+    traverse_ (expectPlutusContractSubscribe <<< _.instanceId) instances
 
 expectPabWebsocketSend
   :: forall m a
