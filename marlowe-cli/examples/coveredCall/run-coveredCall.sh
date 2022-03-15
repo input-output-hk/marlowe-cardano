@@ -135,6 +135,8 @@ echo "### Tip of the Blockchain"
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
 HOUR="$((3600*1000))"
+MINUTE="$((60*1000))"
+SECOND="1000"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
@@ -142,8 +144,11 @@ echo "## The Contract"
 
 MINIMUM_ADA=3000000
 
-ISSUE_TIMEOUT=$((NOW+6*HOUR))
-MATURITY_TIMEOUT=$((NOW+6*HOUR))
+#ISSUE_TIMEOUT=$((NOW+6*HOUR))
+#MATURITY_TIMEOUT=$((NOW+6*HOUR))
+#SETTLEMENT_TIMEOUT=$((NOW+12*HOUR))
+ISSUE_TIMEOUT=$((NOW+2*MINUTE-1*SECOND))
+MATURITY_TIMEOUT=$((NOW+2*MINUTE))
 SETTLEMENT_TIMEOUT=$((NOW+12*HOUR))
 
 echo "The contract has a minimum-ADA requirement and three timeouts. It also specifies that the issuer $ISSUER_NAME will put $AMOUNT_A of "'`'"$TOKEN_A"'`'" before $(date -u -R -d @$((ISSUE_TIMEOUT/1000))) into the contract and if the counter-party $COUNTERPARTY_NAME exercises the option for $AMOUNT_B of "'`'"$TOKEN_B"'`'" after $(date -u -R -d @$((MATURITY_TIMEOUT/1000))) and before $(date -u -R -d @$((SETTLEMENT_TIMEOUT/1000)))."
@@ -215,7 +220,7 @@ marlowe-cli run prepare --marlowe-file tx-1.marlowe               \
                         --deposit-token "$TOKEN_A"                \
                         --deposit-amount "$AMOUNT_A"              \
                         --invalid-before "$((NOW-300000))"        \
-                        --invalid-hereafter "$((NOW+4*HOUR))"     \
+                        --invalid-hereafter "$((NOW+2*MINUTE-2*SECOND))"     \
                         --out-file tx-2.marlowe                   \
                         --print-stats
 
@@ -246,68 +251,61 @@ echo "Here is the UTxO at the issuer $ISSUER_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
 
-echo "## Transaction 3. The Counter-Party chooses to exercise the option"
+echo "## Transaction 3. Wait until expiry (2 minutes) and advance contract"
 
-echo "First we compute the input for the contract to transition forward."
+sleep 2m
 
-marlowe-cli run prepare --marlowe-file tx-2.marlowe                  \
-                        --choice-name "Exercise Call"                \
-                        --choice-party "PK=$COUNTERPARTY_PUBKEYHASH" \
-                        --choice-number 1                            \
-                        --invalid-before "$((NOW-300000))"           \
-                        --invalid-hereafter "$((NOW+4*HOUR))"        \
-                        --out-file tx-3.marlowe                      \
-                        --print-stats
-
-
-TX_3=$(
-marlowe-cli run execute "${MAGIC[@]}"                                  \
-                        --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
-                        --marlowe-in-file tx-2.marlowe                 \
-                        --tx-in-marlowe "$TX_2"#1                      \
-                        --tx-in-collateral "$TX_0_B_ADA"               \
-                        --tx-in "$TX_0_B_ADA"                          \
-                        --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
-                        --marlowe-out-file tx-3.marlowe                \
-                        --change-address "$COUNTERPARTY_ADDRESS"       \
-                        --out-file tx-3.raw                            \
-                        --print-stats                                  \
-                        --submit=600                                   \
-| sed -e 's/^TxId "\(.*\)"$/\1/'                                       \
-)
-
-echo "## Transaction 4. The Counter-Party Deposits their Tokens."
-
-echo "First we compute the input for the contract to transition forward."
-
-marlowe-cli run prepare --marlowe-file tx-3.marlowe                     \
-                        --deposit-account "PK=$COUNTERPARTY_PUBKEYHASH" \
-                        --deposit-party "PK=$COUNTERPARTY_PUBKEYHASH"   \
-                        --deposit-token "$TOKEN_B"                      \
-                        --deposit-amount "$AMOUNT_B"                    \
-                        --invalid-before "$((NOW-300000))"              \
-                        --invalid-hereafter "$((NOW+8*HOUR))"           \
-                        --out-file tx-4.marlowe                         \
-                        --print-stats
-
-echo "Now the counter-party $COUNTERPARTY_NAME can submit a transaction that deposits their tokens."
-
-TX_3_B_ADA=$(
+TX_1_A_ADA=$(
 cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$COUNTERPARTY_ADDRESS"                                                        \
+                       --address "$ISSUER_ADDRESS"                                                              \
                        --out-file /dev/stdout                                                                   \
 | jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
 | head -n 1
 )
+
+echo "First we compute the input for the contract to transition forward."
+
+marlowe-cli run prepare --marlowe-file tx-2.marlowe           \
+                        --invalid-before "$((NOW+2*MINUTE))"  \
+                        --invalid-hereafter "$((NOW+8*HOUR))" \
+                        --out-file tx-3.marlowe               \
+                        --print-stats
+
+TX_3=$(
+marlowe-cli run execute "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --marlowe-in-file tx-2.marlowe            \
+                        --tx-in-marlowe "$TX_2"#1                 \
+                        --tx-in-collateral "$TX_1_A_ADA"          \
+                        --tx-in "$TX_1_A_ADA"                     \
+                        --required-signer "$ISSUER_PAYMENT_SKEY"  \
+                        --marlowe-out-file tx-3.marlowe           \
+                        --change-address "$ISSUER_ADDRESS"        \
+                        --out-file tx-3.raw                       \
+                        --print-stats                             \
+                        --submit=600                              \
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                  \
+)
+
+echo "## Transaction 4. The Counter-Party chooses to exercise the option"
+
+marlowe-cli run prepare --marlowe-file tx-3.marlowe                   \
+                        --choice-name "Exercise Call"                 \
+                        --choice-party "PK=$COUNTERPARTY_PUBKEYHASH"  \
+                        --choice-number 1                             \
+                        --invalid-before "$((NOW+2*MINUTE+1*SECOND))" \
+                        --invalid-hereafter "$((NOW+8*HOUR))"         \
+                        --out-file tx-4.marlowe                       \
+                        --print-stats
+
 
 TX_4=$(
 marlowe-cli run execute "${MAGIC[@]}"                                  \
                         --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
                         --marlowe-in-file tx-3.marlowe                 \
                         --tx-in-marlowe "$TX_3"#1                      \
-                        --tx-in-collateral "$TX_3_B_ADA"               \
-                        --tx-in "$TX_3_B_ADA"                          \
-                        --tx-in "$TX_0_B_TOKEN"                        \
+                        --tx-in-collateral "$TX_0_B_ADA"               \
+                        --tx-in "$TX_0_B_ADA"                          \
                         --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
                         --marlowe-out-file tx-4.marlowe                \
                         --change-address "$COUNTERPARTY_ADDRESS"       \
@@ -317,15 +315,56 @@ marlowe-cli run execute "${MAGIC[@]}"                                  \
 | sed -e 's/^TxId "\(.*\)"$/\1/'                                       \
 )
 
-echo "The closing of the contract paid $AMOUNT_B "'`'"$TOKEN_B"'`'" to the first party $ISSUER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract, and it paid $AMOUNT_A "'`'"$TOKEN_A"'`'" to the counter party $COUNTERPARTY_NAME in the transaction "'`'"$TX_4"'`'". There is no UTxO at the contract address:"
+echo "## Transaction 5. The Counter-Party Deposits their Tokens."
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_4/p"
+echo "First we compute the input for the contract to transition forward."
+
+marlowe-cli run prepare --marlowe-file tx-4.marlowe                     \
+                        --deposit-account "PK=$COUNTERPARTY_PUBKEYHASH" \
+                        --deposit-party "PK=$COUNTERPARTY_PUBKEYHASH"   \
+                        --deposit-token "$TOKEN_B"                      \
+                        --deposit-amount "$AMOUNT_B"                    \
+                        --invalid-before "$((NOW+2*MINUTE+1*SECOND))"   \
+                        --invalid-hereafter "$((NOW+8*HOUR))"           \
+                        --out-file tx-5.marlowe                         \
+                        --print-stats
+
+echo "Now the counter-party $COUNTERPARTY_NAME can submit a transaction that deposits their tokens."
+
+TX_4_B_ADA=$(
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$COUNTERPARTY_ADDRESS"                                                        \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
+| head -n 1
+)
+
+TX_5=$(
+marlowe-cli run execute "${MAGIC[@]}"                                  \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH"      \
+                        --marlowe-in-file tx-4.marlowe                 \
+                        --tx-in-marlowe "$TX_4"#1                      \
+                        --tx-in-collateral "$TX_4_B_ADA"               \
+                        --tx-in "$TX_4_B_ADA"                          \
+                        --tx-in "$TX_0_B_TOKEN"                        \
+                        --required-signer "$COUNTERPARTY_PAYMENT_SKEY" \
+                        --marlowe-out-file tx-5.marlowe                \
+                        --change-address "$COUNTERPARTY_ADDRESS"       \
+                        --out-file tx-5.raw                            \
+                        --print-stats                                  \
+                        --submit=600                                   \
+| sed -e 's/^TxId "\(.*\)"$/\1/'                                       \
+)
+
+echo "The closing of the contract paid $AMOUNT_B "'`'"$TOKEN_B"'`'" to the first party $ISSUER_NAME, along with the minimum ADA $MINIMUM_ADA lovelace that they deposited when creating the contract, and it paid $AMOUNT_A "'`'"$TOKEN_A"'`'" to the counter party $COUNTERPARTY_NAME in the transaction "'`'"$TX_5"'`'". There is no UTxO at the contract address:"
+
+cardano-cli query utxo "${MAGIC[@]}" --address "$CONTRACT_ADDRESS" | sed -n -e "1p;2p;/$TX_1/p;/$TX_2/p;/$TX_5/p"
 
 echo "Here are the UTxOs at the issuer party $ISSUER_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS" | sed -n -e "1p;2p;/$TX_2/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$ISSUER_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
 
 echo "Here are the UTxOs at the counter party $COUNTERPARTY_NAME's address:"
 
-cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_3/p"
+cardano-cli query utxo "${MAGIC[@]}" --address "$COUNTERPARTY_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 

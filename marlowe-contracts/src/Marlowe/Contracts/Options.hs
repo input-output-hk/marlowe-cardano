@@ -123,7 +123,7 @@ coveredCall ::
   -> Contract -- ^ Covered Call Contract
 coveredCall issuer counterparty currency underlying strike ratio issue maturity settlement =
     deposit issuer issuer (underlying, ratio) issue Close
-  $ option American Call counterparty issuer (underlying, ratio) (currency, strike) maturity settlement
+  $ option European Call counterparty issuer (underlying, ratio) (currency, strike) maturity settlement
 
 -- |A /Straddle/ involves simultaneously buying a call and a put option
 -- for the same underlying with the same strike and the same expiry.
