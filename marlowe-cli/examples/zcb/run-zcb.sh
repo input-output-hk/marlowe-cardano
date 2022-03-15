@@ -16,7 +16,8 @@ echo '* [marlowe-cli](../../ReadMe.md)'
 echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md)'
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
-echo '* xargs'
+echo '* basenc'
+echo '* tr'
 echo
 echo "Signing and verification keys must be provided below for the two parties: to do this, set the environment variables "'`'"LENDER_PREFIX"'`'" and "'`'"BORROWER_PREFIX"'`'" where they appear below."
 echo
@@ -26,7 +27,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if true
+if false
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
@@ -48,6 +49,7 @@ echo "#### The Lender"
 LENDER_PREFIX="$TREASURY/john-fletcher"
 LENDER_NAME="John Fletcher"
 LENDER_ROLE=JF
+LENDER_ROLE_HEX=$(echo -n "$LENDER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 LENDER_TOKEN="$ROLE_CURRENCY.$LENDER_ROLE"
 LENDER_PAYMENT_SKEY="$LENDER_PREFIX".skey
 LENDER_PAYMENT_VKEY="$LENDER_PREFIX".vkey
@@ -77,10 +79,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_LENDER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                      \
-                       --address "$LENDER_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                             \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$LENDER_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                          \
+                       --address "$LENDER_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                 \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$LENDER_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$LENDER_NAME will spend the UTxOs "'`'"$TX_0_LENDER_ADA"'`'" and "'`'"$TX_0_LENDER_TOKEN"'`.'
@@ -90,6 +92,7 @@ echo "### The Borrower"
 BORROWER_PREFIX="$TREASURY/thomas-middleton"
 BORROWER_NAME="Thomas Middleton"
 BORROWER_ROLE=TM
+BORROWER_ROLE_HEX=$(echo -n "$BORROWER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
 BORROWER_TOKEN="$ROLE_CURRENCY.$BORROWER_ROLE"
 BORROWER_PAYMENT_SKEY="$BORROWER_PREFIX".skey
 BORROWER_PAYMENT_VKEY="$BORROWER_PREFIX".vkey
@@ -119,10 +122,10 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 | head -n 1
 )
 TX_0_BORROWER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                        \
-                       --address "$BORROWER_ADDRESS"                                                        \
-                       --out-file /dev/stdout                                                               \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BORROWER_ROLE"'" == 1) | .key' \
+cardano-cli query utxo "${MAGIC[@]}"                                                                            \
+                       --address "$BORROWER_ADDRESS"                                                            \
+                       --out-file /dev/stdout                                                                   \
+| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BORROWER_ROLE_HEX"'" == 1) | .key' \
 )
 
 echo "$BORROWER_NAME will spend the UTxOs "'`'"$TX_0_BORROWER_ADA"'`'" and "'`'"$TX_0_BORROWER_TOKEN"'`.'

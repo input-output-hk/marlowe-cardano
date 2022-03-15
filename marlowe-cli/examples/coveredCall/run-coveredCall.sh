@@ -73,11 +73,11 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 cardano-cli query utxo "${MAGIC[@]}"                                                                                                                   \
                        --address "$ISSUER_ADDRESS"                                                                                                     \
                        --out-file /dev/stdout                                                                                                          \
-| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[0].value | to_entries | .[0] | .value) > 1)' \
+| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[1].value | to_entries | .[0] | .value) > 1)' \
 > utxo-0-a.json
 TX_0_A_TOKEN=$(jq -r '.key' utxo-0-a.json | head -n 1)
 CURRENCY_SYMBOL_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .key' utxo-0-a.json | head -n 1)
-TOKEN_NAME_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-a.json | head -n 1)
+TOKEN_NAME_A=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-a.json | head -n 1 | sed -e 's/\(.*\)/\U\1/' | basenc --decode --base16)
 TOKEN_A="$CURRENCY_SYMBOL_A.$TOKEN_NAME_A"
 AMOUNT_A=$(jq '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .value' utxo-0-a.json | head -n 1)
 
@@ -120,11 +120,11 @@ cardano-cli query utxo "${MAGIC[@]}"                                            
 cardano-cli query utxo "${MAGIC[@]}"                                                                                                                   \
                        --address "$COUNTERPARTY_ADDRESS"                                                                                               \
                        --out-file /dev/stdout                                                                                                          \
-| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[0].value | to_entries | .[0] | .value) > 1)' \
+| jq '. | to_entries | .[] | select((.value.value | length) == 2) | select((.value.value | to_entries | .[1].value | to_entries | .[0] | .value) > 1)' \
 > utxo-0-b.json
 TX_0_B_TOKEN=$(jq -r '.key' utxo-0-b.json | head -n 1)
 CURRENCY_SYMBOL_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .key' utxo-0-b.json | head -n 1)
-TOKEN_NAME_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-b.json | head -n 1)
+TOKEN_NAME_B=$(jq -r '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .key' utxo-0-b.json | head -n 1 | sed -e 's/\(.*\)/\U\1/' | basenc --decode --base16)
 TOKEN_B="$CURRENCY_SYMBOL_B.$TOKEN_NAME_B"
 AMOUNT_B=$(jq '.value.value | to_entries | .[] | select(.key != "lovelace") | .value | to_entries | .[] | .value' utxo-0-b.json | head -n 1)
 

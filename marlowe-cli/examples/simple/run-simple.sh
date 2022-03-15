@@ -54,7 +54,7 @@ echo "## Preliminaries"
 
 echo "### Select Network"
 
-if true
+if false
 then # Use the public testnet.
   MAGIC=(--testnet-magic 1097911063)
   SLOT_LENGTH=1000
