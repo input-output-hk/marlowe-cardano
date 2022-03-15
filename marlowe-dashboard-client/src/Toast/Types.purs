@@ -20,6 +20,7 @@ import Data.Argonaut.Decode (JsonDecodeError)
 import Errors (class Explain, explainString)
 import Halogen (SubscriptionId)
 import Types (JsonAjaxError)
+import Web.ARIA (ARIARole(..))
 
 type ToastMessage =
   { shortDescription :: String
@@ -29,6 +30,7 @@ type ToastMessage =
   , textColor :: String
   , bgColor :: String
   , timeout :: Number
+  , role :: ARIARole
   }
 
 data Action
@@ -67,6 +69,7 @@ successToast shortDescription =
   , textColor: "text-white"
   , bgColor: "bg-black"
   , timeout: 2500.0
+  , role: Status
   }
 
 infoToast :: String -> ToastMessage
@@ -78,6 +81,7 @@ infoToast shortDescription =
   , textColor: "text-white"
   , bgColor: "bg-black"
   , timeout: 2500.0
+  , role: Status
   }
 
 errorToast :: String -> Maybe String -> ToastMessage
@@ -90,6 +94,7 @@ errorToast shortDescription longDescription =
   , textColor: "text-white"
   , bgColor: "bg-red"
   , timeout: 5000.0
+  , role: Alert
   }
 
 explainableErrorToast :: forall a. Explain a => String -> a -> ToastMessage

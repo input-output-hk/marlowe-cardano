@@ -138,6 +138,12 @@ data ARIARole
   | Widget
   | Window
 
+-- Note: We use equality on show as a derive instance warns with the following:
+--   An exhaustivity check was abandoned due to too many possible cases.
+--   You may want to decompose your data types into smaller types.of too
+instance Eq ARIARole where
+  eq a b = show a == show b
+
 instance Show ARIARole where
   show Alert = "alert"
   show Alertdialog = "alertdialog"

@@ -184,6 +184,8 @@ type CreateWalletRecord =
 
 data MarloweRunAction
   = CreateWallet CreateWalletRecord
+  | CreateContract {}
+  | AddContact { walletName :: WalletName, address :: Address }
   | DropWallet
   | UseWallet { walletName :: WalletName }
   | PabWebSocketSend { expectPayload :: Json }
@@ -198,6 +200,8 @@ instance Show MarloweRunAction where
   show = case _ of
     DropWallet -> "DropWallet"
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
+    CreateContract _ -> "(CreateContract)"
+    AddContact a -> "(AddContact " <> show a <> ")"
     UseWallet a -> "(UseWallet " <> show a <> ")"
     PabWebSocketSend a -> "(PabWebSocketSend " <> encodeStringifyJson a <> ")"
     PabWebSocketReceive a ->
@@ -212,6 +216,10 @@ instance DecodeJson MarloweRunAction where
       "DropWallet" -> pure DropWallet
       "CreateWallet" ->
         lmap (Named "CreateWallet") $ CreateWallet <$> obj .: "content"
+      "CreateContract" ->
+        lmap (Named "CreateContract") $ CreateContract <$> obj .: "content"
+      "AddContact" ->
+        lmap (Named "AddContact") $ AddContact <$> obj .: "content"
       "UseWallet" ->
         lmap (Named "UseWallet") $ UseWallet <$> obj .: "content"
       "PabWebSocketSend" ->
@@ -228,6 +236,8 @@ instance EncodeJson MarloweRunAction where
   encodeJson = case _ of
     DropWallet -> encodeJson { tag: "DropWallet" }
     CreateWallet content -> encodeJson { tag: "CreateWallet", content }
+    CreateContract content -> encodeJson { tag: "CreateContract", content }
+    AddContact content -> encodeJson { tag: "AddContact", content }
     UseWallet content -> encodeJson { tag: "UseWallet", content }
     PabWebSocketSend content -> encodeJson { tag: "PabWebSocketSend", content }
     PabWebSocketReceive content ->

@@ -8,9 +8,10 @@ import Data.Lens (preview)
 import Data.Maybe (fromMaybe)
 import Halogen (RefLabel(..))
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, a, div, div_, span, span_, text)
+import Halogen.HTML (HTML, a, div, div_, span, text)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (ref)
+import Halogen.HTML.Properties (id, ref)
+import Halogen.HTML.Properties.ARIA (describedBy, labelledBy, role)
 import Toast.Lenses (_expanded, _toastMessage)
 import Toast.Types (Action(..), State, ToastMessage)
 
@@ -35,7 +36,11 @@ renderExpanded toast =
   div
     [ classNames $ Css.cardOverlay true ]
     [ div
-        [ classNames $ Css.card true ]
+        [ classNames (Css.card true)
+        , role $ show toast.role
+        , labelledBy "toast-short-message"
+        , describedBy "toast-long-message"
+        ]
         [ a
             [ classNames [ "absolute", "top-4", "right-4", toast.textColor ]
             , onClick_ CloseToast
@@ -52,9 +57,12 @@ renderExpanded toast =
                 ]
             ]
             [ icon toast.icon [ "mr-2", toast.iconColor ]
-            , span_ [ text toast.shortDescription ]
+            , span [ id "toast-short-message" ] [ text toast.shortDescription ]
             ]
-        , div [ classNames [ "px-5", "pb-6", "pt-3", "md:pb-8" ] ]
+        , div
+            [ classNames [ "px-5", "pb-6", "pt-3", "md:pb-8" ]
+            , id "toast-long-message"
+            ]
             [ text $ fromMaybe "" toast.longDescription
             ]
         ]
@@ -105,6 +113,8 @@ renderCollapsed toast =
               , toast.textColor
               ]
           , ref $ RefLabel "collapsed-toast"
+          , role $ show toast.role
+          , labelledBy "toast-short-message"
           ]
           [ div [ classNames [ "flex", "overflow-hidden" ] ]
               [ icon toast.icon [ "mr-2", toast.iconColor ]
@@ -115,6 +125,7 @@ renderCollapsed toast =
                       , "whitespace-nowrap"
                       , "overflow-hidden"
                       ]
+                  , id "toast-short-message"
                   ]
                   [ text toast.shortDescription ]
               ]

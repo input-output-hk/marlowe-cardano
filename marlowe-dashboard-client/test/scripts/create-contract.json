@@ -4,13 +4,31 @@
     {
       "tag": "CreateWallet",
       "content": {
-        "walletName": "Wallet1",
-        "mnemonic": "praise nut achieve misery coil shrimp post change view crumble taxi artwork hold list snap subject shiver actress video summer stone vicious trigger inmate",
-        "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a",
-        "pubKeyHash": "b57c4784ed9c9d087053f6f04219aec82fca839a",
-        "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga",
-        "walletCompanionId": "863f130d-9b87-4acd-afe1-74bed1211ff3",
-        "marloweAppId": "7b5e06fc-c302-4c7d-b329-38010c53553d"
+        "walletName": "Wallet2",
+        "mnemonic": "move exclude fancy harsh enough rack flash culture nice apple group team tornado occur reject reflect design all town unknown pause paddle half inner",
+        "walletId": "06e8f9abeb55ceb6a137c6e4391c36143f8f7be4",
+        "pubKeyHash": "06e8f9abeb55ceb6a137c6e4391c36143f8f7be4",
+        "address": "addr_test1qrqk7g9l0hp9dlg0uq0fjcrj06zyl88xkazpasp4gy9l2v2clhyqu6euhk37l9kzmw3249cmw9upywjsaccgjqlnvfqqnkr46s",
+        "walletCompanionId": "cb7910b4-070a-4c48-9d44-34d67948e04c",
+        "marloweAppId": "888bdf70-56ff-49fb-a83f-ad8041d0617e"
+      }
+    }
+  ],
+  [
+    2000,
+    {
+      "tag": "AddContact",
+      "content": {
+          "walletName": "Wallet1",
+          "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
+      }
+    }
+  ],
+  [
+    3000,
+    {
+      "tag": "CreateContract",
+      "content": {
       }
     }
   ]

@@ -55,7 +55,8 @@ import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Marlowe.Run (Coenv, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
-  ( CreateWalletRecord
+  ( Address
+  , CreateWalletRecord
   , HttpExpect(..)
   , HttpExpectContent(..)
   , HttpRespond(..)
@@ -189,8 +190,10 @@ evalAction = case _ of
     dropWallet
 
   -- Evaluate a CreateWallet action by performing the create wallet workflow.
-  CreateWallet r -> createWallet r
+  CreateWallet params -> createWallet params
 
+  CreateContract _ -> pure unit
+  AddContact params -> addContact params
   -- Evaluate a UseWallet action by performing the restore wallet workflow.
   UseWallet { walletName } -> do
     restore walletName
@@ -250,6 +253,70 @@ openMyWallet action = do
     pure Link
   card <- findBy role $ pure Dialog
   withContainer card action
+
+addContact
+  :: forall m
+   . MonadError Error m
+  => MonadTest m
+  => MonadUser m
+  => { walletName :: WalletName, address :: Address }
+  -> m Unit
+addContact { walletName, address } = do
+  card <- openContactList
+  withContainer card do
+    -- Open add new contact dialog
+    clickM $ getBy role do
+      nameRegex "new contact" ignoreCase
+      pure Button
+    fillContactDetails
+    -- Submit the form
+    clickM $ getBy role do
+      nameRegex "save" ignoreCase
+      pure Button
+  expectSuccessToast "contact added"
+  where
+  openContactList = do
+    clickM $ getBy role do
+      nameRegex "contacts" ignoreCase
+      pure Link
+    findBy role $ pure Dialog
+  fillContactDetails = do
+    nicknameField <- getBy role do
+      nameRegex "wallet nickname" ignoreCase
+      pure Textbox
+    click nicknameField
+    type_ nicknameField walletName Nothing
+    walletField <- getBy role do
+      nameRegex "address" ignoreCase
+      pure Textbox
+    click walletField
+    type_ walletField address Nothing
+
+-- Assert that there is a success toast with the provided message.
+-- This should be executed from the main container
+expectSuccessToast
+  :: forall m
+   . MonadTest m
+  => MonadError Error m
+  => String
+  -> m Unit
+expectSuccessToast message =
+  void $ getBy role do
+    nameRegex message ignoreCase
+    pure Status
+
+-- Assert that there is a error toast with the provided message.
+-- This should be executed from the main container
+expectErrorToast
+  :: forall m
+   . MonadTest m
+  => MonadError Error m
+  => String
+  -> m Unit
+expectErrorToast message =
+  void $ getBy role do
+    nameRegex message ignoreCase
+    pure Alert
 
 expectPlutusContractSubscribe
   :: forall m

@@ -346,6 +346,7 @@ dashboardHeader walletNickname menuOpen =
       [ a
           [ classNames [ "ml-6", "font-bold", "text-sm" ]
           , id refId
+          , href "#"
           , onClick_ action
           , ARIA.label label
           ]
