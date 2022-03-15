@@ -1,0 +1,20 @@
+
+***** Test "Detection of Wallet Failures" *****
+[Comment] Create and fund the wallet.
+[CreateWallet] Created wallet 82b11cb1173868f861a9f9bf619baa1dc286dc4f for role "PAB".
+[FundWallet] Funded wallet 82b11cb1173868f861a9f9bf619baa1dc286dc4f for role "PAB" with valueFromList [(AdaAssetId,1200000)].
+[Comment] Activate the Marlowe application.
+[ActivateApp] Activated MarloweApp instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce for role "PAB".
+[Comment] Create the contract.
+[CallCreate] Endpoint "create" called on instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce for owners [("PAB",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "5236736ee3061cc9a3334430c1d60959e52931f7436fec625b4d4383")) (StakeRefBase (KeyHashObj (KeyHash "a46e8c0d5bb0685fb8a1e0aba8d5430c2b7fd19579c917534d2cf19e")))))].
+[Comment] The failure of the wallet to balance should be promptly reported.
+[runContract] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce received NewObservableState Null.
+[runContract] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[runContract] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce received NewYieldedExportTxs [].
+[runContract] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce received NewActiveEndpoints [].
+[runContract] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce received NewObservableState (Object (fromList [("contents",Array [String "e9e69b81-4bc1-41eb-87cd-bc63968dc855",String "create",Object (fromList [("contents",Object (fromList [("contents",String "HERE THERE WHERE"),("tag",String "OtherContractError")])),("tag",String "OtherContractError")])]),("tag",String "EndpointException")])).
+[runContract] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[ShouldFail] Operations failed as expected: CliError {unCliError = "[awaitApp] Received unexpected response OtherContractError (OtherContractError \"HERE THERE WHERE\")."} occurred for [AwaitCreate {poInstance = "App"}].
+[Comment] Stop the application.
+[Stop] Instance 7e862b40-f91f-4ee7-a86f-fd2a1c0e81ce stopped.
+***** SUCCEEDED *****
