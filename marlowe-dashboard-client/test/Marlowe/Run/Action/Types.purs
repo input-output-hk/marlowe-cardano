@@ -19,6 +19,7 @@ import Data.Argonaut
   )
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Extra (encodeStringifyJson)
+import Data.Array (fromFoldable, last, uncons, unsnoc)
 import Data.Bifunctor (lmap)
 import Data.Either (either)
 import Data.Generic.Rep (class Generic)
@@ -246,15 +247,24 @@ instance EncodeJson MarloweRunAction where
 
 type MarloweRunScript = Array (Tuple Milliseconds MarloweRunAction)
 
-data ScriptError = ScriptError (Array MarloweRunAction) MarloweRunAction Error
+data ScriptError = ScriptError
+  (Array MarloweRunAction)
+  MarloweRunAction
+  (Array String)
+  Error
 
 renderScriptError :: ScriptError -> String
-renderScriptError (ScriptError succeeded failed e) =
+renderScriptError
+  (ScriptError succeededActions failedAction steps e) =
   joinWith "\n  " $ join
     [ pure "Test script failed at the indicated step:"
     , pure ""
-    , reportAction true <$> succeeded
-    , pure $ reportAction false failed
+    , reportAction true <$> succeededActions
+    , pure $ reportAction false failedAction
+    , unsnoc steps # fromFoldable >>= \{ init, last } -> join
+        [ reportStep true <$> init
+        , pure $ reportStep false last
+        ]
     , pure ""
     , pure "Error was:"
     , pure ""
@@ -270,5 +280,10 @@ renderScriptError (ScriptError succeeded failed e) =
     truncatedAction
       | length actionText <= 120 = actionText
       | otherwise = take 191 actionText <> "…"
+    color = foreground if success then Green else Red
+    glyph = withGraphics (color <> bold) if success then "✓" else "✗"
+  reportStep success step =
+    "  " <> joinWith " " [ glyph, withGraphics color step ]
+    where
     color = foreground if success then Green else Red
     glyph = withGraphics (color <> bold) if success then "✓" else "✗"

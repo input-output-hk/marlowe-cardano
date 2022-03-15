@@ -7,11 +7,12 @@ import Affjax.ResponseFormat (ResponseFormat)
 import Affjax.ResponseFormat as ResponseFormat
 import Affjax.ResponseHeader (ResponseHeader(..))
 import Concurrent.Queue as Queue
-import Control.Monad.Error.Class (class MonadError, throwError, try)
-import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
+import Control.Monad.Error.Class (class MonadError, throwError)
+import Control.Monad.Except (ExceptT, mapExceptT, runExceptT)
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
+import Control.Monad.Writer (class MonadTell, runWriterT, tell)
 import Data.Align (crosswalk)
 import Data.Argonaut
   ( class EncodeJson
@@ -166,18 +167,23 @@ evalScript = runExceptT <<< void <<< foldM (map uncurry evalAction') []
     -> MarloweRunAction
     -> ExceptT ScriptError m (Array MarloweRunAction)
   evalAction' succeeded millis action =
-    withExceptT (ScriptError succeeded action) $ ExceptT $ try do
+    mapExceptT mkScriptError do
       currentTime <- now
       let currentMillis = unInstant currentTime
       let millisUntilAction = over2 Milliseconds (-) millis currentMillis
       advanceTime (millisUntilAction :: Milliseconds)
       evalAction action
       pure $ snoc succeeded action
+    where
+    mkScriptError writer = do
+      Tuple result steps <- runWriterT writer
+      pure $ lmap (ScriptError succeeded action steps) result
 
 evalAction
   :: forall m
    . MonadAff m
   => MonadTest m
+  => MonadTell (Array String) m
   => MonadUser m
   => MonadError Error m
   => MonadMockHTTP m
@@ -322,6 +328,7 @@ expectPlutusContractSubscribe
   :: forall m
    . MonadMockHTTP m
   => MonadError Error m
+  => MonadTell (Array String) m
   => MonadAff m
   => MonadAsk Coenv m
   => PlutusAppId
@@ -336,6 +343,7 @@ expectPlutusContractActivation
   :: forall m
    . MonadMockHTTP m
   => MonadError Error m
+  => MonadTell (Array String) m
   => MonadAff m
   => MonadAsk Coenv m
   => WalletId
@@ -343,6 +351,7 @@ expectPlutusContractActivation
   -> PlutusAppId
   -> m Unit
 expectPlutusContractActivation walletId contractType plutusAppId = do
+  tell [ "Expect POST activate " <> show contractType ]
   expectJsonRequest ado
     expectMethod POST
     expectUri "/pab/api/contract/activate"
@@ -356,6 +365,7 @@ createWallet
   :: forall m
    . MonadTest m
   => MonadError Error m
+  => MonadTell (Array String) m
   => MonadUser m
   => MonadAsk Coenv m
   => MonadMockHTTP m
@@ -381,7 +391,7 @@ createWallet
     expectWalletActivation
   where
   fillCreateWalletDialog = do
-
+    tell [ "Fill create wallet dialog" ]
     nicknameField <- getBy role do
       nameRegex "wallet nickname" ignoreCase
       pure Textbox
@@ -390,7 +400,9 @@ createWallet
     clickM $ getBy role do
       nameRegex "create wallet" ignoreCase
       pure Button
+
   expectCreateHttpRequest = do
+    tell [ "Expect POST create wallet" ]
     expectJsonRequest ado
       expectMethod POST
       expectUri "/api/wallet/v1/centralized-testnet/create"
@@ -411,6 +423,7 @@ createWallet
         }
 
   fillConfirmMnemonicDialog = do
+    tell [ "Fill confirm mnemonic dialot" ]
     mnemonicText <- findBy role $ pure Mark
     mnemonicText `shouldHaveText` mnemonic
     clickM $ getBy role do
@@ -429,6 +442,7 @@ createWallet
     liftEffect $ Ref.modify_ (Bimap.insert walletName mnemonic) wallets
 
   expectWalletActivation = do
+    tell [ "Expect GET contract instances" ]
     expectJsonRequest ado
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
@@ -478,11 +492,14 @@ expectPabWebsocketSend
   :: forall m a
    . MonadAsk Coenv m
   => MonadError Error m
+  => MonadTell (Array String) m
   => EncodeJson a
   => MonadAff m
   => a
   -> m Unit
 expectPabWebsocketSend expectPayload = do
+  tell
+    [ "Expect send websocket message: " <> encodeStringifyJson expectPayload ]
   queue <- asks _.pabWebsocketOut
   msg <- liftAff $ Queue.tryRead queue
   case msg of
