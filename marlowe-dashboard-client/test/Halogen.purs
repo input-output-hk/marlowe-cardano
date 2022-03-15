@@ -114,7 +114,11 @@ instance MonadHalogenTest q i o m => MonadHalogenTest q i o (MaybeT m) where
   getMessages = lift getMessages
   sendInput = map lift sendInput
 
-instance MonadHalogenTest q i o m => MonadHalogenTest q i o (UserM m) where
+instance
+  ( MonadError Error m
+  , MonadHalogenTest q i o m
+  ) =>
+  MonadHalogenTest q i o (UserM m) where
   getDriver = map (hoistDriver lift) $ lift getDriver
   getMessages = lift getMessages
   sendInput = map lift sendInput

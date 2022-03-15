@@ -6,7 +6,8 @@ import Control.Alt (class Alt)
 import Control.Alternative (class Alternative)
 import Control.Bind (bindFlipped)
 import Control.Monad.Cont.Class (class MonadCont)
-import Control.Monad.Error.Class (class MonadError, class MonadThrow)
+import Control.Monad.Error.Class (class MonadError, class MonadThrow, try)
+import Control.Monad.Error.Extra (toMonadThrow)
 import Control.Monad.Reader (ReaderT(..), asks, mapReaderT)
 import Control.Monad.Reader.Class
   ( class MonadAsk
@@ -26,6 +27,7 @@ import Data.Distributive (class Distributive)
 import Data.Maybe (Maybe)
 import Data.Undefinable (Undefinable, toUndefinable)
 import Effect (Effect)
+import Effect.Aff (Error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Uncurried (EffectFn1, runEffectFn1, runEffectFn2, runEffectFn3)
@@ -81,11 +83,19 @@ derive newtype instance Distributive g => Distributive (UserM g)
 derive newtype instance MonadRec m => MonadRec (UserM m)
 derive newtype instance MonadTest m => MonadTest (UserM m)
 
-instance MonadEffect m => MonadUser (UserM m) where
+liftPromise
+  :: forall a m. MonadAff m => MonadError Error m => Effect (Promise a) -> m a
+liftPromise p = toMonadThrow =<< liftAff (try $ toAffE p)
+
+liftForeignEffect
+  :: forall a m. MonadEffect m => MonadError Error m => Effect a -> m a
+liftForeignEffect e = toMonadThrow =<< liftEffect (try e)
+
+instance (MonadError Error m, MonadEffect m) => MonadUser (UserM m) where
   api = UserM $ asks userEventApi
   setup options (UserM r) = UserM do
     user <- ask
-    user' <- liftEffect $ runEffectFn1 (userEventSetup user) options
+    user' <- liftForeignEffect $ runEffectFn1 (userEventSetup user) options
     local (const user') r
 
 foreign import data UserEvent :: Type
@@ -98,24 +108,32 @@ userEventApi = unsafeCoerce
 userEventSetup :: UserEvent -> EffectFn1 UserOptions UserEvent
 userEventSetup = _.setup <<< unsafeCoerce
 
-runUserM :: forall m a. MonadEffect m => Maybe UserOptions -> UserM m a -> m a
+runUserM
+  :: forall m a
+   . MonadEffect m
+  => MonadError Error m
+  => Maybe UserOptions
+  -> UserM m a
+  -> m a
 runUserM options (UserM (ReaderT f)) = do
-  user <- liftEffect $ runEffectFn1 _setup (toUndefinable options)
+  user <- liftForeignEffect $ runEffectFn1 _setup (toUndefinable options)
   f user
 
 withUserApi
   :: forall m a
    . MonadAff m
   => MonadUser m
+  => MonadError Error m
   => (UserApi -> Effect (Promise a))
   -> m a
-withUserApi f = liftAff <<< toAffE <<< f =<< api
+withUserApi f = liftPromise <<< f =<< api
 
 click
   :: forall element m
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> m Unit
 click element = withUserApi \api -> runEffectFn1 api.click $ toElement element
@@ -125,6 +143,7 @@ clickM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> m Unit
 clickM = bindFlipped click
@@ -134,6 +153,7 @@ dblClick
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> m Unit
 dblClick element = withUserApi \api ->
@@ -144,6 +164,7 @@ dblClickM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> m Unit
 dblClickM = bindFlipped dblClick
@@ -153,6 +174,7 @@ tripleClick
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> m Unit
 tripleClick element = withUserApi \api ->
@@ -163,6 +185,7 @@ tripleClickM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> m Unit
 tripleClickM = bindFlipped tripleClick
@@ -172,6 +195,7 @@ hover
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> m Unit
 hover element = withUserApi \api -> runEffectFn1 api.hover $ toElement element
@@ -181,6 +205,7 @@ hoverM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> m Unit
 hoverM = bindFlipped hover
@@ -190,6 +215,7 @@ unhover
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> m Unit
 unhover element = withUserApi \api ->
@@ -200,23 +226,36 @@ unhoverM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> m Unit
 unhoverM = bindFlipped unhover
 
 data ShiftState = ShiftPressed | ShiftNotPressed
 
-tab :: forall m. MonadAff m => MonadUser m => ShiftState -> m Unit
+tab
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => ShiftState
+  -> m Unit
 tab ShiftPressed = withUserApi \api -> runEffectFn1 api.tab { shift: true }
 tab ShiftNotPressed = withUserApi \api -> runEffectFn1 api.tab { shift: false }
 
-keyboard :: forall m. MonadAff m => MonadUser m => String -> m Unit
+keyboard
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => String
+  -> m Unit
 keyboard text = withUserApi \api -> runEffectFn1 api.keyboard text
 
-copy :: forall m. MonadAff m => MonadUser m => m Unit
+copy :: forall m. MonadAff m => MonadUser m => MonadError Error m => m Unit
 copy = withUserApi \api -> api.copy
 
-cut :: forall m. MonadAff m => MonadUser m => m Unit
+cut :: forall m. MonadAff m => MonadUser m => MonadError Error m => m Unit
 cut = withUserApi \api -> api.cut
 
 paste
@@ -224,6 +263,7 @@ paste
    . IsClipboardData clipboard
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => clipboard
   -> m Unit
 paste clipboard =
@@ -234,6 +274,7 @@ pointer
    . IsPointerInput pointer
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => pointer
   -> m Unit
 pointer p = withUserApi \api -> runEffectFn1 api.pointer $ toPointerInput p
@@ -243,6 +284,7 @@ clear
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> m Unit
 clear element = withUserApi \api -> runEffectFn1 api.clear $ toElement element
@@ -252,6 +294,7 @@ clearM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> m Unit
 clearM = bindFlipped clear
@@ -262,6 +305,7 @@ deselectOptions
   => IsSelectOptions options
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> options
   -> m Unit
@@ -274,6 +318,7 @@ deselectOptionsM
   => IsSelectOptions options
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> options
   -> m Unit
@@ -285,6 +330,7 @@ selectOptions
   => IsSelectOptions options
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> options
   -> m Unit
@@ -297,6 +343,7 @@ selectOptionsM
   => IsSelectOptions options
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> options
   -> m Unit
@@ -307,6 +354,7 @@ type_
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> String
   -> Maybe TypeOptions
@@ -319,6 +367,7 @@ typeM
    . IsElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> String
   -> Maybe TypeOptions
@@ -333,6 +382,7 @@ upload
   => IsHTMLElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => element
   -> files
   -> m Unit
@@ -345,6 +395,7 @@ uploadM
   => IsHTMLElement element
   => MonadAff m
   => MonadUser m
+  => MonadError Error m
   => m element
   -> files
   -> m Unit
