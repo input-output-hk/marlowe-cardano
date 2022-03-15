@@ -65,6 +65,7 @@ import Test.Marlowe.Run.Action.Types
   , MarloweRunAction(..)
   , MarloweRunScript
   , PlutusAppId
+  , PubKeyHash
   , ScriptError(..)
   , WalletId
   , WalletName
@@ -191,11 +192,8 @@ evalAction
   => MarloweRunAction
   -> m Unit
 evalAction = case _ of
-  -- Evaluate a CreateWallet action by performing the create wallet workflow.
-  DropWallet -> do
-    dropWallet
+  DropWallet params -> dropWallet params
 
-  -- Evaluate a CreateWallet action by performing the create wallet workflow.
   CreateWallet params -> createWallet params
 
   CreateContract _ -> pure unit
@@ -240,11 +238,31 @@ evalAction = case _ of
           expectRequestWithBody ResponseFormat.json $ Right json
 
 dropWallet
-  :: forall m. MonadTest m => MonadError Error m => MonadUser m => m Unit
-dropWallet = openMyWallet do
+  :: forall m
+   . MonadTest m
+  => MonadError Error m
+  => MonadTell (Array String) m
+  => MonadUser m
+  => MonadAsk Coenv m
+  => MonadMockHTTP m
+  => { walletId :: WalletId, pubKeyHash :: PubKeyHash }
+  -> m Unit
+dropWallet { walletId, pubKeyHash } = openMyWallet do
   clickM $ getBy role do
     nameRegex "drop" ignoreCase
     pure Button
+  expectWalletDeactivation
+  where
+  expectWalletDeactivation = do
+    tell [ "Expect GET contract instances" ]
+    expectJsonRequest ado
+      expectMethod GET
+      expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
+      in ([] :: Array Json)
+    expectPabWebsocketSend
+      { tag: "Unsubscribe"
+      , contents: { "Right": { getPubKeyHash: pubKeyHash } }
+      }
 
 openMyWallet
   :: forall m

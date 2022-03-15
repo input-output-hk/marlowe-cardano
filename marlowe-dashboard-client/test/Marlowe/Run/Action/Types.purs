@@ -19,7 +19,7 @@ import Data.Argonaut
   )
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Argonaut.Extra (encodeStringifyJson)
-import Data.Array (fromFoldable, last, uncons, unsnoc)
+import Data.Array (fromFoldable, unsnoc)
 import Data.Bifunctor (lmap)
 import Data.Either (either)
 import Data.Generic.Rep (class Generic)
@@ -187,7 +187,7 @@ data MarloweRunAction
   = CreateWallet CreateWalletRecord
   | CreateContract {}
   | AddContact { walletName :: WalletName, address :: Address }
-  | DropWallet
+  | DropWallet { walletId :: WalletId, pubKeyHash :: PubKeyHash }
   | UseWallet { walletName :: WalletName }
   | PabWebSocketSend { expectPayload :: Json }
   | PabWebSocketReceive { payload :: Json }
@@ -199,7 +199,7 @@ derive instance Generic MarloweRunAction _
 
 instance Show MarloweRunAction where
   show = case _ of
-    DropWallet -> "DropWallet"
+    DropWallet a -> "(DropWallet " <> show a <> ")"
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
     CreateContract _ -> "(CreateContract)"
     AddContact a -> "(AddContact " <> show a <> ")"
@@ -214,7 +214,8 @@ instance DecodeJson MarloweRunAction where
     obj <- decodeJson json
     tag <- obj .: "tag"
     case tag of
-      "DropWallet" -> pure DropWallet
+      "DropWallet" ->
+        lmap (Named "DropWallet") $ DropWallet <$> obj .: "content"
       "CreateWallet" ->
         lmap (Named "CreateWallet") $ CreateWallet <$> obj .: "content"
       "CreateContract" ->
@@ -235,7 +236,7 @@ instance DecodeJson MarloweRunAction where
 
 instance EncodeJson MarloweRunAction where
   encodeJson = case _ of
-    DropWallet -> encodeJson { tag: "DropWallet" }
+    DropWallet content -> encodeJson { tag: "DropWallet", content }
     CreateWallet content -> encodeJson { tag: "CreateWallet", content }
     CreateContract content -> encodeJson { tag: "CreateContract", content }
     AddContact content -> encodeJson { tag: "AddContact", content }
