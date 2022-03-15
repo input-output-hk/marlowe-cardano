@@ -135,7 +135,6 @@ echo "### Tip of the Blockchain"
 TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
 NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
 HOUR="$((3600*1000))"
-MINUTE="$((60*1000))"
 
 echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
