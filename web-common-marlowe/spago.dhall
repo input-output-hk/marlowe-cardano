@@ -1,6 +1,7 @@
 { name = "purescript-marlowe"
 , dependencies =
-  [ "argonaut"
+  [ "aff"
+  , "argonaut"
   , "argonaut-codecs"
   , "argonaut-core"
   , "arrays"
@@ -12,6 +13,7 @@
   , "effect"
   , "either"
   , "enums"
+  , "exceptions"
   , "foldable-traversable"
   , "foreign-object"
   , "formatters"
