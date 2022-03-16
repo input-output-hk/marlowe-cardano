@@ -1,5 +1,7 @@
 module Data.Bimap
   ( Bimap
+  , alterL
+  , alterR
   , associated
   , deleteL
   , deleteR
@@ -81,6 +83,34 @@ null (UnsafeBimap left _) = M.isEmpty left
 
 size :: forall k v. Bimap k v -> Int
 size (UnsafeBimap left _) = M.size left
+
+alterL
+  :: forall k v
+   . Ord k
+  => Ord v
+  => k
+  -> (Maybe v -> Maybe v)
+  -> Bimap k v
+  -> Bimap k v
+alterL k f m = case lookupL k m of
+  Nothing -> case f Nothing of
+    Nothing -> m
+    Just v -> insert k v m
+  Just v -> case f (Just v) of
+    Nothing -> deleteL k m
+    Just v'
+      | v' == v -> m
+      | otherwise -> insert k v' m
+
+alterR
+  :: forall k v
+   . Ord k
+  => Ord v
+  => v
+  -> (Maybe k -> Maybe k)
+  -> Bimap k v
+  -> Bimap k v
+alterR v = swapped <<< alterL v
 
 insert :: forall k v. Ord k => Ord v => k -> v -> Bimap k v -> Bimap k v
 insert k v = unsafeInsert k v <<< deleteL k <<< deleteR v

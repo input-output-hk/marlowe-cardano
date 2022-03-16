@@ -43,9 +43,9 @@ import Data.Argonaut
   , (.:?)
   )
 import Data.Argonaut.Decode (class DecodeJson)
-import Data.Argonaut.Extra (encodeStringifyJson)
 import Data.Array (fromFoldable, unsnoc)
 import Data.Bifunctor (lmap)
+import Data.BigInt.Argonaut (BigInt)
 import Data.Either (either)
 import Data.Generic.Rep (class Generic)
 import Data.HTTP.Method (Method)
@@ -231,11 +231,10 @@ type AppInstance = { type :: MarloweContract, instanceId :: PlutusAppId }
 data MarloweRunAction
   = CreateWallet CreateWalletRecord
   | CreateContract CreateContractRecord
+  | FundWallet { walletName :: WalletName, lovelace :: BigInt }
   | AddContact { walletName :: WalletName, address :: Address }
   | DropWallet { walletId :: WalletId, pubKeyHash :: PubKeyHash }
   | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
-  | PabWebSocketSend { expectPayload :: Json }
-  | PabWebSocketReceive { payload :: Json }
   | HttpRequest { expect :: HttpExpect, respond :: HttpRespond }
 
 derive instance Eq MarloweRunAction
@@ -244,15 +243,13 @@ derive instance Generic MarloweRunAction _
 
 instance Show MarloweRunAction where
   show = case _ of
-    DropWallet a -> "(DropWallet " <> show a <> ")"
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
     CreateContract { templateName } -> "(CreateContract " <> templateName <> ")"
+    DropWallet a -> "(DropWallet " <> show a <> ")"
+    FundWallet a -> "(FundWallet " <> show a <> ")"
     AddContact a -> "(AddContact " <> show a <> ")"
     RestoreWallet a -> "(RestoreWallet " <> show a <> ")"
-    PabWebSocketSend a -> "(PabWebSocketSend " <> encodeStringifyJson a <> ")"
-    PabWebSocketReceive a ->
-      "(PabWebSocketReceive " <> encodeStringifyJson a <> ")"
-    HttpRequest a -> "HttpRequest " <> show a <> ")"
+    HttpRequest a -> "(HttpRequest " <> show a <> ")"
 
 instance DecodeJson MarloweRunAction where
   decodeJson json = do
@@ -263,17 +260,14 @@ instance DecodeJson MarloweRunAction where
         lmap (Named "DropWallet") $ DropWallet <$> obj .: "content"
       "CreateWallet" ->
         lmap (Named "CreateWallet") $ CreateWallet <$> obj .: "content"
+      "FundWallet" ->
+        lmap (Named "FundWallet") $ FundWallet <$> obj .: "content"
       "CreateContract" ->
         lmap (Named "CreateContract") $ CreateContract <$> obj .: "content"
       "AddContact" ->
         lmap (Named "AddContact") $ AddContact <$> obj .: "content"
       "RestoreWallet" ->
         lmap (Named "RestoreWallet") $ RestoreWallet <$> obj .: "content"
-      "PabWebSocketSend" ->
-        lmap (Named "PabWebSocketSend") $ PabWebSocketSend <$> obj .: "content"
-      "PabWebSocketReceive" ->
-        lmap (Named "PabWebSocketReceive")
-          $ PabWebSocketReceive <$> obj .: "content"
       "HttpRequest" ->
         lmap (Named "HttpRequest") $ HttpRequest <$> obj .: "content"
       _ ->
@@ -284,11 +278,9 @@ instance EncodeJson MarloweRunAction where
     DropWallet content -> encodeJson { tag: "DropWallet", content }
     CreateWallet content -> encodeJson { tag: "CreateWallet", content }
     CreateContract content -> encodeJson { tag: "CreateContract", content }
+    FundWallet content -> encodeJson { tag: "FundWallet", content }
     AddContact content -> encodeJson { tag: "AddContact", content }
     RestoreWallet content -> encodeJson { tag: "RestoreWallet", content }
-    PabWebSocketSend content -> encodeJson { tag: "PabWebSocketSend", content }
-    PabWebSocketReceive content ->
-      encodeJson { tag: "PabWebSocketReceive", content }
     HttpRequest content -> encodeJson { tag: "HttpRequest", content }
 
 type MarloweRunScript = Array (Tuple Milliseconds MarloweRunAction)

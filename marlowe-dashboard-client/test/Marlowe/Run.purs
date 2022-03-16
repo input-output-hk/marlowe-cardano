@@ -46,6 +46,7 @@ import Halogen.Subscription (Listener, SubscribeIO)
 import Halogen.Subscription as HS
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types as MF
+import Marlowe.Semantics (Assets)
 import Marlowe.Time (unixEpoch)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
@@ -245,6 +246,7 @@ type TestWallet =
   , mnemonic :: WalletMnemonic
   , pubKeyHash :: PubKeyHash
   , walletId :: WalletId
+  , assets :: Assets
   }
 
 -- Like `Env` but we invert the control of everything in it (i.e. all sources

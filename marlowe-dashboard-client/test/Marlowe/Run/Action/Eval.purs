@@ -17,7 +17,6 @@ import Data.Align (crosswalk)
 import Data.Argonaut
   ( class EncodeJson
   , Json
-  , decodeJson
   , encodeJson
   , jsonEmptyArray
   , jsonNull
@@ -32,8 +31,9 @@ import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
 import Data.Foldable (foldM, for_, traverse_)
 import Data.HTTP.Method (Method(..))
+import Data.Map as Map
 import Data.Maybe (maybe)
-import Data.Newtype (over2)
+import Data.Newtype (over, over2)
 import Data.String
   ( Pattern(..)
   , Replacement(..)
@@ -50,7 +50,7 @@ import Effect.Aff (Error, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
-import Halogen.Subscription as HS
+import Marlowe.Semantics (Assets(..))
 import MarloweContract (MarloweContract(..))
 import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
@@ -93,7 +93,6 @@ import Test.Web.Event.User (click, clickM, type_)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
 import Web.ARIA (ARIARole(..))
-import WebSocket.Support (FromSocket(..))
 
 runScriptedTest :: String -> Spec Unit
 runScriptedTest scriptName = marloweRunTest scriptName do
@@ -197,20 +196,29 @@ evalAction
 evalAction = case _ of
   DropWallet params -> dropWallet params
   CreateWallet params -> createWallet params
-
-  CreateContract params -> createContract params
+  CreateContract _ -> pure unit
+  FundWallet { walletName, lovelace } -> do
+    walletsRef <- asks _.wallets
+    wallets <- liftEffect $ Ref.read walletsRef
+    let mWallet = Bimap.lookupL walletName wallets
+    wallet <- maybe
+      (throwError $ error $ "Test error: unknown wallet " <> walletName)
+      pure
+      mWallet
+    liftEffect $ flip Ref.write walletsRef $ Bimap.insert
+      walletName
+      wallet
+        { assets = over
+            Assets
+            ( flip Map.alter "" $ Just <<< maybe
+                (Map.singleton "" lovelace)
+                (flip Map.alter "" $ Just <<< maybe lovelace (_ + lovelace))
+            )
+            wallet.assets
+        }
+      wallets
   AddContact params -> addContact params
   RestoreWallet params -> restore params
-
-  -- Evaluate a PabWebSocketSend action by reading from the output queue and
-  -- checking the content against the expectations.
-  PabWebSocketSend { expectPayload } -> expectPabWebsocketSend expectPayload
-
-  -- Evaluate a PabWebSocketReceive action by sending the payload to the
-  -- listener.
-  PabWebSocketReceive { payload } -> do
-    listener <- asks _.pabWebsocketIn
-    liftEffect $ HS.notify listener $ ReceiveMessage $ decodeJson payload
 
   HttpRequest { expect: HttpExpect expect, respond: HttpRespond respond } ->
     let
@@ -259,10 +267,7 @@ dropWallet { walletId, pubKeyHash } = openMyWallet do
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
       in jsonEmptyArray
-    expectPabWebsocketSend
-      { tag: "Unsubscribe"
-      , contents: { "Right": { getPubKeyHash: pubKeyHash } }
-      }
+    expectWalletSubscribe pubKeyHash
 
 openMyWallet
   :: forall m
@@ -392,6 +397,21 @@ expectErrorToast message =
     nameRegex message ignoreCase
     pure Alert
 
+expectWalletSubscribe
+  :: forall m
+   . MonadMockHTTP m
+  => MonadError Error m
+  => MonadTell (Array String) m
+  => MonadAff m
+  => MonadAsk Coenv m
+  => PubKeyHash
+  -> m Unit
+expectWalletSubscribe pubKeyHash = do
+  expectPabWebsocketSend
+    { tag: "Subscribe"
+    , contents: { "Right": { getPubKeyHash: pubKeyHash } }
+    }
+
 expectPlutusContractSubscribe
   :: forall m
    . MonadMockHTTP m
@@ -483,9 +503,7 @@ createWallet
         { mnemonic: split (Pattern " ") mnemonic
         , walletInfo:
             { walletId
-            , pubKeyHash:
-                { unPaymentPubKeyHash: { getPubKeyHash: pubKeyHash }
-                }
+            , pubKeyHash: { unPaymentPubKeyHash: { getPubKeyHash: pubKeyHash } }
             , address
             }
         }
@@ -508,7 +526,9 @@ createWallet
     click okButton
     wallets <- asks _.wallets
     liftEffect $ Ref.modify_
-      (Bimap.insert walletName { address, mnemonic, pubKeyHash, walletId })
+      ( Bimap.insert walletName
+          { address, assets: Assets Map.empty, mnemonic, pubKeyHash, walletId }
+      )
       wallets
 
   expectWalletActivation = do
@@ -519,10 +539,7 @@ createWallet
       in ([] :: Array Json)
     expectPlutusContractActivation walletId WalletCompanion walletCompanionId
     expectPlutusContractActivation walletId MarloweApp marloweAppId
-    expectPabWebsocketSend
-      { tag: "Subscribe"
-      , contents: { "Right": { getPubKeyHash: pubKeyHash } }
-      }
+    expectWalletSubscribe pubKeyHash
     expectPlutusContractSubscribe walletCompanionId
     expectPlutusContractSubscribe marloweAppId
 
@@ -608,10 +625,7 @@ restore { instances, walletName } = do
           , cicYieldedExportTxs: jsonEmptyArray
           , cicDefinition: contractType
           }
-    expectPabWebsocketSend
-      { tag: "Subscribe"
-      , contents: { "Right": { getPubKeyHash: pubKeyHash } }
-      }
+    expectWalletSubscribe pubKeyHash
     traverse_ (expectPlutusContractSubscribe <<< _.instanceId) instances
 
 expectPabWebsocketSend
