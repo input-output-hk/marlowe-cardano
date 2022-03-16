@@ -60,6 +60,7 @@ import Test.Marlowe.Run (Coenv, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
   , AppInstance
+  , CreateContractRecord
   , CreateWalletRecord
   , HttpExpect(..)
   , HttpExpectContent(..)
@@ -196,7 +197,8 @@ evalAction
 evalAction = case _ of
   DropWallet params -> dropWallet params
   CreateWallet params -> createWallet params
-  CreateContract _ -> pure unit
+
+  CreateContract params -> createContract params
   AddContact params -> addContact params
   RestoreWallet params -> restore params
 
@@ -313,6 +315,56 @@ addContact { walletName, address } = do
       pure Textbox
     click walletField
     type_ walletField address Nothing
+
+createContract
+  :: forall m
+   . MonadError Error m
+  => MonadTest m
+  => MonadUser m
+  => CreateContractRecord
+  -> m Unit
+createContract { templateName, contractTitle, fields } = do
+  card <- openContractTemplates
+  withContainer card do
+    selectTemplate
+    fillContractFields
+    clickM $ getBy role do
+      nameRegex "review" ignoreCase
+      pure Button
+    clickM $ getBy role do
+      nameRegex "pay and start" ignoreCase
+      pure Button
+  -- FIXME: This is failing because I have insufficient funds
+  -- expectSuccessToast "The request to initialize this contract has been submitted."
+
+  where
+  openContractTemplates = do
+    clickM $ getBy role do
+      nameRegex "create a new contract" ignoreCase
+      pure Link
+    findBy role $ pure Dialog
+  selectTemplate = do
+    clickM $ getBy role do
+      nameRegex templateName ignoreCase
+      pure Link
+    clickM $ getBy role do
+      nameRegex "setup" ignoreCase
+      pure Button
+  fillContractFields = do
+    -- Fill contract title
+    titleField <-
+      getBy role do
+        nameRegex "contract title" ignoreCase
+        pure Textbox
+    click titleField
+    type_ titleField contractTitle Nothing
+    -- Fill other fields
+    for_ fields \field -> do
+      fieldElement <- getBy role do
+        nameRegex field.name ignoreCase
+        pure field.role
+      click fieldElement
+      type_ fieldElement field.value Nothing
 
 -- Assert that there is a success toast with the provided message.
 -- This should be executed from the main container

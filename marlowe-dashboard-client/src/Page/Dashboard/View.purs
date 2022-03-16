@@ -575,6 +575,8 @@ contractNavigation contractFilter =
               , a
                   [ classNames $ navItemClasses false
                   , onClick_ $ OpenCard ContractTemplateCard
+                  , href "#"
+                  , ARIA.label "Create a new contract"
                   , id "newContractButton"
                   ]
                   [ icon Icon.AddBox [ "text-purple" ] ]

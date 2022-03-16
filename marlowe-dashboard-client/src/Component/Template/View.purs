@@ -13,6 +13,7 @@ import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.Popper (Placement(..))
 import Component.Template.Types (Action(..), State(..))
 import Css as Css
+import Data.Array (mapWithIndex)
 import Data.ContractTimeout (ContractTimeout)
 import Data.ContractTimeout as CT
 import Data.ContractValue (ContractValue)
@@ -47,6 +48,8 @@ import Halogen.HTML
   )
 import Halogen.HTML as HH
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties (href, id)
+import Halogen.HTML.Properties.ARIA (describedBy, labelledBy)
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (contractIcon, humanizeValue)
 import MainFrame.Types (ChildSlots)
@@ -170,7 +173,7 @@ contractSelection :: forall p. HTML p Action
 contractSelection =
   div
     [ classNames [ "h-full", "overflow-y-auto" ] ]
-    [ ul_ $ contractTemplateLink <$> contractTemplates
+    [ div_ $ mapWithIndex contractTemplateLink contractTemplates
     ]
   where
   -- Cautionary tale: Initially I made these `divs` inside a `div`, but because they are very
@@ -181,8 +184,8 @@ contractSelection =
   -- these `divs` (even though they are never rendered at the same time). Anyway, changing these
   -- to `li` items inside a `ul` (a perfectly reasonable semantic choice anyway) solves this
   -- problem.
-  contractTemplateLink contractTemplate =
-    li
+  contractTemplateLink i contractTemplate =
+    a
       [ classNames
           [ "flex"
           , "gap-4"
@@ -193,14 +196,21 @@ contractSelection =
           , "cursor-pointer"
           ]
       , onClick_ $ OnTemplateChosen contractTemplate
+      , href "#"
+      , labelledBy $ "contract-name-" <> show i
+      , describedBy $ "contract-description-" <> show i
       ]
       [ contractIcon contractTemplate.metaData.contractType
       , div_
           [ h2
-              [ classNames [ "font-semibold", "mb-2" ] ]
+              [ classNames [ "font-semibold", "mb-2" ]
+              , id $ "contract-name-" <> show i
+              ]
               [ text contractTemplate.metaData.contractName ]
           , p
-              [ classNames [ "font-xs" ] ]
+              [ classNames [ "font-xs" ]
+              , id $ "contract-description-" <> show i
+              ]
               $ markdownToHTML
                   contractTemplate.metaData.contractShortDescription
           ]

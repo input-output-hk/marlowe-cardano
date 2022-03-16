@@ -19,16 +19,25 @@
     {
       "tag": "AddContact",
       "content": {
-          "walletName": "Wallet1",
-          "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
+        "walletName": "Wallet1",
+        "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"
       }
     }
   ],
+
   [
-    3000,
+    30000,
     {
       "tag": "CreateContract",
       "content": {
+        "templateName": "Loan",
+        "contractTitle": "Test",
+        "fields": [
+          {"name":"borrower", "value":"Wallet1", "role": "textbox"},
+          {"name":"lender", "value":"Wallet2", "role": "textbox"},
+          {"name":"amount", "value":"10", "role": "spinbutton"},
+          {"name":"interest", "value":"11", "role": "spinbutton"}
+        ]
       }
     }
   ]

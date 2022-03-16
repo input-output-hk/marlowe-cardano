@@ -1,4 +1,29 @@
-module Test.Marlowe.Run.Action.Types where
+module Test.Marlowe.Run.Action.Types
+  ( AppInstance
+  , Address
+  , ContractField
+  , ContractNickname
+  , CreateContractRecord
+  , CreateWalletRecord
+  , FieldName
+  , FieldValue
+  , HttpExpect(..)
+  , HttpExpectContent(..)
+  , HttpRespond(..)
+  , HttpRespondContent(..)
+  , JsonMethod(..)
+  , MarloweRunAction(..)
+  , MarloweRunScript
+  , PlutusAppId
+  , PubKeyHash
+  , ScriptError(..)
+  , TemplateName
+  , WalletId
+  , WalletMnemonic
+  , WalletName
+  , renderScriptError
+  , unJsonMethod
+  ) where
 
 import Prologue
 
@@ -38,6 +63,7 @@ import Data.String
 import Data.Time.Duration (Milliseconds)
 import Effect.Aff (Error, message)
 import MarloweContract (MarloweContract)
+import Web.ARIA (ARIARole)
 
 type WalletName = String
 type WalletMnemonic = String
@@ -45,6 +71,16 @@ type WalletId = String
 type PubKeyHash = String
 type Address = String
 type PlutusAppId = String
+type TemplateName = String
+type ContractNickname = String
+type FieldName = String
+type FieldValue = String
+
+type ContractField =
+  { name :: FieldName
+  , value :: FieldValue
+  , role :: ARIARole
+  }
 
 data HttpExpectContent
   = ExpectJson Json
@@ -184,11 +220,17 @@ type CreateWalletRecord =
   , marloweAppId :: PlutusAppId
   }
 
+type CreateContractRecord =
+  { templateName :: TemplateName
+  , contractTitle :: ContractNickname
+  , fields :: Array ContractField
+  }
+
 type AppInstance = { type :: MarloweContract, instanceId :: PlutusAppId }
 
 data MarloweRunAction
   = CreateWallet CreateWalletRecord
-  | CreateContract {}
+  | CreateContract CreateContractRecord
   | AddContact { walletName :: WalletName, address :: Address }
   | DropWallet { walletId :: WalletId, pubKeyHash :: PubKeyHash }
   | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
@@ -197,14 +239,14 @@ data MarloweRunAction
   | HttpRequest { expect :: HttpExpect, respond :: HttpRespond }
 
 derive instance Eq MarloweRunAction
-derive instance Ord MarloweRunAction
+-- derive instance Ord MarloweRunAction
 derive instance Generic MarloweRunAction _
 
 instance Show MarloweRunAction where
   show = case _ of
     DropWallet a -> "(DropWallet " <> show a <> ")"
     CreateWallet a -> "(CreateWallet " <> show a <> ")"
-    CreateContract _ -> "(CreateContract)"
+    CreateContract { templateName } -> "(CreateContract " <> templateName <> ")"
     AddContact a -> "(AddContact " <> show a <> ")"
     RestoreWallet a -> "(RestoreWallet " <> show a <> ")"
     PabWebSocketSend a -> "(PabWebSocketSend " <> encodeStringifyJson a <> ")"
