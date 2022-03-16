@@ -1,4 +1,4 @@
-import { stringify, parse } from "json-bigint";
+const { stringify, parse } = require("json-bigint")({ useNativeBigInt: true });
 
 JSON.stringify = stringify;
 JSON.parse = parse;

@@ -1,7 +1,7 @@
 /*eslint-env node*/
 "use strict";
 const safeEval = require("safe-eval");
-const JSONbig = require("json-bigint");
+const JSONbig = require("json-bigint")({ useNativeBigInt: true });
 
 exports.eval_ = function (left, right, model) {
   // include any libraries etc we want by providing a context. be careful!
