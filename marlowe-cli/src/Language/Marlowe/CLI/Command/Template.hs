@@ -164,6 +164,7 @@ runTemplateCommand TemplateCoveredCall{..}    = let marloweContract = makeContra
                                                      coveredCall
                                                        issuer
                                                        counterparty
+                                                       Nothing
                                                        currency
                                                        underlying
                                                        (Constant strike)
