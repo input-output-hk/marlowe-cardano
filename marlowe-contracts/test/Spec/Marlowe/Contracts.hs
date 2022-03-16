@@ -124,6 +124,7 @@ americanCallOptionTest =
           Call
           w1Pk
           w2Pk
+          Nothing
           (tok, Constant 30)
           (ada, Constant 10_000_000)
           (POSIXTime 100)
@@ -148,6 +149,7 @@ americanCallOptionExercisedTest =
           Call
           w1Pk
           w2Pk
+          Nothing
           (tok, Constant 30)
           (ada, Constant 10_000_000)
           (POSIXTime 100)
@@ -183,6 +185,7 @@ europeanCallOptionTest =
           Call
           w1Pk
           w2Pk
+          Nothing
           (tok, Constant 30)
           (ada, Constant 10_000_000)
           (POSIXTime 100)
@@ -207,6 +210,7 @@ europeanCallOptionExercisedTest =
           Call
           w1Pk
           w2Pk
+          Nothing
           (tok, Constant 30)
           (ada, Constant 10_000_000)
           (POSIXTime 100)
@@ -343,6 +347,7 @@ reverseConvertibleExercisedTest =
           (POSIXTime 10)
           (POSIXTime 100)
           (POSIXTime 200)
+          Nothing
           ada
           tok
           (Constant 10_000_000)
@@ -372,6 +377,7 @@ reverseConvertibleTest =
           (POSIXTime 10)
           (POSIXTime 100)
           (POSIXTime 200)
+          Nothing
           ada
           tok
           (Constant 10_000_000)

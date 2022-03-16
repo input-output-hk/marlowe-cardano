@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
 module Marlowe.Contracts.Options
   (
   -- * Options
@@ -39,27 +40,30 @@ option ::
   -> OptionType     -- ^ Type of Option
   -> Party          -- ^ Buyer
   -> Party          -- ^ Seller
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
   -> (Token, Value) -- ^ Underlying
   -> (Token, Value) -- ^ Strike
   -> Timeout        -- ^ Expiry
   -> Timeout        -- ^ Settlement Date
   -> Contract       -- ^ Option Contract
-option American optionType buyer seller asset strike expiry settlement =
+option American optionType buyer seller priceFeed asset strike expiry settlement =
   exercise
     optionType
     buyer
     seller
+    priceFeed
     asset
     strike
     settlement
     expiry
     Close
-option European optionType buyer seller asset strike expiry settlement =
+option European optionType buyer seller priceFeed asset strike expiry settlement =
   waitUntil expiry $
     exercise
       optionType
       buyer
       seller
+      priceFeed
       asset
       strike
       settlement
@@ -72,29 +76,49 @@ exercise ::
      OptionType     -- ^ Type of Option
   -> Party          -- ^ Buyer
   -> Party          -- ^ Seller
+  -> Maybe ChoiceId -- ^ Price feed for underlying
   -> (Token, Value) -- ^ Underlying
   -> (Token, Value) -- ^ Strike
   -> Timeout        -- ^ Timeout
   -> Timeout        -- ^ Expiry
   -> Contract       -- ^ Continuation
   -> Contract       -- ^ Contract
-exercise Call buyer seller asset strike timeout =
+exercise Call buyer seller Nothing asset strike timeout =
   When
     [ choose (ChoiceId "Exercise Call" buyer)
-    $ deposit buyer buyer strike timeout Close
-    $ pay seller buyer asset
-    $ pay buyer seller strike
-      Close
+    $ depositAndPay buyer seller strike asset timeout
     ]
-exercise Put buyer seller asset strike timeout =
+exercise Call buyer seller (Just choiceId) asset strike timeout =
+  When
+    [ chooseOracle choiceId strike ValueLT
+    $ depositAndPay buyer seller strike asset timeout
+    ]
+exercise Put buyer seller Nothing asset strike timeout =
   When
     [ choose (ChoiceId "Exercise Put" buyer)
-    $ deposit buyer buyer asset timeout Close
-    $ pay seller buyer strike
-    $ pay buyer seller asset
-      Close
+    $ depositAndPay buyer seller asset strike timeout
+    ]
+exercise Put buyer seller (Just choiceId) asset strike timeout =
+  When
+    [ chooseOracle choiceId strike ValueGT
+    $ depositAndPay buyer seller asset strike timeout
     ]
 
+-- |Deposit an asset and swap
+depositAndPay ::
+     Party          -- ^ Buyer
+  -> Party          -- ^ Seller
+  -> (Token, Value) -- ^ Underlying asset
+  -> (Token, Value) -- ^ Strike price
+  -> Timeout        -- ^ Timeout for deposit
+  -> Contract       -- ^ Contract
+depositAndPay buyer seller asset strike timeout =
+    deposit buyer buyer asset timeout Close
+  $ pay seller buyer strike
+  $ pay buyer seller asset
+    Close
+
+-- |Choosing explicitly whether to exercise the option
 choose ::
      ChoiceId -- ^ Choice id, references the party to chose
   -> Contract -- ^ Continuation Contract if the option is exercised
@@ -102,78 +126,90 @@ choose ::
 choose choiceId cont =
   Case
     (Choice choiceId [Bound 0 1])
-    ( If
-        (ValueEQ (ChoiceValue choiceId) (Constant 0))
-        Close
-        cont
-    )
+    (If (ValueEQ (ChoiceValue choiceId) (Constant 0)) Close cont)
+
+-- |Choosing whether to exercise the option using a price feed
+chooseOracle ::
+     ChoiceId                        -- ^ Price feed
+  -> (Token,Value)                   -- ^ Strike price
+  -> (Value -> Value -> Observation) -- ^ Comparison function
+  -> Contract                        -- ^ Continuation Contract if the option is exercised
+  -> Case                            -- ^ Case expression with continuation
+chooseOracle choiceId (_, strike) comparision cont =
+   Case
+      (Choice choiceId [Bound 0 100_000_000_000])
+      (If (comparision (ChoiceValue choiceId) strike) Close cont)
 
 -- |A /Covered Call/ is an option strategy constructed by writing a call on a token
 -- and in addition providing the token as cover/collateral as part of the contract
 coveredCall ::
-     Party    -- ^ Issuer of the covered Call
-  -> Party    -- ^ Counter-party
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value    -- ^ Strike price (in currency)
-  -> Value    -- ^ Amount of underlying tokens per contract
-  -> Timeout  -- ^ Issue Date
-  -> Timeout  -- ^ Maturity
-  -> Timeout  -- ^ Settlement Date
-  -> Contract -- ^ Covered Call Contract
-coveredCall issuer counterparty currency underlying strike ratio issue maturity settlement =
+     Party          -- ^ Issuer of the covered Call
+  -> Party          -- ^ Counter-party
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike price (in currency)
+  -> Value          -- ^ Amount of underlying tokens per contract
+  -> Timeout        -- ^ Issue Date
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement Date
+  -> Contract       -- ^ Covered Call Contract
+coveredCall issuer counterparty priceFeed currency underlying strike ratio issue maturity settlement =
     deposit issuer issuer (underlying, ratio) issue Close
-  $ option European Call counterparty issuer (underlying, ratio) (currency, strike) maturity settlement
+  $ option European Call counterparty issuer priceFeed (underlying, ratio) (currency, strike) maturity settlement
 
 -- |A /Straddle/ involves simultaneously buying a call and a put option
 -- for the same underlying with the same strike and the same expiry.
 straddle ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value    -- ^ Ratio
-  -> Value    -- ^ Strike
-  -> Timeout  -- ^ Maturity
-  -> Timeout  -- ^ Settlement Date
-  -> Contract -- ^ Straddle Contract
-straddle buyer seller currency underlying ratio strike maturity settlement =
-  let c = option European Call buyer seller (underlying, ratio) (currency, strike) maturity settlement
-      p = option European Put  buyer seller (underlying, ratio) (currency, strike) maturity settlement
+     Party          -- ^ Buyer
+  -> Party          -- ^ Seller
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Ratio
+  -> Value          -- ^ Strike
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement Date
+  -> Contract       -- ^ Straddle Contract
+straddle buyer seller priceFeed currency underlying ratio strike maturity settlement =
+  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement
+      p = option European Put  buyer seller priceFeed (underlying, ratio) (currency, strike) maturity settlement
    in c `both` p
 
 -- |A /Strangle/ involves simultaneously buying a call and a put option
 -- for the same underlying with different strikes, but with the same expiry.
 strangle ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value    -- ^ Ratio
-  -> Value    -- ^ Lower Strike
-  -> Value    -- ^ Upper Strike
-  -> Timeout  -- ^ Maturity
-  -> Timeout  -- ^ Settlement Date
-  -> Contract -- ^ Straddle Contract
-strangle buyer seller currency underlying ratio strike1 strike2 maturity settlement =
-  let c = option European Call buyer seller (underlying, ratio) (currency, strike1) maturity settlement
-      p = option European Put  buyer seller (underlying, ratio) (currency, strike2) maturity settlement
+     Party          -- ^ Buyer
+  -> Party          -- ^ Seller
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Ratio
+  -> Value          -- ^ Lower Strike
+  -> Value          -- ^ Upper Strike
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement Date
+  -> Contract       -- ^ Straddle Contract
+strangle buyer seller priceFeed currency underlying ratio strike1 strike2 maturity settlement =
+  let c = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike1) maturity settlement
+      p = option European Put  buyer seller priceFeed (underlying, ratio) (currency, strike2) maturity settlement
    in c `both` p
 
 -- |A /Call Spread/ involves simultaneously buying two call options
 -- for the same underlying with different strikes, but with the same expiry.
 callSpread ::
-     Party    -- ^ Buyer
-  -> Party    -- ^ Seller
-  -> Token    -- ^ Currency
-  -> Token    -- ^ Underlying
-  -> Value    -- ^ Strike price (in currency) for the long position
-  -> Value    -- ^ Strike price (in currency) for the short position
-  -> Value    -- ^ Amount of underlying tokens per contract
-  -> Timeout  -- ^ Maturity
-  -> Timeout  -- ^ Settlement Date
-  -> Contract -- ^ Call Spread Contract
-callSpread buyer seller currency underlying strike1 strike2 ratio maturity settlement =
-  let l = option European Call buyer seller (underlying, ratio) (currency, strike1) maturity settlement
-      s = option European Call seller buyer (underlying, ratio) (currency, strike2) maturity settlement
+     Party          -- ^ Buyer
+  -> Party          -- ^ Seller
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike price (in currency) for the long position
+  -> Value          -- ^ Strike price (in currency) for the short position
+  -> Value          -- ^ Amount of underlying tokens per contract
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement Date
+  -> Contract       -- ^ Call Spread Contract
+callSpread buyer seller priceFeed currency underlying strike1 strike2 ratio maturity settlement =
+  let l = option European Call buyer seller priceFeed (underlying, ratio) (currency, strike1) maturity settlement
+      s = option European Call seller buyer priceFeed (underlying, ratio) (currency, strike2) maturity settlement
    in l `both` s

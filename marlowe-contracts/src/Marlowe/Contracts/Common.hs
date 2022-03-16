@@ -26,13 +26,13 @@ advanceTillWhenAndThen (Let vId val cont) f         = Let vId val (f cont)
 advanceTillWhenAndThen (Assert obs cont) f          = Assert obs (f cont)
 
 -- |Role for oracle
-oracle :: Party
-oracle = Role "kraken"
+kraken :: Party
+kraken = Role "kraken"
 
 -- |Exchange rates
 dirRate, invRate :: ChoiceId
-dirRate = ChoiceId "dir-adausd" oracle -- USD/ADA
-invRate = ChoiceId "inv-adausd" oracle -- ADA/USD
+dirRate = ChoiceId "dir-adausd" kraken -- USD/ADA
+invRate = ChoiceId "inv-adausd" kraken -- ADA/USD
 
 -- |Oracle input
 oracleInput ::

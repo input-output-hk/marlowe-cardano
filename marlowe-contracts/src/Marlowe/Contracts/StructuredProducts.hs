@@ -69,17 +69,18 @@ import Marlowe.Contracts.ZeroCouponBond
 -- from selling the option, in the example: @Underlying + 100@
 --
 reverseConvertible ::
-     Party   -- ^ Investor
-  -> Timeout -- ^ Initial fixing
-  -> Timeout -- ^ Maturity
-  -> Timeout -- ^ Settlement date
-  -> Token   -- ^ Currency
-  -> Token   -- ^ Underlying
-  -> Value   -- ^ Strike
-  -> Value   -- ^ Ratio
-  -> Value   -- ^ Issue Price
-  -> Contract          -- ^ Reverse Convertible Contract
-reverseConvertible investor fixing maturity settlement currency underlying strike ratio issuePrice =
+     Party          -- ^ Investor
+  -> Timeout        -- ^ Initial fixing
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement date
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike
+  -> Value          -- ^ Ratio
+  -> Value          -- ^ Issue Price
+  -> Contract       -- ^ Reverse Convertible Contract
+reverseConvertible investor fixing maturity settlement priceFeed currency underlying strike ratio issuePrice =
   zcb `both` shortCall
   where
     zcb =
@@ -98,6 +99,7 @@ reverseConvertible investor fixing maturity settlement currency underlying strik
         Call
         (Role "OptionCounterparty")
         investor
+        priceFeed
         (currency, strike)
         (underlying, ratio)
         maturity

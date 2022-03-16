@@ -74,11 +74,11 @@ concurrentlySwapTwiceTest =
 coveredCallTest :: IO ()
 coveredCallTest =
   testNoWarnings $
-    coveredCall (Role "buyer") (Role "seller") ada coin (Constant 1) (Constant 1) (POSIXTime 10) (POSIXTime 100) (POSIXTime 110)
+    coveredCall (Role "buyer") (Role "seller") Nothing ada coin (Constant 1) (Constant 1) (POSIXTime 10) (POSIXTime 100) (POSIXTime 110)
 
 -- |== Test Cases, warnings expected
 
 optionTest :: IO ()
 optionTest =
   testExpectedWarnings $
-    option European Call partyA partyB (ada, Constant 1) (coin, Constant 1) (POSIXTime 100) (POSIXTime 110)
+    option European Call partyA partyB Nothing (ada, Constant 1) (coin, Constant 1) (POSIXTime 100) (POSIXTime 110)
