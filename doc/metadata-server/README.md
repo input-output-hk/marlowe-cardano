@@ -4,17 +4,17 @@ This document summarizes requirements and proposes a draft of a protocol for met
 
 ## Motivation
 
-Marlowe is a high-level language with a set of properties which are crucial for writing reliable financial contracts. A possibility to audit the code of the contract which was already initiated on-chain seems to be critical to any participant "invited" to it. Marlowe and its current implementation on Cardano chain gives us access to the source code of the contract, ability to do static analysis over it and "step by step" simulation so it provides the fundamental layer of trust for the language users.
+Marlowe is a high-level language with a set of properties which are crucial for writing reliable financial contracts. A possibility to audit the source code of the contract which was already initiated on-chain seems to be critical to any participant "invited" to it. Marlowe and its current implementation on Cardano chain gives us access to the source code of the contract, ability to do static analysis over it and "step by step" simulation so it provides the fundamental layer of trust for the language users.
 
-To build a contract exchange platform (Marlowe Marketplace) and execution environment (Marlowe Run) we want to be able to also associate and provide contract template information suitable for human consumption (like title, description, statistics and certification etc.). We want to verify that provided metadata information about the transaction template is consistent with the Marlowe contract embedded in the transaction on-chain. Additionally we should allow the contract initiator to attach a specific set of data (like documents, agreements) to the particular contract instance. We want to be able to provide a validity proof for these data and present it to all other participants as well if necessary.
+To build a contract exchange platform (Marlowe Marketplace) and execution environment (Marlowe Run) we want to be able to also associate and provide contract template information suitable for human consumption (like title, description, statistics and certification etc.). We want to verify that provided metadata information about the transaction template is consistent with the Marlowe contract embedded in the transaction on-chain. Additionally we should allow the contract initiator to attach a specific set of data (like documents / agreements or dedicated description) to the particular contract instance. We want to be able to provide a validity proof for these data and present it to all other participants as well.
 
-We want to implement this in an efficient manner avoiding huge payloads on the blockchain and by use of existing or emerging Cardano standards. Additionally we need to keep the protocol decentralized so anybody can take the role of a metadata provider.
+We want to implement this in an efficient manner avoiding huge payloads on the blockchain and using existing or emerging Cardano standards. Additionally we need to keep the protocol decentralized so anybody can take the role of the metadata provider.
 
 ### Scope limits
 
 We can identify additional sources of metadata information which can be associated with contract transactions running on the blockchain. There are also parts of the proposed metadata format which we should extend in the future. These parts/problems we want to tackle in a separate proposals:
 
-- Role token metadata (icon, currency description etc.) handling. They are presented in Cardano wallets and blockchain explorers.
+- Role token metadata (icon, currency description etc.) handling. These data are presented in Cardano wallets and blockchain explorers. Please refer to [CIP-25](https://cips.cardano.org/cips/cip25/) which describes NFT metadata format.
 
 - Localization (`l10n`) layer for the metadata format.
 
@@ -22,7 +22,9 @@ We can identify additional sources of metadata information which can be associat
 
 - Encryption layer. We assume now that exchanged data are public or that the access to the information is restricted by a separate layer of the metadata server. In the future we want to probably propose some encryption schema as a part of the protocol.
 
-- Proposal for "identity layer" using Atala PRISM. With identities we can associate and exchange some metadata information like nicknames, credibility etc.
+- Proposal for "identity layer" using Atala PRISM. With identities we can associate and exchange some metadata information like for example nicknames, avatras, credibility etc.
+
+- Possible intergration with WNS (Wallet Name System - a "DNS for wallet addresses") if they provide reverse lookup.
 
 ## Verifying Marlowe Contract Metadata on the chain
 
@@ -32,20 +34,20 @@ We can identify additional sources of metadata information which can be associat
 
 - Marlowe contract transaction (`MarloweTx`)- transaction on the block chain which is a part of the ongoing Marlowe contract.
 
-- Marlowe contract metadata (`ContractMetadata`) - a particular set of information which we want to attach to a Marlowe contract (description, documents / agreements etc.)
+- Marlowe contract metadata (`ContractMetadata`) - a particular set of information which we want to attach to a Marlowe contract (description, documents / agreements etc.) which resides on or off chain.
 
 - Role distribution (`RoleDistribution`) - when contract uses roles as `Party` values we use NFTs to represent roles on-chain. The initial transaction pay these NFTs to some addresses so it defines this initial distribution.
 
 - Transaction metadata (`TxMetadata`) - on-chain information ([`CBOR` encoded](https://github.com/input-output-hk/cardano-node/blob/master/doc/reference/tx-metadata.md)) which is attached to the transaction . It is inaccessible to the transaction validators and minting policy scripts.
 
-- Marlowe contract transaction metadata (`MarloweTxMetadata`) - metadata attached to the on-chain transaction executing Marlowe Contract (`MarloweTx`) related to the `Contract`.
+- Marlowe contract transaction metadata (`MarloweTxMetadata`) - metadata attached to the on-chain transaction (`ContractMetadata`) executing Marlowe contract (`MarloweTx`) and possibly related to this `Contract`.
 
 
 ### `Contract` extraction
 
-When initiator submits a `Contract` to the blockchain it builds up a transaction which outputs define role tokens distribution. Additionally transaction contains "continuation" output which is "guarded" by `Marlowe` interpreter script. Role tokens outputs are assigned to a set of addresses chosen by the `Tx` author. We can interpret them as invitations to the contract or permissions to be the contract party (this tokens shows up in the user wallets).
+When initiator submits a `Contract` to the blockchain he builds up a transaction which mints and defines role tokens distribution. Additionally a transaction contains "continuation" output which is "guarded" by `Marlowe` interpreter script. Role tokens outputs are assigned to a set of addresses chosen by the `Tx` author. We can interpret them as invitations to the contract or permissions to be the contract party (this tokens show up in the user wallets).
 
-Because continuation output from the initial `Tx` contains the full code ("modulo" `Merkleization`) of the `Contract` we are able to [extract it](https://github.com/input-output-hk/marlowe-cardano/blob/f452d98942a14d34c10f2963ec4b84147da5621c/marlowe/src/Language/Marlowe/Client/History.hs). In other words when someone is "invited" to the already initiated on-chain contract we are able to extract the Marlowe code from that transaction and present it to the possible participant for an audit, simulation etc. before he / she commits to it. We can do this at any stage of the contract progression because we can track the chain back to the initial transaction and perform the extraction.
+Because continuation output from the initial `Tx` contains the full code ("modulo" `Merkleization`) of the `Contract` we are able to [extract it](https://github.com/input-output-hk/marlowe-cardano/blob/f452d98942a14d34c10f2963ec4b84147da5621c/marlowe/src/Language/Marlowe/Client/History.hs). In other words when someone is "invited" to the already initiated on-chain contract we are able to extract the Marlowe code from that transaction and present it to the possible participant for an audit, simulation etc. before he / she commits to it. We can do this at any stage of the contract progression because we can track the chain back to the initial transaction (identitfied / verified by role token minting) and perform the extraction.
 
 <!-- [ IMAGE -> Extraction of the contract -> Simulation / Audit ] -->
 
