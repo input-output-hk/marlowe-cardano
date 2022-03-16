@@ -25,7 +25,7 @@ import Data.Bifunctor (lmap)
 import Data.Bimap as Bimap
 import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
-import Data.Foldable (foldM, traverse_)
+import Data.Foldable (foldM, for_, traverse_)
 import Data.HTTP.Method (Method(..))
 import Data.Map as Map
 import Data.Maybe (maybe)
