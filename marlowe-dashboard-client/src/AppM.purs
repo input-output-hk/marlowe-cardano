@@ -19,16 +19,15 @@ import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Data.Array as A
-import Data.Lens (Lens', over)
+import Data.Lens (Lens', over, view)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
-import Data.Newtype (un)
 import Data.Passphrase (Passphrase)
 import Data.Passphrase as Passphrase
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (Env(..))
+import Env (Env, _sinks)
 import Halogen (Component)
 import Halogen.Component (hoist)
 import Halogen.Store.Monad (class MonadStore, StoreT, runAndEmitStoreT)
@@ -128,7 +127,7 @@ instance MonadAjax MarloweRun.Api m => MonadAjax MarloweRun.Api (AppM m) where
 
 instance MonadEffect m => MonadLogger StructuredLog (AppM m) where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`
-  log m = AppM $ withReaderT (un Env) (Control.Monad.Effect.Class.log' m)
+  log m = AppM $ withReaderT (view _sinks) (Control.Monad.Effect.Class.log' m)
 
 instance MonadEffect m => MonadClipboard (AppM m) where
   copy = liftEffect <<< copy

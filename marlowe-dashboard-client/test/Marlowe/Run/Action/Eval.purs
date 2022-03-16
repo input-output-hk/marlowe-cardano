@@ -2,10 +2,6 @@ module Test.Marlowe.Run.Action.Eval where
 
 import Prologue
 
-import Affjax as Affjax
-import Affjax.ResponseFormat (ResponseFormat)
-import Affjax.ResponseFormat as ResponseFormat
-import Affjax.ResponseHeader (ResponseHeader(..))
 import Concurrent.Queue as Queue
 import Control.Monad.Error.Class (class MonadError, throwError)
 import Control.Monad.Except (ExceptT, mapExceptT, runExceptT)
@@ -29,11 +25,11 @@ import Data.Bifunctor (lmap)
 import Data.Bimap as Bimap
 import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
-import Data.Foldable (foldM, for_, traverse_)
+import Data.Foldable (foldM, traverse_)
 import Data.HTTP.Method (Method(..))
 import Data.Map as Map
 import Data.Maybe (maybe)
-import Data.Newtype (over, over2)
+import Data.Newtype (over2)
 import Data.String
   ( Pattern(..)
   , Replacement(..)
@@ -56,16 +52,12 @@ import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
-import Test.Marlowe.Run (Coenv, marloweRunTest)
+import Test.Marlowe.Run (Coenv, fundWallet, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
   , AppInstance
   , CreateContractRecord
   , CreateWalletRecord
-  , HttpExpect(..)
-  , HttpExpectContent(..)
-  , HttpRespond(..)
-  , HttpRespondContent(..)
   , MarloweRunAction(..)
   , MarloweRunScript
   , PlutusAppId
@@ -81,8 +73,6 @@ import Test.Network.HTTP
   , expectJsonContent
   , expectJsonRequest
   , expectMethod
-  , expectRequest
-  , expectTextContent
   , expectUri
   , renderMatcherError
   )
@@ -197,53 +187,9 @@ evalAction = case _ of
   DropWallet params -> dropWallet params
   CreateWallet params -> createWallet params
   CreateContract _ -> pure unit
-  FundWallet { walletName, lovelace } -> do
-    walletsRef <- asks _.wallets
-    wallets <- liftEffect $ Ref.read walletsRef
-    let mWallet = Bimap.lookupL walletName wallets
-    wallet <- maybe
-      (throwError $ error $ "Test error: unknown wallet " <> walletName)
-      pure
-      mWallet
-    liftEffect $ flip Ref.write walletsRef $ Bimap.insert
-      walletName
-      wallet
-        { assets = over
-            Assets
-            ( flip Map.alter "" $ Just <<< maybe
-                (Map.singleton "" lovelace)
-                (flip Map.alter "" $ Just <<< maybe lovelace (_ + lovelace))
-            )
-            wallet.assets
-        }
-      wallets
+  FundWallet { walletName, lovelace } -> fundWallet walletName "" "" lovelace
   AddContact params -> addContact params
   RestoreWallet params -> restore params
-
-  HttpRequest { expect: HttpExpect expect, respond: HttpRespond respond } ->
-    let
-      { status, statusText, headers: headerTuples, content } = respond
-      headers = uncurry ResponseHeader <$> headerTuples
-
-      expectRequestWithBody
-        :: forall a
-         . ResponseFormat a
-        -> Either Affjax.Error a
-        -> m Unit
-      expectRequestWithBody format body = expectRequest format
-        ado
-          traverse_ expectMethod expect.method
-          traverse_ expectUri expect.uri
-          for_ expect.content case _ of
-            ExpectJson json -> expectJsonContent json
-            ExpectText text -> expectTextContent text
-          in { status, statusText, headers, body: _ } <$> body
-    in
-      case content of
-        RespondText text ->
-          expectRequestWithBody ResponseFormat.string $ Right text
-        RespondJson json ->
-          expectRequestWithBody ResponseFormat.json $ Right json
 
 dropWallet
   :: forall m
@@ -267,7 +213,7 @@ dropWallet { walletId, pubKeyHash } = openMyWallet do
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
       in jsonEmptyArray
-    expectWalletSubscribe pubKeyHash
+    expectWalletUnsubscribe pubKeyHash
 
 openMyWallet
   :: forall m
@@ -396,6 +342,21 @@ expectErrorToast message =
   void $ getBy role do
     nameRegex message ignoreCase
     pure Alert
+
+expectWalletUnsubscribe
+  :: forall m
+   . MonadMockHTTP m
+  => MonadError Error m
+  => MonadTell (Array String) m
+  => MonadAff m
+  => MonadAsk Coenv m
+  => PubKeyHash
+  -> m Unit
+expectWalletUnsubscribe pubKeyHash = do
+  expectPabWebsocketSend
+    { tag: "Unsubscribe"
+    , contents: { "Right": { getPubKeyHash: pubKeyHash } }
+    }
 
 expectWalletSubscribe
   :: forall m

@@ -5,12 +5,17 @@ module Main
 import Prologue
 
 import AppM (runAppM)
+import Bridge (toFront)
+import Control.Alternative (empty)
 import Control.Concurrent.EventBus as EventBus
+import Control.Logger.Effect (Logger)
+import Control.Logger.Effect.Class as Logger
 import Control.Logger.Effect.Console (structuredLogger) as Console
+import Control.Logger.Structured (StructuredLog(..))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (runMaybeT)
-import Control.Monad.Now (now)
+import Control.Monad.Now (class MonadTime, makeClock, now)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
@@ -19,6 +24,7 @@ import Data.Argonaut
   , Json
   , JsonDecodeError
   , decodeJson
+  , fromString
   , printJsonDecodeError
   , (.:)
   )
@@ -31,7 +37,7 @@ import Data.LocalContractNicknames
   )
 import Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Data.PABConnectedWallet (_walletDetails)
+import Data.PABConnectedWallet (_walletDetails, _walletId)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Wallet
@@ -39,24 +45,34 @@ import Data.Wallet
   , _walletInfo
   , _walletNickname
   , mkWalletDetails
+  , syncStatusFromNumber
   )
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Effect (Effect)
-import Effect.AVar as AVar
-import Effect.Aff (error, forkAff, launchAff_)
+import Effect.Aff (Aff, error, forkAff, launchAff_)
+import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
-import Env (Env(..), Sinks, Sources)
+import Env (Env(..), Sinks, Sources, WalletFunds)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Store.Select (selectEmitter, selectEq)
 import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
+import Halogen.Subscription.Extra
+  ( compactEmitter
+  , connectEmitter_
+  , reactimate
+  , switchMapEmitter
+  )
 import Halogen.VDom.Driver (runUI)
 import LocalStorage (Key(..), getItem, removeItem, setItem)
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types (Msg(..))
 import MainFrame.Types as MainFrame
+import Marlowe.Run.Server as MarloweRun
+import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
+import Servant.PureScript (printAjaxError)
 import Store (_wallet, mkStore)
 import Store as Store
 import Store.Contracts (getContractNicknames)
@@ -78,26 +94,16 @@ instance DecodeJson MainArgs where
       else Production
     in MainArgs { pollingInterval, webpackBuildMode }
 
-mkEnv
-  :: Milliseconds
-  -> Milliseconds
-  -> Sources
-  -> Sinks
-  -> WebpackBuildMode
-  -> Effect Env
-mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
+mkEnv :: Sources -> Sinks -> Aff Env
+mkEnv sources sinks = do
   contractStepCarouselSubscription <- AVar.empty
   endpointSemaphores <- AVar.new Map.empty
   createListeners <- AVar.new Map.empty
   applyInputListeners <- AVar.new Map.empty
   redeemListeners <- AVar.new Map.empty
-  followerBus <- EventBus.create
+  followerBus <- liftEffect EventBus.create
   pure $ Env
     { contractStepCarouselSubscription
-    , logger: case webpackBuildMode of
-        -- Add backend logging capability
-        Production -> mempty
-        Development -> Console.structuredLogger
     , followerBus
     , endpointSemaphores
     , createListeners
@@ -105,8 +111,6 @@ mkEnv regularPollInterval syncPollInterval sources sinks webpackBuildMode = do
     , redeemListeners
     , sinks
     , sources
-    , regularPollInterval
-    , syncPollInterval
     }
 
 exitBadArgs :: forall a. JsonDecodeError -> Effect a
@@ -116,15 +120,24 @@ exitBadArgs e = throwError
 
 main :: Json -> Effect Unit
 main args = do
-  MainArgs { pollingInterval, webpackBuildMode } <- either exitBadArgs pure $
-    decodeJson args
+  MainArgs { pollingInterval, webpackBuildMode } <-
+    either exitBadArgs pure $ decodeJson args
   runHalogenAff do
     wsManager <- WS.mkWebSocketManager
     pabWebsocketIn <- liftEffect HS.create
-    void $ forkAff $ WS.runWebSocketManager
-      (WS.URI "/pab/ws")
-      (liftEffect <<< HS.notify pabWebsocketIn.listener)
-      wsManager
+    -- | Create a new SubscribeIO for the store. A store emitter is needed by
+    -- | `mkWalletfundsEmitter`, but we don't have the store emitter returned
+    -- | by `runAppM` yet (and we need to make the wallet emitter before we can
+    -- | call `runAppM`). This SubscribeIO will act as a forward reference for
+    -- | that emitter, which will eventually be connected when we finally obtain
+    -- | it.
+    storeIO <- liftEffect HS.create
+    let
+      logger = case webpackBuildMode of
+        -- TODO Add backend logging capability
+        Production -> mempty
+        Development -> Console.structuredLogger
+    walletFunds <- mkWalletFundsEmitter logger pollingInterval storeIO.emitter
     pabWebsocketOut <- liftEffect HS.create
     void
       $ forkAff
@@ -134,27 +147,78 @@ main args = do
     let
       sources =
         { pabWebsocket: pabWebsocketIn.emitter
+        , walletFunds
         }
-      sinks = { pabWebsocket: pabWebsocketOut.listener }
-    env <- liftEffect $ mkEnv
-      pollingInterval
-      (Milliseconds 500.0)
-      sources
-      sinks
-      webpackBuildMode
-    body <- awaitBody
+      sinks =
+        { logger
+        , pabWebsocket: pabWebsocketOut.listener
+        }
 
+    env <- mkEnv sources sinks
+    body <- awaitBody
     store <- liftEffect loadStore
     { component, emitter: storeE } <- runAppM env store mkMainFrame
+    -- Connect the store emitter to the previously created SubscribeIO, tying
+    -- the knot.
+    connectEmitter_ storeE storeIO
     liftEffect $ persistStore storeE
 
     driver <- runUI component unit body
+
+    void $ forkAff $ WS.runWebSocketManager
+      (WS.URI "/pab/ws")
+      (liftEffect <<< HS.notify pabWebsocketIn.listener)
+      wsManager
 
     -- This handler allows us to call an action in the MainFrame from a child component
     -- (more info in the MainFrameLoop capability)
     void $ liftEffect $ HS.subscribe driver.messages case _ of
       MainFrameActionMsg action -> launchAff_ $ void $ driver.query $
         MainFrame.MainFrameActionQuery action unit
+
+mkWalletFundsEmitter
+  :: forall m
+   . MonadTime m
+  => Logger StructuredLog
+  -> Milliseconds
+  -> Emitter Store.Store
+  -> m (Emitter WalletFunds)
+mkWalletFundsEmitter logger pollingInterval storeE = do
+  pollE <- makeClock pollingInterval
+  let
+    -- | Fires every time the wallet ID changes in the store
+    walletIdE :: Emitter (Maybe WalletId)
+    walletIdE = selectEmitter
+      (selectEq $ preview $ _wallet <<< _connectedWallet <<< _walletId)
+      storeE
+
+    -- | Fires every time a poll should occur
+    walletPollE :: Emitter WalletId
+    walletPollE = walletIdE # switchMapEmitter case _ of
+      Nothing -> empty
+      Just walletId -> walletId <$ pollE
+
+    -- | React to poll events by dispatching a request to the wallet backend.
+    -- | The resulting `Emitter` Fires every time we receive a response.
+    walletFundsE :: Emitter (Maybe WalletFunds)
+    walletFundsE = walletPollE # reactimate \walletId -> do
+      result <- MarloweRun.getApiWalletV1ByWalletidTotalfunds walletId
+      case result of
+        Left e -> do
+          Logger.error
+            ( StructuredLog
+                { msg: "Failed to poll total funds"
+                , payload: Just $ fromString $ printAjaxError e
+                }
+            )
+            logger
+          pure Nothing
+        Right (GetTotalFundsResponse { assets, sync }) ->
+          pure $ Just
+            { assets: toFront assets, sync: syncStatusFromNumber sync }
+
+  -- Discard any `Nothing` results from `walletFundsE`
+  pure $ compactEmitter walletFundsE
 
 -------------------------------------------------------------------------------
 -- Local Storage integeration

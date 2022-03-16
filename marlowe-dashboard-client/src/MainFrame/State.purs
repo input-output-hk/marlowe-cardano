@@ -25,7 +25,6 @@ import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Control.Alt ((<|>))
-import Control.Alternative (empty)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Logger.Structured as Logger
@@ -55,7 +54,6 @@ import Data.PABConnectedWallet
   )
 import Data.PABConnectedWallet as Connected
 import Data.Time.Duration (Minutes(..), Seconds(..))
-import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.Wallet as Disconnected
@@ -63,15 +61,12 @@ import Data.WalletId (WalletId)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
-import Effect.Ref as Ref
 import Env
   ( Env
   , _applyInputListeners
   , _createListeners
   , _redeemListeners
-  , _regularPollInterval
   , _sources
-  , _syncPollInterval
   )
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
@@ -87,6 +82,7 @@ import Halogen.Store.Monad
 import Halogen.Store.Select (selectEq)
 import Halogen.Subscription (Emitter)
 import Halogen.Subscription as HS
+import Halogen.Subscription.Extra (compactEmitter)
 import Language.Marlowe.Client
   ( ContractHistory
   , EndpointResponse(..)
@@ -117,7 +113,6 @@ import Marlowe.Deinstantiate (findTemplate)
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract(..))
 import Page.Dashboard.State (handleAction, mkInitialState) as Dashboard
-import Page.Dashboard.State (updateTotalFunds)
 import Page.Dashboard.Types (Action(..), State) as Dashboard
 import Page.Welcome.State (handleAction, initialState) as Welcome
 import Page.Welcome.Types (Action, State) as Welcome
@@ -303,7 +298,7 @@ handleAction (Receive context) = do
       enterWelcomeState connectedWallet
     Disconnecting _, Disconnected ->
       assign _subState $ Left Welcome.initialState
-    Connected _, Connected connectedWallet -> do
+    Connected oldWallet, Connected connectedWallet -> do
       let
         walletNickname = view Connected._walletNickname connectedWallet
         address = view Connected._address connectedWallet
@@ -311,17 +306,17 @@ handleAction (Receive context) = do
         $ Store.ModifyAddressBook
         $ AddressBook.insert walletNickname address
       handleAction $ DashboardAction $ Dashboard.Receive
+      case oldWallet ^. _syncStatus, connectedWallet ^. _syncStatus of
+        Synchronizing _, Synchronized -> addToast $ successToast
+          "Wallet backend in sync."
+        OutOfSync, Synchronizing _ -> addToast $ infoToast
+          "Wallet backend synchronizing..."
+        _, _ -> pure unit
     _, _ -> pure unit
 
-handleAction (OnPoll lastSyncStatus walletId) = do
-  updateTotalFunds walletId >>= traverse_ \syncStatus -> do
-    case lastSyncStatus, syncStatus of
-      Synchronizing _, Synchronized -> addToast $ successToast
-        "Wallet backend in sync."
-      OutOfSync, Synchronizing _ -> addToast $ infoToast
-        "Wallet backend synchronizing..."
-      _, _ -> pure unit
-    updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
+handleAction (UpdateWalletFunds { assets, sync }) = do
+  updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
+  updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
 handleAction (WelcomeAction wa) = do
   mWelcomeState <- peruse _welcomeState
@@ -664,26 +659,13 @@ actionsFromSources
   -> m (Emitter (Maybe Action))
 actionsFromSources wallet = do
   clock <- makeClock $ Seconds 1.0
-  syncPoll <- makeClock =<< asks (view _syncPollInterval)
-  regularPoll <- makeClock =<< asks (view _regularPollInterval)
-  let walletPoller = switchEmitter $ pollWallet syncPoll regularPoll <$> wallet
-  { pabWebsocket } <- asks $ view _sources
-  pure $ actionFromWebsocket <$> wallet <*> pabWebsocket
-    <|> walletPoller
-    <|> Just Tick <$ clock
-
-pollWallet
-  :: Emitter Unit
-  -> Emitter Unit
-  -> Maybe PABConnectedWallet
-  -> Emitter (Maybe Action)
-pollWallet syncPoll regularPoll = case _ of
-  Nothing -> empty
-  Just wallet ->
-    Just (OnPoll (wallet ^. _syncStatus) (wallet ^. Connected._walletId))
-      <$ case wallet ^. _syncStatus of
-        Synchronizing _ -> syncPoll
-        _ -> regularPoll
+  { pabWebsocket, walletFunds } <- asks $ view _sources
+  let websocketActions = actionFromWebsocket <$> wallet <*> pabWebsocket
+  let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
+  let seconds = Just Tick <$ clock
+  -- Alt instance for Emitters "zips" them together. So the resulting Emitter
+  -- is the union of events fired from the constituent emitters.
+  pure $ websocketActions <|> walletUpdates <|> seconds
 
 actionFromWebsocket
   :: Maybe PABConnectedWallet
@@ -795,23 +777,3 @@ toDashboard s = mapAction DashboardAction <<< imapState (lens getter setter)
   where
   getter = fromMaybe s <<< preview _dashboardState
   setter = flip $ set _dashboardState
-
-compactEmitter
-  :: forall a
-   . Emitter (Maybe a)
-  -> Emitter a
-compactEmitter emitter = HS.makeEmitter $
-  pure <<< HS.unsubscribe <=< HS.subscribe emitter <<< traverse
-
-switchEmitter
-  :: forall a
-   . Emitter (Emitter a)
-  -> Emitter a
-switchEmitter emitter = HS.makeEmitter \push -> do
-  innerSub <- Ref.new Nothing
-  outerSub <- HS.subscribe emitter \emitter' -> do
-    traverse_ HS.unsubscribe =<< Ref.read innerSub
-    flip Ref.write innerSub <<< Just =<< HS.subscribe emitter' push
-  pure do
-    traverse_ HS.unsubscribe =<< Ref.read innerSub
-    HS.unsubscribe outerSub

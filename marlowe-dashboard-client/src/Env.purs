@@ -10,15 +10,15 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
-import Data.Time.Duration (Milliseconds)
 import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
+import Data.Wallet (SyncStatus)
 import Effect.AVar (AVar)
 import Halogen (SubscriptionId)
 import Halogen.Subscription (Emitter, Listener, Subscription)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams)
+import Marlowe.Semantics (Assets, MarloweParams)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
   , CombinedWSStreamToServer
@@ -35,12 +35,16 @@ import WebSocket.Support (FromSocket)
 -- available again).
 type EndpointSemaphores = Map PlutusAppId (Map String (AVar Unit))
 
+type WalletFunds = { sync :: SyncStatus, assets :: Assets }
+
 type Sources =
   { pabWebsocket :: Emitter (FromSocket CombinedWSStreamToClient)
+  , walletFunds :: Emitter WalletFunds
   }
 
 type Sinks =
   { pabWebsocket :: Listener CombinedWSStreamToServer
+  , logger :: Logger StructuredLog
   }
 
 -- Application enviroment configuration
@@ -55,7 +59,6 @@ newtype Env = Env
     --    creation functions didn't require that, so it seemed wrong to lift several functions into Effect.
     --    In contrast, the Env is created in Main, where we already have access to Effect
     contractStepCarouselSubscription :: AVar SubscriptionId
-  , logger :: Logger StructuredLog
   , endpointSemaphores :: AVar EndpointSemaphores
   , createListeners ::
       AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams))
@@ -66,8 +69,6 @@ newtype Env = Env
   , sinks :: Sinks
   -- | All the inbound communication channels from the outside world
   , sources :: Sources
-  , regularPollInterval :: Milliseconds
-  , syncPollInterval :: Milliseconds
   }
 
 derive instance newtypeEnv :: Newtype Env _
@@ -95,9 +96,3 @@ _sources = _Newtype <<< prop (Proxy :: _ "sources")
 
 _sinks :: Lens' Env Sinks
 _sinks = _Newtype <<< prop (Proxy :: _ "sinks")
-
-_syncPollInterval :: Lens' Env Milliseconds
-_syncPollInterval = _Newtype <<< prop (Proxy :: _ "syncPollInterval")
-
-_regularPollInterval :: Lens' Env Milliseconds
-_regularPollInterval = _Newtype <<< prop (Proxy :: _ "regularPollInterval")

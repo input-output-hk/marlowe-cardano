@@ -235,7 +235,6 @@ data MarloweRunAction
   | AddContact { walletName :: WalletName, address :: Address }
   | DropWallet { walletId :: WalletId, pubKeyHash :: PubKeyHash }
   | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
-  | HttpRequest { expect :: HttpExpect, respond :: HttpRespond }
 
 derive instance Eq MarloweRunAction
 -- derive instance Ord MarloweRunAction
@@ -249,7 +248,6 @@ instance Show MarloweRunAction where
     FundWallet a -> "(FundWallet " <> show a <> ")"
     AddContact a -> "(AddContact " <> show a <> ")"
     RestoreWallet a -> "(RestoreWallet " <> show a <> ")"
-    HttpRequest a -> "(HttpRequest " <> show a <> ")"
 
 instance DecodeJson MarloweRunAction where
   decodeJson json = do
@@ -268,8 +266,6 @@ instance DecodeJson MarloweRunAction where
         lmap (Named "AddContact") $ AddContact <$> obj .: "content"
       "RestoreWallet" ->
         lmap (Named "RestoreWallet") $ RestoreWallet <$> obj .: "content"
-      "HttpRequest" ->
-        lmap (Named "HttpRequest") $ HttpRequest <$> obj .: "content"
       _ ->
         Left $ Named "tag" $ UnexpectedValue $ encodeJson tag
 
@@ -281,7 +277,6 @@ instance EncodeJson MarloweRunAction where
     FundWallet content -> encodeJson { tag: "FundWallet", content }
     AddContact content -> encodeJson { tag: "AddContact", content }
     RestoreWallet content -> encodeJson { tag: "RestoreWallet", content }
-    HttpRequest content -> encodeJson { tag: "HttpRequest", content }
 
 type MarloweRunScript = Array (Tuple Milliseconds MarloweRunAction)
 

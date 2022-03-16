@@ -17,8 +17,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Map (Map)
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
-import Data.Wallet (SyncStatus)
-import Data.WalletId (WalletId)
+import Env (WalletFunds)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
@@ -100,7 +99,7 @@ data Action
   | Receive Slice
   | Init
   | Tick
-  | OnPoll SyncStatus WalletId
+  | UpdateWalletFunds WalletFunds
   | NewWebSocketStatus WebSocketStatus
   | NotificationParseFailed String Json JsonDecodeError
   | CompanionAppStateUpdated (Map MarloweParams MarloweData)
@@ -121,7 +120,7 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (Receive _) = Nothing
   toEvent (Tick) = Nothing
   toEvent Init = Just $ defaultEvent "Init"
-  toEvent (OnPoll _ _) = Nothing
+  toEvent (UpdateWalletFunds _) = Nothing
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction
   toEvent _ = Nothing

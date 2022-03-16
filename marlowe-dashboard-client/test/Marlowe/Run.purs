@@ -5,6 +5,7 @@ import Prologue
 import AppM (runAppM)
 import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
+import Control.Apply (lift2)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect.Test (testLogger)
 import Control.Monad.Error.Class
@@ -18,35 +19,39 @@ import Control.Monad.Reader
   ( class MonadAsk
   , class MonadReader
   , ReaderT
+  , asks
   , runReaderT
   )
 import Control.Parallel (parallel, sequential)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
+import Data.BigInt.Argonaut (BigInt)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.LocalContractNicknames
   ( LocalContractNicknames
   , emptyLocalContractNicknames
   )
+import Data.Map (Map)
 import Data.Map as Map
-import Data.Time.Duration (Minutes(..), Seconds(..), fromDuration)
+import Data.Newtype (over)
+import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.Wallet (WalletDetails)
+import Data.Wallet (SyncStatus(..), WalletDetails)
 import Effect (Effect)
-import Effect.Aff (Aff, Error, bracket, finally, launchAff_)
+import Effect.Aff (Aff, Error, bracket, error, finally, launchAff_)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import Env (Env(..))
+import Env (Env(..), WalletFunds)
 import Halogen as H
 import Halogen.Subscription (Listener, SubscribeIO)
 import Halogen.Subscription as HS
 import MainFrame.State (mkMainFrame)
 import MainFrame.Types as MF
-import Marlowe.Semantics (Assets)
+import Marlowe.Semantics (Assets(..), CurrencySymbol, TokenName)
 import Marlowe.Time (unixEpoch)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
@@ -108,7 +113,6 @@ marloweRunTestWith
        => m Unit
      )
   -> Spec Unit
-
 marloweRunTestWith name addressBook contractNicknames wallet test = it name $
   bracket
     (liftAff mkTestEnv)
@@ -159,7 +163,11 @@ derive newtype instance Monad m => MonadAsk Coenv (MarloweTestM m)
 derive newtype instance Monad m => MonadReader Coenv (MarloweTestM m)
 derive newtype instance MonadTest m => MonadTest (MarloweTestM m)
 derive newtype instance MonadUser m => MonadUser (MarloweTestM m)
-derive newtype instance MonadAff m => MonadMockHTTP (MarloweTestM m)
+derive newtype instance
+  ( MonadError Error m
+  , MonadAff m
+  ) =>
+  MonadMockHTTP (MarloweTestM m)
 
 derive newtype instance
   MonadHalogenTest q i o m =>
@@ -204,6 +212,7 @@ mkTestEnv = do
   redeemListeners <- liftAff $ AVar.new Map.empty
   followerBus <- liftEffect $ EventBus.create
   pabWebsocketIn <- liftEffect $ HS.create
+  walletFunds <- liftEffect $ HS.create
   pabWebsocketOut <- liftEffect $ HS.create
   errors <- liftEffect $ HS.create
   pabWebsocketOutQueue <- Queue.new
@@ -215,12 +224,15 @@ mkTestEnv = do
   let
     sources =
       { pabWebsocket: pabWebsocketIn.emitter
+      , walletFunds: walletFunds.emitter
       }
-    sinks = { pabWebsocket: pabWebsocketOut.listener }
+    sinks =
+      { logger: testLogger logMessages
+      , pabWebsocket: pabWebsocketOut.listener
+      }
 
     env = Env
       { contractStepCarouselSubscription
-      , logger: testLogger logMessages
       , endpointSemaphores
       , createListeners
       , applyInputListeners
@@ -228,11 +240,10 @@ mkTestEnv = do
       , followerBus
       , sinks
       , sources
-      , regularPollInterval: fromDuration $ Seconds 5.0
-      , syncPollInterval: fromDuration $ Seconds 0.5
       }
     coenv =
       { pabWebsocketIn: pabWebsocketIn.listener
+      , walletFunds: walletFunds.listener
       , pabWebsocketOut: pabWebsocketOutQueue
       , httpRequests
       , dispose: do
@@ -255,6 +266,37 @@ type Coenv =
   { pabWebsocketOut :: Queue CombinedWSStreamToServer
   , httpRequests :: Queue RequestBox
   , pabWebsocketIn :: Listener (FromSocket CombinedWSStreamToClient)
+  , walletFunds :: Listener WalletFunds
   , dispose :: Effect Unit
   , wallets :: Ref (Bimap WalletName TestWallet)
   }
+
+fundWallet
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
+  => WalletName
+  -> CurrencySymbol
+  -> TokenName
+  -> BigInt
+  -> m Unit
+fundWallet walletName currencySymbol tokenName amount = do
+  walletsRef <- asks _.wallets
+  walletFunds <- asks _.walletFunds
+  wallets <- liftEffect $ Ref.read walletsRef
+  wallet <- case Bimap.lookupL walletName wallets of
+    Nothing -> throwError $ error $ "Test error: unknown wallet " <> walletName
+    Just w -> pure w
+  liftEffect do
+    let
+      alter
+        :: forall k v. Ord k => k -> (Maybe v -> Maybe v) -> Map k v -> Map k v
+      alter = flip Map.alter
+      addAsset = alter currencySymbol $ Just <<< case _ of
+        Nothing -> Map.singleton tokenName amount
+        Just tokens -> alter tokenName (lift2 add (pure amount)) tokens
+      assets = over Assets addAsset wallet.assets
+    let newWallet = wallet { assets = assets }
+    Ref.write (Bimap.insert walletName newWallet wallets) walletsRef
+    HS.notify walletFunds { sync: Synchronized, assets }

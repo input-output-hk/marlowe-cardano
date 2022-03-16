@@ -15,44 +15,12 @@
     }
   ],
   [
-    10000,
+    0,
     {
-      "tag": "HttpRequest",
+      "tag": "FundWallet",
       "content": {
-        "expect": {
-          "method": "GET",
-          "uri": "/api/wallet/v1/b57c4784ed9c9d087053f6f04219aec82fca839a/total-funds"
-        },
-        "respond": {
-          "content": {
-            "tag": "RespondJson",
-            "content": {
-              "assets": { "getValue": [] },
-              "sync": 0
-            }
-          }
-        }
-      }
-    }
-  ],
-  [
-    10000,
-    {
-      "tag": "HttpRequest",
-      "content": {
-        "expect": {
-          "method": "GET",
-          "uri": "/api/wallet/v1/b57c4784ed9c9d087053f6f04219aec82fca839a/total-funds"
-        },
-        "respond": {
-          "content": {
-            "tag": "RespondJson",
-            "content": {
-              "assets": { "getValue": [] },
-              "sync": 0
-            }
-          }
-        }
+        "walletName": "Wallet1",
+        "lovelace": 1000000000
       }
     }
   ],
