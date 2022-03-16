@@ -20,8 +20,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Hooks as Hooks
 import Pretty (showBigIntAsCurrency)
 
-type Input
-  =
+type Input =
   { classList :: Array String
   , value :: BigInt
   , prefix :: String

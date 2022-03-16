@@ -10,8 +10,7 @@ import Data.UUID.Argonaut (UUID)
 import Marlowe.Extended.Metadata (MetaData)
 
 -- This data type contains the information needed to display a new contract
-data NewContract
-  = NewContract UUID ContractNickname MetaData
+data NewContract = NewContract UUID ContractNickname MetaData
 
 derive instance Eq NewContract
 

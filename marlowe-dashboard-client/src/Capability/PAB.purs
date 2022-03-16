@@ -90,10 +90,10 @@ class Monad m <= ManagePAB m where
   getWalletContractInstances
     :: WalletId
     -> m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
-  getAllContractInstances :: m
-    (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
-  getContractDefinitions :: m
-    (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
+  getAllContractInstances
+    :: m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
+  getContractDefinitions
+    :: m (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
   onNewActiveEndpoints :: PlutusAppId -> Array ActiveEndpoint -> m Unit
   subscribeToPlutusApp :: PlutusAppId -> m Unit
   subscribeToWallet :: WalletId -> m Unit

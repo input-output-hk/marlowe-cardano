@@ -10,11 +10,8 @@ data WarningAnalysisError
   = WarningAnalysisAjaxError JsonAjaxError
   | WarningAnalysisIsExtendedMarloweError
 
-type WebData
-  = RemoteData JsonAjaxError
+type WebData = RemoteData JsonAjaxError
 
-type WarningAnalysisData
-  = RemoteData WarningAnalysisError
+type WarningAnalysisData = RemoteData WarningAnalysisError
 
-data MarloweError
-  = MarloweError String
+data MarloweError = MarloweError String

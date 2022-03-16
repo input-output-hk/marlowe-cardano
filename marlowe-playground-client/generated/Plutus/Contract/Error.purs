@@ -136,8 +136,9 @@ _WalletContractError = prism' WalletContractError case _ of
   (WalletContractError a) -> Just a
   _ -> Nothing
 
-_ChainIndexContractError :: Prism' ContractError
-  { a :: String, b :: ChainIndexResponse }
+_ChainIndexContractError
+  :: Prism' ContractError
+       { a :: String, b :: ChainIndexResponse }
 _ChainIndexContractError = prism' (\{ a, b } -> (ChainIndexContractError a b))
   case _ of
     (ChainIndexContractError a b) -> Just { a, b }
@@ -165,11 +166,12 @@ _CCheckpointContractError = prism' CCheckpointContractError case _ of
   (CCheckpointContractError a) -> Just a
   _ -> Nothing
 
-_EndpointDecodeContractError :: Prism' ContractError
-  { eeEndpointDescription :: EndpointDescription
-  , eeEndpointValue :: EndpointValue RawJson
-  , eeErrorMessage :: String
-  }
+_EndpointDecodeContractError
+  :: Prism' ContractError
+       { eeEndpointDescription :: EndpointDescription
+       , eeEndpointValue :: EndpointValue RawJson
+       , eeErrorMessage :: String
+       }
 _EndpointDecodeContractError = prism' EndpointDecodeContractError case _ of
   (EndpointDecodeContractError a) -> Just a
   _ -> Nothing

@@ -117,8 +117,7 @@ type Input =
   , contractIndex :: ContractStatusId
   }
 
-data Msg
-  = AskConfirmation NamedAction (Maybe ChosenNum)
+data Msg = AskConfirmation NamedAction (Maybe ChosenNum)
 
 data Action
   = Init

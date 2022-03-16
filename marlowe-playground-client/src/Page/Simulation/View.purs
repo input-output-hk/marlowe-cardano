@@ -326,8 +326,7 @@ sidebar metadata state =
       ]
 
 ------------------------------------------------------------
-type TemplateFormDisplayInfo
-  =
+type TemplateFormDisplayInfo =
   { lookupFormat ::
       String -> Maybe (String /\ Int) -- Gets the format for a given key
   , lookupDefinition ::

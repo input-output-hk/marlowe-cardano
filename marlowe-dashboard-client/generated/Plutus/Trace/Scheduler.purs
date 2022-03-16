@@ -111,12 +111,13 @@ derive instance Newtype SchedulerLog _
 
 --------------------------------------------------------------------------------
 
-_SchedulerLog :: Iso' SchedulerLog
-  { slEvent :: ThreadEvent
-  , slThread :: ThreadId
-  , slTag :: Tag
-  , slPrio :: Priority
-  }
+_SchedulerLog
+  :: Iso' SchedulerLog
+       { slEvent :: ThreadEvent
+       , slThread :: ThreadId
+       , slTag :: Tag
+       , slPrio :: Priority
+       }
 _SchedulerLog = _Newtype
 
 --------------------------------------------------------------------------------

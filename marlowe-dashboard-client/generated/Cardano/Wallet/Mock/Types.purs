@@ -54,6 +54,7 @@ derive instance Newtype WalletInfo _
 
 --------------------------------------------------------------------------------
 
-_WalletInfo :: Iso' WalletInfo
-  { wiWallet :: Wallet, wiPaymentPubKeyHash :: PaymentPubKeyHash }
+_WalletInfo
+  :: Iso' WalletInfo
+       { wiWallet :: Wallet, wiPaymentPubKeyHash :: PaymentPubKeyHash }
 _WalletInfo = _Newtype

@@ -517,8 +517,7 @@ mkDefaultTerm a = Term a NoLocation
 class HasMarloweHoles a where
   getHoles :: a -> Holes -> Holes
 
-type ContractData
-  =
+type ContractData =
   { parties :: Set Party
   , tokens :: Set Token
   }
@@ -554,8 +553,7 @@ getLocation (Term _ location) = location
 getLocation (Hole _ location) = location
 
 -- A TermWrapper is like a Term but doesn't have a Hole constructor
-data TermWrapper a
-  = TermWrapper a Location
+data TermWrapper a = TermWrapper a Location
 
 derive instance genericTermWrapper :: Generic a r => Generic (TermWrapper a) _
 
@@ -587,8 +585,7 @@ mkDefaultTermWrapper :: forall a. a -> TermWrapper a
 mkDefaultTermWrapper a = TermWrapper a NoLocation
 
 -- a concrete type for holes only
-newtype MarloweHole
-  = MarloweHole
+newtype MarloweHole = MarloweHole
   { name :: String
   , marloweType :: MarloweType
   , location :: Location
@@ -607,8 +604,7 @@ class IsMarloweType a where
   marloweType :: Proxy a -> MarloweType
 
 -- a Monoid for collecting Holes
-newtype Holes
-  = Holes (Map String (Set MarloweHole))
+newtype Holes = Holes (Map String (Set MarloweHole))
 
 derive instance genericHoles :: Generic Holes _
 
@@ -643,8 +639,7 @@ instance arrayHasMarloweHoles :: HasMarloweHoles a => HasMarloweHoles (Array a) 
 instance arrayHasContractData :: HasContractData a => HasContractData (Array a) where
   gatherContractData as s = foldMap (\a -> gatherContractData a s) as
 
-data Bound
-  = Bound BigInt BigInt
+data Bound = Bound BigInt BigInt
 
 derive instance genericBound :: Generic Bound _
 
@@ -759,11 +754,9 @@ instance partyHasMarloweHoles :: HasMarloweHoles Party where
 instance partyHasContractData :: HasContractData Party where
   gatherContractData party s = over _parties (Set.insert party) s
 
-type AccountId
-  = Term Party
+type AccountId = Term Party
 
-data Token
-  = Token CurrencySymbol String
+data Token = Token CurrencySymbol String
 
 derive instance genericToken :: Generic Token _
 
@@ -793,8 +786,7 @@ instance tokenHasMarloweHoles :: HasMarloweHoles Token where
 instance tokenHasContractData :: HasContractData Token where
   gatherContractData token s = over _tokens (Set.insert token) s
 
-data ChoiceId
-  = ChoiceId String (Term Party)
+data ChoiceId = ChoiceId String (Term Party)
 
 derive instance genericChoiceId :: Generic ChoiceId _
 
@@ -912,8 +904,7 @@ instance payeeHasContractData :: HasContractData Payee where
   gatherContractData (Account accountId) s = gatherContractData accountId s
   gatherContractData (Party party) s = gatherContractData party s
 
-data Case
-  = Case (Term Action) (Term Contract)
+data Case = Case (Term Action) (Term Contract)
 
 derive instance genericCase :: Generic Case _
 
@@ -1279,8 +1270,7 @@ instance contractHasContractData :: HasContractData Contract where
   gatherContractData (Assert a b) s = gatherContractData a s <>
     gatherContractData b s
 
-newtype ValueId
-  = ValueId String
+newtype ValueId = ValueId String
 
 derive instance genericValueId :: Generic ValueId _
 

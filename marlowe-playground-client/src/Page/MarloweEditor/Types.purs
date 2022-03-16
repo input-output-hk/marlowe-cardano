@@ -21,8 +21,7 @@ import StaticAnalysis.Types (AnalysisState, initAnalysisState)
 import Type.Proxy (Proxy(..))
 import Web.HTML.Event.DragEvent (DragEvent)
 
-type Pos
-  = Int
+type Pos = Int
 
 data Action
   = ChangeKeyBindings KeyBindings
@@ -91,8 +90,7 @@ derive instance genericBottomPanelView :: Generic BottomPanelView _
 instance showBottomPanelView :: Show BottomPanelView where
   show = genericShow
 
-type State
-  =
+type State =
   { keybindings :: KeyBindings
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , showErrorDetail :: Boolean

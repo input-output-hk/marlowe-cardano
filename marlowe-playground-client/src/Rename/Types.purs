@@ -20,8 +20,7 @@ instance isEventAction :: IsEvent Action where
     , value: Nothing
     }
 
-type State
-  =
+type State =
   { projectName :: String
   , error :: Maybe String
   }

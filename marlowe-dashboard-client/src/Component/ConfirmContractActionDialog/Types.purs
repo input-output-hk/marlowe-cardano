@@ -24,8 +24,7 @@ import Marlowe.Execution.Types as Execution
 import Marlowe.Semantics (ChosenNum, TransactionInput)
 import Type.Proxy (Proxy(..))
 
-data Msg
-  = DialogClosed
+data Msg = DialogClosed
 
 data Action
   = ConfirmAction NamedAction

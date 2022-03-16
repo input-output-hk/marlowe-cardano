@@ -34,8 +34,8 @@ newtype UserNamedActions =
 
 derive instance Eq UserNamedActions
 
-_UserNamedActions :: Lens' UserNamedActions
-  (Array (Tuple Party (Array NamedAction)))
+_UserNamedActions
+  :: Lens' UserNamedActions (Array (Tuple Party (Array NamedAction)))
 _UserNamedActions = iso
   (\(UserNamedActions m) -> m)
   (\m -> UserNamedActions m)

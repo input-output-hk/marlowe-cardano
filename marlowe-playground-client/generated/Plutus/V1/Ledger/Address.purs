@@ -59,8 +59,9 @@ derive instance Newtype Address _
 
 --------------------------------------------------------------------------------
 
-_Address :: Iso' Address
-  { addressCredential :: Credential
-  , addressStakingCredential :: Maybe StakingCredential
-  }
+_Address
+  :: Iso' Address
+       { addressCredential :: Credential
+       , addressStakingCredential :: Maybe StakingCredential
+       }
 _Address = _Newtype

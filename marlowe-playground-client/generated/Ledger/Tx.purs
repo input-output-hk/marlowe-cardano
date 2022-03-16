@@ -135,18 +135,20 @@ derive instance Generic ChainIndexTxOut _
 
 --------------------------------------------------------------------------------
 
-_PublicKeyChainIndexTxOut :: Prism' ChainIndexTxOut
-  { _ciTxOutAddress :: Address, _ciTxOutValue :: Value }
+_PublicKeyChainIndexTxOut
+  :: Prism' ChainIndexTxOut
+       { _ciTxOutAddress :: Address, _ciTxOutValue :: Value }
 _PublicKeyChainIndexTxOut = prism' PublicKeyChainIndexTxOut case _ of
   (PublicKeyChainIndexTxOut a) -> Just a
   _ -> Nothing
 
-_ScriptChainIndexTxOut :: Prism' ChainIndexTxOut
-  { _ciTxOutAddress :: Address
-  , _ciTxOutValidator :: Either String Validator
-  , _ciTxOutDatum :: Either DatumHash String
-  , _ciTxOutValue :: Value
-  }
+_ScriptChainIndexTxOut
+  :: Prism' ChainIndexTxOut
+       { _ciTxOutAddress :: Address
+       , _ciTxOutValidator :: Either String Validator
+       , _ciTxOutDatum :: Either DatumHash String
+       , _ciTxOutValue :: Value
+       }
 _ScriptChainIndexTxOut = prism' ScriptChainIndexTxOut case _ of
   (ScriptChainIndexTxOut a) -> Just a
   _ -> Nothing

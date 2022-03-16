@@ -41,12 +41,9 @@ type JsonDecodeErrorRow r = (jsonDecodeError :: JsonDecodeError | r)
 jsonDecodeError :: forall r. JsonDecodeError -> Variant (JsonDecodeErrorRow r)
 jsonDecodeError = Variant.inj (Proxy :: Proxy "jsonDecodeError")
 
-type AjaxResponse
-  = Either JsonAjaxError
+type AjaxResponse = Either JsonAjaxError
 
-type DecodedAjaxError
-  = Either JsonAjaxError JsonDecodeError
+type DecodedAjaxError = Either JsonAjaxError JsonDecodeError
 
-type DecodedAjaxResponse
-  = Either DecodedAjaxError
+type DecodedAjaxResponse = Either DecodedAjaxError
 

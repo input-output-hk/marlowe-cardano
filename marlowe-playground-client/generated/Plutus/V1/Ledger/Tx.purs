@@ -175,18 +175,19 @@ derive instance Newtype Tx _
 
 --------------------------------------------------------------------------------
 
-_Tx :: Iso' Tx
-  { txInputs :: Set TxIn
-  , txCollateral :: Set TxIn
-  , txOutputs :: Array TxOut
-  , txMint :: Value
-  , txFee :: Value
-  , txValidRange :: Interval Slot
-  , txMintScripts :: Set MintingPolicy
-  , txSignatures :: Map PubKey Signature
-  , txRedeemers :: Map RedeemerPtr String
-  , txData :: Map DatumHash String
-  }
+_Tx
+  :: Iso' Tx
+       { txInputs :: Set TxIn
+       , txCollateral :: Set TxIn
+       , txOutputs :: Array TxOut
+       , txMint :: Value
+       , txFee :: Value
+       , txValidRange :: Interval Slot
+       , txMintScripts :: Set MintingPolicy
+       , txSignatures :: Map PubKey Signature
+       , txRedeemers :: Map RedeemerPtr String
+       , txData :: Map DatumHash String
+       }
 _Tx = _Newtype
 
 --------------------------------------------------------------------------------
@@ -268,8 +269,9 @@ derive instance Generic TxInType _
 
 --------------------------------------------------------------------------------
 
-_ConsumeScriptAddress :: Prism' TxInType
-  { a :: Validator, b :: String, c :: String }
+_ConsumeScriptAddress
+  :: Prism' TxInType
+       { a :: Validator, b :: String, c :: String }
 _ConsumeScriptAddress = prism' (\{ a, b, c } -> (ConsumeScriptAddress a b c))
   case _ of
     (ConsumeScriptAddress a b c) -> Just { a, b, c }
@@ -323,11 +325,12 @@ derive instance Newtype TxOut _
 
 --------------------------------------------------------------------------------
 
-_TxOut :: Iso' TxOut
-  { txOutAddress :: Address
-  , txOutValue :: Value
-  , txOutDatumHash :: Maybe DatumHash
-  }
+_TxOut
+  :: Iso' TxOut
+       { txOutAddress :: Address
+       , txOutValue :: Value
+       , txOutDatumHash :: Maybe DatumHash
+       }
 _TxOut = _Newtype
 
 --------------------------------------------------------------------------------

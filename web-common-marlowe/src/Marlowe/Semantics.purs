@@ -124,8 +124,7 @@ next =
       <*> pure unit
 
 -- TODO: fix primitive obsession
-type PubKey
-  = String
+type PubKey = String
 
 data Party
   = PK PubKey
@@ -160,22 +159,17 @@ instance hasArgsParty :: Args Party where
   hasArgs = genericHasArgs
   hasNestedArgs = genericHasNestedArgs
 
-type Timeout
-  = POSIXTime
+type Timeout = POSIXTime
 
-type Money
-  = Assets
+type Money = Assets
 
 -- TODO: fix primitive obsession
-type CurrencySymbol
-  = String
+type CurrencySymbol = String
 
 -- TODO: fix primitive obsession
-type TokenName
-  = String
+type TokenName = String
 
-data Token
-  = Token CurrencySymbol TokenName
+data Token = Token CurrencySymbol TokenName
 
 instance encodeJsonToken :: EncodeJson Token where
   encodeJson (Token cur tok) =
@@ -221,20 +215,16 @@ instance hasArgsToken :: Args Token where
   hasNestedArgs = genericHasNestedArgs
 
 -- TODO: fix primitive obsession
-type ChosenNum
-  = BigInt
+type ChosenNum = BigInt
 
 -- TODO: fix primitive obsession
-type Accounts
-  = Map (Tuple AccountId Token) BigInt
+type Accounts = Map (Tuple AccountId Token) BigInt
 
 -- TODO: fix primitive obsession
-type ChoiceName
-  = String
+type ChoiceName = String
 
 -- TODO: fix primitive obsession
-newtype Assets
-  = Assets (Map CurrencySymbol (Map TokenName BigInt))
+newtype Assets = Assets (Map CurrencySymbol (Map TokenName BigInt))
 
 derive instance genericAssets :: Generic Assets _
 
@@ -258,8 +248,7 @@ instance semigroupAssets :: Semigroup Assets where
 instance monoidAssets :: Monoid Assets where
   mempty = Assets Map.empty
 
-newtype Ada
-  = Lovelace BigInt
+newtype Ada = Lovelace BigInt
 
 derive newtype instance encodeJsonAda :: EncodeJson Ada
 
@@ -285,12 +274,10 @@ derive newtype instance euclideanRingAda :: EuclideanRing Ada
 instance commutativeRingAda :: CommutativeRing Ada
 
 -- TODO: remove or make a newtype
-type AccountId
-  = Party
+type AccountId = Party
 
 -- TODO: extract module
-data ChoiceId
-  = ChoiceId String Party
+data ChoiceId = ChoiceId String Party
 
 derive instance genericChoiceId :: Generic ChoiceId _
 
@@ -329,8 +316,7 @@ choiceOwner :: ChoiceId -> Party
 choiceOwner (ChoiceId _ owner) = owner
 
 -- TODO: extract module
-newtype ValueId
-  = ValueId String
+newtype ValueId = ValueId String
 
 derive instance genericValueId :: Generic ValueId _
 
@@ -355,8 +341,7 @@ instance hasArgsValueId :: Args ValueId where
   hasNestedArgs _ = false
 
 -- TODO: extract module
-data Rational
-  = Rational BigInt BigInt
+data Rational = Rational BigInt BigInt
 
 derive instance genericRational :: Generic Rational _
 
@@ -618,8 +603,7 @@ anyWithin :: forall f. Foldable f => POSIXTime -> f TimeInterval -> Boolean
 anyWithin v = any (\(TimeInterval from to) -> v >= from && v <= to)
 
 -- TODO: extract module
-data TimeInterval
-  = TimeInterval POSIXTime POSIXTime
+data TimeInterval = TimeInterval POSIXTime POSIXTime
 
 derive instance genericTimeInterval :: Generic TimeInterval _
 
@@ -644,8 +628,7 @@ ivTo :: TimeInterval -> POSIXTime
 ivTo (TimeInterval _ to) = to
 
 -- TODO: extract module
-data Bound
-  = Bound BigInt BigInt
+data Bound = Bound BigInt BigInt
 
 derive instance genericBound :: Generic Bound _
 
@@ -786,8 +769,7 @@ instance hasArgsPayee :: Args Payee where
   hasArgs a = genericHasArgs a
   hasNestedArgs a = genericHasNestedArgs a
 
-data Case
-  = Case Action Contract
+data Case = Case Action Contract
 
 derive instance genericCase :: Generic Case _
 
@@ -943,8 +925,7 @@ _boundValues = _Newtype <<< prop (Proxy :: _ "boundValues")
 _minTime :: Lens' State POSIXTime
 _minTime = _Newtype <<< prop (Proxy :: _ "minTime")
 
-newtype Environment
-  = Environment { timeInterval :: TimeInterval }
+newtype Environment = Environment { timeInterval :: TimeInterval }
 
 derive instance genericEnvironment :: Generic Environment _
 
@@ -1064,8 +1045,7 @@ derive instance eqIntervalResult :: Eq IntervalResult
 instance showIntervalResult :: Show IntervalResult where
   show v = genericShow v
 
-data Payment
-  = Payment AccountId Payee Money
+data Payment = Payment AccountId Payee Money
 
 derive instance genericPayment :: Generic Payment _
 
@@ -1325,8 +1305,7 @@ instance genericDecodeJsonTransactionError :: DecodeJson TransactionError where
           , "TEUselessTransaction" /\ pure TEUselessTransaction
           ]
 
-newtype TransactionInput
-  = TransactionInput
+newtype TransactionInput = TransactionInput
   { interval :: TimeInterval
   , inputs :: (List Input)
   }
@@ -1434,8 +1413,7 @@ _rolesCurrency = _Newtype <<< prop (Proxy :: _ "rolesCurrency") <<< prop
   (Proxy :: _ "unCurrencySymbol")
 
 -- TODO: fix primitive obsession
-type ValidatorHash
-  = String
+type ValidatorHash = String
 
 emptyState :: State
 emptyState =
@@ -1871,8 +1849,7 @@ moneyInContract state =
     (\(Tuple _ (Token cur tok)) balance -> asset cur tok balance)
     (unwrap state).accounts
 
-newtype Timeouts
-  = Timeouts { maxTime :: Timeout, minTime :: Maybe Timeout }
+newtype Timeouts = Timeouts { maxTime :: Timeout, minTime :: Maybe Timeout }
 
 derive instance newtypeTimeouts :: Newtype Timeouts _
 

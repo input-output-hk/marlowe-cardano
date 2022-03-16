@@ -73,8 +73,7 @@ import StaticAnalysis.Types (ContractPath, ContractPathStep(..), PrefixMap)
 import Text.Pretty (hasArgs, pretty)
 import Type.Proxy (Proxy(..))
 
-newtype MaxTimeout
-  = MaxTimeout POSIXTime
+newtype MaxTimeout = MaxTimeout POSIXTime
 
 derive instance newtypeMaxTimeout :: Newtype MaxTimeout _
 
@@ -91,8 +90,7 @@ instance monoidMaxTimeout :: Monoid MaxTimeout where
 -- We could eventually see if we can make Warning polymorphic on the location, even if Term cannot be.
 -- for the moment we don't have static guarantees on the Location type, but runtype exceptions if it
 -- is missused.
-newtype Warning
-  = Warning
+newtype Warning = Warning
   { warning :: WarningDetail
   , location :: Location
   -- FIXME: The Maybe TextEdit only makes sense for LinterText
@@ -185,8 +183,7 @@ instance ordWarning :: Ord Warning where
 instance showWarning :: Show Warning where
   show (Warning warn) = show warn.warning
 
-newtype State
-  = State
+newtype State = State
   { holes :: Holes
   , warnings :: Set Warning
   , metadataHints :: MetadataHintInfo
@@ -228,8 +225,7 @@ addChoiceName :: String -> CMS.State State Unit
 addChoiceName choiceName = modifying (_metadataHints <<< _choiceNames) $
   Set.insert choiceName
 
-newtype LintEnv
-  = LintEnv
+newtype LintEnv = LintEnv
   { choicesMade :: Set S.ChoiceId
   , deposits :: Map (S.AccountId /\ S.Token) (Maybe BigInt)
   , letBindings :: Set S.ValueId

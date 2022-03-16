@@ -123,8 +123,8 @@ handleAction (OnContractSetupMsg (CS.FieldsUpdated fields)) =
     Setup template input -> Setup template input { fields = fields }
     s -> s
 
-data InstantiateContractError
-  = InstantiateContractError Instant ContractTemplate ContractParams
+data InstantiateContractError =
+  InstantiateContractError Instant ContractTemplate ContractParams
 
 instance Explain InstantiateContractError where
   explain _ = text

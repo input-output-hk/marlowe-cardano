@@ -272,8 +272,7 @@ provideCodeActions uri markers' additionalContext =
               in
                 actions
 
-type AdditionalContext
-  =
+type AdditionalContext =
   { warnings :: Set Warning
   , contract :: Maybe (Term Contract)
   , metadataHints :: Maybe MetadataHintInfo

@@ -52,6 +52,7 @@ derive instance Newtype Request _
 
 --------------------------------------------------------------------------------
 
-_Request :: Iso' Request
-  { onlyAssertions :: Boolean, contract :: Contract, state :: State }
+_Request
+  :: Iso' Request
+       { onlyAssertions :: Boolean, contract :: Contract, state :: State }
 _Request = _Newtype

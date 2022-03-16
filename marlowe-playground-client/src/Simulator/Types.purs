@@ -155,8 +155,7 @@ instance decodeJsonActionInput :: DecodeJson ActionInput where
           ]
 
 -- TODO: Probably rename to PartiesActions or similar
-newtype Parties
-  = Parties (Map Party (Map ActionInputId ActionInput))
+newtype Parties = Parties (Map Party (Map ActionInputId ActionInput))
 
 derive instance newtypeParties :: Newtype Parties _
 

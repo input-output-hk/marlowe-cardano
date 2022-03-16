@@ -38,8 +38,7 @@ mkNewGistFile _newGistFilename _newGistFileContent =
     , _newGistFileContent
     }
 
-type PlaygroundFiles
-  =
+type PlaygroundFiles =
   { playground :: String
   , marlowe :: Maybe String
   , haskell :: Maybe String
@@ -62,15 +61,15 @@ toArray { playground, marlowe, haskell, blockly, javascript, actus, metadata } =
       , mkNewGistFile filenames.metadata <$> metadata
       ]
 
-filenames ::
-  { playground :: String
-  , marlowe :: String
-  , haskell :: String
-  , blockly :: String
-  , javascript :: String
-  , actus :: String
-  , metadata :: String
-  }
+filenames
+  :: { playground :: String
+     , marlowe :: String
+     , haskell :: String
+     , blockly :: String
+     , javascript :: String
+     , actus :: String
+     , metadata :: String
+     }
 filenames =
   { playground: "playground.marlowe.json"
   , marlowe: "playground.marlowe"

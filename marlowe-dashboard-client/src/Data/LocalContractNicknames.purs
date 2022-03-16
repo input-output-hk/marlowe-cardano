@@ -21,8 +21,8 @@ derive instance Eq LocalContractNicknames
 derive newtype instance EncodeJson LocalContractNicknames
 derive newtype instance DecodeJson LocalContractNicknames
 
-_LocalContractNicknames :: Lens' LocalContractNicknames
-  (Map MarloweParams ContractNickname)
+_LocalContractNicknames
+  :: Lens' LocalContractNicknames (Map MarloweParams ContractNickname)
 _LocalContractNicknames = iso
   (\(LocalContractNicknames m) -> m)
   (\m -> LocalContractNicknames m)

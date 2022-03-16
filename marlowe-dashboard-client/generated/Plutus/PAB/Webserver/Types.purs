@@ -75,11 +75,12 @@ derive instance Newtype ChainReport _
 
 --------------------------------------------------------------------------------
 
-_ChainReport :: Iso' ChainReport
-  { transactionMap :: Map TxId Tx
-  , utxoIndex :: UtxoIndex
-  , annotatedBlockchain :: Array (Array AnnotatedTx)
-  }
+_ChainReport
+  :: Iso' ChainReport
+       { transactionMap :: Map TxId Tx
+       , utxoIndex :: UtxoIndex
+       , annotatedBlockchain :: Array (Array AnnotatedTx)
+       }
 _ChainReport = _Newtype
 
 --------------------------------------------------------------------------------
@@ -107,8 +108,9 @@ derive instance Generic CombinedWSStreamToClient _
 
 --------------------------------------------------------------------------------
 
-_InstanceUpdate :: Prism' CombinedWSStreamToClient
-  { a :: PlutusAppId, b :: InstanceStatusToClient }
+_InstanceUpdate
+  :: Prism' CombinedWSStreamToClient
+       { a :: PlutusAppId, b :: InstanceStatusToClient }
 _InstanceUpdate = prism' (\{ a, b } -> (InstanceUpdate a b)) case _ of
   (InstanceUpdate a b) -> Just { a, b }
   _ -> Nothing
@@ -265,8 +267,9 @@ instance (EncodeJson a) => EncodeJson (ContractReport a) where
         { crAvailableContracts:
             E.value :: _ (Array (ContractSignatureResponse a))
         , crActiveContractStates:
-            E.value :: _
-              (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
+            E.value
+              :: _
+                   (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
         }
     )
 
@@ -276,8 +279,9 @@ instance (DecodeJson a) => DecodeJson (ContractReport a) where
         { crAvailableContracts:
             D.value :: _ (Array (ContractSignatureResponse a))
         , crActiveContractStates:
-            D.value :: _
-              (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
+            D.value
+              :: _
+                   (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
         }
     )
 

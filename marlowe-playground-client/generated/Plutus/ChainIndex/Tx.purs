@@ -82,16 +82,17 @@ derive instance Newtype ChainIndexTx _
 
 --------------------------------------------------------------------------------
 
-_ChainIndexTx :: Iso' ChainIndexTx
-  { _citxTxId :: TxId
-  , _citxInputs :: Set TxIn
-  , _citxOutputs :: ChainIndexTxOutputs
-  , _citxValidRange :: Interval Slot
-  , _citxData :: Map DatumHash String
-  , _citxRedeemers :: Map String String
-  , _citxScripts :: Map String String
-  , _citxCardanoTx :: Maybe RawJson
-  }
+_ChainIndexTx
+  :: Iso' ChainIndexTx
+       { _citxTxId :: TxId
+       , _citxInputs :: Set TxIn
+       , _citxOutputs :: ChainIndexTxOutputs
+       , _citxValidRange :: Interval Slot
+       , _citxData :: Map DatumHash String
+       , _citxRedeemers :: Map String String
+       , _citxScripts :: Map String String
+       , _citxCardanoTx :: Maybe RawJson
+       }
 _ChainIndexTx = _Newtype
 
 citxTxId :: Lens' ChainIndexTx TxId

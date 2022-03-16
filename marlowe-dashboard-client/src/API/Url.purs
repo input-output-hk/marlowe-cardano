@@ -6,8 +6,7 @@ module API.Url
 
 import Wallet.Emulator.Wallet (Wallet(..))
 
-type URLPiece
-  = String
+type URLPiece = String
 
 -- servant-purescript provides a ToUrlPiece class, but it doesn't work as we need it to
 -- for our generated data types

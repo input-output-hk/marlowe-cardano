@@ -238,8 +238,9 @@ _TipAtGenesis = prism' (const TipAtGenesis) case _ of
   TipAtGenesis -> Just unit
   _ -> Nothing
 
-_Tip :: Prism' Tip
-  { tipSlot :: Slot, tipBlockId :: BlockId, tipBlockNo :: BlockNumber }
+_Tip
+  :: Prism' Tip
+       { tipSlot :: Slot, tipBlockId :: BlockId, tipBlockNo :: BlockNumber }
 _Tip = prism' Tip case _ of
   (Tip a) -> Just a
   _ -> Nothing

@@ -13,8 +13,7 @@ import Halogen (RefLabel(..), SubscriptionId)
 import Marlowe.Linter (Warning)
 import Type.Proxy (Proxy(..))
 
-type State
-  =
+type State =
   { blocklyState :: Maybe BT.BlocklyState
   , errorMessage :: Maybe String
   , blocklyEventSubscription :: Maybe SubscriptionId

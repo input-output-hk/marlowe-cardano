@@ -25,8 +25,7 @@ import Test.QuickCheck.Gen (Gen)
 import Test.Spec.QuickCheck (quickCheck)
 
 -- TODO: rename to GenContract or similar
-newtype GenWithHoles a
-  = GenWithHoles (ReaderT GenerationOptions Gen a)
+newtype GenWithHoles a = GenWithHoles (ReaderT GenerationOptions Gen a)
 
 unGenWithHoles :: forall a. GenWithHoles a -> ReaderT GenerationOptions Gen a
 unGenWithHoles (GenWithHoles g) = g

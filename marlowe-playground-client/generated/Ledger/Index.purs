@@ -96,8 +96,9 @@ instance EncodeJson ScriptValidationEvent where
     ( E.record
         { sveScript: E.value :: _ String
         , sveResult:
-            (E.either E.value (E.tuple (E.value >/\< E.value))) :: _
-              (Either ScriptError (Tuple RawJson (Array String)))
+            (E.either E.value (E.tuple (E.value >/\< E.value)))
+              :: _
+                   (Either ScriptError (Tuple RawJson (Array String)))
         , sveRedeemer: E.value :: _ String
         , sveType: E.value :: _ ScriptType
         }
@@ -108,8 +109,9 @@ instance DecodeJson ScriptValidationEvent where
     ( ScriptValidationEvent <$> D.record "ScriptValidationEvent"
         { sveScript: D.value :: _ String
         , sveResult:
-            (D.either D.value (D.tuple (D.value </\> D.value))) :: _
-              (Either ScriptError (Tuple RawJson (Array String)))
+            (D.either D.value (D.tuple (D.value </\> D.value)))
+              :: _
+                   (Either ScriptError (Tuple RawJson (Array String)))
         , sveRedeemer: D.value :: _ String
         , sveType: D.value :: _ ScriptType
         }
@@ -121,12 +123,13 @@ derive instance Newtype ScriptValidationEvent _
 
 --------------------------------------------------------------------------------
 
-_ScriptValidationEvent :: Iso' ScriptValidationEvent
-  { sveScript :: String
-  , sveResult :: Either ScriptError (Tuple RawJson (Array String))
-  , sveRedeemer :: String
-  , sveType :: ScriptType
-  }
+_ScriptValidationEvent
+  :: Iso' ScriptValidationEvent
+       { sveScript :: String
+       , sveResult :: Either ScriptError (Tuple RawJson (Array String))
+       , sveRedeemer :: String
+       , sveType :: ScriptType
+       }
 _ScriptValidationEvent = _Newtype
 
 --------------------------------------------------------------------------------

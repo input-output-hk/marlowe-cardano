@@ -58,14 +58,12 @@ import Examples.Metadata
 import LocalStorage as LocalStorage
 import Marlowe.Extended.Metadata (MetaData)
 
-type Label
-  = String
+type Label = String
 
-type Contents
-  = String
+type Contents = String
 
-demoFiles ::
-  Map Label Contents
+demoFiles
+  :: Map Label Contents
 demoFiles =
   Map.fromFoldable
     [ "Example" /\ HE.example
@@ -78,8 +76,8 @@ demoFiles =
     , "CFDWithOracle" /\ HE.contractForDifferencesWithOracle
     ]
 
-demoFilesJS ::
-  Map Label Contents
+demoFilesJS
+  :: Map Label Contents
 demoFilesJS =
   Map.fromFoldable
     [ "Example" /\ JSE.example
@@ -92,8 +90,8 @@ demoFilesJS =
     , "CFDWithOracle" /\ JSE.contractForDifferencesWithOracle
     ]
 
-marloweContracts ::
-  Map Label Contents
+marloweContracts
+  :: Map Label Contents
 marloweContracts =
   Map.fromFoldable
     [ "Example" /\ ME.example
@@ -106,8 +104,8 @@ marloweContracts =
     , "CFDWithOracle" /\ ME.contractForDifferencesWithOracle
     ]
 
-demoFilesMetadata ::
-  Map Label MetaData
+demoFilesMetadata
+  :: Map Label MetaData
 demoFilesMetadata =
   Map.fromFoldable
     [ "Example" /\ M.example
@@ -120,28 +118,28 @@ demoFilesMetadata =
     , "CFDWithOracle" /\ M.contractForDifferencesWithOracle
     ]
 
-marloweContract ::
-  Contents
+marloweContract
+  :: Contents
 marloweContract = "(Some Marlowe Code)"
 
-haskellBufferLocalStorageKey ::
-  LocalStorage.Key
+haskellBufferLocalStorageKey
+  :: LocalStorage.Key
 haskellBufferLocalStorageKey = LocalStorage.Key "HaskellBuffer"
 
-jsBufferLocalStorageKey ::
-  LocalStorage.Key
+jsBufferLocalStorageKey
+  :: LocalStorage.Key
 jsBufferLocalStorageKey = LocalStorage.Key "JavascriptBuffer"
 
-marloweBufferLocalStorageKey ::
-  LocalStorage.Key
+marloweBufferLocalStorageKey
+  :: LocalStorage.Key
 marloweBufferLocalStorageKey = LocalStorage.Key "MarloweBuffer"
 
-simulatorBufferLocalStorageKey ::
-  LocalStorage.Key
+simulatorBufferLocalStorageKey
+  :: LocalStorage.Key
 simulatorBufferLocalStorageKey = LocalStorage.Key "SimulationBuffer"
 
-gistIdLocalStorageKey ::
-  LocalStorage.Key
+gistIdLocalStorageKey
+  :: LocalStorage.Key
 gistIdLocalStorageKey = LocalStorage.Key "GistId"
 
 sessionStorageKey :: LocalStorage.Key

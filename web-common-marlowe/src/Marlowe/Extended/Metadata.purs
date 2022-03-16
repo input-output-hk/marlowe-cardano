@@ -109,8 +109,7 @@ defaultForFormatType DecimalFormatType = DecimalFormat 0 ""
 
 defaultForFormatType TimeFormatType = TimeFormat
 
-type ValueParameterInfo
-  =
+type ValueParameterInfo =
   { valueParameterFormat :: NumberFormat
   , valueParameterDescription :: String
   }
@@ -232,8 +231,7 @@ getChoiceFormat { choiceInfo } choiceName =
   maybe DefaultFormat (\choiceInfoVal -> choiceInfoVal.choiceFormat) $
     Map.lookup choiceName choiceInfo
 
-type MetadataHintInfo
-  =
+type MetadataHintInfo =
   { roles :: Set S.TokenName
   , timeParameters :: OSet String
   , valueParameters :: OSet String

@@ -84,8 +84,9 @@ instance EncodeJson CheckpointStore where
   encodeJson = defer \_ -> E.encode $ unwrap >$<
     ( E.record
         { unCheckpointStore:
-            (E.dictionary E.value E.value) :: _
-              (Map CheckpointKey (CheckpointStoreItem Json))
+            (E.dictionary E.value E.value)
+              :: _
+                   (Map CheckpointKey (CheckpointStoreItem Json))
         }
     )
 
@@ -93,8 +94,9 @@ instance DecodeJson CheckpointStore where
   decodeJson = defer \_ -> D.decode $
     ( CheckpointStore <$> D.record "CheckpointStore"
         { unCheckpointStore:
-            (D.dictionary D.value D.value) :: _
-              (Map CheckpointKey (CheckpointStoreItem Json))
+            (D.dictionary D.value D.value)
+              :: _
+                   (Map CheckpointKey (CheckpointStoreItem Json))
         }
     )
 
@@ -104,8 +106,9 @@ derive instance Newtype CheckpointStore _
 
 --------------------------------------------------------------------------------
 
-_CheckpointStore :: Iso' CheckpointStore
-  { unCheckpointStore :: Map CheckpointKey (CheckpointStoreItem Json) }
+_CheckpointStore
+  :: Iso' CheckpointStore
+       { unCheckpointStore :: Map CheckpointKey (CheckpointStoreItem Json) }
 _CheckpointStore = _Newtype
 
 --------------------------------------------------------------------------------

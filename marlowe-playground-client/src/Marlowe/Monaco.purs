@@ -46,32 +46,37 @@ import Monaco
   , Uri
   )
 
-foreign import hoverProvider_ :: EffectFn1
-  (String -> { contents :: Array IMarkdownString })
-  HoverProvider
+foreign import hoverProvider_
+  :: EffectFn1
+       (String -> { contents :: Array IMarkdownString })
+       HoverProvider
 
-foreign import completionItemProvider_ :: EffectFn1
-  ( String
-    -> Boolean
-    -> String
-    -> IRange
-    -> AdditionalContext
-    -> Array CompletionItem
-  )
-  CompletionItemProvider
+foreign import completionItemProvider_
+  :: EffectFn1
+       ( String
+         -> Boolean
+         -> String
+         -> IRange
+         -> AdditionalContext
+         -> Array CompletionItem
+       )
+       CompletionItemProvider
 
-foreign import codeActionProvider_ :: EffectFn2
-  (Uri -> Array IMarkerData -> AdditionalContext -> Array CodeAction)
-  AdditionalContext
-  CodeActionProvider
+foreign import codeActionProvider_
+  :: EffectFn2
+       (Uri -> Array IMarkerData -> AdditionalContext -> Array CodeAction)
+       AdditionalContext
+       CodeActionProvider
 
-foreign import updateAdditionalContext_ :: EffectFn3 CodeActionProvider
-  CompletionItemProvider
-  AdditionalContext
-  Unit
+foreign import updateAdditionalContext_
+  :: EffectFn3 CodeActionProvider
+       CompletionItemProvider
+       AdditionalContext
+       Unit
 
-foreign import documentFormattingEditProvider_ :: EffectFn1 (String -> String)
-  DocumentFormattingEditProvider
+foreign import documentFormattingEditProvider_
+  :: EffectFn1 (String -> String)
+       DocumentFormattingEditProvider
 
 foreign import tokensProvider_ :: EffectFn1 Unit TokensProvider
 

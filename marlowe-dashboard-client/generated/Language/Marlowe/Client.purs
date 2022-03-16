@@ -69,12 +69,13 @@ derive instance Newtype ContractHistory _
 
 --------------------------------------------------------------------------------
 
-_ContractHistory :: Iso' ContractHistory
-  { chParams :: MarloweParams
-  , chInitialData :: MarloweData
-  , chHistory :: Array TransactionInput
-  , chAddress :: Address
-  }
+_ContractHistory
+  :: Iso' ContractHistory
+       { chParams :: MarloweParams
+       , chInitialData :: MarloweData
+       , chHistory :: Array TransactionInput
+       , chAddress :: Address
+       }
 _ContractHistory = _Newtype
 
 --------------------------------------------------------------------------------

@@ -55,6 +55,7 @@ derive instance Newtype GetTotalFundsResponse _
 
 --------------------------------------------------------------------------------
 
-_GetTotalFundsResponse :: Iso' GetTotalFundsResponse
-  { assets :: Value, sync :: Number }
+_GetTotalFundsResponse
+  :: Iso' GetTotalFundsResponse
+       { assets :: Value, sync :: Number }
 _GetTotalFundsResponse = _Newtype

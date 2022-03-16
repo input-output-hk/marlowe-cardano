@@ -30,8 +30,7 @@ import Type.Proxy (Proxy(..))
 import Types (WarningAnalysisData)
 
 -------------------------------------------------------------------------------
-type AnalysisState
-  =
+type AnalysisState =
   { templateContent :: TemplateContent
   , analysisExecutionState :: AnalysisExecutionState
   }
@@ -91,15 +90,13 @@ data MultiStageAnalysisData
   | AnalysisFoundCounterExamples AnalysisCounterExamplesRecord
   | AnalysisFinishedAndPassed
 
-type AnalysisCounterExamplesRecord
-  =
+type AnalysisCounterExamplesRecord =
   { originalState :: S.State
   , originalContract :: Contract
   , counterExampleSubcontracts :: NonEmptyList ContractPath
   }
 
-type AnalysisInProgressRecord
-  =
+type AnalysisInProgressRecord =
   { currPath :: ContractPath
   , currContract :: Contract
   , currChildren :: RemainingSubProblemInfo
@@ -112,8 +109,7 @@ type AnalysisInProgressRecord
   }
 
 -------------------------------------------------------------------------------
-type ContractPath
-  = List ContractPathStep
+type ContractPath = List ContractPathStep
 
 data ContractPathStep
   = PayContPath
@@ -133,8 +129,7 @@ derive instance genericContractPathStep :: Generic ContractPathStep _
 instance showContractPathStep :: Show ContractPathStep where
   show = genericShow
 
-type RemainingSubProblemInfo
-  = List (ContractZipper /\ Contract)
+type RemainingSubProblemInfo = List (ContractZipper /\ Contract)
 
 data ContractZipper
   = PayZip AccountId Payee Token Value ContractZipper
@@ -146,8 +141,7 @@ data ContractZipper
   | AssertZip Observation ContractZipper
   | HeadZip
 
-type MultiStageAnalysisProblemDef
-  =
+type MultiStageAnalysisProblemDef =
   { expandSubproblemImpl ::
       ContractZipper -> Contract -> (ContractPath /\ Contract)
   , isValidSubproblemImpl :: ContractZipper -> Contract -> Boolean
@@ -156,5 +150,4 @@ type MultiStageAnalysisProblemDef
   , isProblemCounterExample :: Boolean -> Boolean
   }
 
-type PrefixMap
-  = Map ContractPathStep (Set (NonEmptyList ContractPathStep))
+type PrefixMap = Map ContractPathStep (Set (NonEmptyList ContractPathStep))

@@ -80,8 +80,7 @@ instance actionIsEvent :: IsEvent Action where
     { label = Just $ showConstructor action }
   toEvent DoNothing = Nothing
 
-type DecorationIds
-  =
+type DecorationIds =
   { topDecorationId :: String
   , bottomDecorationId :: String
   }
@@ -92,8 +91,7 @@ _topDecorationId = prop (Proxy :: _ "topDecorationId")
 _bottomDecorationId :: Lens' DecorationIds String
 _bottomDecorationId = prop (Proxy :: _ "bottomDecorationId")
 
-type State
-  =
+type State =
   { keybindings :: KeyBindings
   , bottomPanelState :: BottomPanel.State BottomPanelView
   , compilationResult :: CompilationState

@@ -54,8 +54,9 @@ derive instance Newtype Assertion _
 
 --------------------------------------------------------------------------------
 
-_NpvAssertionAgainstZeroRiskBond :: Iso' Assertion
-  { zeroRiskInterest :: Number, expectedNpv :: Number }
+_NpvAssertionAgainstZeroRiskBond
+  :: Iso' Assertion
+       { zeroRiskInterest :: Number, expectedNpv :: Number }
 _NpvAssertionAgainstZeroRiskBond = _Newtype
 
 --------------------------------------------------------------------------------
@@ -87,8 +88,9 @@ derive instance Newtype AssertionContext _
 
 --------------------------------------------------------------------------------
 
-_AssertionContext :: Iso' AssertionContext
-  { rrmoMin :: Number, rrmoMax :: Number }
+_AssertionContext
+  :: Iso' AssertionContext
+       { rrmoMin :: Number, rrmoMax :: Number }
 _AssertionContext = _Newtype
 
 --------------------------------------------------------------------------------
@@ -120,8 +122,9 @@ derive instance Newtype Assertions _
 
 --------------------------------------------------------------------------------
 
-_Assertions :: Iso' Assertions
-  { context :: AssertionContext, assertions :: Array Assertion }
+_Assertions
+  :: Iso' Assertions
+       { context :: AssertionContext, assertions :: Array Assertion }
 _Assertions = _Newtype
 
 --------------------------------------------------------------------------------
@@ -965,8 +968,9 @@ derive instance Newtype Cycle _
 
 --------------------------------------------------------------------------------
 
-_Cycle :: Iso' Cycle
-  { n :: BigInt, p :: Period, stub :: Stub, includeEndDay :: Boolean }
+_Cycle
+  :: Iso' Cycle
+       { n :: BigInt, p :: Period, stub :: Stub, includeEndDay :: Boolean }
 _Cycle = _Newtype
 
 --------------------------------------------------------------------------------
@@ -1240,8 +1244,9 @@ derive instance Newtype Identifier _
 
 --------------------------------------------------------------------------------
 
-_Identifier :: Iso' Identifier
-  { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
+_Identifier
+  :: Iso' Identifier
+       { marketObjectCode :: Maybe String, contractIdentifier :: Maybe String }
 _Identifier = _Newtype
 
 --------------------------------------------------------------------------------
@@ -1816,11 +1821,12 @@ derive instance Newtype ScheduleConfig _
 
 --------------------------------------------------------------------------------
 
-_ScheduleConfig :: Iso' ScheduleConfig
-  { calendar :: Maybe Calendar
-  , endOfMonthConvention :: Maybe EOMC
-  , businessDayConvention :: Maybe BDC
-  }
+_ScheduleConfig
+  :: Iso' ScheduleConfig
+       { calendar :: Maybe Calendar
+       , endOfMonthConvention :: Maybe EOMC
+       , businessDayConvention :: Maybe BDC
+       }
 _ScheduleConfig = _Newtype
 
 --------------------------------------------------------------------------------

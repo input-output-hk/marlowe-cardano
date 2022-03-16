@@ -22,8 +22,7 @@ import Web.Event.Event (preventDefault)
 import Web.HTML.Event.DragEvent (DragEvent)
 import Web.HTML.Event.DragEvent (toEvent) as DragEvent
 
-newtype OrderingVersion
-  = OrderingVersion Int
+newtype OrderingVersion = OrderingVersion Int
 
 derive newtype instance eqOrderingVersion :: Eq OrderingVersion
 
@@ -35,8 +34,7 @@ nextVersion (OrderingVersion i) = OrderingVersion (i + 1)
 -- | we trigger some other reordering it is going to be inconsistent
 -- | with the new one so we have to ignore all events till everything is
 -- | repainted
-type State
-  = { orderingVersion :: OrderingVersion, dragged :: Maybe Int }
+type State = { orderingVersion :: OrderingVersion, dragged :: Maybe Int }
 
 initialState :: State
 initialState = { orderingVersion: OrderingVersion 0, dragged: Nothing }
@@ -46,8 +44,7 @@ data Action
   | DragEnd
   | MoveTo OrderingVersion Int
 
-type DragHandler r action
-  = IProp
+type DragHandler r action = IProp
   ( onDragEnd :: DragEvent
   , onDragEnter :: DragEvent
   , onDragStart :: DragEvent
@@ -57,8 +54,7 @@ type DragHandler r action
 
 -- | We need this `newtype` because of escaping type variable `r` error.
 -- | The benefit is that we get a Functor out of it.
-newtype DragHandlers action
-  = DragHandlers
+newtype DragHandlers action = DragHandlers
   { onDragEnd :: forall r. DragHandler r action
   , onDragEnter :: forall r. DragHandler r action
   , onDragStart :: forall r. DragHandler r action
@@ -72,8 +68,7 @@ instance functorDragHandlers :: Functor DragHandlers where
       , onDragEnd: map f r.onDragEnd
       }
 
-type GenDragHandlers action
-  = Infinite.List (DragHandlers action)
+type GenDragHandlers action = Infinite.List (DragHandlers action)
 
 mkGenDragHandlers :: OrderingVersion -> GenDragHandlers Action
 mkGenDragHandlers orderingVersion =
