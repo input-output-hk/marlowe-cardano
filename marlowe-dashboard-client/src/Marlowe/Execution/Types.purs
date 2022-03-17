@@ -17,6 +17,7 @@ import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Map (Map)
 import Data.Show.Generic (genericShow)
+import Language.Marlowe.Client (UnspentPayouts)
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
@@ -49,6 +50,7 @@ type State =
   , metadata :: MetaData
   , marloweParams :: MarloweParams
   , history :: Array PastState
+  , unspentPayouts :: UnspentPayouts
   -- When the user submits a transaction, we save it here until we get confirmation from the PAB and
   -- can advance the contract. This enables us to show immediate feedback to the user while we wait.
   , mPendingTransaction :: Maybe TransactionInput
@@ -124,3 +126,4 @@ derive instance Eq NamedAction
 derive instance Generic NamedAction _
 instance Show NamedAction where
   show = genericShow
+

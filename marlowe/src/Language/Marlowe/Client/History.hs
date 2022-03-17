@@ -98,7 +98,6 @@ type RolePayoutTxOut = TypedScriptTxOut TypedRolePayoutValidator
 type RolePayoutTxOutRef = TypedScriptTxOutRef TypedRolePayoutValidator
 
 
--- | Role payout
 data RolePayout =
     RolePayout
     {

@@ -30,8 +30,12 @@ import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe, maybe')
 import Data.Newtype (unwrap)
 import Data.Time.Duration (Days(..), Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
-import Language.Marlowe.Client (ContractHistory)
-import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
+import Marlowe.Client
+  ( getInitialData
+  , getMarloweParams
+  , getTransactionInputs
+  , getUnspentPayouts
+  )
 import Marlowe.Execution.Lenses (_resultingPayments)
 import Marlowe.Execution.Types
   ( NamedAction(..)
@@ -89,6 +93,7 @@ mkInitialState followerAppId contractNickname marloweParams metadata contract =
   , metadata
   , marloweParams
   , history: mempty
+  , unspentPayouts: mempty
   , mPendingTransaction: Nothing
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
@@ -115,6 +120,7 @@ restoreState followerAppId currentTime contractNickname metadata history = do
       , metadata
       , marloweParams
       , history: mempty
+      , unspentPayouts: getUnspentPayouts history
       , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout marloweContract

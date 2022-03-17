@@ -29,10 +29,11 @@ import Cardano.Api (AddressInEra (..), PaymentCredential (..), SerialiseAsRawByt
                     StakeAddressReference (..))
 import Cardano.Api.Shelley (StakeCredential (..))
 import qualified Cardano.Api.Shelley as Shelley
+import Control.Error.Util (hush)
 import Control.Lens
 import Control.Monad (forM_, void)
 import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
-import Control.Monad.Extra (concatMapM)
+import Control.Monad.Extra (concatMapM, untilJustM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
@@ -435,7 +436,7 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
             in
               dh == Just expectedDatumHash
           utxosToSpend = Map.filter spendable utxos
-          spendUnspentPayoutConstraints tx ref txout =
+          spendPayoutConstraints tx ref txout =
             do
               let amount = view Ledger.ciTxOutValue txout
               previousConstraints <- tx
@@ -445,14 +446,14 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
                 <> payOwner -- pay to a token owner
                 <> Constraints.mustSpendScriptOutput ref unitRedeemer -- spend the rolePayoutScript address
 
-        spendUnspentPayouts <- Map.foldlWithKey spendUnspentPayoutConstraints (pure mempty) utxosToSpend
-        if spendUnspentPayouts == mempty
+        spendPayouts <- Map.foldlWithKey spendPayoutConstraints (pure mempty) utxosToSpend
+        if spendPayouts == mempty
         then do
             logInfo $ "MarloweApp contract redemption empty for role " <> show role <> "."
             tell $ Just $ EndpointSuccess reqId RedeemResponse
         else do
             let
-              constraints = spendUnspentPayouts
+              constraints = spendPayouts
                   -- must spend a role token for authorization
                   <> Constraints.mustSpendAtLeast (Val.singleton rolesCurrency role 1)
               -- lookup for payout validator and role payouts
@@ -925,8 +926,8 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                                 finalBalance = let
                                     contractBalance = totalBalance (accounts marloweState)
                                     totalIncome = P.foldMap (collectDeposits . getInputContent) inputs
-                                    totalUnspentPayouts = P.foldMap snd payoutsByParty
-                                    in contractBalance P.+ totalIncome P.- totalUnspentPayouts
+                                    totalPayouts = P.foldMap snd payoutsByParty
+                                    in contractBalance P.+ totalIncome P.- totalPayouts
                                 in txConstraints { txOwnOutputs =
                                     [ ScriptOutputConstraint
                                         { ocDatum = marloweData
@@ -1022,9 +1023,19 @@ waitTillPayoutIsSpent
     Val.CurrencySymbol
   -> Contract w schema MarloweError ChainIndexTx
 waitTillPayoutIsSpent rolesCurrency = do
-  let addr = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
-  payouts <- Map.keys <$> utxosAt addr
-  selectList $ map utxoIsSpent payouts
+  let
+    address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
+  logInfo $ "[DEBUG:waitTillPayoutIsSpent] address = " <> show address
+  payouts <- Map.keys <$> utxosAt address
+  logInfo $ "[DEBUG:waitTillPayoutIsSpent] payouts = " <> show (length payouts)
+  logInfo ("[DEBUG:waitTillPayoutIsSpent] entering the loop.." :: String)
+  untilJustM $ do
+    logInfo ("[DEBUG:waitTillPayoutIsSpent] in loop..." :: String)
+    payouts <- Map.keys <$> utxosAt address
+    logInfo $ "[DEBUG:waitTillPayoutIsSpent] payouts = " <> show (length payouts) <> "."
+    res <- awaitPromise $ hush <$> selectEither (utxoIsProduced address) (Promise $ selectList $ map utxoIsSpent payouts)
+    logInfo $ "[DEBUG:waitTillPayoutIsSpent] res = " <> show res
+    pure res
 
 
 getInput ::
