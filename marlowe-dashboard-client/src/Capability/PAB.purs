@@ -11,8 +11,6 @@ module Capability.PAB
   , getWalletContractInstances
   , invokeEndpoint
   , onNewActiveEndpoints
-  , subscribeToWallet
-  , unsubscribeFromWallet
   , subscribeToPlutusApp
   , unsubscribeFromPlutusApp
   ) where
@@ -42,8 +40,6 @@ import Data.Map as Map
 import Data.Map.Alignable (AlignableMap(..))
 import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
-import Data.PubKeyHash (PubKeyHash)
-import Data.PubKeyHash as PKH
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.These (These(..))
@@ -106,9 +102,7 @@ class Monad m <= ManagePAB m where
     :: m (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
   onNewActiveEndpoints :: PlutusAppId -> Array ActiveEndpoint -> m Unit
   subscribeToPlutusApp :: PlutusAppId -> m Unit
-  subscribeToWallet :: WalletId -> m Unit
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
-  unsubscribeFromWallet :: WalletId -> m Unit
 
 instance
   ( MonadRec m
@@ -262,23 +256,13 @@ instance
     -- endpoint was in both available endpoints, and semaphores. Unlock it.
     updateSemaphore (Both semaphore _) = AVar.tryPut unit semaphore $> semaphore
   subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
-  subscribeToWallet =
-    sendWsMessage <<< Subscribe <<< Right <<< invalidWalletIdToPubKeyHash
   unsubscribeFromPlutusApp = Left >>> Unsubscribe >>> sendWsMessage
-  unsubscribeFromWallet =
-    sendWsMessage <<< Unsubscribe <<< Right <<< invalidWalletIdToPubKeyHash
 
 sendWsMessage
   :: forall m. MonadEffect m => CombinedWSStreamToServer -> AppM m Unit
 sendWsMessage msg = do
   { pabWebsocket } <- asks $ view _sinks
   liftEffect $ HS.notify pabWebsocket msg
-
--- | DO NOT USE! This is incorrect. The WS message type _should_ require a
--- | wallet ID, not a pub key hash. This is the cost of using strings for types,
--- | even if wrapped in newtypes!
-invalidWalletIdToPubKeyHash :: WalletId -> PubKeyHash
-invalidWalletIdToPubKeyHash = PKH.fromString <<< WalletId.toString
 
 instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   activateContract contractActivationId wallet = lift $ activateContract
@@ -299,9 +283,7 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
-  subscribeToWallet = lift <<< subscribeToWallet
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
-  unsubscribeFromWallet = lift <<< unsubscribeFromWallet
 
 instance ManagePAB m => ManagePAB (MaybeT m) where
   activateContract contractActivationId wallet = lift $ activateContract
@@ -322,9 +304,7 @@ instance ManagePAB m => ManagePAB (MaybeT m) where
   getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
-  subscribeToWallet = lift <<< subscribeToWallet
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
-  unsubscribeFromWallet = lift <<< unsubscribeFromWallet
 
 instance ManagePAB m => ManagePAB (ReaderT r m) where
   activateContract contractActivationId wallet = lift $ activateContract
@@ -345,6 +325,4 @@ instance ManagePAB m => ManagePAB (ReaderT r m) where
   getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
-  subscribeToWallet = lift <<< subscribeToWallet
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
-  unsubscribeFromWallet = lift <<< unsubscribeFromWallet

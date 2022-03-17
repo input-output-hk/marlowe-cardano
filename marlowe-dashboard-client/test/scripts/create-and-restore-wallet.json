@@ -28,10 +28,7 @@
     10000,
     {
       "tag": "DropWallet",
-      "content": {
-        "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a",
-        "pubKeyHash": "b57c4784ed9c9d087053f6f04219aec82fca839a"
-      }
+      "content": { "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a" }
     }
   ],
   [
@@ -53,10 +50,7 @@
     20000,
     {
       "tag": "DropWallet",
-      "content": {
-        "walletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870",
-        "pubKeyHash": "53f6f04219aec82fca839ab57c4784ed9c9d0870"
-      }
+      "content": { "walletId": "53f6f04219aec82fca839ab57c4784ed9c9d0870" }
     }
   ],
   [
@@ -82,10 +76,7 @@
     40000,
     {
       "tag": "DropWallet",
-      "content": {
-        "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a",
-        "pubKeyHash": "b57c4784ed9c9d087053f6f04219aec82fca839a"
-      }
+      "content": { "walletId": "b57c4784ed9c9d087053f6f04219aec82fca839a" }
     }
   ]
 ]

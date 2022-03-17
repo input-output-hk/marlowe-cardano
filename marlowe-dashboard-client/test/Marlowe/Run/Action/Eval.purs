@@ -61,7 +61,6 @@ import Test.Marlowe.Run.Action.Types
   , MarloweRunAction(..)
   , MarloweRunScript
   , PlutusAppId
-  , PubKeyHash
   , ScriptError(..)
   , WalletId
   , WalletName
@@ -184,7 +183,7 @@ evalAction
   => MarloweRunAction
   -> m Unit
 evalAction = case _ of
-  DropWallet params -> dropWallet params
+  DropWallet { walletId } -> dropWallet walletId
   CreateWallet params -> createWallet params
   CreateContract _ -> pure unit
   FundWallet { walletName, lovelace } -> fundWallet walletName "" "" lovelace
@@ -199,9 +198,9 @@ dropWallet
   => MonadUser m
   => MonadAsk Coenv m
   => MonadMockHTTP m
-  => { walletId :: WalletId, pubKeyHash :: PubKeyHash }
+  => WalletId
   -> m Unit
-dropWallet { walletId, pubKeyHash } = openMyWallet do
+dropWallet walletId = openMyWallet do
   clickM $ getBy role do
     nameRegex "drop" ignoreCase
     pure Button
@@ -213,7 +212,6 @@ dropWallet { walletId, pubKeyHash } = openMyWallet do
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
       in jsonEmptyArray
-    expectWalletUnsubscribe pubKeyHash
 
 openMyWallet
   :: forall m
@@ -343,36 +341,6 @@ expectErrorToast message =
     nameRegex message ignoreCase
     pure Alert
 
-expectWalletUnsubscribe
-  :: forall m
-   . MonadMockHTTP m
-  => MonadError Error m
-  => MonadTell (Array String) m
-  => MonadAff m
-  => MonadAsk Coenv m
-  => PubKeyHash
-  -> m Unit
-expectWalletUnsubscribe pubKeyHash = do
-  expectPabWebsocketSend
-    { tag: "Unsubscribe"
-    , contents: { "Right": { getPubKeyHash: pubKeyHash } }
-    }
-
-expectWalletSubscribe
-  :: forall m
-   . MonadMockHTTP m
-  => MonadError Error m
-  => MonadTell (Array String) m
-  => MonadAff m
-  => MonadAsk Coenv m
-  => PubKeyHash
-  -> m Unit
-expectWalletSubscribe pubKeyHash = do
-  expectPabWebsocketSend
-    { tag: "Subscribe"
-    , contents: { "Right": { getPubKeyHash: pubKeyHash } }
-    }
-
 expectPlutusContractSubscribe
   :: forall m
    . MonadMockHTTP m
@@ -500,7 +468,6 @@ createWallet
       in ([] :: Array Json)
     expectPlutusContractActivation walletId WalletCompanion walletCompanionId
     expectPlutusContractActivation walletId MarloweApp marloweAppId
-    expectWalletSubscribe pubKeyHash
     expectPlutusContractSubscribe walletCompanionId
     expectPlutusContractSubscribe marloweAppId
 
@@ -561,7 +528,7 @@ restore { instances, walletName } = do
         , address
         }
 
-  expectWalletActivation { walletId, pubKeyHash } = do
+  expectWalletActivation { walletId } = do
     tell [ "Expect GET contract instances" ]
     expectJsonRequest ado
       expectMethod GET
@@ -586,7 +553,6 @@ restore { instances, walletName } = do
           , cicYieldedExportTxs: jsonEmptyArray
           , cicDefinition: contractType
           }
-    expectWalletSubscribe pubKeyHash
     traverse_ (expectPlutusContractSubscribe <<< _.instanceId) instances
 
 expectPabWebsocketSend

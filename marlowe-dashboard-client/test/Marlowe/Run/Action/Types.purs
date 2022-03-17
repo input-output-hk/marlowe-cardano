@@ -233,7 +233,7 @@ data MarloweRunAction
   | CreateContract CreateContractRecord
   | FundWallet { walletName :: WalletName, lovelace :: BigInt }
   | AddContact { walletName :: WalletName, address :: Address }
-  | DropWallet { walletId :: WalletId, pubKeyHash :: PubKeyHash }
+  | DropWallet { walletId :: WalletId }
   | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
 
 derive instance Eq MarloweRunAction

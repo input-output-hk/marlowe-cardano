@@ -15,9 +15,7 @@ import Capability.PAB
   ( class ManagePAB
   , onNewActiveEndpoints
   , subscribeToPlutusApp
-  , subscribeToWallet
   , unsubscribeFromPlutusApp
-  , unsubscribeFromWallet
   )
 import Capability.PAB (activateContract, getWalletContractInstances) as PAB
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
@@ -335,8 +333,6 @@ handleAction (NewWebSocketStatus status) = do
       mWalletId <- peruse $ _store <<< _wallet <<< WalletStore._walletId
       let walletIdXDashboardState = Tuple <$> mWalletId <*> mDashboardState
       for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
-        -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
-        subscribeToWallet walletId
         ajaxPlutusApps <- PAB.getWalletContractInstances walletId
         case ajaxPlutusApps of
           Left _ -> pure unit
@@ -425,8 +421,6 @@ enterWelcomeState
 enterWelcomeState walletDetails = do
   let
     walletId = view Connected._walletId walletDetails
-  -- We need to unsubscribe from the wallet per se
-  unsubscribeFromWallet walletId
   -- And also from the individual plutus apps that we are
   -- subscribed to.
   -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
@@ -461,8 +455,6 @@ enterDashboardState disconnectedWallet = do
       "Failed to access the plutus contracts."
       ajaxError
     Right plutusApps -> do
-      -- Get notified of wallet messages
-      subscribeToWallet $ walletId
       -- Subscribe to WalletCompanion and the MarloweApp control app
       -- we try to reutilize an active plutus contract if possible,
       -- if not we activate new ones
