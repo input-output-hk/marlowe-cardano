@@ -129,18 +129,13 @@ activateAndfollowContract wallet marloweParams = runExceptT do
   -- Create a new instance of a MarloweFollower plutus contract
   followAppId <- withExceptT ActivateContractError
     $ ExceptT
-    $ PAB.activateContract
-        MarloweFollower
-        walletId
+    $ PAB.activateContract MarloweFollower walletId
+  -- Subscribe to notifications
+  lift $ subscribeToPlutusApp followAppId
   -- Tell it to follow the Marlowe contract via its MarloweParams
   withExceptT FollowContractError
     $ ExceptT
-    $ PAB.invokeEndpoint
-        followAppId
-        "follow"
-        marloweParams
-  -- Subscribe to notifications
-  lift $ subscribeToPlutusApp followAppId
+    $ PAB.invokeEndpoint followAppId "follow" marloweParams
   pure followAppId
 
 {- [UC-CONTRACT-1][4] Start a new marlowe contract
