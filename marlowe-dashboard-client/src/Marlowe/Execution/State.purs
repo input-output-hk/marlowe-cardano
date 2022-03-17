@@ -28,7 +28,7 @@ import Data.List (List(..), concat, fromFoldable)
 import Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe, maybe')
 import Data.Newtype (unwrap)
-import Data.Time.Duration (Days(..), Milliseconds(..), Minutes(..))
+import Data.Time.Duration (Days(..), Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getInitialData, getMarloweParams, getTransactionInputs)
@@ -348,18 +348,28 @@ expandBalances participants tokens stateAccounts =
 mkInterval :: Instant -> Contract -> TimeInterval
 mkInterval currentTime contract =
   case nextTimeout contract of
+    -- There are no timeouts in the remaining contract. i.e. the contract is
+    -- not an executable contract.
     Nothing -> TimeInterval
       (POSIXTime currentTimeAdjustedForSlotDelay)
       (POSIXTime currentTimeAdjustedForBlockConfirmation)
     Just nextTO
       -- FIXME SCP-2875 Change hardcoded time in mkInterval
-      | nextTO < currentTimeAdjustedForSlotDelay ->
-          TimeInterval (POSIXTime nextTO) top
+      -- The next timeout in the contract has already passed - i.e. the
+      -- branch is timed out.
+      | nextTO < currentTime ->
+          TimeInterval
+            ( fromMaybe (POSIXTime nextTO)
+                $ POSIXTime.adjust (Seconds 1.0)
+                $ POSIXTime nextTO
+            )
+            top
+      -- There is a timeout approaching. The valid interval for the transaction
+      -- is any time between now and the next timeout.
       | otherwise ->
           TimeInterval (POSIXTime currentTimeAdjustedForSlotDelay)
-            $ unsafePartial
-            $ fromJust
-            $ POSIXTime.adjust (Milliseconds (-1.0)) (POSIXTime nextTO)
+            $ fromMaybe (POSIXTime nextTO)
+            $ POSIXTime.adjust (Seconds (-1.0)) (POSIXTime nextTO)
   where
   -- TODO move this to configuration and possibly process server-side instead.
   -- If the block is confirmed after the upper bound of the interval, the
