@@ -23,15 +23,15 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
-import Debug (traceM)
 import Effect (Effect)
-import Effect.Aff (delay, launchAff_)
-import Effect.Class.Console (log)
+import Effect.Aff (launchAff_)
 import Effect.Exception (Error, throw)
+import Examples.Metadata (contractForDifferencesWithOracle)
 import Examples.PureScript.ContractForDifferences
   ( defaultSlotContent
   , extendedContract
   ) as ContractForDifferences
+import Examples.PureScript.ContractForDifferencesWithOracle (extendedContract) as ContractForDifferencesWithOracle
 import Examples.PureScript.Escrow (defaultSlotContent, fixedTimeoutContract) as Escrow
 import Examples.PureScript.EscrowWithCollateral
   ( defaultSlotContent
@@ -48,7 +48,8 @@ import Marlowe.Template (TemplateContent(..), fillTemplate)
 import Node.Encoding (Encoding(UTF8))
 import Node.FS.Sync as FS
 import Node.Path (FilePath)
-import Test.Spec (describe, it, pending)
+import Node.Path as FP
+import Test.Spec (describe, it)
 import Test.Spec.Assertions (fail)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
@@ -93,6 +94,15 @@ mkContracts = do
             , "Amount paid by counterparty" /\ fromInt 1800
             ]
         }
+  -- contractForDifferencesWithOracle =
+  --   TemplateContent
+  --     { slotContent: Map.empty 
+  --     , valueContent: Map.fromFoldable
+  --         [ "Amount paid by party" /\ fromInt 25000
+  --         , "Amount paid by counterparty" /\ fromInt 1800
+  --         , "Amount of Ada to use as asset" /\ fromInt 800
+  --         ]
+  --     }
   swap <- toCore $ fillTemplate swapContent Swap.fixedTimeoutContract
   escrow <- toCore $ fillTemplate escrowContent Escrow.fixedTimeoutContract
   escrowWithCollateral <- toCore $ fillTemplate escrowWithCollateralContent
@@ -103,30 +113,49 @@ mkContracts = do
     ContractForDifferences.extendedContract
   -- traceM $ fillTemplate contractForDifferencesContent ContractForDifferences.extendedContract
   pure
-    [ "./test/fixtures/swap.json" /\ swap
-    , "./test/fixtures/escrow.json" /\ escrow
-    , "./test/fixtures/escrowWithCollateral.json" /\ escrowWithCollateral
-    , "./test/fixtures/zeroCouponBond.json" /\ zeroCouponBond
-    , "./test/fixtures/contractForDifferences.json" /\ contractForDifferences
+    [ "swap" /\ swap
+    , "escrow" /\ escrow
+    , "escrowWithCollateral" /\ escrowWithCollateral
+    , "zeroCouponBond" /\ zeroCouponBond
+    , "contractForDifferences" /\ contractForDifferences
     ]
+
+fixtureDirectory :: String
+fixtureDirectory = "./test/fixtures/"
+
+createJsonFilePath :: String -> String
+createJsonFilePath contractName = FP.concat
+  [ fixtureDirectory, contractName <> ".json" ]
+
+createMarloweFilePath :: String -> String
+createMarloweFilePath contractName = FP.concat
+  [ fixtureDirectory, contractName <> ".marlowe" ]
 
 buildFixtures :: Effect (Array (String /\ Json /\ Contract))
 buildFixtures = case mkContracts of
   Nothing -> do
     throw "Failure during test setup"
   Just contracts -> do
-    for_ contracts \(fileName /\ contract) -> do
-      fileExists <- FS.exists fileName
+    for_ contracts \(contractName /\ contract) -> do
+      let jsonContractFile = createJsonFilePath contractName
+      fileExists <- FS.exists $ jsonContractFile
       if fileExists then pure unit
       else
-        FS.writeTextFile UTF8 fileName $ stringify $ encodeJson contract
-    for contracts \(fileName /\ contract) -> do
-      jsonString <- FS.readTextFile UTF8 fileName
+        FS.writeTextFile UTF8 jsonContractFile $ stringify $ encodeJson contract
+    for_ contracts \(contractName /\ contract) -> do
+      let marloweContractFile = createMarloweFilePath contractName
+      fileExists <- FS.exists $ marloweContractFile
+      if fileExists then pure unit
+      else
+        FS.writeTextFile UTF8 marloweContractFile $ show contract
+    for contracts \(contractName /\ contract) -> do
+      let jsonContractFile = createJsonFilePath contractName
+      jsonString <- FS.readTextFile UTF8 jsonContractFile
       case jsonParser jsonString of
         Left err -> do
           throw $ "Parsing JSON failed: " <> err
         Right json -> do
-          pure $ fileName /\ json /\ contract
+          pure $ jsonContractFile /\ json /\ contract
 
 shouldEqual
   :: forall m t
