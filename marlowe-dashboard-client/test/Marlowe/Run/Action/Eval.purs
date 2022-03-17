@@ -200,10 +200,11 @@ dropWallet
   => MonadMockHTTP m
   => WalletId
   -> m Unit
-dropWallet walletId = openMyWallet do
-  clickM $ getBy role do
-    nameRegex "drop" ignoreCase
-    pure Button
+dropWallet walletId = do
+  openMyWallet do
+    clickM $ getBy role do
+      nameRegex "drop" ignoreCase
+      pure Button
   expectWalletDeactivation
   where
   expectWalletDeactivation = do
@@ -324,7 +325,7 @@ expectSuccessToast
   => String
   -> m Unit
 expectSuccessToast message =
-  void $ getBy role do
+  void $ findBy role do
     nameRegex message ignoreCase
     pure Status
 

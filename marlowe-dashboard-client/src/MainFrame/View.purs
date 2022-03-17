@@ -7,27 +7,27 @@ import Capability.Toast (class Toast)
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
+import Data.Either (fromLeft)
 import Data.Lens ((^.), (^?))
 import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.Extra (renderSubmodule)
+import Halogen.Extra (mapComponentAction)
 import Halogen.HTML (div)
 import Halogen.HTML as H
 import Halogen.Store.Monad (class MonadStore)
 import MainFrame.Lenses
   ( _addressBook
   , _currentTime
-  , _dashboardState
   , _store
   , _subState
   , _tzOffset
-  , _welcomeState
   )
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
 import Page.Dashboard.View (dashboardCard, dashboardScreen)
+import Page.Welcome.State as Welcome
 import Page.Welcome.View (welcomeCard, welcomeScreen)
 import Store (_contracts, _wallet)
 import Store as Store
@@ -59,35 +59,22 @@ render state =
 
     contracts = state ^. _store <<< _contracts
   in
-    div [ classNames [ "h-full" ] ]
-      $
-        case mWallet, subState of
-          Just wallet, Right _ ->
-            [ renderSubmodule
-                _dashboardState
-                DashboardAction
-                ( \dashboardState ->
-                    dashboardScreen
-                      { addressBook, currentTime, tzOffset, wallet, contracts }
-                      dashboardState
-                )
-                state
-            , renderSubmodule
-                _dashboardState
-                DashboardAction
-                ( \dashboardState ->
-                    dashboardCard
-                      { addressBook, currentTime, tzOffset, wallet, contracts }
-                      dashboardState
-                )
-                state
-            ]
+    div [ classNames [ "h-full" ] ] $ join
+      [ case mWallet, subState of
+          Just wallet, Right dashboardState ->
+            mapComponentAction DashboardAction <$>
+              [ dashboardScreen
+                  { addressBook, currentTime, tzOffset, wallet, contracts }
+                  dashboardState
+              , dashboardCard
+                  { addressBook, currentTime, tzOffset, wallet, contracts }
+                  dashboardState
+              ]
           _, _ ->
-            [ renderSubmodule _welcomeState WelcomeAction welcomeScreen state
-            , renderSubmodule
-                _welcomeState
-                WelcomeAction
-                welcomeCard
-                state
-            ]
-          <> [ H.slot_ _toaster unit Toast.component unit ]
+            let
+              welcomeState = fromLeft Welcome.initialState subState
+            in
+              mapComponentAction WelcomeAction
+                <$> [ welcomeScreen welcomeState, welcomeCard welcomeState ]
+      , [ H.slot_ _toaster unit Toast.component unit ]
+      ]

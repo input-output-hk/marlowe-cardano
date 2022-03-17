@@ -427,9 +427,9 @@ enterWelcomeState walletDetails = do
   ajaxPlutusApps <- PAB.getWalletContractInstances walletId
   case ajaxPlutusApps of
     Left _ -> pure unit
-    Right plutusApps -> for_ plutusApps \app ->
-      unsubscribeFromPlutusApp $ view _cicContract app
-  updateStore $ Store.Disconnect
+    Right plutusApps -> do
+      updateStore $ Store.Disconnect
+      traverse_ (unsubscribeFromPlutusApp <<< view _cicContract) plutusApps
 
 {- [UC-WALLET-TESTNET-2][5] Restore a testnet wallet
 Here we move the app from the `Welcome` state to the `Dashboard` state. First, however, we query
