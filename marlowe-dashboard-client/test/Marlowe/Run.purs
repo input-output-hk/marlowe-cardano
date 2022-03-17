@@ -207,14 +207,14 @@ mkTestEnv :: Aff (Env /\ Coenv /\ SubscribeIO Error)
 mkTestEnv = do
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointSemaphores <- liftAff $ AVar.new Map.empty
-  createListeners <- liftAff $ AVar.new Map.empty
-  applyInputListeners <- liftAff $ AVar.new Map.empty
-  redeemListeners <- liftAff $ AVar.new Map.empty
-  followerBus <- liftEffect $ EventBus.create
-  pabWebsocketIn <- liftEffect $ HS.create
-  walletFunds <- liftEffect $ HS.create
-  pabWebsocketOut <- liftEffect $ HS.create
-  errors <- liftEffect $ HS.create
+  createBus <- liftEffect EventBus.create
+  applyInputBus <- liftEffect EventBus.create
+  redeemBus <- liftEffect EventBus.create
+  followerBus <- liftEffect EventBus.create
+  pabWebsocketIn <- liftEffect HS.create
+  walletFunds <- liftEffect HS.create
+  pabWebsocketOut <- liftEffect HS.create
+  errors <- liftEffect HS.create
   pabWebsocketOutQueue <- Queue.new
   httpRequests <- Queue.new
   logMessages <- Queue.new
@@ -234,9 +234,9 @@ mkTestEnv = do
     env = Env
       { contractStepCarouselSubscription
       , endpointSemaphores
-      , createListeners
-      , applyInputListeners
-      , redeemListeners
+      , createBus
+      , applyInputBus
+      , redeemBus
       , followerBus
       , sinks
       , sources

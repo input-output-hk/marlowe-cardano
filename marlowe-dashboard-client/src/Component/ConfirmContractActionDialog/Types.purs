@@ -18,6 +18,7 @@ import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Data.BigInt.Argonaut (BigInt)
 import Data.ContractUserParties (ContractUserParties)
 import Data.PABConnectedWallet (PABConnectedWallet)
+import Effect.Aff (Fiber)
 import Halogen as H
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
@@ -38,6 +39,7 @@ type State =
   , txInput :: Maybe TransactionInput
   , wallet :: PABConnectedWallet
   , chosenNum :: Maybe ChosenNum
+  , pendingFiber :: Maybe (Fiber Unit)
   }
 
 type Input =

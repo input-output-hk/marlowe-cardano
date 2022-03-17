@@ -11,6 +11,7 @@ module Capability.Wallet
 import Prologue
 
 import AppM (AppM)
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (lift)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (ReaderT)
@@ -18,6 +19,7 @@ import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Passphrase (Passphrase)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
+import Effect.Aff (Error)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen (HalogenM)
 import Marlowe.Run.Server as MarloweRun
@@ -47,7 +49,11 @@ class Monad m <= ManageWallet m where
   getWalletTotalFunds :: WalletId -> m (AjaxResponse GetTotalFundsResponse)
   signTransaction :: WalletId -> Tx -> m (AjaxResponse Tx)
 
-instance MonadAjax MarloweRun.Api m => ManageWallet (AppM m) where
+instance
+  ( MonadError Error m
+  , MonadAjax MarloweRun.Api m
+  ) =>
+  ManageWallet (AppM m) where
   createWallet wn p = MarloweRun.postApiWalletV1CentralizedtestnetCreate
     $ CreatePostData { getCreateWalletName: wn, getCreatePassphrase: p }
   restoreWallet mp wn p = MarloweRun.postApiWalletV1CentralizedtestnetRestore

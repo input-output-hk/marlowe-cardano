@@ -23,6 +23,7 @@ import Component.IconButton.View (iconButton)
 import Component.Icons (icon_)
 import Component.Icons as Icon
 import Component.Link (link)
+import Component.LoadingSubmitButton.State (loadingSubmitButton)
 import Component.Row (row)
 import Component.Row as Row
 import Component.Transfer.Types
@@ -36,6 +37,7 @@ import Data.Default (default)
 import Data.Foldable (length)
 import Data.Lens ((^.))
 import Data.PABConnectedWallet (_assets)
+import Effect.Aff.Class (class MonadAff)
 import Halogen.Css (classNames)
 import Halogen.HTML (HTML, div, div_, p, span, text)
 import MainFrame.Types (ChildSlots)
@@ -44,7 +46,7 @@ import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as Semantics
 import Marlowe.Semantics (Token(..), computeTransaction)
 
-render :: forall m. Monad m => State -> ComponentHTML m
+render :: forall m. MonadAff m => State -> ComponentHTML m
 render state@{ action, executionState } =
   let
     stepNumber = currentStep executionState + 1
@@ -170,7 +172,7 @@ results { action, contractUserParties, executionState, txInput } = case _ of
 
   count = length payments + if willClose then 1 else 0
 
-confirmation :: forall w. State -> HTML w Action
+confirmation :: forall m. MonadAff m => State -> ComponentHTML m
 confirmation { action, transactionFeeQuote, wallet } =
   column Column.Divided []
     [ sectionBox [ "bg-lightgray" ]
@@ -198,11 +200,13 @@ confirmation { action, transactionFeeQuote, wallet } =
                     (Just $ CancelConfirmation)
                     []
                     [ text "Cancel" ]
-                , button
-                    Button.Primary
-                    (Just $ ConfirmAction action)
-                    []
-                    [ text "Confirm" ]
+                , loadingSubmitButton
+                    { ref: "action-confirm-button"
+                    , caption: "Confirm"
+                    , styles: [ "flex-1" ]
+                    , enabled: true
+                    , handler: ConfirmAction action
+                    }
                 ]
             ]
     , sectionBox []

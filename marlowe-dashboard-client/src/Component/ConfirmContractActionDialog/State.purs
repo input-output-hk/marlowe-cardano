@@ -15,11 +15,14 @@ import Component.ConfirmContractActionDialog.Types
   )
 import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
+import Control.Monad.Fork.Class (class MonadKill, fork, kill)
+import Control.Monad.Fork.Class as MF
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.State (get)
 import Data.ContractUserParties (contractUserParties)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Unfoldable as Unfoldable
+import Effect.Aff (Error, Fiber, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen as H
@@ -36,6 +39,7 @@ import Toast.Types (ajaxErrorToast, successToast)
 component
   :: forall query m
    . MonadAff m
+  => MonadKill Error Fiber m
   => ManageMarlowe m
   => MonadStore Store.Action Store.Store m
   => MonadTime m
@@ -67,6 +71,7 @@ mkInitialState
     , txInput: Nothing
     , wallet
     , chosenNum
+    , pendingFiber: Nothing
     }
 
 handleAction
@@ -74,11 +79,21 @@ handleAction
    . ManageMarlowe m
   => MonadStore Store.Action Store.Store m
   => MonadAff m
+  => MonadKill Error Fiber m
   => MonadTime m
   => Toast m
   => Action
   -> DSL m Unit
-handleAction CancelConfirmation = H.raise DialogClosed
+handleAction CancelConfirmation = do
+  mPendingFiber <- H.gets _.pendingFiber
+  case mPendingFiber of
+    Nothing -> H.raise DialogClosed
+    Just pendingFiber -> do
+      H.modify_ _ { pendingFiber = Nothing }
+      H.lift $ kill (error "killed") pendingFiber
+      void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
+        (Milliseconds 600.0)
+        (Left "Cancelled")
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
 handleAction (ConfirmAction namedAction) = do
@@ -88,7 +103,11 @@ handleAction (ConfirmAction namedAction) = do
     { marloweParams, contract } = executionState
     contractInput = toInput namedAction chosenNum
     txInput = mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
-  ajaxApplyInputs <- applyTransactionInput wallet marloweParams txInput
+  ajaxApplyInputsF <-
+    H.lift $ fork $ applyTransactionInput wallet marloweParams txInput
+  H.modify_ _ { pendingFiber = Just $ void ajaxApplyInputsF }
+  ajaxApplyInputs <- H.lift $ MF.join ajaxApplyInputsF
+  H.modify_ _ { pendingFiber = Nothing }
   case ajaxApplyInputs of
     Left ajaxError -> do
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult

@@ -6,7 +6,6 @@ import Prologue
 
 import AppM (runAppM)
 import Bridge (toFront)
-import Control.Alternative (empty)
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect (Logger)
 import Control.Logger.Effect.Class as Logger
@@ -41,7 +40,8 @@ import Data.PABConnectedWallet (_walletDetails, _walletId)
 import Data.PaymentPubKeyHash (PaymentPubKeyHash)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Wallet
-  ( WalletDetails
+  ( SyncStatus(..)
+  , WalletDetails
   , _walletInfo
   , _walletNickname
   , mkWalletDetails
@@ -72,6 +72,7 @@ import MainFrame.Types as MainFrame
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
+import Marlowe.Semantics (Assets(..))
 import Servant.PureScript (printAjaxError)
 import Store (_wallet, mkStore)
 import Store as Store
@@ -98,17 +99,17 @@ mkEnv :: Sources -> Sinks -> Aff Env
 mkEnv sources sinks = do
   contractStepCarouselSubscription <- AVar.empty
   endpointSemaphores <- AVar.new Map.empty
-  createListeners <- AVar.new Map.empty
-  applyInputListeners <- AVar.new Map.empty
-  redeemListeners <- AVar.new Map.empty
+  createBus <- liftEffect EventBus.create
+  applyInputBus <- liftEffect EventBus.create
+  redeemBus <- liftEffect EventBus.create
   followerBus <- liftEffect EventBus.create
   pure $ Env
     { contractStepCarouselSubscription
     , followerBus
     , endpointSemaphores
-    , createListeners
-    , applyInputListeners
-    , redeemListeners
+    , createBus
+    , applyInputBus
+    , redeemBus
     , sinks
     , sources
     }
@@ -193,29 +194,34 @@ mkWalletFundsEmitter logger pollingInterval storeE = do
       storeE
 
     -- | Fires every time a poll should occur
-    walletPollE :: Emitter WalletId
+    walletPollE :: Emitter (Maybe WalletId)
     walletPollE = walletIdE # switchMapEmitter case _ of
-      Nothing -> empty
-      Just walletId -> walletId <$ pollE
+      Nothing -> pure Nothing
+      walletId -> walletId <$ pollE
 
     -- | React to poll events by dispatching a request to the wallet backend.
     -- | The resulting `Emitter` Fires every time we receive a response.
     walletFundsE :: Emitter (Maybe WalletFunds)
-    walletFundsE = walletPollE # reactimate \walletId -> do
-      result <- MarloweRun.getApiWalletV1ByWalletidTotalfunds walletId
-      case result of
-        Left e -> do
-          Logger.error
-            ( StructuredLog
-                { msg: "Failed to poll total funds"
-                , payload: Just $ fromString $ printAjaxError e
-                }
-            )
-            logger
-          pure Nothing
-        Right (GetTotalFundsResponse { assets, sync }) ->
-          pure $ Just
-            { assets: toFront assets, sync: syncStatusFromNumber sync }
+    walletFundsE = walletPollE # reactimate case _ of
+      -- We need to fire an "empty" assets here, otherwise it will remember the
+      -- previous value fired downstream and use that again the next time
+      -- a wallet is activated until the next poll resolves.
+      Nothing -> pure $ Just { assets: Assets Map.empty, sync: OutOfSync }
+      Just walletId -> do
+        result <- MarloweRun.getApiWalletV1ByWalletidTotalfunds walletId
+        case result of
+          Left e -> do
+            Logger.error
+              ( StructuredLog
+                  { msg: "Failed to poll total funds"
+                  , payload: Just $ fromString $ printAjaxError e
+                  }
+              )
+              logger
+            pure Nothing
+          Right (GetTotalFundsResponse { assets, sync }) ->
+            pure $ Just
+              { assets: toFront assets, sync: syncStatusFromNumber sync }
 
   -- Discard any `Nothing` results from `walletFundsE`
   pure $ compactEmitter walletFundsE

@@ -11,15 +11,18 @@ import Prologue
 import AppM (AppM)
 import Capability.PAB (getContractInstanceObservableState) as PAB
 import Capability.PlutusApps.MarloweApp (applyInputs, createContract, redeem) as MarloweApp
+import Capability.Toast (addToast)
 import Capability.Wallet (class ManageWallet)
 import Component.ContractSetup.Types (ContractParams)
 import Component.Template.State
   ( InstantiateContractErrorRow
   , instantiateExtendedContract
   )
+import Control.Monad.Error.Class (class MonadError, throwError)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (ReaderT)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Bifunctor (lmap)
 import Data.DateTime.Instant (Instant)
@@ -35,10 +38,11 @@ import Data.PABConnectedWallet
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
-import Effect.Aff (Aff)
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff (Aff, Error, error)
+import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (updateStore)
+import Language.Marlowe.Client.Error (showContractError)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Run.Server (Api) as MarloweApp
 import Marlowe.Semantics
@@ -50,6 +54,7 @@ import Marlowe.Semantics
 import Plutus.PAB.Webserver (Api) as PAB
 import Servant.PureScript (class MonadAjax)
 import Store as Store
+import Toast.Types (errorToast)
 import Type.Proxy (Proxy(..))
 import Type.Row (type (+))
 import Types (AjaxResponse, DecodedAjaxResponse, JsonAjaxErrorRow)
@@ -88,13 +93,16 @@ class
     -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
 
 instance
-  ( MonadAff m
+  ( MonadUnliftAff m
+  , MonadError Error m
+  , MonadRec m
   , MonadAjax PAB.Api m
   , MonadAjax MarloweApp.Api m
   ) =>
   ManageMarlowe (AppM m) where
 
-  initializeContract currentInstant template params wallet =
+  initializeContract currentInstant template params wallet = do
+    u <- askUnliftAff
     runExceptT do
       let
         { instantiateContractError, jsonAjaxError } = initializeContractError
@@ -108,10 +116,7 @@ instance
         withExceptT instantiateContractError
           $ ExceptT
           $ pure
-          $ instantiateExtendedContract
-              currentInstant
-              template
-              params
+          $ instantiateExtendedContract currentInstant template params
       -- Call the PAB to create the new contract. It returns a request id and a function
       -- that we can use to block and wait for the response
       reqId /\ awaitContractCreation <-
@@ -122,22 +127,60 @@ instance
       -- the information relevant to show a placeholder of a starting contract.
       let newContract = NewContract reqId nickname template.metaData
       lift $ updateStore $ Store.AddStartingContract newContract
-      pure $ newContract /\ awaitContractCreation
+
+      pure $ newContract /\ do
+        mParams <- awaitContractCreation
+        case mParams of
+          Left contractError -> do
+            unliftAff u
+              $ addToast
+              $ errorToast "Failed to create contract"
+              $ Just
+              $ showContractError contractError
+            throwError $ error $ "Failed to create contract: " <>
+              showContractError contractError
+          Right marloweParams -> pure marloweParams
 
   -- "apply-inputs" to a Marlowe contract on the blockchain
-  applyTransactionInput wallet marloweParams transactionInput =
-    let
-      marloweAppId = view _marloweAppId wallet
-    in
-      MarloweApp.applyInputs marloweAppId marloweParams transactionInput
-  -- "redeem" payments from a Marlowe contract on the blockchain
-  redeem wallet marloweParams tokenName =
-    let
-      marloweAppId = view _marloweAppId wallet
+  applyTransactionInput wallet marloweParams transactionInput = do
+    u <- askUnliftAff
+    runExceptT do
+      let marloweAppId = view _marloweAppId wallet
+      awaitResult <- ExceptT
+        $ MarloweApp.applyInputs marloweAppId marloweParams transactionInput
+      pure do
+        mUnit <- awaitResult
+        case mUnit of
+          Left contractError -> do
+            unliftAff u
+              $ addToast
+              $ errorToast "Failed to update contract"
+              $ Just
+              $ showContractError contractError
+            throwError $ error $ "Failed to update contract: " <>
+              showContractError contractError
+          Right _ -> pure unit
 
-      address = view _address wallet
-    in
-      MarloweApp.redeem marloweAppId marloweParams tokenName address
+  -- "redeem" payments from a Marlowe contract on the blockchain
+  redeem wallet marloweParams tokenName = do
+    u <- askUnliftAff
+    runExceptT do
+      let marloweAppId = view _marloweAppId wallet
+      let address = view _address wallet
+      awaitResult <- ExceptT
+        $ MarloweApp.redeem marloweAppId marloweParams tokenName address
+      pure do
+        mUnit <- awaitResult
+        case mUnit of
+          Left contractError -> do
+            unliftAff u
+              $ addToast
+              $ errorToast "Failed to redeem payment"
+              $ Just
+              $ showContractError contractError
+            throwError $ error $ "Failed to redeem payment: " <>
+              showContractError contractError
+          Right _ -> pure unit
 
   -- get the observable state of a wallet's WalletCompanion
   getRoleContracts wallet =

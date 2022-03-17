@@ -26,6 +26,7 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
+import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
 import Css as Css
@@ -48,6 +49,7 @@ import Data.PABConnectedWallet
 import Data.String (take)
 import Data.Wallet (SyncStatus(..))
 import Data.WalletNickname as WN
+import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Env (Env)
@@ -111,6 +113,7 @@ import Store.Contracts (getContract, getNewContract)
 dashboardScreen
   :: forall m
    . MonadAff m
+  => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
@@ -186,6 +189,7 @@ dashboardScreen { currentTime, wallet, contracts } state =
 dashboardCard
   :: forall m
    . MonadAff m
+  => MonadKill Error Fiber m
   => MonadTime m
   => ManageMarlowe m
   => Toast m

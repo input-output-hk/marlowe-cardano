@@ -13,15 +13,17 @@ import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
 import Capability.PAB (activateContract, invokeEndpoint) as PAB
 import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont (lift)
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
 import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut (encodeJson)
 import Data.Either (either)
 import Data.Lens (view, (^.))
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, Error)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env, _followerBus)
@@ -74,7 +76,13 @@ class Monad m <= FollowerApp m where
     -> MarloweParams
     -> m (Aff (Either FollowContractError (PlutusAppId /\ ContractHistory)))
 
-instance (MonadAff m, MonadAjax PAB.Api m) => FollowerApp (AppM m) where
+instance
+  ( MonadAff m
+  , MonadRec m
+  , MonadError Error m
+  , MonadAjax PAB.Api m
+  ) =>
+  FollowerApp (AppM m) where
   ensureFollowerContract wallet marloweParams = do
     contracts <- _.contracts <$> getStore
     case getFollowerContract marloweParams contracts of

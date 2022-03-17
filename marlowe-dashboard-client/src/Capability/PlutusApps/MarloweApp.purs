@@ -14,8 +14,11 @@ import Prologue
 import AppM (AppM)
 import Bridge (toBack)
 import Capability.PAB (invokeEndpoint) as PAB
+import Control.Concurrent.EventBus as EventBus
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (asks)
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Address (Address)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Lens (_1, over, view)
@@ -23,14 +26,11 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID, genUUID)
-import Effect.AVar (AVar)
-import Effect.Aff (Aff, effectCanceler, launchAff_)
-import Effect.Aff as Aff
-import Effect.Aff.AVar as AVar
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff (Aff, Error)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Env (_applyInputListeners, _createListeners, _redeemListeners)
-import Halogen.Subscription as HS
+import Env (_applyInputBus, _createBus, _redeemBus)
+import Language.Marlowe.Client (MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Contract
@@ -50,12 +50,12 @@ class MarloweApp m where
     :: PlutusAppId
     -> Map TokenName Address
     -> Contract
-    -> m (AjaxResponse (UUID /\ Aff MarloweParams))
+    -> m (AjaxResponse (UUID /\ Aff (Either MarloweError MarloweParams)))
   applyInputs
     :: PlutusAppId
     -> MarloweParams
     -> TransactionInput
-    -> m (AjaxResponse (Aff Unit))
+    -> m (AjaxResponse (Aff (Either MarloweError Unit)))
   -- TODO auto
   -- TODO close
   redeem
@@ -63,9 +63,15 @@ class MarloweApp m where
     -> MarloweParams
     -> TokenName
     -> Address
-    -> m (AjaxResponse (Aff Unit))
+    -> m (AjaxResponse (Aff (Either MarloweError Unit)))
 
-instance (MonadAff m, MonadAjax PAB.Api m) => MarloweApp (AppM m) where
+instance
+  ( MonadError Error m
+  , MonadAff m
+  , MonadRec m
+  , MonadAjax PAB.Api m
+  ) =>
+  MarloweApp (AppM m) where
   createContract plutusAppId roles contract = runExceptT do
     reqId <- liftEffect genUUID
     let
@@ -76,8 +82,8 @@ instance (MonadAff m, MonadAjax PAB.Api m) => MarloweApp (AppM m) where
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "create" payload
-    createListenersAVar <- asks $ view _createListeners
-    liftAff $ Tuple reqId <$> waitForUpdate reqId createListenersAVar
+    bus <- asks $ view _createBus
+    pure $ Tuple reqId $ EventBus.subscribeOnce bus.emitter reqId
 
   applyInputs plutusAppId marloweContractId input = runExceptT do
     let
@@ -96,8 +102,8 @@ instance (MonadAff m, MonadAjax PAB.Api m) => MarloweApp (AppM m) where
         ]
     ExceptT
       $ PAB.invokeEndpoint plutusAppId "apply-inputs-nonmerkleized" payload
-    applyInputListenersAVar <- asks $ view _applyInputListeners
-    liftAff $ waitForUpdate reqId applyInputListenersAVar
+    bus <- asks $ view _applyInputBus
+    pure $ EventBus.subscribeOnce bus.emitter reqId
 
   redeem plutusAppId marloweContractId tokenName address = runExceptT do
     reqId <- liftEffect genUUID
@@ -109,31 +115,5 @@ instance (MonadAff m, MonadAjax PAB.Api m) => MarloweApp (AppM m) where
         , encodeJson address
         ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "redeem" payload
-    redeemListenersAVar <- asks $ view _redeemListeners
-    liftAff $ waitForUpdate reqId redeemListenersAVar
-
-waitForUpdate
-  :: forall a
-   . UUID
-  -> AVar (Map UUID (Maybe HS.Subscription /\ HS.Listener a))
-  -> Aff (Aff a)
-waitForUpdate reqId listenersAVar = do
-  { emitter, listener } <- liftEffect HS.create
-  listeners <- AVar.take listenersAVar
-  AVar.put (Map.insert reqId (Nothing /\ listener) listeners) listenersAVar
-  pure $ Aff.makeAff \resolve -> do
-    subscription <- HS.subscribe emitter \params -> do
-      launchAff_ do
-        listeners' <- AVar.take listenersAVar
-        AVar.put (Map.delete reqId listeners') listenersAVar
-      resolve $ pure params
-    launchAff_ do
-      listeners' <- AVar.take listenersAVar
-      AVar.put
-        (Map.insert reqId (Just subscription /\ listener) listeners')
-        listenersAVar
-    pure $ effectCanceler do
-      launchAff_ do
-        listeners' <- AVar.take listenersAVar
-        AVar.put (Map.delete reqId listeners') listenersAVar
-      HS.unsubscribe subscription
+    bus <- asks $ view _redeemBus
+    pure $ EventBus.subscribeOnce bus.emitter reqId

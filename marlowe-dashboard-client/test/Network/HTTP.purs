@@ -44,6 +44,7 @@ import Concurrent.Queue as Queue
 import Control.Alt (class Alt, alt)
 import Control.Apply (lift2)
 import Control.Logger.Capability (class MonadLogger)
+import Control.Monad.Base (class MonadBase)
 import Control.Monad.Cont (class MonadCont, class MonadTrans, ContT)
 import Control.Monad.Error.Class
   ( class MonadError
@@ -74,6 +75,7 @@ import Control.Monad.Reader
 import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
 import Control.Monad.State (class MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Unlift (class MonadUnlift)
 import Control.Monad.Writer (class MonadTell, class MonadWriter, WriterT)
 import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
 import Data.Array (fromFoldable)
@@ -90,7 +92,9 @@ import Effect.Aff (Aff, error)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Class (class MonadEffect)
+import Effect.Unlift (class MonadUnliftEffect)
 import Halogen.Store.Monad (class MonadStore)
 import Servant.PureScript
   ( class MonadAjax
@@ -117,7 +121,11 @@ derive newtype instance Applicative m => Applicative (MockHttpM m)
 derive newtype instance Bind m => Bind (MockHttpM m)
 derive newtype instance Monad m => Monad (MockHttpM m)
 derive newtype instance MonadEffect m => MonadEffect (MockHttpM m)
+derive newtype instance MonadUnliftEffect m => MonadUnliftEffect (MockHttpM m)
 derive newtype instance MonadAff m => MonadAff (MockHttpM m)
+derive newtype instance MonadUnliftAff m => MonadUnliftAff (MockHttpM m)
+derive newtype instance MonadBase b m => MonadBase b (MockHttpM m)
+derive newtype instance MonadUnlift b m => MonadUnlift b (MockHttpM m)
 derive newtype instance MonadThrow e m => MonadThrow e (MockHttpM m)
 derive newtype instance MonadError e m => MonadError e (MockHttpM m)
 derive newtype instance MonadTell s m => MonadTell s (MockHttpM m)

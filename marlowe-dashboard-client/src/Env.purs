@@ -10,13 +10,12 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Newtype (class Newtype)
-import Data.Tuple.Nested (type (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
 import Effect.AVar (AVar)
 import Halogen (SubscriptionId)
-import Halogen.Subscription (Emitter, Listener, Subscription)
-import Language.Marlowe.Client (ContractHistory)
+import Halogen.Subscription (Emitter, Listener)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (Assets, MarloweParams)
 import Plutus.PAB.Webserver.Types
@@ -60,10 +59,9 @@ newtype Env = Env
     --    In contrast, the Env is created in Main, where we already have access to Effect
     contractStepCarouselSubscription :: AVar SubscriptionId
   , endpointSemaphores :: AVar EndpointSemaphores
-  , createListeners ::
-      AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams))
-  , applyInputListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
-  , redeemListeners :: AVar (Map UUID (Maybe Subscription /\ Listener Unit))
+  , createBus :: EventBus UUID (Either MarloweError MarloweParams)
+  , applyInputBus :: EventBus UUID (Either MarloweError Unit)
+  , redeemBus :: EventBus UUID (Either MarloweError Unit)
   , followerBus :: EventBus PlutusAppId ContractHistory
   -- | All the outbound communication channels to the outside world
   , sinks :: Sinks
@@ -73,17 +71,14 @@ newtype Env = Env
 
 derive instance newtypeEnv :: Newtype Env _
 
-_createListeners :: Lens' Env
-  (AVar (Map UUID (Maybe Subscription /\ Listener MarloweParams)))
-_createListeners = _Newtype <<< prop (Proxy :: _ "createListeners")
+_createBus :: Lens' Env (EventBus UUID (Either MarloweError MarloweParams))
+_createBus = _Newtype <<< prop (Proxy :: _ "createBus")
 
-_applyInputListeners :: Lens' Env
-  (AVar (Map UUID (Maybe Subscription /\ Listener Unit)))
-_applyInputListeners = _Newtype <<< prop (Proxy :: _ "applyInputListeners")
+_applyInputBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
+_applyInputBus = _Newtype <<< prop (Proxy :: _ "applyInputBus")
 
-_redeemListeners :: Lens' Env
-  (AVar (Map UUID (Maybe Subscription /\ Listener Unit)))
-_redeemListeners = _Newtype <<< prop (Proxy :: _ "redeemListeners")
+_redeemBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
+_redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
 
 _followerBus :: Lens' Env (EventBus PlutusAppId ContractHistory)
 _followerBus = _Newtype <<< prop (Proxy :: _ "followerBus")

@@ -20,15 +20,22 @@ module Capability.PAB
 import Prologue
 
 import API.Lenses (_cicCurrentState, _hooks, _observableState)
-import Affjax (Error(..))
+import Affjax (defaultRequest)
+import Affjax as Affjax
+import Affjax.ResponseFormat as ResponseFormat
 import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
+import Capability.Toast (addToast)
+import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
-import Control.Monad.Maybe.Trans (MaybeT)
+import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (ReaderT, asks)
+import Control.Monad.Rec.Class (class MonadRec, untilJust)
+import Control.Parallel (parOneOf)
 import Data.Align (align)
 import Data.Argonaut (Json, encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
+import Data.Filterable (filter)
 import Data.Lens (view)
 import Data.Map (Map)
 import Data.Map as Map
@@ -40,10 +47,12 @@ import Data.PubKeyHash as PKH
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.These (These(..))
+import Data.Time.Duration (Minutes(..), fromDuration)
 import Data.Traversable (sequence, traverse)
+import Data.UUID.Argonaut as UUID
 import Data.WalletId (WalletId)
 import Data.WalletId as WalletId
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, Error, delay, error)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -65,6 +74,7 @@ import Plutus.PAB.Webserver.Types
   , ContractSignatureResponse
   )
 import Servant.PureScript (class MonadAjax, AjaxError(..), ErrorDescription(..))
+import Toast.Types (infoToast)
 import Types (AjaxResponse)
 import Wallet.Emulator.Wallet (Wallet(..))
 
@@ -100,7 +110,13 @@ class Monad m <= ManagePAB m where
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
   unsubscribeFromWallet :: WalletId -> m Unit
 
-instance (MonadAff m, MonadAjax PAB.Api m) => ManagePAB (AppM m) where
+instance
+  ( MonadRec m
+  , MonadAff m
+  , MonadError Error m
+  , MonadAjax PAB.Api m
+  ) =>
+  ManagePAB (AppM m) where
   activateContract contractActivationId wallet =
     PAB.postApiContractActivate
       $ ContractActivationArgs
@@ -129,49 +145,50 @@ instance (MonadAff m, MonadAjax PAB.Api m) => ManagePAB (AppM m) where
     currentState <- getContractInstanceCurrentState plutusAppId
     pure $ map (view _hooks) currentState
 
-  invokeEndpoint appId endpoint payload = runExceptT do
-    result <- ExceptT tryInvokeEndpoint
-    ExceptT case result of
-      Nothing -> waitForEndpointAndRetry
-      Just a -> pure $ Right a
-    where
-    -- Tries to call the endpoint. If it's unavailable, returns a successful
-    -- result with Nothing.
-    tryInvokeEndpoint = do
-      ajaxResult <-
+  invokeEndpoint appId endpoint payload =
+    runExceptT $ untilJust $ runMaybeT do
+      lift $ ExceptT acquireEndpoint
+      ajaxResult <- lift $ lift $
         PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
           (encodeJson payload)
           appId
           endpoint
-      pure $ case ajaxResult of
-        Left
-          ( AjaxError
-              -- This is a ConnectingError, not an UnexpectedHTTPStatus becase to
-              -- create an UnexpectedHTTPStatus, servant-support needs to get a
-              -- `Response Json` back from affjax. However, the body is in fact a
-              -- String produced by calling Show, not JSON. Affjax fails to parse
-              -- this as JSON and throws an error instead. So, we need to dig
-              -- into the Error returned from Affjax to get the underlying
-              -- `Response Foreign` and inspect that instead.
-              { description: ConnectingError
-                  (ResponseBodyError _ { status: StatusCode 500, body })
-              }
-          ) ->
-          case runExcept $ decode body of
-            Right str
-              | contains (Pattern "EndpointNotAvailable") str -> Right Nothing
-            _ -> Just <$> ajaxResult
-        _ -> Just <$> ajaxResult
-
-    waitForEndpointAndRetry = do
+      MaybeT
+        $ ExceptT
+        $ pure
+        $ sequence
+        $ filter (not <<< failedWithEndpointNotAvailable)
+        $ Just ajaxResult
+    where
+    acquireEndpoint = do
       -- Get the AVar for the global semaphore lookup
       applicationsAvar <- asks $ view _endpointSemaphores
       -- Get the AVar that corresponds to this specific endpoint
       endpointSem <- liftAff $ getOrCreateEndpoint applicationsAvar
-      -- Wait until it is available
-      liftAff $ AVar.take endpointSem
-      -- Try again
-      invokeEndpoint appId endpoint payload
+      -- try to take it
+      mEndpoint <- liftAff $ AVar.tryTake endpointSem
+      case mEndpoint of
+        Nothing -> do
+          -- Inform user of intent to wait.
+          addToast $ infoToast
+            "Endpoint not currently available. Waiting for it to be released."
+          -- Wait until it is available
+          liftAff $ parOneOf
+            [ Right <$> AVar.take endpointSem
+            , Left timeoutError <$ delay (fromDuration $ Minutes 5.0)
+            ]
+        Just _ ->
+          pure $ pure unit
+
+    timeoutError = AjaxError
+      { request: defaultRequest { responseFormat = ResponseFormat.json }
+      , response: Nothing
+      , description: ConnectingError $ Affjax.XHROtherError $ error $
+          "Timed out waiting for endpoint to be released. AppId: "
+            <> UUID.toString (unwrap appId)
+            <> ", Endpoint: "
+            <> endpoint
+      }
 
     getOrCreateEndpoint applicationsAvar = do
       applications <- AVar.take applicationsAvar
@@ -189,6 +206,25 @@ instance (MonadAff m, MonadAjax PAB.Api m) => ManagePAB (AppM m) where
       AVar.put applications' applicationsAvar
       -- Return the AVar for the endpoint.
       pure endpointSem
+
+    failedWithEndpointNotAvailable = case _ of
+      Left
+        ( AjaxError
+            -- This is a ConnectingError, not an UnexpectedHTTPStatus becase to
+            -- create an UnexpectedHTTPStatus, servant-support needs to get a
+            -- `Response Json` back from affjax. However, the body is in fact a
+            -- String produced by calling Show, not JSON. Affjax fails to parse
+            -- this as JSON and throws an error instead. So, we need to dig
+            -- into the Error returned from Affjax to get the underlying
+            -- `Response Foreign` and inspect that instead.
+            { description: ConnectingError
+                (Affjax.ResponseBodyError _ { status: StatusCode 500, body })
+            }
+        ) ->
+        case runExcept $ decode body of
+          Right str -> contains (Pattern "EndpointNotAvailable") str
+          _ -> false
+      _ -> false
 
   getWalletContractInstances wallet =
     PAB.getApiContractInstancesWalletByWalletid (WalletId.toString wallet)
@@ -224,7 +260,7 @@ instance (MonadAff m, MonadAjax PAB.Api m) => ManagePAB (AppM m) where
     -- new, unlocked semaphore for it.
     updateSemaphore (That _) = AVar.new unit
     -- endpoint was in both available endpoints, and semaphores. Unlock it.
-    updateSemaphore (Both semaphore _) = AVar.put unit semaphore $> semaphore
+    updateSemaphore (Both semaphore _) = AVar.tryPut unit semaphore $> semaphore
   subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
   subscribeToWallet =
     sendWsMessage <<< Subscribe <<< Right <<< invalidWalletIdToPubKeyHash

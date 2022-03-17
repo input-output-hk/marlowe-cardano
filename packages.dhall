@@ -213,3 +213,18 @@ in  upstream
         ]
         "https://github.com/jhbertra/purescript-halogen-nselect"
         "v1.0.0"
+  with unlift =
+      mkPackage
+        [ "aff"
+        , "effect"
+        , "either"
+        , "identity"
+        , "lists"
+        , "maybe"
+        , "monad-control"
+        , "prelude"
+        , "transformers"
+        , "tuples"
+        ]
+        "https://github.com/tweag/purescript-unlift"
+        "v1.0.1"

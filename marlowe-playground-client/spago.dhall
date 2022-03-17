@@ -50,7 +50,6 @@
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
-  , "psci-support"
   , "quickcheck"
   , "record"
   , "refs"

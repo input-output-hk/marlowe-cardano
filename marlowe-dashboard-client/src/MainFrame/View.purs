@@ -4,9 +4,11 @@ import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.Toast (class Toast)
+import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
 import Data.Lens ((^.), (^?))
+import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen (ComponentHTML)
@@ -35,6 +37,7 @@ import Toast.State as Toast
 render
   :: forall m
    . MonadAff m
+  => MonadKill Error Fiber m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m

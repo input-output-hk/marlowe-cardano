@@ -833,6 +833,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "monad-control" = pkgs.stdenv.mkDerivation {
+        name = "monad-control";
+        version = "v5.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/athanclark/purescript-monad-control.git";
+          rev = "9684a6955af3bc32550bed2aee7f63869b04bd46";
+          sha256 = "0czwzn59iscp2796k2hn4nqhaydi3f7pif8bgdd7276ajkzzay5c";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "newtype" = pkgs.stdenv.mkDerivation {
         name = "newtype";
         version = "v4.0.0";
@@ -1332,6 +1344,18 @@ let
           url = "https://github.com/purescript-contrib/purescript-unicode.git";
           rev = "2b66dcdb2ea533c7bc864574e860012c57ace2aa";
           sha256 = "0xh9wwyrl9nsw3h3wzalc1gaph39drj0i6k648cf9bnbb96nxa4z";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "unlift" = pkgs.stdenv.mkDerivation {
+        name = "unlift";
+        version = "v1.0.1";
+        src = pkgs.fetchgit {
+          url = "https://github.com/tweag/purescript-unlift";
+          rev = "485a5269b0913ed53b6709d0bb6e67796de6fa42";
+          sha256 = "1h1bk6xspz7azx9rmpf8lngbv6ssq90kg5cfn8zqxgc831z38qn6";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
