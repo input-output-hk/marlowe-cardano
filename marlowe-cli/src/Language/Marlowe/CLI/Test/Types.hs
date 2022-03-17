@@ -265,8 +265,8 @@ data PabOperation =
     -- | Fail if a test operation doesn't complete in time.
   | Timeout
     {
-      poTimeoutSeconds :: Int           -- ^ The number of seconds to wait.
-    , poOperation      :: PabOperation  -- ^ The PAB operation to wait for.
+      poTimeoutSeconds :: Int             -- ^ The number of seconds to wait.
+    , poOperations     :: [PabOperation]  -- ^ The PAB operations to wait for.
     }
     -- | Execute test operations that should fail.
   | ShouldFail

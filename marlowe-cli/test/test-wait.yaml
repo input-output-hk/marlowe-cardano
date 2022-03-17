@@ -10,14 +10,14 @@ ptPabOperations:
 
 - tag: Timeout
   poTimeoutSeconds: 10
-  poOperation:
-    tag: WaitFor
+  poOperations:
+  - tag: WaitFor
     poRelativeTime: 5000
 
 - tag: ShouldFail
   poOperations:
   - tag: Timeout
     poTimeoutSeconds: 10
-    poOperation:
-      tag: WaitFor
+    poOperations:
+    - tag: WaitFor
       poRelativeTime: 15000

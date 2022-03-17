@@ -399,13 +399,13 @@ interpret access Timeout{..} =
     result <-
       liftIO
         . timeout (1_000_000 * poTimeoutSeconds)
-        $ runOperationsToIO access [poOperation] state
+        $ runOperationsToIO access poOperations state
     case result of
       Just (Right state') -> do
                                put state'
-                               liftIO . putStrLn $ "[Timeout] Operation completed within " <> show poTimeoutSeconds <> " seconds."
+                               liftIO . putStrLn $ "[Timeout] Operations completed within " <> show poTimeoutSeconds <> " seconds."
       Just (Left e)       -> throwError e
-      Nothing             -> throwError . CliError $ "[Timeout] Operation did not complete within " <> show poTimeoutSeconds <> " seconds: " <> show poOperation <> "."
+      Nothing             -> throwError . CliError $ "[Timeout] Operations did not complete within " <> show poTimeoutSeconds <> " seconds: " <> show poOperations <> "."
 
 interpret access ShouldFail{..} =
   do
