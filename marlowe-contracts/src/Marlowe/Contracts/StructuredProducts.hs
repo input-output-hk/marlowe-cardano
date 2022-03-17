@@ -14,7 +14,7 @@ import Marlowe.Contracts.ZeroCouponBond
 --
 -- === Construction
 -- A /Reverse Convertible/ is typically constructed by combining a /zero-coupon Bond/
--- with a short position of an /Option/ with the same maturity and the face value
+-- with a short position of a /Put-Option/ with the same maturity and the face value
 -- of the Bond is equal to the strike of the Option - i.e. the short position of the
 -- Option is collateralized by the face value of the Bond. The coupon payment is the
 -- premium received by shorting the Option.
@@ -81,7 +81,7 @@ reverseConvertible ::
   -> Value          -- ^ Issue Price
   -> Contract       -- ^ Reverse Convertible Contract
 reverseConvertible investor fixing maturity settlement priceFeed currency underlying strike ratio issuePrice =
-  zcb `both` shortCall
+  zcb `both` shortPut
   where
     zcb =
       zeroCouponBond'
@@ -93,14 +93,14 @@ reverseConvertible investor fixing maturity settlement priceFeed currency underl
         strike
         currency
         Close
-    shortCall =
+    shortPut =
       option
         European
-        Call
+        Put
         (Role "OptionCounterparty")
         investor
         priceFeed
-        (currency, strike)
         (underlying, ratio)
+        (currency, strike)
         maturity
         settlement

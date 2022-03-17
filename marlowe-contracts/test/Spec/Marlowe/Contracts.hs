@@ -59,7 +59,7 @@ assertTotalPayments p t x = assertBool "total payments to party" (totalPayments 
 
 assertNoWarnings :: [a] -> Assertion
 assertNoWarnings [] = pure ()
-assertNoWarnings t  = assertBool "No warnings" $ null t
+assertNoWarnings t  = assertBool "Assert no warnings" $ null t
 
 assertClose :: C.Contract -> Assertion
 assertClose = assertBool "Contract is in Close" . (C.Close==)
@@ -357,7 +357,7 @@ reverseConvertibleExercisedTest =
         [ C.TransactionInput (0, 0)   [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 9_000_000 ]
         , C.TransactionInput (99, 99) [ C.NormalInput $ C.IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
         , C.TransactionInput (100, 100)
-            [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 1
+            [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Put" (Role "OptionCounterparty")) 1
             , C.NormalInput $ C.IDeposit (Role "OptionCounterparty") (Role "OptionCounterparty") tok 30 ]
         ]
    in case C.playTrace 0 contract txIn of
@@ -386,7 +386,7 @@ reverseConvertibleTest =
       txIn =
         [ C.TransactionInput (0, 0)     [ C.NormalInput $ C.IDeposit w1Pk w1Pk ada 9_000_000 ]
         , C.TransactionInput (99, 99)   [ C.NormalInput $ C.IDeposit w1Pk (Role "BondProvider") ada 10_000_000 ]
-        , C.TransactionInput (100, 100) [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" (Role "OptionCounterparty")) 0 ]
+        , C.TransactionInput (100, 100) [ C.NormalInput $ C.IChoice (ChoiceId "Exercise Put" (Role "OptionCounterparty")) 0 ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput {..} -> do
