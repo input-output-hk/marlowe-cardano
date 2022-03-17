@@ -287,7 +287,7 @@ instance Monoid UnspentPayouts where
   mempty = UnspentPayouts mempty
 
 instance Semigroup UnspentPayouts where
-  append (UnspentPayouts p1) (UnspentPayouts p2) = UnspentPayouts $ Array.nubEq
+  append (UnspentPayouts p1) (UnspentPayouts p2) = UnspentPayouts $ nubEq
     (append p1 p2)
 
 derive instance Generic UnspentPayouts _

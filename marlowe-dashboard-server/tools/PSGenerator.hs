@@ -16,6 +16,7 @@ where
 
 import Control.Applicative ((<|>))
 import Control.Lens (set, (&))
+import Control.Monad (join)
 import Data.Functor (($>))
 import Data.Monoid ()
 import Data.Proxy (Proxy (Proxy))
@@ -184,9 +185,6 @@ instance HasBridge MyBridge where
 dto :: SumType 'Haskell -> SumType 'Haskell
 dto = equal . genericShow . argonaut
 
-dtoNoShow :: SumType 'Haskell -> SumType 'Haskell
-dtoNoShow = equal . argonaut
-
 customInstance :: forall t. CustomInstance t -> SumType t -> SumType t
 customInstance i (SumType ti dc is) = SumType ti dc $ Custom i : is
 
@@ -197,7 +195,7 @@ unspentPayouts = customInstance monoid $ customInstance semigroup $ mkSumType @U
     appendImpl = InstanceMember
       "append"
       ["(UnspentPayouts p1)", "(UnspentPayouts p2)"]
-      "UnspentPayouts $ Array.nubEq (append p1 p2)"
+      "UnspentPayouts $ nubEq (append p1 p2)"
       [ TypeInfo "purescript-arrays" "Data.Array" "nubEq" []
       , TypeInfo "purescript-prelude" "Data.Semigroup" "append" []
       ]
@@ -220,31 +218,29 @@ unspentPayouts = customInstance monoid $ customInstance semigroup $ mkSumType @U
     monoid = CustomInstance [] monoidHead monoidImpl
 
 myTypes :: [SumType 'Haskell]
-myTypes = dto <$>
-    [ mkSumType @StreamToServer,
-      mkSumType @StreamToClient,
-      mkSumType @RestorePostData,
-      mkSumType @CreateResponse,
-      mkSumType @CreatePostData,
-      mkSumType @GetTotalFundsResponse,
-      mkSumType @(EndpointResponse A E),
-      mkSumType @MarloweEndpointResult,
-      mkSumType @WalletInfo,
-      mkSumType @ContractHistory,
-      mkSumType @RolePayout,
-      unspentPayouts
-    ]
-
-myTypesNoShow :: [SumType 'Haskell]
-myTypesNoShow = dtoNoShow <$>
-    [ mkSumType @MarloweError
+myTypes = join
+    [ dto <$>
+      [ mkSumType @StreamToServer,
+        mkSumType @StreamToClient,
+        mkSumType @RestorePostData,
+        mkSumType @CreateResponse,
+        mkSumType @CreatePostData,
+        mkSumType @GetTotalFundsResponse,
+        mkSumType @(EndpointResponse A E),
+        mkSumType @MarloweEndpointResult,
+        mkSumType @WalletInfo,
+        mkSumType @ContractHistory,
+        mkSumType @RolePayout,
+        unspentPayouts
+      ]
+    , equal . argonaut <$>
+      [ mkSumType @MarloweError ]
     ]
 
 marloweRunSettings :: Settings
 marloweRunSettings = defaultSettings
   & set apiModuleName "Marlowe.Run.Server"
   & addTypes myTypes
-  & addTypes myTypesNoShow
 
 pabSettings :: Settings
 pabSettings = defaultSettings
