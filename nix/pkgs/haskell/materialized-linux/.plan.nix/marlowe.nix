@@ -42,6 +42,7 @@
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
+          (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
           (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))

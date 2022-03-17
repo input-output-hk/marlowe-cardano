@@ -57,6 +57,7 @@ library
     cardano-ledger-core -any,
     containers -any,
     deriving-aeson -any,
+    errors -any,
     extra -any,
     lens,
     mtl,
