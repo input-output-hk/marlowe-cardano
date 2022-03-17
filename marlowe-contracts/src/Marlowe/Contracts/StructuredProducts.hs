@@ -104,3 +104,48 @@ reverseConvertible investor fixing maturity settlement priceFeed currency underl
         (currency, strike)
         maturity
         settlement
+
+-- |Similar to `reverseConvertible` constructed from a Bond in combination with a Down-And-In Put barrier option
+barrierReverseConvertible ::
+     Party          -- ^ Investor
+  -> Timeout        -- ^ Initial fixing
+  -> Timeout        -- ^ Maturity
+  -> Timeout        -- ^ Settlement date
+  -> [Timeout]      -- ^ Barrier observation dates
+  -> Maybe ChoiceId -- ^ Price feed for the underlying
+  -> Token          -- ^ Currency
+  -> Token          -- ^ Underlying
+  -> Value          -- ^ Strike
+  -> Value          -- ^ Barrier
+  -> Value          -- ^ Ratio
+  -> Value          -- ^ Issue Price
+  -> Contract       -- ^ Reverse Convertible Contract
+barrierReverseConvertible investor fixing maturity settlement observationDates priceFeed currency underlying strike barrier ratio issuePrice =
+  zcb `both` shortPut
+  where
+    zcb =
+      zeroCouponBond'
+        investor
+        (Role "BondProvider")
+        fixing
+        maturity
+        issuePrice
+        strike
+        currency
+        Close
+    shortPut =
+      barrierOption
+        European
+        Put
+        DownAndIn
+        (Role "OptionCounterparty")
+        investor
+        priceFeed
+        currency
+        underlying
+        strike
+        ratio
+        barrier
+        observationDates
+        maturity
+        settlement

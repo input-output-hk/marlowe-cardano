@@ -6,6 +6,7 @@ module Marlowe.Contracts.Options
     option
   , OptionType(..)
   , ExerciseType(..)
+  , BarrierType(..)
   -- * Option Strategies
   -- ** Fully collateralized
   , coveredCall
