@@ -133,7 +133,7 @@ pabTest access faucetKey faucetAddress burnAddress passphrase PabTest{..} =
         -- TODO: Clean up wallets and instances.
         liftIO (putStrLn "***** FAILED *****")
           >> throwError (e :: CliError)
-    liftIO $ putStrLn "***** SUCCEEDED *****"
+    liftIO $ putStrLn "***** PASSED *****"
 
 
 -- | Execute a test operation.
@@ -147,7 +147,7 @@ interpret access CreateWallet{..} =
   do
     passphrase <- use psPassphrase
     wi <- lift $ createWallet access poOwner passphrase
-    liftIO . putStrLn $ "[CreateWallet] Created wallet " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
+    liftIO . putStrLn $ "[CreateWallet] Created wallet identified as " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
     psWallets %= M.insert poOwner wi
 
 interpret PabAccess{..} FundWallet{..} =
@@ -161,7 +161,7 @@ interpret PabAccess{..} FundWallet{..} =
           poValue wiAddress
           faucetAddress faucetKey
           (Just 600)
-    liftIO . putStrLn $ "[FundWallet] Funded wallet " <> show (W.getWalletId wiWalletId) <> " for role " <> show poOwner <> " with " <> show poValue <> "."
+    liftIO . putStrLn $ "[FundWallet] Funded wallet for role " <> show poOwner <> " with " <> show poValue <> "."
 
 interpret PabAccess{..} ReturnFunds{..} =
   do
@@ -206,7 +206,7 @@ interpret PabAccess{..} ReturnFunds{..} =
           (minAda <> roleTokens) burnAddress
           faucetAddress faucetKey
           (Just 600)
-    liftIO . putStrLn $ "[ReturnFunds] Returned funds from wallet " <> show (W.getWalletId wiWalletId) <> "."
+    liftIO . putStrLn $ "[ReturnFunds] Returned funds from wallet for role " <> show poOwner <> "."
 
 interpret access CheckFunds{..} =
   do
@@ -235,7 +235,7 @@ interpret access ActivateApp{..} =
     (aiInstance, aiChannel) <- lift $ runContract access MarloweApp wiWalletId'
     let
       aiParams = Nothing
-    liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
+    liftIO . putStrLn $ "[ActivateApp] Activated MarloweApp instance " <> show poInstance <> " with identifier " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
     psAppInstances %= M.insert poInstance AppInstanceInfo{..}
 
 interpret access CallCreate{..} =
@@ -254,7 +254,7 @@ interpret access CallCreate{..} =
         poOwners
     lift
       $ call access aiInstance "create" ((uuid, AM.fromList owners, poContract) :: CreateEndpointSchema)
-    liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show (unContractInstanceId aiInstance) <> " for owners " <> show owners <> "."
+    liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show poInstance <> " for owners " <> show owners <> "."
 
 interpret _ AwaitCreate{..} =
   do
@@ -275,7 +275,7 @@ interpret access CallApplyInputs{..} =
     params <- maybe (throwError $ CliError "[CallApplyInputs] Contract parameters are not known.") pure aiParams
     lift
       $ call access aiInstance "apply-inputs" ((uuid, params, poTimes, poInputs) :: ApplyInputsEndpointSchema)
-    liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on " <> show (unContractInstanceId aiInstance) <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
+    liftIO . putStrLn $ "[CallApplyInputs] Endpoint \"apply-inputs\" called on instance " <> show poInstance <> " for inputs " <> show poInputs <> " and times " <> show poTimes <> "."
 
 interpret _ AwaitApplyInputs{..} =
   do
@@ -297,7 +297,7 @@ interpret access CallAuto{..} =
       , Role . TokenName . toBuiltin $ BS8.pack poOwner
       , poAbsoluteTime
       ) :: AutoEndpointSchema)
-    liftIO . putStrLn $ "[CallAuto] Endpoint \"auto\" called on " <> show (unContractInstanceId aiInstance) <> " on behalf of role " <> show poOwner <> " until time " <> show poAbsoluteTime <> "."
+    liftIO . putStrLn $ "[CallAuto] Endpoint \"auto\" called on instance " <> show poInstance <> " on behalf of role " <> show poOwner <> " until time " <> show poAbsoluteTime <> "."
 
 interpret _ AwaitAuto{..} =
   do
@@ -320,7 +320,7 @@ interpret access CallRedeem{..} =
       , TokenName . toBuiltin $ BS8.pack poOwner
       , anyAddressInShelleyBasedEra wiAddress :: AddressInEra ShelleyEra
       ) :: RedeemEndpointSchema)
-    liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on " <> show (unContractInstanceId aiInstance) <> " for role " <> show poOwner <> "."
+    liftIO . putStrLn $ "[CallRedeem] Endpoint \"redeem\" called on instance " <> show poInstance <> " for role " <> show poOwner <> "."
 
 interpret _ AwaitRedeem{..} =
   do
@@ -335,7 +335,7 @@ interpret access CallClose{..} =
     AppInstanceInfo{..} <- findInstance poInstance
     lift
       $ call access aiInstance "close" uuid
-    liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on " <> show (unContractInstanceId aiInstance) <> "."
+    liftIO . putStrLn $ "[CallClose] Endpoint \"close\" called on instance " <> show poInstance <> "."
 
 interpret _ AwaitClose{..} =
   do
@@ -353,17 +353,16 @@ interpret PabAccess{..} Stop{..} =
     liftCliIO
       $ runApi stopInstance
     -- TODO: Update state.
-    liftIO . putStrLn $ "[Stop] Instance " <> show (unContractInstanceId aiInstance) <> " stopped."
+    liftIO . putStrLn $ "[Stop] Instance " <> show poInstance <> " stopped."
 
 interpret _ Follow{..} =
   do
-    aiThis <- findInstance poInstance
     aiOther <- findInstance poOtherInstance
     psAppInstances %=
       M.adjust
         (\ai -> ai {aiParams = aiParams aiOther})
         poInstance
-    liftIO . putStrLn $ "[Follow] Instance " <> show (unContractInstanceId $ aiInstance aiThis) <> " now follows instance " <> show (unContractInstanceId $ aiInstance aiOther) <> "."
+    liftIO . putStrLn $ "[Follow] Instance " <> show poInstance <> " now follows instance " <> show poOtherInstance <> "."
 
 interpret _ PrintState =
   do
@@ -489,7 +488,7 @@ findRoleTokens poOwner poInstances =
       do
         AppInstanceInfo{..} <- findInstance poInstance
         CurrencySymbol currency <-
-          liftCliMaybe ("[findRoleTokens] Parameters not found for instance " <> show (unContractInstanceId aiInstance) <> ".")
+          liftCliMaybe ("[findRoleTokens] Parameters not found for instance " <> show poInstance <> ".")
             $ rolesCurrency
             <$> aiParams
         policy <-
