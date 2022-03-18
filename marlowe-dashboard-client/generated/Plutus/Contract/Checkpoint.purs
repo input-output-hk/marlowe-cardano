@@ -85,8 +85,7 @@ instance EncodeJson CheckpointStore where
     ( E.record
         { unCheckpointStore:
             (E.dictionary E.value E.value)
-              :: _
-                   (Map CheckpointKey (CheckpointStoreItem Json))
+              :: _ (Map CheckpointKey (CheckpointStoreItem Json))
         }
     )
 
@@ -95,8 +94,7 @@ instance DecodeJson CheckpointStore where
     ( CheckpointStore <$> D.record "CheckpointStore"
         { unCheckpointStore:
             (D.dictionary D.value D.value)
-              :: _
-                   (Map CheckpointKey (CheckpointStoreItem Json))
+              :: _ (Map CheckpointKey (CheckpointStoreItem Json))
         }
     )
 

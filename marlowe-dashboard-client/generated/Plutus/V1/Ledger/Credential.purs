@@ -100,8 +100,7 @@ _StakingHash = prism' StakingHash case _ of
   _ -> Nothing
 
 _StakingPtr
-  :: Prism' StakingCredential
-       { a :: BigInt, b :: BigInt, c :: BigInt }
+  :: Prism' StakingCredential { a :: BigInt, b :: BigInt, c :: BigInt }
 _StakingPtr = prism' (\{ a, b, c } -> (StakingPtr a b c)) case _ of
   (StakingPtr a b c) -> Just { a, b, c }
   _ -> Nothing

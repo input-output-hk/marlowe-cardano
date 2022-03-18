@@ -84,8 +84,7 @@ derive instance Newtype PaymentPubKeyHash _
 --------------------------------------------------------------------------------
 
 _PaymentPubKeyHash
-  :: Iso' PaymentPubKeyHash
-       { unPaymentPubKeyHash :: PubKeyHash }
+  :: Iso' PaymentPubKeyHash { unPaymentPubKeyHash :: PubKeyHash }
 _PaymentPubKeyHash = _Newtype
 
 --------------------------------------------------------------------------------

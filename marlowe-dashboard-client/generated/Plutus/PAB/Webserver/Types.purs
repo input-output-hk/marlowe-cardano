@@ -268,8 +268,7 @@ instance (EncodeJson a) => EncodeJson (ContractReport a) where
             E.value :: _ (Array (ContractSignatureResponse a))
         , crActiveContractStates:
             E.value
-              :: _
-                   (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
+              :: _ (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
         }
     )
 
@@ -280,8 +279,7 @@ instance (DecodeJson a) => DecodeJson (ContractReport a) where
             D.value :: _ (Array (ContractSignatureResponse a))
         , crActiveContractStates:
             D.value
-              :: _
-                   (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
+              :: _ (Array (Tuple PlutusAppId (PartiallyDecodedResponse PABReq)))
         }
     )
 

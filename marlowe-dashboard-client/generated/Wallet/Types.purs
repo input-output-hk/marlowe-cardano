@@ -103,8 +103,7 @@ derive instance Newtype EndpointDescription _
 --------------------------------------------------------------------------------
 
 _EndpointDescription
-  :: Iso' EndpointDescription
-       { getEndpointDescription :: String }
+  :: Iso' EndpointDescription { getEndpointDescription :: String }
 _EndpointDescription = _Newtype
 
 --------------------------------------------------------------------------------
@@ -223,16 +222,14 @@ derive instance Generic NotificationError _
 --------------------------------------------------------------------------------
 
 _EndpointNotAvailable
-  :: Prism' NotificationError
-       { a :: PlutusAppId, b :: EndpointDescription }
+  :: Prism' NotificationError { a :: PlutusAppId, b :: EndpointDescription }
 _EndpointNotAvailable = prism' (\{ a, b } -> (EndpointNotAvailable a b))
   case _ of
     (EndpointNotAvailable a b) -> Just { a, b }
     _ -> Nothing
 
 _MoreThanOneEndpointAvailable
-  :: Prism' NotificationError
-       { a :: PlutusAppId, b :: EndpointDescription }
+  :: Prism' NotificationError { a :: PlutusAppId, b :: EndpointDescription }
 _MoreThanOneEndpointAvailable = prism'
   (\{ a, b } -> (MoreThanOneEndpointAvailable a b))
   case _ of

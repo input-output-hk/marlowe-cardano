@@ -125,6 +125,5 @@ derive instance Newtype UtxosResponse _
 --------------------------------------------------------------------------------
 
 _UtxosResponse
-  :: Iso' UtxosResponse
-       { currentTip :: Tip, page :: Page TxOutRef }
+  :: Iso' UtxosResponse { currentTip :: Tip, page :: Page TxOutRef }
 _UtxosResponse = _Newtype

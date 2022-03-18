@@ -135,8 +135,7 @@ derive instance Newtype EndpointDescription _
 --------------------------------------------------------------------------------
 
 _EndpointDescription
-  :: Iso' EndpointDescription
-       { getEndpointDescription :: String }
+  :: Iso' EndpointDescription { getEndpointDescription :: String }
 _EndpointDescription = _Newtype
 
 --------------------------------------------------------------------------------

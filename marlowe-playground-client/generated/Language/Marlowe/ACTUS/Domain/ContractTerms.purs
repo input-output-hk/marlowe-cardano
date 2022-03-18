@@ -55,8 +55,7 @@ derive instance Newtype Assertion _
 --------------------------------------------------------------------------------
 
 _NpvAssertionAgainstZeroRiskBond
-  :: Iso' Assertion
-       { zeroRiskInterest :: Number, expectedNpv :: Number }
+  :: Iso' Assertion { zeroRiskInterest :: Number, expectedNpv :: Number }
 _NpvAssertionAgainstZeroRiskBond = _Newtype
 
 --------------------------------------------------------------------------------
@@ -89,8 +88,7 @@ derive instance Newtype AssertionContext _
 --------------------------------------------------------------------------------
 
 _AssertionContext
-  :: Iso' AssertionContext
-       { rrmoMin :: Number, rrmoMax :: Number }
+  :: Iso' AssertionContext { rrmoMin :: Number, rrmoMax :: Number }
 _AssertionContext = _Newtype
 
 --------------------------------------------------------------------------------

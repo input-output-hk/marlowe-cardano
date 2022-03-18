@@ -157,8 +157,7 @@ instance EncodeJson UnbalancedTx where
         { unBalancedTxTx: E.value :: _ Tx
         , unBalancedTxRequiredSignatories:
             (E.dictionary E.value (E.maybe E.value))
-              :: _
-                   (Map PaymentPubKeyHash (Maybe PaymentPubKey))
+              :: _ (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
             (E.dictionary E.value E.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: E.value :: _ (Interval POSIXTime)
@@ -171,8 +170,7 @@ instance DecodeJson UnbalancedTx where
         { unBalancedTxTx: D.value :: _ Tx
         , unBalancedTxRequiredSignatories:
             (D.dictionary D.value (D.maybe D.value))
-              :: _
-                   (Map PaymentPubKeyHash (Maybe PaymentPubKey))
+              :: _ (Map PaymentPubKeyHash (Maybe PaymentPubKey))
         , unBalancedTxUtxoIndex:
             (D.dictionary D.value D.value) :: _ (Map TxOutRef TxOut)
         , unBalancedTxValidityTimeRange: D.value :: _ (Interval POSIXTime)

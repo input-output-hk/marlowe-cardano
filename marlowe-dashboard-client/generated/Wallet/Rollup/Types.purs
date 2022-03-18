@@ -166,8 +166,7 @@ derive instance Generic DereferencedInput _
 --------------------------------------------------------------------------------
 
 _DereferencedInput
-  :: Prism' DereferencedInput
-       { originalInput :: TxIn, refersTo :: TxOut }
+  :: Prism' DereferencedInput { originalInput :: TxIn, refersTo :: TxOut }
 _DereferencedInput = prism' DereferencedInput case _ of
   (DereferencedInput a) -> Just a
   _ -> Nothing

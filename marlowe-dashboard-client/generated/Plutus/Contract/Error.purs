@@ -137,8 +137,7 @@ _WalletContractError = prism' WalletContractError case _ of
   _ -> Nothing
 
 _ChainIndexContractError
-  :: Prism' ContractError
-       { a :: String, b :: ChainIndexResponse }
+  :: Prism' ContractError { a :: String, b :: ChainIndexResponse }
 _ChainIndexContractError = prism' (\{ a, b } -> (ChainIndexContractError a b))
   case _ of
     (ChainIndexContractError a b) -> Just { a, b }

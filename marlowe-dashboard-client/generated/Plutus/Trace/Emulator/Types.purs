@@ -168,8 +168,7 @@ _StoppedWithError = prism' StoppedWithError case _ of
   _ -> Nothing
 
 _ReceiveEndpointCall
-  :: Prism' ContractInstanceMsg
-       { a :: EndpointDescription, b :: Json }
+  :: Prism' ContractInstanceMsg { a :: EndpointDescription, b :: Json }
 _ReceiveEndpointCall = prism' (\{ a, b } -> (ReceiveEndpointCall a b)) case _ of
   (ReceiveEndpointCall a b) -> Just { a, b }
   _ -> Nothing
@@ -325,8 +324,7 @@ _InstanceIdNotFound = prism' InstanceIdNotFound case _ of
   _ -> Nothing
 
 _EmulatorJSONDecodingError
-  :: Prism' EmulatorRuntimeError
-       { a :: String, b :: Json }
+  :: Prism' EmulatorRuntimeError { a :: String, b :: Json }
 _EmulatorJSONDecodingError = prism'
   (\{ a, b } -> (EmulatorJSONDecodingError a b))
   case _ of

@@ -59,8 +59,7 @@ derive instance Newtype SlotConfig _
 --------------------------------------------------------------------------------
 
 _SlotConfig
-  :: Iso' SlotConfig
-       { scSlotLength :: BigInt, scSlotZeroTime :: POSIXTime }
+  :: Iso' SlotConfig { scSlotLength :: BigInt, scSlotZeroTime :: POSIXTime }
 _SlotConfig = _Newtype
 
 --------------------------------------------------------------------------------

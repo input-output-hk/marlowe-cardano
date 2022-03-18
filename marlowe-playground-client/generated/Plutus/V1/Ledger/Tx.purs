@@ -270,8 +270,7 @@ derive instance Generic TxInType _
 --------------------------------------------------------------------------------
 
 _ConsumeScriptAddress
-  :: Prism' TxInType
-       { a :: Validator, b :: String, c :: String }
+  :: Prism' TxInType { a :: Validator, b :: String, c :: String }
 _ConsumeScriptAddress = prism' (\{ a, b, c } -> (ConsumeScriptAddress a b c))
   case _ of
     (ConsumeScriptAddress a b c) -> Just { a, b, c }

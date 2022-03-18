@@ -174,8 +174,7 @@ instance (EncodeJson a) => EncodeJson (Responses a) where
     ( E.record
         { unResponses:
             (E.dictionary (E.tuple (E.value >/\< E.value)) E.value)
-              :: _
-                   (Map (Tuple IterationID RequestID) a)
+              :: _ (Map (Tuple IterationID RequestID) a)
         }
     )
 
@@ -184,8 +183,7 @@ instance (DecodeJson a) => DecodeJson (Responses a) where
     ( Responses <$> D.record "Responses"
         { unResponses:
             (D.dictionary (D.tuple (D.value </\> D.value)) D.value)
-              :: _
-                   (Map (Tuple IterationID RequestID) a)
+              :: _ (Map (Tuple IterationID RequestID) a)
         }
     )
 

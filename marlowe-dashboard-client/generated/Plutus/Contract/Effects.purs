@@ -233,15 +233,13 @@ _UtxoSetMembership = prism' UtxoSetMembership case _ of
   _ -> Nothing
 
 _UtxoSetAtAddress
-  :: Prism' ChainIndexQuery
-       { a :: PageQuery TxOutRef, b :: Credential }
+  :: Prism' ChainIndexQuery { a :: PageQuery TxOutRef, b :: Credential }
 _UtxoSetAtAddress = prism' (\{ a, b } -> (UtxoSetAtAddress a b)) case _ of
   (UtxoSetAtAddress a b) -> Just { a, b }
   _ -> Nothing
 
 _UtxoSetWithCurrency
-  :: Prism' ChainIndexQuery
-       { a :: PageQuery TxOutRef, b :: AssetClass }
+  :: Prism' ChainIndexQuery { a :: PageQuery TxOutRef, b :: AssetClass }
 _UtxoSetWithCurrency = prism' (\{ a, b } -> (UtxoSetWithCurrency a b)) case _ of
   (UtxoSetWithCurrency a b) -> Just { a, b }
   _ -> Nothing
@@ -252,8 +250,7 @@ _TxsFromTxIds = prism' TxsFromTxIds case _ of
   _ -> Nothing
 
 _TxoSetAtAddress
-  :: Prism' ChainIndexQuery
-       { a :: PageQuery TxOutRef, b :: Credential }
+  :: Prism' ChainIndexQuery { a :: PageQuery TxOutRef, b :: Credential }
 _TxoSetAtAddress = prism' (\{ a, b } -> (TxoSetAtAddress a b)) case _ of
   (TxoSetAtAddress a b) -> Just { a, b }
   _ -> Nothing
@@ -679,16 +676,14 @@ _AwaitUtxoProducedResp = prism' AwaitUtxoProducedResp case _ of
   _ -> Nothing
 
 _AwaitTxStatusChangeResp
-  :: Prism' PABResp
-       { a :: TxId, b :: RollbackState Unit }
+  :: Prism' PABResp { a :: TxId, b :: RollbackState Unit }
 _AwaitTxStatusChangeResp = prism' (\{ a, b } -> (AwaitTxStatusChangeResp a b))
   case _ of
     (AwaitTxStatusChangeResp a b) -> Just { a, b }
     _ -> Nothing
 
 _AwaitTxOutStatusChangeResp
-  :: Prism' PABResp
-       { a :: TxOutRef, b :: RollbackState TxOutState }
+  :: Prism' PABResp { a :: TxOutRef, b :: RollbackState TxOutState }
 _AwaitTxOutStatusChangeResp = prism'
   (\{ a, b } -> (AwaitTxOutStatusChangeResp a b))
   case _ of
@@ -731,15 +726,13 @@ _WriteBalancedTxResp = prism' WriteBalancedTxResp case _ of
   _ -> Nothing
 
 _ExposeEndpointResp
-  :: Prism' PABResp
-       { a :: EndpointDescription, b :: EndpointValue Json }
+  :: Prism' PABResp { a :: EndpointDescription, b :: EndpointValue Json }
 _ExposeEndpointResp = prism' (\{ a, b } -> (ExposeEndpointResp a b)) case _ of
   (ExposeEndpointResp a b) -> Just { a, b }
   _ -> Nothing
 
 _PosixTimeRangeToContainedSlotRangeResp
-  :: Prism' PABResp
-       (Either SlotConversionError (Interval Slot))
+  :: Prism' PABResp (Either SlotConversionError (Interval Slot))
 _PosixTimeRangeToContainedSlotRangeResp = prism'
   PosixTimeRangeToContainedSlotRangeResp
   case _ of

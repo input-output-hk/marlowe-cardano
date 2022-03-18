@@ -97,8 +97,7 @@ instance EncodeJson ScriptValidationEvent where
         { sveScript: E.value :: _ String
         , sveResult:
             (E.either E.value (E.tuple (E.value >/\< E.value)))
-              :: _
-                   (Either ScriptError (Tuple RawJson (Array String)))
+              :: _ (Either ScriptError (Tuple RawJson (Array String)))
         , sveRedeemer: E.value :: _ String
         , sveType: E.value :: _ ScriptType
         }
@@ -110,8 +109,7 @@ instance DecodeJson ScriptValidationEvent where
         { sveScript: D.value :: _ String
         , sveResult:
             (D.either D.value (D.tuple (D.value </\> D.value)))
-              :: _
-                   (Either ScriptError (Tuple RawJson (Array String)))
+              :: _ (Either ScriptError (Tuple RawJson (Array String)))
         , sveRedeemer: D.value :: _ String
         , sveType: D.value :: _ ScriptType
         }
