@@ -2,7 +2,7 @@ module Halogen.Subscription.Extra where
 
 import Prologue
 
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Map as Map
 import Data.Traversable (traverse)
 import Effect.Aff
@@ -14,6 +14,7 @@ import Effect.Aff
   , launchAff_
   , supervise
   )
+import Effect.Aff as Aff
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
 import Halogen.Subscription (Emitter, SubscribeIO, Subscription)
@@ -90,3 +91,21 @@ reactimate runAction emitter = HS.makeEmitter \push -> do
     -- | Kill all pending Fibers.
     fibers <- Ref.read fibersRef
     traverse_ (launchAff_ <<< killFiber (error "unsubscribed")) fibers
+
+-- Helper function to subscribe for the first notification from an emitter
+subscribeOnce :: Emitter ~> Aff
+subscribeOnce emitter =
+  Aff.makeAff \resolve -> do
+    refSubscription <- Ref.new Nothing
+    let
+      unsubscribe = do
+        mSubscription <- Ref.read refSubscription
+        for_ mSubscription HS.unsubscribe
+        Ref.write Nothing refSubscription
+
+    subscription <- HS.subscribe emitter \a -> do
+      unsubscribe
+      resolve (Right a)
+    Ref.write (Just subscription) refSubscription
+    pure $ Aff.effectCanceler unsubscribe
+

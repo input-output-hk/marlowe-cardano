@@ -11,10 +11,11 @@ import Prologue
 import AppM (AppM)
 import Capability.PAB (class ManagePAB, subscribeToPlutusApp)
 import Capability.PAB (activateContract, invokeEndpoint) as PAB
+import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont (lift)
-import Control.Monad.Error.Class (class MonadError)
-import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
+import Control.Monad.Error.Class (class MonadError, try)
+import Control.Monad.Except (ExceptT(..), except, runExceptT, withExceptT)
 import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut (encodeJson)
@@ -23,13 +24,15 @@ import Data.Lens (view, (^.))
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Traversable (for_)
 import Data.Tuple.Nested (type (/\), (/\))
-import Effect.Aff (Aff, Error)
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff (Aff, Error, error)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
-import Env (Env, _followerBus)
+import Env (Env, _followerAVarMap, _followerBus)
 import Errors (class Debuggable, class Explain, debuggable)
 import Halogen (HalogenM)
 import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
+import Halogen.Subscription as HS
+import Halogen.Subscription.Extra (subscribeOnce)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
@@ -87,9 +90,11 @@ instance
     contracts <- _.contracts <$> getStore
     case getFollowerContract marloweParams contracts of
       -- If we already have a follower contract, we don't need to do anything
-      Just plutusAppId -> pure $ Right plutusAppId
+      Just plutusAppId -> do
+        pure $ Right plutusAppId
       -- If we don't, lets activate and follow one
-      Nothing -> activateAndfollowContract wallet marloweParams
+      Nothing -> do
+        activateAndfollowContract wallet marloweParams
 
   followNewContract wallet marloweParams = do
     mFollowAppId <- activateAndfollowContract wallet marloweParams
@@ -121,22 +126,36 @@ instance FollowerApp m => FollowerApp (ReaderT r m) where
 activateAndfollowContract
   :: forall m
    . ManagePAB m
+  => MonadAsk Env m
+  => MonadAff m
   => PABConnectedWallet
   -> MarloweParams
   -> m (Either FollowContractError PlutusAppId)
 activateAndfollowContract wallet marloweParams = runExceptT do
-  let walletId = wallet ^. _walletId
-  -- Create a new instance of a MarloweFollower plutus contract
-  followAppId <- withExceptT ActivateContractError
-    $ ExceptT
-    $ PAB.activateContract MarloweFollower walletId
-  -- Subscribe to notifications
-  lift $ subscribeToPlutusApp followAppId
-  -- Tell it to follow the Marlowe contract via its MarloweParams
-  withExceptT FollowContractError
-    $ ExceptT
-    $ PAB.invokeEndpoint followAppId "follow" marloweParams
-  pure followAppId
+  -- Try to get an emitter, in case a call to activate has already been started.
+  followerAVarMap <- asks $ view _followerAVarMap
+  newIO <- liftEffect $ HS.create
+  emitterWasPut <- AVarMap.tryPut marloweParams newIO.emitter followerAVarMap
+  if emitterWasPut then do
+    result <- try do
+      let walletId = wallet ^. _walletId
+      -- Create a new instance of a MarloweFollower plutus contract
+      followAppId <- withExceptT ActivateContractError
+        $ ExceptT
+        $ PAB.activateContract MarloweFollower walletId
+      -- Subscribe to notifications
+      lift $ subscribeToPlutusApp followAppId
+      -- Tell it to follow the Marlowe contract via its MarloweParams
+      withExceptT FollowContractError
+        $ ExceptT
+        $ PAB.invokeEndpoint followAppId "follow" marloweParams
+      liftEffect $ HS.notify newIO.listener followAppId
+      pure followAppId
+    AVarMap.kill marloweParams (error "killed") followerAVarMap
+    except result
+  else do
+    emitter <- AVarMap.read marloweParams followerAVarMap
+    liftAff $ subscribeOnce emitter
 
 {- [UC-CONTRACT-1][4] Start a new marlowe contract
    [UC-CONTRACT-2][X] Receive a role token for a marlowe contract

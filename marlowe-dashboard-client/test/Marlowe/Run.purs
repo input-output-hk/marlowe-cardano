@@ -208,6 +208,7 @@ mkTestEnv :: Aff (Env /\ Coenv /\ SubscribeIO Error)
 mkTestEnv = do
   contractStepCarouselSubscription <- liftAff AVar.empty
   endpointAVarMap <- AVarMap.empty
+  followerAVarMap <- AVarMap.empty
   createBus <- liftEffect EventBus.create
   applyInputBus <- liftEffect EventBus.create
   redeemBus <- liftEffect EventBus.create
@@ -235,6 +236,7 @@ mkTestEnv = do
     env = Env
       { contractStepCarouselSubscription
       , endpointAVarMap
+      , followerAVarMap
       , createBus
       , applyInputBus
       , redeemBus
