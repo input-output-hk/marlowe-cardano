@@ -3,13 +3,11 @@ module Capability.Marlowe
   , initializeContract
   , applyTransactionInput
   , redeem
-  , getRoleContracts
   ) where
 
 import Prologue
 
 import AppM (AppM)
-import Capability.PAB (getContractInstanceObservableState) as PAB
 import Capability.PlutusApps.MarloweApp (applyInputs, createContract, redeem) as MarloweApp
 import Capability.Toast (addToast)
 import Capability.Wallet (class ManageWallet)
@@ -19,22 +17,14 @@ import Component.Template.State
   , instantiateExtendedContract
   )
 import Control.Monad.Error.Class (class MonadError, throwError)
-import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
+import Control.Monad.Except (ExceptT(..), lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
-import Data.Argonaut.Decode (decodeJson)
-import Data.Bifunctor (lmap)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (view)
-import Data.Map (Map)
 import Data.NewContract (NewContract(..))
-import Data.PABConnectedWallet
-  ( PABConnectedWallet
-  , _address
-  , _companionAppId
-  , _marloweAppId
-  )
+import Data.PABConnectedWallet (PABConnectedWallet, _address, _marloweAppId)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
@@ -45,19 +35,14 @@ import Halogen.Store.Monad (updateStore)
 import Language.Marlowe.Client.Error (showContractError)
 import Marlowe.Extended.Metadata (ContractTemplate)
 import Marlowe.Run.Server (Api) as MarloweApp
-import Marlowe.Semantics
-  ( MarloweData
-  , MarloweParams
-  , TokenName
-  , TransactionInput
-  )
+import Marlowe.Semantics (MarloweParams, TokenName, TransactionInput)
 import Plutus.PAB.Webserver (Api) as PAB
 import Servant.PureScript (class MonadAjax)
 import Store as Store
 import Toast.Types (errorToast)
 import Type.Proxy (Proxy(..))
 import Type.Row (type (+))
-import Types (AjaxResponse, DecodedAjaxResponse, JsonAjaxErrorRow)
+import Types (AjaxResponse, JsonAjaxErrorRow)
 
 type InitializeContractError = Variant
   (JsonAjaxErrorRow + InstantiateContractErrorRow + ())
@@ -88,9 +73,6 @@ class
     -> MarloweParams
     -> TokenName
     -> m (AjaxResponse (Aff Unit))
-  getRoleContracts
-    :: PABConnectedWallet
-    -> m (DecodedAjaxResponse (Map MarloweParams MarloweData))
 
 instance
   ( MonadUnliftAff m
@@ -182,15 +164,6 @@ instance
               showContractError contractError
           Right _ -> pure unit
 
-  -- get the observable state of a wallet's WalletCompanion
-  getRoleContracts wallet =
-    runExceptT do
-      let
-        companionAppId = view _companionAppId wallet
-      observableStateJson <- withExceptT Left $ ExceptT $
-        PAB.getContractInstanceObservableState companionAppId
-      except $ lmap Right $ decodeJson observableStateJson
-
 instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) where
   initializeContract currentInstant template params wallet =
     lift $ initializeContract currentInstant template params wallet
@@ -198,7 +171,6 @@ instance ManageMarlowe m => ManageMarlowe (HalogenM state action slots msg m) wh
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
   redeem walletDetails marloweParams tokenName =
     lift $ redeem walletDetails marloweParams tokenName
-  getRoleContracts = lift <<< getRoleContracts
 
 instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
   initializeContract currentInstant template params wallet =
@@ -207,7 +179,6 @@ instance ManageMarlowe m => ManageMarlowe (MaybeT m) where
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
   redeem walletDetails marloweParams tokenName =
     lift $ redeem walletDetails marloweParams tokenName
-  getRoleContracts = lift <<< getRoleContracts
 
 instance ManageMarlowe m => ManageMarlowe (ReaderT r m) where
   initializeContract currentInstant template params wallet =
@@ -216,4 +187,3 @@ instance ManageMarlowe m => ManageMarlowe (ReaderT r m) where
     lift $ applyTransactionInput walletDetails marloweParams transactionInput
   redeem walletDetails marloweParams tokenName =
     lift $ redeem walletDetails marloweParams tokenName
-  getRoleContracts = lift <<< getRoleContracts

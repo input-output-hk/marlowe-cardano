@@ -1,13 +1,8 @@
 module Capability.PAB
   ( class ManagePAB
   , activateContract
-  , deactivateContract
   , getAllContractInstances
   , getContractDefinitions
-  , getContractInstanceClientState
-  , getContractInstanceCurrentState
-  , getContractInstanceHooks
-  , getContractInstanceObservableState
   , getWalletContractInstances
   , invokeEndpoint
   , onNewActiveEndpoints
@@ -17,7 +12,6 @@ module Capability.PAB
 
 import Prologue
 
-import API.Lenses (_cicCurrentState, _hooks, _observableState)
 import Affjax (defaultRequest)
 import Affjax as Affjax
 import Affjax.ResponseFormat as ResponseFormat
@@ -31,7 +25,7 @@ import Control.Monad.Reader (ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec, untilJust)
 import Control.Parallel (parOneOf)
 import Data.Align (align)
-import Data.Argonaut (Json, encodeJson)
+import Data.Argonaut (encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Filterable (filter)
 import Data.Lens (view)
@@ -60,8 +54,6 @@ import Halogen.Subscription as HS
 import Marlowe.PAB (PlutusAppId)
 import MarloweContract (MarloweContract)
 import Plutus.Contract.Effects (ActiveEndpoint)
-import Plutus.Contract.Resumable (Request)
-import Plutus.PAB.Events.ContractInstanceState (PartiallyDecodedResponse)
 import Plutus.PAB.Webserver as PAB
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToServer(..)
@@ -77,15 +69,6 @@ import Wallet.Emulator.Wallet (Wallet(..))
 class Monad m <= ManagePAB m where
   activateContract
     :: MarloweContract -> WalletId -> m (AjaxResponse PlutusAppId)
-  deactivateContract :: PlutusAppId -> m (AjaxResponse Unit)
-  getContractInstanceClientState
-    :: PlutusAppId
-    -> m (AjaxResponse (ContractInstanceClientState MarloweContract))
-  getContractInstanceCurrentState
-    :: PlutusAppId -> m (AjaxResponse (PartiallyDecodedResponse ActiveEndpoint))
-  getContractInstanceObservableState :: PlutusAppId -> m (AjaxResponse Json)
-  getContractInstanceHooks
-    :: PlutusAppId -> m (AjaxResponse (Array (Request ActiveEndpoint)))
   invokeEndpoint
     :: forall d
      . EncodeJson d
@@ -120,24 +103,6 @@ instance
               , getWalletId: WalletId.toString wallet
               }
           }
-
-  deactivateContract =
-    PAB.putApiContractInstanceByContractinstanceidStop
-
-  getContractInstanceClientState =
-    PAB.getApiContractInstanceByContractinstanceidStatus
-
-  getContractInstanceCurrentState plutusAppId = do
-    clientState <- getContractInstanceClientState plutusAppId
-    pure $ map (view _cicCurrentState) clientState
-
-  getContractInstanceObservableState plutusAppId = do
-    currentState <- getContractInstanceCurrentState plutusAppId
-    pure $ map (view _observableState) currentState
-
-  getContractInstanceHooks plutusAppId = do
-    currentState <- getContractInstanceCurrentState plutusAppId
-    pure $ map (view _hooks) currentState
 
   invokeEndpoint appId endpoint payload =
     runExceptT $ untilJust $ runMaybeT do
@@ -268,12 +233,6 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
-  deactivateContract = lift <<< deactivateContract
-  getContractInstanceClientState = lift <<< getContractInstanceClientState
-  getContractInstanceCurrentState = lift <<< getContractInstanceCurrentState
-  getContractInstanceObservableState = lift <<<
-    getContractInstanceObservableState
-  getContractInstanceHooks = lift <<< getContractInstanceHooks
   invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
     plutusAppId
     endpointDescription
@@ -289,12 +248,6 @@ instance ManagePAB m => ManagePAB (MaybeT m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
-  deactivateContract = lift <<< deactivateContract
-  getContractInstanceClientState = lift <<< getContractInstanceClientState
-  getContractInstanceCurrentState = lift <<< getContractInstanceCurrentState
-  getContractInstanceObservableState = lift <<<
-    getContractInstanceObservableState
-  getContractInstanceHooks = lift <<< getContractInstanceHooks
   invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
     plutusAppId
     endpointDescription
@@ -310,12 +263,6 @@ instance ManagePAB m => ManagePAB (ReaderT r m) where
   activateContract contractActivationId wallet = lift $ activateContract
     contractActivationId
     wallet
-  deactivateContract = lift <<< deactivateContract
-  getContractInstanceClientState = lift <<< getContractInstanceClientState
-  getContractInstanceCurrentState = lift <<< getContractInstanceCurrentState
-  getContractInstanceObservableState = lift <<<
-    getContractInstanceObservableState
-  getContractInstanceHooks = lift <<< getContractInstanceHooks
   invokeEndpoint plutusAppId endpointDescription payload = lift $ invokeEndpoint
     plutusAppId
     endpointDescription
