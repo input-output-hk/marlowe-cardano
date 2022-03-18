@@ -126,6 +126,7 @@ addFollowerContract currentTime followerId metadata history store =
         lift2
           (Map.insert marloweParams)
           ( Execution.restoreState
+              followerId
               currentTime
               mContractNickname
               metadata

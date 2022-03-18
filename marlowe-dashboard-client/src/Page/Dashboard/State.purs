@@ -95,10 +95,10 @@ mkInitialState
   :: Instant -> PABConnectedWallet -> ContractStore -> State
 mkInitialState currentTime wallet contracts =
   let
-    runningContracts = deriveContractState currentTime wallet $
-      getRunningContracts contracts
-    closedContracts = deriveContractState currentTime wallet $
-      getClosedContracts contracts
+    runningContracts =
+      deriveContractState currentTime wallet <$> getRunningContracts contracts
+    closedContracts =
+      deriveContractState currentTime wallet <$> getClosedContracts contracts
   in
     { contactsState: Contacts.initialState
     , walletCompanionStatus: WaitingToSync
@@ -116,9 +116,9 @@ mkInitialState currentTime wallet contracts =
 deriveContractState
   :: Instant
   -> PABConnectedWallet
-  -> Array Execution.State
-  -> Array ContractState
-deriveContractState currentTime wallet = map \executionState ->
+  -> Execution.State
+  -> ContractState
+deriveContractState currentTime wallet executionState =
   let
     { marloweParams, contract } = executionState
     userParties = contractUserParties wallet marloweParams contract
@@ -146,9 +146,9 @@ handleAction
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction { currentTime, wallet, contracts } Receive = do
   let
-    runningContracts = deriveContractState currentTime wallet $
+    runningContracts = deriveContractState currentTime wallet <$>
       getRunningContracts contracts
-    closedContracts = deriveContractState currentTime wallet $
+    closedContracts = deriveContractState currentTime wallet <$>
       getClosedContracts contracts
     newContracts = getNewContracts contracts
   modify_

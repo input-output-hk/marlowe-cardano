@@ -16,11 +16,14 @@ import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
 import Data.Lens ((^.))
 import Data.NewContract (NewContract(..))
+import Data.Newtype (unwrap)
+import Data.UUID.Argonaut as UUID
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
 import Halogen.HTML (a, div, h3, p, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
+import Halogen.HTML.Properties (id)
 import Humanize (contractIcon)
 import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
@@ -69,6 +72,10 @@ contractPreviewCard
     div
       [ classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
+      , id
+          $ UUID.toString
+          $ unwrap
+          $ executionState.followerAppId
       ]
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]

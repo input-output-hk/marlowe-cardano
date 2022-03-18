@@ -41,6 +41,7 @@ import Marlowe.Execution.Types
   , TimeoutInfo
   )
 import Marlowe.Extended.Metadata (MetaData)
+import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics
   ( Accounts
   , Action(..)
@@ -75,12 +76,13 @@ import Plutus.V1.Ledger.Time as POSIXTime
 import Safe.Coerce (coerce)
 
 mkInitialState
-  :: Maybe ContractNickname
+  :: PlutusAppId
+  -> Maybe ContractNickname
   -> MarloweParams
   -> MetaData
   -> Contract
   -> State
-mkInitialState contractNickname marloweParams metadata contract =
+mkInitialState followerAppId contractNickname marloweParams metadata contract =
   { semanticState: emptyState
   , contractNickname
   , contract
@@ -90,15 +92,17 @@ mkInitialState contractNickname marloweParams metadata contract =
   , mPendingTransaction: Nothing
   , mPendingTimeouts: Nothing
   , mNextTimeout: nextTimeout contract
+  , followerAppId
   }
 
 restoreState
-  :: Instant
+  :: PlutusAppId
+  -> Instant
   -> Maybe ContractNickname
   -> MetaData
   -> ContractHistory
   -> Either String State
-restoreState currentTime contractNickname metadata history = do
+restoreState followerAppId currentTime contractNickname metadata history = do
   let
     MarloweData { marloweContract, marloweState } = getInitialData history
     marloweParams = getMarloweParams history
@@ -114,6 +118,7 @@ restoreState currentTime contractNickname metadata history = do
       , mPendingTransaction: Nothing
       , mPendingTimeouts: Nothing
       , mNextTimeout: nextTimeout marloweContract
+      , followerAppId
       }
   -- Apply all the transaction inputs
   foldl (flip nextState) initialState inputs
