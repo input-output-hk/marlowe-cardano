@@ -36,10 +36,10 @@ data ExerciseType =
 
 -- |Barrier type
 data BarrierType =
-      DownAndIn  -- ^ Knock in
-    | DownAndOut -- ^ Knock out
-    | UpAndIn    -- ^ Knock in
-    | UpAndOut   -- ^ Knock out
+      DownAndIn  -- ^ Knock in, downwards crossing of barrier
+    | DownAndOut -- ^ Knock out, downwards crossing of barrier
+    | UpAndIn    -- ^ Knock in, upwards crossing of barrier
+    | UpAndOut   -- ^ Knock out, upwards crossing of barrier
 
 -- |An /option/ is a financial instrument that is based on the value of underlying
 -- securities. An options contract offers the buyer the opportunity but not
@@ -246,8 +246,10 @@ barrierOption ::
 barrierOption exerciseType optionType barrierType issuer counterparty priceFeed currency underlying strike ratio barrier observationDates maturity settlement =
   foldl checkBarrierCondition initialContract observationDates
   where
+    -- The option contract, that can be activated (knock-in) or deactivated (knock-out) over time
     optionContract = option exerciseType optionType issuer counterparty priceFeed (underlying, ratio) (currency, strike) maturity settlement
 
+    -- Knock-in options are set to the Close contract initially, knock-out options to the option contract
     initialContract = initialContract' barrierType
       where
         initialContract' DownAndIn  = Close
@@ -255,12 +257,14 @@ barrierOption exerciseType optionType barrierType issuer counterparty priceFeed 
         initialContract' UpAndIn    = Close
         initialContract' UpAndOut   = optionContract
 
+    -- Check for knock-in or knock-out events. If an oracle is provided, the decision is based on the current value of the price feed of the underlying
+    -- otherwise the decision has to be done manually
     checkBarrierCondition continuation timeout =
       When [checkBarrierCondition' priceFeed barrierType] timeout Close
       where
         checkBarrierCondition' :: Maybe ChoiceId -> BarrierType -> Case
-        checkBarrierCondition' Nothing _                  = choose (ChoiceId "Barrier Breach" issuer) continuation optionContract
         checkBarrierCondition' (Just choiceId) DownAndIn  = chooseOracle choiceId (currency, barrier) ValueGT continuation optionContract
         checkBarrierCondition' (Just choiceId) DownAndOut = chooseOracle choiceId (currency, barrier) ValueGT continuation Close
         checkBarrierCondition' (Just choiceId) UpAndIn    = chooseOracle choiceId (currency, barrier) ValueLT continuation optionContract
         checkBarrierCondition' (Just choiceId) UpAndOut   = chooseOracle choiceId (currency, barrier) ValueLT continuation Close
+        checkBarrierCondition' Nothing _                  = choose (ChoiceId "Barrier Breach" issuer) continuation optionContract
