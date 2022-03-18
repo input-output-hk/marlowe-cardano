@@ -6,6 +6,7 @@ import AppM (runAppM)
 import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
 import Control.Apply (lift2)
+import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect.Test (testLogger)
 import Control.Monad.Error.Class
@@ -206,7 +207,7 @@ marshallErrors errors m = catchError m \e -> do
 mkTestEnv :: Aff (Env /\ Coenv /\ SubscribeIO Error)
 mkTestEnv = do
   contractStepCarouselSubscription <- liftAff AVar.empty
-  endpointSemaphores <- liftAff $ AVar.new Map.empty
+  endpointAVarMap <- AVarMap.empty
   createBus <- liftEffect EventBus.create
   applyInputBus <- liftEffect EventBus.create
   redeemBus <- liftEffect EventBus.create
@@ -233,7 +234,7 @@ mkTestEnv = do
 
     env = Env
       { contractStepCarouselSubscription
-      , endpointSemaphores
+      , endpointAVarMap
       , createBus
       , applyInputBus
       , redeemBus

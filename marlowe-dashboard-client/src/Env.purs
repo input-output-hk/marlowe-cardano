@@ -2,13 +2,13 @@ module Env where
 
 import Prologue
 
+import Control.Concurrent.AVarMap (AVarMap)
 import Control.Concurrent.EventBus (EventBus)
 import Control.Logger.Effect (Logger)
 import Control.Logger.Structured (StructuredLog)
 import Data.Lens (Lens')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Lens.Record (prop)
-import Data.Map (Map)
 import Data.Newtype (class Newtype)
 import Data.UUID.Argonaut (UUID)
 import Data.Wallet (SyncStatus)
@@ -24,15 +24,6 @@ import Plutus.PAB.Webserver.Types
   )
 import Type.Proxy (Proxy(..))
 import WebSocket.Support (FromSocket)
-
--- A two-layer mapping of semaphores. The keys of the outer Map correspond to
--- the app IDs of the different plutus apps, the keys of the inner Map
--- correspond to the endpoint names of the endpoints within that app, and the
--- values of the inner map are AVars which are used to conrol when that
--- endpoint is available (when the AVar is empty, it is unavailable, and
--- prospective clients of that endpoint will need to wait until it becomes
--- available again).
-type EndpointSemaphores = Map PlutusAppId (Map String (AVar Unit))
 
 type WalletFunds = { sync :: SyncStatus, assets :: Assets }
 
@@ -58,7 +49,7 @@ newtype Env = Env
     --    creation functions didn't require that, so it seemed wrong to lift several functions into Effect.
     --    In contrast, the Env is created in Main, where we already have access to Effect
     contractStepCarouselSubscription :: AVar SubscriptionId
-  , endpointSemaphores :: AVar EndpointSemaphores
+  , endpointAVarMap :: AVarMap (Tuple PlutusAppId String) Unit
   , createBus :: EventBus UUID (Either MarloweError MarloweParams)
   , applyInputBus :: EventBus UUID (Either MarloweError Unit)
   , redeemBus :: EventBus UUID (Either MarloweError Unit)
@@ -83,8 +74,8 @@ _redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
 _followerBus :: Lens' Env (EventBus PlutusAppId ContractHistory)
 _followerBus = _Newtype <<< prop (Proxy :: _ "followerBus")
 
-_endpointSemaphores :: Lens' Env (AVar EndpointSemaphores)
-_endpointSemaphores = _Newtype <<< prop (Proxy :: _ "endpointSemaphores")
+_endpointAVarMap :: Lens' Env (AVarMap (Tuple PlutusAppId String) Unit)
+_endpointAVarMap = _Newtype <<< prop (Proxy :: _ "endpointAVarMap")
 
 _sources :: Lens' Env Sources
 _sources = _Newtype <<< prop (Proxy :: _ "sources")

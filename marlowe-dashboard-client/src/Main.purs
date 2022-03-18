@@ -6,6 +6,7 @@ import Prologue
 
 import AppM (runAppM)
 import Bridge (toFront)
+import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Effect (Logger)
 import Control.Logger.Effect.Class as Logger
@@ -98,7 +99,7 @@ instance DecodeJson MainArgs where
 mkEnv :: Sources -> Sinks -> Aff Env
 mkEnv sources sinks = do
   contractStepCarouselSubscription <- AVar.empty
-  endpointSemaphores <- AVar.new Map.empty
+  endpointAVarMap <- AVarMap.empty
   createBus <- liftEffect EventBus.create
   applyInputBus <- liftEffect EventBus.create
   redeemBus <- liftEffect EventBus.create
@@ -106,7 +107,7 @@ mkEnv sources sinks = do
   pure $ Env
     { contractStepCarouselSubscription
     , followerBus
-    , endpointSemaphores
+    , endpointAVarMap
     , createBus
     , applyInputBus
     , redeemBus

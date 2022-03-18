@@ -1,8 +1,6 @@
 module Capability.PAB
   ( class ManagePAB
   , activateContract
-  , getAllContractInstances
-  , getContractDefinitions
   , getWalletContractInstances
   , invokeEndpoint
   , onNewActiveEndpoints
@@ -17,37 +15,30 @@ import Affjax as Affjax
 import Affjax.ResponseFormat as ResponseFormat
 import Affjax.StatusCode (StatusCode(..))
 import AppM (AppM)
-import Capability.Toast (addToast)
+import Control.Concurrent.AVarMap as AVarMap
 import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), lift, runExcept, runExceptT)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec, untilJust)
 import Control.Parallel (parOneOf)
-import Data.Align (align)
 import Data.Argonaut (encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Filterable (filter)
 import Data.Lens (view)
 import Data.Map (Map)
-import Data.Map as Map
-import Data.Map.Alignable (AlignableMap(..))
-import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
-import Data.These (These(..))
 import Data.Time.Duration (Minutes(..), fromDuration)
-import Data.Traversable (sequence, traverse)
+import Data.Traversable (sequence)
 import Data.UUID.Argonaut as UUID
 import Data.WalletId (WalletId)
 import Data.WalletId as WalletId
-import Effect.Aff (Aff, Error, delay, error)
-import Effect.Aff.AVar (AVar)
-import Effect.Aff.AVar as AVar
+import Effect.Aff (Error, delay, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Env (_endpointSemaphores, _sinks)
+import Env (_endpointAVarMap, _sinks)
 import Foreign.Class (decode)
 import Halogen (HalogenM)
 import Halogen.Subscription as HS
@@ -59,10 +50,8 @@ import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToServer(..)
   , ContractActivationArgs(..)
   , ContractInstanceClientState
-  , ContractSignatureResponse
   )
 import Servant.PureScript (class MonadAjax, AjaxError(..), ErrorDescription(..))
-import Toast.Types (infoToast)
 import Types (AjaxResponse)
 import Wallet.Emulator.Wallet (Wallet(..))
 
@@ -79,10 +68,6 @@ class Monad m <= ManagePAB m where
   getWalletContractInstances
     :: WalletId
     -> m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
-  getAllContractInstances
-    :: m (AjaxResponse (Array (ContractInstanceClientState MarloweContract)))
-  getContractDefinitions
-    :: m (AjaxResponse (Array (ContractSignatureResponse MarloweContract)))
   onNewActiveEndpoints :: PlutusAppId -> Array ActiveEndpoint -> m Unit
   subscribeToPlutusApp :: PlutusAppId -> m Unit
   unsubscribeFromPlutusApp :: PlutusAppId -> m Unit
@@ -106,7 +91,12 @@ instance
 
   invokeEndpoint appId endpoint payload =
     runExceptT $ untilJust $ runMaybeT do
-      lift $ ExceptT acquireEndpoint
+      endpointAvarMap <- asks $ view _endpointAVarMap
+      -- Try to take the endpoint's availability AVar with a 5 minute timeout
+      lift $ ExceptT $ liftAff $ parOneOf
+        [ Right <$> AVarMap.take (Tuple appId endpoint) endpointAvarMap
+        , Left timeoutError <$ delay (fromDuration $ Minutes 5.0)
+        ]
       ajaxResult <- lift $ lift $
         PAB.postApiContractInstanceByContractinstanceidEndpointByEndpointname
           (encodeJson payload)
@@ -116,29 +106,9 @@ instance
         $ ExceptT
         $ pure
         $ sequence
-        $ filter (not <<< failedWithEndpointNotAvailable)
+        $ filter (not <<< isEndpointNotAvailableFailure)
         $ Just ajaxResult
     where
-    acquireEndpoint = do
-      -- Get the AVar for the global semaphore lookup
-      applicationsAvar <- asks $ view _endpointSemaphores
-      -- Get the AVar that corresponds to this specific endpoint
-      endpointSem <- liftAff $ getOrCreateEndpoint applicationsAvar
-      -- try to take it
-      mEndpoint <- liftAff $ AVar.tryTake endpointSem
-      case mEndpoint of
-        Nothing -> do
-          -- Inform user of intent to wait.
-          addToast $ infoToast
-            "Endpoint not currently available. Waiting for it to be released."
-          -- Wait until it is available
-          liftAff $ parOneOf
-            [ Right <$> AVar.take endpointSem
-            , Left timeoutError <$ delay (fromDuration $ Minutes 5.0)
-            ]
-        Just _ ->
-          pure $ pure unit
-
     timeoutError = AjaxError
       { request: defaultRequest { responseFormat = ResponseFormat.json }
       , response: Nothing
@@ -149,24 +119,7 @@ instance
             <> endpoint
       }
 
-    getOrCreateEndpoint applicationsAvar = do
-      applications <- AVar.take applicationsAvar
-      -- Get the mapping of AVars for this plutusAppId, or create a new one if
-      -- it doesn't exist.
-      let endpoints = fromMaybe Map.empty $ Map.lookup appId applications
-      -- Get the AVar this endpoint, or create a new one if it doesn't exist.
-      endpointSem <- maybe AVar.empty pure $ Map.lookup endpoint endpoints
-      -- Insert the newly created AVar into the AVar Map for this application
-      let endpoints' = Map.insert endpoint endpointSem endpoints
-      -- Insert the newly updates AVar mapping for this app into the global
-      -- map.
-      let applications' = Map.insert appId endpoints' applications
-      -- Put it back into the AVar.
-      AVar.put applications' applicationsAvar
-      -- Return the AVar for the endpoint.
-      pure endpointSem
-
-    failedWithEndpointNotAvailable = case _ of
+    isEndpointNotAvailableFailure = case _ of
       Left
         ( AjaxError
             -- This is a ConnectingError, not an UnexpectedHTTPStatus becase to
@@ -189,37 +142,19 @@ instance
     PAB.getApiContractInstancesWalletByWalletid (WalletId.toString wallet)
       Nothing
 
-  getAllContractInstances = PAB.getApiContractInstances Nothing
-
-  getContractDefinitions = PAB.getApiContractDefinitions
-
   onNewActiveEndpoints appId endpoints = do
     let
-      endpointMap :: Map String Unit
+      endpointMap :: Map (Tuple PlutusAppId String) Unit
       endpointMap = Set.toMap $ Set.fromFoldable $ map
-        (_.getEndpointDescription <<< unwrap <<< _.aeDescription <<< unwrap)
+        ( Tuple appId
+            <<< _.getEndpointDescription
+            <<< unwrap
+            <<< _.aeDescription
+            <<< unwrap
+        )
         endpoints
-    endpointSemaphoresAVar <- asks $ view _endpointSemaphores
-    liftAff do
-      endpointSemaphores <- AVar.take endpointSemaphoresAVar
-      appSemaphores' <- case Map.lookup appId endpointSemaphores of
-        Nothing -> traverse (const $ AVar.new unit) endpointMap
-        Just appSemaphores -> sequence $ unwrap $ align updateSemaphore
-          (AlignableMap appSemaphores)
-          (AlignableMap endpointMap)
-      AVar.put
-        (Map.insert appId appSemaphores' endpointSemaphores)
-        endpointSemaphoresAVar
-    where
-    -- endpoint was in semaphores, but not in new available endpoints. Lock it
-    -- (without blocking).
-    updateSemaphore :: These (AVar Unit) Unit -> Aff (AVar Unit)
-    updateSemaphore (This semaphore) = AVar.tryTake semaphore $> semaphore
-    -- endpoint was in new available endpoints, but not in semaphores. Create a
-    -- new, unlocked semaphore for it.
-    updateSemaphore (That _) = AVar.new unit
-    -- endpoint was in both available endpoints, and semaphores. Unlock it.
-    updateSemaphore (Both semaphore _) = AVar.tryPut unit semaphore $> semaphore
+    endpointAvarMap <- asks $ view _endpointAVarMap
+    AVarMap.mask endpointMap endpointAvarMap
   subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
   unsubscribeFromPlutusApp = Left >>> Unsubscribe >>> sendWsMessage
 
@@ -238,8 +173,6 @@ instance ManagePAB m => ManagePAB (HalogenM state action slots msg m) where
     endpointDescription
     payload
   getWalletContractInstances = lift <<< getWalletContractInstances
-  getAllContractInstances = lift getAllContractInstances
-  getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
@@ -253,8 +186,6 @@ instance ManagePAB m => ManagePAB (MaybeT m) where
     endpointDescription
     payload
   getWalletContractInstances = lift <<< getWalletContractInstances
-  getAllContractInstances = lift getAllContractInstances
-  getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp
@@ -268,8 +199,6 @@ instance ManagePAB m => ManagePAB (ReaderT r m) where
     endpointDescription
     payload
   getWalletContractInstances = lift <<< getWalletContractInstances
-  getAllContractInstances = lift getAllContractInstances
-  getContractDefinitions = lift getContractDefinitions
   onNewActiveEndpoints appId = lift <<< onNewActiveEndpoints appId
   subscribeToPlutusApp = lift <<< subscribeToPlutusApp
   unsubscribeFromPlutusApp = lift <<< unsubscribeFromPlutusApp

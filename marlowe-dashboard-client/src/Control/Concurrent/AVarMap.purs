@@ -1,8 +1,8 @@
 module Control.Concurrent.AVarMap
   ( AVarMap
-  , new
   , empty
-  , status
+  , kill
+  , mask
   , member
   , modify
   , modify'
@@ -10,26 +10,34 @@ module Control.Concurrent.AVarMap
   , modifyM'
   , modifyM_
   , modify_
+  , new
   , put
   , read
+  , status
   , take
   , tryPut
   , tryRead
   , tryTake
-  , kill
   ) where
 
 import Prologue
 
+import Control.Alternative (guard)
 import Control.Monad.Fork.Class (BracketCondition(..), bracket)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
+import Control.Monad.Rec.Class (untilJust)
 import Control.Monad.Trans.Class (lift)
+import Control.Parallel (parSequence, parTraverse_)
+import Data.Align (align)
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Map.Alignable (AlignableMap(..))
 import Data.Maybe (maybe)
+import Data.Newtype (unwrap)
+import Data.These (These(..))
 import Data.Traversable (traverse)
-import Effect.Aff (Aff, Error, supervise)
+import Effect.Aff (Aff, Error, forkAff, joinFiber, supervise)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -39,11 +47,11 @@ import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 newtype AVarMap k v = AVarMap (AVar (Map k (AVar v)))
 
 -- | Creates a fresh AVarMap initial values.
-new :: forall m k v. MonadAff m => Map k v -> Aff (AVarMap k v)
-new = liftAff <<< map AVarMap <<< AVar.new <=< traverse AVar.new
+new :: forall m k v. MonadAff m => Map k v -> m (AVarMap k v)
+new = liftAff <<< (map AVarMap <<< AVar.new <=< traverse AVar.new)
 
 -- | Creates a fresh AVarMap.
-empty :: forall m k v. MonadAff m => Aff (AVarMap k v)
+empty :: forall m k v. MonadAff m => m (AVarMap k v)
 empty = liftAff $ AVarMap <$> AVar.new Map.empty
 
 -- | Synchronously checks the status of a key in an AVarMap
@@ -76,6 +84,41 @@ tryTake k (AVarMap avarsA) = liftAff $ runMaybeT do
   avars <- lift $ AVar.read avarsA
   avar <- hoistMaybe $ Map.lookup k avars
   MaybeT $ AVar.tryTake avar
+
+-- | Make the AVars in an AVarMap match the values in the given map.
+-- | This call doesn't block because the risk of deadlocks it too high. Keys
+-- | not preset in the mask will be emptied if they are full. Keys provided in
+-- | the mask will fill the AVars at those locations with their given values,
+-- | either by: filling empty AVars, emptying filled AVars and then filling
+-- | them, or creating new ones.
+mask :: forall m k v. Ord k => MonadAff m => Map k v -> AVarMap k v -> m Unit
+mask maskValues (AVarMap avarsA) = liftAff do
+  fibers <- avarsA # modifyAVarM' \avars -> do
+    fibersAndAVars <- parSequence $ unwrap $ align updateAVar
+      (AlignableMap avars)
+      (AlignableMap maskValues)
+    pure
+      { value: snd <$> fibersAndAVars
+      , result: fst =<< Map.values fibersAndAVars
+      }
+  parTraverse_ joinFiber fibers
+  where
+  -- Key is in AVarMap, but not in the mask. Leave it empty without blocking
+  updateAVar (This avar) = Tuple mempty <$> (AVar.tryTake avar $> avar)
+  -- Key is in mask, but not in AVarMap. Create a new filled AVar for it.
+  updateAVar (That v) = Tuple mempty <$> AVar.new v
+  -- Key is in mask and AVarMap. Make a best effort to fill it without locking.
+  -- This won't deadlock, but it is potentially vulnerable to starvation if it
+  -- keeps failing to fill the AVar before a competitor does. To mitigate this,
+  -- and to unlock the avar map its self promptly, the attempt to fill the avar
+  -- is forked to a new fiber, which is joined with after the avar map has been
+  -- put back.
+  updateAVar (Both avar v) = do
+    fiber <- forkAff $ untilJust do
+      succeeded <- AVar.tryPut v avar
+      void $ AVar.tryTake avar
+      pure $ guard succeeded
+    pure $ Tuple (pure fiber) avar
 
 -- | Put a value into the AVar at the given key. This call will block if the
 -- | value of the AVar at the key has been taken. If the key is not present in
