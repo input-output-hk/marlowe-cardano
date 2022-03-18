@@ -1,6 +1,7 @@
 module Control.Concurrent.AVarMap
   ( AVarMap
   , empty
+  , keys
   , kill
   , mask
   , member
@@ -15,6 +16,7 @@ module Control.Concurrent.AVarMap
   , read
   , status
   , take
+  , traceStatus
   , tryPut
   , tryRead
   , tryTake
@@ -22,7 +24,6 @@ module Control.Concurrent.AVarMap
 
 import Prologue
 
-import Control.Alternative (guard)
 import Control.Monad.Fork.Class (BracketCondition(..), bracket)
 import Control.Monad.Maybe.Extra (hoistMaybe)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -30,13 +31,16 @@ import Control.Monad.Rec.Class (untilJust)
 import Control.Monad.Trans.Class (lift)
 import Control.Parallel (parSequence, parTraverse_)
 import Data.Align (align)
+import Data.Argonaut (class EncodeJson, encodeJson)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Map.Alignable (AlignableMap(..))
 import Data.Maybe (maybe)
 import Data.Newtype (unwrap)
+import Data.Set (Set)
 import Data.These (These(..))
 import Data.Traversable (traverse)
+import Debug (class DebugWarning, traceM)
 import Effect.Aff (Aff, Error, forkAff, joinFiber, supervise)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
@@ -54,17 +58,35 @@ new = liftAff <<< (map AVarMap <<< AVar.new <=< traverse AVar.new)
 empty :: forall m k v. MonadAff m => m (AVarMap k v)
 empty = liftAff $ AVarMap <$> AVar.new Map.empty
 
--- | Synchronously checks the status of a key in an AVarMap
+-- | Synchronously checks the status of the AVarMap
 status
   :: forall m k v
    . Ord k
   => MonadAff m
-  => k
-  -> AVarMap k v
-  -> m (AVar.AVarStatus v)
-status k (AVarMap avarsA) = liftAff do
+  => AVarMap k v
+  -> m (Map k (AVar.AVarStatus v))
+status (AVarMap avarsA) = liftAff do
   avars <- AVar.read avarsA
-  maybe (pure AVar.Empty) AVar.status $ Map.lookup k avars
+  traverse AVar.status avars
+
+-- | Print the status of the AVar map to the console.
+traceStatus
+  :: forall m k v
+   . Show v
+  => EncodeJson k
+  => DebugWarning
+  => Ord k
+  => MonadAff m
+  => AVarMap k v
+  -> m Unit
+traceStatus avarMap = do
+  statuses <- status avarMap
+  traceM $ encodeJson $ showStatus <$> statuses
+  where
+  showStatus = case _ of
+    AVar.Filled a -> "(Filled " <> show a <> ")"
+    AVar.Killed e -> "(Killed " <> show e <> ")"
+    AVar.Empty -> "Empty"
 
 -- | Take the AVar at the given key. This call will block if A. the
 -- | avar for the key is empty or B. the key is not found in the map. If the
@@ -87,11 +109,16 @@ tryTake k (AVarMap avarsA) = liftAff $ runMaybeT do
 
 -- | Make the AVars in an AVarMap match the values in the given map.
 -- | This call doesn't block because the risk of deadlocks it too high. Keys
--- | not preset in the mask will be emptied if they are full. Keys provided in
--- | the mask will fill the AVars at those locations with their given values,
--- | either by: filling empty AVars, emptying filled AVars and then filling
--- | them, or creating new ones.
-mask :: forall m k v. Ord k => MonadAff m => Map k v -> AVarMap k v -> m Unit
+-- | not preset in the mask will be not be touched. Keys provided in
+-- | the mask will fill the AVars at those locations with their given values if
+-- | their values are `Just`, and empty them otherwise.
+mask
+  :: forall m k v
+   . Ord k
+  => MonadAff m
+  => Map k (Maybe v)
+  -> AVarMap k v
+  -> m Unit
 mask maskValues (AVarMap avarsA) = liftAff do
   fibers <- avarsA # modifyAVarM' \avars -> do
     fibersAndAVars <- parSequence $ unwrap $ align updateAVar
@@ -103,21 +130,28 @@ mask maskValues (AVarMap avarsA) = liftAff do
       }
   parTraverse_ joinFiber fibers
   where
-  -- Key is in AVarMap, but not in the mask. Leave it empty without blocking
-  updateAVar (This avar) = Tuple mempty <$> (AVar.tryTake avar $> avar)
+  -- Key is in AVarMap, but not in the mask. Do nothing.
+  updateAVar (This avar) = pure $ Tuple mempty avar
   -- Key is in mask, but not in AVarMap. Create a new filled AVar for it.
-  updateAVar (That v) = Tuple mempty <$> AVar.new v
+  updateAVar (That v) = do
+    Tuple mempty <$> maybe AVar.empty AVar.new v
+  -- Key is in mask and AVarMap. Empty it without blocking.
+  updateAVar (Both avar Nothing) =
+    Tuple mempty <$> (AVar.tryTake avar $> avar)
   -- Key is in mask and AVarMap. Make a best effort to fill it without locking.
   -- This won't deadlock, but it is potentially vulnerable to starvation if it
   -- keeps failing to fill the AVar before a competitor does. To mitigate this,
   -- and to unlock the avar map its self promptly, the attempt to fill the avar
   -- is forked to a new fiber, which is joined with after the avar map has been
   -- put back.
-  updateAVar (Both avar v) = do
+  updateAVar (Both avar (Just v)) = do
     fiber <- forkAff $ untilJust do
       succeeded <- AVar.tryPut v avar
-      void $ AVar.tryTake avar
-      pure $ guard succeeded
+      if succeeded then do
+        pure $ Just unit
+      else do
+        void $ AVar.tryTake avar
+        pure Nothing
     pure $ Tuple (pure fiber) avar
 
 -- | Put a value into the AVar at the given key. This call will block if the
@@ -253,6 +287,13 @@ member
 member k (AVarMap avarsA) = liftAff do
   avars <- AVar.read avarsA
   pure $ Map.member k avars
+
+-- | Get the keys in the AVarMap.
+keys
+  :: forall m k v. Ord k => MonadAff m => AVarMap k v -> m (Set k)
+keys (AVarMap avarsA) = liftAff do
+  avars <- AVar.read avarsA
+  pure $ Map.keys avars
 
 -- | Kills the AVar at the given key with an exception. All pending and future
 -- | actions will resolve immediately with the provided exception.

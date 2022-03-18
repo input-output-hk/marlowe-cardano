@@ -22,14 +22,17 @@ import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec, untilJust)
 import Control.Parallel (parOneOf)
+import Data.Align (align)
 import Data.Argonaut (encodeJson)
 import Data.Argonaut.Encode (class EncodeJson)
 import Data.Filterable (filter)
 import Data.Lens (view)
 import Data.Map (Map)
+import Data.Map.Alignable (AlignableMap(..))
 import Data.Newtype (unwrap)
 import Data.Set as Set
 import Data.String (Pattern(..), contains)
+import Data.These (theseLeft)
 import Data.Time.Duration (Minutes(..), fromDuration)
 import Data.Traversable (sequence)
 import Data.UUID.Argonaut as UUID
@@ -154,7 +157,14 @@ instance
         )
         endpoints
     endpointAvarMap <- asks $ view _endpointAVarMap
-    AVarMap.mask endpointMap endpointAvarMap
+    keys <- Set.filter (eq appId <<< fst) <$> AVarMap.keys endpointAvarMap
+    let
+      appMask :: Map (Tuple PlutusAppId String) (Maybe Unit)
+      appMask = unwrap $ align
+        theseLeft
+        (AlignableMap endpointMap)
+        (AlignableMap $ Set.toMap keys)
+    AVarMap.mask appMask endpointAvarMap
   subscribeToPlutusApp = Left >>> Subscribe >>> sendWsMessage
   unsubscribeFromPlutusApp = Left >>> Unsubscribe >>> sendWsMessage
 
