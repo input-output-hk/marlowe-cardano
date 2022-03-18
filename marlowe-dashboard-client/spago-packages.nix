@@ -597,7 +597,7 @@ let
         name = "halogen-store";
         version = "v0.4.1";
         src = pkgs.fetchgit {
-          url = "https://github.com/thomashoneyman/purescript-halogen-store";
+          url = "https://github.com/thomashoneyman/purescript-halogen-store.git";
           rev = "79e2800cef8865cd266567b55cb74645324c197f";
           sha256 = "03yi869jl7vbq3r1dq8f82pyqawl55v2nmd44yhad6wz6lrdq7b4";
         };

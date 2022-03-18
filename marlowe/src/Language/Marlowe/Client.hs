@@ -268,6 +268,7 @@ minLovelaceDeposit = 2000000
 marloweFollowContract :: Contract FollowerContractState MarloweFollowSchema MarloweError ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
+    logInfo $ "MarloweFollower endpoint \"follow\" called with parameters " <> show params <> "."
     let typedValidator = mkMarloweTypedValidator params
     marloweHistory params
       >>= maybe (pure InProgress) (updateHistory params)

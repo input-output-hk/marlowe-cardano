@@ -54,6 +54,7 @@ import Plutus.ChainIndex.Tx (ChainIndexTx, ChainIndexTxOutputs (..), citxCardano
                              citxScripts, citxTxId, citxValidRange)
 import Plutus.Contract (Contract, ownPaymentPubKeyHash)
 import Plutus.Contract.Error (AsContractError)
+import Plutus.Contract.Logging (logInfo)
 import Plutus.Contract.Request (txsAt, utxosTxOutTxAt, utxosTxOutTxFromTx)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol (..), Datum (..), Extended (..),
@@ -114,12 +115,16 @@ marloweHistory :: AsContractError e
 marloweHistory params =
   do
     let address = validatorAddress $ smallUntypedValidator params
+    logInfo $ "[DEBUG:marloweHistory] address = " <> show address
     -- The script address contains transactions that have datum.
     addressTxns <- txsAt address
+    logInfo $ "[DEBUG:marloweHistory] length addressTxns = " <> show (length addressTxns)
     -- When a contract closes, there may be a UTxO at the role address.
     roleTxns <- txsAt . scriptHashAddress $ rolePayoutValidatorHash params
+    logInfo $ "[DEBUG:marloweHistory] length roleTxns = " <> show (length roleTxns)
     -- When a contract closes, there may be a UTxO at the owner's public key hash address.
     pkhTxns <- txsAt . flip Address Nothing . PubKeyCredential . unPaymentPubKeyHash =<< ownPaymentPubKeyHash
+    logInfo $ "[DEBUG:marloweHistory] length pkhTxns = " <> show (length pkhTxns)
     -- TODO: Extract all PKHs from the contract, and query these addresses, too.
     pure
       . history params address
