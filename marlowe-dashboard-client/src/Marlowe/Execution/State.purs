@@ -30,6 +30,7 @@ import Data.Maybe (fromJust, fromMaybe, fromMaybe', maybe, maybe')
 import Data.Newtype (unwrap)
 import Data.Time.Duration (Days(..), Minutes(..), Seconds(..))
 import Data.Tuple.Nested ((/\))
+import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client
   ( getInitialData
   , getMarloweParams

@@ -33,6 +33,7 @@ import Control.Error.Util (hush)
 import Control.Lens
 import Control.Monad (forM_, void)
 import Control.Monad.Error.Lens (catching, handling, throwing, throwing_)
+import Control.Monad.Except (catchError)
 import Control.Monad.Extra (concatMapM, untilJustM)
 import Data.Aeson (FromJSON, ToJSON, parseJSON, toJSON)
 import qualified Data.List.NonEmpty as NonEmpty
@@ -125,7 +126,7 @@ type MarloweFollowSchema = Endpoint "follow" MarloweParams
 
 
 data MarloweError =
-      TransitionError
+      TransitionError String
     | AmbiguousOnChainState
     | UnableToExtractTransition
     | OnChainStateNotFound
@@ -242,7 +243,6 @@ mkMarloweTypedValidator = smallUntypedValidator
 minLovelaceDeposit :: Integer
 minLovelaceDeposit = 2000000
 
-
 marloweFollowContract :: Contract FollowerContractState MarloweFollowSchema MarloweError ()
 marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
   do
@@ -258,9 +258,17 @@ marloweFollowContract = awaitPromise $ endpoint @"follow" $ \params ->
             logInfo $ "MarloweFollower found finished contract with " <> show params <> "."
             pure $ Right InProgress -- do not close the contract so we can see it in Marlowe Run history
         InProgress -> do
-            update <- awaitPromise $ selectEither
-              (Promise $ waitTillPayoutIsSpent $ rolesCurrency params)
-              (Promise $ waitForTransition typedValidator)
+            let
+              -- | Feature flag ;-)
+              checkPayoutRedemption_SCP_2867 :: Bool
+              checkPayoutRedemption_SCP_2867 = False
+
+            update <- if checkPayoutRedemption_SCP_2867
+                        then awaitPromise $ selectEither
+                          (Promise $ waitTillPayoutIsSpent $ rolesCurrency params)
+                          (Promise $ waitForTransition typedValidator)
+                        else
+                          Right <$> waitForTransition typedValidator
             case update of
               Left payoutTxOut -> do
                   logInfo $ "MarloweFollower payout spent:" <> show payoutTxOut <> "."
@@ -1022,20 +1030,25 @@ waitTillPayoutIsSpent
   :: forall w schema.
     Val.CurrencySymbol
   -> Contract w schema MarloweError ChainIndexTx
-waitTillPayoutIsSpent rolesCurrency = do
-  let
-    address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
-  logInfo $ "[DEBUG:waitTillPayoutIsSpent] address = " <> show address
-  payouts <- Map.keys <$> utxosAt address
-  logInfo $ "[DEBUG:waitTillPayoutIsSpent] payouts = " <> show (length payouts)
-  logInfo ("[DEBUG:waitTillPayoutIsSpent] entering the loop.." :: String)
-  untilJustM $ do
-    logInfo ("[DEBUG:waitTillPayoutIsSpent] in loop..." :: String)
-    payouts <- Map.keys <$> utxosAt address
-    logInfo $ "[DEBUG:waitTillPayoutIsSpent] payouts = " <> show (length payouts) <> "."
-    res <- awaitPromise $ hush <$> selectEither (utxoIsProduced address) (Promise $ selectList $ map utxoIsSpent payouts)
-    logInfo $ "[DEBUG:waitTillPayoutIsSpent] res = " <> show res
-    pure res
+waitTillPayoutIsSpent rolesCurrency =
+  wait `catchError` \err -> do
+    logInfo $ "[DEBUG:waitTillPayoutIsSpent] err = " <> show err
+    wait
+  where
+    wait = do
+      let
+        address = scriptHashAddress (mkRolePayoutValidatorHash rolesCurrency)
+      logInfo $ "[DEBUG:waitTillPayoutIsSpent] address = " <> show address
+      payouts <- Map.keys <$> utxosAt address
+      logInfo $ "[DEBUG:waitTillPayoutIsSpent] payouts = " <> show (length payouts)
+      logInfo ("[DEBUG:waitTillPayoutIsSpent] entering the loop.." :: String)
+      untilJustM $ do
+        logInfo ("[DEBUG:waitTillPayoutIsSpent] in loop..." :: String)
+        payouts <- Map.keys <$> utxosAt address
+        logInfo $ "[DEBUG:waitTillPayoutIsSpent] payouts = " <> show (length payouts) <> "."
+        res <- awaitPromise $ hush <$> selectEither (utxoIsProduced address) (Promise $ selectList $ map utxoIsSpent payouts)
+        logInfo $ "[DEBUG:waitTillPayoutIsSpent] res = " <> show res
+        pure res
 
 
 getInput ::
