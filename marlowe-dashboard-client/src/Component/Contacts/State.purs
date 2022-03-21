@@ -26,7 +26,7 @@ import Data.AddressBook as AddressBook
 import Data.BigInt.Argonaut (BigInt)
 import Data.Lens (assign)
 import Data.Map (lookup)
-import Data.Maybe (fromMaybe, maybe)
+import Data.Maybe (fromMaybe)
 import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
@@ -53,11 +53,8 @@ component
   => Component m
 component = connect (selectEq _.addressBook) $ mkReactiveComponent
   { render: contactsCard
-  , deriveState: \{ context, input } mState ->
-      { cardSection: maybe Home _.cardSection mState
-      , wallet: input
-      , addressBook: context
-      }
+  , deriveState: const unit
+  , initialTransient: Home
   , eval: defaultReactiveEval
       { handleAction = handleAction
       }

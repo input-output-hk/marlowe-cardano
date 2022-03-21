@@ -25,12 +25,11 @@ import Halogen.HTML (a, div, h3, p, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (id)
 import Humanize (contractIcon)
-import MainFrame.Types (ChildSlots)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Extended.Metadata (_contractName, _contractType)
 import Page.Contract.Lenses (_marloweParams, _metadata)
-import Page.Dashboard.Types (Action(..), ContractState)
+import Page.Dashboard.Types (Action(..), ChildSlots, ContractState)
 
 -- This card shows a preview of synced contracts (intended to be used in the dashboard)
 contractPreviewCard

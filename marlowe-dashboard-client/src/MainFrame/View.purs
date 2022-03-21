@@ -3,8 +3,12 @@ module MainFrame.View where
 import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
+import Capability.PAB (class ManagePAB)
+import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast)
 import Clipboard (class MonadClipboard)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
@@ -18,13 +22,15 @@ import Halogen.Css (classNames)
 import Halogen.Extra (mapComponentAction)
 import Halogen.HTML (div)
 import Halogen.HTML as H
+import Halogen.HTML as HH
 import Halogen.Store.Monad (class MonadStore)
-import MainFrame.Lenses (_currentTime, _store, _subState, _tzOffset)
+import MainFrame.Lenses (_store, _subState)
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
-import Page.Dashboard.View (dashboardCard, dashboardScreen)
+import Page.Dashboard.State as Dashboard
+import Page.Dashboard.Types (_dashboard)
 import Page.Welcome.State as Welcome
 import Page.Welcome.View (welcomeCard, welcomeScreen)
-import Store (_contracts, _wallet)
+import Store (_wallet)
 import Store as Store
 import Store.Wallet (_connectedWallet)
 import Toast.State as Toast
@@ -36,34 +42,24 @@ render
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
+  => ManagePAB m
   => MonadClipboard m
+  => MonadLogger StructuredLog m
+  => FollowerApp m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =
   let
-    currentTime = state ^. _currentTime
-
-    tzOffset = state ^. _tzOffset
-
     subState = state ^. _subState
 
     mWallet = state ^? _store <<< _wallet <<< _connectedWallet
-
-    contracts = state ^. _store <<< _contracts
   in
     div [ classNames [ "h-full" ] ] $ join
       [ case mWallet, subState of
-          Just wallet, Right dashboardState ->
-            mapComponentAction DashboardAction <$>
-              [ dashboardScreen
-                  { currentTime, tzOffset, wallet, contracts }
-                  dashboardState
-              , dashboardCard
-                  { currentTime, tzOffset, wallet, contracts }
-                  dashboardState
-              ]
+          Just wallet, Right _ ->
+            [ HH.slot_ _dashboard unit Dashboard.component wallet ]
           _, _ ->
             let
               welcomeState = fromLeft Welcome.initialState subState

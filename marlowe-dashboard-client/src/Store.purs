@@ -9,6 +9,7 @@ import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
 import Data.Maybe (maybe)
 import Data.NewContract (NewContract)
+import Data.Set (Set)
 import Data.Wallet (WalletDetails)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Execution.Types as Execution
@@ -17,13 +18,14 @@ import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import Store.Contracts
   ( ContractStore
-  , addFollowerContract
-  , addStartingContract
+  , contractCreated
+  , contractStarted
   , emptyContractStore
+  , historyUpdated
+  , initialFollowersReceived
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
-  , swapStartingToStartedContract
   , tick
   )
 import Store.Wallet (WalletAction, WalletStore)
@@ -75,12 +77,12 @@ data Action
   -- Time
   = Tick Instant
   -- Contract
-  | AddStartingContract NewContract
-  | AddFollowerContract PlutusAppId MetaData ContractHistory
+  | InitialFollowersReceived (Set (Tuple MarloweParams PlutusAppId))
+  | ContractCreated NewContract
+  | ContractHistoryUpdated PlutusAppId MetaData ContractHistory
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
-  | SwapStartingToStartedContract NewContract Instant PlutusAppId
-      ContractHistory
+  | ContractStarted NewContract MarloweParams
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -105,15 +107,15 @@ reduce store = case _ of
       , contracts = contracts
       }
   -- Contract
-  AddStartingContract startingContractInfo -> store
-    { contracts =
-        addStartingContract
-          startingContractInfo
-          store.contracts
+  InitialFollowersReceived followers -> store
+    { contracts = initialFollowersReceived followers store.contracts
     }
-  AddFollowerContract followerId metadata history ->
+  ContractCreated startingContractInfo -> store
+    { contracts = contractCreated startingContractInfo store.contracts
+    }
+  ContractHistoryUpdated followerId metadata history ->
     let
-      mContracts = addFollowerContract
+      mContracts = historyUpdated
         store.currentTime
         followerId
         metadata
@@ -132,21 +134,10 @@ reduce store = case _ of
   ModifySyncedContract marloweParams f -> store
     { contracts = modifyContract marloweParams f store.contracts
     }
-  SwapStartingToStartedContract newContract instant plutusAppId history ->
-    let
-      mContracts = swapStartingToStartedContract
-        newContract
-        instant
-        plutusAppId
-        history
-        store.contracts
-    in
-      case mContracts of
-        Left error -> reduce store
-          $ ShowToast
-          $ errorToast "Error creating a contract"
-          $ Just error
-        Right contracts -> store { contracts = contracts }
+  ContractStarted newContract marloweParams ->
+    store
+      { contracts = contractStarted newContract marloweParams store.contracts
+      }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
   -- Wallet

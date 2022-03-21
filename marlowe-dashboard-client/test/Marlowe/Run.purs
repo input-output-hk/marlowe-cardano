@@ -23,7 +23,7 @@ import Control.Monad.Reader
   , asks
   , runReaderT
   )
-import Control.Parallel (parallel, sequential)
+import Control.Parallel (parSequence_)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.BigInt.Argonaut (BigInt)
@@ -141,9 +141,8 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
       sub <- liftEffect
         $ HS.subscribe errors.emitter
         $ launchAff_ <<< flip AVar.kill errorAVar
-      finally (liftEffect $ HS.unsubscribe sub) do
-        sequential ado
-          parallel do
+      finally (liftEffect $ HS.unsubscribe sub) $ parSequence_
+        [ do
             runUITest
               ( H.hoist
                   ( marshallErrors errors.listener
@@ -156,8 +155,8 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
               unit
               (runMarloweTestM test coenv requests mockTimeEnv mockUuidEnv)
             AVar.put unit errorAVar
-          parallel $ AVar.take errorAVar
-          in unit
+        , AVar.take errorAVar
+        ]
 
 newtype MarloweTestM (m :: Type -> Type) a = MarloweTestM
   (ReaderT Coenv (MockHttpM (MockTimeM (MockUuidM m))) a)
@@ -197,6 +196,7 @@ derive newtype instance MonadEffect m => MonadMockUUID (MarloweTestM m)
 runMarloweTestM
   :: forall m a
    . MonadAff m
+  => MonadError Error m
   => MarloweTestM m a
   -> Coenv
   -> Queue RequestBox

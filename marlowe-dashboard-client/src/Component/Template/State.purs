@@ -35,7 +35,6 @@ import Examples.PureScript.ZeroCouponBond as ZeroCouponBond
 import Halogen (HalogenM)
 import Halogen as H
 import Halogen.Form.Injective (blank, inject)
-import MainFrame.Types (ChildSlots, Msg)
 import Marlowe.Extended (ContractType(..), resolveRelativeTimes, toCore)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
@@ -51,6 +50,7 @@ import Marlowe.Template
   , getPlaceholderIds
   , initializeTemplateContent
   )
+import Page.Dashboard.Types (ChildSlots, Msg)
 import Text.Pretty (text)
 
 -- see note [dummyState] in MainFrame.State

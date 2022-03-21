@@ -9,6 +9,7 @@ import Clipboard (Action(..)) as Clipboard
 import Component.AddContact (_addContact)
 import Component.AddContact (component) as AddContact
 import Component.Address.View as Address
+import Component.Contacts.Lenses (_addressBook, _cardSection, _wallet)
 import Component.Contacts.Types (Action(..), CardSection(..), ChildSlots, State)
 import Component.Icons (Icon(..)) as Icon
 import Component.Icons (icon_)
@@ -53,29 +54,34 @@ contactsCard
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML m
-contactsCard { addressBook, wallet, cardSection } =
-  div
-    [ classNames
-        [ "h-full"
-        , "grid"
-        , "grid-rows-auto-auto-1fr-auto"
-        , "divide-y"
-        , "divide-gray"
-        ]
-    ]
-    $
-      [ h2
-          [ classNames Css.cardHeader ]
-          [ text "Contacts" ]
-      , contactsBreadcrumb cardSection
+contactsCard state =
+  let
+    addressBook = state ^. _addressBook
+    cardSection = state ^. _cardSection
+    wallet = state ^. _wallet
+  in
+    div
+      [ classNames
+          [ "h-full"
+          , "grid"
+          , "grid-rows-auto-auto-1fr-auto"
+          , "divide-y"
+          , "divide-gray"
+          ]
       ]
-        <> case cardSection of
-          Home -> addressBookCard addressBook
-          ViewWallet nickname address ->
-            contactDetailsCard wallet nickname address
-          NewWallet _ ->
-            [ slot _addContact unit AddContact.component {} OnAddContactMsg
-            ]
+      $
+        [ h2
+            [ classNames Css.cardHeader ]
+            [ text "Contacts" ]
+        , contactsBreadcrumb cardSection
+        ]
+          <> case cardSection of
+            Home -> addressBookCard addressBook
+            ViewWallet nickname address ->
+              contactDetailsCard wallet nickname address
+            NewWallet _ ->
+              [ slot _addContact unit AddContact.component {} OnAddContactMsg
+              ]
 
 contactsBreadcrumb :: forall p. CardSection -> HTML p Action
 contactsBreadcrumb cardSection =

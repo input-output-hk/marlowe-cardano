@@ -1,12 +1,4 @@
-module Page.Dashboard.Types
-  ( Action(..)
-  , State
-  , ContractState
-  , Card(..)
-  , ContractFilter(..)
-  , Input
-  , WalletCompanionStatus(..)
-  ) where
+module Page.Dashboard.Types where
 
 import Prologue
 
@@ -14,7 +6,13 @@ import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
 import Component.Contacts.Types as Contacts
+import Component.ContractSetup.Types as ContractSetup
+import Component.CurrentStepActions.Types as CurrentStepActions
+import Component.Expand as Expand
+import Component.LoadingSubmitButton.Types as LoadingSubmitButton
 import Component.Template.Types (Action, State) as Template
+import Component.Tooltip.Types (ReferenceId)
+import Data.Argonaut (Json, JsonDecodeError)
 import Data.ContractStatus (ContractStatusId)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
@@ -22,12 +20,25 @@ import Data.Map (Map)
 import Data.NewContract (NewContract)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.Time.Duration (Minutes)
+import Data.UUID.Argonaut (UUID)
 import Data.UserNamedActions (UserNamedActions)
 import Data.WalletNickname (WalletNickname)
+import Env (WalletFunds)
+import Errors.Debuggable (class Debuggable)
+import Errors.Explain (class Explain)
+import Halogen as H
+import Halogen.Component.Reactive as Reactive
+import Halogen.Store.Connect (Connected)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Execution.Types (NamedAction)
 import Marlowe.Execution.Types as Execution
+import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (ChosenNum, MarloweData, MarloweParams)
+import Page.Contract.Types as ContractPage
+import Plutus.Contract.Effects (ActiveEndpoint)
 import Store.Contracts (ContractStore)
+import Text.Pretty (text)
+import Type.Proxy (Proxy(..))
 
 type ContractState =
   { executionState :: Execution.State
@@ -35,18 +46,27 @@ type ContractState =
   , namedActions :: UserNamedActions
   }
 
-type State =
+type State = Reactive.State
+  (Connected Slice PABConnectedWallet)
+  DerivedState
+  TransientState
+
+type TransientState =
   { walletCompanionStatus :: WalletCompanionStatus
   , menuOpen :: Boolean
   , card :: Maybe Card
   -- TODO use HalogenStore for modals. It would sure be nice to have portals...
   , cardOpen :: Boolean -- see note [CardOpen] in Welcome.State (the same applies here)
-  , newContracts :: Array NewContract
-  , runningContracts :: Array ContractState
-  , closedContracts :: Array ContractState
   , contractFilter :: ContractFilter
   , selectedContractIndex :: Maybe ContractStatusId
   , templateState :: Template.State
+  , tzOffset :: Minutes
+  }
+
+type DerivedState =
+  { newContracts :: Array NewContract
+  , runningContracts :: Array ContractState
+  , closedContracts :: Array ContractState
   }
 
 -- This represents the status of the wallet companion. When we start the application
@@ -73,42 +93,77 @@ data ContractFilter
 
 derive instance eqContractFilter :: Eq ContractFilter
 
-type Input =
-  { wallet :: PABConnectedWallet
-  , contracts :: ContractStore
+data Query (a :: Type)
+
+type Slice =
+  { contracts :: ContractStore
   , currentTime :: Instant
-  , tzOffset :: Minutes
   }
 
+data Msg
+
+type Component = H.Component Query PABConnectedWallet Msg
+
+type Slot = H.Slot Query Msg Unit
+
+type ChildSlots =
+  ( contacts :: Contacts.Slot Unit
+  , tooltipSlot :: forall query. H.Slot query Void ReferenceId
+  , hintSlot :: forall query. H.Slot query Void String
+  , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String
+  , expandSlot :: Expand.Slot Void String
+  , contractSetup :: ContractSetup.Slot Unit
+  , contractPage :: ContractPage.Slot Unit
+  , confirmActionDialog :: ConfirmContractActionDialog.Slot Unit
+  , currentStepActions :: CurrentStepActions.Slot MarloweParams
+  )
+
+_dashboard = Proxy :: Proxy "dashboard"
+
 data Action
-  = Receive
-  | DisconnectWallet
+  = DisconnectWallet
   | ToggleMenu
   | OpenCard Card
   | CloseCard
   | SetContractFilter ContractFilter
   | SelectContract (Maybe ContractStatusId)
-  | UpdateFollowerApps (Map MarloweParams MarloweData)
   | RedeemPayments MarloweParams
   | OnAskContractActionConfirmation MarloweParams NamedAction (Maybe ChosenNum)
   | TemplateAction Template.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
   | OnContactsMsg Contacts.Msg
+  | UpdateWalletFunds WalletFunds
+  | NotificationParseFailed String Json JsonDecodeError
+  | CompanionAppStateUpdated (Map MarloweParams MarloweData)
+  | MarloweContractCreated UUID MarloweParams
+  | InputsApplied UUID
+  | PaymentRedeemed UUID
+  | CreateFailed UUID MarloweError
+  | ApplyInputsFailed UUID MarloweError
+  | RedeemFailed UUID MarloweError
+  | ContractHistoryUpdated PlutusAppId ContractHistory
+  | NewActiveEndpoints PlutusAppId (Array ActiveEndpoint)
+  | MarloweAppClosed (Maybe Json)
+  | WalletCompanionAppClosed (Maybe Json)
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
-  toEvent Receive = Nothing
   toEvent DisconnectWallet = Just $ defaultEvent "DisconnectWallet"
   toEvent ToggleMenu = Just $ defaultEvent "ToggleMenu"
-  toEvent (OpenCard _) = Nothing
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
-  toEvent CloseCard = Nothing
   toEvent (SetContractFilter _) = Just $ defaultEvent "FilterContracts"
   toEvent (SelectContract _) = Just $ defaultEvent "OpenContract"
-  toEvent (UpdateFollowerApps _) = Nothing
-  toEvent (RedeemPayments _) = Nothing
-  toEvent (OnAskContractActionConfirmation _ _ _) = Nothing
-  toEvent (TemplateAction _) = Nothing
-  toEvent (SetContactForRole _ _) = Nothing
-  toEvent (OnContactsMsg _) = Nothing
+  toEvent _ = Nothing
+
+newtype NotificationParseFailedError = NotificationParseFailedError
+  { whatFailed :: String
+  , originalValue :: Json
+  , parsingError :: JsonDecodeError
+  }
+
+instance Explain NotificationParseFailedError where
+  explain _ = text
+    "We received a message from the server that we can't understand."
+
+derive newtype instance Debuggable NotificationParseFailedError

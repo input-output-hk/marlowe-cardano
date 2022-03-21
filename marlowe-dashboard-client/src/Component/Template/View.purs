@@ -52,7 +52,6 @@ import Halogen.HTML.Properties (href, id)
 import Halogen.HTML.Properties.ARIA (describedBy, labelledBy)
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (contractIcon, humanizeValue)
-import MainFrame.Types (ChildSlots)
 import Marlowe.Extended.Metadata
   ( ContractTemplate
   , MetaData
@@ -63,6 +62,7 @@ import Marlowe.Extended.Metadata
 import Marlowe.Market (contractTemplates)
 import Marlowe.PAB (contractCreationFee)
 import Marlowe.Semantics (Assets)
+import Page.Dashboard.Types (ChildSlots)
 import Store as Store
 import Text.Markdown.TrimmedInline (markdownToHTML)
 

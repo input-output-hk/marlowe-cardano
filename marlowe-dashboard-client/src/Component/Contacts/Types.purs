@@ -10,13 +10,12 @@ import Data.AddressBook (AddressBook)
 import Data.PABConnectedWallet (PABConnectedWallet)
 import Data.WalletNickname (WalletNickname)
 import Halogen as H
+import Halogen.Component.Reactive as Reactive
+import Halogen.Store.Connect (Connected)
 import Type.Proxy (Proxy(..))
 
 type State =
-  { addressBook :: AddressBook
-  , cardSection :: CardSection
-  , wallet :: PABConnectedWallet
-  }
+  Reactive.State (Connected AddressBook PABConnectedWallet) Unit CardSection
 
 data CardSection
   = Home

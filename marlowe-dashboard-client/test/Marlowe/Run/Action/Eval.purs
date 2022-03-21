@@ -4,12 +4,13 @@ import Prologue
 
 import Capability.PlutusApps.MarloweApp.Types (EndpointName)
 import Concurrent.Queue as Queue
-import Control.Monad.Error.Class (class MonadError, throwError)
-import Control.Monad.Except (ExceptT, mapExceptT, runExceptT)
+import Control.Monad.Error.Class (class MonadError, throwError, try)
+import Control.Monad.Except (ExceptT(..), mapExceptT, runExceptT)
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Control.Monad.Writer (class MonadTell, runWriterT, tell)
+import Control.Parallel (parOneOf)
 import Data.Align (crosswalk)
 import Data.Argonaut
   ( class EncodeJson
@@ -51,7 +52,7 @@ import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Data.Undefinable (toUndefinable)
-import Effect.Aff (Error, error)
+import Effect.Aff (Error, delay, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
@@ -180,7 +181,7 @@ evalScript = runExceptT <<< void <<< foldM (map uncurry evalAction') []
       let currentMillis = unInstant currentTime
       let millisUntilAction = over2 Milliseconds (-) millis currentMillis
       advanceTime (millisUntilAction :: Milliseconds)
-      evalAction action
+      ExceptT $ try $ evalAction action
       pure $ snoc succeeded action
     where
     mkScriptError writer = do
@@ -914,7 +915,10 @@ expectPabWebsocketSend expectPayload = do
   tell
     [ "Expect send websocket message: " <> encodeStringifyJson expectPayload ]
   queue <- asks _.pabWebsocketOut
-  msg <- liftAff $ Queue.tryRead queue
+  msg <- liftAff $ parOneOf
+    [ Just <$> Queue.read queue
+    , Nothing <$ delay (Milliseconds 1000.0)
+    ]
   case msg of
     Nothing -> throwError $ error $ joinWith "\n"
       [ "A websocket message was expected to be sent:"

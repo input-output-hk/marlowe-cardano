@@ -25,7 +25,7 @@ module Test.Network.HTTP
 
 import Prelude
 
-import Affjax (Error, Request, Response)
+import Affjax (Request, Response)
 import Affjax as Affjax
 import Affjax.RequestBody (RequestBody)
 import Affjax.RequestBody as Request
@@ -73,12 +73,13 @@ import Control.Monad.Reader
   , local
   , runReaderT
   )
-import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (class MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.UUID (class MonadUUID)
 import Control.Monad.Unlift (class MonadUnlift)
 import Control.Monad.Writer (class MonadTell, class MonadWriter, WriterT)
+import Control.Parallel (parOneOf)
 import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
 import Data.Array (fromFoldable)
 import Data.Bifunctor (lmap)
@@ -89,8 +90,9 @@ import Data.Maybe (Maybe(..), isNothing)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (Pattern(..), joinWith, split)
 import Data.String.Extra (repeat)
+import Data.Time.Duration (Milliseconds(..))
 import Data.Validation.Semigroup (V(..))
-import Effect.Aff (Aff, error)
+import Effect.Aff (Error, delay, error)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -159,17 +161,18 @@ derive newtype instance
 
 derive newtype instance MonadUser m => MonadUser (MockHttpM m)
 
-instance MonadAff m => MonadMockHTTP (MockHttpM m) where
+instance (MonadThrow Error m, MonadAff m) => MonadMockHTTP (MockHttpM m) where
   expectRequest responseFormat matcher = do
     requests <- MockHttpM ask
-    liftAff $ flip tailRecM 0 \tries ->
-      if tries > 3 then
-        throwError $ error $ "Expected an HTTP request to be made"
-      else
-        Queue.tryRead requests >>= case _ of
-          Nothing -> pure $ Loop $ tries + 1
-          Just request ->
-            Done <$> runRequestMatcher responseFormat matcher request
+    mRequest <- liftAff $ parOneOf
+      [ Just <$> Queue.read requests
+      , Nothing <$ delay (Milliseconds 1000.0)
+      ]
+    case mRequest of
+      Nothing ->
+        throwError $ error "Expected an HTTP request to be made"
+      Just request ->
+        runRequestMatcher responseFormat matcher request
 
 instance MonadAff m => MonadAjax api (MockHttpM m) where
   request _ req = do
@@ -212,7 +215,7 @@ class Monad m <= MonadMockHTTP m where
   expectRequest
     :: forall a
      . ResponseFormat a
-    -> RequestMatcher (Either Error (Response a))
+    -> RequestMatcher (Either Affjax.Error (Response a))
     -> m Unit
 
 instance MonadMockHTTP m => MonadMockHTTP (ReaderT r m) where
@@ -306,21 +309,23 @@ renderMatcherError (RequestBox f) (MatcherError lines) = f \request _ ->
     ]
 
 runRequestMatcher
-  :: forall a
-   . ResponseFormat a
-  -> RequestMatcher (Either Error (Response a))
+  :: forall m a
+   . MonadAff m
+  => MonadThrow Error m
+  => ResponseFormat a
+  -> RequestMatcher (Either Affjax.Error (Response a))
   -> RequestBox
-  -> Aff Unit
+  -> m Unit
 runRequestMatcher providedFormat (RequestMatcher matcher) (RequestBox f) = f go
   where
   go
     :: forall b
      . Request b
     -> AVar (Either Affjax.Error (Affjax.Response b))
-    -> Aff Unit
+    -> m Unit
   go request responseA = either
     (throwError <<< error <<< renderMatcherError (RequestBox f))
-    (flip AVar.put responseA)
+    (liftAff <<< flip AVar.put responseA)
     ( map (map unsafeCoerceResponse)
         case request.responseFormat, providedFormat of
           ArrayBuffer _, ArrayBuffer _ ->

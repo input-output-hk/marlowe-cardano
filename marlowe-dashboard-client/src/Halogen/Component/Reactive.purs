@@ -1,16 +1,26 @@
 module Halogen.Component.Reactive
   ( ReactiveComponentSpec
   , ReactiveComponentEval
+  , State
   , defaultReactiveEval
   , mkReactiveComponent
+  , _input
+  , _derived
+  , _transient
   ) where
 
 import Prelude
 
+import Control.Monad.State (get)
+import Control.React (ReactT, runReactT)
 import Data.Bifunctor (bimap)
+import Data.Lens (Lens')
+import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(..))
+import Data.These (These(..))
 import Halogen as H
 import Halogen.Query.HalogenM (mapAction)
+import Type.Proxy (Proxy(..))
 
 data Action input action
   = Init
@@ -18,41 +28,65 @@ data Action input action
   | Receive input
   | Action action
 
-type ReactiveComponentSpec state query action slots input output m =
-  { deriveState :: input -> Maybe state -> state
-  , render :: state -> H.ComponentHTML action slots m
-  , eval :: ReactiveComponentEval state query action slots output m
+_input
+  :: forall input derived transient. Lens' (State input derived transient) input
+_input = prop (Proxy :: _ "input")
+
+_derived
+  :: forall input derived transient
+   . Lens' (State input derived transient) derived
+_derived = prop (Proxy :: _ "derived")
+
+_transient
+  :: forall input derived transient
+   . Lens' (State input derived transient) transient
+_transient = prop (Proxy :: _ "transient")
+
+type State input derived transient =
+  { input :: input
+  , derived :: derived
+  , transient :: transient
   }
 
-type ReactiveComponentEval state query action slots output m =
-  { initialize :: H.HalogenM state action slots output m Unit
-  , finalize :: H.HalogenM state action slots output m Unit
-  , handleStateUpdate ::
-      Maybe state -> H.HalogenM state action slots output m Unit
-  , handleAction :: action -> H.HalogenM state action slots output m Unit
-  , handleQuery ::
-      forall a. query a -> H.HalogenM state action slots output m (Maybe a)
+type ReactiveComponentSpec derived transient action slots input output m =
+  { deriveState :: input -> derived
+  , initialTransient :: transient
+  , render :: State input derived transient -> H.ComponentHTML action slots m
+  , eval ::
+      ReactiveComponentEval derived transient action slots input output m
+  }
+
+type ReactiveComponentEval derived transient action slots input output m =
+  { react ::
+      ReactT
+        (State input derived transient)
+        (H.HalogenM (State input derived transient) action slots output m)
+        Unit
+  , handleAction ::
+      action
+      -> H.HalogenM (State input derived transient) action slots output m Unit
   }
 
 defaultReactiveEval
-  :: forall state query action slots output m
-   . ReactiveComponentEval state query action slots output m
+  :: forall derived transient action slots input output m
+   . ReactiveComponentEval derived transient action slots input output m
 defaultReactiveEval =
-  { initialize: pure unit
-  , finalize: pure unit
-  , handleStateUpdate: const (pure unit)
+  { react: pure unit
   , handleAction: const (pure unit)
-  , handleQuery: const (pure Nothing)
   }
 
 mkReactiveComponent
-  :: forall state query action slots input output m
+  :: forall derived transient query action slots input output m
    . Functor m
-  => ReactiveComponentSpec state query action slots input output m
+  => ReactiveComponentSpec derived transient action slots input output m
   -> H.Component query input output m
-mkReactiveComponent { deriveState, render, eval } =
+mkReactiveComponent { deriveState, initialTransient, render, eval } =
   H.mkComponent
-    { initialState: \input -> deriveState input Nothing
+    { initialState: \input ->
+        { input
+        , derived: deriveState input
+        , transient: initialTransient
+        }
     , render: bimap (map Action) Action <<< render
     , eval: H.mkEval
         { initialize: Just Init
@@ -60,15 +94,16 @@ mkReactiveComponent { deriveState, render, eval } =
         , finalize: Just Finalize
         , handleAction: mapAction Action <<< case _ of
             Init -> do
-              eval.initialize
-              eval.handleStateUpdate Nothing
+              runReactT eval.react <<< That =<< get
             Finalize -> do
-              eval.finalize
+              runReactT eval.react <<< This =<< get
             Receive input -> do
+              let derived = deriveState input
               state <- H.get
-              H.put $ deriveState input (Just state)
-              eval.handleStateUpdate (Just state)
+              let state' = state { derived = derived, input = input }
+              H.put state'
+              runReactT eval.react $ Both state state'
             Action action -> eval.handleAction action
-        , handleQuery: \query -> mapAction Action (eval.handleQuery query)
+        , handleQuery: const $ pure Nothing
         }
     }

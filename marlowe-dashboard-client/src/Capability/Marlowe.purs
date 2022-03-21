@@ -110,7 +110,7 @@ instance
       -- We save in the store the request of a created contract with
       -- the information relevant to show a placeholder of a starting contract.
       let newContract = NewContract reqId nickname template.metaData
-      lift $ updateStore $ Store.AddStartingContract newContract
+      lift $ updateStore $ Store.ContractCreated newContract
 
       pure $ newContract /\ do
         mParams <- awaitContractCreation
@@ -123,7 +123,13 @@ instance
               $ showContractError contractError
             throwError $ error $ "Failed to create contract: " <>
               showContractError contractError
-          Right marloweParams -> pure marloweParams
+          Right marloweParams -> do
+            -- Update the contract's representation in the store to use its
+            -- MarloweParams instead of the temporary UUID
+            unliftAff u
+              $ updateStore
+              $ Store.ContractStarted newContract marloweParams
+            pure marloweParams
 
   -- "apply-inputs" to a Marlowe contract on the blockchain
   applyTransactionInput wallet marloweParams transactionInput = do
