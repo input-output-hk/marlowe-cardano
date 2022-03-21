@@ -78,12 +78,7 @@ import Control.Monad.State (class MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Unlift (class MonadUnlift)
 import Control.Monad.Writer (class MonadTell, class MonadWriter, WriterT)
-import Data.Argonaut
-  ( class EncodeJson
-  , encodeJson
-  , stringify
-  , stringifyWithIndent
-  )
+import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
 import Data.Array (fromFoldable)
 import Data.Bifunctor (lmap)
 import Data.Distributive (class Distributive)
@@ -443,7 +438,7 @@ expectContent expected = RequestMatcher \request ->
   lmap MatcherError case request.content, expected of
     Nothing, _ -> Left $ [ "Expected content, but saw none" ]
     Just (Request.Json actualJson), Request.Json expectedJson
-      | stringify expectedJson == stringify actualJson -> Right unit
+      | expectedJson == actualJson -> Right unit
       | otherwise -> Left $ join
           [ pure
               "✗ Actual JSON content does not match expected content:"

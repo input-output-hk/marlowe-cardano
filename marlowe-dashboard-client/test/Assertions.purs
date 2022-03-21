@@ -20,8 +20,7 @@ shouldEqualJson
   -> t
   -> m Unit
 shouldEqualJson a b =
-  -- we need to stringify because of BigInts
-  when (stringify jsonA /= stringify jsonB) do
+  when (jsonA /= jsonB) do
     fail $
       joinWith "\n  "
         [ withGraphics (foreground Red) "- Actual"
