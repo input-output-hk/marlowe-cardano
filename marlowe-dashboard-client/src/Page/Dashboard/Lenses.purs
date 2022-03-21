@@ -2,7 +2,6 @@ module Page.Dashboard.Lenses
   ( _card
   , _cardOpen
   , _closedContracts
-  , _contactsState
   , _contractFilter
   , _menuOpen
   , _newContracts
@@ -14,7 +13,6 @@ module Page.Dashboard.Lenses
 
 import Prologue
 
-import Component.Contacts.Types (State) as Contacts
 import Component.Template.Types (State) as Template
 import Data.ContractStatus (ContractStatusId)
 import Data.Lens (Lens')
@@ -28,9 +26,6 @@ import Page.Dashboard.Types
   , WalletCompanionStatus
   )
 import Type.Proxy (Proxy(..))
-
-_contactsState :: Lens' State Contacts.State
-_contactsState = prop (Proxy :: _ "contactsState")
 
 _walletCompanionStatus :: Lens' State WalletCompanionStatus
 _walletCompanionStatus = prop (Proxy :: _ "walletCompanionStatus")

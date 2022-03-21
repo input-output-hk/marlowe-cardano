@@ -3,8 +3,8 @@ module MainFrame.Types where
 import Prologue
 
 import Analytics (class IsEvent, defaultEvent, toEvent)
-import Component.AddContact.Types as AddContact
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
+import Component.Contacts.Types as Contacts
 import Component.ContractSetup.Types as ContractSetup
 import Component.CurrentStepActions.Types as CurrentStepActions
 import Component.Expand as Expand
@@ -66,7 +66,7 @@ instance showWebSocketStatus :: Show WebSocketStatus where
 
 ------------------------------------------------------------
 type ChildSlots =
-  ( addContact :: AddContact.Slot Unit
+  ( contacts :: Contacts.Slot Unit
   , tooltipSlot :: forall query. H.Slot query Void ReferenceId
   , hintSlot :: forall query. H.Slot query Void String
   , submitButtonSlot :: H.Slot LoadingSubmitButton.Query Unit String

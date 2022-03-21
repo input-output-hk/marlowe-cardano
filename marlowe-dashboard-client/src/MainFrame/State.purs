@@ -81,8 +81,7 @@ import Language.Marlowe.Client
   , MarloweEndpointResult(..)
   )
 import MainFrame.Lenses
-  ( _addressBook
-  , _dashboardState
+  ( _dashboardState
   , _store
   , _subState
   , _tzOffset
@@ -169,7 +168,7 @@ mkMainFrame =
     ) $
     mkComponent
       { initialState: deriveState emptyState
-      , render: render
+      , render
       , eval:
           mkEval defaultEval
             { handleQuery = handleQuery
@@ -315,13 +314,12 @@ handleAction (WelcomeAction wa) = do
 handleAction (DashboardAction da) = void $ runMaybeT $ do
   currentTime <- now
   tzOffset <- H.lift $ use _tzOffset
-  addressBook <- H.lift $ use _addressBook
   contracts <- H.lift $ use (_store <<< _contracts)
   dashboardState <- MaybeT $ peruse _dashboardState
   wallet <- MaybeT $ peruse $ _store <<< _wallet <<< _connectedWallet
   H.lift $ toDashboard dashboardState
     $ Dashboard.handleAction
-        { addressBook, currentTime, tzOffset, wallet, contracts }
+        { currentTime, tzOffset, wallet, contracts }
         da
 
 handleAction (NewWebSocketStatus status) = do

@@ -1,41 +1,67 @@
 module Component.Contacts.State
-  ( initialState
-  , handleAction
+  ( component
   , adaToken
   , getAda
   ) where
 
 import Prologue
 
-import Capability.MainFrameLoop (callMainFrameAction)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.Toast (class Toast, addToast)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
 import Component.AddContact.Types as AddContact
 import Component.Contacts.Lenses (_cardSection)
-import Component.Contacts.Types (Action(..), CardSection(..), State)
+import Component.Contacts.Types
+  ( Action(..)
+  , CardSection(..)
+  , ChildSlots
+  , Component
+  , Msg(..)
+  , State
+  )
+import Component.Contacts.View (contactsCard)
 import Control.Monad.Reader (class MonadAsk)
 import Data.AddressBook as AddressBook
 import Data.BigInt.Argonaut (BigInt)
 import Data.Lens (assign)
 import Data.Map (lookup)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
-import Halogen (HalogenM)
+import Halogen as H
+import Halogen.Component.Reactive (defaultReactiveEval, mkReactiveComponent)
 import Halogen.Query.HalogenM (mapAction)
+import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
-import MainFrame.Types (Action(..)) as MainFrame
-import MainFrame.Types (ChildSlots, Msg)
+import Halogen.Store.Select (selectEq)
 import Marlowe.Semantics (Assets, CurrencySymbol, Token(..), TokenName)
-import Page.Dashboard.Types as Dashboard
 import Store as Store
 import Toast.Types (successToast)
 
-initialState :: State
-initialState = { cardSection: Home }
+type HalogenM = H.HalogenM State Action ChildSlots Msg
+
+component
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => MonadStore Store.Action Store.Store m
+  => ManageMarlowe m
+  => Toast m
+  => MonadClipboard m
+  => Component m
+component = connect (selectEq _.addressBook) $ mkReactiveComponent
+  { render: contactsCard
+  , deriveState: \{ context, input } mState ->
+      { cardSection: maybe Home _.cardSection mState
+      , wallet: input
+      , addressBook: context
+      }
+  , eval: defaultReactiveEval
+      { handleAction = handleAction
+      }
+  }
 
 handleAction
   :: forall m
@@ -46,32 +72,21 @@ handleAction
   => Toast m
   => MonadClipboard m
   => Action
-  -> HalogenM State Action ChildSlots Msg m Unit
-handleAction CloseContactsCard = callMainFrameAction
-  $ MainFrame.DashboardAction
-  $ Dashboard.CloseCard
+  -> HalogenM m Unit
+handleAction CloseContactsCard = H.raise Closed
 
 handleAction (SetCardSection cardSection) = do
   assign _cardSection cardSection
 
-handleAction
-  (OnAddContactMsg mTokenName (AddContact.SaveClicked { nickname, address })) =
+-- TODO SCP-3468 Restore add contact from contract form
+handleAction (OnAddContactMsg (AddContact.SaveClicked { nickname, address })) =
   do
     updateStore $ Store.ModifyAddressBook (AddressBook.insert nickname address)
     addToast $ successToast "Contact added"
-    case mTokenName of
-      -- if a tokenName was also passed, we are inside a template contract and we need to update role
-      Just tokenName -> callMainFrameAction $ MainFrame.DashboardAction $
-        Dashboard.SetContactForRole tokenName nickname
-      -- If we don't have a tokenName, then we added the contact from the contact dialog and we should close the panel
-      Nothing -> callMainFrameAction $ MainFrame.DashboardAction $
-        Dashboard.CloseCard
+    H.raise Closed
 
-handleAction (OnAddContactMsg Nothing AddContact.BackClicked) = do
+handleAction (OnAddContactMsg AddContact.BackClicked) = do
   assign _cardSection Home
-
-handleAction (OnAddContactMsg _ AddContact.BackClicked) = do
-  pure unit -- handled in Dashboard.State
 
 handleAction (ClipboardAction clipboardAction) = do
   mapAction ClipboardAction $ Clipboard.handleAction clipboardAction

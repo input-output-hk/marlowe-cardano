@@ -10,12 +10,11 @@ module Page.Dashboard.Types
 
 import Prologue
 
-import Analytics (class IsEvent, defaultEvent, toEvent)
+import Analytics (class IsEvent, defaultEvent)
 import Clipboard (Action) as Clipboard
 import Component.ConfirmContractActionDialog.Types as ConfirmContractActionDialog
-import Component.Contacts.Types (Action, State) as Contacts
+import Component.Contacts.Types as Contacts
 import Component.Template.Types (Action, State) as Template
-import Data.AddressBook (AddressBook)
 import Data.ContractStatus (ContractStatusId)
 import Data.ContractUserParties (ContractUserParties)
 import Data.DateTime.Instant (Instant)
@@ -37,8 +36,7 @@ type ContractState =
   }
 
 type State =
-  { contactsState :: Contacts.State
-  , walletCompanionStatus :: WalletCompanionStatus
+  { walletCompanionStatus :: WalletCompanionStatus
   , menuOpen :: Boolean
   , card :: Maybe Card
   -- TODO use HalogenStore for modals. It would sure be nice to have portals...
@@ -78,7 +76,6 @@ derive instance eqContractFilter :: Eq ContractFilter
 type Input =
   { wallet :: PABConnectedWallet
   , contracts :: ContractStore
-  , addressBook :: AddressBook
   , currentTime :: Instant
   , tzOffset :: Minutes
   }
@@ -86,7 +83,6 @@ type Input =
 data Action
   = Receive
   | DisconnectWallet
-  | ContactsAction Contacts.Action
   | ToggleMenu
   | OpenCard Card
   | CloseCard
@@ -98,12 +94,12 @@ data Action
   | TemplateAction Template.Action
   | SetContactForRole String WalletNickname
   | ClipboardAction Clipboard.Action
+  | OnContactsMsg Contacts.Msg
 
 -- | Here we decide which top-level queries to track as GA events, and how to classify them.
 instance actionIsEvent :: IsEvent Action where
   toEvent Receive = Nothing
   toEvent DisconnectWallet = Just $ defaultEvent "DisconnectWallet"
-  toEvent (ContactsAction contactsAction) = toEvent contactsAction
   toEvent ToggleMenu = Just $ defaultEvent "ToggleMenu"
   toEvent (OpenCard _) = Nothing
   toEvent (ClipboardAction _) = Just $ defaultEvent "ClipboardAction"
@@ -115,3 +111,4 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (OnAskContractActionConfirmation _ _ _) = Nothing
   toEvent (TemplateAction _) = Nothing
   toEvent (SetContactForRole _ _) = Nothing
+  toEvent (OnContactsMsg _) = Nothing

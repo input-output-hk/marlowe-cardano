@@ -18,11 +18,7 @@ import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
 import Clipboard (class MonadClipboard)
 import Clipboard (handleAction) as Clipboard
-import Component.AddContact.Types as AddContact
-import Component.Contacts.Lenses (_cardSection)
-import Component.Contacts.State (handleAction, initialState) as Contacts
-import Component.Contacts.Types (Action(..), State) as Contacts
-import Component.Contacts.Types (CardSection(..))
+import Component.Contacts.Types as Contacts
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Component.Template.State (dummyState, handleAction, initialState) as Template
 import Component.Template.Types (Action(..), State(..)) as Template
@@ -60,7 +56,6 @@ import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
   , _closedContracts
-  , _contactsState
   , _contractFilter
   , _menuOpen
   , _newContracts
@@ -100,8 +95,7 @@ mkInitialState currentTime wallet contracts =
     closedContracts =
       deriveContractState currentTime wallet <$> getClosedContracts contracts
   in
-    { contactsState: Contacts.initialState
-    , walletCompanionStatus: WaitingToSync
+    { walletCompanionStatus: WaitingToSync
     , menuOpen: false
     , card: Nothing
     , cardOpen: false
@@ -144,6 +138,9 @@ handleAction
   => Input
   -> Action
   -> HalogenM State Action ChildSlots Msg m Unit
+handleAction _ (OnContactsMsg Contacts.Closed) =
+  assign _card Nothing
+
 handleAction { currentTime, wallet, contracts } Receive = do
   let
     runningContracts = deriveContractState currentTime wallet <$>
@@ -161,13 +158,6 @@ handleAction { currentTime, wallet, contracts } Receive = do
 handleAction { wallet } DisconnectWallet = do
   updateStore $ Store.Wallet $ WalletStore.OnDisconnect wallet
 
-handleAction _ (ContactsAction contactsAction) =
-  case contactsAction of
-    Contacts.OnAddContactMsg (Just _) AddContact.BackClicked -> do
-      assign _card $ Just ContractTemplateCard
-    _ -> do
-      toContacts $ Contacts.handleAction contactsAction
-
 handleAction _ ToggleMenu = modifying _menuOpen not
 
 handleAction _ (ClipboardAction action) = do
@@ -179,7 +169,6 @@ handleAction _ (OpenCard card) = do
   -- (we could check the card and only reset if relevant, but it doesn't seem worth the bother)
   modify_
     $ set _card (Just card)
-        <<< set (_contactsState <<< _cardSection) Home
         <<< set _templateState Template.Start
   -- then we set the card to open (and close the mobile menu) in a separate `modify_`, so that the
   -- CSS transition animation works
@@ -250,11 +239,8 @@ for_ mStartedContract \{ executionState, userParties } ->
 
 handleAction input@{ wallet } (TemplateAction templateAction) =
   case templateAction of
-    Template.OpenCreateWalletCard tokenName -> do
-      modify_
-        $ set _card (Just $ ContactsCard)
-            <<< set (_contactsState <<< _cardSection)
-              (NewWallet $ Just tokenName)
+    Template.OpenCreateWalletCard _ -> do
+      modify_ $ set _card (Just $ ContactsCard)
     {- [UC-CONTRACT-1][0] Start a new marlowe contract
      The flow of creating a new marlowe contract starts when we submit the
      Template form. In here we apply the contract parameters to the Marlowe
@@ -318,9 +304,7 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
--- FIXME: this all feels like a horrible hack that should be refactored.
--- This action is a bridge from the Contacts to the Template modules. It is used to create a
--- contract for a specific role during contract setup.
+-- FIXME: SCP-3468
 handleAction _ (SetContactForRole _ _) = do
   pure unit
 -- handleAction input $ TemplateAction Template.UpdateRoleWalletValidators
@@ -359,13 +343,6 @@ updateTotalFunds walletId = do
     let syncStatus = syncStatusFromNumber sync
     updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged syncStatus
     pure syncStatus
-
-toContacts
-  :: forall m msg slots
-   . Functor m
-  => HalogenM Contacts.State Contacts.Action slots msg m Unit
-  -> HalogenM State Action slots msg m Unit
-toContacts = mapSubmodule _contactsState ContactsAction
 
 toTemplate
   :: forall m msg slots

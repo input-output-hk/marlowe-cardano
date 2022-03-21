@@ -7,6 +7,7 @@ import Prologue hiding (Either(..), div)
 
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.Toast (class Toast)
+import Clipboard (class MonadClipboard)
 import Clipboard (Action(..)) as Clipboard
 import Component.Address.View (defaultInput, render) as Address
 import Component.ConfirmContractActionDialog.State as ConfirmContractActionDialog
@@ -15,7 +16,8 @@ import Component.ConfirmContractActionDialog.Types
   , _confirmActionDialog
   )
 import Component.Contacts.State (adaToken, getAda)
-import Component.Contacts.View (contactsCard)
+import Component.Contacts.State as Contacts
+import Component.Contacts.Types (_contacts)
 import Component.ContractPreview.View
   ( contractPreviewCard
   , contractStartingPreviewCard
@@ -76,6 +78,7 @@ import Halogen.HTML
   , span_
   , text
   )
+import Halogen.HTML as H
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id, src)
@@ -92,7 +95,6 @@ import Page.Contract.Types (Msg(..), _contractPage)
 import Page.Dashboard.Lenses
   ( _card
   , _cardOpen
-  , _contactsState
   , _contractFilter
   , _menuOpen
   , _selectedContractIndex
@@ -190,14 +192,16 @@ dashboardCard
   :: forall m
    . MonadAff m
   => MonadKill Error Fiber m
+  => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
+  => MonadClipboard m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => Input
   -> State
   -> ComponentHTML Action ChildSlots m
-dashboardCard { addressBook, wallet } state = case view _card state of
+dashboardCard { wallet } state = case view _card state of
   Just card ->
     let
       cardOpen = state ^. _cardOpen
@@ -217,9 +221,12 @@ dashboardCard { addressBook, wallet } state = case view _card state of
               , case card of
                   TutorialsCard -> tutorialsCard
                   CurrentWalletCard -> currentWalletCard wallet
-                  ContactsCard -> renderSubmodule _contactsState ContactsAction
-                    (contactsCard addressBook wallet)
-                    state
+                  ContactsCard -> H.slot
+                    _contacts
+                    unit
+                    Contacts.component
+                    wallet
+                    OnContactsMsg
                   ContractTemplateCard -> renderSubmodule _templateState
                     TemplateAction
                     (contractTemplateCard assets)

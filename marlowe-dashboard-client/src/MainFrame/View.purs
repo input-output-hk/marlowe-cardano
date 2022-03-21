@@ -4,6 +4,7 @@ import Prologue hiding (div)
 
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.Toast (class Toast)
+import Clipboard (class MonadClipboard)
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
@@ -18,13 +19,7 @@ import Halogen.Extra (mapComponentAction)
 import Halogen.HTML (div)
 import Halogen.HTML as H
 import Halogen.Store.Monad (class MonadStore)
-import MainFrame.Lenses
-  ( _addressBook
-  , _currentTime
-  , _store
-  , _subState
-  , _tzOffset
-  )
+import MainFrame.Lenses (_currentTime, _store, _subState, _tzOffset)
 import MainFrame.Types (Action(..), ChildSlots, State, _toaster)
 import Page.Dashboard.View (dashboardCard, dashboardScreen)
 import Page.Welcome.State as Welcome
@@ -41,14 +36,13 @@ render
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
+  => MonadClipboard m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => State
   -> ComponentHTML Action ChildSlots m
 render state =
   let
-    addressBook = state ^. _addressBook
-
     currentTime = state ^. _currentTime
 
     tzOffset = state ^. _tzOffset
@@ -64,10 +58,10 @@ render state =
           Just wallet, Right dashboardState ->
             mapComponentAction DashboardAction <$>
               [ dashboardScreen
-                  { addressBook, currentTime, tzOffset, wallet, contracts }
+                  { currentTime, tzOffset, wallet, contracts }
                   dashboardState
               , dashboardCard
-                  { addressBook, currentTime, tzOffset, wallet, contracts }
+                  { currentTime, tzOffset, wallet, contracts }
                   dashboardState
               ]
           _, _ ->
