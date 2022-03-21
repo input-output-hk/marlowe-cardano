@@ -362,7 +362,7 @@ interpret PabAccess{..} Stop{..} =
 
 interpret _ Follow{..} =
   do
-    aiOther <- findInstance poOtherInstance
+    aiOther <- findAppInstance poOtherInstance
     psAppInstances %=
       M.adjust
         (\ai -> ai {aiParams = aiParams aiOther})
