@@ -32,6 +32,8 @@ import Affjax.RequestBody as Request
 import Affjax.ResponseFormat (ResponseFormat(..))
 import Affjax.ResponseFormat as Response
 import Affjax.StatusCode (StatusCode(..))
+import Ansi.Codes (Color(..))
+import Ansi.Output (foreground, withGraphics)
 import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.PAB (class ManagePAB)
@@ -77,7 +79,12 @@ import Control.Monad.State (class MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Unlift (class MonadUnlift)
 import Control.Monad.Writer (class MonadTell, class MonadWriter, WriterT)
-import Data.Argonaut (class EncodeJson, encodeJson, stringifyWithIndent)
+import Data.Argonaut
+  ( class EncodeJson
+  , encodeJson
+  , stringify
+  , stringifyWithIndent
+  )
 import Data.Array (fromFoldable)
 import Data.Bifunctor (lmap)
 import Data.Distributive (class Distributive)
@@ -450,7 +457,7 @@ expectContent expected = RequestMatcher \request ->
                 , ""
                 ] <> split
                   (Pattern "\n")
-                  (jsonDiffString actualJson exceptedJson)
+                  (jsonDiffString actualJson expectedJson)
           ]
     Just (Request.String actualStr), Request.String expectedStr
       | expectedStr == actualStr -> Right unit
