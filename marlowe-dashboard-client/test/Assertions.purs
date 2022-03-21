@@ -5,7 +5,7 @@ import Prologue
 import Ansi.Codes (Color(..))
 import Ansi.Output (foreground, withGraphics)
 import Control.Monad.Error.Class (class MonadThrow)
-import Data.Argonaut (class EncodeJson, Json, encodeJson, stringify)
+import Data.Argonaut (class EncodeJson, Json, encodeJson)
 import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll)
 import Effect.Aff (Error)
 import Test.Spec.Assertions (fail)

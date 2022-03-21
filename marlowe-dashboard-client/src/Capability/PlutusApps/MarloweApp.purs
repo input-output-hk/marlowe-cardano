@@ -15,20 +15,21 @@ import AppM (AppM)
 import Bridge (toBack)
 import Capability.PAB (invokeEndpoint) as PAB
 import Control.Concurrent.EventBus as EventBus
+import Control.Monad.Cont.Trans (lift)
 import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Reader (asks)
 import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.UUID (class MonadUUID, generateUUID)
 import Data.Address (Address)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Lens (_1, over, view)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.UUID.Argonaut (UUID, genUUID)
+import Data.UUID.Argonaut (UUID)
 import Effect.Aff (Aff, Error)
 import Effect.Aff.Class (class MonadAff)
-import Effect.Class (liftEffect)
 import Env (_applyInputBus, _createBus, _redeemBus)
 import Language.Marlowe.Client (MarloweError)
 import Marlowe.PAB (PlutusAppId)
@@ -70,10 +71,11 @@ instance
   , MonadAff m
   , MonadRec m
   , MonadAjax PAB.Api m
+  , MonadUUID m
   ) =>
   MarloweApp (AppM m) where
   createContract plutusAppId roles contract = runExceptT do
-    reqId <- liftEffect genUUID
+    reqId <- lift generateUUID
     let
       backRoles :: Map Back.TokenName Address
       backRoles = Map.fromFoldable
@@ -89,7 +91,7 @@ instance
     let
       TransactionInput { interval: TimeInterval slotStart slotEnd, inputs } =
         input
-    reqId <- liftEffect genUUID
+    reqId <- lift generateUUID
     let
       backTimeInterval :: POSIXTime /\ POSIXTime
       backTimeInterval = (slotStart) /\ (slotEnd)
@@ -106,7 +108,7 @@ instance
     pure $ EventBus.subscribeOnce bus.emitter reqId
 
   redeem plutusAppId marloweContractId tokenName address = runExceptT do
-    reqId <- liftEffect genUUID
+    reqId <- lift generateUUID
     let
       payload =
         [ encodeJson reqId

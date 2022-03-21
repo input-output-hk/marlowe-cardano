@@ -29,6 +29,7 @@ import Control.Monad.Reader
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
+import Control.Monad.UUID (class MonadUUID)
 import Control.Monad.Unlift (class MonadUnlift, withRunInBase)
 import Data.Array as A
 import Data.Lens (Lens', over, view)
@@ -167,6 +168,8 @@ derive newtype instance
   MonadStore Store.Action Store.Store (AppM m)
 
 derive newtype instance MonadTime m => MonadTime (AppM m)
+
+derive newtype instance MonadUUID m => MonadUUID (AppM m)
 
 -- TODO move to servant-support and add more lenses
 _uri

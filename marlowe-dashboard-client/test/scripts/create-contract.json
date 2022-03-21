@@ -15,6 +15,17 @@
     }
   ],
   [
+    1000,
+    {
+      "tag": "FundWallet",
+      "content": {
+        "walletName": "Wallet2",
+        "lovelace": 100000000
+      }
+    }
+  ],
+
+  [
     2000,
     {
       "tag": "AddContact",
@@ -32,12 +43,15 @@
       "content": {
         "templateName": "Loan",
         "contractTitle": "Test",
+        "roles": [
+          {"roleName": "Borrower", "walletName": "Wallet1", "address": "addr_test1qp8fta3c0g85dd9pu4fp4tsjq955w2zz76y2ywumsmky86nlxyxn4wsn2z3watr72naayj7kctvygade83cw98kd8gsqltffga"},
+          {"roleName": "Lender", "walletName": "Wallet2", "address": "addr_test1qrqk7g9l0hp9dlg0uq0fjcrj06zyl88xkazpasp4gy9l2v2clhyqu6euhk37l9kzmw3249cmw9upywjsaccgjqlnvfqqnkr46s"}
+        ],
         "fields": [
-          {"name":"borrower", "value":"Wallet1", "role": "textbox"},
-          {"name":"lender", "value":"Wallet2", "role": "textbox"},
           {"name":"amount", "value":"10", "role": "spinbutton"},
-          {"name":"interest", "value":"11", "role": "spinbutton"}
-        ]
+          {"name":"interest", "value":"1", "role": "spinbutton"}
+        ],
+        "marloweAppId": "888bdf70-56ff-49fb-a83f-ad8041d0617e"
       }
     }
   ]

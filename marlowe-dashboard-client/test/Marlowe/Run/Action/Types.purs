@@ -2,6 +2,7 @@ module Test.Marlowe.Run.Action.Types
   ( AppInstance
   , Address
   , ContractField
+  , ContractRoles
   , ContractNickname
   , CreateContractRecord
   , CreateWalletRecord
@@ -75,11 +76,17 @@ type TemplateName = String
 type ContractNickname = String
 type FieldName = String
 type FieldValue = String
-
+type EndpointName = String
 type ContractField =
   { name :: FieldName
   , value :: FieldValue
   , role :: ARIARole
+  }
+
+type ContractRoles =
+  { roleName :: String
+  , walletName :: WalletName
+  , address :: Address
   }
 
 data HttpExpectContent
@@ -224,6 +231,8 @@ type CreateContractRecord =
   { templateName :: TemplateName
   , contractTitle :: ContractNickname
   , fields :: Array ContractField
+  , roles :: Array ContractRoles
+  , marloweAppId :: PlutusAppId
   }
 
 type AppInstance = { type :: MarloweContract, instanceId :: PlutusAppId }

@@ -21,6 +21,7 @@ import Control.Monad.Except (ExceptT(..), lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.UUID (class MonadUUID)
 import Data.DateTime.Instant (Instant)
 import Data.Lens (view)
 import Data.NewContract (NewContract(..))
@@ -80,6 +81,7 @@ instance
   , MonadRec m
   , MonadAjax PAB.Api m
   , MonadAjax MarloweApp.Api m
+  , MonadUUID m
   ) =>
   ManageMarlowe (AppM m) where
 

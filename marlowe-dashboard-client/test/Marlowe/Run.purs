@@ -65,6 +65,7 @@ import Test.Control.Monad.Time
   , MockTimeM
   , runMockTimeM
   )
+import Test.Control.Monad.UUID (MockUuidEnv, MockUuidM, runMockUuidM)
 import Test.Halogen (class MonadHalogenTest, runUITest)
 import Test.Marlowe.Run.Action.Types
   ( Address
@@ -123,7 +124,9 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
       clocks <- liftEffect $ Ref.new Map.empty
       nowRef <- liftEffect $ Ref.new unixEpoch
       nextClockId <- liftEffect $ Ref.new 0
+      uuidRef <- liftEffect $ Ref.new 1
       let mockTimeEnv = { clocks, nowRef, tzOffset: Minutes zero, nextClockId }
+      let mockUuidEnv = { uuidRef }
       let
         store = mkStore unixEpoch addressBook contractNicknames wallet
       { component } <- runAppM env store mkMainFrame
@@ -137,19 +140,20 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
             runUITest
               ( H.hoist
                   ( marshallErrors errors.listener
+                      <<< flip runMockUuidM mockUuidEnv
                       <<< flip runMockTimeM mockTimeEnv
                       <<< flip runMockHttpM requests
                   )
                   component
               )
               unit
-              (runMarloweTestM test coenv requests mockTimeEnv)
+              (runMarloweTestM test coenv requests mockTimeEnv mockUuidEnv)
             AVar.put unit errorAVar
           parallel $ AVar.take errorAVar
           in unit
 
 newtype MarloweTestM (m :: Type -> Type) a = MarloweTestM
-  (ReaderT Coenv (MockHttpM (MockTimeM m)) a)
+  (ReaderT Coenv (MockHttpM (MockTimeM (MockUuidM m))) a)
 
 derive newtype instance Functor m => Functor (MarloweTestM m)
 derive newtype instance Apply m => Apply (MarloweTestM m)
@@ -189,9 +193,13 @@ runMarloweTestM
   -> Coenv
   -> Queue RequestBox
   -> MockTimeEnv
+  -> MockUuidEnv
   -> m a
-runMarloweTestM (MarloweTestM m) coenv requests timeEnv =
-  flip runMockTimeM timeEnv $ flip runMockHttpM requests $ runReaderT m coenv
+runMarloweTestM (MarloweTestM m) coenv requests timeEnv uuidEnv =
+  flip runMockUuidM uuidEnv
+    $ flip runMockTimeM timeEnv
+    $ flip runMockHttpM requests
+    $ runReaderT m coenv
 
 marshallErrors
   :: forall m a

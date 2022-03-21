@@ -2,6 +2,7 @@ module Test.Marlowe.Run.Action.Eval where
 
 import Prologue
 
+import Capability.PlutusApps.MarloweApp.Types (EndpointName)
 import Concurrent.Queue as Queue
 import Control.Monad.Error.Class (class MonadError, throwError)
 import Control.Monad.Except (ExceptT, mapExceptT, runExceptT)
@@ -13,6 +14,7 @@ import Data.Align (crosswalk)
 import Data.Argonaut
   ( class EncodeJson
   , Json
+  , decodeJson
   , encodeJson
   , jsonEmptyArray
   , jsonNull
@@ -23,13 +25,15 @@ import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Array (snoc)
 import Data.Bifunctor (lmap)
 import Data.Bimap as Bimap
-import Data.DateTime.Instant (unInstant)
+import Data.DateTime (adjust)
+import Data.DateTime.Instant (Instant, fromDateTime, toDateTime, unInstant)
 import Data.Either (either)
 import Data.Foldable (foldM, for_, traverse_)
 import Data.HTTP.Method (Method(..))
+import Data.Int (floor)
 import Data.Map as Map
 import Data.Maybe (maybe)
-import Data.Newtype (over2)
+import Data.Newtype (over2, unwrap)
 import Data.String
   ( Pattern(..)
   , Replacement(..)
@@ -42,20 +46,25 @@ import Data.String.Extra (repeat)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (uncurry)
+import Data.Tuple.Nested ((/\))
+import Data.Undefinable (toUndefinable)
 import Effect.Aff (Error, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
+import Halogen.Subscription (notify)
 import Marlowe.Semantics (Assets(..))
 import MarloweContract (MarloweContract(..))
 import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
+import Test.Control.Monad.UUID (mockUUID)
 import Test.Marlowe.Run (Coenv, fundWallet, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
   , AppInstance
+  , ContractRoles
   , CreateContractRecord
   , CreateWalletRecord
   , MarloweRunAction(..)
@@ -82,6 +91,7 @@ import Test.Web.Event.User (click, clickM, type_)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
 import Web.ARIA (ARIARole(..))
+import WebSocket.Support (FromSocket(..))
 
 runScriptedTest :: String -> Spec Unit
 runScriptedTest scriptName = marloweRunTest scriptName do
@@ -179,13 +189,14 @@ evalAction
   => MonadUser m
   => MonadError Error m
   => MonadMockHTTP m
+  => MonadTime m
   => MonadAsk Coenv m
   => MarloweRunAction
   -> m Unit
 evalAction = case _ of
   DropWallet { walletId } -> dropWallet walletId
   CreateWallet params -> createWallet params
-  CreateContract _ -> pure unit
+  CreateContract params -> createContract params
   FundWallet { walletName, lovelace } -> fundWallet walletName "" "" lovelace
   AddContact params -> addContact params
   RestoreWallet params -> restore params
@@ -233,28 +244,32 @@ addContact
    . MonadError Error m
   => MonadTest m
   => MonadUser m
+  => MonadTell (Array String) m
   => { walletName :: WalletName, address :: Address }
   -> m Unit
 addContact { walletName, address } = do
   card <- openContactList
   withContainer card do
-    -- Open add new contact dialog
+    tell [ "Open add new contact dialog" ]
     clickM $ getBy role do
       nameRegex "new contact" ignoreCase
       pure Button
     fillContactDetails
-    -- Submit the form
+
+    tell [ "Submit the form" ]
     clickM $ getBy role do
       nameRegex "save" ignoreCase
       pure Button
   expectSuccessToast "contact added"
   where
   openContactList = do
+    tell [ "Open contact list" ]
     clickM $ getBy role do
       nameRegex "contacts" ignoreCase
       pure Link
     findBy role $ pure Dialog
   fillContactDetails = do
+    tell [ "Fill contact details" ]
     nicknameField <- getBy role do
       nameRegex "wallet nickname" ignoreCase
       pure Textbox
@@ -271,60 +286,160 @@ createContract
    . MonadError Error m
   => MonadTest m
   => MonadUser m
+  => MonadTime m
+  => MonadTell (Array String) m
+  => MonadMockHTTP m
   => CreateContractRecord
   -> m Unit
-createContract { templateName, contractTitle, fields } = do
+createContract { templateName, contractTitle, fields, roles, marloweAppId } = do
   card <- openContractTemplates
   withContainer card do
     selectTemplate
     fillContractFields
+    tell [ "Review terms" ]
     clickM $ getBy role do
       nameRegex "review" ignoreCase
       pure Button
+
+    tell [ "Pay and start" ]
     clickM $ getBy role do
       nameRegex "pay and start" ignoreCase
       pure Button
-  -- FIXME: This is failing because I have insufficient funds
-  -- expectSuccessToast "The request to initialize this contract has been submitted."
+    expectCreateContractHttpRequest
+    expectSuccessToast
+      "The request to initialize this contract has been submitted."
 
   where
   openContractTemplates = do
+    tell [ "Open contract templates" ]
     clickM $ getBy role do
       nameRegex "create a new contract" ignoreCase
       pure Link
     findBy role $ pure Dialog
+
   selectTemplate = do
+    tell [ "Select template: " <> templateName ]
     clickM $ getBy role do
       nameRegex templateName ignoreCase
       pure Link
     clickM $ getBy role do
       nameRegex "setup" ignoreCase
       pure Button
+
   fillContractFields = do
-    -- Fill contract title
+    tell [ "Fill contract title" ]
     titleField <-
       getBy role do
         nameRegex "contract title" ignoreCase
         pure Textbox
     click titleField
     type_ titleField contractTitle Nothing
+
+    -- Fill roles
+    for_ roles \r -> do
+      tell [ "Fill " <> r.roleName <> " role" ]
+      fieldElement <- getBy role do
+        nameRegex r.roleName ignoreCase
+        pure Textbox
+      click fieldElement
+      type_ fieldElement r.walletName Nothing
+
     -- Fill other fields
     for_ fields \field -> do
+      tell [ "Fill " <> field.name <> " field" ]
       fieldElement <- getBy role do
         nameRegex field.name ignoreCase
         pure field.role
       click fieldElement
-      type_ fieldElement field.value Nothing
+      type_ fieldElement field.value $ Just
+        { skipClick: false
+        , skipAutoClose: true
+        , initialSelectionStart: toUndefinable $ Just 0
+        , initialSelectionEnd: toUndefinable $ Just 10
+        }
+
+  expectCreateContractHttpRequest = do
+    tell [ "Expect POST create contract" ]
+    currentTime <- now
+    expectJsonRequest ado
+      expectMethod POST
+      expectUri $ "/pab/api/contract/instance/" <> marloweAppId <>
+        "/endpoint/create"
+      expectJsonContent $
+        [ encodeJson $ mockUUID 1
+        , mockRolesPayload roles
+        , mockContract currentTime
+        ]
+      in
+        [] :: Array Json
+
+mockRolesPayload :: Array ContractRoles -> Json
+mockRolesPayload roles = encodeJson encodedRoles
+  where
+  encodedRoles = roles <#> \{ roleName, address } -> { unTokenName: roleName }
+    /\ address
+
+adjustInstant :: Number -> Instant -> Int
+adjustInstant offset initial =
+  floor
+    $ unwrap
+    $ unInstant
+    $ maybe initial fromDateTime
+    $ adjust (Milliseconds offset) (toDateTime initial)
+
+mockContract :: Instant -> Json
+mockContract currentTime = encodeJson
+  { "when":
+      [ { "then":
+            { "token": { "token_name": "", "currency_symbol": "" }
+            , "to": { "party": { "role_token": "Borrower" } }
+            , "then":
+                { "when":
+                    [ { "then":
+                          { "token": { "token_name": "", "currency_symbol": "" }
+                          , "to": { "party": { "role_token": "Lender" } }
+                          , "then": "close"
+                          , "pay": { "and": 10000000, "add": 1000000 }
+                          , "from_account": { "role_token": "Borrower" }
+                          }
+                      , "case":
+                          { "party": { "role_token": "Borrower" }
+                          , "of_token":
+                              { "token_name": "", "currency_symbol": "" }
+                          , "into_account": { "role_token": "Borrower" }
+                          , "deposits": { "and": 10000000, "add": 1000000 }
+                          }
+                      }
+                    ]
+                , "timeout_continuation": "close"
+                , "timeout": adjustInstant 1500000.0 currentTime
+                }
+            , "pay": 10000000
+            , "from_account": { "role_token": "Lender" }
+            }
+        , "case":
+            { "party": { "role_token": "Lender" }
+            , "of_token": { "token_name": "", "currency_symbol": "" }
+            , "into_account": { "role_token": "Lender" }
+            , "deposits": 10000000
+            }
+        }
+      ]
+  , "timeout_continuation": "close"
+  , "timeout": adjustInstant 600000.0 currentTime
+  }
 
 -- Assert that there is a success toast with the provided message.
 -- This should be executed from the main container
 expectSuccessToast
   :: forall m
    . MonadTest m
+  => MonadTell (Array String) m
   => MonadError Error m
   => String
   -> m Unit
-expectSuccessToast message =
+expectSuccessToast message = do
+  tell [ "Expect success toast: " <> message ]
   void $ findBy role do
     nameRegex message ignoreCase
     pure Status
@@ -378,6 +493,46 @@ expectPlutusContractActivation walletId contractType plutusAppId = do
       , caID: encodeJson contractType
       }
     in { unContractInstanceId: plutusAppId }
+
+marloweAppEndpoints :: Array EndpointName
+marloweAppEndpoints =
+  [ "close"
+  , "redeem"
+  , "auto"
+  , "apply-inputs-nonmerkleized"
+  , "apply-inputs"
+  , "create"
+  ]
+
+expectPlutusContractEndpoints
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadError Error m
+  => MonadTell (Array String) m
+  => MonadAff m
+  => PlutusAppId
+  -> Array EndpointName
+  -> m Unit
+expectPlutusContractEndpoints plutusAppId endpoints = do
+  pabWebsocketReceive
+    { "contents":
+        [ encodeJson
+            { "unContractInstanceId": plutusAppId }
+        , encodeJson
+            ( { "contents":
+                  endpoints <#> \endpointName ->
+                    [ { "aeMetadata": jsonNull
+                      , "aeDescription":
+                          { "getEndpointDescription": endpointName
+                          }
+                      }
+                    ]
+              , "tag": "NewActiveEndpoints"
+              }
+            )
+        ]
+    , "tag": "InstanceUpdate"
+    }
 
 createWallet
   :: forall m
@@ -471,6 +626,8 @@ createWallet
     expectPlutusContractActivation walletId MarloweApp marloweAppId
     expectPlutusContractSubscribe walletCompanionId
     expectPlutusContractSubscribe marloweAppId
+    expectPlutusContractEndpoints walletCompanionId []
+    expectPlutusContractEndpoints marloweAppId marloweAppEndpoints
 
 restore
   :: forall m
@@ -555,6 +712,20 @@ restore { instances, walletName } = do
           , cicDefinition: contractType
           }
     traverse_ (expectPlutusContractSubscribe <<< _.instanceId) instances
+
+pabWebsocketReceive
+  :: forall m a
+   . MonadAsk Coenv m
+  => MonadTell (Array String) m
+  => MonadEffect m
+  => EncodeJson a
+  => a
+  -> m Unit
+pabWebsocketReceive payload = do
+  tell [ "Receive websocket message: " <> encodeStringifyJson payload ]
+  listener <- asks _.pabWebsocketIn
+  liftEffect $ notify listener
+    (ReceiveMessage $ decodeJson $ encodeJson payload)
 
 expectPabWebsocketSend
   :: forall m a
