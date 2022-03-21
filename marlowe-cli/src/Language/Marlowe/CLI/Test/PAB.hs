@@ -32,9 +32,9 @@ module Language.Marlowe.CLI.Test.PAB (
 import Cardano.Api (AddressAny (..), AddressInEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr), AssetId (..),
                     AssetName (..), PolicyId (..), Quantity (..), ShelleyEra, anyAddressInShelleyBasedEra,
                     deserialiseAddress, deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace,
-                    selectLovelace, toAddressAny, valueFromList, valueToList)
+                    selectLovelace, serialiseAddress, toAddressAny, valueFromList, valueToList)
 import Cardano.Api.Shelley (shelleyPayAddrToPlutusPubKHash)
-import Cardano.Mnemonic (SomeMnemonic (..))
+import Cardano.Mnemonic (SomeMnemonic (..), mnemonicToText)
 import Cardano.Wallet.Api (GetTransaction, MigrateShelleyWallet)
 import Cardano.Wallet.Api.Client (addressClient, getWallet, listAddresses, postWallet, walletClient)
 import Cardano.Wallet.Api.Types (ApiMnemonicT (..), ApiT (..), ApiTransaction (..), ApiTxId (..), ApiWallet (..),
@@ -57,6 +57,7 @@ import Control.Monad.Extra (whenJust)
 import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String))
 import Data.Aeson.Types (parseEither)
+import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
@@ -94,7 +95,7 @@ import qualified Data.ByteString.Char8 as BS8 (pack)
 import qualified Data.HashMap.Strict as H (lookup)
 import qualified Data.Map.Strict as M (adjust, insert, lookup)
 import qualified Data.Quantity as W (Quantity (..))
-import qualified Data.Text as T (pack)
+import qualified Data.Text as T (pack, unpack)
 import qualified Data.Time.Clock.POSIX as Time (getPOSIXTime)
 import qualified PlutusTx.AssocMap as AM (fromList)
 import qualified Servant.Client as Servant (client)
@@ -511,11 +512,9 @@ createWallet :: MonadError CliError m
              -> m WalletInfo      -- ^ Action returning the new wallet information.
 createWallet PabAccess{..} owner passphrase' =
   do
-    mnemonicSentence <-
-      liftIO . generate
-        $ ApiMnemonicT . SomeMnemonic
-        <$> genMnemonic @24
+    mnemonicSentence' <- liftIO . generate $ genMnemonic @24
     let
+      mnemonicSentence = ApiMnemonicT . SomeMnemonic $ mnemonicSentence'
       addressPoolGap = Nothing
       mnemonicSecondFactor = Nothing
       name = ApiT . WalletName . T.pack $ show owner
@@ -532,7 +531,7 @@ createWallet PabAccess{..} owner passphrase' =
     addresses <- liftCliIO . runWallet $ listAddresses addressClient (W.id wallet) Nothing
     (wiAddress, wiPubKeyHash) <-
       case addresses of
-        Object o : _ -> liftCliMaybe "[CreateWallet] Failed to deserialise wallet address."
+        Object o : _ -> liftCliMaybe "[createWallet] Failed to deserialise wallet address."
                           $ do
                             address <-
                               case H.lookup "id" o of
@@ -540,7 +539,10 @@ createWallet PabAccess{..} owner passphrase' =
                                 _               -> Nothing
                             pkh <- shelleyPayAddrToPlutusPubKHash address
                             pure (toAddressAny address, pkh)
-        _            -> throwError $ CliError "[CreateWallet] No addresses found in wallet."
+        _            -> throwError $ CliError "[createWallet] No addresses found in wallet."
+    liftIO . putStrLn $ "[createWallet] Mnemonic sentence is \"" <> intercalate " " (T.unpack <$> mnemonicToText mnemonicSentence') <> "\"."
+    liftIO . putStrLn $ "[createWallet] First wallet address is " <> T.unpack (serialiseAddress wiAddress) <> "."
+    liftIO . putStrLn $ "[createWallet] First public key hash is " <> show wiPubKeyHash <> "."
     let
       go =
         do
