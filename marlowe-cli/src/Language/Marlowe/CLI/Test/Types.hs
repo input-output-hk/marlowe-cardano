@@ -247,6 +247,16 @@ data PabOperation =
     {
       poOwner :: RoleName  -- ^ The name of the wallet's owner.
     }
+    -- | Print the UTxOs at the app adddress.
+  | PrintAppUTxOs
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
+    -- | Print the UTxOs at the role-payout adddress.
+  | PrintRoleUTxOs
+    {
+      poInstance :: InstanceNickname  -- ^ The nickname of the PAB contract instance.
+    }
     -- | Print a comment.
   | Comment
     {

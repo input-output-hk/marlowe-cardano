@@ -35,6 +35,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildPayToScript
 , hashSigningKey
 , queryAlonzo
+, queryUtxos
 , submitBody
 ) where
 
@@ -668,3 +669,16 @@ queryAlonzo connection =
           . QueryInEra AlonzoEraInCardanoMode
           . QueryInShelleyBasedEra ShelleyBasedEraAlonzo
         )
+
+
+-- | Find the UTxOs at an address.
+queryUtxos :: MonadError CliError m
+           => MonadIO m
+           => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+           -> AddressAny                        -- ^ The address.
+           -> m (UTxO AlonzoEra)                -- ^ Action query the UTxOs.
+queryUtxos connection =
+  queryAlonzo connection
+    . QueryUTxO
+    . QueryUTxOByAddress
+    . S.singleton

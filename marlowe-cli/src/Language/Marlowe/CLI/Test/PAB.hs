@@ -29,7 +29,7 @@ module Language.Marlowe.CLI.Test.PAB (
 ) where
 
 
-import Cardano.Api (AddressAny (..), AddressInEra, AlonzoEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr),
+import Cardano.Api (AddressAny (..), AddressInEra (..), AlonzoEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr),
                     AssetId (..), AssetName (..), LocalNodeConnectInfo (..), PolicyId (..), Quantity (..), ShelleyEra,
                     StakeAddressReference (NoStakeAddress), anyAddressInShelleyBasedEra, deserialiseAddress,
                     deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace, selectLovelace,
@@ -69,7 +69,7 @@ import Language.Marlowe.CLI.PAB (receiveStatus)
 import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), InstanceNickname, PabAccess (..), PabOperation (..),
                                         PabState (..), PabTest (..), RoleName, WalletInfo (..), psAppInstances,
                                         psBurnAddress, psFaucetAddress, psFaucetKey, psPassphrase, psWallets)
-import Language.Marlowe.CLI.Transaction (buildFaucet)
+import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
                                 EndpointResponse (..), MarloweEndpointResult (..), RedeemEndpointSchema)
@@ -380,6 +380,28 @@ interpret access PrintWallet{..} =
     WalletInfo{..} <- findOwner poOwner
     actual <- lift $ totalBalance access wiWalletId
     liftIO . putStrLn $ "[PrintWallet] Wallet for role " <> show poOwner <> " contains " <> show actual <> "."
+
+interpret PabAccess{..} PrintAppUTxOs{..} =
+  do
+    AppInstanceInfo{..} <- findInstance poInstance
+    params <- maybe (throwError $ CliError "[PrintAppUTxOs] Contract parameters are not known.") pure aiParams
+    let
+      toAddressAny' (AddressInEra _ address') = toAddressAny address'
+      LocalNodeConnectInfo _ network _ = localConnection
+      address = buildAddress params network NoStakeAddress :: AddressInEra AlonzoEra
+    utxos <- queryUtxos localConnection $ toAddressAny' address
+    liftIO . putStrLn $ "[PrintAppUTxOs] App address " <> T.unpack (serialiseAddress address) <> " contains " <> show utxos <> "."
+
+interpret PabAccess{..} PrintRoleUTxOs{..} =
+  do
+    AppInstanceInfo{..} <- findInstance poInstance
+    params <- maybe (throwError $ CliError "[PrintRoleUTxOs] Contract parameters are not known.") pure aiParams
+    let
+      toAddressAny' (AddressInEra _ address') = toAddressAny address'
+      LocalNodeConnectInfo _ network _ = localConnection
+      address = buildRoleAddress (rolesCurrency params) network NoStakeAddress :: AddressInEra AlonzoEra
+    utxos <- queryUtxos localConnection $ toAddressAny' address
+    liftIO . putStrLn $ "[PrintAppUTxOs] Role address " <> T.unpack (serialiseAddress address) <> " contains " <> show utxos <> "."
 
 interpret _ Comment{..} =
   liftIO . putStrLn $ "[Comment] " <> poComment

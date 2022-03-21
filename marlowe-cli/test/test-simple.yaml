@@ -51,6 +51,9 @@ ptPabOperations:
 - tag: AwaitCreate
   poInstance: App
 
+- tag: PrintAppUTxOs
+  poInstance: App
+
 - tag: Comment
   poComment: Deposit funds.
 
@@ -84,6 +87,9 @@ ptPabOperations:
   - 1898051625000
 
 - tag: AwaitApplyInputs
+  poInstance: App
+
+- tag: PrintRoleUTxOs
   poInstance: App
 
 - tag: Comment
