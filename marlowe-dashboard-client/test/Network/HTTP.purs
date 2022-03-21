@@ -34,7 +34,6 @@ import Affjax.ResponseFormat as Response
 import Affjax.StatusCode (StatusCode(..))
 import Ansi.Codes (Color(..))
 import Ansi.Output (foreground, withGraphics)
-import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.PAB (class ManagePAB)
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
@@ -150,7 +149,6 @@ derive newtype instance ManageWallet m => ManageWallet (MockHttpM m)
 derive newtype instance ManagePAB m => ManagePAB (MockHttpM m)
 derive newtype instance FollowerApp m => FollowerApp (MockHttpM m)
 derive newtype instance Toast m => Toast (MockHttpM m)
-derive newtype instance MainFrameLoop m => MainFrameLoop (MockHttpM m)
 derive newtype instance
   ( Monad m
   , MonadClipboard m

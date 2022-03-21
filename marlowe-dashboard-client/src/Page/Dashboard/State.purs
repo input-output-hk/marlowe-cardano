@@ -7,7 +7,6 @@ module Page.Dashboard.State
 import Prologue
 
 import Bridge (toFront)
-import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe, initializeContract)
 import Capability.PlutusApps.FollowerApp
   ( class FollowerApp
@@ -131,7 +130,6 @@ handleAction
   => MonadTime m
   => ManageMarlowe m
   => FollowerApp m
-  => MainFrameLoop m
   => MonadStore Store.Action Store.Store m
   => Toast m
   => MonadClipboard m

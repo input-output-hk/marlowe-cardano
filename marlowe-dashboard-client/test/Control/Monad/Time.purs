@@ -9,7 +9,6 @@ module Test.Control.Monad.Time
 
 import Prelude
 
-import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.PAB (class ManagePAB)
 import Capability.PlutusApps.FollowerApp (class FollowerApp)
@@ -127,7 +126,6 @@ derive newtype instance ManageWallet m => ManageWallet (MockTimeM m)
 derive newtype instance ManagePAB m => ManagePAB (MockTimeM m)
 derive newtype instance FollowerApp m => FollowerApp (MockTimeM m)
 derive newtype instance Toast m => Toast (MockTimeM m)
-derive newtype instance MainFrameLoop m => MainFrameLoop (MockTimeM m)
 derive newtype instance
   ( Monad m
   , MonadClipboard m

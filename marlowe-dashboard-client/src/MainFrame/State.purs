@@ -9,7 +9,6 @@ import API.Lenses
   , _cicStatus
   , _observableState
   )
-import Capability.MainFrameLoop (class MainFrameLoop)
 import Capability.Marlowe (class ManageMarlowe)
 import Capability.PAB
   ( class ManagePAB
@@ -92,7 +91,7 @@ import MainFrame.Types
   ( Action(..)
   , ChildSlots
   , Msg
-  , Query(..)
+  , Query
   , Slice
   , State
   , WebSocketStatus(..)
@@ -159,7 +158,6 @@ mkMainFrame
   => FollowerApp m
   => Toast m
   => MonadClipboard m
-  => MainFrameLoop m
   => Component Query Unit Msg m
 mkMainFrame =
   connect
@@ -171,8 +169,7 @@ mkMainFrame =
       , render
       , eval:
           mkEval defaultEval
-            { handleQuery = handleQuery
-            , handleAction = handleAction
+            { handleAction = handleAction
             , receive = Just <<< Receive <<< _.context
             , initialize = Just Init
             }
@@ -198,26 +195,6 @@ deriveState state { context } = state
       Left ws -> Left ws
   , store = context
   }
-
-handleQuery
-  :: forall a m
-   . MonadAff m
-  => MonadLogger StructuredLog m
-  => MonadTime m
-  => MonadAsk Env m
-  => ManagePAB m
-  => ManageMarlowe m
-  => FollowerApp m
-  => MonadStore Store.Action Store.Store m
-  => Toast m
-  => MonadClipboard m
-  => MainFrameLoop m
-  => Query a
-  -> HalogenM State Action ChildSlots Msg m (Maybe a)
-handleQuery = case _ of
-  MainFrameActionQuery action next -> do
-    handleAction action
-    pure $ Just next
 
 reActivatePlutusScript
   :: forall m
@@ -260,7 +237,6 @@ handleAction
   => Toast m
   => MonadStore Store.Action Store.Store m
   => MonadClipboard m
-  => MainFrameLoop m
   => Action
   -> HalogenM State Action ChildSlots Msg m Unit
 handleAction Tick = updateStore <<< Store.Tick =<< now

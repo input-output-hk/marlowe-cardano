@@ -86,9 +86,8 @@ _toaster :: Proxy "toaster"
 _toaster = Proxy
 
 ------------------------------------------------------------
-data Query a = MainFrameActionQuery Action a
-
-data Msg = MainFrameActionMsg Action
+data Query (a :: Type)
+data Msg
 
 ------------------------------------------------------------
 data Action

@@ -68,8 +68,6 @@ import Halogen.Subscription.Extra
 import Halogen.VDom.Driver (runUI)
 import LocalStorage (Key(..), getItem, removeItem, setItem)
 import MainFrame.State (mkMainFrame)
-import MainFrame.Types (Msg(..))
-import MainFrame.Types as MainFrame
 import Marlowe.Run.Server as MarloweRun
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
@@ -167,18 +165,12 @@ main args = do
     connectEmitter_ storeE storeIO
     liftEffect $ persistStore storeE
 
-    driver <- runUI component unit body
+    void $ runUI component unit body
 
     void $ forkAff $ WS.runWebSocketManager
       (WS.URI "/pab/ws")
       (liftEffect <<< HS.notify pabWebsocketIn.listener)
       wsManager
-
-    -- This handler allows us to call an action in the MainFrame from a child component
-    -- (more info in the MainFrameLoop capability)
-    void $ liftEffect $ HS.subscribe driver.messages case _ of
-      MainFrameActionMsg action -> launchAff_ $ void $ driver.query $
-        MainFrame.MainFrameActionQuery action unit
 
 mkWalletFundsEmitter
   :: forall m
