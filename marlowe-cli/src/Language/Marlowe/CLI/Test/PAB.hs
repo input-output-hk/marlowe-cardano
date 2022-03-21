@@ -29,10 +29,11 @@ module Language.Marlowe.CLI.Test.PAB (
 ) where
 
 
-import Cardano.Api (AddressAny (..), AddressInEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr), AssetId (..),
-                    AssetName (..), PolicyId (..), Quantity (..), ShelleyEra, anyAddressInShelleyBasedEra,
-                    deserialiseAddress, deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace,
-                    selectLovelace, serialiseAddress, toAddressAny, valueFromList, valueToList)
+import Cardano.Api (AddressAny (..), AddressInEra, AlonzoEra, AsType (AsAddress, AsScriptHash, AsShelleyAddr),
+                    AssetId (..), AssetName (..), LocalNodeConnectInfo (..), PolicyId (..), Quantity (..), ShelleyEra,
+                    StakeAddressReference (NoStakeAddress), anyAddressInShelleyBasedEra, deserialiseAddress,
+                    deserialiseFromRawBytes, lovelaceToValue, negateValue, quantityToLovelace, selectLovelace,
+                    serialiseAddress, toAddressAny, valueFromList, valueToList)
 import Cardano.Api.Shelley (shelleyPayAddrToPlutusPubKHash)
 import Cardano.Mnemonic (SomeMnemonic (..), mnemonicToText)
 import Cardano.Wallet.Api (GetTransaction, MigrateShelleyWallet)
@@ -62,6 +63,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.UUID.V4 (nextRandom)
+import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
 import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.PAB (receiveStatus)
 import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), InstanceNickname, PabAccess (..), PabOperation (..),
@@ -257,7 +259,7 @@ interpret access CallCreate{..} =
       $ call access aiInstance "create" ((uuid, AM.fromList owners, poContract) :: CreateEndpointSchema)
     liftIO . putStrLn $ "[CallCreate] Endpoint \"create\" called on instance " <> show poInstance <> " for owners " <> show owners <> "."
 
-interpret _ AwaitCreate{..} =
+interpret PabAccess{localConnection = LocalNodeConnectInfo _ network _} AwaitCreate{..} =
   do
     result <- awaitApp poInstance (-1)
     case result of
@@ -266,7 +268,10 @@ interpret _ AwaitCreate{..} =
                                    M.adjust
                                      (\ai -> ai {aiParams = Just params})
                                      poInstance
-                                 liftIO . putStrLn $ "[AwaitCreate] Creation confirmed with " <> show params <> "."
+                                 let
+                                   appAddress = T.unpack $ serialiseAddress (buildAddress params network NoStakeAddress :: AddressInEra AlonzoEra)
+                                   roleAddress = T.unpack $ serialiseAddress (buildRoleAddress (rolesCurrency params) network NoStakeAddress :: AddressInEra AlonzoEra)
+                                 liftIO . putStrLn $ "[AwaitCreate] Creation confirmed for app address " <> appAddress <> " and role address " <> roleAddress <> " with " <> show params <> "."
       _                     -> throwError . CliError $ "[AwaitCreate] received unexpected response " <> show result <> "."
 
 interpret access CallApplyInputs{..} =
