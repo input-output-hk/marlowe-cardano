@@ -1,10 +1,5 @@
 module Store.Contracts
   ( ContractStore
-  , StartedContract(..)
-  , _ActivatingFollower
-  , _AwaitingFirstUpdate
-  , _FollowerActivationFailed
-  , _Ready
   , addFollowerContract
   , addStartingContract
   , emptyContractStore
@@ -27,25 +22,13 @@ module Store.Contracts
 import Prologue
 
 import Control.Apply (lift2)
-import Data.Array as Array
+import Data.Array (filter)
+import Data.Bimap (Bimap)
+import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
-import Data.Lens
-  ( Lens'
-  , Prism'
-  , filtered
-  , iso
-  , over
-  , preview
-  , prism'
-  , to
-  , toListOf
-  , traverseOf
-  , traversed
-  , view
-  )
+import Data.Lens (Lens', filtered, iso, over, to, traverseOf, traversed, view)
 import Data.Lens.At (at)
-import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
   ( LocalContractNicknames
@@ -69,45 +52,19 @@ import Type.Proxy (Proxy(..))
 
 newtype ContractStore = ContractStore ContractStoreFields
 
-data StartedContract
-  = ActivatingFollower
-  | FollowerActivationFailed
-  | AwaitingFirstUpdate PlutusAppId
-  | Ready Execution.State
-
-derive instance Eq StartedContract
-
-_ActivatingFollower :: Prism' StartedContract Unit
-_ActivatingFollower = prism' (const ActivatingFollower) case _ of
-  ActivatingFollower -> Just unit
-  _ -> Nothing
-
-_FollowerActivationFailed :: Prism' StartedContract Unit
-_FollowerActivationFailed = prism' (const FollowerActivationFailed) case _ of
-  FollowerActivationFailed -> Just unit
-  _ -> Nothing
-
-_AwaitingFirstUpdate :: Prism' StartedContract PlutusAppId
-_AwaitingFirstUpdate = prism' AwaitingFirstUpdate case _ of
-  AwaitingFirstUpdate appId -> Just appId
-  _ -> Nothing
-
-_Ready :: Prism' StartedContract Execution.State
-_Ready = prism' Ready case _ of
-  Ready state -> Just state
-  _ -> Nothing
-
 type ContractStoreFields =
   {
     -- This map lets you now the status of a contract that is synced with the PAB.
     -- This is what eventually is shown as cards in the Dashboard or as steps
     -- in the Page.Contract
-    syncedContracts :: Map MarloweParams StartedContract
+    syncedContracts :: Map MarloweParams Execution.State
   -- This Map is used to hold the placeholders for new contracts. The key is the
   -- request id of calling the create endpoint, the value is what is needed to
   -- show a "loading" card.
   -- See UC-CONTRACT-1
   , newContracts :: Map UUID NewContract
+  -- This bimap help us have one Follower contract per Marlowe contract.
+  , contractIndex :: Bimap MarloweParams PlutusAppId
   , contractNicknames :: LocalContractNicknames
   }
 
@@ -119,11 +76,14 @@ _ContractStore = iso
   (\(ContractStore fields) -> fields)
   (\fields -> ContractStore fields)
 
-_syncedContracts :: Lens' ContractStore (Map MarloweParams StartedContract)
+_syncedContracts :: Lens' ContractStore (Map MarloweParams Execution.State)
 _syncedContracts = _ContractStore <<< prop (Proxy :: _ "syncedContracts")
 
 _newContracts :: Lens' ContractStore (Map UUID NewContract)
 _newContracts = _ContractStore <<< prop (Proxy :: _ "newContracts")
+
+_contractIndex :: Lens' ContractStore (Bimap MarloweParams PlutusAppId)
+_contractIndex = _ContractStore <<< prop (Proxy :: _ "contractIndex")
 
 _contractNicknames :: Lens' ContractStore LocalContractNicknames
 _contractNicknames = _ContractStore <<< prop (Proxy :: _ "contractNicknames")
@@ -133,6 +93,7 @@ emptyContractStore :: ContractStore
 emptyContractStore = ContractStore
   { syncedContracts: Map.empty
   , newContracts: Map.empty
+  , contractIndex: Bimap.empty
   , contractNicknames: emptyLocalContractNicknames
   }
 
@@ -159,11 +120,12 @@ addFollowerContract currentTime followerId metadata history store =
   let
     marloweParams = getMarloweParams history
     mContractNickname = getContractNickname marloweParams store
+    updateIndexes = over _contractIndex $ Bimap.insert marloweParams followerId
     updateSyncedContracts = traverseOf _syncedContracts
       $
         lift2
           (Map.insert marloweParams)
-          ( Ready <$> Execution.restoreState
+          ( Execution.restoreState
               followerId
               currentTime
               mContractNickname
@@ -172,7 +134,7 @@ addFollowerContract currentTime followerId metadata history store =
           )
           <<< pure
   in
-    updateSyncedContracts store
+    updateIndexes <$> updateSyncedContracts store
 
 swapStartingToStartedContract
   :: NewContract
@@ -209,15 +171,14 @@ modifyContract
   -> (Execution.State -> Execution.State)
   -> ContractStore
   -> ContractStore
-modifyContract marloweParams =
-  over (_syncedContracts <<< ix marloweParams <<< _Ready)
+modifyContract marloweParams f =
+  over (_syncedContracts <<< at marloweParams) (map f)
 
 tick :: Instant -> ContractStore -> Either String ContractStore
 tick currentTime =
   traverseOf
     ( _syncedContracts
         <<< traversed
-        <<< _Ready
         <<< filtered
           ( \executionState ->
               executionState.mNextTimeout /= Nothing
@@ -230,17 +191,15 @@ tick currentTime =
 
 followerContractExists :: MarloweParams -> ContractStore -> Boolean
 followerContractExists marloweParams = view
-  (_syncedContracts <<< to (Map.member marloweParams))
+  (_contractIndex <<< to (Bimap.memberL marloweParams))
 
--- TODO refactor usages of `getContract` to handle StartedContract and unify
--- with getFollowerContract.
-getFollowerContract :: MarloweParams -> ContractStore -> Maybe StartedContract
-getFollowerContract marloweParams =
-  preview $ _syncedContracts <<< ix marloweParams
+getFollowerContract :: MarloweParams -> ContractStore -> Maybe PlutusAppId
+getFollowerContract marloweParams = view
+  (_contractIndex <<< to (Bimap.lookupL marloweParams))
 
 getContract :: MarloweParams -> ContractStore -> Maybe Execution.State
-getContract marloweParams = preview
-  (_syncedContracts <<< ix marloweParams <<< _Ready)
+getContract marloweParams = view
+  (_syncedContracts <<< at marloweParams)
 
 getNewContract :: UUID -> ContractStore -> Maybe NewContract
 getNewContract reqId = view
@@ -255,20 +214,16 @@ getContractNickname marloweParams =
     getContractNicknames
 
 getRunningContracts :: ContractStore -> Array Execution.State
-getRunningContracts = Array.fromFoldable <<< toListOf
-  ( _syncedContracts
-      <<< traversed
-      <<< _Ready
-      <<< filtered (not <<< Execution.isClosed)
-  )
+getRunningContracts = filter (not <<< Execution.isClosed)
+  <<< map snd
+  <<< Map.toUnfoldable
+  <<< view _syncedContracts
 
 getClosedContracts :: ContractStore -> Array Execution.State
-getClosedContracts = Array.fromFoldable <<< toListOf
-  ( _syncedContracts
-      <<< traversed
-      <<< _Ready
-      <<< filtered Execution.isClosed
-  )
+getClosedContracts = filter Execution.isClosed
+  <<< map snd
+  <<< Map.toUnfoldable
+  <<< view _syncedContracts
 
 getNewContracts :: ContractStore -> Array NewContract
 getNewContracts =
