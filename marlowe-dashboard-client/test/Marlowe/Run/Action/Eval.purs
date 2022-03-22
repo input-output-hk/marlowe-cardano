@@ -504,7 +504,7 @@ marloweAppEndpoints =
   , "create"
   ]
 
-expectPlutusContractEndpoints
+expectNewActiveEndpoints
   :: forall m
    . MonadAsk Coenv m
   => MonadError Error m
@@ -513,23 +513,21 @@ expectPlutusContractEndpoints
   => PlutusAppId
   -> Array EndpointName
   -> m Unit
-expectPlutusContractEndpoints plutusAppId endpoints = do
+expectNewActiveEndpoints plutusAppId endpoints = do
   pabWebsocketReceive
     { "contents":
         [ encodeJson
             { "unContractInstanceId": plutusAppId }
         , encodeJson
-            ( { "contents":
-                  endpoints <#> \endpointName ->
-                    [ { "aeMetadata": jsonNull
-                      , "aeDescription":
-                          { "getEndpointDescription": endpointName
-                          }
+            { "contents":
+                endpoints <#> \endpointName ->
+                  { "aeMetadata": jsonNull
+                  , "aeDescription":
+                      { "getEndpointDescription": endpointName
                       }
-                    ]
-              , "tag": "NewActiveEndpoints"
-              }
-            )
+                  }
+            , "tag": "NewActiveEndpoints"
+            }
         ]
     , "tag": "InstanceUpdate"
     }
@@ -626,8 +624,8 @@ createWallet
     expectPlutusContractActivation walletId MarloweApp marloweAppId
     expectPlutusContractSubscribe walletCompanionId
     expectPlutusContractSubscribe marloweAppId
-    expectPlutusContractEndpoints walletCompanionId []
-    expectPlutusContractEndpoints marloweAppId marloweAppEndpoints
+    expectNewActiveEndpoints walletCompanionId []
+    expectNewActiveEndpoints marloweAppId marloweAppEndpoints
 
 restore
   :: forall m

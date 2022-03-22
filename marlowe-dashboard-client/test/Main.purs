@@ -52,7 +52,8 @@ main = launchAff_ $ runSpec'
 testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do
   runScriptedTest "create-and-restore-wallet"
-  runScriptedTest "create-contract"
+
+-- runScriptedTest "create-contract"
 
 -------------------------------------------------------------------------------
 -- Demo tests for purescript-testing-library
