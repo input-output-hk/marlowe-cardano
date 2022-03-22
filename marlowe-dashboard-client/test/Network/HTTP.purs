@@ -107,6 +107,7 @@ import Servant.PureScript
   , printAjaxError
   )
 import Test.Assertions (jsonDiffString)
+import Test.Data.Argonaut.Extra (stableStringifyWithIndent)
 import Test.Halogen (class MonadHalogenTest)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
@@ -440,7 +441,8 @@ expectContent expected = RequestMatcher \request ->
   lmap MatcherError case request.content, expected of
     Nothing, _ -> Left $ [ "Expected content, but saw none" ]
     Just (Request.Json actualJson), Request.Json expectedJson
-      | expectedJson == actualJson -> Right unit
+      | stableStringifyWithIndent 2 expectedJson == stableStringifyWithIndent 2
+          actualJson -> Right unit
       | otherwise -> Left $ join
           [ pure
               "✗ Actual JSON content does not match expected content:"
