@@ -1,5 +1,6 @@
 import { When } from "@cucumber/cucumber";
 import { waitFor } from "../support/wait-for-behavior";
+import { queries, getDocument } from 'playwright-testing-library';
 import { ScenarioWorld } from './setup/world';
 import { getElementLocator } from '../support/web-element-helper';
 import { ElementKey } from '../env/global';
@@ -16,17 +17,19 @@ When(
       globalConfig,
     } = this;
 
+
     console.log(`I fill in the ${elementKey} input with ${input}`);
 
     const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
+    const document = await getDocument(page);
 
     await waitFor(async() => {
-      const result = await page.waitForSelector(elementIdentifier, {
-        state: 'visible'
-      })
+      const locator = await queries.getByRole(document, role, { name })
+      const result = await locator.isVisible();
 
       if (result) {
-        await inputValue(page, elementIdentifier, input)
+        await inputValue(locator, input)
         return result;
       }
     })
@@ -42,16 +45,17 @@ When(
     } = this;
 
     console.log(`I select the ${option} option from the ${elementKey}`)
+    const document = await getDocument(page);
 
     const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
 
     await waitFor(async() => {
-      const result = await page.waitForSelector(elementIdentifier, {
-        state: 'visible'
-      });
+      const locator = await queries.getByRole(document, role, { name })
+      const result = await locator.isVisible();
 
       if (result) {
-        await selectValue(page, elementIdentifier, option)
+        await selectValue(locator, option)
         return result;
       }
     })

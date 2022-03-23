@@ -19,13 +19,15 @@ export const navigateToPage = async (
 }
 
 const pathMatchesPageId = (
-  path: string,
+  pathname: string,
+  hash: string,
   pageId: PageId,
   { pagesConfig }: GlobalConfig
 ): boolean => {
+  const currentPath = `${pathname}${hash}`;
   const pageRegexString = pagesConfig[pageId].regex;
   const pageRegex = new RegExp(pageRegexString);
-  return pageRegex.test(path);
+  return pageRegex.test(currentPath);
 }
 
 export const currentPathMatchesPageId = (
@@ -35,29 +37,23 @@ export const currentPathMatchesPageId = (
 ): boolean => {
   const { pathname, hash } = new URL(page.url());
   const url = new URL(page.url());
-  const currentPath = `${pathname}${hash}`;
-  console.log("pathname ", pathname)
-  console.log("hash ", hash)
-  console.log("currentPath ", currentPath)
-  return pathMatchesPageId(currentPath, pageId, globalConfig);
+  return pathMatchesPageId(pathname, hash, pageId, globalConfig);
 }
 
 export const getCurrentPageId = (
   page: Page,
   globalConfig: GlobalConfig,
 ): PageId => {
-
   const { pagesConfig } = globalConfig;
   const pageConfigPageIds = Object.keys(pagesConfig);
   const { pathname, hash } = new URL(page.url());
-  const currentPath = `${pathname}${hash}`;
   const currentPageId = pageConfigPageIds.find(pageId =>
-    pathMatchesPageId(currentPath, pageId, globalConfig)
+    pathMatchesPageId(pathname, hash, pageId, globalConfig)
   );
 
   if (!currentPageId) {
     throw Error(
-      `Failed to get page name from current route ${currentPath}, \
+      `Failed to get page name from current route ${pathname}/${hash}, \
       possible pages: ${JSON.stringify((pagesConfig))}`
     )
   }

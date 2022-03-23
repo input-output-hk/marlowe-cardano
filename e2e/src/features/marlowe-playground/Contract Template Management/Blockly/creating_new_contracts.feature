@@ -5,13 +5,13 @@ Feature: Creating a new contract with Blockly
   Scenario: Creating a new Blockly contract template
     Given I am on the "home page"
 
-    When I click "Start in Blockly" button
+    When I click the "Start in Blockly" button
 
-    Then I should be on the "Marlowe Editor" page
-    And I should see "New Project" as the contract header
-    And the "playground editor" should contain "empty  Blockly contract code"
+    Then I am directed to the "marlowe-playground-blockly" page
+    And the "editor header" should contain "New Project" text
+    # And the "playground editor" should contain "empty  Blockly contract code"
 
-    When I enter "Blockly Escrow Contract Code" into the "playground editor"
+    # When I enter "Blockly Escrow Contract Code" into the "playground editor"
 
     Then the "Send To Simulator" button should be "enabled"
 

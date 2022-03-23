@@ -1,150 +1,85 @@
 [
   {
-    "description": "    As a user I should be able to navigate to the marlowe playground home page and\n    see all the starting point options available",
+    "description": "  As a user, I would like to create a contract template using javascript,\n  so that I can write contracts in my preferred language",
     "elements": [
       {
         "description": "",
-        "id": "as-a-user-i-should-be-able-to-see-the-marlowe-playground-home-page;as-a-user-i-expect-to-be-able-to-see-the-available-languages",
+        "id": "creating-a-new-contract-with-javascript;using-an-existing-javascript-contract-template",
         "keyword": "Scenario",
-        "line": 9,
-        "name": "As a user I expect to be able to see the available languages",
+        "line": 22,
+        "name": "Using an existing Javascript contract template",
         "steps": [
           {
             "keyword": "Before",
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 413000000
+              "duration": 1553000000
             }
           },
           {
             "arguments": [],
             "keyword": "Given ",
-            "line": 11,
+            "line": 23,
             "name": "I am on the \"home\" page",
             "match": {
-              "location": "src/step-definitions/navigation.ts:7"
+              "location": "src/step-definitions/navigation.ts:10"
             },
             "result": {
               "status": "passed",
-              "duration": 3923000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "Then ",
-            "line": 12,
-            "name": "I should see \"Start in Javascript\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 35000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 13,
-            "name": "I should see \"Start in Haskell\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 8000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 14,
-            "name": "I should see \"Start in Marlowe\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 7000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 15,
-            "name": "I should see \"Start in Blockly\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 7000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 16,
-            "name": "I should see \"Start in Haskell\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 7000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 17,
-            "name": "I should see a button with \"Open existing project\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:22"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 13000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 18,
-            "name": "I should see a button with \"Open an example\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:22"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 12000000
+              "duration": 3730000000
             }
           },
           {
             "arguments": [],
             "keyword": "When ",
-            "line": 20,
-            "name": "I click \"Open existing project\" button",
+            "line": 25,
+            "name": "I click the \"Open an example\" button",
             "match": {
-              "location": "src/step-definitions/actions.ts:5"
+              "location": "src/step-definitions/click.ts:11"
             },
             "result": {
               "status": "passed",
-              "duration": 88000000
+              "duration": 315000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 26,
+            "name": "I click the \"Escrow Javascript\" button",
+            "match": {
+              "location": "src/step-definitions/click.ts:11"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 600000000
             }
           },
           {
             "arguments": [],
             "keyword": "Then ",
-            "line": 21,
-            "name": "I should see \"Login with github\" text",
+            "line": 28,
+            "name": "I am directed to the \"marlowe-playground-js\" page",
             "match": {
-              "location": "src/step-definitions/assertions/verify-elements-visibility.ts:5"
+              "location": "src/step-definitions/navigation.ts:27"
             },
             "result": {
               "status": "passed",
-              "duration": 7000000
+              "duration": 1000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 29,
+            "name": "the \"editor header\" should contain \"Purchase\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-element-value.ts:27"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 222000000
             }
           },
           {
@@ -152,32 +87,24 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 29000000
+              "duration": 332000000
             }
           }
         ],
         "tags": [
           {
             "name": "@dev",
-            "line": 6
-          },
-          {
-            "name": "@smoke",
-            "line": 7
-          },
-          {
-            "name": "@regression",
-            "line": 8
+            "line": 21
           }
         ],
         "type": "scenario"
       }
     ],
-    "id": "as-a-user-i-should-be-able-to-see-the-marlowe-playground-home-page",
+    "id": "creating-a-new-contract-with-javascript",
     "line": 1,
     "keyword": "Feature",
-    "name": "As a user I should be able to see the Marlowe Playground home page",
+    "name": "Creating a new contract with Javascript",
     "tags": [],
-    "uri": "src/features/marlowe-playground/home-page.feature"
+    "uri": "src/features/marlowe-playground/Contract Template Management/JavaScript/creating_new_contracts.feature"
   }
 ]

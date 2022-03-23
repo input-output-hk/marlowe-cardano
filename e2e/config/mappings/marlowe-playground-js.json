@@ -1,6 +1,6 @@
 {
-  "editor header": ".project-title >> h1",
-  "playground editor": ".monaco-editor >> .inputarea",
-  "Compile": "button >> text=Compile",
-  "Send To Simulator": "button >> text=Send To Simulator"
+  "editor header": { "role": "heading", "name": "project-title"},
+  "playground editor": { "role": "textbox", "name": "Editor content;Press Alt+F1 for Accessibility Options."},
+  "Compile": { "role": "button", "name": "Compile"},
+  "Send To Simulator": { "role": "button", "name": "Send to Simulator"}
 }
