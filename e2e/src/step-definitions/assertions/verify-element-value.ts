@@ -1,5 +1,6 @@
 import { Then } from '@cucumber/cucumber';
 import { ElementKey } from '../../env/global';
+import { queries, getDocument } from 'playwright-testing-library';
 import { getElementLocator } from '../../support/web-element-helper';
 import { ScenarioWorld } from '../setup/world'
 import { waitFor } from '../../support/wait-for-behavior';
@@ -11,10 +12,13 @@ Then(
       screen: { page },
       globalConfig,
     } = this;
+    const document = await getDocument(page);
 
     const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
     await waitFor(async() => {
-      const isElementVisible = (await page.$(elementIdentifier)) != null
+      const locator = await queries.getByRole(document, role, { name })
+      const isElementVisible = await locator.isVisible();
       return isElementVisible;
     })
   }
@@ -27,9 +31,14 @@ Then(
       screen: { page },
       globalConfig,
     } = this;
+    const document = await getDocument(page);
     const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
     await waitFor(async() => {
-      const elementText = await page.textContent(elementIdentifier);
+      const locator = await queries.getByRole(document, role, { name })
+      const elementText = await locator.textContent();
+      console.log("ExepctedElement: ", expectedElementText);
+      console.log("ElementText: ", elementText);
       return elementText?.includes(expectedElementText);
     })
   }

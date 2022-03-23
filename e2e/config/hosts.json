@@ -1,4 +1,4 @@
 {
-  "localhost": "https://localhost:8009/",
+  "localhost": "http://localhost:8010/",
   "current-sprint": "https://marlowe-playground-currentsprintmarlowe.plutus.aws.iohkdev.io/"
 }

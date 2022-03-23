@@ -1,27 +1,23 @@
-import { Page } from 'playwright';
-import { ElementLocator } from '../env/global';
+import { ElementHandle } from 'playwright-testing-library/dist/typedefs';
 
 export const clickElement = async(
-  page: Page,
-  elementIdentifier: ElementLocator,
+  locator: ElementHandle,
 ): Promise<void> => {
-  await page.click(elementIdentifier);
+  await locator.click()
 }
 
 export const inputValue = async (
-  page: Page,
-  elementIdentifier: ElementLocator,
+  locator: ElementHandle,
   input: string,
 ): Promise<void> => {
-  await page.focus(elementIdentifier);
-  await page.fill(elementIdentifier, input);
+  await locator.focus();
+  await locator.fill(input);
 }
 
 export const selectValue = async(
-  page: Page,
-  elementIdentifier: ElementLocator,
+  locator: ElementHandle,
   option: string,
 ): Promise<void> => {
-  await page.focus(elementIdentifier);
-  await page.selectOption(elementIdentifier, option);
+  await locator.focus();
+  await locator.selectOption(option);
 }
