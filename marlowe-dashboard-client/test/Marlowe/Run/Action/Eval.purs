@@ -24,6 +24,8 @@ import Data.Argonaut
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Array (snoc)
 import Data.Bifunctor (lmap)
+import Data.BigInt.Argonaut (BigInt(..))
+import Data.BigInt.Argonaut as BigInt
 import Data.Bimap as Bimap
 import Data.DateTime (adjust)
 import Data.DateTime.Instant (Instant, fromDateTime, toDateTime, unInstant)
@@ -379,9 +381,10 @@ mockRolesPayload roles = encodeJson encodedRoles
   encodedRoles = roles <#> \{ roleName, address } -> { unTokenName: roleName }
     /\ address
 
-adjustInstant :: Number -> Instant -> Int
+adjustInstant :: Number -> Instant -> BigInt
 adjustInstant offset initial =
-  floor
+  BigInt.fromInt
+    $ floor
     $ unwrap
     $ unInstant
     $ maybe initial fromDateTime
@@ -399,7 +402,10 @@ mockContract currentTime = encodeJson
                           { "token": { "token_name": "", "currency_symbol": "" }
                           , "to": { "party": { "role_token": "Lender" } }
                           , "then": "close"
-                          , "pay": { "and": 10000000, "add": 1000000 }
+                          , "pay":
+                              { "and": BigInt.fromInt 10000000
+                              , "add": BigInt.fromInt 1000000
+                              }
                           , "from_account": { "role_token": "Borrower" }
                           }
                       , "case":
@@ -407,21 +413,24 @@ mockContract currentTime = encodeJson
                           , "of_token":
                               { "token_name": "", "currency_symbol": "" }
                           , "into_account": { "role_token": "Borrower" }
-                          , "deposits": { "and": 10000000, "add": 1000000 }
+                          , "deposits":
+                              { "and": BigInt.fromInt 10000000
+                              , "add": BigInt.fromInt 1000000
+                              }
                           }
                       }
                     ]
                 , "timeout_continuation": "close"
                 , "timeout": adjustInstant 1500000.0 currentTime
                 }
-            , "pay": 10000000
+            , "pay": BigInt.fromInt 10000000
             , "from_account": { "role_token": "Lender" }
             }
         , "case":
             { "party": { "role_token": "Lender" }
             , "of_token": { "token_name": "", "currency_symbol": "" }
             , "into_account": { "role_token": "Lender" }
-            , "deposits": 10000000
+            , "deposits": BigInt.fromInt 10000000
             }
         }
       ]
