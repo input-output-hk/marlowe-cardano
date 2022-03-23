@@ -24,7 +24,7 @@ import Data.Argonaut
 import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Array (snoc)
 import Data.Bifunctor (lmap)
-import Data.BigInt.Argonaut (BigInt(..))
+import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.Bimap as Bimap
 import Data.DateTime (adjust)

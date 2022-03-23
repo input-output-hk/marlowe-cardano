@@ -107,7 +107,6 @@ import Servant.PureScript
   , printAjaxError
   )
 import Test.Assertions (jsonDiffString)
-import Test.Data.Argonaut.Extra (bigIntEq)
 import Test.Halogen (class MonadHalogenTest)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)

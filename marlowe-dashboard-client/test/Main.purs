@@ -36,7 +36,7 @@ import Web.DOM (Element)
 
 main :: Effect Unit
 main = launchAff_ $ runSpec'
-  defaultConfig { timeout = Just $ Milliseconds 5000.0 }
+  defaultConfig { timeout = Just $ Milliseconds 10000.0 }
   [ consoleReporter ]
   do
     parallel do
