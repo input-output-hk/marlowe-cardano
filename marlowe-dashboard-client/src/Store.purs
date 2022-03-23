@@ -20,12 +20,12 @@ import Store.Contracts
   ( ContractStore
   , contractCreated
   , contractStarted
-  , emptyContractStore
   , historyUpdated
   , initialFollowersReceived
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
+  , resetContractStore
   , tick
   )
 import Store.Wallet (WalletAction, WalletStore)
@@ -150,5 +150,5 @@ reduce store = case _ of
   DropdownClosed -> store { openDropdown = Nothing }
   Disconnect -> store
     { wallet = Wallet.Disconnected
-    , contracts = emptyContractStore
+    , contracts = resetContractStore store.contracts
     }

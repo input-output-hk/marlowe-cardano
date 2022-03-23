@@ -3,7 +3,6 @@ module Store.Contracts
   , ContractStore
   , contractCreated
   , contractStarted
-  , emptyContractStore
   , followerContractExists
   , getAwaitingContracts
   , getClosedContracts
@@ -19,6 +18,7 @@ module Store.Contracts
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
+  , resetContractStore
   , tick
   ) where
 
@@ -49,7 +49,6 @@ import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames
   ( LocalContractNicknames
-  , emptyLocalContractNicknames
   , insertContractNickname
   )
 import Data.LocalContractNicknames as LocalContractNicknames
@@ -126,18 +125,17 @@ _contractIndex = _ContractStore <<< prop (Proxy :: _ "contractIndex")
 _contractNicknames :: Lens' ContractStore LocalContractNicknames
 _contractNicknames = _ContractStore <<< prop (Proxy :: _ "contractNicknames")
 
-------------------------------------------------------------
-emptyContractStore :: ContractStore
-emptyContractStore = ContractStore
+resetContractStore :: ContractStore -> ContractStore
+resetContractStore (ContractStore { contractNicknames }) =
+  mkContractStore contractNicknames
+
+mkContractStore :: LocalContractNicknames -> ContractStore
+mkContractStore nicknames = ContractStore
   { startedContracts: Map.empty
   , newContracts: Map.empty
   , contractIndex: Bimap.empty
-  , contractNicknames: emptyLocalContractNicknames
+  , contractNicknames: nicknames
   }
-
-mkContractStore :: LocalContractNicknames -> ContractStore
-mkContractStore nicknames = modifyContractNicknames (const nicknames) $
-  emptyContractStore
 
 initialFollowersReceived
   :: Set (Tuple MarloweParams PlutusAppId) -> ContractStore -> ContractStore
