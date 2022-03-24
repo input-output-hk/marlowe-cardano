@@ -49,6 +49,7 @@ import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
+import Data.UUID.Argonaut (UUID)
 import Data.Undefinable (toUndefinable)
 import Effect.Aff (Error, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -61,7 +62,7 @@ import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
-import Test.Control.Monad.UUID (mockUUID)
+import Test.Control.Monad.UUID (class MonadMockUUID, mkTestUUID)
 import Test.Marlowe.Run (Coenv, fundWallet, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
@@ -69,10 +70,12 @@ import Test.Marlowe.Run.Action.Types
   , ContractRoles
   , CreateContractRecord
   , CreateWalletRecord
+  , CurrencySymbol
   , MarloweRunAction(..)
   , MarloweRunScript
   , PlutusAppId
   , ScriptError(..)
+  , ScriptHash
   , WalletId
   , WalletName
   , renderScriptError
@@ -159,6 +162,7 @@ evalScript
   => MonadError Error m
   => MonadMockHTTP m
   => MonadMockTime m
+  => MonadMockUUID m
   => MonadTime m
   => MonadAsk Coenv m
   => MarloweRunScript
@@ -191,6 +195,7 @@ evalAction
   => MonadUser m
   => MonadError Error m
   => MonadMockHTTP m
+  => MonadMockUUID m
   => MonadTime m
   => MonadAsk Coenv m
   => MarloweRunAction
@@ -290,11 +295,25 @@ createContract
   => MonadUser m
   => MonadTime m
   => MonadTell (Array String) m
+  => MonadAsk Coenv m
+  => MonadMockUUID m
   => MonadMockHTTP m
   => CreateContractRecord
   -> m Unit
-createContract { templateName, contractTitle, fields, roles, marloweAppId } = do
+createContract
+  { templateName
+  , contractTitle
+  , fields
+  , roles
+  , marloweAppId
+  , followerId
+  , walletCompanionId
+  , currencySymbol
+  , rolePayoutValidatorHash
+  , walletId
+  } = do
   card <- openContractTemplates
+  createContractUUID <- mkTestUUID "aef7e9ad-c283-4039-9a80-28faa0c04c33"
   withContainer card do
     selectTemplate
     fillContractFields
@@ -307,9 +326,14 @@ createContract { templateName, contractTitle, fields, roles, marloweAppId } = do
     clickM $ getBy role do
       nameRegex "pay and start" ignoreCase
       pure Button
-    expectCreateContractHttpRequest
-    expectSuccessToast
-      "The request to initialize this contract has been submitted."
+  contractCreatedTime <- now
+  expectCreateContractHttpRequest contractCreatedTime createContractUUID
+  expectSuccessToast
+    "The request to initialize this contract has been submitted."
+  expectWalletCompanionUpdate contractCreatedTime
+  expectContractCreatedWS createContractUUID
+  expectFollowerContract
+  expectSuccessToast "Contract initialized."
 
   where
   openContractTemplates = do
@@ -360,20 +384,115 @@ createContract { templateName, contractTitle, fields, roles, marloweAppId } = do
         , initialSelectionEnd: toUndefinable $ Just 10
         }
 
-  expectCreateContractHttpRequest = do
+  expectCreateContractHttpRequest contractCreatedTime createContractUUID = do
     tell [ "Expect POST create contract" ]
-    currentTime <- now
+
     expectJsonRequest ado
       expectMethod POST
       expectUri $ "/pab/api/contract/instance/" <> marloweAppId <>
         "/endpoint/create"
       expectJsonContent $
-        [ encodeJson $ mockUUID 1
+        [ encodeJson createContractUUID
         , mockRolesPayload roles
-        , mockContract currentTime
+        -- WARNING: This is currently hardcoded to the loan contract.
+        , mockLoanContract
+            { amount: BigInt.fromInt 10000000
+            , interest: BigInt.fromInt 1000000
+            }
+            contractCreatedTime
         ]
       in
         [] :: Array Json
+
+  expectContractCreatedWS createContractUUID =
+    expectMarloweAppEndpointSuccess marloweAppId createContractUUID
+      $ encodeJson
+          { "contents": marloweParams currencySymbol rolePayoutValidatorHash
+          , "tag": "CreateResponse"
+          }
+
+  expectWalletCompanionUpdate contractCreatedTime = do
+    tell [ "Receive websocket message: Wallet companion update" ]
+    pabWebsocketReceive
+      $ observableState walletCompanionId
+      $ encodeJson
+          [ [ marloweParams currencySymbol rolePayoutValidatorHash
+            , encodeJson
+                { marloweState:
+                    { "choices": [] :: Array String
+                    , "boundValues": [] :: Array String
+                    , "accounts":
+                        [ [ encodeJson
+                              [ encodeJson
+                                  { "pk_hash":
+                                      "e08cfb83f317447d18fad74ce06eab5a91d44480d0f7459abc187136"
+                                  }
+                              , encodeJson
+                                  { "currency_symbol": ""
+                                  , "token_name": ""
+                                  }
+                              ]
+                          , encodeJson 2000000
+                          ]
+                        ]
+                    , "minTime": adjustInstant 0.0 contractCreatedTime
+                    }
+                -- WARNING: This is currently hardcoded to the loan contract.
+                , marloweContract: mockLoanContract2
+                    { amount: 10000000
+                    , interest: 1000000
+                    }
+                    contractCreatedTime
+                }
+            ]
+          ]
+
+  expectFollowerContract = do
+    expectPlutusContractActivation walletId MarloweFollower followerId
+    expectPlutusContractSubscribe followerId
+
+expectMarloweAppEndpointSuccess
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadTell (Array String) m
+  => PlutusAppId
+  -> UUID
+  -> Json
+  -> m Unit
+expectMarloweAppEndpointSuccess controlAppId reqId content = do
+  tell [ "Receive websocket message: Create contract success" ]
+  pabWebsocketReceive
+    $ observableState controlAppId
+    $ encodeJson
+        { "contents":
+            [ encodeJson reqId
+            , content
+            ]
+        , "tag": "EndpointSuccess"
+        }
+
+marloweParams :: CurrencySymbol -> ScriptHash -> Json
+marloweParams currencySymbol rolePayoutValidatorHash =
+  encodeJson
+    { "rolesCurrency": { "unCurrencySymbol": currencySymbol }
+    , "rolePayoutValidatorHash": rolePayoutValidatorHash
+    }
+
+observableState :: PlutusAppId -> Json -> Json
+observableState plutusAppId state =
+  encodeJson
+    { "contents":
+        [ encodeJson
+            { "unContractInstanceId": plutusAppId
+            }
+        , encodeJson
+            { "contents": state
+            , "tag": "NewObservableState"
+            }
+        ]
+    , "tag": "InstanceUpdate"
+    }
 
 mockRolesPayload :: Array ContractRoles -> Json
 mockRolesPayload roles = encodeJson encodedRoles
@@ -390,8 +509,8 @@ adjustInstant offset initial =
     $ maybe initial fromDateTime
     $ adjust (Milliseconds offset) (toDateTime initial)
 
-mockContract :: Instant -> Json
-mockContract currentTime = encodeJson
+mockLoanContract :: { interest :: BigInt, amount :: BigInt } -> Instant -> Json
+mockLoanContract { interest, amount } currentTime = encodeJson
   { "when":
       [ { "then":
             { "token": { "token_name": "", "currency_symbol": "" }
@@ -403,8 +522,8 @@ mockContract currentTime = encodeJson
                           , "to": { "party": { "role_token": "Lender" } }
                           , "then": "close"
                           , "pay":
-                              { "and": BigInt.fromInt 10000000
-                              , "add": BigInt.fromInt 1000000
+                              { "and": amount
+                              , "add": interest
                               }
                           , "from_account": { "role_token": "Borrower" }
                           }
@@ -414,8 +533,8 @@ mockContract currentTime = encodeJson
                               { "token_name": "", "currency_symbol": "" }
                           , "into_account": { "role_token": "Borrower" }
                           , "deposits":
-                              { "and": BigInt.fromInt 10000000
-                              , "add": BigInt.fromInt 1000000
+                              { "and": amount
+                              , "add": interest
                               }
                           }
                       }
@@ -423,14 +542,62 @@ mockContract currentTime = encodeJson
                 , "timeout_continuation": "close"
                 , "timeout": adjustInstant 1500000.0 currentTime
                 }
-            , "pay": BigInt.fromInt 10000000
+            , "pay": amount
             , "from_account": { "role_token": "Lender" }
             }
         , "case":
             { "party": { "role_token": "Lender" }
             , "of_token": { "token_name": "", "currency_symbol": "" }
             , "into_account": { "role_token": "Lender" }
-            , "deposits": BigInt.fromInt 10000000
+            , "deposits": amount
+            }
+        }
+      ]
+  , "timeout_continuation": "close"
+  , "timeout": adjustInstant 600000.0 currentTime
+  }
+
+mockLoanContract2 :: { interest :: Int, amount :: Int } -> Instant -> Json
+mockLoanContract2 { interest, amount } currentTime = encodeJson
+  { "when":
+      [ { "then":
+            { "token": { "token_name": "", "currency_symbol": "" }
+            , "to": { "party": { "role_token": "Borrower" } }
+            , "then":
+                { "when":
+                    [ { "then":
+                          { "token": { "token_name": "", "currency_symbol": "" }
+                          , "to": { "party": { "role_token": "Lender" } }
+                          , "then": "close"
+                          , "pay":
+                              { "and": amount
+                              , "add": interest
+                              }
+                          , "from_account": { "role_token": "Borrower" }
+                          }
+                      , "case":
+                          { "party": { "role_token": "Borrower" }
+                          , "of_token":
+                              { "token_name": "", "currency_symbol": "" }
+                          , "into_account": { "role_token": "Borrower" }
+                          , "deposits":
+                              { "and": amount
+                              , "add": interest
+                              }
+                          }
+                      }
+                    ]
+                , "timeout_continuation": "close"
+                , "timeout": adjustInstant 1500000.0 currentTime
+                }
+            , "pay": amount
+            , "from_account": { "role_token": "Lender" }
+            }
+        , "case":
+            { "party": { "role_token": "Lender" }
+            , "of_token": { "token_name": "", "currency_symbol": "" }
+            , "into_account": { "role_token": "Lender" }
+            , "deposits": amount
             }
         }
       ]
@@ -523,6 +690,7 @@ expectNewActiveEndpoints
   -> Array EndpointName
   -> m Unit
 expectNewActiveEndpoints plutusAppId endpoints = do
+  tell [ "Receive websocket message: New endpoints for " <> plutusAppId ]
   pabWebsocketReceive
     { "contents":
         [ encodeJson
@@ -729,7 +897,6 @@ pabWebsocketReceive
   => a
   -> m Unit
 pabWebsocketReceive payload = do
-  tell [ "Receive websocket message: " <> encodeStringifyJson payload ]
   listener <- asks _.pabWebsocketIn
   liftEffect $ notify listener
     (ReceiveMessage $ decodeJson $ encodeJson payload)

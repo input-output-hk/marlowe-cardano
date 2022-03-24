@@ -65,7 +65,12 @@ import Test.Control.Monad.Time
   , MockTimeM
   , runMockTimeM
   )
-import Test.Control.Monad.UUID (MockUuidEnv, MockUuidM, runMockUuidM)
+import Test.Control.Monad.UUID
+  ( class MonadMockUUID
+  , MockUuidEnv
+  , MockUuidM
+  , runMockUuidM
+  )
 import Test.Halogen (class MonadHalogenTest, runUITest)
 import Test.Marlowe.Run.Action.Types
   ( Address
@@ -93,6 +98,7 @@ marloweRunTest
        => MonadHalogenTest MF.Query Unit MF.Msg m
        => MonadMockHTTP m
        => MonadMockTime m
+       => MonadMockUUID m
        => MonadTime m
        => m Unit
      )
@@ -111,6 +117,7 @@ marloweRunTestWith
        => MonadHalogenTest MF.Query Unit MF.Msg m
        => MonadMockHTTP m
        => MonadMockTime m
+       => MonadMockUUID m
        => MonadTime m
        => m Unit
      )
@@ -124,7 +131,7 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
       clocks <- liftEffect $ Ref.new Map.empty
       nowRef <- liftEffect $ Ref.new unixEpoch
       nextClockId <- liftEffect $ Ref.new 0
-      uuidRef <- liftEffect $ Ref.new 1
+      uuidRef <- liftEffect $ Ref.new Nothing
       let mockTimeEnv = { clocks, nowRef, tzOffset: Minutes zero, nextClockId }
       let mockUuidEnv = { uuidRef }
       let
@@ -185,6 +192,7 @@ derive newtype instance
   MonadMockTime (MarloweTestM m)
 
 derive newtype instance MonadEffect m => MonadTime (MarloweTestM m)
+derive newtype instance MonadEffect m => MonadMockUUID (MarloweTestM m)
 
 runMarloweTestM
   :: forall m a

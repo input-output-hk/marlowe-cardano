@@ -1,11 +1,12 @@
 module Test.Marlowe.Run.Action.Types
-  ( AppInstance
-  , Address
+  ( Address
+  , AppInstance
   , ContractField
-  , ContractRoles
   , ContractNickname
+  , ContractRoles
   , CreateContractRecord
   , CreateWalletRecord
+  , CurrencySymbol
   , FieldName
   , FieldValue
   , HttpExpect(..)
@@ -18,6 +19,7 @@ module Test.Marlowe.Run.Action.Types
   , PlutusAppId
   , PubKeyHash
   , ScriptError(..)
+  , ScriptHash
   , TemplateName
   , WalletId
   , WalletMnemonic
@@ -77,6 +79,8 @@ type ContractNickname = String
 type FieldName = String
 type FieldValue = String
 type EndpointName = String
+type CurrencySymbol = String
+type ScriptHash = String
 type ContractField =
   { name :: FieldName
   , value :: FieldValue
@@ -233,6 +237,11 @@ type CreateContractRecord =
   , fields :: Array ContractField
   , roles :: Array ContractRoles
   , marloweAppId :: PlutusAppId
+  , followerId :: PlutusAppId
+  , walletCompanionId :: PlutusAppId
+  , walletId :: WalletId
+  , currencySymbol :: CurrencySymbol
+  , rolePayoutValidatorHash :: ScriptHash
   }
 
 type AppInstance = { type :: MarloweContract, instanceId :: PlutusAppId }

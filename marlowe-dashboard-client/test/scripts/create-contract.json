@@ -51,7 +51,12 @@
           {"name":"amount", "value":"10", "role": "spinbutton"},
           {"name":"interest", "value":"1", "role": "spinbutton"}
         ],
-        "marloweAppId": "888bdf70-56ff-49fb-a83f-ad8041d0617e"
+        "walletId": "06e8f9abeb55ceb6a137c6e4391c36143f8f7be4",
+        "marloweAppId": "888bdf70-56ff-49fb-a83f-ad8041d0617e",
+        "walletCompanionId": "cb7910b4-070a-4c48-9d44-34d67948e04c",
+        "followerId": "cd4e0b30-7923-47b6-a4ac-824e5401f3cc",
+        "currencySymbol": "76b0c51b8e52d81741f81e64a06a7392b31bdfd8ce25d5d8b920c690",
+        "rolePayoutValidatorHash": "af20884154c20e90f8ec42ff8f8bdc06f4d76c271d03cbf715abb3e8"
       }
     }
   ]

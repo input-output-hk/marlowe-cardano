@@ -288,7 +288,7 @@ handleAction input@{ wallet } (TemplateAction templateAction) =
                   currentInstant
                   followerId
                   history
-              addToast $ successToast "Contract initialised."
+              addToast $ successToast "Contract initialized."
               -- If the UI is showing the Starting contract we change the index to
               -- show the newly Started contract
               let
