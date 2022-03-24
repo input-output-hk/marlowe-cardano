@@ -364,7 +364,16 @@ marlowePlutusContract = selectList [create, apply, applyNonmerkleized, auto, red
         utx <- either (throwing _ConstraintResolutionContractError) pure (Constraints.mkTx lookups tx)
         -- TODO: Move to debug log.
         logInfo $ "[DEBUG:create] utx = " <> show utx
-        submitTxConfirmed utx
+        btx <- balanceTx $ Constraints.adjustUnbalancedTx utx
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] btx = " <> show btx
+        stx <- submitBalancedTx btx
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] stx = " <> show stx
+        let txId = Tx.getCardanoTxId stx
+        awaitTxConfirmed txId
+        -- TODO: Move to debug log.
+        logInfo $ "[DEBUG:create] txId = " <> show txId
         logInfo $ "MarloweApp contract creation confirmed for parameters " <> show params <> "."
         tell $ Just $ EndpointSuccess reqId $ CreateResponse params
         marlowePlutusContract
@@ -837,12 +846,21 @@ mkStep MarloweParams{..} typedValidator timeInterval@(minTime, maxTime) clientIn
                         (Constraints.mkTx lookups allConstraints)
             let utx' = utx
                         {
-                            unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
+                          unBalancedTxTx = (unBalancedTxTx utx) {Tx.txValidRange = range'}
                         , unBalancedTxValidityTimeRange = times
                         }
             -- TODO: Move to debug log.
             logInfo $ "[DEBUG:mkStep] utx' = " <> show utx'
-            submitTxConfirmed $ Constraints.adjustUnbalancedTx utx'
+            btx <- balanceTx $ Constraints.adjustUnbalancedTx utx'
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] btx = " <> show btx
+            stx <- submitBalancedTx btx
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] stx = " <> show stx
+            let txId = Tx.getCardanoTxId stx
+            awaitTxConfirmed txId
+            -- TODO: Move to debug log.
+            logInfo $ "[DEBUG:mkStep] txId = " <> show txId
             pure marloweData
   where
     evaluateTxContstraints :: MarloweData
