@@ -1,32 +1,4 @@
-module Test.Marlowe.Run.Action.Types
-  ( Address
-  , AppInstance
-  , ContractField
-  , ContractNickname
-  , ContractRoles
-  , CreateContractRecord
-  , CreateWalletRecord
-  , CurrencySymbol
-  , FieldName
-  , FieldValue
-  , HttpExpect(..)
-  , HttpExpectContent(..)
-  , HttpRespond(..)
-  , HttpRespondContent(..)
-  , JsonMethod(..)
-  , MarloweRunAction(..)
-  , MarloweRunScript
-  , PlutusAppId
-  , PubKeyHash
-  , ScriptError(..)
-  , ScriptHash
-  , TemplateName
-  , WalletId
-  , WalletMnemonic
-  , WalletName
-  , renderScriptError
-  , unJsonMethod
-  ) where
+module Test.Marlowe.Run.Action.Types where
 
 import Prologue
 
@@ -53,6 +25,7 @@ import Data.Either (either)
 import Data.Generic.Rep (class Generic)
 import Data.HTTP.Method (Method)
 import Data.HTTP.Method as Method
+import Data.Lens (Prism', prism')
 import Data.Maybe (maybe)
 import Data.Show.Generic (genericShow)
 import Data.String
@@ -64,8 +37,11 @@ import Data.String
   , take
   )
 import Data.Time.Duration (Milliseconds)
+import Data.Tuple (uncurry)
+import Data.UUID.Argonaut (UUID)
 import Effect.Aff (Error, message)
-import MarloweContract (MarloweContract)
+import Language.Marlowe.Client (ContractHistory)
+import MarloweContract (MarloweContract(..))
 import Web.ARIA (ARIARole)
 
 type WalletName = String
@@ -73,7 +49,7 @@ type WalletMnemonic = String
 type WalletId = String
 type PubKeyHash = String
 type Address = String
-type PlutusAppId = String
+type PlutusAppId = UUID
 type TemplateName = String
 type ContractNickname = String
 type FieldName = String
@@ -244,7 +220,54 @@ type CreateContractRecord =
   , rolePayoutValidatorHash :: ScriptHash
   }
 
-type AppInstance = { type :: MarloweContract, instanceId :: PlutusAppId }
+data AppInstance
+  = MarloweAppInstance PlutusAppId
+  | WalletCompanionInstance PlutusAppId
+  | MarloweFollowerInstance PlutusAppId ContractHistory
+
+_MarloweAppInstance :: Prism' AppInstance PlutusAppId
+_MarloweAppInstance = prism' MarloweAppInstance case _ of
+  MarloweAppInstance id -> Just id
+  _ -> Nothing
+
+_WalletCompanionInstance :: Prism' AppInstance PlutusAppId
+_WalletCompanionInstance = prism' WalletCompanionInstance case _ of
+  WalletCompanionInstance id -> Just id
+  _ -> Nothing
+
+_MarloweFollowerInstance
+  :: Prism' AppInstance (Tuple PlutusAppId ContractHistory)
+_MarloweFollowerInstance = prism' (uncurry MarloweFollowerInstance) case _ of
+  MarloweFollowerInstance id history -> Just $ Tuple id history
+  _ -> Nothing
+
+instance DecodeJson AppInstance where
+  decodeJson json = do
+    obj <- decodeJson json
+    appType <- obj .: "type"
+    case appType of
+      MarloweApp -> lmap (Named "MarloweAppInstance") $
+        MarloweAppInstance <$> obj .: "instanceId"
+      WalletCompanion -> lmap (Named "WalletCompanionInstance") $
+        WalletCompanionInstance <$> obj .: "instanceId"
+      MarloweFollower -> lmap (Named "MarloweFollowerInstance") $
+        MarloweFollowerInstance
+          <$> obj .: "instanceId"
+          <*> obj .: "history"
+
+instance EncodeJson AppInstance where
+  encodeJson = case _ of
+    MarloweAppInstance instanceId -> encodeJson
+      { type: MarloweApp, instanceId }
+    WalletCompanionInstance instanceId -> encodeJson
+      { type: WalletCompanion, instanceId }
+    MarloweFollowerInstance instanceId history -> encodeJson
+      { type: MarloweFollower, instanceId, history }
+
+derive instance Generic AppInstance _
+derive instance Eq AppInstance
+instance Show AppInstance where
+  show = genericShow
 
 data MarloweRunAction
   = CreateWallet CreateWalletRecord
@@ -253,10 +276,10 @@ data MarloweRunAction
   | AddContact { walletName :: WalletName, address :: Address }
   | DropWallet { walletId :: WalletId }
   | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
+  | ExpectNoHTTPCall
 
-derive instance Eq MarloweRunAction
--- derive instance Ord MarloweRunAction
 derive instance Generic MarloweRunAction _
+derive instance Eq MarloweRunAction
 
 instance Show MarloweRunAction where
   show = case _ of
@@ -266,6 +289,7 @@ instance Show MarloweRunAction where
     FundWallet a -> "(FundWallet " <> show a <> ")"
     AddContact a -> "(AddContact " <> show a <> ")"
     RestoreWallet a -> "(RestoreWallet " <> show a <> ")"
+    ExpectNoHTTPCall -> "ExpectNoHTTPCall"
 
 instance DecodeJson MarloweRunAction where
   decodeJson json = do
@@ -284,6 +308,8 @@ instance DecodeJson MarloweRunAction where
         lmap (Named "AddContact") $ AddContact <$> obj .: "content"
       "RestoreWallet" ->
         lmap (Named "RestoreWallet") $ RestoreWallet <$> obj .: "content"
+      "ExpectNoHTTPCall" ->
+        pure ExpectNoHTTPCall
       _ ->
         Left $ Named "tag" $ UnexpectedValue $ encodeJson tag
 
@@ -295,6 +321,7 @@ instance EncodeJson MarloweRunAction where
     FundWallet content -> encodeJson { tag: "FundWallet", content }
     AddContact content -> encodeJson { tag: "AddContact", content }
     RestoreWallet content -> encodeJson { tag: "RestoreWallet", content }
+    ExpectNoHTTPCall -> encodeJson { tag: "ExpectNoHTTPCall" }
 
 type MarloweRunScript = Array (Tuple Milliseconds MarloweRunAction)
 

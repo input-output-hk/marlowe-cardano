@@ -14,6 +14,7 @@ module Test.Network.HTTP
   , expectMaybe
   , expectMethod
   , expectNoContent
+  , expectNoRequest
   , expectRequest
   , expectRequest'
   , expectTextContent
@@ -161,7 +162,26 @@ derive newtype instance
 
 derive newtype instance MonadUser m => MonadUser (MockHttpM m)
 
+awaitNextRequest :: forall m. MonadAff m => MockHttpM m (Maybe RequestBox)
+awaitNextRequest = do
+  requests <- MockHttpM ask
+  liftAff $ parOneOf
+    [ Just <$> Queue.read requests
+    , Nothing <$ delay (Milliseconds 100.0)
+    ]
+
 instance (MonadThrow Error m, MonadAff m) => MonadMockHTTP (MockHttpM m) where
+  expectNoRequest = do
+    mRequest <- awaitNextRequest
+    case mRequest of
+      Nothing ->
+        pure unit
+      Just request ->
+        throwError
+          $ error
+          $ renderMatcherError request
+          $ MatcherError [ "Unexpected HTTP request." ]
+
   expectRequest responseFormat matcher = do
     requests <- MockHttpM ask
     mRequest <- liftAff $ parOneOf
@@ -212,6 +232,7 @@ instance MonadReader r m => MonadReader r (MockHttpM m) where
   local f (MockHttpM (ReaderT r)) = MockHttpM $ ReaderT $ local f <<< r
 
 class Monad m <= MonadMockHTTP m where
+  expectNoRequest :: m Unit
   expectRequest
     :: forall a
      . ResponseFormat a
@@ -219,24 +240,31 @@ class Monad m <= MonadMockHTTP m where
     -> m Unit
 
 instance MonadMockHTTP m => MonadMockHTTP (ReaderT r m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance (Monoid w, MonadMockHTTP m) => MonadMockHTTP (WriterT w m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (StateT s m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (ContT r m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (ExceptT e m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance MonadMockHTTP m => MonadMockHTTP (MaybeT m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 instance (Monoid w, MonadMockHTTP m) => MonadMockHTTP (RWST r w s m) where
+  expectNoRequest = lift expectNoRequest
   expectRequest = map (map lift) expectRequest
 
 expectTextRequest

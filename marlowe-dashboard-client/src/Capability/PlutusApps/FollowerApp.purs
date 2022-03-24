@@ -91,6 +91,7 @@ instance
         newIO <- liftEffect $ HS.create
         emitterWasPut <-
           AVarMap.tryPut marloweParams newIO.emitter followerAVarMap
+
         runExceptT
           if emitterWasPut then do
             result <- try do

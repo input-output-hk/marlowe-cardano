@@ -31,12 +31,14 @@ import Data.Bimap as Bimap
 import Data.DateTime (adjust)
 import Data.DateTime.Instant (Instant, fromDateTime, toDateTime, unInstant)
 import Data.Either (either)
-import Data.Foldable (foldM, for_, traverse_)
+import Data.Foldable (class Foldable, foldM, for_, traverse_)
 import Data.HTTP.Method (Method(..))
 import Data.Int (floor)
+import Data.Lens (_2, traversed, view, (^..), (^?))
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.Newtype (over2, unwrap)
+import Data.Profunctor.Strong ((&&&))
 import Data.String
   ( Pattern(..)
   , Replacement(..)
@@ -50,24 +52,33 @@ import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Data.UUID.Argonaut (UUID)
 import Data.Undefinable (toUndefinable)
 import Effect.Aff (Error, delay, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
 import Halogen.Subscription (notify)
+import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Client (_chInitialData, _chParams)
+import Marlowe.PAB (PlutusAppId(..)) as PAB
 import Marlowe.Semantics (Assets(..))
 import MarloweContract (MarloweContract(..))
 import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
+import Plutus.Contract.Effects (ActiveEndpoint(..))
+import Plutus.PAB.Webserver.Types
+  ( CombinedWSStreamToClient(..)
+  , CombinedWSStreamToServer(..)
+  , InstanceStatusToClient(..)
+  )
+import Servant.PureScript (toPathSegment)
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Control.Monad.UUID (class MonadMockUUID, mkTestUUID)
 import Test.Marlowe.Run (Coenv, fundWallet, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
-  , AppInstance
+  , AppInstance(..)
   , ContractRoles
   , CreateContractRecord
   , CreateWalletRecord
@@ -79,6 +90,8 @@ import Test.Marlowe.Run.Action.Types
   , ScriptHash
   , WalletId
   , WalletName
+  , _MarloweFollowerInstance
+  , _WalletCompanionInstance
   , renderScriptError
   )
 import Test.Network.HTTP
@@ -87,6 +100,7 @@ import Test.Network.HTTP
   , expectJsonContent
   , expectJsonRequest
   , expectMethod
+  , expectNoRequest
   , expectUri
   , renderMatcherError
   )
@@ -96,6 +110,7 @@ import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
 import Test.Web.Event.User (click, clickM, type_)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
+import Wallet.Types (EndpointDescription(..))
 import Web.ARIA (ARIARole(..))
 import WebSocket.Support (FromSocket(..))
 
@@ -208,6 +223,7 @@ evalAction = case _ of
   FundWallet { walletName, lovelace } -> fundWallet walletName "" "" lovelace
   AddContact params -> addContact params
   RestoreWallet params -> restore params
+  ExpectNoHTTPCall -> expectNoRequest
 
 dropWallet
   :: forall m
@@ -390,8 +406,9 @@ createContract
 
     expectJsonRequest ado
       expectMethod POST
-      expectUri $ "/pab/api/contract/instance/" <> marloweAppId <>
-        "/endpoint/create"
+      expectUri $ "/pab/api/contract/instance/"
+        <> toPathSegment (PAB.PlutusAppId marloweAppId)
+        <> "/endpoint/create"
       expectJsonContent $
         [ encodeJson createContractUUID
         , mockRolesPayload roles
@@ -415,7 +432,7 @@ createContract
   expectWalletCompanionUpdate contractCreatedTime = do
     tell [ "Receive websocket message: Wallet companion update" ]
     pabWebsocketReceive
-      $ observableState walletCompanionId
+      $ newObservableState walletCompanionId
       $ encodeJson
           [ [ marloweParams currencySymbol rolePayoutValidatorHash
             , encodeJson
@@ -450,7 +467,7 @@ createContract
 
   expectFollowerContract = do
     expectPlutusContractActivation walletId MarloweFollower followerId
-    expectPlutusContractSubscribe followerId
+    expectPlutusContractSubscribe followerId [ "follow" ]
 
 expectMarloweAppEndpointSuccess
   :: forall m
@@ -458,13 +475,13 @@ expectMarloweAppEndpointSuccess
   => MonadEffect m
   => MonadTell (Array String) m
   => PlutusAppId
-  -> UUID
+  -> PlutusAppId
   -> Json
   -> m Unit
 expectMarloweAppEndpointSuccess controlAppId reqId content = do
   tell [ "Receive websocket message: Create contract success" ]
   pabWebsocketReceive
-    $ observableState controlAppId
+    $ newObservableState controlAppId
     $ encodeJson
         { "contents":
             [ encodeJson reqId
@@ -480,13 +497,11 @@ marloweParams currencySymbol rolePayoutValidatorHash =
     , "rolePayoutValidatorHash": rolePayoutValidatorHash
     }
 
-observableState :: PlutusAppId -> Json -> Json
-observableState plutusAppId state =
+newObservableState :: PlutusAppId -> Json -> Json
+newObservableState plutusAppId state =
   encodeJson
     { "contents":
-        [ encodeJson
-            { "unContractInstanceId": plutusAppId
-            }
+        [ encodeJson $ PAB.PlutusAppId plutusAppId
         , encodeJson
             { "contents": state
             , "tag": "NewObservableState"
@@ -642,12 +657,37 @@ expectPlutusContractSubscribe
   => MonadAff m
   => MonadAsk Coenv m
   => PlutusAppId
+  -> Array String
   -> m Unit
-expectPlutusContractSubscribe plutusAppId = do
-  expectPabWebsocketSend
-    { tag: "Subscribe"
-    , contents: { "Left": { unContractInstanceId: plutusAppId } }
-    }
+expectPlutusContractSubscribe instanceId endpoints = do
+  expectPabWebsocketSend $ Subscribe $ Left $ PAB.PlutusAppId instanceId
+  pabWebsocketReceive
+    $ InstanceUpdate (PAB.PlutusAppId instanceId)
+    $ NewActiveEndpoints
+    $ map
+        ( ActiveEndpoint
+            <<< { aeMetadata: Nothing, aeDescription: _ }
+            <<< EndpointDescription
+            <<< { getEndpointDescription: _ }
+        )
+        endpoints
+
+expectInstanceSubscribe
+  :: forall m
+   . MonadMockHTTP m
+  => MonadError Error m
+  => MonadTell (Array String) m
+  => MonadAff m
+  => MonadAsk Coenv m
+  => AppInstance
+  -> m Unit
+expectInstanceSubscribe = case _ of
+  MarloweAppInstance instanceId ->
+    expectPlutusContractSubscribe instanceId marloweAppEndpoints
+  WalletCompanionInstance instanceId ->
+    expectPlutusContractSubscribe instanceId []
+  MarloweFollowerInstance instanceId _ -> do
+    expectPlutusContractSubscribe instanceId [ "follow" ]
 
 expectPlutusContractActivation
   :: forall m
@@ -669,7 +709,7 @@ expectPlutusContractActivation walletId contractType plutusAppId = do
       { caWallet: { prettyWalletName: jsonNull, getWalletId: walletId }
       , caID: encodeJson contractType
       }
-    in { unContractInstanceId: plutusAppId }
+    in PAB.PlutusAppId plutusAppId
 
 marloweAppEndpoints :: Array EndpointName
 marloweAppEndpoints =
@@ -680,35 +720,6 @@ marloweAppEndpoints =
   , "apply-inputs"
   , "create"
   ]
-
-expectNewActiveEndpoints
-  :: forall m
-   . MonadAsk Coenv m
-  => MonadError Error m
-  => MonadTell (Array String) m
-  => MonadAff m
-  => PlutusAppId
-  -> Array EndpointName
-  -> m Unit
-expectNewActiveEndpoints plutusAppId endpoints = do
-  tell [ "Receive websocket message: New endpoints for " <> plutusAppId ]
-  pabWebsocketReceive
-    { "contents":
-        [ encodeJson
-            { "unContractInstanceId": plutusAppId }
-        , encodeJson
-            { "contents":
-                endpoints <#> \endpointName ->
-                  { "aeMetadata": jsonNull
-                  , "aeDescription":
-                      { "getEndpointDescription": endpointName
-                      }
-                  }
-            , "tag": "NewActiveEndpoints"
-            }
-        ]
-    , "tag": "InstanceUpdate"
-    }
 
 createWallet
   :: forall m
@@ -800,10 +811,8 @@ createWallet
       in ([] :: Array Json)
     expectPlutusContractActivation walletId WalletCompanion walletCompanionId
     expectPlutusContractActivation walletId MarloweApp marloweAppId
-    expectPlutusContractSubscribe walletCompanionId
-    expectPlutusContractSubscribe marloweAppId
-    expectNewActiveEndpoints walletCompanionId []
-    expectNewActiveEndpoints marloweAppId marloweAppEndpoints
+    expectPlutusContractSubscribe walletCompanionId []
+    expectPlutusContractSubscribe marloweAppId marloweAppEndpoints
 
 restore
   :: forall m
@@ -867,27 +876,59 @@ restore { instances, walletName } = do
     expectJsonRequest ado
       expectMethod GET
       expectUri $ "/pab/api/contract/instances/wallet/" <> walletId <> "?"
-      in
-        instances <#> \{ type: contractType, instanceId } ->
-          { cicWallet:
-              { prettyWalletName: jsonNull
-              , getWalletId: walletId
-              }
-          , cicCurrentState:
-              { lastLogs: jsonEmptyArray
-              , err: jsonNull
-              , hooks: jsonEmptyArray
-              , logs: jsonEmptyArray
-              , observableState: jsonEmptyArray
-              }
-          , cicContract:
-              { unContractInstanceId: instanceId
-              }
-          , cicStatus: "Active"
-          , cicYieldedExportTxs: jsonEmptyArray
-          , cicDefinition: contractType
-          }
-    traverse_ (expectPlutusContractSubscribe <<< _.instanceId) instances
+      in instanceToJson walletId <$> instances
+    traverse_ expectInstanceSubscribe instances
+    let
+      mCompanion = instances ^? traversed <<< _WalletCompanionInstance
+      followerPayloads =
+        instances ^.. traversed <<< _MarloweFollowerInstance <<< _2
+    traverse_ (sendWalletCompanionUpdate followerPayloads) mCompanion
+
+sendWalletCompanionUpdate
+  :: forall f m
+   . Foldable f
+  => Functor f
+  => MonadAsk Coenv m
+  => MonadTell (Array String) m
+  => MonadEffect m
+  => f ContractHistory
+  -> PlutusAppId
+  -> m Unit
+sendWalletCompanionUpdate histories companionId = pabWebsocketReceive
+  $ InstanceUpdate (PAB.PlutusAppId companionId)
+  $ NewObservableState
+  $ encodeJson
+  $ Map.fromFoldable
+  $ map (view _chParams &&& view _chInitialData) histories
+
+instanceToJson :: WalletId -> AppInstance -> Json
+instanceToJson walletId = case _ of
+  MarloweAppInstance instanceId ->
+    template MarloweApp instanceId jsonEmptyArray
+  WalletCompanionInstance instanceId ->
+    template WalletCompanion instanceId jsonEmptyArray
+  MarloweFollowerInstance instanceId history ->
+    template MarloweFollower instanceId $ encodeJson history
+  where
+  template cicDefinition instanceId observableState = encodeJson
+    { cicWallet:
+        { prettyWalletName: jsonNull
+        , getWalletId: walletId
+        }
+    , cicCurrentState:
+        { lastLogs: jsonEmptyArray
+        , err: jsonNull
+        , hooks: jsonEmptyArray
+        , logs: jsonEmptyArray
+        , observableState
+        }
+    , cicContract:
+        { unContractInstanceId: instanceId
+        }
+    , cicStatus: "Active"
+    , cicYieldedExportTxs: jsonEmptyArray
+    , cicDefinition
+    }
 
 pabWebsocketReceive
   :: forall m a

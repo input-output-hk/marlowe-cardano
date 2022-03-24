@@ -427,8 +427,7 @@ handleAction (CompanionAppStateUpdated companionAppState) = do
   wallet <- use _wallet
   walletCompanionStatus <- use _walletCompanionStatus
   let
-    contractExists marloweParams = followerContractExists marloweParams
-      contracts
+    contractExists = flip followerContractExists contracts
 
     newContracts = filterKeys (not contractExists) companionAppState
 

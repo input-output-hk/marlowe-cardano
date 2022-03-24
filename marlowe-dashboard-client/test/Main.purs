@@ -22,7 +22,7 @@ import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
 import Test.Marlowe.Run.Action.Eval (runScriptedTest)
-import Test.Spec (Spec, describe, it, parallel)
+import Test.Spec (Spec, describe, it, parallel, pending)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (defaultConfig, runSpec')
@@ -52,8 +52,8 @@ main = launchAff_ $ runSpec'
 testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do
   runScriptedTest "create-and-restore-wallet"
-
--- runScriptedTest "create-contract"
+  runScriptedTest "restore-existing-follower"
+  pending "create-contract"
 
 -------------------------------------------------------------------------------
 -- Demo tests for purescript-testing-library
