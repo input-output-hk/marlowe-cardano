@@ -17,6 +17,7 @@ module Control.Concurrent.AVarMap
   , status
   , take
   , traceStatus
+  , traceStatusWith
   , tryPut
   , tryRead
   , tryTake
@@ -79,12 +80,24 @@ traceStatus
   => MonadAff m
   => AVarMap k v
   -> m Unit
-traceStatus avarMap = do
+traceStatus = traceStatusWith show
+
+-- | Print the status of the AVar map to the console.
+traceStatusWith
+  :: forall m k v
+   . EncodeJson k
+  => DebugWarning
+  => Ord k
+  => MonadAff m
+  => (v -> String)
+  -> AVarMap k v
+  -> m Unit
+traceStatusWith showValue avarMap = do
   statuses <- status avarMap
   traceM $ encodeJson $ showStatus <$> statuses
   where
   showStatus = case _ of
-    AVar.Filled a -> "(Filled " <> show a <> ")"
+    AVar.Filled a -> "(Filled " <> showValue a <> ")"
     AVar.Killed e -> "(Killed " <> show e <> ")"
     AVar.Empty -> "Empty"
 
@@ -170,15 +183,19 @@ put k v (AVarMap avarsA) = liftAff do
 
 -- | Try to put a value into the AVar at the given key. This call will not block
 -- | if the value of the AVar at the key has been taken, it will return false
--- | instead. If the key is not present in the map, false will be returned and
--- | the map will not be modified.
+-- | instead. If the key is not present in the map, a new, filled AVar will be
+-- | inserted.
 tryPut
   :: forall m k v. Ord k => MonadAff m => k -> v -> AVarMap k v -> m Boolean
 tryPut k v (AVarMap avarsA) = liftAff do
-  avars <- AVar.read avarsA
-  case Map.lookup k avars of
-    Nothing -> pure false
-    Just avar -> supervise $ AVar.tryPut v avar
+  aff <- avarsA # modifyAVarM' \avars ->
+    case Map.lookup k avars of
+      Nothing -> do
+        avar <- AVar.new v
+        pure { result: pure true, value: Map.insert k avar avars }
+      Just avar -> do
+        pure { result: AVar.tryPut v avar, value: avars }
+  supervise aff
 
 -- | Read the AVar at the given key. This call will block if A. the
 -- | avar for the key is empty or B. the key is not found in the map. If the
