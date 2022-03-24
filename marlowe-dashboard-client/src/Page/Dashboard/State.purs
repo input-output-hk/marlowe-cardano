@@ -38,6 +38,7 @@ import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
+import Control.Parallel (parTraverse_)
 import Control.React (onFinalize, onInitialize, onPartialChange)
 import Data.Argonaut (Json, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
@@ -148,11 +149,13 @@ subscribeToPlutusApps = do
   -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
   -- Get notified of new contracts
   subscribeToPlutusApp companionAppId
+
   -- Get notified of the results of our control app
   subscribeToPlutusApp marloweAppId
   Logger.info' $ "Subscribed to companion app " <> show companionAppId
     <> " and control app "
     <> show marloweAppId
+
   -- subscribe to followers
   traverse_ (subscribeToPlutusApp <<< snd) initialFollowers
   Logger.info' $ "Subscribed to follower apps "
@@ -436,7 +439,7 @@ handleAction (CompanionAppStateUpdated companionAppState) = do
   when (walletCompanionStatus == WaitingToSync) $ assign
     _walletCompanionStatus
     WalletCompanionSynced
-  for_ newContractsArray \(marloweParams /\ _) ->
+  flip parTraverse_ newContractsArray \(marloweParams /\ _) ->
     ensureFollowerContract wallet marloweParams
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
@@ -444,8 +447,7 @@ handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-3][1] Apply an input to a contract -}
   FollowerApp.onNewObservableState plutusAppId contractHistory
   {- [UC-CONTRACT-4][0] Redeem payments -}
-  let
-    marloweParams = getMarloweParams contractHistory
+  let marloweParams = getMarloweParams contractHistory
   handleAction $ RedeemPayments marloweParams
 
 {- [UC-CONTRACT-1][2] Starting a Marlowe contract
