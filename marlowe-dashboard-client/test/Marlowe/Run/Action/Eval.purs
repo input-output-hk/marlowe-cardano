@@ -52,6 +52,7 @@ import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
+import Data.UUID.Argonaut as UUID
 import Data.Undefinable (toUndefinable)
 import Effect.Aff (Error, delay, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
@@ -65,16 +66,15 @@ import Marlowe.Semantics (Assets(..))
 import MarloweContract (MarloweContract(..))
 import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
-import Plutus.Contract.Effects (ActiveEndpoint(..))
-import Plutus.PAB.Webserver.Types
-  ( CombinedWSStreamToClient(..)
-  , CombinedWSStreamToServer(..)
-  , InstanceStatusToClient(..)
-  )
-import Servant.PureScript (toPathSegment)
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
 import Test.Control.Monad.UUID (class MonadMockUUID, mkTestUUID)
+import Test.Data.Plutus
+  ( instanceUpdate
+  , newActiveEndpoints
+  , newObservableState
+  , subscribeApp
+  )
 import Test.Marlowe.Run (Coenv, fundWallet, marloweRunTest)
 import Test.Marlowe.Run.Action.Types
   ( Address
@@ -110,7 +110,6 @@ import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
 import Test.Web.Event.User (click, clickM, type_)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
-import Wallet.Types (EndpointDescription(..))
 import Web.ARIA (ARIARole(..))
 import WebSocket.Support (FromSocket(..))
 
@@ -407,7 +406,7 @@ createContract
     expectJsonRequest ado
       expectMethod POST
       expectUri $ "/pab/api/contract/instance/"
-        <> toPathSegment (PAB.PlutusAppId marloweAppId)
+        <> (UUID.toString marloweAppId)
         <> "/endpoint/create"
       expectJsonContent $
         [ encodeJson createContractUUID
@@ -432,8 +431,8 @@ createContract
   expectWalletCompanionUpdate contractCreatedTime = do
     tell [ "Receive websocket message: Wallet companion update" ]
     pabWebsocketReceive
-      $ newObservableState walletCompanionId
-      $ encodeJson
+      $ instanceUpdate walletCompanionId
+      $ newObservableState
           [ [ marloweParams currencySymbol rolePayoutValidatorHash
             , encodeJson
                 { marloweState:
@@ -481,8 +480,8 @@ expectMarloweAppEndpointSuccess
 expectMarloweAppEndpointSuccess controlAppId reqId content = do
   tell [ "Receive websocket message: Create contract success" ]
   pabWebsocketReceive
-    $ newObservableState controlAppId
-    $ encodeJson
+    $ instanceUpdate controlAppId
+    $ newObservableState
         { "contents":
             [ encodeJson reqId
             , content
@@ -495,19 +494,6 @@ marloweParams currencySymbol rolePayoutValidatorHash =
   encodeJson
     { "rolesCurrency": { "unCurrencySymbol": currencySymbol }
     , "rolePayoutValidatorHash": rolePayoutValidatorHash
-    }
-
-newObservableState :: PlutusAppId -> Json -> Json
-newObservableState plutusAppId state =
-  encodeJson
-    { "contents":
-        [ encodeJson $ PAB.PlutusAppId plutusAppId
-        , encodeJson
-            { "contents": state
-            , "tag": "NewObservableState"
-            }
-        ]
-    , "tag": "InstanceUpdate"
     }
 
 mockRolesPayload :: Array ContractRoles -> Json
@@ -660,17 +646,8 @@ expectPlutusContractSubscribe
   -> Array String
   -> m Unit
 expectPlutusContractSubscribe instanceId endpoints = do
-  expectPabWebsocketSend $ Subscribe $ Left $ PAB.PlutusAppId instanceId
-  pabWebsocketReceive
-    $ InstanceUpdate (PAB.PlutusAppId instanceId)
-    $ NewActiveEndpoints
-    $ map
-        ( ActiveEndpoint
-            <<< { aeMetadata: Nothing, aeDescription: _ }
-            <<< EndpointDescription
-            <<< { getEndpointDescription: _ }
-        )
-        endpoints
+  expectPabWebsocketSend $ subscribeApp instanceId
+  pabWebsocketReceive $ instanceUpdate instanceId $ newActiveEndpoints endpoints
 
 expectInstanceSubscribe
   :: forall m
@@ -895,9 +872,8 @@ sendWalletCompanionUpdate
   -> PlutusAppId
   -> m Unit
 sendWalletCompanionUpdate histories companionId = pabWebsocketReceive
-  $ InstanceUpdate (PAB.PlutusAppId companionId)
-  $ NewObservableState
-  $ encodeJson
+  $ instanceUpdate companionId
+  $ newObservableState
   $ Map.fromFoldable
   $ map (view _chParams &&& view _chInitialData) histories
 
