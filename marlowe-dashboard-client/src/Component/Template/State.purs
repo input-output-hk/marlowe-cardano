@@ -25,7 +25,8 @@ import Data.Map.Ordered.OMap as OMap
 import Data.Maybe (fromMaybe, maybe)
 import Data.Set as Set
 import Effect.Aff.Class (class MonadAff)
-import Errors (class Debuggable, class Explain)
+import Errors.Debuggable (class Debuggable)
+import Errors.Explain (class Explain)
 import Examples.PureScript.ContractForDifferences as ContractForDifferences
 import Examples.PureScript.Escrow as Escrow
 import Examples.PureScript.EscrowWithCollateral as EscrowWithCollateral

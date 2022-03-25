@@ -18,6 +18,8 @@ import Data.Map (Map)
 import Data.Time.Duration (Minutes)
 import Data.UUID.Argonaut (UUID)
 import Env (WalletFunds)
+import Errors.Debuggable (class Debuggable)
+import Errors.Explain (class Explain)
 import Halogen as H
 import Halogen.Extra (LifecycleEvent)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
@@ -32,6 +34,7 @@ import Page.Welcome.Types (Action, State) as Welcome
 import Plutus.Contract.Effects (ActiveEndpoint)
 import Store.Contracts (ContractStore)
 import Store.Wallet (WalletStore)
+import Text.Pretty (text)
 import Type.Proxy (Proxy(..))
 import Web.Socket.Event.CloseEvent (CloseEvent, reason) as WS
 
@@ -98,7 +101,7 @@ data Action
   | Tick
   | UpdateWalletFunds WalletFunds
   | NewWebSocketStatus WebSocketStatus
-  | NotificationParseFailed String Json JsonDecodeError
+  | NotificationParseFailed NotificationParseFailedError
   | CompanionAppStateUpdated (Map MarloweParams MarloweData)
   | MarloweContractCreated UUID MarloweParams
   | InputsApplied UUID
@@ -121,3 +124,15 @@ instance actionIsEvent :: IsEvent Action where
   toEvent (WelcomeAction welcomeAction) = toEvent welcomeAction
   toEvent (DashboardAction dashboardAction) = toEvent dashboardAction
   toEvent _ = Nothing
+
+newtype NotificationParseFailedError = NotificationParseFailedError
+  { whatFailed :: String
+  , originalValue :: Json
+  , parsingError :: JsonDecodeError
+  }
+
+instance Explain NotificationParseFailedError where
+  explain _ = text
+    "We received a message from the server that we can't understand."
+
+derive newtype instance Debuggable NotificationParseFailedError

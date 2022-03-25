@@ -33,7 +33,7 @@ import Control.Monad.Now (class MonadTime, makeClock, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Data.AddressBook as AddressBook
-import Data.Argonaut (Json, decodeJson, jsonNull)
+import Data.Argonaut (Json, JsonDecodeError, decodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array (filter, find) as Array
 import Data.Array (mapMaybe)
@@ -59,6 +59,7 @@ import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
+import Errors (globalError)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -91,6 +92,7 @@ import MainFrame.Types
   ( Action(..)
   , ChildSlots
   , Msg
+  , NotificationParseFailedError(..)
   , Query
   , Slice
   , State
@@ -125,12 +127,7 @@ import Store.Wallet
   )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types
-  ( ajaxErrorToast
-  , explainableErrorToast
-  , infoToast
-  , successToast
-  )
+import Toast.Types (ajaxErrorToast, infoToast, successToast)
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
 import WebSocket.Support (FromSocket)
@@ -319,12 +316,13 @@ handleAction (NewWebSocketStatus status) = do
     -- reason.
     _ -> pure unit
 
-handleAction (NotificationParseFailed whatFailed value error) = do
+handleAction (NotificationParseFailed error) = do
   let
+    NotificationParseFailedError { whatFailed } = error
     shortDescription = "Failed to parse " <> whatFailed <>
       " from websocket message"
-  addToast $ explainableErrorToast shortDescription error
-  Logger.error shortDescription { value, error }
+
+  globalError shortDescription error
 
 handleAction (CompanionAppStateUpdated companionAppState) = do
   handleAction
@@ -570,7 +568,7 @@ actionFromWebsocket (Just wallet) = case _ of
   WS.WebSocketClosed closeEvent ->
     Just $ NewWebSocketStatus $ WebSocketClosed $ Just closeEvent
   WS.ReceiveMessage (Left jsonDecodeError) ->
-    Just $ NotificationParseFailed
+    Just $ notificationParseFailed
       "websocket message"
       jsonNull
       jsonDecodeError
@@ -606,7 +604,7 @@ actionFromStream wallet = case _ of
     | appId == companionAppId ->
         case D.decode (D.maybe D.value) state of
           Left error ->
-            Just $ NotificationParseFailed
+            Just $ notificationParseFailed
               "wallet companion state"
               state
               error
@@ -615,7 +613,9 @@ actionFromStream wallet = case _ of
           _ -> Nothing
     | appId == marloweAppId -> case D.decode (D.maybe D.value) state of
         Left error ->
-          Just $ NotificationParseFailed "marlowe app response" state
+          Just $ notificationParseFailed
+            "marlowe app response"
+            state
             error
         Right Nothing ->
           Nothing
@@ -634,7 +634,9 @@ actionFromStream wallet = case _ of
         _ -> Nothing
     | otherwise -> case D.decode (D.maybe D.value) state of
         Left error ->
-          Just $ NotificationParseFailed "follower app response" state
+          Just $ notificationParseFailed
+            "follower app response"
+            state
             error
         Right (Just history) ->
           Just $ ContractHistoryUpdated appId history
@@ -642,6 +644,11 @@ actionFromStream wallet = case _ of
   where
   companionAppId = wallet ^. _companionAppId
   marloweAppId = wallet ^. _marloweAppId
+
+notificationParseFailed :: String -> Json -> JsonDecodeError -> Action
+notificationParseFailed whatFailed originalValue parsingError =
+  NotificationParseFailed $ NotificationParseFailedError
+    { whatFailed, originalValue, parsingError }
 
 ------------------------------------------------------------
 -- Note [dummyState]: In order to map a submodule whose state might not exist, we need

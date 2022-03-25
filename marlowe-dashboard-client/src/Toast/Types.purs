@@ -17,7 +17,7 @@ import Analytics (class IsEvent, Event)
 import Analytics as A
 import Component.Icons (Icon(..))
 import Data.Argonaut.Decode (JsonDecodeError)
-import Errors (class Explain, explainString)
+import Errors.Explain (class Explain, explainString)
 import Halogen (SubscriptionId)
 import Types (JsonAjaxError)
 import Web.ARIA (ARIARole(..))

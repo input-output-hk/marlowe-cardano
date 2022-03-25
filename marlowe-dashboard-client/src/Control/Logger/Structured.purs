@@ -5,7 +5,7 @@ import Prologue
 import Control.Logger.Capability (class MonadLogger, log)
 import Control.Monad.Freer.Extras.Log (LogLevel(..), LogMessage(..))
 import Data.Argonaut (Json)
-import Errors (class Debuggable, debuggable)
+import Errors.Debuggable (class Debuggable, debuggable)
 
 newtype StructuredLog = StructuredLog
   { msg :: String
