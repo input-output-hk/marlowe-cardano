@@ -24,6 +24,7 @@ import Control.Monad.Reader
   , runReaderT
   )
 import Control.Parallel (parSequence_)
+import Data.Address (Address)
 import Data.AddressBook (AddressBook)
 import Data.AddressBook as AddressBook
 import Data.BigInt.Argonaut (BigInt)
@@ -35,10 +36,15 @@ import Data.LocalContractNicknames
   )
 import Data.Map (Map)
 import Data.Map as Map
+import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.Newtype (over)
+import Data.PubKeyHash (PubKeyHash)
 import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Wallet (SyncStatus(..), WalletDetails)
+import Data.WalletId (WalletId)
+import Data.WalletNickname (WalletNickname)
+import Data.WalletNickname as WN
 import Effect (Effect)
 import Effect.Aff (Aff, Error, bracket, error, finally, launchAff_)
 import Effect.Aff.AVar as AVar
@@ -72,13 +78,6 @@ import Test.Control.Monad.UUID
   , runMockUuidM
   )
 import Test.Halogen (class MonadHalogenTest, runUITest)
-import Test.Marlowe.Run.Action.Types
-  ( Address
-  , PubKeyHash
-  , WalletId
-  , WalletMnemonic
-  , WalletName
-  )
 import Test.Network.HTTP
   ( class MonadMockHTTP
   , MockHttpM
@@ -273,7 +272,7 @@ mkTestEnv = do
 
 type TestWallet =
   { address :: Address
-  , mnemonic :: WalletMnemonic
+  , mnemonic :: MnemonicPhrase
   , pubKeyHash :: PubKeyHash
   , walletId :: WalletId
   , assets :: Assets
@@ -287,7 +286,7 @@ type Coenv =
   , pabWebsocketIn :: Listener (FromSocket CombinedWSStreamToClient)
   , walletFunds :: Listener WalletFunds
   , dispose :: Effect Unit
-  , wallets :: Ref (Bimap WalletName TestWallet)
+  , wallets :: Ref (Bimap WalletNickname TestWallet)
   }
 
 fundWallet
@@ -295,7 +294,7 @@ fundWallet
    . MonadAsk Coenv m
   => MonadEffect m
   => MonadError Error m
-  => WalletName
+  => WalletNickname
   -> CurrencySymbol
   -> TokenName
   -> BigInt
@@ -305,7 +304,9 @@ fundWallet walletName currencySymbol tokenName amount = do
   walletFunds <- asks _.walletFunds
   wallets <- liftEffect $ Ref.read walletsRef
   wallet <- case Bimap.lookupL walletName wallets of
-    Nothing -> throwError $ error $ "Test error: unknown wallet " <> walletName
+    Nothing -> throwError
+      $ error
+      $ "Test error: unknown wallet " <> WN.toString walletName
     Just w -> pure w
   liftEffect do
     let

@@ -76,6 +76,7 @@
   , "typelevel-prelude"
   , "undefinable"
   , "unfoldable"
+  , "unicode"
   , "unlift"
   , "unsafe-coerce"
   , "uri"

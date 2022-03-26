@@ -2,6 +2,7 @@ module Data.Passphrase
   ( Passphrase
   , fromString
   , toString
+  , fixmeAllowPassPerWallet
   ) where
 
 import Prologue
@@ -18,6 +19,9 @@ derive newtype instance DecodeJson Passphrase
 
 instance Show Passphrase where
   show = const "<Passphrase>"
+
+fixmeAllowPassPerWallet :: Passphrase
+fixmeAllowPassPerWallet = Passphrase "fixme-allow-pass-per-wallet"
 
 fromString :: String -> Maybe Passphrase
 fromString s =

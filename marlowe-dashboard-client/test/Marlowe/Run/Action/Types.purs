@@ -5,12 +5,15 @@ import Prologue
 import Affjax.StatusCode (StatusCode(..))
 import Ansi.Codes (Color(..))
 import Ansi.Output (bold, foreground, withGraphics)
+import Data.Address (Address)
 import Data.Argonaut
   ( class EncodeJson
   , Json
   , JsonDecodeError(..)
   , decodeJson
   , encodeJson
+  , fromArray
+  , fromString
   , jsonNull
   , stringify
   , (.!=)
@@ -27,6 +30,10 @@ import Data.HTTP.Method (Method)
 import Data.HTTP.Method as Method
 import Data.Lens (Prism', prism')
 import Data.Maybe (maybe)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.MnemonicPhrase as MP
+import Data.PubKeyHash (PubKeyHash)
+import Data.PubKeyHash as PKH
 import Data.Show.Generic (genericShow)
 import Data.String
   ( Pattern(..)
@@ -34,29 +41,24 @@ import Data.String
   , joinWith
   , length
   , replaceAll
+  , split
   , take
   )
 import Data.Time.Duration (Milliseconds)
 import Data.Tuple (uncurry)
 import Data.UUID.Argonaut (UUID)
+import Data.WalletId (WalletId)
+import Data.WalletNickname (WalletNickname)
 import Effect.Aff (Error, message)
 import Language.Marlowe.Client (ContractHistory)
+import Marlowe.Semantics (CurrencySymbol, ValidatorHash)
 import MarloweContract (MarloweContract(..))
 import Web.ARIA (ARIARole)
 
-type WalletName = String
-type WalletMnemonic = String
-type WalletId = String
-type PubKeyHash = String
-type Address = String
-type PlutusAppId = UUID
 type TemplateName = String
 type ContractNickname = String
 type FieldName = String
 type FieldValue = String
-type EndpointName = String
-type CurrencySymbol = String
-type ScriptHash = String
 type ContractField =
   { name :: FieldName
   , value :: FieldValue
@@ -65,7 +67,7 @@ type ContractField =
 
 type ContractRoles =
   { roleName :: String
-  , walletName :: WalletName
+  , walletName :: WalletNickname
   , address :: Address
   }
 
@@ -198,13 +200,13 @@ instance EncodeJson HttpRespond where
     encodeJson { status, statusText, headers, content }
 
 type CreateWalletRecord =
-  { walletName :: WalletName
-  , mnemonic :: WalletMnemonic
+  { walletName :: WalletNickname
+  , mnemonic :: MnemonicPhrase
   , walletId :: WalletId
   , pubKeyHash :: PubKeyHash
   , address :: Address
-  , walletCompanionId :: PlutusAppId
-  , marloweAppId :: PlutusAppId
+  , walletCompanionId :: UUID
+  , marloweAppId :: UUID
   }
 
 type CreateContractRecord =
@@ -212,31 +214,31 @@ type CreateContractRecord =
   , contractTitle :: ContractNickname
   , fields :: Array ContractField
   , roles :: Array ContractRoles
-  , marloweAppId :: PlutusAppId
-  , followerId :: PlutusAppId
-  , walletCompanionId :: PlutusAppId
+  , marloweAppId :: UUID
+  , followerId :: UUID
+  , walletCompanionId :: UUID
   , walletId :: WalletId
   , currencySymbol :: CurrencySymbol
-  , rolePayoutValidatorHash :: ScriptHash
+  , rolePayoutValidatorHash :: ValidatorHash
   }
 
 data AppInstance
-  = MarloweAppInstance PlutusAppId
-  | WalletCompanionInstance PlutusAppId
-  | MarloweFollowerInstance PlutusAppId ContractHistory
+  = MarloweAppInstance UUID
+  | WalletCompanionInstance UUID
+  | MarloweFollowerInstance UUID ContractHistory
 
-_MarloweAppInstance :: Prism' AppInstance PlutusAppId
+_MarloweAppInstance :: Prism' AppInstance UUID
 _MarloweAppInstance = prism' MarloweAppInstance case _ of
   MarloweAppInstance id -> Just id
   _ -> Nothing
 
-_WalletCompanionInstance :: Prism' AppInstance PlutusAppId
+_WalletCompanionInstance :: Prism' AppInstance UUID
 _WalletCompanionInstance = prism' WalletCompanionInstance case _ of
   WalletCompanionInstance id -> Just id
   _ -> Nothing
 
 _MarloweFollowerInstance
-  :: Prism' AppInstance (Tuple PlutusAppId ContractHistory)
+  :: Prism' AppInstance (Tuple UUID ContractHistory)
 _MarloweFollowerInstance = prism' (uncurry MarloweFollowerInstance) case _ of
   MarloweFollowerInstance id history -> Just $ Tuple id history
   _ -> Nothing
@@ -272,10 +274,11 @@ instance Show AppInstance where
 data MarloweRunAction
   = CreateWallet CreateWalletRecord
   | CreateContract CreateContractRecord
-  | FundWallet { walletName :: WalletName, lovelace :: BigInt }
-  | AddContact { walletName :: WalletName, address :: Address }
+  | FundWallet { walletName :: WalletNickname, lovelace :: BigInt }
+  | AddContact { walletName :: WalletNickname, address :: Address }
   | DropWallet { walletId :: WalletId }
-  | RestoreWallet { walletName :: WalletName, instances :: Array AppInstance }
+  | RestoreWallet
+      { walletName :: WalletNickname, instances :: Array AppInstance }
   | ExpectNoHTTPCall
 
 derive instance Generic MarloweRunAction _
@@ -298,8 +301,15 @@ instance DecodeJson MarloweRunAction where
     case tag of
       "DropWallet" ->
         lmap (Named "DropWallet") $ DropWallet <$> obj .: "content"
-      "CreateWallet" ->
-        lmap (Named "CreateWallet") $ CreateWallet <$> obj .: "content"
+      "CreateWallet" -> lmap (Named "CreateWallet") $ CreateWallet <$> do
+        content <- obj .: "content"
+        pubKeyHash <- decodeJson $ encodeJson
+          { getPubKeyHash: content.pubKeyHash :: String }
+        mnemonic <- decodeJson
+          $ fromArray
+          $ map fromString
+          $ split (Pattern " ") content.mnemonic
+        pure content { mnemonic = mnemonic, pubKeyHash = pubKeyHash }
       "FundWallet" ->
         lmap (Named "FundWallet") $ FundWallet <$> obj .: "content"
       "CreateContract" ->
@@ -316,7 +326,13 @@ instance DecodeJson MarloweRunAction where
 instance EncodeJson MarloweRunAction where
   encodeJson = case _ of
     DropWallet content -> encodeJson { tag: "DropWallet", content }
-    CreateWallet content -> encodeJson { tag: "CreateWallet", content }
+    CreateWallet content -> encodeJson
+      { tag: "CreateWallet"
+      , content: content
+          { mnemonic = MP.toString content.mnemonic
+          , pubKeyHash = PKH.toString content.pubKeyHash
+          }
+      }
     CreateContract content -> encodeJson { tag: "CreateContract", content }
     FundWallet content -> encodeJson { tag: "FundWallet", content }
     AddContact content -> encodeJson { tag: "AddContact", content }
