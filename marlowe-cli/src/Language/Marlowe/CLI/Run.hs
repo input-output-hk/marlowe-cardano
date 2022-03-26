@@ -37,9 +37,9 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, CardanoMode, Local
                     MultiAssetSupportedInEra (MultiAssetInAlonzoEra), NetworkId,
                     QueryInShelleyBasedEra (QueryProtocolParameters, QueryUTxO), QueryUTxOFilter (QueryUTxOByAddress),
                     Script (..), ScriptDataSupportedInEra (..), ShelleyBasedEra (ShelleyBasedEraAlonzo), SlotNo (..),
-                    StakeAddressReference (..), TxId, TxIn, TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..),
-                    calculateMinimumUTxO, getTxId, lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue,
-                    writeFileTextEnvelope)
+                    StakeAddressReference (..), TxId, TxIn, TxMetadataInEra (TxMetadataNone), TxMintValue (TxMintNone),
+                    TxOut (..), TxOutDatum (..), TxOutValue (..), UTxO (..), calculateMinimumUTxO, getTxId,
+                    lovelaceToValue, selectLovelace, toAddressAny, txOutValueToValue, writeFileTextEnvelope)
 import qualified Cardano.Api as Api (Value)
 import Cardano.Api.Shelley (ProtocolParameters, fromPlutusData)
 import Control.Monad (forM_, guard, unless, when)
@@ -337,6 +337,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
         collateral changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
+        TxMintNone TxMetadataNone
         printStats
         invalid
     liftCliIO
@@ -424,6 +425,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         (Just collateral) changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
+        TxMintNone TxMetadataNone
         printStats
         invalid
     liftCliIO

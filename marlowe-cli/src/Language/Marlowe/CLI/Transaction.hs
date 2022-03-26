@@ -27,6 +27,7 @@ module Language.Marlowe.CLI.Transaction (
 , buildOutgoing
 , buildClean
 , buildFaucet
+, buildMinting
 -- * Submitting
 , submit
 -- * Low-Level Functions
@@ -40,27 +41,31 @@ module Language.Marlowe.CLI.Transaction (
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), BalancedTxBody (..), BuildTx,
-                    BuildTxWith (..), CardanoEra (..), CardanoMode, CollateralSupportedInEra (..),
-                    ConsensusModeIsMultiEra (..), CtxTx, EraInMode (..), ExecutionUnits (..), Hash,
-                    KeyWitnessInCtx (..), LocalNodeConnectInfo, Lovelace, MultiAssetSupportedInEra (..), PaymentKey,
-                    PlutusScript, PlutusScriptV1, PlutusScriptVersion (..), QueryInEra (..), QueryInMode (..),
-                    QueryInShelleyBasedEra (..), QueryUTxOFilter (..), ScriptDataSupportedInEra (..), ScriptDatum (..),
+import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), AssetId (..), AssetName (..),
+                    BalancedTxBody (..), BuildTx, BuildTxWith (..), CardanoEra (..), CardanoMode,
+                    CollateralSupportedInEra (..), ConsensusModeIsMultiEra (..), CtxTx, EraInMode (..),
+                    ExecutionUnits (..), Hash, KeyWitnessInCtx (..), LocalNodeConnectInfo, Lovelace,
+                    MultiAssetSupportedInEra (..), PaymentKey, PlutusScript, PlutusScriptV1, PlutusScriptVersion (..),
+                    PolicyId (..), Quantity (..), QueryInEra (..), QueryInMode (..), QueryInShelleyBasedEra (..),
+                    QueryUTxOFilter (..), Script (..), ScriptDataSupportedInEra (..), ScriptDatum (..), ScriptHash,
                     ScriptLanguageInEra (..), ScriptValidity (ScriptInvalid), ScriptWitness (..),
-                    ScriptWitnessInCtx (..), ShelleyBasedEra (..), ShelleyWitnessSigningKey (..), SlotNo,
-                    TxAuxScripts (..), TxBody (..), TxBodyContent (..), TxBodyErrorAutoBalance (..),
-                    TxBodyScriptData (..), TxCertificates (..), TxExtraKeyWitnesses (..),
-                    TxExtraKeyWitnessesSupportedInEra (..), TxFee (..), TxFeesExplicitInEra (..), TxId, TxIn (..),
-                    TxInMode (..), TxInsCollateral (..), TxIx (..), TxMetadataInEra (..), TxMintValue (..), TxOut (..),
-                    TxOutDatum (..), TxOutValue (..), TxScriptValidity (..),
+                    ScriptWitnessInCtx (..), ShelleyBasedEra (..), ShelleyWitnessSigningKey (..), SimpleScript (..),
+                    SimpleScriptV2, SimpleScriptVersion (..), SlotNo, TimeLocksSupported (..), TxAuxScripts (..),
+                    TxBody (..), TxBodyContent (..), TxBodyErrorAutoBalance (..), TxBodyScriptData (..),
+                    TxCertificates (..), TxExtraKeyWitnesses (..), TxExtraKeyWitnessesSupportedInEra (..), TxFee (..),
+                    TxFeesExplicitInEra (..), TxId, TxIn (..), TxInMode (..), TxInsCollateral (..), TxIx (..),
+                    TxMetadataInEra (..), TxMetadataJsonSchema (TxMetadataJsonNoSchema),
+                    TxMetadataSupportedInEra (TxMetadataInAlonzoEra), TxMintValue (..), TxOut (..), TxOutDatum (..),
+                    TxOutValue (..), TxScriptValidity (..),
                     TxScriptValiditySupportedInEra (TxScriptValiditySupportedInAlonzoEra), TxUpdateProposal (..),
                     TxValidityLowerBound (..), TxValidityUpperBound (..), TxWithdrawals (..), UTxO (..),
                     ValidityLowerBoundSupportedInEra (..), ValidityNoUpperBoundSupportedInEra (..),
                     ValidityUpperBoundSupportedInEra (..), Value, WitCtxTxIn, Witness (..), anyAddressInEra,
-                    castVerificationKey, getTxId, getVerificationKey, hashScriptData, lovelaceToValue,
-                    makeTransactionBodyAutoBalance, negateValue, queryNodeLocalState, readFileTextEnvelope,
-                    selectLovelace, serialiseToCBOR, signShelleyTransaction, submitTxToNodeLocal, txOutValueToValue,
-                    valueFromList, valueToList, valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
+                    castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData, lovelaceToValue,
+                    makeTransactionBodyAutoBalance, metadataFromJson, negateValue, queryNodeLocalState,
+                    readFileTextEnvelope, selectLovelace, serialiseToCBOR, serialiseToRawBytesHex,
+                    signShelleyTransaction, submitTxToNodeLocal, txOutValueToValue, valueFromList, valueToList,
+                    valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
                             protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
@@ -69,15 +74,19 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (forM_, when, (<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (isNothing, maybeToList)
-import Language.Marlowe.CLI.IO (decodeFileBuiltinData, liftCli, liftCliIO, readSigningKey)
+import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, readSigningKey)
 import Language.Marlowe.CLI.Types (CliError (..), PayFromScript (..), PayToScript (..), SomePaymentSigningKey)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
-import Plutus.V1.Ledger.Api (Datum (..), Redeemer (..), toData)
+import Plutus.V1.Ledger.Api (Datum (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import System.IO (hPutStrLn, stderr)
 
+import qualified Data.Aeson as A (Value (Object))
 import qualified Data.ByteString as BS (length)
-import qualified Data.Map.Strict as M (elems, keysSet, toList)
+import qualified Data.ByteString.Char8 as BS8 (unpack)
+import qualified Data.HashMap.Strict as H (singleton)
+import qualified Data.Map.Strict as M (elems, keysSet, singleton, toList)
 import qualified Data.Set as S (empty, fromList, singleton)
+import qualified Data.Text as T (pack)
 
 
 -- | Build a non-Marlowe transaction.
@@ -103,6 +112,8 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress bodyFile tim
         inputs outputs Nothing changeAddress
         Nothing
         []
+        TxMintNone
+        TxMetadataNone
         printStats
         invalid
     liftCliIO
@@ -122,10 +133,13 @@ buildClean :: MonadError CliError m
            -> [FilePath]                        -- ^ The files for required signing keys.
            -> Lovelace                          -- ^ The value to be sent to addresses with tokens.
            -> AddressAny                        -- ^ The change address.
+           -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
+           -> TxMintValue BuildTx AlonzoEra     -- ^ The mint value.
+           -> TxMetadataInEra AlonzoEra         -- ^ The metadata.
            -> FilePath                          -- ^ The output file for the transaction body.
            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
            -> m TxId                            -- ^ Action to build the transaction body.
-buildClean connection signingKeyFiles lovelace changeAddress bodyFile timeout =
+buildClean connection signingKeyFiles lovelace changeAddress range mintValue metadata bodyFile timeout =
   do
     signingKeys <- mapM readSigningKey signingKeyFiles
     utxos <-
@@ -136,6 +150,10 @@ buildClean connection signingKeyFiles lovelace changeAddress bodyFile timeout =
         . S.singleton
         $ changeAddress
     let
+      minting =
+        case mintValue of
+          TxMintValue _ minting' _ -> minting'
+          _                        -> mempty
       inputs = fst <$> utxos
       extractValue (TxOut _ value _) = txOutValueToValue value
       total = mconcat $ extractValue . snd <$> utxos
@@ -143,7 +161,7 @@ buildClean connection signingKeyFiles lovelace changeAddress bodyFile timeout =
         [
           (changeAddress, Nothing, value <> lovelaceToValue lovelace)
         |
-          value <- valueFromList . pure <$> valueToList total
+          value <- valueFromList . pure <$> valueToList (total <> minting)
         , isNothing $ valueToLovelace value
         ]
     body <-
@@ -151,8 +169,10 @@ buildClean connection signingKeyFiles lovelace changeAddress bodyFile timeout =
         []
         Nothing
         inputs outputs Nothing changeAddress
-        Nothing
+        range
         []
+        mintValue
+        metadata
         False
         False
     liftCliIO
@@ -199,12 +219,105 @@ buildFaucet connection value fundedAddress changeAddress signingKey timeout =
         inputs outputs Nothing changeAddress
         Nothing
         []
+        TxMintNone
+        TxMetadataNone
         False
         False
     forM_ timeout
       $ submitBody connection body [signingKey]
     pure
       $ getTxId body
+
+
+-- | Build a non-Marlowe transaction that mints tokens.
+buildMinting :: MonadError CliError m
+             => MonadIO m
+             => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+             -> FilePath                          -- ^ The file for required signing key.
+             -> [TokenName]                       -- ^ The token names.
+             -> Maybe FilePath                    -- ^ The CIP-25 metadata for the minting, with keys for each token name.
+             -> Integer                           -- ^ The number of each token to mint.
+             -> Maybe SlotNo                      -- ^ The slot number after which minting is no longer possible.
+             -> Lovelace                          -- ^ The value to be sent to addresses with tokens.
+             -> AddressAny                        -- ^ The change address.
+             -> FilePath                          -- ^ The output file for the transaction body.
+             -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> m TxId                            -- ^ Action to build the transaction body.
+buildMinting connection signingKeyFile tokenNames metadataFile count expires lovelace changeAddress bodyFile timeout =
+  do
+    metadata <- sequence $ decodeFileStrict <$> metadataFile
+    signingKey <- readSigningKey signingKeyFile
+    let
+      verification =
+        verificationKeyHash
+          $ case signingKey of
+              Left  k -> getVerificationKey k
+              Right k -> castVerificationKey $ getVerificationKey k
+      (script, scriptHash) = mintingScript verification expires
+      policy = PolicyId scriptHash
+      minting =
+        valueFromList
+          [
+            (
+              AssetId policy (AssetName $ fromBuiltin name)
+            , Quantity count
+            )
+          |
+            TokenName name <- tokenNames
+          ]
+      mintValue =
+        TxMintValue MultiAssetInAlonzoEra minting
+          . BuildTxWith
+          . M.singleton policy
+          $ SimpleScriptWitness SimpleScriptV2InAlonzo SimpleScriptV2 script
+    metadata' <-
+      case metadata of
+        Just (A.Object metadata'') -> fmap (TxMetadataInEra TxMetadataInAlonzoEra)
+                                        . liftCli
+                                        . metadataFromJson TxMetadataJsonNoSchema
+                                        . A.Object
+                                        . H.singleton "721"
+                                        . A.Object
+                                        . H.singleton (T.pack . BS8.unpack $ serialiseToRawBytesHex policy)
+                                        $ A.Object metadata''
+        _                          -> pure TxMetadataNone
+    buildClean
+      connection
+      [signingKeyFile]
+      lovelace
+      changeAddress
+      ((0, ) <$> expires)
+      mintValue
+      metadata'
+      bodyFile
+      timeout
+
+
+-- | Create a minting script.
+mintingScript :: Hash PaymentKey                           -- ^ The hash of the payment key.
+              -> Maybe SlotNo                              -- ^ The last slot on which minting can occur, if any.
+              -> (SimpleScript SimpleScriptV2, ScriptHash) -- ^ The script and its hash.
+mintingScript hash Nothing =
+  let
+    script = RequireSignature hash
+  in
+    (
+      script
+    , hashScript $ SimpleScript SimpleScriptV2 script
+    )
+mintingScript hash (Just slot) =
+  let
+    script =
+      RequireAllOf
+        [
+          RequireSignature hash
+        , RequireTimeBefore TimeLocksInSimpleScriptV2 slot
+        ]
+  in
+    (
+      script
+    , hashScript $ SimpleScript SimpleScriptV2 script
+    )
 
 
 -- | Build a transaction paying into a Marlowe contract.
@@ -235,6 +348,8 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         inputs outputs Nothing changeAddress
         Nothing
         []
+        TxMintNone
+        TxMetadataNone
         printStats
         invalid
     liftCliIO
@@ -285,6 +400,8 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
+        TxMintNone
+        TxMetadataNone
         printStats
         invalid
     liftCliIO
@@ -330,6 +447,8 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         inputs outputs (Just collateral) changeAddress
         (Just (minimumSlot, maximumSlot))
         (hashSigningKey <$> signingKeys)
+        TxMintNone
+        TxMetadataNone
         printStats
         invalid
     liftCliIO
@@ -385,10 +504,12 @@ buildBody :: MonadError CliError m
           -> AddressAny                          -- ^ The change address.
           -> Maybe (SlotNo, SlotNo)              -- ^ The valid slot range, if any.
           -> [Hash PaymentKey]                   -- ^ The extra required signatures.
+          -> TxMintValue BuildTx AlonzoEra       -- ^ The mint value.
+          -> TxMetadataInEra AlonzoEra           -- ^ The metadata.
           -> Bool                                -- ^ Whether to print statistics about the transaction.
           -> Bool                                -- ^ Assertion that the transaction is invalid.
           -> m (TxBody AlonzoEra)                -- ^ The action to build the transaction body.
-buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners printStats invalid =
+buildBody connection payFromScript payToScript inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid =
   do
     changeAddress' <- asAlonzoAddress "Failed converting change address to Alonzo era." changeAddress
     start <- queryAny connection   QuerySystemStart
@@ -408,14 +529,14 @@ buildBody connection payFromScript payToScript inputs outputs collateral changeA
                               (TxValidityUpperBound ValidityUpperBoundInAlonzoEra . snd)
                               slotRange
                           )
-      txMetadata        = TxMetadataNone
+      txMetadata        = metadata
       txAuxScripts      = TxAuxScriptsNone
       txExtraKeyWits    = TxExtraKeyWitnesses ExtraKeyWitnessesInAlonzoEra extraSigners
       txProtocolParams  = BuildTxWith $ Just protocol'
       txWithdrawals     = TxWithdrawalsNone
       txCertificates    = TxCertificatesNone
       txUpdateProposal  = TxUpdateProposalNone
-      txMintValue       = TxMintNone
+      txMintValue       = mintValue
       txScriptValidity  = if invalid
                             then TxScriptValidity TxScriptValiditySupportedInAlonzoEra ScriptInvalid
                             else TxScriptValidityNone
