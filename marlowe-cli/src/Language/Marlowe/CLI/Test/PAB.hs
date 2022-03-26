@@ -58,7 +58,6 @@ import Control.Monad.Extra (whenJust)
 import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String))
 import Data.Aeson.Types (parseEither)
-import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
@@ -567,7 +566,7 @@ createWallet PabAccess{..} owner passphrase' =
                             pkh <- shelleyPayAddrToPlutusPubKHash address
                             pure (toAddressAny address, pkh)
         _            -> throwError $ CliError "[createWallet] No addresses found in wallet."
-    liftIO . putStrLn $ "[createWallet] Mnemonic sentence is \"" <> intercalate " " (T.unpack <$> mnemonicToText mnemonicSentence') <> "\"."
+    liftIO . putStrLn $ "[createWallet] Mnemonic sentence is \"" <> unwords (T.unpack <$> mnemonicToText mnemonicSentence') <> "\"."
     liftIO . putStrLn $ "[createWallet] First wallet address is " <> T.unpack (serialiseAddress wiAddress) <> "."
     liftIO . putStrLn $ "[createWallet] First public key hash is " <> show wiPubKeyHash <> "."
     let

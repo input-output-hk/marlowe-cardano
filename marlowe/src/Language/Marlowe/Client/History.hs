@@ -21,6 +21,7 @@ module Language.Marlowe.Client.History (
 , marloweStatesFrom
 , toMarloweState
 -- * History Queriies
+, histories
 , history
 , historyFrom
 , creationTxOut
@@ -141,13 +142,25 @@ history :: MarloweParams   -- ^ The Marlowe validator parameters.
         -> [ChainIndexTx]  -- ^ The transactions at the Marlowe validator and role validator addresses.
         -> Maybe History   -- ^ The original contract and the sequence of redemptions, if any.
 history params address citxs =
-  case creationTxOut params address `mapMaybe` citxs of
+  case histories params address citxs of
     -- If role tokens are minted by the "create" endpoint, then there should only ever be on contract at the address.
-    [creation] -> Just
-                    . Created (tyTxOutRefRef creation) (toMarloweState creation)
-                    $ historyFrom address citxs creation
+    [history'] -> Just history'
     -- Either there is no contract yet, or role tokens have been reused for multiple contracts.
     _          -> Nothing
+
+
+-- | Retrieve the histories of a role-based Marlowe contract.
+histories :: MarloweParams   -- ^ The Marlowe validator parameters.
+          -> Address         -- ^ The Marlowe validator address.
+          -> [ChainIndexTx]  -- ^ The transactions at the Marlowe validator and role validator addresses.
+          -> [History]       -- ^ The original contracts and the sequence of redemptions.
+histories params address citxs =
+  [
+    Created (tyTxOutRefRef creation) (toMarloweState creation)
+      $ historyFrom address citxs creation
+  |
+    creation <- creationTxOut params address `mapMaybe` citxs
+  ]
 
 
 -- | Construct the sequence of redemptions following from a particular Marlowe transactions.

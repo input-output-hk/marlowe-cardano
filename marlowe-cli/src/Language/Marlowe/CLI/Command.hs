@@ -124,7 +124,7 @@ parseCommand version =
                 <> O.command "contract"    (O.info (ContractCommand    <$> parseContractCommand   ) $ O.progDesc "Export contract address, validator, datum, or redeemer.")
                 <> O.command "input"       (O.info (InputCommand       <$> parseInputCommand      ) $ O.progDesc "Create inputs to a contract."                           )
                 <> O.command "role"        (O.info (RoleCommand        <$> parseRoleCommand       ) $ O.progDesc "Export role address, validator, datum, or redeemer."    )
-                <> O.command "query"       (O.info (QueryCommand       <$> parseQueryCommand      ) $ O.progDesc "Blockchain queries."                                    )
+                <> O.command "query"       (O.info (QueryCommand       <$> parseQueryCommand      ) $ O.progDesc "Blockchain queries for Marlowe."                        )
                 <> O.command "transaction" (O.info (TransactionCommand <$> parseTransactionCommand) $ O.progDesc "Create and submit transactions."                        )
                 <> O.command "util"        (O.info (UtilCommand        <$> parseUtilCommand       ) $ O.progDesc "Miscellaneous utilities."                               )
               )
