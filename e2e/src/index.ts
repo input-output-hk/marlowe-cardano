@@ -8,14 +8,15 @@ import {
   HostsConfig,
   PagesConfig,
   PageElementMappings,
+  FixtureMappings,
 } from './env/global';
 import * as fs from 'fs';
 
 dotenv.config({path: env('COMMON_CONFIG_FILE')})
 const hostsConfig: HostsConfig = getJsonFromFile(env('HOSTS_URLS_PATH'))
 const pagesConfig: PagesConfig = getJsonFromFile(env('PAGE_URLS_PATH'))
-const mappingFiles = fs.readdirSync(`${process.cwd()}${env('PAGE_ELEMENTS_PATH')}`)
-const pageElementMappings: PageElementMappings = mappingFiles.reduce(
+const pageMappingFiles = fs.readdirSync(`${process.cwd()}${env('PAGE_ELEMENTS_PATH')}`)
+const pageElementMappings: PageElementMappings = pageMappingFiles.reduce(
   (pageElementConfigAcc, file) => {
     const key = file.replace('.json', '');
     const elementMappings = getJsonFromFile(`${env('PAGE_ELEMENTS_PATH')}${file}`);
@@ -24,10 +25,21 @@ const pageElementMappings: PageElementMappings = mappingFiles.reduce(
   {}
 );
 
+const fixtureMappingFiles = fs.readdirSync(`${process.cwd()}${env('FIXTURES_PATH')}`)
+const fixtureMappings: FixtureMappings = fixtureMappingFiles.reduce(
+  (fixtureConfigAcc, file) => {
+    const key = file.replace('.json', '');
+    const fixturesMappings = getJsonFromFile(`${env('FIXTURES_PATH')}${file}`);
+    return { ...fixtureConfigAcc, [key]: fixturesMappings}
+  },
+  {}
+);
+
 const worldParameters: GlobalConfig = {
   hostsConfig,
   pagesConfig,
   pageElementMappings,
+  fixtureMappings,
 };
 
 const common = `./src/features/**/*.feature \

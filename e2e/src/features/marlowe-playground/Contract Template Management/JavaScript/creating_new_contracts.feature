@@ -13,7 +13,7 @@ Feature: Creating a new contract with Javascript
     And the "editor header" should contain "New Project" text
     # And the "playground editor" should contain "empty javascript contract code" text
 
-    When I fill in the "playground editor" input with "Close"
+    # When I fill in the "playground editor" input with "javascript-escrow" contract code
     # And I click the "Compile" button
 
     # Then the "Send To Simulator" button should be "enabled"
@@ -27,7 +27,7 @@ Feature: Creating a new contract with Javascript
 
     Then I am directed to the "marlowe-playground-js" page
     And the "editor header" should contain "Purchase" text
-    # And the "playground editor" should contain "Javascript Escrow Contract Code"
+    # And the "playground editor" should contain "javascript-escrow" contract code
 
     # When I click "Compile" button
 
