@@ -41,14 +41,7 @@ import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.Newtype (over2)
 import Data.PubKeyHash (PubKeyHash)
-import Data.String
-  ( Pattern(..)
-  , Replacement(..)
-  , joinWith
-  , null
-  , replaceAll
-  , split
-  )
+import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll)
 import Data.String.Extra (repeat)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
@@ -91,6 +84,8 @@ import Test.Data.Marlowe
   , createContent
   , createEndpoint
   , createSuccessMessage
+  , createWalletRequest
+  , createWalletResponse
   , expectJust
   , followerEndpoints
   , fromNow
@@ -456,18 +451,6 @@ createContract
     recvInstanceSubscribe followerId
     sendNewActiveEndpoints followerId followerEndpoints
 
-sendCreateSuccess
-  :: forall m
-   . MonadAsk Coenv m
-  => MonadEffect m
-  => MonadTell (Array String) m
-  => UUID
-  -> UUID
-  -> MarloweParams
-  -> m Unit
-sendCreateSuccess appId reqId =
-  sendWebsocketMessage <<< createSuccessMessage appId reqId
-
 -- Assert that there is a success toast with the provided message.
 -- This should be executed from the main container
 expectSuccessToast
@@ -521,7 +504,7 @@ createWallet
   dialog <- getBy role $ pure Dialog
   withContainer dialog do
     fillCreateWalletDialog
-    expectCreateHttpRequest
+    handlePostCreateWallet walletName address mnemonic pubKeyHash walletId
     fillConfirmMnemonicDialog
     expectWalletActivation
 
@@ -536,24 +519,6 @@ createWallet
     clickM $ getBy role do
       nameRegex "create wallet" ignoreCase
       pure Button
-
-  expectCreateHttpRequest = do
-    tell [ "Expect POST create wallet" ]
-    expectJsonRequest ado
-      expectMethod POST
-      expectUri "/api/wallet/v1/centralized-testnet/create"
-      expectJsonContent $
-        { getCreateWalletName: walletName
-        , getCreatePassphrase: "fixme-allow-pass-per-wallet"
-        }
-      in
-        { mnemonic: split (Pattern " ") (MP.toString mnemonic)
-        , walletInfo:
-            { walletId
-            , pubKeyHash: { unPaymentPubKeyHash: pubKeyHash }
-            , address
-            }
-        }
 
   fillConfirmMnemonicDialog = do
     tell [ "Fill confirm mnemonic dialot" ]
@@ -656,19 +621,6 @@ restore { instances, walletName } = do
           <<< takeBoth _chParams _chInitialData
     traverse_ (flip sendWalletCompanionUpdate companionContracts) mCompanion
 
-sendWalletCompanionUpdate
-  :: forall f m
-   . Foldable f
-  => Functor f
-  => MonadAsk Coenv m
-  => MonadTell (Array String) m
-  => MonadEffect m
-  => UUID
-  -> f (Tuple MarloweParams MarloweData)
-  -> m Unit
-sendWalletCompanionUpdate companionId =
-  sendWebsocketMessage <<< walletCompantionMessage companionId
-
 appInstanceToCic
   :: WalletId -> AppInstance -> MarloweContractInstanceClientState
 appInstanceToCic walletId = case _ of
@@ -682,6 +634,22 @@ appInstanceToCic walletId = case _ of
 -------------------------------------------------------------------------------
 -- Mock HTTP Server
 -------------------------------------------------------------------------------
+
+handlePostCreateWallet
+  :: forall m
+   . MonadTell (Array String) m
+  => MonadMockHTTP m
+  => MonadThrow Error m
+  => WalletNickname
+  -> Address
+  -> MnemonicPhrase
+  -> PubKeyHash
+  -> WalletId
+  -> m Unit
+handlePostCreateWallet walletName address mnemonic pubKeyHash walletId =
+  handleHTTPRequest POST "/api/wallet/v1/centralized-testnet/create" ado
+    expectJsonContent $ createWalletRequest walletName
+    in createWalletResponse mnemonic walletId address pubKeyHash
 
 handlePostRestoreWallet
   :: forall m
@@ -777,6 +745,31 @@ handleHTTPRequest method uri matcher = do
 -------------------------------------------------------------------------------
 -- Mock WebSocket Server
 -------------------------------------------------------------------------------
+
+sendCreateSuccess
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadTell (Array String) m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> m Unit
+sendCreateSuccess appId reqId =
+  sendWebsocketMessage <<< createSuccessMessage appId reqId
+
+sendWalletCompanionUpdate
+  :: forall f m
+   . Foldable f
+  => Functor f
+  => MonadAsk Coenv m
+  => MonadTell (Array String) m
+  => MonadEffect m
+  => UUID
+  -> f (Tuple MarloweParams MarloweData)
+  -> m Unit
+sendWalletCompanionUpdate companionId =
+  sendWebsocketMessage <<< walletCompantionMessage companionId
 
 sendNewActiveEndpoints
   :: forall m

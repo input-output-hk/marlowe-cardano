@@ -35,7 +35,11 @@ import Language.Marlowe.Client
   , MarloweEndpointResult(..)
   , MarloweError
   )
-import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types (RestorePostData(..))
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
+  ( CreatePostData(..)
+  , RestorePostData(..)
+  )
+import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types as Wallet
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics
   ( AccountId
@@ -71,6 +75,13 @@ mnemonicPhrase mp =
 walletName :: forall m. MonadThrow Error m => String -> m WalletNickname
 walletName name = expectRight ("Bad wallet name: " <> name) $ WN.fromString name
 
+walletInfo :: WalletId -> Address -> PubKeyHash -> WalletInfo
+walletInfo walletId address pubKeyHash = WalletInfo
+  { walletId
+  , address
+  , pubKeyHash: PPKH.fromPubKeyHash pubKeyHash
+  }
+
 restoreRequest :: WalletNickname -> MnemonicPhrase -> RestorePostData
 restoreRequest getRestoreWalletName getRestoreMnemonicPhrase = RestorePostData
   { getRestoreWalletName
@@ -79,11 +90,25 @@ restoreRequest getRestoreWalletName getRestoreMnemonicPhrase = RestorePostData
   }
 
 restoreResponse :: WalletId -> Address -> PubKeyHash -> WalletInfo
-restoreResponse walletId address pubKeyHash = WalletInfo
-  { walletId
-  , address
-  , pubKeyHash: PPKH.fromPubKeyHash pubKeyHash
+restoreResponse = walletInfo
+
+createWalletRequest :: WalletNickname -> CreatePostData
+createWalletRequest getCreateWalletName = CreatePostData
+  { getCreateWalletName
+  , getCreatePassphrase: fixmeAllowPassPerWallet
   }
+
+createWalletResponse
+  :: MnemonicPhrase
+  -> WalletId
+  -> Address
+  -> PubKeyHash
+  -> Wallet.CreateResponse
+createWalletResponse mnemonic walletId address pubKeyHash =
+  Wallet.CreateResponse
+    { mnemonic
+    , walletInfo: walletInfo walletId address pubKeyHash
+    }
 
 -------------------------------------------------------------------------------
 -- Endpoints
