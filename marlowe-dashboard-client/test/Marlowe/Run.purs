@@ -41,6 +41,7 @@ import Data.Newtype (over)
 import Data.PubKeyHash (PubKeyHash)
 import Data.Time.Duration (Minutes(..))
 import Data.Tuple.Nested (type (/\), (/\))
+import Data.UniqueIdentifier (UniqueIdentifier)
 import Data.Wallet (SyncStatus(..), WalletDetails)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
@@ -71,12 +72,7 @@ import Test.Control.Monad.Time
   , MockTimeM
   , runMockTimeM
   )
-import Test.Control.Monad.UUID
-  ( class MonadMockUUID
-  , MockUuidEnv
-  , MockUuidM
-  , runMockUuidM
-  )
+import Test.Control.Monad.UUID (class MonadMockUUID, MockUuidM, runMockUuidM)
 import Test.Halogen (class MonadHalogenTest, runUITest)
 import Test.Network.HTTP
   ( class MonadMockHTTP
@@ -130,9 +126,8 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
       clocks <- liftEffect $ Ref.new Map.empty
       nowRef <- liftEffect $ Ref.new unixEpoch
       nextClockId <- liftEffect $ Ref.new 0
-      uuidRef <- liftEffect $ Ref.new Nothing
       let mockTimeEnv = { clocks, nowRef, tzOffset: Minutes zero, nextClockId }
-      let mockUuidEnv = { uuidRef }
+      mockUuidEnv <- liftEffect $ Ref.new bottom
       let
         store = mkStore unixEpoch addressBook contractNicknames wallet
       { component } <- runAppM env store mkMainFrame
@@ -200,7 +195,7 @@ runMarloweTestM
   -> Coenv
   -> Queue RequestBox
   -> MockTimeEnv
-  -> MockUuidEnv
+  -> Ref UniqueIdentifier
   -> m a
 runMarloweTestM (MarloweTestM m) coenv requests timeEnv uuidEnv =
   flip runMockUuidM uuidEnv

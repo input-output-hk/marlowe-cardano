@@ -77,7 +77,7 @@ import Plutus.PAB.Webserver.Types
   )
 import Test.Assertions (shouldEqualJson)
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
-import Test.Control.Monad.UUID (class MonadMockUUID, mkTestUUID)
+import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
 import Test.Data.Marlowe
   ( adaToken
   , companionEndpoints
@@ -131,6 +131,7 @@ import Test.Network.HTTP
   , renderMatcherError
   )
 import Test.Spec (Spec)
+import Test.Spec.Assertions (fail)
 import Test.Web.DOM.Assertions (shouldCast, shouldHaveText, shouldNotBeDisabled)
 import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
 import Test.Web.Event.User (click, clickM, type_)
@@ -348,7 +349,7 @@ createContract
   , walletId
   } = do
   card <- openContractTemplates
-  createRequestId <- mkTestUUID "aef7e9ad-c283-4039-9a80-28faa0c04c33"
+  createRequestId <- getNextUUID
   withContainer card do
     selectTemplate
     fillContractFields

@@ -4,25 +4,24 @@ import Prologue
 
 import Control.Monad.Base (class MonadBase)
 import Control.Monad.Cont (class MonadTrans)
-import Control.Monad.Error.Class
-  ( class MonadError
-  , class MonadThrow
-  , throwError
-  )
+import Control.Monad.Error.Class (class MonadError, class MonadThrow)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.Fork.Class (class MonadFork, class MonadKill, kill)
 import Control.Monad.Now (class MonadTime)
-import Control.Monad.Reader (ReaderT, asks, runReaderT)
+import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.UUID (class MonadUUID)
 import Control.Monad.Unlift (class MonadUnlift)
 import Control.Monad.Writer (WriterT)
-import Data.UUID.Argonaut (UUID, parseUUID)
+import Data.Enum (succ)
+import Data.Maybe (fromMaybe)
+import Data.UUID.Argonaut (UUID)
+import Data.UniqueIdentifier (UniqueIdentifier, toUUID)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Aff.Unlift (class MonadUnliftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Exception (Error, error)
+import Effect.Exception (Error)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Test.Control.Monad.Time (MockTimeM)
@@ -32,37 +31,33 @@ import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
 
 class Monad m <= MonadMockUUID m where
-  -- We are only storing a single UUID, if an action fires multiple requests, we
-  -- might want to change this to receive an array.
-  setNextUUID :: UUID -> m Unit
+  -- Get the next UUID to be generated without incrementing the counter.
+  getNextUUID :: m UUID
 
 instance MonadMockUUID m => MonadMockUUID (ReaderT r m) where
-  setNextUUID = lift <<< setNextUUID
+  getNextUUID = lift getNextUUID
 
 instance (Monoid w, MonadMockUUID m) => MonadMockUUID (WriterT w m) where
-  setNextUUID = lift <<< setNextUUID
+  getNextUUID = lift getNextUUID
 
 instance MonadMockUUID m => MonadMockUUID (ExceptT e m) where
-  setNextUUID = lift <<< setNextUUID
-
-instance MonadEffect m => MonadMockUUID (MockUuidM m) where
-  setNextUUID uuid = do
-    uuidRef <- MockUuidM $ asks _.uuidRef
-    liftEffect $ Ref.write (Just uuid) uuidRef
+  getNextUUID = lift getNextUUID
 
 instance MonadMockUUID m => MonadMockUUID (MockHttpM m) where
-  setNextUUID = lift <<< setNextUUID
+  getNextUUID = lift getNextUUID
 
 instance MonadMockUUID m => MonadMockUUID (MockTimeM m) where
-  setNextUUID = lift <<< setNextUUID
+  getNextUUID = lift getNextUUID
 
-type MockUuidEnv =
-  { uuidRef :: Ref (Maybe UUID)
-  }
+instance MonadEffect m => MonadMockUUID (MockUuidM m) where
+  getNextUUID = do
+    uuidRef <- MockUuidM ask
+    liftEffect $ toUUID <<< fromMaybe bottom <<< succ <$> Ref.read uuidRef
 
-newtype MockUuidM (m :: Type -> Type) a = MockUuidM (ReaderT MockUuidEnv m a)
+newtype MockUuidM (m :: Type -> Type) a =
+  MockUuidM (ReaderT (Ref UniqueIdentifier) m a)
 
-runMockUuidM :: forall m a. MockUuidM m a -> MockUuidEnv -> m a
+runMockUuidM :: forall m a. MockUuidM m a -> Ref UniqueIdentifier -> m a
 runMockUuidM (MockUuidM r) = runReaderT r
 
 derive newtype instance Functor m => Functor (MockUuidM m)
@@ -97,21 +92,6 @@ derive newtype instance MonadUser m => MonadUser (MockUuidM m)
 
 instance (MonadEffect m, MonadError Error m) => MonadUUID (MockUuidM m) where
   generateUUID = do
-    uuidRef <- MockUuidM $ asks _.uuidRef
-    mReqId <- liftEffect $ Ref.read uuidRef
-    case mReqId of
-      Nothing -> throwError $ error
-        "A UUID was asked to be created but no mock was found"
-      Just reqId -> do
-        liftEffect $ Ref.write Nothing uuidRef
-        pure reqId
-
-mkTestUUID
-  :: forall m. MonadThrow Error m => MonadMockUUID m => String -> m UUID
-mkTestUUID str =
-  case parseUUID str of
-    Just uuid -> do
-      setNextUUID uuid
-      pure uuid
-    Nothing -> throwError $ error $ "Can't parse <" <> str <> "> as a UUID"
-
+    uuidRef <- MockUuidM ask
+    uuid <- liftEffect $ Ref.modify (fromMaybe bottom <<< succ) uuidRef
+    pure $ toUUID uuid
