@@ -22,9 +22,11 @@ import Data.Map (Map)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.PubKeyHash (PubKeyHash)
 import Data.String (joinWith)
+import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
 import Data.UUID.Argonaut (UUID)
 import Data.UUID.Argonaut as UUID
+import Data.Undefinable (toUndefinable)
 import Data.WalletId (WalletId)
 import Data.WalletId as WI
 import Data.WalletNickname (WalletNickname)
@@ -65,7 +67,277 @@ import Test.Network.HTTP
   , expectMethod
   , expectUri
   )
+import Test.Web.DOM.Assertions (shouldCast, shouldNotBeDisabled)
+import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
+import Test.Web.Event.User (click, clickM, type_)
+import Test.Web.Event.User.Monad (class MonadUser)
+import Test.Web.Monad (class MonadTest, withContainer)
+import Web.ARIA (ARIARole(..))
 import WebSocket.Support (FromSocket(..))
+
+-------------------------------------------------------------------------------
+-- UI Navigation - Dashboard Page
+-------------------------------------------------------------------------------
+
+openMyWalletDialog
+  :: forall m a
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m a
+  -> m a
+openMyWalletDialog action = do
+  clickLinkRegex "my wallet"
+  card <- findBy role $ pure Dialog
+  withContainer card action
+
+openContactsDialog
+  :: forall m a
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m a
+  -> m a
+openContactsDialog action = do
+  clickLinkRegex "contacts"
+  card <- findBy role $ pure Dialog
+  withContainer card action
+
+openNewContractDialog
+  :: forall m a
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m a
+  -> m a
+openNewContractDialog action = do
+  clickLinkRegex "create a new contract"
+  card <- findBy role $ pure Dialog
+  withContainer card action
+
+typeAddress
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> m Unit
+typeAddress = typeTextboxRegex "address"
+
+typeContractTitle
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> m Unit
+typeContractTitle = typeTextboxRegex "contract title"
+
+typeContractValue
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => ARIARole
+  -> String
+  -> String
+  -> m Unit
+typeContractValue r name value = do
+  textbox <- getBy role do
+    nameRegex name ignoreCase
+    pure r
+  type_ textbox value $ Just
+    { skipClick: false
+    , skipAutoClose: true
+    , initialSelectionStart: toUndefinable $ Just 0
+    , initialSelectionEnd: toUndefinable $ Just 10
+    }
+
+clickDrop
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickDrop = clickButtonRegex "drop"
+
+clickNewContact
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickNewContact = clickButtonRegex "new contact"
+
+clickSave
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickSave = clickButtonRegex "save"
+
+clickSetup
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickSetup = clickButtonRegex "setup"
+
+clickReview
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickReview = clickButtonRegex "review"
+
+clickPayAndStart
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickPayAndStart = clickButtonRegex "pay and start"
+
+-------------------------------------------------------------------------------
+-- UI Navigation - Welcome Page
+-------------------------------------------------------------------------------
+
+openRestoreDialog
+  :: forall m a
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m a
+  -> m a
+openRestoreDialog action = do
+  clickButtonRegex "restore testnet wallet"
+  dialog <- getBy role $ pure Dialog
+  withContainer dialog action
+
+openGenerateDialog
+  :: forall m a
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m a
+  -> m a
+openGenerateDialog action = do
+  clickButtonRegex "generate"
+  dialog <- getBy role $ pure Dialog
+  withContainer dialog action
+
+typeWalletNickname
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> m Unit
+typeWalletNickname = typeTextboxRegex "wallet nickname"
+
+typeMnemonicPhrase
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> m Unit
+typeMnemonicPhrase = typeTextboxRegex "mnemonic phrase"
+
+clickCreateWallet
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickCreateWallet = clickButtonRegex "create wallet"
+
+clickRestoreWallet
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickRestoreWallet = clickButtonRegex "restore wallet"
+
+clickOk
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => m Unit
+clickOk = clickButtonRegex "ok"
+
+-------------------------------------------------------------------------------
+-- UI Navigation - Helpers
+-------------------------------------------------------------------------------
+
+clickLinkRegex
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> m Unit
+clickLinkRegex regex = do
+  button <- shouldCast =<< getBy role do
+    nameRegex regex ignoreCase
+    pure Link
+  shouldNotBeDisabled button
+  click button
+
+clickButtonRegex
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> m Unit
+clickButtonRegex regex = do
+  button <- shouldCast =<< getBy role do
+    nameRegex regex ignoreCase
+    pure Button
+  shouldNotBeDisabled button
+  click button
+
+typeTextboxRegex
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => String
+  -> String
+  -> m Unit
+typeTextboxRegex regex text = do
+  textbox <- getBy role do
+    nameRegex regex ignoreCase
+    pure Textbox
+  type_ textbox text Nothing
 
 -------------------------------------------------------------------------------
 -- Mock HTTP Server

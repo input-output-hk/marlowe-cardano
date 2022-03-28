@@ -31,28 +31,28 @@ import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
 
 class Monad m <= MonadMockUUID m where
-  -- Get the next UUID to be generated without incrementing the counter.
-  getNextUUID :: m UUID
+  -- Get the last UUID generated without incrementing the counter.
+  getLastUUID :: m UUID
 
 instance MonadMockUUID m => MonadMockUUID (ReaderT r m) where
-  getNextUUID = lift getNextUUID
+  getLastUUID = lift getLastUUID
 
 instance (Monoid w, MonadMockUUID m) => MonadMockUUID (WriterT w m) where
-  getNextUUID = lift getNextUUID
+  getLastUUID = lift getLastUUID
 
 instance MonadMockUUID m => MonadMockUUID (ExceptT e m) where
-  getNextUUID = lift getNextUUID
+  getLastUUID = lift getLastUUID
 
 instance MonadMockUUID m => MonadMockUUID (MockHttpM m) where
-  getNextUUID = lift getNextUUID
+  getLastUUID = lift getLastUUID
 
 instance MonadMockUUID m => MonadMockUUID (MockTimeM m) where
-  getNextUUID = lift getNextUUID
+  getLastUUID = lift getLastUUID
 
 instance MonadEffect m => MonadMockUUID (MockUuidM m) where
-  getNextUUID = do
+  getLastUUID = do
     uuidRef <- MockUuidM ask
-    liftEffect $ toUUID <<< fromMaybe bottom <<< succ <$> Ref.read uuidRef
+    liftEffect $ toUUID <$> Ref.read uuidRef
 
 newtype MockUuidM (m :: Type -> Type) a =
   MockUuidM (ReaderT (Ref UniqueIdentifier) m a)

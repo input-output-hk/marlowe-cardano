@@ -36,7 +36,6 @@ import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
-import Data.Undefinable (toUndefinable)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
@@ -50,7 +49,7 @@ import MarloweContract (MarloweContract(..))
 import Node.Encoding (Encoding(..))
 import Node.FS.Sync as FS
 import Test.Control.Monad.Time (class MonadMockTime, advanceTime)
-import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
+import Test.Control.Monad.UUID (class MonadMockUUID, getLastUUID)
 import Test.Data.Marlowe
   ( adaToken
   , companionEndpoints
@@ -78,15 +77,36 @@ import Test.Marlowe.Run.Action.Types
   , renderScriptError
   )
 import Test.Marlowe.Run.Commands
-  ( handleGetContractInstances
+  ( clickCreateWallet
+  , clickDrop
+  , clickLinkRegex
+  , clickNewContact
+  , clickOk
+  , clickPayAndStart
+  , clickRestoreWallet
+  , clickReview
+  , clickSave
+  , clickSetup
+  , handleGetContractInstances
   , handlePostActivate
   , handlePostCreate
   , handlePostCreateWallet
   , handlePostRestoreWallet
+  , openContactsDialog
+  , openGenerateDialog
+  , openMyWalletDialog
+  , openNewContractDialog
+  , openRestoreDialog
   , recvInstanceSubscribe
   , sendCreateSuccess
   , sendNewActiveEndpoints
   , sendWalletCompanionUpdate
+  , typeAddress
+  , typeContractTitle
+  , typeContractValue
+  , typeMnemonicPhrase
+  , typeTextboxRegex
+  , typeWalletNickname
   )
 import Test.Network.HTTP
   ( class MonadMockHTTP
@@ -95,11 +115,10 @@ import Test.Network.HTTP
   , renderMatcherError
   )
 import Test.Spec (Spec)
-import Test.Web.DOM.Assertions (shouldCast, shouldHaveText, shouldNotBeDisabled)
-import Test.Web.DOM.Query (findBy, getBy, nameRegex, role)
-import Test.Web.Event.User (click, clickM, type_)
+import Test.Web.DOM.Assertions (shouldHaveText)
+import Test.Web.DOM.Query (findBy, nameRegex, role)
 import Test.Web.Event.User.Monad (class MonadUser)
-import Test.Web.Monad (class MonadTest, withContainer)
+import Test.Web.Monad (class MonadTest)
 import Web.ARIA (ARIARole(..))
 
 runScriptedTest :: String -> Spec Unit
@@ -224,25 +243,8 @@ dropWallet
   => WalletId
   -> m Unit
 dropWallet walletId = do
-  openMyWallet do
-    clickM $ getBy role do
-      nameRegex "drop" ignoreCase
-      pure Button
+  openMyWalletDialog clickDrop
   handleGetContractInstances walletId []
-
-openMyWallet
-  :: forall m
-   . MonadError Error m
-  => MonadTest m
-  => MonadUser m
-  => m Unit
-  -> m Unit
-openMyWallet action = do
-  clickM $ getBy role do
-    nameRegex "my wallet" ignoreCase
-    pure Link
-  card <- findBy role $ pure Dialog
-  withContainer card action
 
 addContact
   :: forall m
@@ -253,38 +255,12 @@ addContact
   => { walletName :: WalletNickname, address :: Address }
   -> m Unit
 addContact { walletName, address } = do
-  card <- openContactList
-  withContainer card do
-    tell [ "Open add new contact dialog" ]
-    clickM $ getBy role do
-      nameRegex "new contact" ignoreCase
-      pure Button
-    fillContactDetails
-
-    tell [ "Submit the form" ]
-    clickM $ getBy role do
-      nameRegex "save" ignoreCase
-      pure Button
+  openContactsDialog do
+    clickNewContact
+    typeWalletNickname $ WN.toString walletName
+    typeAddress $ Address.toString address
+    clickSave
   expectSuccessToast "contact added"
-  where
-  openContactList = do
-    tell [ "Open contact list" ]
-    clickM $ getBy role do
-      nameRegex "contacts" ignoreCase
-      pure Link
-    findBy role $ pure Dialog
-  fillContactDetails = do
-    tell [ "Fill contact details" ]
-    nicknameField <- getBy role do
-      nameRegex "wallet nickname" ignoreCase
-      pure Textbox
-    click nicknameField
-    type_ nicknameField (WN.toString walletName) Nothing
-    walletField <- getBy role do
-      nameRegex "address" ignoreCase
-      pure Textbox
-    click walletField
-    type_ walletField (Address.toString address) Nothing
 
 createContract
   :: forall m
@@ -310,109 +286,46 @@ createContract
   , rolePayoutValidatorHash
   , walletId
   } = do
-  card <- openContractTemplates
-  createRequestId <- getNextUUID
-  withContainer card do
-    selectTemplate
-    fillContractFields
-    tell [ "Review terms" ]
-    clickM $ getBy role do
-      nameRegex "review" ignoreCase
-      pure Button
-
-    tell [ "Pay and start" ]
-    clickM $ getBy role do
-      nameRegex "pay and start" ignoreCase
-      pure Button
+  openNewContractDialog do
+    clickLinkRegex templateName
+    clickSetup
+    typeContractTitle contractTitle
+    for_ roles \r -> do typeTextboxRegex r.roleName $ WN.toString r.walletName
+    for_ fields \field -> typeContractValue field.role field.name field.value
+    clickReview
+    clickPayAndStart
+  reqId <- getLastUUID
   createdAt <- now
   loanDeadline <- fromNow (Minutes 10.0)
   repaymentDeadline <- fromNow (Minutes 25.0)
-  let contract = loan loanDeadline repaymentDeadline 1000000 10000000
-  expectCreateContractHttpRequest createRequestId contract
+  let
+    contract = loan loanDeadline repaymentDeadline 1000000 10000000
+    params = marloweParams currencySymbol rolePayoutValidatorHash
+    contractState = semanticState
+      [ (PK "e08cfb83f317447d18fad74ce06eab5a91d44480d0f7459abc187136")
+          /\ adaToken
+          /\ 200000
+      ]
+      []
+      []
+      createdAt
+  lender <- expectJust "lender role expected"
+    $ find (eq "Lender" <<< _.roleName) roles
+  borrower <- expectJust "borrower role expected"
+    $ find (eq "Borrower" <<< _.roleName) roles
+  handlePostCreate marloweAppId reqId
+    (loanRoles borrower.address lender.address)
+    contract
   expectSuccessToast
     "The request to initialize this contract has been submitted."
-  expectWalletCompanionUpdate createdAt contract
-  sendCreateSuccess marloweAppId createRequestId params
-  expectFollowerContract
+  sendWalletCompanionUpdate walletCompanionId
+    [ Tuple params $ marloweData contract contractState
+    ]
+  sendCreateSuccess marloweAppId reqId params
+  handlePostActivate walletId MarloweFollower followerId
+  recvInstanceSubscribe followerId
+  sendNewActiveEndpoints followerId followerEndpoints
   expectSuccessToast "Contract initialized."
-
-  where
-  params = marloweParams currencySymbol rolePayoutValidatorHash
-  openContractTemplates = do
-    tell [ "Open contract templates" ]
-    clickM $ getBy role do
-      nameRegex "create a new contract" ignoreCase
-      pure Link
-    findBy role $ pure Dialog
-
-  selectTemplate = do
-    tell [ "Select template: " <> templateName ]
-    clickM $ getBy role do
-      nameRegex templateName ignoreCase
-      pure Link
-    clickM $ getBy role do
-      nameRegex "setup" ignoreCase
-      pure Button
-
-  fillContractFields = do
-    tell [ "Fill contract title" ]
-    titleField <-
-      getBy role do
-        nameRegex "contract title" ignoreCase
-        pure Textbox
-    click titleField
-    type_ titleField contractTitle Nothing
-
-    -- Fill roles
-    for_ roles \r -> do
-      tell [ "Fill " <> r.roleName <> " role" ]
-      fieldElement <- getBy role do
-        nameRegex r.roleName ignoreCase
-        pure Textbox
-      click fieldElement
-      type_ fieldElement (WN.toString r.walletName) Nothing
-
-    -- Fill other fields
-    for_ fields \field -> do
-      tell [ "Fill " <> field.name <> " field" ]
-      fieldElement <- getBy role do
-        nameRegex field.name ignoreCase
-        pure field.role
-      click fieldElement
-      type_ fieldElement field.value $ Just
-        { skipClick: false
-        , skipAutoClose: true
-        , initialSelectionStart: toUndefinable $ Just 0
-        , initialSelectionEnd: toUndefinable $ Just 10
-        }
-
-  expectCreateContractHttpRequest reqId contract = do
-    lender <- expectJust "lender role expected"
-      $ find (eq "Lender" <<< _.roleName) roles
-    borrower <- expectJust "borrower role expected"
-      $ find (eq "Borrower" <<< _.roleName) roles
-    handlePostCreate marloweAppId reqId
-      (loanRoles borrower.address lender.address)
-      contract
-
-  expectWalletCompanionUpdate createdAt contract =
-    sendWalletCompanionUpdate walletCompanionId
-      [ Tuple params
-          $ marloweData contract
-          $ semanticState
-              [ (PK "e08cfb83f317447d18fad74ce06eab5a91d44480d0f7459abc187136")
-                  /\ adaToken
-                  /\ 200000
-              ]
-              []
-              []
-              createdAt
-      ]
-
-  expectFollowerContract = do
-    handlePostActivate walletId MarloweFollower followerId
-    recvInstanceSubscribe followerId
-    sendNewActiveEndpoints followerId followerEndpoints
 
 -- Assert that there is a success toast with the provided message.
 -- This should be executed from the main container
@@ -461,11 +374,7 @@ createWallet
   , walletCompanionId
   , marloweAppId
   } = do
-  clickM $ getBy role do
-    nameRegex "generate" ignoreCase
-    pure Button
-  dialog <- getBy role $ pure Dialog
-  withContainer dialog do
+  openGenerateDialog do
     fillCreateWalletDialog
     handlePostCreateWallet walletName address mnemonic pubKeyHash walletId
     fillConfirmMnemonicDialog
@@ -474,31 +383,16 @@ createWallet
   where
   fillCreateWalletDialog = do
     tell [ "Fill create wallet dialog" ]
-    nicknameField <- getBy role do
-      nameRegex "wallet nickname" ignoreCase
-      pure Textbox
-    click nicknameField
-    type_ nicknameField (WN.toString walletName) Nothing
-    clickM $ getBy role do
-      nameRegex "create wallet" ignoreCase
-      pure Button
+    typeWalletNickname $ WN.toString walletName
+    clickCreateWallet
 
   fillConfirmMnemonicDialog = do
     tell [ "Fill confirm mnemonic dialot" ]
     mnemonicText <- findBy role $ pure Mark
     mnemonicText `shouldHaveText` MP.toString mnemonic
-    clickM $ getBy role do
-      nameRegex "ok" ignoreCase
-      pure Button
-    mnemonicField <- getBy role do
-      nameRegex "mnemonic phrase" ignoreCase
-      pure Textbox
-    type_ mnemonicField (MP.toString mnemonic) Nothing
-    okButton <- shouldCast =<< getBy role do
-      nameRegex "ok" ignoreCase
-      pure Button
-    shouldNotBeDisabled okButton
-    click okButton
+    clickOk
+    typeMnemonicPhrase $ MP.toString mnemonic
+    clickOk
     wallets <- asks _.wallets
     liftEffect $ Ref.modify_
       ( Bimap.insert walletName
@@ -535,11 +429,7 @@ restore { instances, walletName } = do
     )
     pure
     mWallet
-  clickM $ getBy role do
-    nameRegex "restore" ignoreCase
-    pure Button
-  dialog <- getBy role $ pure Dialog
-  withContainer dialog do
+  openRestoreDialog do
     fillRestoreWalletDialog wallet.mnemonic
     expectRestoreHttpRequest wallet
     expectWalletActivation wallet
@@ -547,17 +437,9 @@ restore { instances, walletName } = do
   where
   fillRestoreWalletDialog mnemonic = do
     tell [ "Fill restore wallet dialog" ]
-    nicknameField <- getBy role do
-      nameRegex "wallet nickname" ignoreCase
-      pure Textbox
-    mnemonicField <- getBy role do
-      nameRegex "mnemonic phrase" ignoreCase
-      pure Textbox
-    type_ nicknameField (WN.toString walletName) Nothing
-    type_ mnemonicField (MP.toString mnemonic) Nothing
-    clickM $ getBy role do
-      nameRegex "restore wallet" ignoreCase
-      pure Button
+    typeWalletNickname $ WN.toString walletName
+    typeMnemonicPhrase $ MP.toString mnemonic
+    clickRestoreWallet
 
   expectRestoreHttpRequest { address, mnemonic, pubKeyHash, walletId } = do
     handlePostRestoreWallet walletName address mnemonic pubKeyHash walletId
