@@ -1,6 +1,6 @@
 {
   "editor header": { "role": "heading", "name": "project-title"},
-  "playground editor": { "role": "textbox", "name": "Editor content;Press Alt+F1 for Accessibility Options."},
+  "playground editor": { "role": "heading", "name": "javascript-editor"},
   "Compile": { "role": "button", "name": "Compile"},
   "Send To Simulator": { "role": "button", "name": "Send to Simulator"}
 }
