@@ -295,23 +295,46 @@ fundWallet
   -> BigInt
   -> m Unit
 fundWallet walletName currencySymbol tokenName amount = do
-  walletsRef <- asks _.wallets
+  wallet <- getWallet walletName
   walletFunds <- asks _.walletFunds
+  let
+    alter
+      :: forall k v. Ord k => k -> (Maybe v -> Maybe v) -> Map k v -> Map k v
+    alter = flip Map.alter
+    addAsset = alter currencySymbol $ Just <<< case _ of
+      Nothing -> Map.singleton tokenName amount
+      Just tokens -> alter tokenName (lift2 add (pure amount)) tokens
+    assets = over Assets addAsset wallet.assets
+    newWallet = wallet { assets = assets }
+  setWallet walletName newWallet
+  liftEffect $ HS.notify walletFunds { sync: Synchronized, assets }
+
+getWallet
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
+  => WalletNickname
+  -> m TestWallet
+getWallet walletName = do
+  walletsRef <- asks _.wallets
   wallets <- liftEffect $ Ref.read walletsRef
-  wallet <- case Bimap.lookupL walletName wallets of
+  case Bimap.lookupL walletName wallets of
     Nothing -> throwError
       $ error
       $ "Test error: unknown wallet " <> WN.toString walletName
     Just w -> pure w
+
+setWallet
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
+  => WalletNickname
+  -> TestWallet
+  -> m Unit
+setWallet walletName wallet = do
+  walletsRef <- asks _.wallets
   liftEffect do
-    let
-      alter
-        :: forall k v. Ord k => k -> (Maybe v -> Maybe v) -> Map k v -> Map k v
-      alter = flip Map.alter
-      addAsset = alter currencySymbol $ Just <<< case _ of
-        Nothing -> Map.singleton tokenName amount
-        Just tokens -> alter tokenName (lift2 add (pure amount)) tokens
-      assets = over Assets addAsset wallet.assets
-    let newWallet = wallet { assets = assets }
-    Ref.write (Bimap.insert walletName newWallet wallets) walletsRef
-    HS.notify walletFunds { sync: Synchronized, assets }
+    wallets <- Ref.read walletsRef
+    Ref.write (Bimap.insert walletName wallet wallets) walletsRef

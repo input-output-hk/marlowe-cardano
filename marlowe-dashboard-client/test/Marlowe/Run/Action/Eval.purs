@@ -21,13 +21,11 @@ import Data.Argonaut
 import Data.Argonaut.Extra (parseDecodeJson)
 import Data.Array (snoc)
 import Data.Bifunctor (lmap)
-import Data.Bimap as Bimap
 import Data.DateTime.Instant (unInstant)
 import Data.Either (either)
 import Data.Foldable (find, foldM, for_, traverse_)
 import Data.Lens (_2, takeBoth, traversed, (^..), (^?))
 import Data.Map as Map
-import Data.Maybe (maybe)
 import Data.MnemonicPhrase as MP
 import Data.Newtype (over2)
 import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll)
@@ -42,7 +40,6 @@ import Data.WalletNickname as WN
 import Effect.Aff (Error, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
-import Effect.Ref as Ref
 import Marlowe.Client (_chInitialData, _chParams)
 import Marlowe.Semantics (Assets(..), Party(..))
 import MarloweContract (MarloweContract(..))
@@ -64,7 +61,13 @@ import Test.Data.Marlowe
   , semanticState
   )
 import Test.Data.Plutus (MarloweContractInstanceClientState, appInstanceActive)
-import Test.Marlowe.Run (Coenv, fundWallet, marloweRunTest)
+import Test.Marlowe.Run
+  ( Coenv
+  , fundWallet
+  , getWallet
+  , marloweRunTest
+  , setWallet
+  )
 import Test.Marlowe.Run.Action.Types
   ( AppInstance(..)
   , CreateContractRecord
@@ -291,7 +294,7 @@ createContract
     clickSetup
     typeContractTitle contractTitle
     for_ roles \r -> do typeTextboxRegex r.roleName $ WN.toString r.walletName
-    for_ fields \field -> typeContractValue field.role field.name field.value
+    for_ fields \field -> typeContractValue field.name field.value
     clickReview
     clickPayAndStart
   reqId <- getLastUUID
@@ -393,12 +396,8 @@ createWallet
     clickOk
     typeMnemonicPhrase $ MP.toString mnemonic
     clickOk
-    wallets <- asks _.wallets
-    liftEffect $ Ref.modify_
-      ( Bimap.insert walletName
-          { address, assets: Assets Map.empty, mnemonic, pubKeyHash, walletId }
-      )
-      wallets
+    setWallet walletName
+      { address, assets: Assets Map.empty, mnemonic, pubKeyHash, walletId }
 
   expectWalletActivation = do
     handleGetContractInstances walletId []
@@ -420,15 +419,7 @@ restore
   => { walletName :: WalletNickname, instances :: Array AppInstance }
   -> m Unit
 restore { instances, walletName } = do
-  wallets <- asks _.wallets
-  mWallet <- liftEffect $ Bimap.lookupL walletName <$> Ref.read wallets
-  wallet <- maybe
-    ( throwError
-        $ error
-        $ "Test error: unknown wallet " <> (WN.toString walletName)
-    )
-    pure
-    mWallet
+  wallet <- getWallet walletName
   openRestoreDialog do
     fillRestoreWalletDialog wallet.mnemonic
     expectRestoreHttpRequest wallet

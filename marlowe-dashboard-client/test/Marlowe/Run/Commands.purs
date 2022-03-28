@@ -34,6 +34,7 @@ import Effect.Aff (Error, delay, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Halogen.Subscription (notify)
+import Language.Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Semantics (Contract, MarloweData, MarloweParams)
 import MarloweContract (MarloweContract)
@@ -48,6 +49,7 @@ import Test.Data.Marlowe
   , createSuccessMessage
   , createWalletRequest
   , createWalletResponse
+  , followerMessage
   , restoreRequest
   , restoreResponse
   , walletCompantionMessage
@@ -144,14 +146,13 @@ typeContractValue
   => MonadUser m
   => MonadError Error m
   => MonadTest m
-  => ARIARole
-  -> String
+  => String
   -> String
   -> m Unit
-typeContractValue r name value = do
+typeContractValue name value = do
   textbox <- getBy role do
     nameRegex name ignoreCase
-    pure r
+    pure Spinbutton
   type_ textbox value $ Just
     { skipClick: false
     , skipAutoClose: true
@@ -303,11 +304,9 @@ clickLinkRegex
   => String
   -> m Unit
 clickLinkRegex regex = do
-  button <- shouldCast =<< getBy role do
+  clickM $ getBy role do
     nameRegex regex ignoreCase
     pure Link
-  shouldNotBeDisabled button
-  click button
 
 clickButtonRegex
   :: forall m
@@ -478,6 +477,17 @@ sendWalletCompanionUpdate
   -> m Unit
 sendWalletCompanionUpdate companionId =
   sendWebsocketMessage <<< walletCompantionMessage companionId
+
+sendFollowerUpdate
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadTell (Array String) m
+  => MonadEffect m
+  => UUID
+  -> ContractHistory
+  -> m Unit
+sendFollowerUpdate followerId =
+  sendWebsocketMessage <<< followerMessage followerId
 
 sendNewActiveEndpoints
   :: forall m

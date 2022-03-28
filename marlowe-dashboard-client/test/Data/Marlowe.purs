@@ -31,7 +31,8 @@ import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff (Error, error)
 import Language.Marlowe.Client
-  ( EndpointResponse(..)
+  ( ContractHistory
+  , EndpointResponse(..)
   , MarloweEndpointResult(..)
   , MarloweError
   )
@@ -230,6 +231,13 @@ walletCompantionMessage
   -> CombinedWSStreamToClient
 walletCompantionMessage appId =
   instanceUpdate appId <<< newObservableState <<< walletCompantionState
+
+-------------------------------------------------------------------------------
+-- MarloweFollower Websocket Traffic
+-------------------------------------------------------------------------------
+
+followerMessage :: UUID -> ContractHistory -> CombinedWSStreamToClient
+followerMessage appId = instanceUpdate appId <<< newObservableState
 
 -------------------------------------------------------------------------------
 -- Semantic model
