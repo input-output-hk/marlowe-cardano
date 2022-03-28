@@ -435,8 +435,11 @@ instance encodeJsonValue :: EncodeJson Value where
 
 instance decodeJsonValue :: DecodeJson Value where
   decodeJson =
-    caseConstantFrom valueConstants \json ->
-      Constant <$> decodeJson json <|> decodeObject json
+    -- Don't use <|> here - trying to decode a bigint as an object throws a
+    -- runtime error!
+    caseConstantFrom valueConstants \json -> case decodeJson json of
+      Right bigint -> pure $ Constant bigint
+      Left _ -> decodeObject json
     where
     valueConstants =
       Map.fromFoldable

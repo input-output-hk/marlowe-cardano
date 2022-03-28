@@ -8,6 +8,7 @@ import Control.Monad.Error.Class (class MonadThrow)
 import Data.Argonaut (class EncodeJson, Json, encodeJson)
 import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll)
 import Effect.Aff (Error)
+import Test.Data.Argonaut.Extra (bigIntNeq)
 import Test.Spec.Assertions (fail)
 
 foreign import jsonDiffString :: Json -> Json -> String
@@ -20,7 +21,7 @@ shouldEqualJson
   -> t
   -> m Unit
 shouldEqualJson a b =
-  when (jsonA /= jsonB) do
+  when (jsonA `bigIntNeq` jsonB) do
     fail $
       joinWith "\n  "
         [ withGraphics (foreground Red) "- Actual"
