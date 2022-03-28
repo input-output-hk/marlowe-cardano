@@ -72,8 +72,9 @@ render state =
         ]
     , div
         [ classNames [ "flex", "mb-8" ] ]
-        [ div
+        [ a
             [ classNames (newProjectClasses <> [ "mr-24" ])
+            , href "#/javascript"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Javascript)
             ]
@@ -82,8 +83,9 @@ render state =
             , text
                 "Start in Javascript"
             ]
-        , div
+        , a
             [ classNames (newProjectClasses <> [ "mr-24" ])
+            , href "#/haskell"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Haskell)
             ]
@@ -102,8 +104,9 @@ render state =
                 ]
             ]
             []
-        , div
+        , a
             [ classNames (newProjectClasses <> [ "ml-24", "mr-4" ])
+            , href "#"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Marlowe)
             ]
@@ -115,8 +118,9 @@ render state =
             [ img [ classNames [ "mt-4" ], src arrowRightUp ]
             , img [ classNames [ "mt-3" ], src arrowLeftUp ]
             ]
-        , div
+        , a
             [ classNames (newProjectClasses <> [ "ml-4", "mr-1" ])
+            , href "#"
             , onClick
                 (const $ NewProjectAction $ NewProject.CreateProject Blockly)
             ]
