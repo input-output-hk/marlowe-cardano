@@ -30,7 +30,6 @@ import Data.Traversable (traverse)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
-import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff (Error)
@@ -215,9 +214,9 @@ dropWallet
   => MonadUser m
   => MonadAsk Coenv m
   => MonadMockHTTP m
-  => WalletId
+  => WalletInfo
   -> m Unit
-dropWallet walletId = do
+dropWallet (WalletInfo { walletId }) = do
   openMyWalletDialog clickDrop
   handleGetContractInstances walletId []
 

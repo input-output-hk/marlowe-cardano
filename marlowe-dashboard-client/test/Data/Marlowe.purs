@@ -256,6 +256,11 @@ followerMessage appId = instanceUpdate appId <<< newObservableState
 -- Semantic model
 -------------------------------------------------------------------------------
 
+newMarloweParams :: forall m. MonadEffect m => m MarloweParams
+newMarloweParams = marloweParams
+  <$> (fold <$> replicateM 56 newHexChar)
+  <*> (fold <$> replicateM 56 newHexChar)
+
 marloweParams :: CurrencySymbol -> ValidatorHash -> MarloweParams
 marloweParams unCurrencySymbol rolePayoutValidatorHash = MarloweParams
   { rolesCurrency: { unCurrencySymbol }

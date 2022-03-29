@@ -21,9 +21,9 @@ import Test.Data.Address.Bech32.HRP as Bech32HRP
 import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
-import Test.Marlowe.Run.Action.Eval (runScriptedTest)
 import Test.Marlowe.Run.Action.Scenarios.Wallet
   ( createAndRestoreWallet
+  , multipleCompanionUpdates
   )
 import Test.Spec (Spec, describe, it, parallel, pending)
 import Test.Spec.Assertions (shouldEqual)
@@ -55,7 +55,7 @@ main = launchAff_ $ runSpec'
 testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do
   createAndRestoreWallet
-  runScriptedTest "restore-existing-follower"
+  multipleCompanionUpdates
   pending "create-contract"
 
 -------------------------------------------------------------------------------

@@ -49,8 +49,6 @@
   , "maybe"
   , "monad-control"
   , "newtype"
-  , "node-buffer"
-  , "node-fs"
   , "now"
   , "nullable"
   , "ordered-collections"
