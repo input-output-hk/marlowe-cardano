@@ -271,11 +271,11 @@ templateSwapOptions =
     <*> O.option parseParty   (O.long "a-party"           <> O.metavar "PARTY"         <> O.help "The first party."                                                  )
     <*> O.option parseToken   (O.long "a-token"           <> O.metavar "TOKEN"         <> O.help "The first party's token."                                          )
     <*> O.option O.auto       (O.long "a-amount"          <> O.metavar "INTEGER"       <> O.help "The amount of the first party's token."                            )
-    <*> O.option parseTimeout (O.long "a-timeout"         <> O.metavar "SLOT"          <> O.help "The timeout for the first party's deposit, in POSIX milliseconds." )
+    <*> O.option parseTimeout (O.long "a-timeout"         <> O.metavar "POSIX_TIME"    <> O.help "The timeout for the first party's deposit, in POSIX milliseconds." )
     <*> O.option parseParty   (O.long "b-party"           <> O.metavar "PARTY"         <> O.help "The second party."                                                 )
     <*> O.option parseToken   (O.long "b-token"           <> O.metavar "TOKEN"         <> O.help "The second party's token."                                         )
     <*> O.option O.auto       (O.long "b-amount"          <> O.metavar "INTEGER"       <> O.help "The amount of the second party's token."                           )
-    <*> O.option parseTimeout (O.long "b-timeout"         <> O.metavar "SLOT"          <> O.help "The timeout for the second party's deposit, in POSIX milliseconds.")
+    <*> O.option parseTimeout (O.long "b-timeout"         <> O.metavar "POSIX_TIME"    <> O.help "The timeout for the second party's deposit, in POSIX milliseconds.")
     <*> O.strOption           (O.long "out-contract-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON output file for the contract."                                )
     <*> O.strOption           (O.long "out-state-file"    <> O.metavar "STATE_FILE"    <> O.help "JSON output file for the contract's state."                        )
 
