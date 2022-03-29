@@ -53,10 +53,18 @@ library
     Marlowe.Contracts.Swap
     Marlowe.Contracts.Trivial
     Marlowe.Contracts.ZeroCouponBond
+    Marlowe.Contracts.UTC.Common
+    Marlowe.Contracts.UTC.CouponBond
+    Marlowe.Contracts.UTC.Futures
+    Marlowe.Contracts.UTC.Options
+    Marlowe.Contracts.UTC.StructuredProducts
+    Marlowe.Contracts.UTC.Swap
+    Marlowe.Contracts.UTC.ZeroCouponBond
   other-modules:
   build-depends:
     base >= 4.9 && < 5,
-    marlowe -any
+    marlowe -any,
+    time -any
 
 test-suite marlowe-contracts-test
     import: lang
@@ -81,4 +89,5 @@ test-suite marlowe-contracts-test
         marlowe-contracts,
         plutus-tx -any,
         QuickCheck,
+        time -any,
         uuid -any

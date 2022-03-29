@@ -55,7 +55,7 @@ option ::
   -> Timeout        -- ^ Expiry
   -> Timeout        -- ^ Settlement date
   -> Contract       -- ^ Option Contract
-option American optionType buyer seller priceFeed asset strike expiry settlement =
+option American optionType buyer seller priceFeed asset strike expiry _ =
   exercise
     optionType
     buyer
@@ -63,9 +63,7 @@ option American optionType buyer seller priceFeed asset strike expiry settlement
     priceFeed
     asset
     strike
-    settlement
     expiry
-    Close
 option European optionType buyer seller priceFeed asset strike expiry settlement =
   waitUntil expiry $
     exercise
@@ -76,8 +74,6 @@ option European optionType buyer seller priceFeed asset strike expiry settlement
       asset
       strike
       settlement
-      settlement
-      Close
 
 -- |Choose whether to exercise an option and transfer the assets or close
 -- the contract
@@ -89,29 +85,23 @@ exercise ::
   -> (Token, Value) -- ^ Underlying
   -> (Token, Value) -- ^ Strike
   -> Timeout        -- ^ Timeout
-  -> Timeout        -- ^ Expiry
-  -> Contract       -- ^ Continuation
   -> Contract       -- ^ Contract
-exercise Call buyer seller Nothing asset strike timeout =
+exercise optionType buyer seller priceFeed asset strike timeout =
   When
-    [ choose (ChoiceId "Exercise Call" buyer) Close
-    $ depositAndPay buyer seller strike asset timeout
+    [ exercise'
+        optionType
+        priceFeed
     ]
-exercise Call buyer seller (Just choiceId) asset strike timeout =
-  When
-    [ chooseOracle choiceId strike ValueLT Close
-    $ depositAndPay buyer seller strike asset timeout
-    ]
-exercise Put buyer seller Nothing asset strike timeout =
-  When
-    [ choose (ChoiceId "Exercise Put" buyer) Close
-    $ depositAndPay buyer seller asset strike timeout
-    ]
-exercise Put buyer seller (Just choiceId) asset strike timeout =
-  When
-    [ chooseOracle choiceId strike ValueGT Close
-    $ depositAndPay buyer seller asset strike timeout
-    ]
+    timeout
+    Close
+  where
+    -- without a price-feed (oracle)
+    exercise' Call Nothing = choose (ChoiceId "Exercise Call" buyer) Close $ depositAndPay buyer seller strike asset timeout
+    exercise' Put Nothing  = choose (ChoiceId "Exercise Put"  buyer) Close $ depositAndPay buyer seller asset strike timeout
+
+    -- with a price-feed (oracle)
+    exercise' Call (Just choiceId) = chooseOracle choiceId strike ValueLT Close $ depositAndPay buyer seller strike asset timeout
+    exercise' Put  (Just choiceId) = chooseOracle choiceId strike ValueGT Close $ depositAndPay buyer seller asset strike timeout
 
 -- |Deposit an asset and swap
 depositAndPay ::
