@@ -20,6 +20,7 @@ module Test.Web.DOM.Query
   , level
   , name
   , nameRegex
+  , nameRegexi
   , normalizer
   , placeholderText
   , pressed
@@ -47,7 +48,7 @@ import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable)
 import Data.Nullable as N
 import Data.String.Regex (Regex)
-import Data.String.Regex.Flags (RegexFlags)
+import Data.String.Regex.Flags (RegexFlags, ignoreCase)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Tuple (Tuple(..))
 import Data.Undefinable (Undefinable, toMaybe, toUndefinable)
@@ -279,6 +280,9 @@ queryFallbacks = ByRoleBuilder
 
 nameRegex :: String -> RegexFlags -> ByRoleBuilder Unit
 nameRegex regex = name <<< unsafeRegex regex
+
+nameRegexi :: String -> ByRoleBuilder Unit
+nameRegexi regex = nameRegex regex ignoreCase
 
 name :: forall matcher. IsMatcher matcher => matcher -> ByRoleBuilder Unit
 name = ByRoleBuilder

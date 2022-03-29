@@ -2,34 +2,21 @@ module Test.Marlowe.Run.Action.Eval (runScriptedTest) where
 
 import Prologue
 
-import Concurrent.Queue as Queue
-import Control.Monad.Error.Class (class MonadError, throwError, try)
-import Control.Monad.Except (ExceptT(..), mapExceptT, runExceptT)
+import Control.Logger.Capability (class MonadLogger, debug, info)
+import Control.Monad.Error.Class (class MonadError, throwError)
 import Control.Monad.Now (class MonadTime, now)
-import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Control.Monad.Writer (class MonadTell, runWriterT, tell)
+import Control.Monad.Reader (class MonadAsk)
 import Data.Address (Address)
 import Data.Address as Address
-import Data.Align (crosswalk)
-import Data.Argonaut
-  ( encodeJson
-  , jsonEmptyArray
-  , printJsonDecodeError
-  , stringifyWithIndent
-  )
-import Data.Argonaut.Extra (parseDecodeJson)
-import Data.Array (snoc)
+import Data.Argonaut (jsonEmptyArray, printJsonDecodeError)
+import Data.Argonaut.Extra (encodeStringifyJson, parseDecodeJson)
 import Data.Bifunctor (lmap)
 import Data.DateTime.Instant (unInstant)
-import Data.Either (either)
-import Data.Foldable (find, foldM, for_, traverse_)
+import Data.Foldable (find, for_, traverse_)
 import Data.Lens (_2, takeBoth, traversed, (^..), (^?))
 import Data.Map as Map
 import Data.MnemonicPhrase as MP
 import Data.Newtype (over2)
-import Data.String (Pattern(..), Replacement(..), joinWith, null, replaceAll)
-import Data.String.Extra (repeat)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Tuple (uncurry)
@@ -38,7 +25,7 @@ import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff (Error, error)
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Marlowe.Client (_chInitialData, _chParams)
 import Marlowe.Semantics (Assets(..), Party(..))
@@ -59,6 +46,7 @@ import Test.Data.Marlowe
   , marloweData
   , marloweParams
   , semanticState
+  , walletInfo
   )
 import Test.Data.Plutus (MarloweContractInstanceClientState, appInstanceActive)
 import Test.Marlowe.Run
@@ -74,10 +62,8 @@ import Test.Marlowe.Run.Action.Types
   , CreateWalletRecord
   , MarloweRunAction(..)
   , MarloweRunScript
-  , ScriptError(..)
   , _MarloweFollowerInstance
   , _WalletCompanionInstance
-  , renderScriptError
   )
 import Test.Marlowe.Run.Commands
   ( clickCreateWallet
@@ -111,12 +97,7 @@ import Test.Marlowe.Run.Commands
   , typeTextboxRegex
   , typeWalletNickname
   )
-import Test.Network.HTTP
-  ( class MonadMockHTTP
-  , MatcherError(..)
-  , expectNoRequest
-  , renderMatcherError
-  )
+import Test.Network.HTTP (class MonadMockHTTP, expectNoRequest)
 import Test.Spec (Spec)
 import Test.Web.DOM.Assertions (shouldHaveText)
 import Test.Web.DOM.Query (findBy, nameRegex, role)
@@ -133,58 +114,14 @@ runScriptedTest scriptName = marloweRunTest scriptName do
       $ error
       $ "Failed to parse script file:\n\n" <> printJsonDecodeError e
     Right s -> pure s
-  pabWebsocketOut <- asks _.pabWebsocketOut
-  httpRequests <- asks _.httpRequests
-  runError <- either (Just <<< renderScriptError) (const Nothing)
-    <$> evalScript (lmap Milliseconds <$> script)
-  -- Ensure there are no unhandled HTTP requests
-  httpMsg <- liftAff do
-    lines <- flip tailRecM [] \errors -> do
-      mRequest <- Queue.tryRead httpRequests
-      pure case mRequest of
-        Nothing -> Done errors
-        Just request ->
-          Loop
-            $ snoc errors
-            $ renderMatcherError request
-            $ MatcherError [ "✗ An HTTP request was not expected" ]
-    pure $ joinWith ("\n  " <> repeat 80 "=" <> "\n  ") lines
-  -- Ensure there are no unhandled WebSocket messages
-  wsMsg <- liftAff do
-    lines <- flip tailRecM [] \errors -> do
-      mRequest <- Queue.tryRead pabWebsocketOut
-      pure case mRequest of
-        Nothing -> Done errors
-        Just msg ->
-          Loop $ snoc errors $ stringifyWithIndent 2 $ encodeJson msg
-    pure $ joinWith ("\n  " <> repeat 80 "=" <> "\n  ") lines
-
-  let
-    httpError =
-      if null httpMsg then Nothing
-      else Just $ joinWith "\n  "
-        [ "Test finished with unhandled HTTP requests:"
-        , repeat 80 "="
-        , httpMsg
-        ]
-    wsError =
-      if null wsMsg then Nothing
-      else Just $ joinWith "\n  "
-        [ "Test finished with unhandled WebSocket messages:"
-        , repeat 80 "="
-        , wsMsg
-        ]
-    combinedError =
-      joinWith "\n\n  " <$> crosswalk identity [ runError, httpError, wsError ]
-  traverse_
-    (throwError <<< error <<< replaceAll (Pattern "\n") (Replacement "\n  "))
-    combinedError
+  evalScript (lmap Milliseconds <$> script)
 
 evalScript
   :: forall m
    . MonadAff m
   => MonadTest m
   => MonadUser m
+  => MonadLogger String m
   => MonadError Error m
   => MonadMockHTTP m
   => MonadMockTime m
@@ -192,32 +129,23 @@ evalScript
   => MonadTime m
   => MonadAsk Coenv m
   => MarloweRunScript
-  -> m (Either ScriptError Unit)
-evalScript = runExceptT <<< void <<< foldM (map uncurry evalAction') []
+  -> m Unit
+evalScript = traverse_ (uncurry evalAction')
   where
-  evalAction'
-    :: Array MarloweRunAction
-    -> Milliseconds
-    -> MarloweRunAction
-    -> ExceptT ScriptError m (Array MarloweRunAction)
-  evalAction' succeeded millis action =
-    mapExceptT mkScriptError do
-      currentTime <- now
-      let currentMillis = unInstant currentTime
-      let millisUntilAction = over2 Milliseconds (-) millis currentMillis
-      advanceTime (millisUntilAction :: Milliseconds)
-      ExceptT $ try $ evalAction action
-      pure $ snoc succeeded action
-    where
-    mkScriptError writer = do
-      Tuple result steps <- runWriterT writer
-      pure $ lmap (ScriptError succeeded action steps) result
+  evalAction' :: Milliseconds -> MarloweRunAction -> m Unit
+  evalAction' millis action = do
+    currentTime <- now
+    let currentMillis = unInstant currentTime
+    let millisUntilAction = over2 Milliseconds (-) millis currentMillis
+    advanceTime (millisUntilAction :: Milliseconds)
+    info $ encodeStringifyJson action
+    evalAction action
 
 evalAction
   :: forall m
    . MonadAff m
   => MonadTest m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadUser m
   => MonadError Error m
   => MonadMockHTTP m
@@ -239,7 +167,7 @@ dropWallet
   :: forall m
    . MonadTest m
   => MonadError Error m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadUser m
   => MonadAsk Coenv m
   => MonadMockHTTP m
@@ -254,7 +182,7 @@ addContact
    . MonadError Error m
   => MonadTest m
   => MonadUser m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => { walletName :: WalletNickname, address :: Address }
   -> m Unit
 addContact { walletName, address } = do
@@ -271,7 +199,7 @@ createContract
   => MonadTest m
   => MonadUser m
   => MonadTime m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadAsk Coenv m
   => MonadMockUUID m
   => MonadMockHTTP m
@@ -335,12 +263,12 @@ createContract
 expectSuccessToast
   :: forall m
    . MonadTest m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadError Error m
   => String
   -> m Unit
 expectSuccessToast message = do
-  tell [ "Expect success toast: " <> message ]
+  debug $ "Expect success toast: " <> message
   void $ findBy role do
     nameRegex message ignoreCase
     pure Status
@@ -362,7 +290,7 @@ createWallet
   :: forall m
    . MonadTest m
   => MonadError Error m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadUser m
   => MonadAsk Coenv m
   => MonadMockHTTP m
@@ -379,18 +307,19 @@ createWallet
   } = do
   openGenerateDialog do
     fillCreateWalletDialog
-    handlePostCreateWallet walletName address mnemonic pubKeyHash walletId
+    handlePostCreateWallet walletName mnemonic
+      $ walletInfo walletId address pubKeyHash
     fillConfirmMnemonicDialog
     expectWalletActivation
 
   where
   fillCreateWalletDialog = do
-    tell [ "Fill create wallet dialog" ]
+    debug "Fill create wallet dialog"
     typeWalletNickname $ WN.toString walletName
     clickCreateWallet
 
   fillConfirmMnemonicDialog = do
-    tell [ "Fill confirm mnemonic dialot" ]
+    debug "Fill confirm mnemonic dialog"
     mnemonicText <- findBy role $ pure Mark
     mnemonicText `shouldHaveText` MP.toString mnemonic
     clickOk
@@ -412,7 +341,7 @@ restore
   :: forall m
    . MonadTest m
   => MonadUser m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadMockHTTP m
   => MonadError Error m
   => MonadAsk Coenv m
@@ -427,7 +356,7 @@ restore { instances, walletName } = do
 
   where
   fillRestoreWalletDialog mnemonic = do
-    tell [ "Fill restore wallet dialog" ]
+    debug "Fill restore wallet dialog"
     typeWalletNickname $ WN.toString walletName
     typeMnemonicPhrase $ MP.toString mnemonic
     clickRestoreWallet

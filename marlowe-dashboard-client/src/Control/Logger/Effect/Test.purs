@@ -6,9 +6,8 @@ import Concurrent.Queue (Queue)
 import Concurrent.Queue as Queue
 import Control.Logger (Logger(..)) as Logger
 import Control.Logger.Effect (Logger)
-import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Freer.Extras.Log (LogMessage)
 import Effect.Aff (launchAff_)
 
-testLogger :: Queue (LogMessage StructuredLog) -> Logger StructuredLog
+testLogger :: forall a. Queue (LogMessage a) -> Logger a
 testLogger queue = Logger.Logger $ launchAff_ <<< Queue.write queue

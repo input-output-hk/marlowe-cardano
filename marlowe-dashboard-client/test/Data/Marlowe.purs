@@ -5,31 +5,50 @@ module Test.Data.Marlowe where
 
 import Prologue
 
-import Control.Monad.Error.Class (class MonadThrow, throwError)
+import Control.Monad.Error.Class
+  ( class MonadError
+  , class MonadThrow
+  , throwError
+  )
 import Control.Monad.Now (class MonadTime, now)
-import Data.Address (Address)
+import Crypto.Encoding.BIP39.English as English
+import Data.Address (Address(..))
+import Data.Address.Bech32 (Bech32Address(..))
+import Data.Address.Bech32.DataPart as BDP
+import Data.Address.Bech32.DataPart.CodePoint (toCodePoint)
 import Data.Argonaut (Json, encodeJson)
+import Data.Array (length, (!!))
+import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime.Instant (Instant, instant, unInstant)
 import Data.Either (either)
-import Data.Foldable (class Foldable)
+import Data.Enum (class BoundedEnum, Cardinality(..), cardinality, toEnum)
+import Data.Foldable (class Foldable, fold)
+import Data.Int (hexadecimal, toStringAs)
+import Data.List.Lazy (replicateM)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (maybe)
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
+import Data.MnemonicPhrase.Word as Word
 import Data.Newtype (over2)
 import Data.Passphrase (fixmeAllowPassPerWallet)
 import Data.PaymentPubKeyHash as PPKH
 import Data.PubKeyHash (PubKeyHash)
+import Data.PubKeyHash as PKH
+import Data.String (fromCodePointArray)
 import Data.Time.Duration (class Duration, Milliseconds(..), fromDuration)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
 import Data.WalletId (WalletId)
+import Data.WalletId as WI
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff (Error, error)
+import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Random (randomInt)
 import Language.Marlowe.Client
   ( ContractHistory
   , EndpointResponse(..)
@@ -63,7 +82,9 @@ import Marlowe.Semantics
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Value as PV
+import Safe.Coerce (coerce)
 import Test.Data.Plutus (instanceUpdate, newObservableState)
+import Unsafe.Coerce (unsafeCoerce)
 
 -------------------------------------------------------------------------------
 -- Webserver
@@ -99,17 +120,9 @@ createWalletRequest getCreateWalletName = CreatePostData
   , getCreatePassphrase: fixmeAllowPassPerWallet
   }
 
-createWalletResponse
-  :: MnemonicPhrase
-  -> WalletId
-  -> Address
-  -> PubKeyHash
-  -> Wallet.CreateResponse
-createWalletResponse mnemonic walletId address pubKeyHash =
-  Wallet.CreateResponse
-    { mnemonic
-    , walletInfo: walletInfo walletId address pubKeyHash
-    }
+createWalletResponse :: MnemonicPhrase -> WalletInfo -> Wallet.CreateResponse
+createWalletResponse = map (map Wallet.CreateResponse)
+  { mnemonic: _, walletInfo: _ }
 
 -------------------------------------------------------------------------------
 -- Endpoints
@@ -276,42 +289,6 @@ semanticState accounts choices boundValues minTime = State
 adaToken :: Token
 adaToken = Token "" ""
 
-assocTuples :: forall a b c. a /\ (b /\ c) -> (a /\ b) /\ c
-assocTuples (a /\ (b /\ c)) = ((a /\ b) /\ c)
-
-fromNow
-  :: forall d m
-   . MonadThrow Error m
-  => MonadTime m
-  => Show d
-  => Duration d
-  => d
-  -> m Instant
-fromNow duration = adjustInstant duration =<< now
-
-adjustInstant
-  :: forall d m
-   . MonadThrow Error m
-  => Show d
-  => Duration d
-  => d
-  -> Instant
-  -> m Instant
-adjustInstant duration i =
-  expectJust ("failed to adjust " <> show i <> " by " <> show duration)
-    $ instant
-    $ over2 Milliseconds add (fromDuration duration)
-    $ unInstant i
-
-expectRight :: forall m a b. MonadThrow Error m => String -> Either a b -> m b
-expectRight msg = either (const $ fail $ "Test error: " <> msg) pure
-
-expectJust :: forall m a. MonadThrow Error m => String -> Maybe a -> m a
-expectJust msg = maybe (fail $ "Test error: " <> msg) pure
-
-fail :: forall m a. MonadThrow Error m => String -> m a
-fail = throwError <<< error
-
 mkWhen :: Instant -> Array Case -> Contract -> Contract
 mkWhen timeout cases = When cases (POSIXTime timeout)
 
@@ -366,3 +343,115 @@ loan loanDeadline repaymentDeadline interest amount =
                   payPartyAda borrower lender repaymentValue Close
               ]
       ]
+
+-------------------------------------------------------------------------------
+-- Wallet Types
+-------------------------------------------------------------------------------
+
+walletNickname :: forall m. MonadThrow Error m => String -> m WalletNickname
+walletNickname name =
+  expectRight ("invalid wallet nickname: " <> name) $ WN.fromString name
+
+newMnemonicPhrase
+  :: forall m. MonadError Error m => MonadEffect m => m MnemonicPhrase
+newMnemonicPhrase = do
+  words <- replicateM 24 do
+    word <- pickFrom English.dictionary
+    expectJust ("invalid mnemonic phrase word: " <> word) $ Word.fromString word
+  expectRight "Invalid mnemonic phrase"
+    $ MP.fromWords
+    $ Array.fromFoldable words
+
+newWalletId :: forall m. MonadEffect m => MonadError Error m => m WalletId
+newWalletId = do
+  str <- fold <$> replicateM 40 newHexChar
+  expectRight ("invalid mnemonic walletId was generated: " <> str)
+    $ WI.fromString str
+
+newPubKeyHash :: forall m. MonadEffect m => MonadError Error m => m PubKeyHash
+newPubKeyHash = PKH.fromString <<< fold <$> replicateM 56 newHexChar
+
+newAddress :: forall m. MonadEffect m => MonadError Error m => m Address
+newAddress = do
+  Bech32 <<< Bech32Address (unsafeCoerce "addr_test") <$> newDataPart
+  where
+  newDataPart = do
+    codePoints <- Array.fromFoldable <$> replicateM 98 pickEnum
+    let str = fromCodePointArray $ toCodePoint <$> codePoints
+    expectJust
+      ("invalid bech 32 data part was generated: " <> str)
+      (BDP.fromCodePoints codePoints)
+
+newWalletInfo :: forall m. MonadEffect m => MonadError Error m => m WalletInfo
+newWalletInfo =
+  WalletInfo <$>
+    ( { walletId: _, pubKeyHash: _, address: _ }
+        <$> newWalletId
+        <*> (PPKH.fromPubKeyHash <$> newPubKeyHash)
+        <*> newAddress
+    )
+
+-------------------------------------------------------------------------------
+-- Helpers
+-------------------------------------------------------------------------------
+
+newHexChar :: forall m. MonadEffect m => m String
+newHexChar = do
+  int <- liftRandomInt 0 15
+  pure $ toStringAs hexadecimal int
+
+liftRandomInt :: forall m. MonadEffect m => Int -> Int -> m Int
+liftRandomInt i = liftEffect <<< randomInt i
+
+pickFrom
+  :: forall m a
+   . MonadEffect m
+  => MonadThrow Error m
+  => Array a
+  -> m a
+pickFrom arr = do
+  let len = length arr
+  index <- liftRandomInt 0 len
+  expectJust ("index out of bounds. " <> show { len, index }) $ arr !! index
+
+pickEnum
+  :: forall m a. MonadEffect m => MonadError Error m => BoundedEnum a => m a
+pickEnum = do
+  value <- liftRandomInt 0 $ coerce (cardinality :: _ a)
+  expectJust ("enum value out of bounds: " <> show value) $ toEnum value
+
+expectRight :: forall m a b. MonadThrow Error m => String -> Either a b -> m b
+expectRight msg = either (const $ fail $ "Test error: " <> msg) pure
+
+expectJust :: forall m a. MonadThrow Error m => String -> Maybe a -> m a
+expectJust msg = maybe (fail $ "Test error: " <> msg) pure
+
+fail :: forall m a. MonadThrow Error m => String -> m a
+fail = throwError <<< error
+
+assocTuples :: forall a b c. a /\ (b /\ c) -> (a /\ b) /\ c
+assocTuples (a /\ (b /\ c)) = ((a /\ b) /\ c)
+
+fromNow
+  :: forall d m
+   . MonadThrow Error m
+  => MonadTime m
+  => Show d
+  => Duration d
+  => d
+  -> m Instant
+fromNow duration = adjustInstant duration =<< now
+
+adjustInstant
+  :: forall d m
+   . MonadThrow Error m
+  => Show d
+  => Duration d
+  => d
+  -> Instant
+  -> m Instant
+adjustInstant duration i =
+  expectJust ("failed to adjust " <> show i <> " by " <> show duration)
+    $ instant
+    $ over2 Milliseconds add (fromDuration duration)
+    $ unInstant i

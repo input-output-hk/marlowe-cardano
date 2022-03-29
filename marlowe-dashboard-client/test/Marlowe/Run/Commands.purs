@@ -5,13 +5,14 @@ module Test.Marlowe.Run.Commands where
 import Prologue
 
 import Concurrent.Queue as Queue
+import Control.Logger.Capability (class MonadLogger, debug)
 import Control.Monad.Error.Class
   ( class MonadError
   , class MonadThrow
   , throwError
   )
 import Control.Monad.Reader (class MonadAsk, asks)
-import Control.Monad.Writer (class MonadTell, tell)
+import Control.Monad.Rec.Class (untilJust)
 import Control.Parallel (parOneOf)
 import Data.Address (Address)
 import Data.Argonaut (class EncodeJson, encodeJson, jsonEmptyArray)
@@ -36,6 +37,7 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Halogen.Subscription (notify)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId(..))
+import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics (Contract, MarloweData, MarloweParams)
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
@@ -344,23 +346,21 @@ typeTextboxRegex regex text = do
 
 handlePostCreateWallet
   :: forall m
-   . MonadTell (Array String) m
+   . MonadLogger String m
   => MonadMockHTTP m
   => MonadThrow Error m
   => WalletNickname
-  -> Address
   -> MnemonicPhrase
-  -> PubKeyHash
-  -> WalletId
+  -> WalletInfo
   -> m Unit
-handlePostCreateWallet walletName address mnemonic pubKeyHash walletId =
+handlePostCreateWallet walletName mnemonic walletInfo =
   handleHTTPRequest POST "/api/wallet/v1/centralized-testnet/create" ado
     expectJsonContent $ createWalletRequest walletName
-    in createWalletResponse mnemonic walletId address pubKeyHash
+    in createWalletResponse mnemonic walletInfo
 
 handlePostRestoreWallet
   :: forall m
-   . MonadTell (Array String) m
+   . MonadLogger String m
   => MonadMockHTTP m
   => MonadThrow Error m
   => WalletNickname
@@ -376,7 +376,7 @@ handlePostRestoreWallet walletName address mnemonic pubKeyHash walletId =
 
 handleGetContractInstances
   :: forall m
-   . MonadTell (Array String) m
+   . MonadLogger String m
   => MonadMockHTTP m
   => WalletId
   -> Array (ContractInstanceClientState MarloweContract)
@@ -387,7 +387,7 @@ handleGetContractInstances walletId = handleHTTPRequest GET uri <<< pure
 
 handlePostCreate
   :: forall m
-   . MonadTell (Array String) m
+   . MonadLogger String m
   => MonadMockHTTP m
   => UUID
   -> UUID
@@ -403,7 +403,7 @@ handlePostEndpoint
   :: forall a m
    . EncodeJson a
   => MonadMockHTTP m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => UUID
   -> String
   -> RequestMatcher a
@@ -420,7 +420,7 @@ handlePostActivate
   :: forall m
    . MonadMockHTTP m
   => MonadError Error m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadAff m
   => MonadAsk Coenv m
   => WalletId
@@ -436,13 +436,13 @@ handleHTTPRequest
   :: forall a m
    . EncodeJson a
   => MonadMockHTTP m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => Method
   -> String
   -> RequestMatcher a
   -> m Unit
 handleHTTPRequest method uri matcher = do
-  tell [ joinWith " " [ "⇵", show method, uri ] ]
+  debug $ joinWith " " [ "⇵", show method, uri ]
   expectJsonRequest ado
     expectMethod method
     expectUri uri
@@ -457,7 +457,7 @@ sendCreateSuccess
   :: forall m
    . MonadAsk Coenv m
   => MonadEffect m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => UUID
   -> UUID
   -> MarloweParams
@@ -470,7 +470,7 @@ sendWalletCompanionUpdate
    . Foldable f
   => Functor f
   => MonadAsk Coenv m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadEffect m
   => UUID
   -> f (Tuple MarloweParams MarloweData)
@@ -481,7 +481,7 @@ sendWalletCompanionUpdate companionId =
 sendFollowerUpdate
   :: forall m
    . MonadAsk Coenv m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadEffect m
   => UUID
   -> ContractHistory
@@ -493,7 +493,7 @@ sendNewActiveEndpoints
   :: forall m
    . MonadMockHTTP m
   => MonadError Error m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadAff m
   => MonadAsk Coenv m
   => UUID
@@ -506,7 +506,7 @@ recvInstanceSubscribe
   :: forall m
    . MonadMockHTTP m
   => MonadError Error m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadAff m
   => MonadAsk Coenv m
   => UUID
@@ -517,12 +517,12 @@ recvInstanceSubscribe instanceId = do
 sendWebsocketMessage
   :: forall m
    . MonadAsk Coenv m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => MonadEffect m
   => CombinedWSStreamToClient
   -> m Unit
 sendWebsocketMessage payload = do
-  tell [ "↑ Send websocket message to app: " <> encodeStringifyJson payload ]
+  debug $ "↑ Send websocket message to app: " <> encodeStringifyJson payload
   listener <- asks _.pabWebsocketIn
   liftEffect $ notify listener $ ReceiveMessage $ Right payload
 
@@ -530,17 +530,23 @@ recvWebsocketMessage
   :: forall m a
    . MonadAsk Coenv m
   => MonadError Error m
-  => MonadTell (Array String) m
+  => MonadLogger String m
   => EncodeJson a
   => MonadAff m
   => a
   -> m Unit
 recvWebsocketMessage expected = do
-  tell [ "↓ Recv websocket message from app: " <> encodeStringifyJson expected ]
+  debug $ "↓ Recv websocket message from app: " <> encodeStringifyJson expected
   queue <- asks _.pabWebsocketOut
   msg <- liftAff $ parOneOf
-    [ Just <$> Queue.read queue
-    , Nothing <$ delay (Milliseconds 1000.0)
+    [ Just <$> untilJust do
+        result <- Queue.tryRead queue
+        case result of
+          Just a -> pure $ Just a
+          Nothing -> do
+            delay $ Milliseconds 10.0
+            pure Nothing
+    , Nothing <$ delay (Milliseconds 100.0)
     ]
   case msg of
     Nothing -> throwError $ error $ joinWith "\n"

@@ -79,7 +79,7 @@ import Halogen.HTML
 import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (href, id, src)
+import Halogen.HTML.Properties (href, id, src, title)
 import Halogen.HTML.Properties.ARIA (role)
 import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
@@ -780,37 +780,39 @@ currentWalletCard wallet =
           [ classNames Css.cardHeader ]
           [ text "My wallet" ]
       , div
-          [ classNames
+          [ role "table"
+          , classNames
               [ "p-4", "overflow-y-auto", "overflow-x-hidden", "space-y-4" ]
           ]
           [ h3
-              [ classNames [ "font-semibold", "text-lg" ] ]
+              [ classNames [ "font-semibold", "text-lg" ], title "wallet-name" ]
               [ text $ WN.toString walletNickname ]
           , copyAddress <$> Address.render
               (Address.defaultInput address)
-          , div_
+          , div [ role "row" ]
               [ h4
-                  [ classNames [ "font-semibold" ] ]
+                  [ id "mw-balance", classNames [ "font-semibold" ] ]
                   [ text "Balance:" ]
               , p
-                  [ classNames Css.funds ]
+                  [ role "cell", classNames Css.funds ]
                   [ text $ humanizeValue adaToken $ getAda assets ]
               ]
-          , div [ classNames [ "space-y-2" ] ]
+          , div [ role "row", classNames [ "space-y-2" ] ]
               [ h4
-                  [ classNames [ "font-semibold" ] ]
+                  [ id "mw-status", classNames [ "font-semibold" ] ]
                   [ text "Status:" ]
               , case syncStatus of
                   OutOfSync ->
-                    p [ classNames [ "text-red" ] ] [ text "Out of sync" ]
+                    p [ role "cell", classNames [ "text-red" ] ]
+                      [ text "Out of sync" ]
                   Synchronizing progress ->
-                    p []
+                    p [ role "cell" ]
                       [ text "Syncrhonizing ("
                       , text $ show $ round $ progress * 100.0
                       , text "%)"
                       ]
                   Synchronized ->
-                    p [ classNames [ "text-green" ] ]
+                    p [ role "cell", classNames [ "text-green" ] ]
                       [ text "Syncrhonized" ]
               ]
           ]

@@ -61,6 +61,7 @@
   , "profunctor-lenses"
   , "quickcheck"
   , "quickcheck-laws"
+  , "random"
   , "record"
   , "refs"
   , "remotedata"

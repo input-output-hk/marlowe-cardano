@@ -74,7 +74,7 @@ import Control.Monad.Reader
   , local
   , runReaderT
   )
-import Control.Monad.Rec.Class (class MonadRec)
+import Control.Monad.Rec.Class (class MonadRec, untilJust)
 import Control.Monad.State (class MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.UUID (class MonadUUID)
@@ -167,7 +167,19 @@ awaitNextRequest :: forall m. MonadAff m => MockHttpM m (Maybe RequestBox)
 awaitNextRequest = do
   requests <- MockHttpM ask
   liftAff $ parOneOf
-    [ Just <$> Queue.read requests
+    -- tryRead here is necessary  because it is not safe to kill a
+    -- `Queue.read` or `Queue.tryRead` operation because it will permenantly lock
+    -- the queue (the `readEnd` AVar is taken but not put back in a bracket, so
+    -- it will be empty but nothing will be reading it).
+    -- We also add a small delay between retries because otherwise we can
+    -- starve the event queue and the timeout never runs.
+    [ Just <$> untilJust do
+        result <- Queue.tryRead requests
+        case result of
+          Just a -> pure $ Just a
+          Nothing -> do
+            delay $ Milliseconds 10.0
+            pure Nothing
     , Nothing <$ delay (Milliseconds 100.0)
     ]
 
@@ -184,11 +196,7 @@ instance (MonadThrow Error m, MonadAff m) => MonadMockHTTP (MockHttpM m) where
           $ MatcherError [ "Unexpected HTTP request." ]
 
   expectRequest responseFormat matcher = do
-    requests <- MockHttpM ask
-    mRequest <- liftAff $ parOneOf
-      [ Just <$> Queue.read requests
-      , Nothing <$ delay (Milliseconds 1000.0)
-      ]
+    mRequest <- awaitNextRequest
     case mRequest of
       Nothing ->
         throwError $ error "Expected an HTTP request to be made"
