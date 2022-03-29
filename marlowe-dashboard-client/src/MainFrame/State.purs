@@ -41,6 +41,7 @@ import Data.WalletId (WalletId)
 import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
+import Errors (globalError)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
 import Halogen as H
 import Halogen.Extra (imapState)
@@ -78,7 +79,7 @@ import Store as Store
 import Store.Wallet (WalletStore(..), _Connecting)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (ajaxErrorToast, infoToast, successToast)
+import Toast.Types (infoToast, successToast)
 import Types (AjaxResponse)
 import Wallet.Types (ContractActivityStatus(..))
 
@@ -212,7 +213,7 @@ handleAction (NewWebSocketStatus status) = do
       for_ walletIdXDashboardState \(Tuple walletId _dashboardState) -> do
         ajaxPlutusApps <- PAB.getWalletContractInstances walletId
         case ajaxPlutusApps of
-          Left _ -> pure unit
+          Left err -> globalError "Can't renew websocket subscriptions" err
           Right plutusApps -> for_
             (Array.filter (eq Active <<< view _cicStatus) plutusApps)
             \app ->
@@ -242,7 +243,7 @@ enterDashboardState disconnectedWallet = do
   ajaxPlutusApps <- PAB.getWalletContractInstances walletId
   -- TODO: Refactor with runExceptT
   case ajaxPlutusApps of
-    Left ajaxError -> addToast $ ajaxErrorToast
+    Left ajaxError -> globalError
       "Failed to access the plutus contracts."
       ajaxError
     Right plutusApps -> do
@@ -253,7 +254,7 @@ enterDashboardState disconnectedWallet = do
         walletId
         plutusApps
       case ajaxCompanionContracts of
-        Left ajaxError -> addToast $ ajaxErrorToast
+        Left ajaxError -> globalError
           "Failed to create the companion plutus contracts."
           ajaxError
         Right { companionAppId, marloweAppId } -> do

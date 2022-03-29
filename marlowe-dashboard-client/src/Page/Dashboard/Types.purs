@@ -134,7 +134,7 @@ data Action
   | ClipboardAction Clipboard.Action
   | OnContactsMsg Contacts.Msg
   | UpdateWalletFunds WalletFunds
-  | NotificationParseFailed String Json JsonDecodeError
+  | NotificationParseFailed NotificationParseFailedError
   | CompanionAppStateUpdated (Map MarloweParams MarloweData)
   | MarloweContractCreated UUID MarloweParams
   | InputsApplied UUID

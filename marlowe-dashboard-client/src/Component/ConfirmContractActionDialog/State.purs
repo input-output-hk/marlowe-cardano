@@ -15,6 +15,8 @@ import Component.ConfirmContractActionDialog.Types
   )
 import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill, fork, kill)
 import Control.Monad.Fork.Class as MF
 import Control.Monad.Now (class MonadTime, now)
@@ -25,6 +27,7 @@ import Data.Unfoldable as Unfoldable
 import Effect.Aff (Error, Fiber, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
+import Errors (globalError)
 import Halogen as H
 import Halogen.Store.Monad (class MonadStore, updateStore)
 import Marlowe.Execution.State (mkTx, setPendingTransaction)
@@ -33,7 +36,7 @@ import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics (ChosenNum)
 import Marlowe.Semantics as Semantic
 import Store as Store
-import Toast.Types (ajaxErrorToast, successToast)
+import Toast.Types (successToast)
 
 --
 component
@@ -41,6 +44,7 @@ component
    . MonadAff m
   => MonadKill Error Fiber m
   => ManageMarlowe m
+  => MonadLogger StructuredLog m
   => MonadStore Store.Action Store.Store m
   => MonadTime m
   => Toast m
@@ -81,6 +85,7 @@ handleAction
   => MonadAff m
   => MonadKill Error Fiber m
   => MonadTime m
+  => MonadLogger StructuredLog m
   => Toast m
   => Action
   -> DSL m Unit
@@ -113,7 +118,7 @@ handleAction (ConfirmAction namedAction) = do
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
         (Milliseconds 600.0)
         (Left "Error")
-      addToast $ ajaxErrorToast "Failed to submit transaction." ajaxError
+      globalError "Failed to submit transaction." ajaxError
     Right mResult -> do
       updateStore $ Store.ModifySyncedContract marloweParams $
         setPendingTransaction txInput

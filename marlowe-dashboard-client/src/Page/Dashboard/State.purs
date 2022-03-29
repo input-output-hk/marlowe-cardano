@@ -40,7 +40,7 @@ import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
 import Control.React (onFinalize, onInitialize, onPartialChange)
-import Data.Argonaut (Json, jsonNull)
+import Data.Argonaut (Json, JsonDecodeError, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
 import Data.ContractStatus (ContractStatus(..))
@@ -68,6 +68,7 @@ import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
+import Errors (globalError)
 import Halogen (modify_, tell)
 import Halogen as H
 import Halogen.Component.Reactive (defaultReactiveEval, mkReactiveComponent)
@@ -106,6 +107,7 @@ import Page.Dashboard.Types
   , ContractState
   , DerivedState
   , Msg
+  , NotificationParseFailedError(..)
   , Slice
   , State
   , WalletCompanionStatus(..)
@@ -126,7 +128,7 @@ import Store.Contracts
   )
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
-import Toast.Types (explainableErrorToast, successToast)
+import Toast.Types (successToast)
 import WebSocket.Support (FromSocket)
 import WebSocket.Support as WS
 
@@ -165,7 +167,12 @@ subscribeToPlutusApps = do
 Here we move from the `Dashboard` state to the `Welcome` state. It's very straightfoward - we just
 need to unsubscribe from all the apps related to the wallet that was previously connected.
 -}
-unsubscribeFromPlutusApps :: forall m. ManagePAB m => HalogenM m Unit
+unsubscribeFromPlutusApps
+  :: forall m
+   . ManagePAB m
+  => Toast m
+  => MonadLogger StructuredLog m
+  => HalogenM m Unit
 unsubscribeFromPlutusApps = do
   wallet <- use _wallet
   let walletId = view _walletId wallet
@@ -174,7 +181,8 @@ unsubscribeFromPlutusApps = do
   -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
   ajaxPlutusApps <- PAB.getWalletContractInstances walletId
   case ajaxPlutusApps of
-    Left _ -> pure unit
+    Left err -> globalError "Can't unsubscribe from the backend notifications"
+      err
     Right plutusApps -> do
       traverse_ (unsubscribeFromPlutusApp <<< view _cicContract) plutusApps
 
@@ -362,9 +370,7 @@ handleAction (TemplateAction templateAction) = do
         Left error -> do
           void $ tell _submitButtonSlot "action-pay-and-start" $
             SubmitResult (Milliseconds 600.0) (Left "Error")
-          addToast $ explainableErrorToast "Failed to initialize contract."
-            error
-          Logger.error "Failed to initialize contract." error
+          globalError "Failed to initialize contract." error
         Right (newContract /\ awaitContractCreation) -> do
           handleAction CloseCard
           void $ tell _submitButtonSlot "action-pay-and-start" $
@@ -385,9 +391,7 @@ handleAction (TemplateAction templateAction) = do
                 $ Started marloweParams
           ajaxFollow <- ensureFollowerContract wallet marloweParams
           case ajaxFollow of
-            Left err -> do
-              addToast $ explainableErrorToast "Can't follow the contract" err
-              Logger.error "Can't follow the contract: " err
+            Left err -> globalError "Can't follow the contract" err
             Right _ -> do
               addToast $ successToast "Contract initialized."
     _ -> do
@@ -417,12 +421,12 @@ handleAction
     handleAction $ OpenCard $ ContractActionConfirmationCard
       { action, chosenNum, executionState, wallet }
 
-handleAction (NotificationParseFailed whatFailed value error) = do
+handleAction (NotificationParseFailed error) = do
   let
+    NotificationParseFailedError { whatFailed } = error
     shortDescription = "Failed to parse " <> whatFailed <>
       " from websocket message"
-  addToast $ explainableErrorToast shortDescription error
-  Logger.error shortDescription { value, error }
+  globalError shortDescription error
 
 {- [UC-CONTRACT-2][1] Receive a role token for a marlowe contract -}
 handleAction (CompanionAppStateUpdated companionAppState) = do
@@ -542,7 +546,7 @@ actionFromWebsocket
   -> Maybe Action
 actionFromWebsocket wallet = case _ of
   WS.ReceiveMessage (Left jsonDecodeError) ->
-    Just $ NotificationParseFailed "websocket message" jsonNull jsonDecodeError
+    Just $ notificationParseFailed "websocket message" jsonNull jsonDecodeError
   WS.ReceiveMessage (Right stream) -> actionFromStream wallet stream
   _ -> Nothing
 
@@ -576,7 +580,7 @@ actionFromStream wallet = case _ of
     | appId == companionAppId ->
         case D.decode (D.maybe D.value) state of
           Left error ->
-            Just $ NotificationParseFailed
+            Just $ notificationParseFailed
               "wallet companion state"
               state
               error
@@ -585,7 +589,9 @@ actionFromStream wallet = case _ of
           _ -> Nothing
     | appId == marloweAppId -> case D.decode (D.maybe D.value) state of
         Left error ->
-          Just $ NotificationParseFailed "marlowe app response" state
+          Just $ notificationParseFailed
+            "marlowe app response"
+            state
             error
         Right Nothing ->
           Nothing
@@ -604,7 +610,9 @@ actionFromStream wallet = case _ of
         _ -> Nothing
     | otherwise -> case D.decode (D.maybe D.value) state of
         Left error ->
-          Just $ NotificationParseFailed "follower app response" state
+          Just $ notificationParseFailed
+            "follower app response"
+            state
             error
         Right (Just history) ->
           Just $ ContractHistoryUpdated appId history
@@ -612,6 +620,15 @@ actionFromStream wallet = case _ of
   where
   companionAppId = wallet ^. _companionAppId
   marloweAppId = wallet ^. _marloweAppId
+
+notificationParseFailed
+  :: String -> Json -> JsonDecodeError -> Action
+notificationParseFailed whatFailed originalValue parsingError =
+  NotificationParseFailed $ NotificationParseFailedError
+    { whatFailed
+    , originalValue
+    , parsingError
+    }
 
 updateTotalFunds
   :: forall m

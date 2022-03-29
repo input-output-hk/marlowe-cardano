@@ -3,8 +3,10 @@ module Page.Welcome.RestoreWallet (component, _restoreWallet) where
 import Prologue
 
 import AppM (passphrase) as AppM
-import Capability.Toast (class Toast, addToast)
+import Capability.Toast (class Toast)
 import Capability.Wallet (class ManageWallet, restoreWallet)
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Trans.Class (lift)
 import Css as Css
 import Data.AddressBook (AddressBook)
@@ -16,6 +18,7 @@ import Data.Wallet (WalletDetails, mkWalletDetails)
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
+import Errors (globalError)
 import Halogen as H
 import Halogen.Css (classNames)
 import Halogen.Form.Injective (blank, project)
@@ -38,7 +41,6 @@ import Page.Welcome.RestoreWallet.Types
   , _nickname
   )
 import Store as Store
-import Toast.Types (ajaxErrorToast)
 import Type.Proxy (Proxy(..))
 import Web.Event.Event (Event, preventDefault)
 
@@ -75,6 +77,7 @@ component
    . MonadAff m
   => ManageWallet m
   => Toast m
+  => MonadLogger StructuredLog m
   => MonadStore Store.Action Store.Store m
   => Component m
 component = connect (selectEq _.addressBook) $ H.mkComponent
@@ -111,6 +114,7 @@ handleAction
    . MonadEffect m
   => Toast m
   => ManageWallet m
+  => MonadLogger StructuredLog m
   => Action
   -> DSL m Unit
 handleAction = case _ of
@@ -127,7 +131,7 @@ handleAction = case _ of
     response <- lift $ restoreWallet mnemonic nickname AppM.passphrase
     case response of
       Left err -> do
-        addToast $ ajaxErrorToast "Failed to restore wallet" err
+        globalError "Failed to restore wallet" err
         H.modify_ _
           { walletDetails = Failure "Failed to restore wallet"
           }

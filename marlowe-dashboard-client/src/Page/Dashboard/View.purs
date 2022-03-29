@@ -25,6 +25,8 @@ import Component.Popper (Placement(..))
 import Component.Template.View (contractTemplateCard)
 import Component.Tooltip.State (tooltip)
 import Component.Tooltip.Types (ReferenceId(..))
+import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadAsk)
@@ -122,6 +124,7 @@ render
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
+  => MonadLogger StructuredLog m
   => Toast m
   => MonadStore Store.Action Store.Store m
   => MonadClipboard m
@@ -214,6 +217,7 @@ dashboardCard
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
+  => MonadLogger StructuredLog m
   => MonadClipboard m
   => Toast m
   => MonadStore Store.Action Store.Store m
