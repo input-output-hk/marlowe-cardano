@@ -417,7 +417,7 @@ pickFrom arr = do
 pickEnum
   :: forall m a. MonadEffect m => MonadError Error m => BoundedEnum a => m a
 pickEnum = do
-  value <- liftRandomInt 0 $ coerce (cardinality :: _ a)
+  value <- liftRandomInt 0 $ coerce (cardinality :: _ a) - 1
   expectJust ("enum value out of bounds: " <> show value) $ toEnum value
 
 expectRight :: forall m a b. MonadThrow Error m => String -> Either a b -> m b

@@ -60,7 +60,13 @@ import Test.Data.Marlowe
   , walletCompantionState
   )
 import Test.Data.Plutus (appInstanceActive)
-import Test.Marlowe.Run (Coenv, TestWallet, getWallet, setWallet)
+import Test.Marlowe.Run
+  ( Coenv
+  , TestWallet
+  , getWallet
+  , sendWalletFunds
+  , setWallet
+  )
 import Test.Marlowe.Run.Commands
   ( clickCreateWallet
   , clickDrop
@@ -191,8 +197,6 @@ restoreWallet walletName contracts = do
         , followerInstances
         ]
     handleGetContractInstances walletId instances
-    handlePostActivate walletId WalletCompanion walletCompanionId
-    handlePostActivate walletId MarloweApp marloweAppId
     recvInstanceSubscribe walletCompanionId
     sendNewActiveEndpoints walletCompanionId companionEndpoints
     recvInstanceSubscribe marloweAppId
@@ -200,6 +204,7 @@ restoreWallet walletName contracts = do
     sendWalletCompanionUpdate walletCompanionId companionContracts
     traverse_ (flip sendNewActiveEndpoints followerEndpoints) followerAppIds
     traverse_ (uncurry $ flip sendFollowerUpdate) followerIdsAndHistories
+    sendWalletFunds walletName
     pure { marloweAppId, walletCompanionId, followerAppIds }
 
 dropWallet

@@ -32,6 +32,7 @@ import Control.Monad.Reader
   , runReaderT
   )
 import Control.Monad.Rec.Class (whileJust)
+import Control.Monad.UUID (class MonadUUID)
 import Control.Parallel (parSequence_)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
@@ -112,6 +113,7 @@ marloweRunTest
        => MonadMockHTTP m
        => MonadMockTime m
        => MonadMockUUID m
+       => MonadUUID m
        => MonadTime m
        => MonadLogger String m
        => m Unit
@@ -132,6 +134,7 @@ marloweRunTestWith
        => MonadMockHTTP m
        => MonadMockTime m
        => MonadMockUUID m
+       => MonadUUID m
        => MonadTime m
        => MonadLogger String m
        => m Unit
@@ -202,6 +205,7 @@ marloweRunTestWith name addressBook contractNicknames wallet test = it name $
       [ pure "Application log:"
       , pure ""
       , reportLogMessage reportStructuredLog <$> appLog
+      , pure ""
       , pure "Test log:"
       , pure ""
       , reportLogMessage identity <$> testLog
@@ -271,6 +275,12 @@ derive newtype instance
   MonadMockTime (MarloweTestM m)
 
 derive newtype instance MonadEffect m => MonadTime (MarloweTestM m)
+derive newtype instance
+  ( MonadEffect m
+  , MonadError Error m
+  ) =>
+  MonadUUID (MarloweTestM m)
+
 derive newtype instance MonadEffect m => MonadMockUUID (MarloweTestM m)
 instance MonadEffect m => MonadLogger String (MarloweTestM m) where
   log msg = do
@@ -377,6 +387,19 @@ type Coenv =
   , testLogMessages :: Queue (LogMessage String)
   , logMessages :: Queue (LogMessage StructuredLog)
   }
+
+sendWalletFunds
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadError Error m
+  => WalletNickname
+  -> m Unit
+sendWalletFunds walletName = do
+  wallet <- getWallet walletName
+  walletFunds <- asks _.walletFunds
+  liftEffect
+    $ HS.notify walletFunds { sync: Synchronized, assets: wallet.assets }
 
 fundWallet
   :: forall m

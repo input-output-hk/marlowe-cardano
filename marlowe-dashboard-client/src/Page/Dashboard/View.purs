@@ -80,7 +80,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
 import Halogen.HTML.Events.Extra (onClick_)
 import Halogen.HTML.Properties (href, id, src, title)
-import Halogen.HTML.Properties.ARIA (role)
+import Halogen.HTML.Properties.ARIA (labelledBy, role)
 import Halogen.HTML.Properties.ARIA as ARIA
 import Halogen.Store.Monad (class MonadStore)
 import Humanize (humanizeValue)
@@ -794,7 +794,7 @@ currentWalletCard wallet =
                   [ id "mw-balance", classNames [ "font-semibold" ] ]
                   [ text "Balance:" ]
               , p
-                  [ role "cell", classNames Css.funds ]
+                  [ role "cell", labelledBy "mw-balance", classNames Css.funds ]
                   [ text $ humanizeValue adaToken $ getAda assets ]
               ]
           , div [ role "row", classNames [ "space-y-2" ] ]
@@ -803,17 +803,25 @@ currentWalletCard wallet =
                   [ text "Status:" ]
               , case syncStatus of
                   OutOfSync ->
-                    p [ role "cell", classNames [ "text-red" ] ]
+                    p
+                      [ role "cell"
+                      , labelledBy "mw-status"
+                      , classNames [ "text-red" ]
+                      ]
                       [ text "Out of sync" ]
                   Synchronizing progress ->
-                    p [ role "cell" ]
-                      [ text "Syncrhonizing ("
+                    p [ role "cell", labelledBy "mw-status" ]
+                      [ text "Synchronizing ("
                       , text $ show $ round $ progress * 100.0
                       , text "%)"
                       ]
                   Synchronized ->
-                    p [ role "cell", classNames [ "text-green" ] ]
-                      [ text "Syncrhonized" ]
+                    p
+                      [ role "cell"
+                      , labelledBy "mw-status"
+                      , classNames [ "text-green" ]
+                      ]
+                      [ text "Synchronized" ]
               ]
           ]
       , div

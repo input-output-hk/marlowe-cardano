@@ -93,5 +93,7 @@ derive newtype instance MonadUser m => MonadUser (MockUuidM m)
 instance (MonadEffect m, MonadError Error m) => MonadUUID (MockUuidM m) where
   generateUUID = do
     uuidRef <- MockUuidM ask
-    uuid <- liftEffect $ Ref.modify (fromMaybe bottom <<< succ) uuidRef
-    pure $ toUUID uuid
+    liftEffect do
+      uuid <- liftEffect $ Ref.read uuidRef
+      liftEffect $ Ref.write (fromMaybe bottom $ succ uuid) uuidRef
+      pure $ toUUID uuid
