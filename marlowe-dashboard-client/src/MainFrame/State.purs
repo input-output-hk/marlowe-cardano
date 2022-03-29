@@ -177,7 +177,13 @@ handleAction (Receive context) = do
   -- React to changes in the wallet store
   case oldStore.wallet, wallet of
     Disconnected, Connecting details -> enterDashboardState details
-    Connecting _, Connected connectedWallet ->
+    Connecting _, Connected connectedWallet -> do
+      let
+        walletNickname = view Connected._walletNickname connectedWallet
+        address = view Connected._address connectedWallet
+      updateStore
+        $ Store.ModifyAddressBook
+        $ AddressBook.insert walletNickname address
       assign _subState $ Right connectedWallet
     Connected _, Disconnecting _ ->
       updateStore Store.Disconnect

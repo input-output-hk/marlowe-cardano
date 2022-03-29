@@ -36,6 +36,7 @@ import Control.Monad.UUID (class MonadUUID)
 import Control.Parallel (parSequence_)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook)
+import Data.AddressBook as AB
 import Data.AddressBook as AddressBook
 import Data.Align (crosswalk)
 import Data.Argonaut (encodeJson, stringify, stringifyWithIndent)
@@ -44,7 +45,7 @@ import Data.BigInt.Argonaut (BigInt)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.Compactable (compact)
-import Data.Foldable (fold, traverse_)
+import Data.Foldable (fold, for_, traverse_)
 import Data.LocalContractNicknames
   ( LocalContractNicknames
   , emptyLocalContractNicknames
@@ -90,6 +91,7 @@ import Test.Control.Monad.Time
   , runMockTimeM
   )
 import Test.Control.Monad.UUID (class MonadMockUUID, MockUuidM, runMockUuidM)
+import Test.Data.Marlowe (newMnemonicPhrase, newPubKeyHash, newWalletId)
 import Test.Halogen (class MonadHalogenTest, runUITest)
 import Test.Network.HTTP
   ( class MonadMockHTTP
@@ -99,7 +101,7 @@ import Test.Network.HTTP
   , renderMatcherError
   , runMockHttpM
   )
-import Test.Spec (Spec, it)
+import Test.Spec (Spec, before, it)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest)
 import WebSocket.Support (FromSocket)
@@ -119,14 +121,24 @@ marloweRunTest
        => m Unit
      )
   -> Spec Unit
-marloweRunTest name =
-  marloweRunTestWith name AddressBook.empty emptyLocalContractNicknames Nothing
+marloweRunTest name = marloweRunTestWith name $ pure defaultTestParameters
+
+type MarloweRunTestParameters =
+  { addressBook :: AddressBook
+  , contractNicknames :: LocalContractNicknames
+  , walletDetails :: Maybe WalletDetails
+  }
+
+defaultTestParameters :: MarloweRunTestParameters
+defaultTestParameters =
+  { addressBook: AddressBook.empty
+  , contractNicknames: emptyLocalContractNicknames
+  , walletDetails: Nothing
+  }
 
 marloweRunTestWith
   :: String
-  -> AddressBook
-  -> LocalContractNicknames
-  -> Maybe WalletDetails
+  -> Aff MarloweRunTestParameters
   -> ( forall m
         . MonadReader Coenv m
        => MonadError Error m
@@ -140,50 +152,63 @@ marloweRunTestWith
        => m Unit
      )
   -> Spec Unit
-marloweRunTestWith name addressBook contractNicknames wallet test = it name $
-  bracket
-    (liftAff mkTestEnv)
-    (\(_ /\ coenv /\ _) -> liftEffect $ coenv.dispose)
-    \(env /\ coenv /\ errors) -> do
-      clocks <- liftEffect $ Ref.new Map.empty
-      nowRef <- liftEffect $ Ref.new unixEpoch
-      nextClockId <- liftEffect $ Ref.new 0
-      let mockTimeEnv = { clocks, nowRef, tzOffset: Minutes zero, nextClockId }
-      mockUuidEnv <- liftEffect $ Ref.new bottom
-      let
-        store = mkStore unixEpoch addressBook contractNicknames wallet
-      { component } <- runAppM env store mkMainFrame
-      errorAVar <- AVar.empty
-      sub <- liftEffect
-        $ HS.subscribe errors.emitter
-        $ launchAff_ <<< flip AVar.kill errorAVar
-      result <- try $ parSequence_
-        [ do
-            runUITest
-              ( H.hoist
-                  ( marshallErrors errors.listener
-                      <<< flip runMockUuidM mockUuidEnv
-                      <<< flip runMockTimeM mockTimeEnv
-                      <<< flip runMockHttpM coenv.httpRequests
-                  )
-                  component
-              )
-              unit
-              (runMarloweTestM test coenv mockTimeEnv mockUuidEnv)
-            AVar.put unit errorAVar
-        , AVar.take errorAVar
-        ]
-      liftEffect $ HS.unsubscribe sub
-      httpMsg <- drainHttpRequests coenv
-      wsMsg <- drainWebsocketMessages coenv
-      appLog <- drainQueue coenv.logMessages
-      testLog <- drainQueue coenv.testLogMessages
-      let
-        runError = case result of
-          Left e -> Just $ renderRunError appLog testLog e
-          _ -> Nothing
-        compoundMsg = join <$> crosswalk identity [ httpMsg, wsMsg, runError ]
-      traverse_ reportFailure compoundMsg
+marloweRunTestWith name makeParameters test = before makeParameters $ it name $
+  \{ addressBook, contractNicknames, walletDetails } ->
+    bracket
+      (liftAff mkTestEnv)
+      (\(_ /\ coenv /\ _) -> liftEffect $ coenv.dispose)
+      \(env /\ coenv /\ errors) -> do
+        for_ (AB.toUnfoldable addressBook :: Array _)
+          \(Tuple nickname address) ->
+            liftEffect do
+              testWallet <-
+                { address
+                , mnemonic: _
+                , pubKeyHash: _
+                , walletId: _
+                , assets: Assets Map.empty
+                } <$> newMnemonicPhrase <*> newPubKeyHash <*> newWalletId
+              Ref.modify_ (Bimap.insert nickname testWallet) coenv.wallets
+        clocks <- liftEffect $ Ref.new Map.empty
+        nowRef <- liftEffect $ Ref.new unixEpoch
+        nextClockId <- liftEffect $ Ref.new 0
+        let
+          mockTimeEnv = { clocks, nowRef, tzOffset: Minutes zero, nextClockId }
+        mockUuidEnv <- liftEffect $ Ref.new bottom
+        let
+          store = mkStore unixEpoch addressBook contractNicknames walletDetails
+        { component } <- runAppM env store mkMainFrame
+        errorAVar <- AVar.empty
+        sub <- liftEffect
+          $ HS.subscribe errors.emitter
+          $ launchAff_ <<< flip AVar.kill errorAVar
+        result <- try $ parSequence_
+          [ do
+              runUITest
+                ( H.hoist
+                    ( marshallErrors errors.listener
+                        <<< flip runMockUuidM mockUuidEnv
+                        <<< flip runMockTimeM mockTimeEnv
+                        <<< flip runMockHttpM coenv.httpRequests
+                    )
+                    component
+                )
+                unit
+                (runMarloweTestM test coenv mockTimeEnv mockUuidEnv)
+              AVar.put unit errorAVar
+          , AVar.take errorAVar
+          ]
+        liftEffect $ HS.unsubscribe sub
+        httpMsg <- drainHttpRequests coenv
+        wsMsg <- drainWebsocketMessages coenv
+        appLog <- drainQueue coenv.logMessages
+        testLog <- drainQueue coenv.testLogMessages
+        let
+          runError = case result of
+            Left e -> Just $ renderRunError appLog testLog e
+            _ -> Nothing
+          compoundMsg = join <$> crosswalk identity [ httpMsg, wsMsg, runError ]
+        traverse_ reportFailure compoundMsg
   where
   drainQueue :: forall a. Queue a -> Aff (Array a)
   drainQueue = whileJust <<< map (map Array.singleton) <<< Queue.tryRead

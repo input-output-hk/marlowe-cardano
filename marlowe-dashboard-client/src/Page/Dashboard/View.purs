@@ -75,6 +75,7 @@ import Halogen.HTML
   , span
   , span_
   , text
+  , ul
   )
 import Halogen.HTML as HH
 import Halogen.HTML.Events (onClick)
@@ -710,7 +711,7 @@ contractGridRunning currentTime state =
   if Array.null runningContracts && Array.null newContracts then
     noContractsMessage Running
   else
-    div
+    ul
       [ classNames contractGridClasses ]
       $ [ newContractCard ]
           <> (contractStartingPreviewCard <$> newContracts)
@@ -750,7 +751,7 @@ contractGridCompleted currentTime state =
   in
     if Array.null closedContracts then noContractsMessage Completed
     else
-      div
+      ul
         [ classNames contractGridClasses ]
         (contractPreviewCard currentTime <$> closedContracts)
 

@@ -21,6 +21,8 @@ import Data.Array (length, (!!))
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut as BigInt
+import Data.ContractNickname (ContractNickname)
+import Data.ContractNickname as CN
 import Data.DateTime.Instant (Instant, instant, unInstant)
 import Data.Either (either)
 import Data.Enum (class BoundedEnum, Cardinality(..), cardinality, toEnum)
@@ -90,13 +92,6 @@ import Unsafe.Coerce (unsafeCoerce)
 -- Webserver
 -------------------------------------------------------------------------------
 
-mnemonicPhrase :: forall m. MonadThrow Error m => String -> m MnemonicPhrase
-mnemonicPhrase mp =
-  expectRight ("Bad mnemonic phrase: " <> mp) $ MP.fromString mp
-
-walletName :: forall m. MonadThrow Error m => String -> m WalletNickname
-walletName name = expectRight ("Bad wallet name: " <> name) $ WN.fromString name
-
 walletInfo :: WalletId -> Address -> PubKeyHash -> WalletInfo
 walletInfo walletId address pubKeyHash = WalletInfo
   { walletId
@@ -110,9 +105,6 @@ restoreRequest getRestoreWalletName getRestoreMnemonicPhrase = RestorePostData
   , getRestorePassphrase: fixmeAllowPassPerWallet
   , getRestoreMnemonicPhrase
   }
-
-restoreResponse :: WalletId -> Address -> PubKeyHash -> WalletInfo
-restoreResponse = walletInfo
 
 createWalletRequest :: WalletNickname -> CreatePostData
 createWalletRequest getCreateWalletName = CreatePostData
@@ -256,6 +248,11 @@ followerMessage appId = instanceUpdate appId <<< newObservableState
 -- Semantic model
 -------------------------------------------------------------------------------
 
+makeTestContractNickname
+  :: forall m. MonadThrow Error m => String -> m ContractNickname
+makeTestContractNickname name =
+  expectRight ("invalid contract nickname: " <> name) $ CN.fromString name
+
 newMarloweParams :: forall m. MonadEffect m => m MarloweParams
 newMarloweParams = marloweParams
   <$> (fold <$> replicateM 56 newHexChar)
@@ -335,10 +332,10 @@ lender :: Party
 lender = Role lenderTokenName
 
 loan :: Instant -> Instant -> Int -> Int -> Contract
-loan loanDeadline repaymentDeadline interest amount =
+loan loanDeadline repaymentDeadline amount interest =
   let
-    loanValue = constant amount
-    repaymentValue = interest `addConstant` amount
+    loanValue = constant $ amount * 1000000
+    repaymentValue = (interest * 1000000) `addConstant` (amount * 1000000)
   in
     mkWhenClose loanDeadline
       [ depositAda lender lender loanValue do
@@ -353,8 +350,9 @@ loan loanDeadline repaymentDeadline interest amount =
 -- Wallet Types
 -------------------------------------------------------------------------------
 
-walletNickname :: forall m. MonadThrow Error m => String -> m WalletNickname
-walletNickname name =
+makeTestWalletNickname
+  :: forall m. MonadThrow Error m => String -> m WalletNickname
+makeTestWalletNickname name =
   expectRight ("invalid wallet nickname: " <> name) $ WN.fromString name
 
 newMnemonicPhrase

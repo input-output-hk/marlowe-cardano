@@ -21,7 +21,6 @@ import Data.Foldable (class Foldable)
 import Data.HTTP.Method (Method(..))
 import Data.Map (Map)
 import Data.MnemonicPhrase (MnemonicPhrase)
-import Data.PubKeyHash (PubKeyHash)
 import Data.String (joinWith)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.Time.Duration (Milliseconds(..))
@@ -53,7 +52,6 @@ import Test.Data.Marlowe
   , createWalletResponse
   , followerMessage
   , restoreRequest
-  , restoreResponse
   , walletCompantionMessage
   )
 import Test.Data.Plutus
@@ -88,6 +86,7 @@ openMyWalletDialog
    . MonadAff m
   => MonadUser m
   => MonadError Error m
+  => MonadLogger String m
   => MonadTest m
   => m a
   -> m a
@@ -101,6 +100,7 @@ openContactsDialog
    . MonadAff m
   => MonadUser m
   => MonadError Error m
+  => MonadLogger String m
   => MonadTest m
   => m a
   -> m a
@@ -114,6 +114,7 @@ openNewContractDialog
    . MonadAff m
   => MonadUser m
   => MonadError Error m
+  => MonadLogger String m
   => MonadTest m
   => m a
   -> m a
@@ -168,6 +169,7 @@ clickDrop
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickDrop = clickButtonRegex "drop"
 
@@ -177,6 +179,7 @@ clickNewContact
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickNewContact = clickButtonRegex "new contact"
 
@@ -186,6 +189,7 @@ clickSave
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickSave = clickButtonRegex "save"
 
@@ -195,6 +199,7 @@ clickSetup
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickSetup = clickButtonRegex "setup"
 
@@ -204,6 +209,7 @@ clickReview
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickReview = clickButtonRegex "review"
 
@@ -213,6 +219,7 @@ clickPayAndStart
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickPayAndStart = clickButtonRegex "pay and start"
 
@@ -226,6 +233,7 @@ openRestoreDialog
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m a
   -> m a
 openRestoreDialog action = do
@@ -239,6 +247,7 @@ openGenerateDialog
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m a
   -> m a
 openGenerateDialog action = do
@@ -272,6 +281,7 @@ clickCreateWallet
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickCreateWallet = clickButtonRegex "create wallet"
 
@@ -281,12 +291,14 @@ clickRestoreWallet
   => MonadUser m
   => MonadError Error m
   => MonadTest m
+  => MonadLogger String m
   => m Unit
 clickRestoreWallet = clickButtonRegex "restore wallet"
 
 clickOk
   :: forall m
    . MonadAff m
+  => MonadLogger String m
   => MonadUser m
   => MonadError Error m
   => MonadTest m
@@ -302,10 +314,12 @@ clickLinkRegex
    . MonadAff m
   => MonadUser m
   => MonadError Error m
+  => MonadLogger String m
   => MonadTest m
   => String
   -> m Unit
 clickLinkRegex regex = do
+  debug $ "click link " <> regex
   clickM $ getBy role do
     nameRegex regex ignoreCase
     pure Link
@@ -315,10 +329,12 @@ clickButtonRegex
    . MonadAff m
   => MonadUser m
   => MonadError Error m
+  => MonadLogger String m
   => MonadTest m
   => String
   -> m Unit
 clickButtonRegex regex = do
+  debug $ "click button " <> regex
   button <- shouldCast =<< getBy role do
     nameRegex regex ignoreCase
     pure Button
@@ -364,15 +380,13 @@ handlePostRestoreWallet
   => MonadMockHTTP m
   => MonadThrow Error m
   => WalletNickname
-  -> Address
   -> MnemonicPhrase
-  -> PubKeyHash
-  -> WalletId
+  -> WalletInfo
   -> m Unit
-handlePostRestoreWallet walletName address mnemonic pubKeyHash walletId =
+handlePostRestoreWallet walletName mnemonic walletInfo =
   handleHTTPRequest POST "/api/wallet/v1/centralized-testnet/restore" ado
     expectJsonContent $ restoreRequest walletName mnemonic
-    in restoreResponse walletId address pubKeyHash
+    in walletInfo
 
 handleGetContractInstances
   :: forall m
@@ -463,7 +477,7 @@ sendCreateSuccess
   -> MarloweParams
   -> m Unit
 sendCreateSuccess appId reqId =
-  sendWebsocketMessage <<< createSuccessMessage appId reqId
+  sendWebsocketMessage "Create success" <<< createSuccessMessage appId reqId
 
 sendWalletCompanionUpdate
   :: forall f m
@@ -476,7 +490,8 @@ sendWalletCompanionUpdate
   -> f (Tuple MarloweParams MarloweData)
   -> m Unit
 sendWalletCompanionUpdate companionId =
-  sendWebsocketMessage <<< walletCompantionMessage companionId
+  sendWebsocketMessage "Wallet companion update" <<< walletCompantionMessage
+    companionId
 
 sendFollowerUpdate
   :: forall m
@@ -487,7 +502,7 @@ sendFollowerUpdate
   -> ContractHistory
   -> m Unit
 sendFollowerUpdate followerId =
-  sendWebsocketMessage <<< followerMessage followerId
+  sendWebsocketMessage "Follower update" <<< followerMessage followerId
 
 sendNewActiveEndpoints
   :: forall m
@@ -500,7 +515,8 @@ sendNewActiveEndpoints
   -> Array String
   -> m Unit
 sendNewActiveEndpoints instanceId =
-  sendWebsocketMessage <<< instanceUpdate instanceId <<< newActiveEndpoints
+  sendWebsocketMessage "New active endpoints" <<< instanceUpdate instanceId <<<
+    newActiveEndpoints
 
 recvInstanceSubscribe
   :: forall m
@@ -512,17 +528,18 @@ recvInstanceSubscribe
   => UUID
   -> m Unit
 recvInstanceSubscribe instanceId = do
-  recvWebsocketMessage $ subscribeApp instanceId
+  recvWebsocketMessage "Subscribe" $ subscribeApp instanceId
 
 sendWebsocketMessage
   :: forall m
    . MonadAsk Coenv m
   => MonadLogger String m
   => MonadEffect m
-  => CombinedWSStreamToClient
+  => String
+  -> CombinedWSStreamToClient
   -> m Unit
-sendWebsocketMessage payload = do
-  debug $ "↑ Send websocket message to app: " <> encodeStringifyJson payload
+sendWebsocketMessage description payload = do
+  debug $ "↑ Send websocket message to app: " <> description
   listener <- asks _.pabWebsocketIn
   liftEffect $ notify listener $ ReceiveMessage $ Right payload
 
@@ -533,10 +550,11 @@ recvWebsocketMessage
   => MonadLogger String m
   => EncodeJson a
   => MonadAff m
-  => a
+  => String
+  -> a
   -> m Unit
-recvWebsocketMessage expected = do
-  debug $ "↓ Recv websocket message from app: " <> encodeStringifyJson expected
+recvWebsocketMessage description expected = do
+  debug $ "↓ Recv websocket message from app: " <> description
   queue <- asks _.pabWebsocketOut
   msg <- liftAff $ parOneOf
     [ Just <$> untilJust do

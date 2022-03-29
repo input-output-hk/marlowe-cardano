@@ -15,12 +15,12 @@ import Plutus.V1.Ledger.Address (Address(..))
 import Plutus.V1.Ledger.Credential (Credential(..))
 import Test.Data.Marlowe
   ( expectJust
+  , makeTestWalletNickname
   , marloweData
   , newMarloweParams
   , newMnemonicPhrase
   , newWalletInfo
   , semanticState
-  , walletNickname
   )
 import Test.Marlowe.Run (fundWallet, marloweRunTest)
 import Test.Marlowe.Run.Action.Flows (createWallet, dropWallet, restoreWallet)
@@ -37,46 +37,44 @@ import Test.Marlowe.Run.Queries
   )
 import Test.Network.HTTP (expectNoRequest)
 import Test.Spec (Spec)
-import Test.Web.DOM.Assertions (shouldHaveText)
+import Test.Web.DOM.Assertions (shouldHaveText, shouldHaveTextM)
 
 createAndRestoreWallet :: Spec Unit
 createAndRestoreWallet = marloweRunTest "Create and Restore Wallet" do
   -- Arrange
-  name <- walletNickname "Wallet1"
+  walletNickname <- makeTestWalletNickname "Wallet1"
   mnemonic <- newMnemonicPhrase
   walletInfo <- newWalletInfo
 
   -- Act
-  _ <- createWallet name mnemonic walletInfo
+  _ <- createWallet walletNickname mnemonic walletInfo
 
   -- Assert
   openMyWalletDialog do
-    heading <- getWalletName
-    balance <- getWalletBalance
-    status <- getWalletStatus
+    getWalletName `shouldHaveTextM` WN.toString walletNickname
+    balanceElement <- getWalletBalance
+    statusElement <- getWalletStatus
 
-    heading `shouldHaveText` WN.toString name
-    balance `shouldHaveText` "₳ 0.000000"
-    status `shouldHaveText` "Out of sync"
+    balanceElement `shouldHaveText` "₳ 0.000000"
+    statusElement `shouldHaveText` "Out of sync"
 
-    fundWallet name "" "" $ BigInt.fromInt 1000000000
+    fundWallet walletNickname "" "" $ BigInt.fromInt 1000000000
 
-    balance `shouldHaveText` "₳ 1,000.000000"
-    status `shouldHaveText` "Synchronized"
+    balanceElement `shouldHaveText` "₳ 1,000.000000"
+    statusElement `shouldHaveText` "Synchronized"
 
   -- Act
   dropWallet walletInfo
-  _ <- restoreWallet name []
+  _ <- restoreWallet walletNickname []
 
   -- Assert
   openMyWalletDialog do
-    heading <- getWalletName
-    balance <- getWalletBalance
-    status <- getWalletStatus
+    getWalletName `shouldHaveTextM` WN.toString walletNickname
+    balanceElement <- getWalletBalance
+    statusElement <- getWalletStatus
 
-    heading `shouldHaveText` WN.toString name
-    balance `shouldHaveText` "₳ 1,000.000000"
-    status `shouldHaveText` "Synchronized"
+    balanceElement `shouldHaveText` "₳ 1,000.000000"
+    statusElement `shouldHaveText` "Synchronized"
 
   dropWallet walletInfo
 
@@ -84,7 +82,7 @@ multipleCompanionUpdates :: Spec Unit
 multipleCompanionUpdates = marloweRunTest "Receiving multiple companion updates"
   do
     -- Arrange
-    name <- walletNickname "Wallet1"
+    walletNickname <- makeTestWalletNickname "Wallet1"
     mnemonic <- newMnemonicPhrase
     walletInfo@(WalletInfo { walletId }) <- newWalletInfo
     let emptyMarloweData = marloweData Close $ semanticState [] [] [] unixEpoch
@@ -95,9 +93,9 @@ multipleCompanionUpdates = marloweRunTest "Receiving multiple companion updates"
     followerId3 <- generateUUID
 
     -- Act
-    _ <- createWallet name mnemonic walletInfo
+    _ <- createWallet walletNickname mnemonic walletInfo
     dropWallet walletInfo
-    appIds <- restoreWallet name
+    appIds <- restoreWallet walletNickname
       [ ContractHistory
           { chAddress: Address
               { addressCredential: ScriptCredential ""

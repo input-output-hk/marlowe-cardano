@@ -4,7 +4,7 @@ module Test.Marlowe.Run.Action.Flows where
 
 import Prologue
 
-import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Capability (class MonadLogger, info)
 import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Now (class MonadTime, now)
 import Control.Monad.Reader (class MonadAsk)
@@ -36,15 +36,9 @@ import Effect.Aff (Error)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
-import Marlowe.Semantics
-  ( Assets(..)
-  , CurrencySymbol
-  , MarloweParams
-  , Party(..)
-  , ValidatorHash
-  )
+import Marlowe.Semantics (Assets(..), MarloweParams, Party(..))
 import MarloweContract (MarloweContract(..))
-import Test.Control.Monad.UUID (class MonadMockUUID, getLastUUID)
+import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
 import Test.Data.Marlowe
   ( adaToken
   , companionEndpoints
@@ -54,9 +48,9 @@ import Test.Data.Marlowe
   , loanRoles
   , marloweAppEndpoints
   , marloweData
-  , marloweParams
   , semanticState
   , walletCompantionState
+  , walletInfo
   )
 import Test.Data.Plutus (appInstanceActive)
 import Test.Marlowe.Run
@@ -120,6 +114,7 @@ createWallet
   -> WalletInfo
   -> m { marloweAppId :: UUID, walletCompanionId :: UUID }
 createWallet walletName mnemonic walletInfo = do
+  info $ "Create new wallet " <> WN.toString walletName
   let WalletInfo { walletId, pubKeyHash, address } = walletInfo
   openGenerateDialog do
     typeWalletNickname $ WN.toString walletName
@@ -167,12 +162,14 @@ restoreWallet
        , followerAppIds :: Map MarloweParams UUID
        }
 restoreWallet walletName contracts = do
+  info $ "Restore wallet " <> WN.toString walletName
   { address, mnemonic, pubKeyHash, walletId } <- getWallet walletName
   openRestoreDialog do
     typeWalletNickname $ WN.toString walletName
     typeMnemonicPhrase $ MP.toString mnemonic
     clickRestoreWallet
-    handlePostRestoreWallet walletName address mnemonic pubKeyHash walletId
+    handlePostRestoreWallet walletName mnemonic
+      $ walletInfo walletId address pubKeyHash
 
     walletCompanionId <- generateUUID
     marloweAppId <- generateUUID
@@ -217,6 +214,7 @@ dropWallet
   => WalletInfo
   -> m Unit
 dropWallet (WalletInfo { walletId }) = do
+  info "Drop wallet"
   openMyWalletDialog clickDrop
   handleGetContractInstances walletId []
 
@@ -230,6 +228,7 @@ addContact
   -> Address
   -> m Unit
 addContact walletName address = do
+  info $ "Add contact " <> WN.toString walletName
   openContactsDialog do
     clickNewContact
     typeWalletNickname $ WN.toString walletName
@@ -237,7 +236,7 @@ addContact walletName address = do
     clickSave
 
 createLoan
-  :: forall m
+  :: forall m r
    . MonadError Error m
   => MonadTest m
   => MonadUser m
@@ -248,27 +247,37 @@ createLoan
   => MonadMockUUID m
   => MonadMockHTTP m
   => TestWallet
-  -> UUID
-  -> UUID
-  -> CurrencySymbol
-  -> ValidatorHash
+  -> { marloweAppId :: UUID, walletCompanionId :: UUID | r }
+  -> MarloweParams
   -> ContractNickname
   -> WalletNickname
   -> WalletNickname
   -> Int
   -> Int
-  -> m Unit
+  -> m UUID
 createLoan
   wallet
-  marloweAppId
-  walletCompanionId
-  currencySymbol
-  rolePayoutValidatorHash
+  { marloweAppId, walletCompanionId }
+  params
   contractTitle
   borrower
   lender
   amount
   interest = do
+  info $ "Create loan contract"
+  reqId <- getNextUUID
+  createdAt <- now
+  loanDeadline <- fromNow (Minutes 10.0)
+  repaymentDeadline <- fromNow (Minutes 25.0)
+  let
+    contract = loan loanDeadline repaymentDeadline amount interest
+    contractState = semanticState
+      [ (PK $ PK.toString wallet.pubKeyHash) /\ adaToken /\ 200000 ]
+      []
+      []
+      createdAt
+  borrowerWallet <- getWallet borrower
+  lenderWallet <- getWallet lender
   openNewContractDialog do
     clickLinkRegex "loan"
     clickSetup
@@ -279,20 +288,6 @@ createLoan
     typeContractValue "interest" $ Int.toStringAs decimal interest
     clickReview
     clickPayAndStart
-  reqId <- getLastUUID
-  createdAt <- now
-  loanDeadline <- fromNow (Minutes 10.0)
-  repaymentDeadline <- fromNow (Minutes 25.0)
-  let
-    contract = loan loanDeadline repaymentDeadline amount interest
-    params = marloweParams currencySymbol rolePayoutValidatorHash
-    contractState = semanticState
-      [ (PK $ PK.toString wallet.pubKeyHash) /\ adaToken /\ 200000 ]
-      []
-      []
-      createdAt
-  borrowerWallet <- getWallet borrower
-  lenderWallet <- getWallet lender
   handlePostCreate marloweAppId reqId
     (loanRoles borrowerWallet.address lenderWallet.address)
     contract
@@ -304,3 +299,4 @@ createLoan
   handlePostActivate wallet.walletId MarloweFollower followerId
   recvInstanceSubscribe followerId
   sendNewActiveEndpoints followerId followerEndpoints
+  pure followerId

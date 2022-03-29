@@ -21,9 +21,9 @@ import Data.UUID.Argonaut as UUID
 import Effect.Aff.Class (class MonadAff)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.HTML (a, div, h3, p, slot, text)
+import Halogen.HTML (a, div, h3, li, p, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (id)
+import Halogen.HTML.Properties (id, title)
 import Humanize (contractIcon)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
@@ -68,8 +68,9 @@ contractPreviewCard
           num
       )
   in
-    div
-      [ classNames
+    li
+      [ title nickname
+      , classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
       , id
           $ UUID.toString
@@ -81,7 +82,8 @@ contractPreviewCard
           [ div
               [ classNames [ "flex-1", "truncate" ] ]
               [ h3
-                  [ classNames [ "flex", "gap-2", "items-center" ] ]
+                  [ classNames [ "flex", "gap-2", "items-center" ]
+                  ]
                   [ contractIcon contractType
                   , text contractName
                   ]
@@ -141,8 +143,9 @@ contractStartingPreviewCard (NewContract reqId contractNickname metadata) =
         ]
     stepActions = startingStepActions
   in
-    div
-      [ classNames
+    li
+      [ title nickname
+      , classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
       ]
       [ div
