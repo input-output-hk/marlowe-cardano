@@ -114,7 +114,7 @@ type ChildSlots =
   , expandSlot :: Expand.Slot Void String
   , contractSetup :: ContractSetup.Slot Unit
   , contractPage :: ContractPage.Slot Unit
-  , confirmActionDialog :: ConfirmContractActionDialog.Slot Unit
+  , confirmActionDialog :: ConfirmContractActionDialog.Slot MarloweParams
   , currentStepActions :: CurrentStepActions.Slot MarloweParams
   )
 

@@ -135,7 +135,6 @@ render state = HH.div [ classNames [ "h-full" ] ]
   , dashboardCard state
   ]
 
--- TODO: We should be able to remove Input (tz and current slot) after we make each sub-component a proper component
 dashboardScreen
   :: forall m
    . MonadAff m
@@ -256,7 +255,7 @@ dashboardCard state = case view _card state of
                   ContractActionConfirmationCard input ->
                     slot
                       _confirmActionDialog
-                      unit
+                      input.executionState.marloweParams
                       ConfirmContractActionDialog.component
                       input
                       (\DialogClosed -> CloseCard)
