@@ -25,11 +25,12 @@ module Language.Marlowe.CLI.Command.Util (
 
 
 import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSlots (..), LocalNodeConnectInfo (..),
-                    Lovelace (..), NetworkId (..), SlotNo, TxMetadataInEra (TxMetadataNone), TxMintValue (TxMintNone))
+                    Lovelace (..), NetworkId (..), SlotNo, TxMetadataInEra (TxMetadataNone), TxMintValue (TxMintNone),
+                    lovelaceToValue)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseSlotNo, parseTokenName)
-import Language.Marlowe.CLI.Transaction (buildClean, buildMinting)
+import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting)
 import Language.Marlowe.CLI.Types (CliError)
 import Plutus.V1.Ledger.Api (TokenName)
 
@@ -64,6 +65,16 @@ data UtilCommand =
     , submitTimeout  :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , tokenNames     :: [TokenName]      -- ^ The token names.
     }
+    -- | Fund an address from a faucet.
+  | Faucet
+    {
+      network       :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath    :: FilePath         -- ^ The path to the node socket.
+    , lovelace      :: Lovelace         -- ^ The lovelace to send to the address.
+    , bodyFile      :: FilePath         -- ^ The output file for the transaction body.
+    , submitTimeout :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
+    , addresses     :: [AddressAny]     -- ^ The addresses.
+    }
 
 
 -- | Run a miscellaneous command.
@@ -84,29 +95,36 @@ runUtilCommand command =
         }
       printTxId = liftIO . putStrLn . ("TxId " <>) . show
     case command of
-      Clean{..} -> buildClean
-                     connection
-                     signingKeyFiles
-                     lovelace
-                     change
-                     Nothing
-                     TxMintNone
-                     TxMetadataNone
-                     bodyFile
-                     submitTimeout
-                     >>= printTxId
-      Mint{..}  -> buildMinting
-                     connection
-                     signingKeyFile
-                     tokenNames
-                     metadataFile
-                     count
-                     expires
-                     lovelace
-                     change
-                     bodyFile
-                     submitTimeout
-                     >>= printTxId
+      Clean{..}  -> buildClean
+                      connection
+                      signingKeyFiles
+                      lovelace
+                      change
+                      Nothing
+                      TxMintNone
+                      TxMetadataNone
+                      bodyFile
+                      submitTimeout
+                      >>= printTxId
+      Mint{..}   -> buildMinting
+                      connection
+                      signingKeyFile
+                      tokenNames
+                      metadataFile
+                      count
+                      expires
+                      lovelace
+                      change
+                      bodyFile
+                      submitTimeout
+                      >>= printTxId
+      Faucet{..} -> buildFaucet'
+                      connection
+                      (lovelaceToValue lovelace)
+                      addresses
+                      bodyFile
+                      submitTimeout
+                      >>= printTxId
 
 
 -- | Parser for miscellaneous commands.
@@ -115,6 +133,7 @@ parseUtilCommand =
   O.hsubparser
     $ O.commandGroup "Miscellaneous low-level commands:"
     <> cleanCommand
+    <> faucetCommand
     <> mintCommand
 
 
@@ -162,3 +181,23 @@ mintOptions =
     <*> O.strOption                            (O.long "out-file"                             <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
     <*> (O.optional . O.option O.auto)         (O.long "submit"                               <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
     <*> O.many (O.argument parseTokenName      $                                                 O.metavar "TOKEN_NAME"    <> O.help "The name of the token."                                     )
+
+
+-- | Parser for the "faucet" command.
+faucetCommand :: O.Mod O.CommandFields UtilCommand
+faucetCommand =
+  O.command "faucet"
+    $ O.info faucetOptions
+    $ O.progDesc "Fund an address from a faucet."
+
+
+-- | Parser for the "faucet" options.
+faucetOptions :: O.Parser UtilCommand
+faucetOptions =
+  Faucet
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"                            <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."                        )
+    <*> O.strOption                            (O.long "socket-path"                              <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."                  )
+    <*> (O.option $ Lovelace <$> O.auto)       (O.long "lovelace"        <> O.value 1_000_000_000 <> O.metavar "LOVELACE"      <> O.help "The lovelace to send to each address."                      )
+    <*> O.strOption                            (O.long "out-file"                                 <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
+    <*> (O.optional . O.option O.auto)         (O.long "submit"                                   <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
+    <*> O.many (O.argument parseAddressAny     $                                                     O.metavar "ADDRESS"       <> O.help "The addresses to receive the funds."                        )

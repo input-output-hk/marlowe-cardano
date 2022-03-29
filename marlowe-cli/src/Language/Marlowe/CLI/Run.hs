@@ -333,7 +333,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
     body <-
       buildBody connection
         spend continue
-        inputs outputs'
+        [] inputs outputs'
         collateral changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
@@ -421,7 +421,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
     body <-
       buildBody connection
         spend Nothing
-        inputs outputs'
+        [] inputs outputs'
         (Just collateral) changeAddress
         (mtRange marloweOut)
         (hashSigningKey <$> signingKeys)
