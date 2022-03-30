@@ -10,6 +10,7 @@ module Marlowe.Execution.State
   , mkTx
   , nextState
   , nextTimeout
+  , removePendingTransaction
   , restoreState
   , setPendingTransaction
   , timeoutState
@@ -137,6 +138,10 @@ contractName { contractNickname, marloweParams } = maybe'
 setPendingTransaction :: TransactionInput -> State -> State
 setPendingTransaction txInput state = state
   { mPendingTransaction = Just txInput }
+
+removePendingTransaction :: State -> State
+removePendingTransaction state = state
+  { mPendingTransaction = Nothing }
 
 nextState :: TransactionInput -> State -> State
 nextState txInput state =

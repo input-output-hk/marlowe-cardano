@@ -30,7 +30,11 @@ import Effect.Exception.Unsafe (unsafeThrow)
 import Errors (globalError)
 import Halogen as H
 import Halogen.Store.Monad (class MonadStore, updateStore)
-import Marlowe.Execution.State (mkTx, setPendingTransaction)
+import Marlowe.Execution.State
+  ( mkTx
+  , removePendingTransaction
+  , setPendingTransaction
+  )
 import Marlowe.Execution.Types (NamedAction(..))
 import Marlowe.PAB (transactionFee)
 import Marlowe.Semantics (ChosenNum)
@@ -119,7 +123,7 @@ handleAction (ConfirmAction namedAction) = do
         (Milliseconds 600.0)
         (Left "Error")
       globalError "Failed to submit transaction." ajaxError
-    Right mResult -> do
+    Right awaitResult -> do
       updateStore $ Store.ModifySyncedContract marloweParams $
         setPendingTransaction txInput
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
@@ -127,8 +131,15 @@ handleAction (ConfirmAction namedAction) = do
         (Right "")
       addToast $ successToast "Transaction submitted, awating confirmation."
       H.raise DialogClosed
-      liftAff mResult
-      addToast $ successToast "Contract update applied."
+      mResult <- liftAff awaitResult
+      case mResult of
+        Right _ -> do
+          addToast $ successToast "Contract update applied."
+        Left error -> do
+          updateStore $ Store.ModifySyncedContract
+            marloweParams
+            removePendingTransaction
+          globalError "Failed to update contract" error
 
 toInput :: NamedAction -> Maybe ChosenNum -> Maybe Semantic.Input
 toInput (MakeDeposit accountId party token value) _ = Just $ Semantic.IDeposit
