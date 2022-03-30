@@ -14,21 +14,20 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 1198000000
+              "duration": 439000000
             }
           },
           {
             "arguments": [],
             "keyword": "Given ",
             "line": 8,
-            "name": "I am on the \"home\" page",
+            "name": "I am on the \"home\" page of the \"marlowe-playground\" application",
             "match": {
               "location": "src/step-definitions/navigation.ts:10"
             },
             "result": {
-              "status": "failed",
-              "duration": 40000000,
-              "error_message": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8010/\n=========================== logs ===========================\nnavigating to \"http://localhost:8010/\", waiting until \"load\"\n============================================================\n    at /Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/support/navigation-behavior.ts:18:14\n    at /Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/support/navigation-behavior.ts:8:71\n    at __awaiter (/Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/support/navigation-behavior.ts:4:12)\n    at navigateToPage (/Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/support/navigation-behavior.ts:8:20)\n    at ScenarioWorld.<anonymous> (/Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/step-definitions/navigation.ts:21:25)\n    at /Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/step-definitions/navigation.ts:8:71\n    at __awaiter (/Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/step-definitions/navigation.ts:4:12)\n    at ScenarioWorld.<anonymous> (/Users/ladames/Projects/cardano-src/forked/new-marlow/marlowe-cardano/e2e/src/step-definitions/navigation.ts:16:12)"
+              "status": "passed",
+              "duration": 3988000000
             }
           },
           {
@@ -40,8 +39,8 @@
               "location": "src/step-definitions/click.ts:11"
             },
             "result": {
-              "status": "skipped",
-              "duration": 0
+              "status": "passed",
+              "duration": 455000000
             }
           },
           {
@@ -53,7 +52,7 @@
               "location": "src/step-definitions/navigation.ts:27"
             },
             "result": {
-              "status": "skipped",
+              "status": "passed",
               "duration": 0
             }
           },
@@ -66,8 +65,8 @@
               "location": "src/step-definitions/assertions/verify-element-value.ts:28"
             },
             "result": {
-              "status": "skipped",
-              "duration": 0
+              "status": "passed",
+              "duration": 223000000
             }
           },
           {
@@ -75,14 +74,8 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 268000000
-            },
-            "embeddings": [
-              {
-                "data": "iVBORw0KGgoAAAANSUhEUgAABQAAAALQCAYAAADPfd1WAAAAAXNSR0IArs4c6QAAFIJJREFUeJzt2EENACAQwDDAv+dDBSFZWgV7b8/MLAAAAAAg6fwOAAAAAADeMQABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAMAMQAAAAAMIMQAAAAAAIMwABAAAAIMwABAAAAIAwAxAAAAAAwgxAAAAAAAgzAAEAAAAgzAAEAAAAgDADEAAAAADCDEAAAAAACDMAAQAAACDMAAQAAACAsAvDJgmc+KaOVQAAAABJRU5ErkJggg==",
-                "mime_type": "image/png"
-              }
-            ]
+              "duration": 36000000
+            }
           }
         ],
         "tags": [
@@ -93,6 +86,103 @@
           {
             "name": "@smoke",
             "line": 6
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "creating-a-new-contract-with-javascript;using-an-existing-javascript-contract-template",
+        "keyword": "Scenario",
+        "line": 22,
+        "name": "Using an existing Javascript contract template",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 430000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 23,
+            "name": "I am on the \"home\" page of the \"marlowe-playground\" application",
+            "match": {
+              "location": "src/step-definitions/navigation.ts:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2583000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 25,
+            "name": "I click the \"Open an example\" button",
+            "match": {
+              "location": "src/step-definitions/click.ts:11"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 224000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 26,
+            "name": "I click the \"Escrow Javascript\" button",
+            "match": {
+              "location": "src/step-definitions/click.ts:11"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 452000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 28,
+            "name": "I am directed to the \"marlowe-playground-js\" page",
+            "match": {
+              "location": "src/step-definitions/navigation.ts:27"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 29,
+            "name": "the \"editor header\" should contain \"Purchase\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 124000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 34000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@dev",
+            "line": 21
           }
         ],
         "type": "scenario"
