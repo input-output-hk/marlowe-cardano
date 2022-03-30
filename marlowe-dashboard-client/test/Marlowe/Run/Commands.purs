@@ -50,6 +50,7 @@ import Test.Data.Marlowe
   , createSuccessMessage
   , createWalletRequest
   , createWalletResponse
+  , followEndpoint
   , followerMessage
   , restoreRequest
   , walletCompantionMessage
@@ -162,6 +163,16 @@ typeContractValue name value = do
     , initialSelectionStart: toUndefinable $ Just 0
     , initialSelectionEnd: toUndefinable $ Just 10
     }
+
+clickConfirm
+  :: forall m
+   . MonadAff m
+  => MonadUser m
+  => MonadError Error m
+  => MonadTest m
+  => MonadLogger String m
+  => m Unit
+clickConfirm = clickButtonRegex "confirm"
 
 clickDrop
   :: forall m
@@ -411,6 +422,18 @@ handlePostCreate
 handlePostCreate marloweAppId reqId roles contract = do
   handlePostEndpoint marloweAppId createEndpoint ado
     expectJsonContent $ createContent reqId roles contract
+    in jsonEmptyArray
+
+handlePostFollow
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> MarloweParams
+  -> m Unit
+handlePostFollow followerAppId params = do
+  handlePostEndpoint followerAppId followEndpoint ado
+    expectJsonContent params
     in jsonEmptyArray
 
 handlePostEndpoint

@@ -20,6 +20,7 @@ import Data.Passphrase (Passphrase)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
 import Effect.Aff (Error)
+import Effect.Class (class MonadEffect)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Halogen (HalogenM)
 import Marlowe.Run.Server as MarloweRun
@@ -51,6 +52,7 @@ class Monad m <= ManageWallet m where
 
 instance
   ( MonadError Error m
+  , MonadEffect m
   , MonadAjax MarloweRun.Api m
   ) =>
   ManageWallet (AppM m) where

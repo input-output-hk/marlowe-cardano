@@ -47,7 +47,7 @@ import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (_Just, assign, modifying, set, use, view, (^.), (^?))
+import Data.Lens (assign, modifying, set, use, view, (^.), (^?))
 import Data.Map (filterKeys, toUnfoldable)
 import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet
@@ -63,8 +63,9 @@ import Data.Tuple.Nested ((/\))
 import Data.UserNamedActions (userNamedActions)
 import Data.Wallet (SyncStatus, syncStatusFromNumber)
 import Data.WalletId (WalletId)
-import Effect.Aff (Error, Fiber)
+import Effect.Aff (Error, Fiber, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 import Effect.Class (liftEffect)
 import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
 import Errors (globalError)
@@ -73,9 +74,9 @@ import Halogen as H
 import Halogen.Component.Reactive (mkReactiveComponent)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Store.Connect (Connected, connect)
-import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Halogen.Store.Select (selectEq)
-import Halogen.Subscription (Emitter)
+import Halogen.Subscription (Emitter, makeEmitter)
 import Halogen.Subscription as HS
 import Halogen.Subscription.Extra (compactEmitter)
 import Language.Marlowe.Client (EndpointResponse(..), MarloweEndpointResult(..))
@@ -125,6 +126,7 @@ import Store.Contracts
   , getNewContracts
   , getRunningContracts
   )
+import Store.Wallet (_connectedWallet)
 import Store.Wallet as Wallet
 import Store.Wallet as WalletStore
 import Toast.Types (successToast)
@@ -189,6 +191,7 @@ component
   :: forall m
    . MonadAff m
   => MonadLogger StructuredLog m
+  => MonadUnliftAff m
   => MonadAsk Env m
   => MonadTime m
   => MonadKill Error Fiber m
@@ -214,18 +217,12 @@ component = connect sliceSelector $ mkReactiveComponent
   , render
   , eval:
       { initialize: do
-          { emitter, listener } <- liftEffect HS.create
-          subscribeToSources emitter
+          subscribeToSources
           subscribeToPlutusApps
           tzOffset <- timezoneOffset
           assign _tzOffset tzOffset
-          pure listener
       , finalize: \_ -> unsubscribeFromPlutusApps
-      , handleInput: \listener mPreviousState -> do
-          let mPreviousWallet = mPreviousState ^? _Just <<< _wallet
-          currentWallet <- use _wallet
-          unless (mPreviousWallet == Just currentWallet) do
-            liftEffect $ HS.notify listener currentWallet
+      , handleInput: \_ _ -> pure unit
       , handleAction
       }
   }
@@ -523,20 +520,36 @@ reActivatePlutusScript contractType mVal = do
 subscribeToSources
   :: forall m
    . MonadAsk Env m
+  => MonadUnliftAff m
   => MonadStore Store.Action Store.Store m
-  => Emitter PABConnectedWallet
-  -> HalogenM m Unit
+  => HalogenM m Unit
 subscribeToSources =
-  void <<< H.subscribe <<< compactEmitter <=< actionsFromSources
+  void <<< H.subscribe <<< compactEmitter =<< H.lift actionsFromSources
 
 actionsFromSources
   :: forall m
    . MonadAsk Env m
-  => Emitter PABConnectedWallet
-  -> m (Emitter (Maybe Action))
-actionsFromSources wallet = do
+  => MonadUnliftAff m
+  => MonadStore Store.Action Store.Store m
+  => m (Emitter (Maybe Action))
+actionsFromSources = do
   { pabWebsocket, walletFunds } <- asks $ view _sources
-  let websocketActions = actionFromWebsocket <$> wallet <*> pabWebsocket
+  u <- askUnliftAff
+  -- IMPORTANT: we can't use the applicative instance for Emitter here like
+  -- this: actionFromWebsocket <$> wallet <*> pabWebsocket. Why? Because that
+  -- will cause duplicate actions to be sent on every wallet change. In FRP
+  -- terms, `wallet` functions as a `Behaviour` here, not an `Event`. But the
+  -- applicative instance for `Emitters` does not work like that. It fires an
+  -- event when either constituent `Emitter` fires, using the previous value of
+  -- the other one each time.
+  let
+    websocketActions = makeEmitter \subscriber -> do
+      canceller <- HS.subscribe pabWebsocket \websocketMsg -> launchAff_ do
+        store <- unliftAff u $ getStore
+        let mWallet = store ^? Store._wallet <<< _connectedWallet
+        liftEffect $ for_ mWallet \w ->
+          subscriber $ actionFromWebsocket w websocketMsg
+      pure $ HS.unsubscribe canceller
   let walletUpdates = Just <<< UpdateWalletFunds <$> walletFunds
   -- Alt instance for Emitters "zips" them together. So the resulting Emitter
   -- is the union of events fired from the constituent emitters.

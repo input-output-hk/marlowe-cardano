@@ -21,7 +21,7 @@ import Data.Variant.Internal as V
 import Foreign.Object as Object
 import Prim.RowList as RL
 import Record.Unsafe (unsafeGet)
-import Servant.PureScript (AjaxError, printAjaxError)
+import Servant.PureScript (class ContentType, AjaxError, printAjaxError)
 import Type.Proxy (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -50,10 +50,12 @@ instance debuggableMaybe :: Debuggable a => Debuggable (Maybe a) where
   debuggable Nothing = Json.fromString "Debug information not available"
   debuggable (Just a) = debuggable a
 
-instance Debuggable (AjaxError JsonDecodeError Json) where
+instance
+  ContentType decodeError content =>
+  Debuggable (AjaxError decodeError content) where
   debuggable e = encodeJson
     { type: "AjaxError"
-    , error: Json.fromString $ printAjaxError e
+    , error: printAjaxError e
     }
 
 instance Debuggable JsonDecodeError where

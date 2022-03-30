@@ -40,6 +40,7 @@ import Data.Wallet as Disconnected
 import Data.WalletId (WalletId)
 import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
 import Env (Env)
 import Errors (globalError)
 import Halogen (Component, HalogenM, defaultEval, mkComponent, mkEval)
@@ -96,6 +97,7 @@ mkMainFrame
   :: forall m
    . MonadAff m
   => MonadKill Error Fiber m
+  => MonadUnliftAff m
   => MonadLogger StructuredLog m
   => MonadAsk Env m
   => MonadStore Store.Action Store.Store m

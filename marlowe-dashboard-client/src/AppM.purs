@@ -5,7 +5,7 @@ import Prologue
 import Clipboard (class MonadClipboard, copy)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Effect.Class (log') as Control.Monad.Effect.Class
-import Control.Logger.Structured (StructuredLog)
+import Control.Logger.Structured (StructuredLog, debug', error)
 import Control.Monad.Base (class MonadBase, liftBase)
 import Control.Monad.Error.Class (class MonadThrow, try)
 import Control.Monad.Error.Extra (toMonadThrow)
@@ -32,12 +32,14 @@ import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.UUID (class MonadUUID)
 import Control.Monad.Unlift (class MonadUnlift, withRunInBase)
 import Data.Array as A
+import Data.HTTP.Method (unCustomMethod)
 import Data.Lens (Lens', over, view)
 import Data.Lens.Record (prop)
 import Data.Maybe (fromJust)
 import Data.Passphrase (Passphrase)
 import Data.Passphrase as Passphrase
-import Effect.Aff (Aff)
+import Data.String (joinWith)
+import Effect.Aff (Aff, Error)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Aff.Unlift (class MonadUnliftAff, withRunInAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -56,7 +58,14 @@ import Marlowe.Run.Server as MarloweRun
 import Partial.Unsafe (unsafePartial)
 import Plutus.PAB.Webserver as PAB
 import Safe.Coerce (coerce)
-import Servant.PureScript (class MonadAjax, Request, request)
+import Servant.PureScript
+  ( class ContentType
+  , class MonadAjax
+  , AjaxError
+  , Request
+  , prepareRequest
+  , request
+  )
 import Store as Store
 import Type.Proxy (Proxy(..))
 import URI (Fragment, Host, Path, RelativeRef, UserInfo)
@@ -209,15 +218,50 @@ liftAndRethrow
   -> t m a
 liftAndRethrow m = toMonadThrow =<< lift (try m)
 
-instance (MonadError e m, MonadAjax PAB.Api m) => MonadAjax PAB.Api (AppM m) where
-  request api = liftAndRethrow <<< request api <<< prependPath [ "pab" ]
+handleRequest
+  :: forall api m reqDecodeError resDecodeError resContent reqContent req res
+   . MonadEffect m
+  => MonadError Error m
+  => MonadAjax api m
+  => ContentType reqDecodeError reqContent
+  => ContentType resDecodeError resContent
+  => Array String
+  -> api
+  -> Request reqContent resContent resDecodeError req res
+  -> AppM m (Either (AjaxError resDecodeError resContent) res)
+handleRequest prefix api req = do
+  let req' = prependPath prefix req
+  result <- liftAndRethrow $ request api req'
+  let
+    msg = joinWith " "
+      [ "⇅"
+      , case req'.method of
+          Left m -> show m
+          Right m -> unCustomMethod m
+      , (prepareRequest req').url
+      ]
+  case result of
+    Left e -> do
+      error msg e
+    Right _ ->
+      debug' msg
+  pure result
 
 instance
-  ( MonadError e m
+  ( MonadError Error m
+  , MonadEffect m
+  , MonadAjax PAB.Api m
+  ) =>
+  MonadAjax PAB.Api (AppM m) where
+  request = handleRequest [ "pab" ]
+
+instance
+  ( MonadError Error m
+  , MonadEffect m
   , MonadAjax MarloweRun.Api m
   ) =>
   MonadAjax MarloweRun.Api (AppM m) where
-  request api = liftAndRethrow <<< request api
+  request = handleRequest []
 
 instance MonadEffect m => MonadLogger StructuredLog (AppM m) where
   -- | All other helper functions (debug, error, info, warn) are in `Control.Logger.Capability`

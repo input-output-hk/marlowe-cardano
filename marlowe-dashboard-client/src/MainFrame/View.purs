@@ -16,6 +16,7 @@ import Data.Either (fromLeft)
 import Data.Lens ((^.), (^?))
 import Effect.Aff (Error, Fiber)
 import Effect.Aff.Class (class MonadAff)
+import Effect.Aff.Unlift (class MonadUnliftAff)
 import Env (Env)
 import Halogen (ComponentHTML)
 import Halogen.Css (classNames)
@@ -39,6 +40,7 @@ render
   :: forall m
    . MonadAff m
   => MonadKill Error Fiber m
+  => MonadUnliftAff m
   => MonadAsk Env m
   => MonadTime m
   => ManageMarlowe m
