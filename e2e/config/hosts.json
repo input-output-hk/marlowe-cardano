@@ -1,4 +1,10 @@
 {
-  "localhost": "http://localhost:8010/",
-  "current-sprint": "https://marlowe-playground-currentsprintmarlowe.plutus.aws.iohkdev.io/"
+  "localhost": {
+    "marlowe-playground": "https://marlowe-playground-currentsprintmarlowe.plutus.aws.iohkdev.io/",
+    "marlowe-run": "http://0.0.0.0:8009/"
+  }, 
+  "current-sprint": { 
+    "marlowe-playground": "https://marlowe-playground-currentsprintmarlowe.plutus.aws.iohkdev.io/",
+    "marlowe-run": "https://marlowe-run-currentsprintmarlowe.plutus.aws.iohkdev.io/"
+  }
 }

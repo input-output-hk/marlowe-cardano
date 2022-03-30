@@ -5,7 +5,7 @@ Feature: Creating a new contract with Javascript
   @dev
   @smoke
   Scenario: Creating a new Javascript contract template
-    Given I am on the "home" page
+    Given I am on the "home" page of the "marlowe-playground" application
 
     When I click the "Start in Javascript" link
 
@@ -18,9 +18,9 @@ Feature: Creating a new contract with Javascript
 
     # Then the "Send To Simulator" button should be "enabled"
 
-  # @dev
+  @dev
   Scenario: Using an existing Javascript contract template
-    Given I am on the "home" page
+    Given I am on the "home" page of the "marlowe-playground" application
 
     When I click the "Open an example" button
     And I click the "Escrow Javascript" button

@@ -1,16 +1,18 @@
 import { Page } from 'playwright';
-import { GlobalConfig, PageId } from '../env/global';
+import { GlobalConfig, PageId, ApplicationId } from '../env/global';
 
 export const navigateToPage = async (
   page: Page,
   pageId: PageId,
+  applicationId: ApplicationId,
   { pagesConfig, hostsConfig }: GlobalConfig
 ): Promise<void> => {
   const {
-    UI_AUTOMATION_HOST: hostName = 'current-sprint',
+    UI_AUTOMATION_HOST: environmentId = 'current-sprint',
   } = process.env
 
-  const hostPath = hostsConfig[`${hostName}`];
+  const hostsByApp = hostsConfig[`${environmentId}`];
+  const hostPath = hostsByApp[`${applicationId}`];
   const url = new URL(hostPath);
   const pagesConfigItem = pagesConfig[pageId];
   url.pathname = pagesConfigItem.route;

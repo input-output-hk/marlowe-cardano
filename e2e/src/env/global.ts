@@ -1,4 +1,5 @@
 export type PageId = string;
+export type ApplicationId = string;
 export type PagesConfig = Record<PageId, Record<string, string>>;
 export type HostsConfig = Record<string, string>;
 export type ElementKey = string;
