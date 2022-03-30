@@ -12,10 +12,11 @@ Then(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
     const document = await getDocument(page);
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
     const { role, name } = elementIdentifier;
     await waitFor(async() => {
       const locator = await queries.getByRole(document, role, { name })
@@ -31,9 +32,10 @@ Then(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
     const document = await getDocument(page);
-    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
     const { role, name } = elementIdentifier;
     await waitFor(async() => {
       const locator = await queries.getByRole(document, role, { name })
@@ -49,9 +51,10 @@ Then(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
     const document = await getDocument(page);
-    const elementIdentifier = getElementLocator(page, "playground editor", globalConfig);
+    const elementIdentifier = getElementLocator(page, "playground editor", applicationId, globalConfig);
     const { role, name } = elementIdentifier;
     const fixture = getFixtureText(contractFixtureKey, globalConfig);
     await waitFor(async() => {

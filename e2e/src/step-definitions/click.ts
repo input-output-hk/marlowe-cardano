@@ -14,12 +14,13 @@ When(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
 
     console.log(`I click the ${elementKey} (?:button|link|icon|element|text)`);
     const document = await getDocument(page);
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
     const { role, name } = elementIdentifier;
     const locator = await queries.getByRole(document, role, { name })
 

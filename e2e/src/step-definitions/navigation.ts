@@ -15,12 +15,12 @@ Given(
       screen: { page },
       globalConfig,
     } = this;
-
+    this.applicationId = applicationId;
     console.log(`I am on the ${pageId} page of the ${applicationId} application`);
 
     await navigateToPage(page, pageId, applicationId, globalConfig);
 
-    await waitFor(() => currentPathMatchesPageId(page, pageId, globalConfig))
+    await waitFor(() => currentPathMatchesPageId(page, pageId, applicationId, globalConfig))
   }
 );
 
@@ -30,9 +30,10 @@ Given(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
     console.log(`I am directed to the ${pageId} page`);
 
-    await waitFor(() => currentPathMatchesPageId(page, pageId, globalConfig))
+    await waitFor(() => currentPathMatchesPageId(page, pageId, applicationId, globalConfig))
   }
 )

@@ -16,12 +16,13 @@ When(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
 
 
     console.log(`I fill in the ${elementKey} input with ${input}`);
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
     const { role, name } = elementIdentifier;
     const document = await getDocument(page);
 
@@ -43,12 +44,13 @@ When(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
 
 
     console.log(`I fill in the playground editor input with ${fixtureKey}`);
 
-    const elementIdentifier = getElementLocator(page, "playground editor", globalConfig);
+    const elementIdentifier = getElementLocator(page, "playground editor", applicationId, globalConfig);
     const { role, name } = elementIdentifier;
     const document = await getDocument(page);
 
@@ -75,12 +77,13 @@ When(
     const {
       screen: { page },
       globalConfig,
+      applicationId
     } = this;
 
     console.log(`I select the ${option} option from the ${elementKey}`)
     const document = await getDocument(page);
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
     const { role, name } = elementIdentifier;
 
     await waitFor(async() => {
