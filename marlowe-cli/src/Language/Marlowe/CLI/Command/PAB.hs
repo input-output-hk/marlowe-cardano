@@ -24,11 +24,11 @@ module Language.Marlowe.CLI.Command.PAB (
 
 import Cardano.Api (AddressAny)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT, throwError)
-import Language.Marlowe.CLI.Command.Parse (parseMarloweClientInput, parsePOSIXTime, parseRole, parseUrl, parseWalletId)
+import Language.Marlowe.CLI.Command.Parse (parseInputContent, parsePOSIXTime, parseRole, parseUrl, parseWalletId)
 import Language.Marlowe.CLI.PAB (callApplyInputs, callCreate, callFollow, callRedeem, runApp, runCompanion, runFollower,
                                  stop)
 import Language.Marlowe.CLI.Types (CliError (..))
-import Language.Marlowe.Client (MarloweClientInput)
+import Language.Marlowe.SemanticsTypes (InputContent)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Socket (withSocketsDo)
 import Network.WebSockets (runClient)
@@ -63,12 +63,12 @@ data PabCommand =
     -- | Call the "apply-inputs" endpoint.
   | ApplyInputs
     {
-      pabUrl       :: BaseUrl               -- ^ The URL for the Marlowe PAB.
-    , instanceFile :: FilePath              -- ^ The file containing the instance ID.
-    , paramsFile   :: FilePath              -- ^ The JSON file containing the contract parameters.
-    , inputs       :: [MarloweClientInput]  -- ^ The contract's inputs.
-    , minimumTime  :: POSIXTime             -- ^ The first valid time for the transaction.
-    , maximumTime  :: POSIXTime             -- ^ The last valid time for the transaction.
+      pabUrl       :: BaseUrl                          -- ^ The URL for the Marlowe PAB.
+    , instanceFile :: FilePath                         -- ^ The file containing the instance ID.
+    , paramsFile   :: FilePath                         -- ^ The JSON file containing the contract parameters.
+    , inputs       :: [(InputContent, Maybe FilePath)] -- ^ The contract's inputs, contract stub for merkleized action.
+    , minimumTime  :: POSIXTime                        -- ^ The first valid time for the transaction.
+    , maximumTime  :: POSIXTime                        -- ^ The last valid time for the transaction.
     }
     -- | Call the "redeem" endpoint.
   | Redeem
@@ -233,7 +233,7 @@ inputsOptions =
     <$> O.option parseUrl              (O.long "pab-url"           <> O.metavar "URL"           <> O.help "URL for the Marlowe PAB."                           )
     <*> O.strOption                    (O.long "instance-file"     <> O.metavar "INSTANCE_FILE" <> O.help "Input file for the instance ID."                    )
     <*> O.strOption                    (O.long "params-file"       <> O.metavar "PARAMS_FILE"   <> O.help "JSON input file for the Marlowe parameters."        )
-    <*> O.many parseMarloweClientInput
+    <*> O.many parseInputContent
     <*> O.option parsePOSIXTime        (O.long "invalid-before"    <> O.metavar "POSIX_TIME"    <> O.help "Minimum time for the input, in POSIX milliseconds." )
     <*> O.option parsePOSIXTime        (O.long "invalid-hereafter" <> O.metavar "POSIX_TIME"    <> O.help "Maximum time for the input, in POSIX milliseconds." )
 

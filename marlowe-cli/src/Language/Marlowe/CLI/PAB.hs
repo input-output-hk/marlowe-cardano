@@ -51,11 +51,11 @@ import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, maybeWriteJson)
 import Language.Marlowe.CLI.Types (CliError (..))
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, CompanionState, CreateEndpointSchema, EndpointResponse (..),
-                                FollowerContractState, MarloweClientInput, MarloweContractState,
+                                FollowerContractState, MarloweClientInput (..), MarloweContractState,
                                 MarloweEndpointResult (CreateResponse), MarloweError, RedeemEndpointSchema)
 import Language.Marlowe.Contract (MarloweContract (..))
 import Language.Marlowe.Semantics (MarloweParams)
-import Language.Marlowe.SemanticsTypes (Contract)
+import Language.Marlowe.SemanticsTypes (Contract, InputContent)
 import Network.WebSockets (Connection, receiveData)
 import Plutus.PAB.Events.Contract (ContractInstanceId (..))
 import Plutus.PAB.Webserver.Client (InstanceClient (..), PabClient (..))
@@ -267,20 +267,24 @@ callApplyInputs :: MonadError CliError m
                 -> (forall a. ApiRunner m a)           -- ^ The HTTP runner.
                 -> FilePath                            -- ^ File containing the contract instance ID.
                 -> FilePath                            -- ^ The JSON file containing the Marlowe parameters.
-                -> [MarloweClientInput]                -- ^ The inputs to the contract.
+                -> [(InputContent, Maybe FilePath)]    -- ^ The inputs to the contract.
                 -> POSIXTime                           -- ^ The first valid time for the transaction.
                 -> POSIXTime                           -- ^ The last valid time for the transaction.
                 -> m ()                                -- ^ Action for calling the "apply-inputs" endpoint.
-callApplyInputs pabClient runApi instanceFile paramsFile inputs minimumTime maximumTime =
+callApplyInputs pabClient runApi instanceFile paramsFile inputContents minimumTime maximumTime =
   do
     params <- decodeFileStrict paramsFile
+    inputs <- mapM (uncurry getInput) inputContents
     call pabClient runApi instanceFile "apply-inputs"
       ((
       , params :: MarloweParams
       , Just (minimumTime, maximumTime)
       , inputs
       ) :: UUID -> ApplyInputsEndpointSchema)
-
+  where
+    getInput :: MonadError CliError m => MonadIO m => InputContent -> Maybe FilePath -> m MarloweClientInput
+    getInput inputContent Nothing         = pure $ ClientInput inputContent
+    getInput inputContent (Just filePath) = ClientMerkleizedInput inputContent <$> decodeFileStrict filePath
 
 -- | Call the "redeem" endpoint.
 callRedeem :: MonadError CliError m

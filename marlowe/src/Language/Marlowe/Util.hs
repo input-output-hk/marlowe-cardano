@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Language.Marlowe.Util (ada, addAccountsDiff, emptyAccountsDiff, extractNonMerkleizedContractRoles,
                               foldMapNonMerkleizedContract, foldMapContract, getAccountsDiff, isEmptyAccountsDiff,
-                              merkleizedCase) where
+                              merkleizedCase, merkleizedInput) where
 import Data.List (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -123,3 +123,9 @@ merkleizedCase :: Action -> Contract -> Case Contract
 merkleizedCase action continuation = let
     hash = dataHash (PlutusTx.toBuiltinData continuation)
     in MerkleizedCase action hash
+
+merkleizedInput :: InputContent -> Contract -> Input
+merkleizedInput input continuation =
+  let builtin = PlutusTx.toBuiltinData continuation
+      hash = dataHash builtin
+   in MerkleizedInput input hash continuation

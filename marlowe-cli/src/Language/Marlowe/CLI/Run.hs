@@ -62,6 +62,7 @@ import Language.Marlowe.Semantics (MarloweParams (rolesCurrency), Payment (..), 
                                    TransactionOutput (..), TransactionWarning, computeTransaction)
 import Language.Marlowe.SemanticsTypes (AccountId, ChoiceId (..), ChoiceName, ChosenNum, Contract, Input (..),
                                         InputContent (..), Party (..), Payee (..), State (accounts), Token (..))
+import Language.Marlowe.Util (merkleizedInput)
 import Ledger.TimeSlot (SlotConfig, posixTimeToEnclosingSlot)
 import Ledger.Tx.CardanoAPI (toCardanoAddress, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken, fromValue, getAda)
@@ -168,16 +169,17 @@ initializeTransactionImpl marloweParams mtSlotConfig costModelParams network sta
 -- | Prepare the next step in a Marlowe contract.
 prepareTransaction :: MonadError CliError m
                => MonadIO m
-               => FilePath        -- ^ The JSON file with the Marlowe initial state and initial contract.
-               -> [Input]         -- ^ The contract's inputs.
-               -> POSIXTime       -- ^ The first valid time for the transaction.
-               -> POSIXTime       -- ^ The last valid time for the transaction.
-               -> Maybe FilePath  -- ^ The output JSON file with the results of the computation.
-               -> Bool            -- ^ Whether to print statistics about the result.
-               -> m ()            -- ^ Action to compute the next step in the contract.
-prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile printStats =
+               => FilePath                         -- ^ The JSON file with the Marlowe initial state and initial contract.
+               -> [(InputContent, Maybe FilePath)] -- ^ The contract's inputs, and a contract stub for a merklized action.
+               -> POSIXTime                        -- ^ The first valid time for the transaction.
+               -> POSIXTime                        -- ^ The last valid time for the transaction.
+               -> Maybe FilePath                   -- ^ The output JSON file with the results of the computation.
+               -> Bool                             -- ^ Whether to print statistics about the result.
+               -> m ()                             -- ^ Action to compute the next step in the contract.
+prepareTransaction marloweFile txInputContents minimumTime maximumTime outputFile printStats =
   do
     marloweIn <- decodeFileStrict marloweFile
+    txInputs <- mapM (uncurry getInput) txInputContents
     let
       txInterval = (minimumTime, maximumTime)
     (warnings, marloweOut@MarloweTransaction{..}) <-
@@ -214,7 +216,10 @@ prepareTransaction marloweFile txInputs minimumTime maximumTime outputFile print
           |
             (i, Payment accountId payee money) <- zip [1..] mtPayments
           ]
-
+  where
+    getInput :: MonadError CliError m => MonadIO m => InputContent -> Maybe FilePath -> m Input
+    getInput inputContent Nothing         = pure $ NormalInput inputContent
+    getInput inputContent (Just filePath) = merkleizedInput inputContent <$> decodeFileStrict filePath
 
 -- | Prepare the next step in a Marlowe contract.
 makeMarlowe :: MonadError CliError m
@@ -224,7 +229,7 @@ makeMarlowe :: MonadError CliError m
 makeMarlowe marloweIn@MarloweTransaction{..} transactionInput@TransactionInput{..} =
   do
     case computeTransaction transactionInput mtState mtContract of
-      Error message          -> throwError . CliError . show $ message
+      Error message         -> throwError . CliError . show $ message
       TransactionOutput{..} -> pure
                                  ( txOutWarnings
                                  , marloweIn
