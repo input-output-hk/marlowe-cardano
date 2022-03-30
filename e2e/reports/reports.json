@@ -14,7 +14,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 408000000
+              "duration": 427000000
             }
           },
           {
@@ -27,7 +27,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 3448000000
+              "duration": 3109000000
             }
           },
           {
@@ -40,7 +40,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 446000000
+              "duration": 441000000
             }
           },
           {
@@ -62,11 +62,11 @@
             "line": 13,
             "name": "the \"editor header\" should contain \"New Project\" text",
             "match": {
-              "location": "src/step-definitions/assertions/verify-element-value.ts:29"
+              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
             },
             "result": {
               "status": "passed",
-              "duration": 181000000
+              "duration": 184000000
             }
           },
           {
@@ -74,7 +74,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 37000000
+              "duration": 34000000
             }
           }
         ],
@@ -98,7 +98,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 409000000
+              "duration": 370000000
             }
           },
           {
@@ -111,7 +111,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 5252000000
+              "duration": 3162000000
             }
           },
           {
@@ -124,7 +124,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 221000000
+              "duration": 210000000
             }
           },
           {
@@ -137,7 +137,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 394000000
+              "duration": 381000000
             }
           },
           {
@@ -150,7 +150,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 1000000
+              "duration": 0
             }
           },
           {
@@ -159,11 +159,11 @@
             "line": 29,
             "name": "the \"editor header\" should contain \"Purchase\" text",
             "match": {
-              "location": "src/step-definitions/assertions/verify-element-value.ts:29"
+              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
             },
             "result": {
               "status": "passed",
-              "duration": 173000000
+              "duration": 108000000
             }
           },
           {
@@ -171,7 +171,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 35000000
+              "duration": 33000000
             }
           }
         ],
@@ -206,7 +206,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 404000000
+              "duration": 387000000
             }
           },
           {
@@ -219,7 +219,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 1103000000
+              "duration": 1224000000
             }
           },
           {
@@ -227,7 +227,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 31000000
+              "duration": 26000000
             }
           }
         ],

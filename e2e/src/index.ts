@@ -9,6 +9,7 @@ import {
   PagesConfig,
   PageElementMappings,
   FixtureMappings,
+  ApplicationId
 } from './env/global';
 import * as fs from 'fs';
 
@@ -16,6 +17,7 @@ dotenv.config({path: env('COMMON_CONFIG_FILE')})
 const hostsConfig: HostsConfig = getJsonFromFile(env('HOSTS_URLS_PATH'))
 const pagesConfig: PagesConfig = getJsonFromFile(env('PAGE_URLS_PATH'))
 const pageMappingFiles = fs.readdirSync(`${process.cwd()}${env('PAGE_ELEMENTS_PATH')}`)
+const applicationId: ApplicationId = '';
 const pageElementMappings: PageElementMappings = pageMappingFiles.reduce(
   (pageElementConfigAcc, file) => {
     const key = file.replace('.json', '');
@@ -40,6 +42,7 @@ const worldParameters: GlobalConfig = {
   pagesConfig,
   pageElementMappings,
   fixtureMappings,
+  applicationId,
 };
 
 const common = `./src/features/**/*.feature \
