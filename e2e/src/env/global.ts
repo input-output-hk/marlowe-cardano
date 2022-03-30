@@ -14,4 +14,5 @@ export type GlobalConfig = {
   pagesConfig: PagesConfig;
   pageElementMappings: PageElementMappings;
   fixtureMappings: FixtureMappings;
+  applicationId: ApplicationId
 }

@@ -15,14 +15,13 @@ When(
   async function(this: ScenarioWorld, elementKey: ElementKey, input: string) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
 
 
     console.log(`I fill in the ${elementKey} input with ${input}`);
 
-    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
     const { role, name } = elementIdentifier;
     const document = await getDocument(page);
 
@@ -43,14 +42,13 @@ When(
   async function(this: ScenarioWorld, fixtureKey: FixtureKey) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
 
 
     console.log(`I fill in the playground editor input with ${fixtureKey}`);
 
-    const elementIdentifier = getElementLocator(page, "playground editor", applicationId, globalConfig);
+    const elementIdentifier = getElementLocator(page, "playground editor", globalConfig);
     const { role, name } = elementIdentifier;
     const document = await getDocument(page);
 
@@ -76,14 +74,13 @@ When(
   async function(this: ScenarioWorld, option: string, elementKey: ElementKey) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
 
     console.log(`I select the ${option} option from the ${elementKey}`)
     const document = await getDocument(page);
 
-    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
     const { role, name } = elementIdentifier;
 
     await waitFor(async() => {

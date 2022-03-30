@@ -1,11 +1,10 @@
 import { Page } from 'playwright';
-import { GlobalConfig, PageId, ApplicationId } from '../env/global';
+import { GlobalConfig, PageId } from '../env/global';
 
 export const navigateToPage = async (
   page: Page,
   pageId: PageId,
-  applicationId: ApplicationId,
-  { pagesConfig, hostsConfig }: GlobalConfig
+  { pagesConfig, hostsConfig, applicationId }: GlobalConfig
 ): Promise<void> => {
   const {
     UI_AUTOMATION_HOST: environmentId = 'current-sprint',
@@ -25,8 +24,7 @@ const pathMatchesPageId = (
   pathname: string,
   hash: string,
   pageId: PageId,
-  applicationId: ApplicationId,
-  { pagesConfig }: GlobalConfig
+  { pagesConfig, applicationId }: GlobalConfig
 ): boolean => {
   const currentPath = `${pathname}${hash}`;
   const applicationPagesConfig = pagesConfig[applicationId]
@@ -38,25 +36,23 @@ const pathMatchesPageId = (
 export const currentPathMatchesPageId = (
   page: Page,
   pageId: PageId,
-  applicationId: ApplicationId,
   globalConfig: GlobalConfig,
 ): boolean => {
   const { pathname, hash } = new URL(page.url());
   const url = new URL(page.url());
-  return pathMatchesPageId(pathname, hash, pageId, applicationId, globalConfig);
+  return pathMatchesPageId(pathname, hash, pageId, globalConfig);
 }
 
 export const getCurrentPageId = (
   page: Page,
-  applicationId: ApplicationId,
   globalConfig: GlobalConfig,
 ): PageId => {
-  const { pagesConfig } = globalConfig;
+  const { pagesConfig, applicationId } = globalConfig;
   const applicationPagesConfig = pagesConfig[applicationId];
   const pageConfigPageIds = Object.keys(applicationPagesConfig);
   const { pathname, hash } = new URL(page.url());
   const currentPageId = pageConfigPageIds.find(pageId =>
-    pathMatchesPageId(pathname, hash, pageId, applicationId, globalConfig)
+    pathMatchesPageId(pathname, hash, pageId, globalConfig)
   );
 
   if (!currentPageId) {

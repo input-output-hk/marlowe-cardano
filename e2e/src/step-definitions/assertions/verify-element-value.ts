@@ -11,12 +11,11 @@ Then(
   async function(this: ScenarioWorld, elementKey: ElementKey) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
     const document = await getDocument(page);
 
-    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
     const { role, name } = elementIdentifier;
     await waitFor(async() => {
       const locator = await queries.getByRole(document, role, { name })
@@ -31,11 +30,10 @@ Then(
   async function(this: ScenarioWorld, elementKey: ElementKey, expectedElementText: string) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
     const document = await getDocument(page);
-    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
     const { role, name } = elementIdentifier;
     await waitFor(async() => {
       const locator = await queries.getByRole(document, role, { name })
@@ -50,11 +48,10 @@ Then(
   async function(this: ScenarioWorld, contractFixtureKey: FixtureKey) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
     const document = await getDocument(page);
-    const elementIdentifier = getElementLocator(page, "playground editor", applicationId, globalConfig);
+    const elementIdentifier = getElementLocator(page, "playground editor", globalConfig);
     const { role, name } = elementIdentifier;
     const fixture = getFixtureText(contractFixtureKey, globalConfig);
     await waitFor(async() => {

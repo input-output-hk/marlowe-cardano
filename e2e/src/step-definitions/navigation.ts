@@ -15,12 +15,12 @@ Given(
       screen: { page },
       globalConfig,
     } = this;
-    this.applicationId = applicationId;
+    this.globalConfig.applicationId = applicationId;
     console.log(`I am on the ${pageId} page of the ${applicationId} application`);
 
-    await navigateToPage(page, pageId, applicationId, globalConfig);
+    await navigateToPage(page, pageId, globalConfig);
 
-    await waitFor(() => currentPathMatchesPageId(page, pageId, applicationId, globalConfig))
+    await waitFor(() => currentPathMatchesPageId(page, pageId, globalConfig))
   }
 );
 
@@ -29,11 +29,10 @@ Given(
   async function(this: ScenarioWorld, pageId: PageId) {
     const {
       screen: { page },
-      globalConfig,
-      applicationId
+      globalConfig
     } = this;
     console.log(`I am directed to the ${pageId} page`);
 
-    await waitFor(() => currentPathMatchesPageId(page, pageId, applicationId, globalConfig))
+    await waitFor(() => currentPathMatchesPageId(page, pageId, globalConfig))
   }
 )
