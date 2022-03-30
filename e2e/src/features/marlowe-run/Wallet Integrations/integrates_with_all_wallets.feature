@@ -16,4 +16,7 @@ Feature: Integrates with All Wallets
       | Nami              |
       | Yoroi             |
       | Flint             |
-      | Daedalus          |
+
+  @dev
+  Scenario: Creating a new wallet on the homepage
+    Given I am on the "home" page of the "marlowe run" application

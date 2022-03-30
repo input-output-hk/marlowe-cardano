@@ -12,9 +12,10 @@ Then(
     const {
       screen: { page, document },
       globalConfig,
+      applicationId
     } = this;
 
-    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const elementIdentifier = getElementLocator(page, elementKey, applicationId, globalConfig);
     const { role, name } = elementIdentifier;
 
     await waitFor(async() => {

@@ -14,20 +14,20 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 439000000
+              "duration": 408000000
             }
           },
           {
             "arguments": [],
             "keyword": "Given ",
             "line": 8,
-            "name": "I am on the \"home\" page of the \"marlowe-playground\" application",
+            "name": "I am on the \"home\" page of the \"marlowe playground\" application",
             "match": {
               "location": "src/step-definitions/navigation.ts:10"
             },
             "result": {
               "status": "passed",
-              "duration": 3988000000
+              "duration": 3448000000
             }
           },
           {
@@ -40,7 +40,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 455000000
+              "duration": 446000000
             }
           },
           {
@@ -53,7 +53,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 0
+              "duration": 1000000
             }
           },
           {
@@ -62,11 +62,11 @@
             "line": 13,
             "name": "the \"editor header\" should contain \"New Project\" text",
             "match": {
-              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
+              "location": "src/step-definitions/assertions/verify-element-value.ts:29"
             },
             "result": {
               "status": "passed",
-              "duration": 223000000
+              "duration": 181000000
             }
           },
           {
@@ -74,7 +74,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 36000000
+              "duration": 37000000
             }
           }
         ],
@@ -82,10 +82,6 @@
           {
             "name": "@dev",
             "line": 5
-          },
-          {
-            "name": "@smoke",
-            "line": 6
           }
         ],
         "type": "scenario"
@@ -102,20 +98,20 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 430000000
+              "duration": 409000000
             }
           },
           {
             "arguments": [],
             "keyword": "Given ",
             "line": 23,
-            "name": "I am on the \"home\" page of the \"marlowe-playground\" application",
+            "name": "I am on the \"home\" page of the \"marlowe playground\" application",
             "match": {
               "location": "src/step-definitions/navigation.ts:10"
             },
             "result": {
               "status": "passed",
-              "duration": 2583000000
+              "duration": 5252000000
             }
           },
           {
@@ -128,7 +124,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 224000000
+              "duration": 221000000
             }
           },
           {
@@ -141,7 +137,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 452000000
+              "duration": 394000000
             }
           },
           {
@@ -163,11 +159,11 @@
             "line": 29,
             "name": "the \"editor header\" should contain \"Purchase\" text",
             "match": {
-              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
+              "location": "src/step-definitions/assertions/verify-element-value.ts:29"
             },
             "result": {
               "status": "passed",
-              "duration": 124000000
+              "duration": 173000000
             }
           },
           {
@@ -175,7 +171,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 34000000
+              "duration": 35000000
             }
           }
         ],
@@ -194,5 +190,61 @@
     "name": "Creating a new contract with Javascript",
     "tags": [],
     "uri": "src/features/marlowe-playground/Contract Template Management/JavaScript/creating_new_contracts.feature"
+  },
+  {
+    "description": "  As a user, I would like to use a light wallet to create transactions on Marlowe Run,\n  so that I can use the wallet of my preference",
+    "elements": [
+      {
+        "description": "",
+        "id": "integrates-with-all-wallets;creating-a-new-wallet-on-the-homepage",
+        "keyword": "Scenario",
+        "line": 21,
+        "name": "Creating a new wallet on the homepage",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 404000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 22,
+            "name": "I am on the \"home\" page of the \"marlowe run\" application",
+            "match": {
+              "location": "src/step-definitions/navigation.ts:10"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 1103000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 31000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@dev",
+            "line": 20
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "integrates-with-all-wallets",
+    "line": 1,
+    "keyword": "Feature",
+    "name": "Integrates with All Wallets",
+    "tags": [],
+    "uri": "src/features/marlowe-run/Wallet Integrations/integrates_with_all_wallets.feature"
   }
 ]

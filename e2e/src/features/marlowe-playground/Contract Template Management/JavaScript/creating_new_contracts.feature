@@ -3,9 +3,9 @@ Feature: Creating a new contract with Javascript
   so that I can write contracts in my preferred language
 
   @dev
-  @smoke
+  # @smoke
   Scenario: Creating a new Javascript contract template
-    Given I am on the "home" page of the "marlowe-playground" application
+    Given I am on the "home" page of the "marlowe playground" application
 
     When I click the "Start in Javascript" link
 
@@ -20,7 +20,7 @@ Feature: Creating a new contract with Javascript
 
   @dev
   Scenario: Using an existing Javascript contract template
-    Given I am on the "home" page of the "marlowe-playground" application
+    Given I am on the "home" page of the "marlowe playground" application
 
     When I click the "Open an example" button
     And I click the "Escrow Javascript" button

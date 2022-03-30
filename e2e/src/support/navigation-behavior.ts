@@ -14,7 +14,8 @@ export const navigateToPage = async (
   const hostsByApp = hostsConfig[`${environmentId}`];
   const hostPath = hostsByApp[`${applicationId}`];
   const url = new URL(hostPath);
-  const pagesConfigItem = pagesConfig[pageId];
+  const applicationPagesConfigItem = pagesConfig[applicationId];
+  const pagesConfigItem = applicationPagesConfigItem[pageId];
   url.pathname = pagesConfigItem.route;
 
   await page.goto(url.href);
@@ -24,10 +25,12 @@ const pathMatchesPageId = (
   pathname: string,
   hash: string,
   pageId: PageId,
+  applicationId: ApplicationId,
   { pagesConfig }: GlobalConfig
 ): boolean => {
   const currentPath = `${pathname}${hash}`;
-  const pageRegexString = pagesConfig[pageId].regex;
+  const applicationPagesConfig = pagesConfig[applicationId]
+  const pageRegexString = applicationPagesConfig[pageId].regex;
   const pageRegex = new RegExp(pageRegexString);
   return pageRegex.test(currentPath);
 }
@@ -35,22 +38,25 @@ const pathMatchesPageId = (
 export const currentPathMatchesPageId = (
   page: Page,
   pageId: PageId,
+  applicationId: ApplicationId,
   globalConfig: GlobalConfig,
 ): boolean => {
   const { pathname, hash } = new URL(page.url());
   const url = new URL(page.url());
-  return pathMatchesPageId(pathname, hash, pageId, globalConfig);
+  return pathMatchesPageId(pathname, hash, pageId, applicationId, globalConfig);
 }
 
 export const getCurrentPageId = (
   page: Page,
+  applicationId: ApplicationId,
   globalConfig: GlobalConfig,
 ): PageId => {
   const { pagesConfig } = globalConfig;
-  const pageConfigPageIds = Object.keys(pagesConfig);
+  const applicationPagesConfig = pagesConfig[applicationId];
+  const pageConfigPageIds = Object.keys(applicationPagesConfig);
   const { pathname, hash } = new URL(page.url());
   const currentPageId = pageConfigPageIds.find(pageId =>
-    pathMatchesPageId(pathname, hash, pageId, globalConfig)
+    pathMatchesPageId(pathname, hash, pageId, applicationId, globalConfig)
   );
 
   if (!currentPageId) {
