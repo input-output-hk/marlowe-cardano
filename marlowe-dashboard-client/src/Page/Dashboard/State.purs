@@ -39,7 +39,6 @@ import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
-import Control.React (onFinalize, onInitialize, onPartialChange)
 import Data.Argonaut (Json, JsonDecodeError, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
@@ -48,7 +47,7 @@ import Data.ContractUserParties (contractUserParties)
 import Data.DateTime.Instant (Instant)
 import Data.Either (hush)
 import Data.Foldable (for_, traverse_)
-import Data.Lens (assign, modifying, set, use, view, (^.))
+import Data.Lens (_Just, assign, modifying, set, use, view, (^.), (^?))
 import Data.Map (filterKeys, toUnfoldable)
 import Data.NewContract (NewContract(..))
 import Data.PABConnectedWallet
@@ -71,7 +70,7 @@ import Env (Env, _applyInputBus, _createBus, _redeemBus, _sources)
 import Errors (globalError)
 import Halogen (modify_, tell)
 import Halogen as H
-import Halogen.Component.Reactive (defaultReactiveEval, mkReactiveComponent)
+import Halogen.Component.Reactive (mkReactiveComponent)
 import Halogen.Extra (mapSubmodule)
 import Halogen.Store.Connect (Connected, connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
@@ -213,18 +212,21 @@ component = connect sliceSelector $ mkReactiveComponent
       , tzOffset: Minutes zero
       }
   , render
-  , eval: defaultReactiveEval
-      { react = do
+  , eval:
+      { initialize: do
           { emitter, listener } <- liftEffect HS.create
-          onInitialize \_ -> do
-            subscribeToSources emitter
-            subscribeToPlutusApps
-            tzOffset <- timezoneOffset
-            assign _tzOffset tzOffset
-          onFinalize \_ -> do
-            unsubscribeFromPlutusApps
-          onPartialChange (view _wallet) \_ -> liftEffect <<< HS.notify listener
-      , handleAction = handleAction
+          subscribeToSources emitter
+          subscribeToPlutusApps
+          tzOffset <- timezoneOffset
+          assign _tzOffset tzOffset
+          pure listener
+      , finalize: \_ -> unsubscribeFromPlutusApps
+      , handleInput: \listener mPreviousState -> do
+          let mPreviousWallet = mPreviousState ^? _Just <<< _wallet
+          currentWallet <- use _wallet
+          unless (mPreviousWallet == Just currentWallet) do
+            liftEffect $ HS.notify listener currentWallet
+      , handleAction
       }
   }
   where

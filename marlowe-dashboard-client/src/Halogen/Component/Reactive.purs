@@ -1,24 +1,27 @@
 module Halogen.Component.Reactive
-  ( ReactiveComponentSpec
-  , ReactiveComponentEval
+  ( Spec
+  , Eval
+  , HalogenM
   , State
-  , defaultReactiveEval
-  , mkReactiveComponent
-  , _input
+  , class ReactiveEval
   , _derived
+  , _input
   , _transient
+  , fromHandleAction
+  , fromHandleActionAndInput
+  , mkReactiveComponent
+  , toReactiveEval
   ) where
 
 import Prelude
 
-import Control.Monad.State (get)
-import Control.React (ReactT, runReactT)
 import Data.Bifunctor (bimap)
+import Data.Foldable (traverse_)
 import Data.Lens (Lens')
 import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(..))
-import Data.These (These(..))
 import Halogen as H
+import Halogen.Extra (imapState)
 import Halogen.Query.HalogenM (mapAction)
 import Type.Proxy (Proxy(..))
 
@@ -48,62 +51,115 @@ type State input derived transient =
   , transient :: transient
   }
 
-type ReactiveComponentSpec derived transient action slots input output m =
+type Spec resources derived transient action slots input output m =
   { deriveState :: input -> derived
   , initialTransient :: transient
   , render :: State input derived transient -> H.ComponentHTML action slots m
   , eval ::
-      ReactiveComponentEval derived transient action slots input output m
+      Eval resources derived transient action slots input
+        output
+        m
   }
 
-type ReactiveComponentEval derived transient action slots input output m =
-  { react ::
-      ReactT
-        (State input derived transient)
-        (H.HalogenM (State input derived transient) action slots output m)
-        Unit
+type HalogenM input derived transient action slots output m =
+  H.HalogenM (State input derived transient) action slots output m
+
+type Eval resources derived transient action slots input output m =
+  { initialize ::
+      HalogenM input derived transient action slots output m resources
+  , finalize ::
+      resources -> HalogenM input derived transient action slots output m Unit
+  , handleInput ::
+      resources
+      -> Maybe (State input derived transient)
+      -> HalogenM input derived transient action slots output m Unit
   , handleAction ::
-      action
-      -> H.HalogenM (State input derived transient) action slots output m Unit
+      action -> HalogenM input derived transient action slots output m Unit
   }
 
-defaultReactiveEval
+class
+  ReactiveEval resources derived transient action slots input output m a
+  | a -> resources derived transient action slots input output m where
+  toReactiveEval
+    :: a -> Eval resources derived transient action slots input output m
+
+fromHandleAction
   :: forall derived transient action slots input output m
-   . ReactiveComponentEval derived transient action slots input output m
-defaultReactiveEval =
-  { react: pure unit
-  , handleAction: const (pure unit)
+   . Applicative m
+  => (action -> HalogenM input derived transient action slots output m Unit)
+  -> Eval Unit derived transient action slots input output m
+fromHandleAction handleAction =
+  { handleAction
+  , handleInput: const $ const $ pure unit
+  , initialize: pure unit
+  , finalize: const $ pure unit
+  }
+
+fromHandleActionAndInput
+  :: forall derived transient action slots input output m
+   . Applicative m
+  => { handleAction ::
+         action -> HalogenM input derived transient action slots output m Unit
+     , handleInput ::
+         Maybe (State input derived transient)
+         -> HalogenM input derived transient action slots output m Unit
+     }
+  -> Eval Unit derived transient action slots input output m
+fromHandleActionAndInput { handleAction, handleInput } =
+  { handleAction
+  , handleInput: const $ handleInput
+  , initialize: pure unit
+  , finalize: const $ pure unit
   }
 
 mkReactiveComponent
-  :: forall derived transient query action slots input output m
-   . Functor m
-  => ReactiveComponentSpec derived transient action slots input output m
+  :: forall resources derived transient query action slots input output m
+   . Monad m
+  => Spec
+       resources
+       derived
+       transient
+       action
+       slots
+       input
+       output
+       m
   -> H.Component query input output m
 mkReactiveComponent { deriveState, initialTransient, render, eval } =
   H.mkComponent
     { initialState: \input ->
-        { input
-        , derived: deriveState input
-        , transient: initialTransient
+        { resources: Nothing
+        , state:
+            { input
+            , derived: deriveState input
+            , transient: initialTransient
+            }
         }
-    , render: bimap (map Action) Action <<< render
+    , render: bimap (map Action) Action <<< render <<< _.state
     , eval: H.mkEval
         { initialize: Just Init
         , receive: Just <<< Receive
         , finalize: Just Finalize
         , handleAction: mapAction Action <<< case _ of
             Init -> do
-              runReactT eval.react <<< That =<< get
+              resources <- imapState _state eval.initialize
+              H.modify_ _ { resources = Just resources }
+              imapState _state $ eval.handleInput resources Nothing
             Finalize -> do
-              runReactT eval.react <<< This =<< get
+              resources <- H.gets _.resources
+              imapState _state $ traverse_ eval.finalize resources
             Receive input -> do
               let derived = deriveState input
-              state <- H.get
+              { resources, state } <- H.get
               let state' = state { derived = derived, input = input }
-              H.put state'
-              runReactT eval.react $ Both state state'
-            Action action -> eval.handleAction action
+              H.modify_ _ { state = state' }
+              imapState _state $ traverse_
+                (flip eval.handleInput $ Just state)
+                resources
+            Action action ->
+              imapState _state $ eval.handleAction action
         , handleQuery: const $ pure Nothing
         }
     }
+  where
+  _state = prop (Proxy :: _ "state")

@@ -31,7 +31,7 @@ import Data.Newtype (unwrap)
 import Effect.Aff.Class (class MonadAff)
 import Env (Env)
 import Halogen as H
-import Halogen.Component.Reactive (defaultReactiveEval, mkReactiveComponent)
+import Halogen.Component.Reactive (fromHandleAction, mkReactiveComponent)
 import Halogen.Query.HalogenM (mapAction)
 import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
@@ -55,9 +55,7 @@ component = connect (selectEq _.addressBook) $ mkReactiveComponent
   { render: contactsCard
   , deriveState: const unit
   , initialTransient: Home
-  , eval: defaultReactiveEval
-      { handleAction = handleAction
-      }
+  , eval: fromHandleAction handleAction
   }
 
 handleAction

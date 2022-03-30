@@ -22,9 +22,7 @@ component =
     { deriveState: const unit
     , initialTransient: { choiceValues: Map.empty }
     , render: currentStepActions
-    , eval: HR.defaultReactiveEval
-        { handleAction = handleAction
-        }
+    , eval: HR.fromHandleAction handleAction
     }
 
 handleAction :: forall m. Action -> DSL m Unit
