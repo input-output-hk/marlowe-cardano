@@ -75,8 +75,10 @@ import Marlowe.Semantics
   , Party(..)
   , Payee(..)
   , State(..)
+  , TimeInterval(..)
   , Token(..)
   , TokenName
+  , TransactionInput(..)
   , ValidatorHash
   , Value(..)
   , ValueId
@@ -126,7 +128,7 @@ redeemEndpoint = "redeem" :: String
 followEndpoint = "follow" :: String
 
 marloweAppEndpoints :: Array String
-marloweAppEndpoints = [ createEndpoint, redeemEndpoint, redeemEndpoint ]
+marloweAppEndpoints = [ createEndpoint, redeemEndpoint, applyInputsEndpoint ]
 
 followerEndpoints :: Array String
 followerEndpoints = [ followEndpoint ]
@@ -145,6 +147,17 @@ createContent reqId roles contract =
       $ map (lmap (PV.TokenName <<< { unTokenName: _ }))
       $ (Map.toUnfoldable roles :: Array _)
   , encodeJson contract
+  ]
+
+applyInputsContent :: UUID -> MarloweParams -> TransactionInput -> Array Json
+applyInputsContent
+  reqId
+  params
+  (TransactionInput { inputs, interval: TimeInterval start end }) =
+  [ encodeJson reqId
+  , encodeJson params
+  , encodeJson $ Tuple start end
+  , encodeJson inputs
   ]
 
 -------------------------------------------------------------------------------
@@ -414,7 +427,7 @@ pickFrom
   -> m a
 pickFrom arr = do
   let len = length arr
-  index <- liftRandomInt 0 len
+  index <- liftRandomInt 0 $ len - 1
   expectJust ("index out of bounds. " <> show { len, index }) $ arr !! index
 
 pickEnum

@@ -9,7 +9,7 @@ module Errors.Debuggable
 
 import Prologue
 
-import Data.Argonaut (Json, JsonDecodeError, encodeJson)
+import Data.Argonaut (Json, JsonDecodeError, encodeJson, printJsonDecodeError)
 import Data.Argonaut as Json
 import Data.Array (cons)
 import Data.Int as Int
@@ -19,6 +19,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant.Internal as V
 import Foreign.Object as Object
+import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
 import Prim.RowList as RL
 import Record.Unsafe (unsafeGet)
 import Servant.PureScript (class ContentType, AjaxError, printAjaxError)
@@ -61,8 +62,11 @@ instance
 instance Debuggable JsonDecodeError where
   debuggable e = encodeJson
     { type: "JsonDecodeError"
-    , error: Json.fromString $ show e
+    , error: Json.fromString $ printJsonDecodeError e
     }
+
+instance Debuggable CombinedWSStreamToClient where
+  debuggable = encodeJson
 
 instance debuggableRecord ::
   ( RL.RowToList row list

@@ -18,26 +18,29 @@ import Data.ContractNickname as CN
 import Data.Foldable (traverse_)
 import Data.Int (decimal)
 import Data.Int as Int
-import Data.Lens (takeBoth, traversed, (^..))
+import Data.Lens (takeBoth, traversed, (^.), (^..))
 import Data.Map (Map)
 import Data.Map as Map
 import Data.MnemonicPhrase (MnemonicPhrase)
 import Data.MnemonicPhrase as MP
 import Data.PaymentPubKeyHash as PPKH
 import Data.PubKeyHash as PK
-import Data.Time.Duration (Minutes(..))
+import Data.Time.Duration (Milliseconds(..), Minutes(..))
 import Data.Traversable (traverse)
 import Data.Tuple (uncurry)
 import Data.Tuple.Nested ((/\))
 import Data.UUID.Argonaut (UUID)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
-import Effect.Aff (Error)
-import Language.Marlowe.Client (ContractHistory)
+import Effect.Aff (Error, delay)
+import Effect.Aff.Class (liftAff)
+import Language.Marlowe.Client (ContractHistory(..))
 import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
-import Marlowe.Semantics (Assets(..), MarloweParams, Party(..))
+import Marlowe.Semantics (Assets(..), MarloweParams, Party(..), _rolesCurrency)
 import MarloweContract (MarloweContract(..))
+import Plutus.V1.Ledger.Address as PAB
+import Plutus.V1.Ledger.Credential (Credential(..))
 import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
 import Test.Data.Marlowe
   ( adaToken
@@ -56,6 +59,7 @@ import Test.Data.Plutus (appInstanceActive)
 import Test.Marlowe.Run
   ( Coenv
   , TestWallet
+  , fundWallet
   , getWallet
   , sendWalletFunds
   , setWallet
@@ -75,6 +79,7 @@ import Test.Marlowe.Run.Commands
   , handlePostActivate
   , handlePostCreate
   , handlePostCreateWallet
+  , handlePostFollow
   , handlePostRestoreWallet
   , openContactsDialog
   , openGenerateDialog
@@ -130,6 +135,7 @@ createWallet walletName mnemonic walletInfo = do
       { address
       , assets: Assets Map.empty
       , mnemonic
+      , nickname: walletName
       , pubKeyHash: PPKH.toPubKeyHash pubKeyHash
       , walletId
       }
@@ -291,12 +297,28 @@ createLoan
   handlePostCreate marloweAppId reqId
     (loanRoles borrowerWallet.address lenderWallet.address)
     contract
+  fundWallet lender (params ^. _rolesCurrency) "Lender" one
+    $ wallet.nickname == lender
+  fundWallet borrower (params ^. _rolesCurrency) "Borrower" one
+    $ wallet.nickname == borrower
+  liftAff $ delay $ Milliseconds 1000.0
+  sendCreateSuccess marloweAppId reqId params
+  sendNewActiveEndpoints marloweAppId marloweAppEndpoints
   sendWalletCompanionUpdate walletCompanionId
     [ Tuple params $ marloweData contract contractState
     ]
-  sendCreateSuccess marloweAppId reqId params
   followerId <- generateUUID
   handlePostActivate wallet.walletId MarloweFollower followerId
   recvInstanceSubscribe followerId
   sendNewActiveEndpoints followerId followerEndpoints
+  handlePostFollow followerId params
+  sendFollowerUpdate followerId $ ContractHistory
+    { chAddress: PAB.Address
+        { addressCredential: ScriptCredential ""
+        , addressStakingCredential: Nothing
+        }
+    , chParams: params
+    , chInitialData: marloweData contract contractState
+    , chHistory: []
+    }
   pure followerId

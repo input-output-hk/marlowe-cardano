@@ -37,7 +37,12 @@ import Halogen.Subscription (notify)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
-import Marlowe.Semantics (Contract, MarloweData, MarloweParams)
+import Marlowe.Semantics
+  ( Contract
+  , MarloweData
+  , MarloweParams
+  , TransactionInput
+  )
 import MarloweContract (MarloweContract)
 import Plutus.PAB.Webserver.Types
   ( CombinedWSStreamToClient
@@ -45,7 +50,9 @@ import Plutus.PAB.Webserver.Types
   )
 import Test.Assertions (shouldEqualJson)
 import Test.Data.Marlowe
-  ( createContent
+  ( applyInputsContent
+  , applyInputsEndpoint
+  , createContent
   , createEndpoint
   , createSuccessMessage
   , createWalletRequest
@@ -422,6 +429,20 @@ handlePostCreate
 handlePostCreate marloweAppId reqId roles contract = do
   handlePostEndpoint marloweAppId createEndpoint ado
     expectJsonContent $ createContent reqId roles contract
+    in jsonEmptyArray
+
+handlePostApplyInputs
+  :: forall m
+   . MonadLogger String m
+  => MonadMockHTTP m
+  => UUID
+  -> UUID
+  -> MarloweParams
+  -> TransactionInput
+  -> m Unit
+handlePostApplyInputs marloweAppId reqId params input = do
+  handlePostEndpoint marloweAppId applyInputsEndpoint ado
+    expectJsonContent $ applyInputsContent reqId params input
     in jsonEmptyArray
 
 handlePostFollow

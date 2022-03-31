@@ -231,6 +231,7 @@ handleRequest
   -> AppM m (Either (AjaxError resDecodeError resContent) res)
 handleRequest prefix api req = do
   let req' = prependPath prefix req
+  let uri = (prepareRequest req').url
   result <- liftAndRethrow $ request api req'
   let
     msg = joinWith " "
@@ -238,7 +239,7 @@ handleRequest prefix api req = do
       , case req'.method of
           Left m -> show m
           Right m -> unCustomMethod m
-      , (prepareRequest req').url
+      , uri
       ]
   case result of
     Left e -> do

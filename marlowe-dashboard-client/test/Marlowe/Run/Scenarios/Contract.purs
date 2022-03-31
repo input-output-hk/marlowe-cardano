@@ -12,8 +12,10 @@ import Test.Data.Marlowe
   )
 import Test.Marlowe.Run (defaultTestParameters, getWallet, marloweRunTestWith)
 import Test.Marlowe.Run.Action.Flows (createLoan, restoreWallet)
+import Test.Marlowe.Run.Commands (clickButtonRegex, clickConfirm)
 import Test.Spec (Spec)
-import Test.Web.DOM.Query (getBy, nameRegexi, role)
+import Test.Web.DOM.Query (findBy, getBy, nameRegexi, role)
+import Test.Web.Monad (withContainer)
 import Web.ARIA (ARIARole(..))
 
 loanContract :: Spec Unit
@@ -34,9 +36,19 @@ loanContract = marloweRunTestWith "Run a loan contract" setupWallets do
     lenderNickname
     1000
     100
-  void $ getBy role do
+  card <- getBy role do
     nameRegexi "Test loan"
     pure Listitem
+  withContainer card $ clickButtonRegex "deposit"
+  confirmDialog <- findBy role $ pure Dialog
+  withContainer confirmDialog clickConfirm
+  pure unit
+  -- reqId <- getNextUUID
+  -- let
+  --   interval = TimeInterval (POSIXTime unixEpoch) (POSIXTime unixEpoch)
+  --   depositInput = TransactionInput { inputs: mempty, interval }
+  -- handlePostApplyInputs lenderApps.marloweAppId reqId marloweParams depositInput
+
   -- TODO complete the contract
   where
   setupWallets = do

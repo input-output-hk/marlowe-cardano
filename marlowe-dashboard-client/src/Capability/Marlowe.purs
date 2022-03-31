@@ -17,6 +17,7 @@ import Component.Template.State
   ( InstantiateContractErrorRow
   , instantiateExtendedContract
   )
+import Control.Logger.Structured (info, info')
 import Control.Monad.Error.Class (class MonadError, throwError)
 import Control.Monad.Except (ExceptT(..), except, lift, runExceptT, withExceptT)
 import Control.Monad.Maybe.Trans (MaybeT)
@@ -93,6 +94,7 @@ instance
   ManageMarlowe (AppM m) where
 
   initializeContract currentInstant template params wallet = do
+    info' "Initializing contract"
     u <- askUnliftAff
     runExceptT do
       let
@@ -137,7 +139,8 @@ instance
             pure marloweParams
 
   -- "apply-inputs" to a Marlowe contract on the blockchain
-  applyTransactionInput wallet marloweParams transactionInput =
+  applyTransactionInput wallet marloweParams transactionInput = do
+    info "Applying input " $ encodeJson { marloweParams, transactionInput }
     let
       marloweAppId = view _marloweAppId wallet
 
@@ -145,13 +148,13 @@ instance
         :: AjaxResponse (Aff (Either MarloweError Unit))
         -> AjaxResponse (Aff (Either ApplyInputError Unit))
       wrapError = map $ map $ lmap ApplyInputError
-    in
-      MarloweApp.applyInputs marloweAppId marloweParams transactionInput
-        -- We wrap the MarloweError in an Explainable and Debuggable context
-        <#> wrapError
+    MarloweApp.applyInputs marloweAppId marloweParams transactionInput
+      -- We wrap the MarloweError in an Explainable and Debuggable context
+      <#> wrapError
 
   -- "redeem" payments from a Marlowe contract on the blockchain
   redeem wallet marloweParams tokenName = do
+    info "Redeeming payments" $ encodeJson { marloweParams, tokenName }
     u <- askUnliftAff
     runExceptT do
       let marloweAppId = view _marloweAppId wallet

@@ -58,7 +58,7 @@ createAndRestoreWallet = marloweRunTest "Create and Restore Wallet" do
     balanceElement `shouldHaveText` "₳ 0.000000"
     statusElement `shouldHaveText` "Out of sync"
 
-    fundWallet walletNickname "" "" $ BigInt.fromInt 1000000000
+    fundWallet walletNickname "" "" (BigInt.fromInt 1000000000) true
 
     balanceElement `shouldHaveText` "₳ 1,000.000000"
     statusElement `shouldHaveText` "Synchronized"

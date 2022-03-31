@@ -31,7 +31,7 @@ import Component.Template.Types (Action(..), State(..)) as Template
 import Control.Alt ((<|>))
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger.Capability (class MonadLogger)
-import Control.Logger.Structured (StructuredLog)
+import Control.Logger.Structured (StructuredLog, debug, error)
 import Control.Logger.Structured as Logger
 import Control.Monad.Fork.Class (class MonadKill)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
@@ -39,7 +39,7 @@ import Control.Monad.Now (class MonadTime, now, timezoneOffset)
 import Control.Monad.Reader (class MonadAsk, asks)
 import Control.Monad.State (class MonadState)
 import Control.Parallel (parTraverse_)
-import Data.Argonaut (Json, JsonDecodeError, jsonNull)
+import Data.Argonaut (Json, JsonDecodeError, encodeJson, jsonNull)
 import Data.Argonaut.Decode.Aeson as D
 import Data.Array as Array
 import Data.ContractStatus (ContractStatus(..))
@@ -494,6 +494,7 @@ handleAction (WalletCompanionAppClosed mVal) = void $ runMaybeT do
   reActivatePlutusScript WalletCompanion mVal
 
 handleAction (UpdateWalletFunds { assets, sync }) = do
+  debug "💰Wallet funds changed" $ encodeJson assets
   updateStore $ Store.Wallet $ Wallet.OnAssetsChanged assets
   updateStore $ Store.Wallet $ Wallet.OnSyncStatusChanged sync
 
@@ -522,6 +523,7 @@ subscribeToSources
    . MonadAsk Env m
   => MonadUnliftAff m
   => MonadStore Store.Action Store.Store m
+  => MonadLogger StructuredLog m
   => HalogenM m Unit
 subscribeToSources =
   void <<< H.subscribe <<< compactEmitter =<< H.lift actionsFromSources
@@ -531,6 +533,7 @@ actionsFromSources
    . MonadAsk Env m
   => MonadUnliftAff m
   => MonadStore Store.Action Store.Store m
+  => MonadLogger StructuredLog m
   => m (Emitter (Maybe Action))
 actionsFromSources = do
   { pabWebsocket, walletFunds } <- asks $ view _sources
@@ -546,6 +549,12 @@ actionsFromSources = do
     websocketActions = makeEmitter \subscriber -> do
       canceller <- HS.subscribe pabWebsocket \websocketMsg -> launchAff_ do
         store <- unliftAff u $ getStore
+        unliftAff u case websocketMsg of
+          WS.ReceiveMessage (Left err) ->
+            error "✘ Failed to parse websocket message" err
+          WS.ReceiveMessage (Right msg) ->
+            debug "↓ Recv websocket message" msg
+          _ -> pure unit
         let mWallet = store ^? Store._wallet <<< _connectedWallet
         liftEffect $ for_ mWallet \w ->
           subscriber $ actionFromWebsocket w websocketMsg

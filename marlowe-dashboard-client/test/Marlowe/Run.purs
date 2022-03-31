@@ -11,7 +11,7 @@ import Control.Apply (lift2)
 import Control.Concurrent.AVarMap as AVarMap
 import Control.Concurrent.EventBus as EventBus
 import Control.Logger (Logger(..))
-import Control.Logger.Capability (class MonadLogger)
+import Control.Logger.Capability (class MonadLogger, info)
 import Control.Logger.Effect.Test (testLogger)
 import Control.Logger.Effect.Test as Logger
 import Control.Logger.Structured (StructuredLog(..))
@@ -42,6 +42,7 @@ import Data.Align (crosswalk)
 import Data.Argonaut (encodeJson, stringify, stringifyWithIndent)
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.Compactable (compact)
@@ -164,6 +165,7 @@ marloweRunTestWith name makeParameters test = before makeParameters $ it name $
               testWallet <-
                 { address
                 , mnemonic: _
+                , nickname
                 , pubKeyHash: _
                 , walletId: _
                 , assets: Assets Map.empty
@@ -393,7 +395,8 @@ mkTestEnv = do
   pure $ env /\ coenv /\ errors
 
 type TestWallet =
-  { address :: Address
+  { nickname :: WalletNickname
+  , address :: Address
   , mnemonic :: MnemonicPhrase
   , pubKeyHash :: PubKeyHash
   , walletId :: WalletId
@@ -431,12 +434,21 @@ fundWallet
    . MonadAsk Coenv m
   => MonadEffect m
   => MonadError Error m
+  => MonadLogger String m
   => WalletNickname
   -> CurrencySymbol
   -> TokenName
   -> BigInt
+  -> Boolean
   -> m Unit
-fundWallet walletName currencySymbol tokenName amount = do
+fundWallet walletName currencySymbol tokenName amount notify = do
+  info $ joinWith " "
+    [ "💰Fund wallet"
+    , WN.toString walletName
+    , currencySymbol
+    , tokenName
+    , BigInt.toString amount
+    ]
   wallet <- getWallet walletName
   walletFunds <- asks _.walletFunds
   let
@@ -449,7 +461,8 @@ fundWallet walletName currencySymbol tokenName amount = do
     assets = over Assets addAsset wallet.assets
     newWallet = wallet { assets = assets }
   setWallet walletName newWallet
-  liftEffect $ HS.notify walletFunds { sync: Synchronized, assets }
+  when notify do
+    liftEffect $ HS.notify walletFunds { sync: Synchronized, assets }
 
 getWallet
   :: forall m
