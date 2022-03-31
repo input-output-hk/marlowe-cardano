@@ -14,20 +14,21 @@ import Component.Progress.Circular as Progress
 import Data.ContractNickname as ContractNickname
 import Data.ContractStatus (ContractStatus(..))
 import Data.DateTime.Instant (Instant)
-import Data.Lens ((^.))
+import Data.Lens (view, (^.))
 import Data.NewContract (NewContract(..))
 import Data.Newtype (unwrap)
 import Data.UUID.Argonaut as UUID
 import Effect.Aff.Class (class MonadAff)
-import Halogen (ComponentHTML)
+import Halogen (AttrName(..), ComponentHTML)
 import Halogen.Css (classNames)
-import Halogen.HTML (a, div, h3, li, p, slot, text)
+import Halogen.HTML (a, attr, div, h3, li, p, slot, text)
 import Halogen.HTML.Events.Extra (onClick_)
-import Halogen.HTML.Properties (id, title)
+import Halogen.HTML.Properties (title)
 import Humanize (contractIcon)
 import Marlowe.Execution.State (contractName) as Execution
 import Marlowe.Execution.State (currentStep)
 import Marlowe.Extended.Metadata (_contractName, _contractType)
+import Marlowe.Semantics (_rolesCurrency)
 import Page.Contract.Lenses (_marloweParams, _metadata)
 import Page.Dashboard.Types (Action(..), ChildSlots, ContractState)
 
@@ -72,10 +73,13 @@ contractPreviewCard
       [ title nickname
       , classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
-      , id
+      , attr (AttrName "data-follower-id")
           $ UUID.toString
           $ unwrap
           $ executionState.followerAppId
+      , attr (AttrName "data-currency-id") $ view
+          _rolesCurrency
+          executionState.marloweParams
       ]
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
