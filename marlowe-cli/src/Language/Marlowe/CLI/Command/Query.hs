@@ -183,7 +183,7 @@ addressOptions =
     <$> O.option parseUrl                  (O.long "index-url" <> O.metavar "URL"         <> O.help "URL for the Plutus chain index."           )
     <*> O.switch                           (O.long "spent"                                <> O.help "Whether to also report spent transactions.")
     <*> (O.optional . O.strOption)         (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for address data."        )
-    <*> O.many (O.argument parseAddressAny $                      O.metavar "ADDRESS"     <> O.help "The address."                              )
+    <*> O.some (O.argument parseAddressAny $                      O.metavar "ADDRESS"     <> O.help "The address."                              )
 
 
 -- | Parser for the "transaction" command.
@@ -200,4 +200,4 @@ transactionOptions =
   Transaction
     <$> O.option parseUrl            (O.long "index-url" <> O.metavar "URL"         <> O.help "URL for the Plutus chain index."       )
     <*> (O.optional . O.strOption)   (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for transaction data.")
-    <*> O.many (O.argument parseTxId $                      O.metavar "TXID"        <> O.help "The transaction ID."                   )
+    <*> O.some (O.argument parseTxId $                      O.metavar "TXID"        <> O.help "The transaction ID."                   )

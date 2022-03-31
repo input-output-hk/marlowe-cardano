@@ -238,7 +238,7 @@ buildFaucet' :: MonadError CliError m
              => MonadIO m
              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
              -> Value                             -- ^ The value to be sent to the funded addresses.
-             -> [AddressAny]                      -- ^ The faucet addresses.
+             -> [AddressAny]                      -- ^ The funded addresses.
              -> FilePath                          -- ^ The output file for the transaction body.
              -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
              -> m TxId                            -- ^ Action to build the transaction body.
