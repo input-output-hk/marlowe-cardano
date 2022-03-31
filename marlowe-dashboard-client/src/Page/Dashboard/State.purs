@@ -15,10 +15,7 @@ import Capability.PAB
   , unsubscribeFromPlutusApp
   )
 import Capability.PAB (activateContract, getWalletContractInstances) as PAB
-import Capability.PlutusApps.FollowerApp
-  ( class FollowerApp
-  , followContract
-  )
+import Capability.PlutusApps.FollowerApp (class FollowerApp, followContract)
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
 import Capability.Wallet (class ManageWallet, getWalletTotalFunds)
@@ -378,21 +375,21 @@ handleAction (TemplateAction templateAction) = do
             "The request to initialize this contract has been submitted."
           -- We reset the template component (TODO: this wont be needed after the SCP-3464 refactor)
           assign _templateState Template.initialState
-          marloweParams <- liftAff awaitContractCreation
-          -- If the UI is showing the Starting contract we change the index to
-          -- show the newly Started contract
-          let NewContract newContractUUID _ _ = newContract
-          mSelectedContract <- use _selectedContractIndex
-          when (mSelectedContract == (Just $ Starting newContractUUID))
-            do
-              assign _selectedContractIndex
-                $ Just
-                $ Started marloweParams
-          ajaxFollow <- followContract wallet marloweParams
-          case ajaxFollow of
-            Left err -> globalError "Can't follow the contract" err
-            Right _ -> do
-              addToast $ successToast "Contract initialized."
+          mMarloweParams <- liftAff awaitContractCreation
+          case mMarloweParams of
+            Left contractError ->
+              globalError "Failed to create contract" contractError
+            Right marloweParams -> do
+              -- If the UI is showing the Starting contract we change the index to
+              -- show the newly Started contract
+              let NewContract newContractUUID _ _ = newContract
+              mSelectedContract <- use _selectedContractIndex
+              when (mSelectedContract == (Just $ Starting newContractUUID))
+                do
+                  assign _selectedContractIndex
+                    $ Just
+                    $ Started marloweParams
+              addToast $ successToast "Contract created."
     _ -> do
       toTemplate $ Template.handleAction templateAction
 
@@ -442,8 +439,12 @@ handleAction (CompanionAppStateUpdated companionAppState) = do
   when (walletCompanionStatus == WaitingToSync) $ assign
     _walletCompanionStatus
     WalletCompanionSynced
-  flip parTraverse_ newContractsArray \(marloweParams /\ _) ->
-    followContract wallet marloweParams
+  flip parTraverse_ newContractsArray \(marloweParams /\ _) -> do
+    ajaxFollow <- followContract wallet marloweParams
+    case ajaxFollow of
+      Left err -> globalError "Can't follow the contract" err
+      Right _ -> do
+        addToast $ successToast "Contract initialized."
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-1][3] Start a contract -}

@@ -52,7 +52,7 @@ import Test.Marlowe.Run.Commands
   , sendWalletCompanionUpdate
   )
 import Test.Network.HTTP (class MonadMockHTTP)
-import Test.Spec (Spec, focus)
+import Test.Spec (Spec)
 import Test.Spec.Assertions (expectError)
 import Test.Web.DOM.Query (findBy, getBy, nameRegexi, role, text)
 import Test.Web.Monad (class MonadTest, withContainer)
@@ -97,53 +97,57 @@ loanContract = loanContractTest
 -- handlePostApplyInputs lenderApps.marloweAppId reqId marloweParams depositInput
 
 startContractCompanionBeforeMarloweApp :: Spec Unit
-startContractCompanionBeforeMarloweApp =
-  focus $ loanContractTest
-    "The wallet companion responds before the marlowe app"
-    \lenderNickname borrowerNickname -> do
-      -- Arrange
-      lenderApps <- restoreWallet lenderNickname []
-      lenderWallet <- getWallet lenderNickname
-      marloweParams <- newMarloweParams
-      contractNickname <- makeTestContractNickname "Test loan"
-      -- Act
-      { contract, contractState, reqId } <- createLoanWithoutUpdates
-        lenderWallet
-        lenderApps
-        marloweParams
-        contractNickname
-        borrowerNickname
-        lenderNickname
-        1000
-        100
-      -- TODO remove this when race condition for awaitMarloweParams is fixed
-      liftAff $ delay $ Milliseconds 1000.0
-      canFindStartingContractCard
-      sendWalletCompanionUpdate lenderApps.walletCompanionId
-        [ Tuple marloweParams $ marloweData contract contractState
-        ]
-      followerId <- generateUUID
-      handlePostActivate lenderWallet.walletId MarloweFollower followerId
-      recvInstanceSubscribe followerId
-      sendNewActiveEndpoints followerId followerEndpoints
-      handlePostFollow followerId marloweParams
-      canFindStartingContractCard
-      sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
-      sendFollowerUpdate followerId $ ContractHistory
-        { chAddress: PAB.Address
-            { addressCredential: ScriptCredential ""
-            , addressStakingCredential: Nothing
-            }
-        , chParams: marloweParams
-        , chInitialData: marloweData contract contractState
-        , chHistory: []
-        }
-      expectError canFindStartingContractCard
-      canFindStartedContractCard
+startContractCompanionBeforeMarloweApp = loanContractTest
+  "The wallet companion responds before the marlowe app"
+  \lenderNickname borrowerNickname -> do
+    -- Arrange
+    lenderApps <- restoreWallet lenderNickname []
+    lenderWallet <- getWallet lenderNickname
+    marloweParams <- newMarloweParams
+    contractNickname <- makeTestContractNickname "Test loan"
+    -- Act
+    { contract, contractState, reqId } <- createLoanWithoutUpdates
+      lenderWallet
+      lenderApps
+      marloweParams
+      contractNickname
+      borrowerNickname
+      lenderNickname
+      1000
+      100
+    -- TODO remove this when race condition for awaitMarloweParams is fixed
+    liftAff $ delay $ Milliseconds 1000.0
+    assertStartingContractShown
+    sendWalletCompanionUpdate lenderApps.walletCompanionId
+      [ Tuple marloweParams $ marloweData contract contractState
+      ]
+    assertStartingContractShown
+    followerId <- generateUUID
+    handlePostActivate lenderWallet.walletId MarloweFollower followerId
+    assertStartingContractShown
+    recvInstanceSubscribe followerId
+    sendNewActiveEndpoints followerId followerEndpoints
+    handlePostFollow followerId marloweParams
+    assertStartingContractShown
+    sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
+    assertStartingContractShown
+    sendFollowerUpdate followerId $ ContractHistory
+      { chAddress: PAB.Address
+          { addressCredential: ScriptCredential ""
+          , addressStakingCredential: Nothing
+          }
+      , chParams: marloweParams
+      , chInitialData: marloweData contract contractState
+      , chHistory: []
+      }
+    -- Delay is, unfortunately, necessary to give the UI time to update.
+    liftAff $ delay $ Milliseconds 100.0
+    expectError assertStartingContractShown
+    canFindStartedContractCard
   where
-  canFindStartingContractCard
+  assertStartingContractShown
     :: forall m. MonadTest m => MonadError Error m => m Unit
-  canFindStartingContractCard = do
+  assertStartingContractShown = do
     card <- getBy role do
       nameRegexi "Test loan"
       pure Listitem
@@ -158,52 +162,55 @@ startContractCompanionBeforeMarloweApp =
     withContainer card $ void $ getBy text $ pure "Current step:1"
 
 startContractMarloweAppBeforeCompanion :: Spec Unit
-startContractMarloweAppBeforeCompanion =
-  focus $ loanContractTest
-    "The marlowe app responds before the wallet companion"
-    \lenderNickname borrowerNickname -> do
-      -- Arrange
-      lenderApps <- restoreWallet lenderNickname []
-      lenderWallet <- getWallet lenderNickname
-      marloweParams <- newMarloweParams
-      contractNickname <- makeTestContractNickname "Test loan"
-      -- Act
-      { contract, contractState, reqId } <- createLoanWithoutUpdates
-        lenderWallet
-        lenderApps
-        marloweParams
-        contractNickname
-        borrowerNickname
-        lenderNickname
-        1000
-        100
-      -- TODO remove this when race condition for awaitMarloweParams is fixed
-      liftAff $ delay $ Milliseconds 1000.0
-      canFindStartingContractCard
-      sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
-      followerId <- generateUUID
-      handlePostActivate lenderWallet.walletId MarloweFollower followerId
-      recvInstanceSubscribe followerId
-      sendNewActiveEndpoints followerId followerEndpoints
-      handlePostFollow followerId marloweParams
-      sendWalletCompanionUpdate lenderApps.walletCompanionId
-        [ Tuple marloweParams $ marloweData contract contractState
-        ]
-      sendFollowerUpdate followerId $ ContractHistory
-        { chAddress: PAB.Address
-            { addressCredential: ScriptCredential ""
-            , addressStakingCredential: Nothing
-            }
-        , chParams: marloweParams
-        , chInitialData: marloweData contract contractState
-        , chHistory: []
-        }
-      expectError canFindStartingContractCard
-      canFindStartedContractCard
+startContractMarloweAppBeforeCompanion = loanContractTest
+  "The marlowe app responds before the wallet companion"
+  \lenderNickname borrowerNickname -> do
+    -- Arrange
+    lenderApps <- restoreWallet lenderNickname []
+    lenderWallet <- getWallet lenderNickname
+    marloweParams <- newMarloweParams
+    contractNickname <- makeTestContractNickname "Test loan"
+    -- Act
+    { contract, contractState, reqId } <- createLoanWithoutUpdates
+      lenderWallet
+      lenderApps
+      marloweParams
+      contractNickname
+      borrowerNickname
+      lenderNickname
+      1000
+      100
+    -- TODO remove this when race condition for awaitMarloweParams is fixed
+    liftAff $ delay $ Milliseconds 1000.0
+    assertStartingContractShown
+    sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
+    assertStartingContractShown
+    sendWalletCompanionUpdate lenderApps.walletCompanionId
+      [ Tuple marloweParams $ marloweData contract contractState
+      ]
+    assertStartingContractShown
+    followerId <- generateUUID
+    handlePostActivate lenderWallet.walletId MarloweFollower followerId
+    assertStartingContractShown
+    recvInstanceSubscribe followerId
+    sendNewActiveEndpoints followerId followerEndpoints
+    handlePostFollow followerId marloweParams
+    assertStartingContractShown
+    sendFollowerUpdate followerId $ ContractHistory
+      { chAddress: PAB.Address
+          { addressCredential: ScriptCredential ""
+          , addressStakingCredential: Nothing
+          }
+      , chParams: marloweParams
+      , chInitialData: marloweData contract contractState
+      , chHistory: []
+      }
+    expectError assertStartingContractShown
+    canFindStartedContractCard
   where
-  canFindStartingContractCard
+  assertStartingContractShown
     :: forall m. MonadTest m => MonadError Error m => m Unit
-  canFindStartingContractCard = do
+  assertStartingContractShown = do
     card <- getBy role do
       nameRegexi "Test loan"
       pure Listitem

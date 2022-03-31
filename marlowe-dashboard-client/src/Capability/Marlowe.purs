@@ -1,5 +1,6 @@
 module Capability.Marlowe
   ( ApplyInputError
+  , CreateError
   , applyTransactionInput
   , class ManageMarlowe
   , initializeContract
@@ -71,7 +72,11 @@ class
     -> ContractTemplate
     -> ContractParams
     -> PABConnectedWallet
-    -> m (Either InitializeContractError (NewContract /\ Aff MarloweParams))
+    -> m
+         ( Either
+             InitializeContractError
+             (NewContract /\ Aff (Either CreateError MarloweParams))
+         )
   applyTransactionInput
     :: PABConnectedWallet
     -> MarloweParams
@@ -123,20 +128,14 @@ instance
         mParams <- awaitContractCreation
         case mParams of
           Left contractError -> do
-            unliftAff u
-              $ addToast
-              $ errorToast "Failed to create contract"
-              $ Just
-              $ showContractError contractError
-            throwError $ error $ "Failed to create contract: " <>
-              showContractError contractError
+            pure $ Left $ CreateError contractError
           Right marloweParams -> do
             -- Update the contract's representation in the store to use its
             -- MarloweParams instead of the temporary UUID
             unliftAff u
               $ updateStore
               $ Store.ContractStarted newContract marloweParams
-            pure marloweParams
+            pure $ Right marloweParams
 
   -- "apply-inputs" to a Marlowe contract on the blockchain
   applyTransactionInput wallet marloweParams transactionInput = do
@@ -206,3 +205,12 @@ instance Explain ApplyInputError where
 
 instance Debuggable ApplyInputError where
   debuggable (ApplyInputError error) = encodeJson error
+
+newtype CreateError = CreateError MarloweError
+
+instance Explain CreateError where
+  -- TODO: SCP-3340 Convert the MarloweErrors into useful messages
+  explain _ = text "There was an unknown problem creating a contract"
+
+instance Debuggable CreateError where
+  debuggable (CreateError error) = encodeJson error
