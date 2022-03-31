@@ -21,7 +21,7 @@ import Test.Data.Address.Bech32.HRP as Bech32HRP
 import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
-import Test.Marlowe.Run.Action.Scenarios.Contract (loanContract)
+import Test.Marlowe.Run.Action.Scenarios.Contract (contractScenarios)
 import Test.Marlowe.Run.Action.Scenarios.Wallet
   ( createAndRestoreWallet
   , multipleCompanionUpdates
@@ -57,7 +57,7 @@ testScripts :: Spec Unit
 testScripts = describe "Scripted scenarios" do
   createAndRestoreWallet
   multipleCompanionUpdates
-  loanContract
+  contractScenarios
 
 -------------------------------------------------------------------------------
 -- Demo tests for purescript-testing-library
