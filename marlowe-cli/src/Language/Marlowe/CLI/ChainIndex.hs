@@ -25,23 +25,26 @@ module Language.Marlowe.CLI.ChainIndex (
 , queryHistory
 , queryAddress
 , queryTransaction
+, queryOutput
 ) where
 
 
-import Cardano.Api (AddressAny, AddressInEra, ShelleyEra, TxId, anyAddressInShelleyBasedEra)
+import Cardano.Api (AddressAny, AddressInEra, ShelleyEra, TxId, anyAddressInShelleyBasedEra, lovelaceToValue,
+                    valueFromList)
+import Control.Applicative (liftA2)
 import Control.Lens ((^.), (^..))
 import Control.Monad.Except (MonadError, MonadIO)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.List (nub)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.IO (liftCli, maybeWriteJson)
-import Language.Marlowe.CLI.Types (CliError (..))
+import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..))
 import Language.Marlowe.Client.History (histories)
 import Language.Marlowe.Scripts (smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData (..), MarloweParams (..))
 import Ledger (ciTxOutDatum, ciTxOutValue)
 import Ledger.Scripts (validatorHash)
-import Ledger.Tx.CardanoAPI (fromCardanoAddress, fromCardanoTxId)
+import Ledger.Tx.CardanoAPI (fromCardanoAddress, fromCardanoTxId, fromCardanoValue)
 import Ledger.Typed.Scripts (validatorAddress, validatorScript)
 import Plutus.ChainIndex (Page (..))
 import Plutus.ChainIndex.Api (TxoAtAddressRequest (..), UtxoAtAddressRequest (..), page, paget)
@@ -49,6 +52,8 @@ import Plutus.ChainIndex.Client (getTx, getTxOut, getTxoSetAtAddress, getUtxoSet
 import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol, Datum (..), FromData, TxOutRef, Value,
                              fromBuiltinData, txOutRefId)
 import Servant.Client (ClientM)
+
+import qualified Plutus.V1.Ledger.Value as V (flattenValue, geq)
 
 
 -- | Output of a Marlowe transaction.
@@ -187,6 +192,43 @@ queryAddress runApi addresses spent outputFile =
         . fmap (nub . concat)
         $ mapM (queryCredential (getTx . txOutRefId) spent) credentials
     maybeWriteJson outputFile txs
+
+
+-- | Query the transaction outputs at addresses.
+queryOutput :: MonadError CliError m
+            => MonadIO m
+            => (forall b. ClientM b -> m b)  -- ^ The chain-index API runner.
+            -> [AddressAny]                  -- ^ The addresses.
+            -> OutputQuery                   -- ^ Filter for the results.
+            -> Bool                          -- ^ Whether to also query spent output.
+            -> Maybe FilePath                -- ^ The output path for the transactions, if any.
+            -> m ()                          -- ^ Action to query the address.
+queryOutput runApi addresses query spent outputFile =
+  do
+    let
+      toCredential address =
+        do
+          Address credential _  <-
+            liftCli
+              . fromCardanoAddress
+              $ (anyAddressInShelleyBasedEra :: AddressAny -> AddressInEra ShelleyEra) address
+          pure credential
+      query' (_, txOut) =
+        let
+          value = txOut ^. ciTxOutValue
+          count = length $ V.flattenValue value
+        in
+          case query of
+            AllOutput        -> True
+            LovelaceOnly{..} -> count == 1 && value `V.geq` fromCardanoValue (lovelaceToValue lovelace)
+            AssetOnly{..}    -> count == 2 && value `V.geq` fromCardanoValue (valueFromList [(asset, 1)])
+    credentials <- toCredential `mapM` addresses
+    txOuts <-
+      runApi
+        . fmap (nub . concat)
+        $ mapM (queryCredential (liftA2 fmap (,) getTxOut) spent) credentials
+    maybeWriteJson outputFile
+      $ filter query' txOuts
 
 
 -- | Query the details of transactions.

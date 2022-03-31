@@ -25,9 +25,10 @@ module Language.Marlowe.CLI.Command.Query (
 
 import Cardano.Api (AddressAny, TxId)
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
-import Language.Marlowe.CLI.ChainIndex (queryAddress, queryApp, queryHistory, queryPayout, queryTransaction)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseTxId, parseUrl)
-import Language.Marlowe.CLI.Types (CliError (..))
+import Language.Marlowe.CLI.ChainIndex (queryAddress, queryApp, queryHistory, queryOutput, queryPayout,
+                                        queryTransaction)
+import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseCurrencySymbol, parseOutputQuery, parseTxId, parseUrl)
+import Language.Marlowe.CLI.Types (CliError (..), OutputQuery)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Plutus.V1.Ledger.Api (CurrencySymbol)
@@ -76,6 +77,15 @@ data QueryCommand =
     , outputFile :: Maybe FilePath  -- ^ The output JSON file for Marlowe histories.
     , addresses  :: [AddressAny]    -- ^ The addresses.
     }
+    -- | Query UTxO details.
+  | Output
+    {
+      indexUrl   :: BaseUrl         -- ^ The URL for the chain index.
+    , query      :: OutputQuery     -- ^ Filter the query results.
+    , spent      :: Bool            -- ^ Whether to also report spent transactions.
+    , outputFile :: Maybe FilePath  -- ^ The output JSON file for Marlowe histories.
+    , addresses  :: [AddressAny]    -- ^ The addresses.
+    }
 
 
 -- | Run a query command.
@@ -96,11 +106,12 @@ runQueryCommand command =
             Right result' -> pure result'
             Left  e       -> throwError . CliError $ show e
     case command of
-      App{..}         -> queryApp         runApi marloweParams' spent outputFile
-      Payout{..}      -> queryPayout      runApi marloweParams' spent outputFile
-      Histories{..}   -> queryHistory     runApi marloweParams'       outputFile
-      Transaction{..} -> queryTransaction runApi txIds                outputFile
-      Address{..}     -> queryAddress     runApi addresses      spent outputFile
+      App{..}         -> queryApp         runApi marloweParams'  spent outputFile
+      Payout{..}      -> queryPayout      runApi marloweParams'  spent outputFile
+      Histories{..}   -> queryHistory     runApi marloweParams'        outputFile
+      Transaction{..} -> queryTransaction runApi txIds                 outputFile
+      Address{..}     -> queryAddress     runApi addresses       spent outputFile
+      Output{..}      -> queryOutput      runApi addresses query spent outputFile
 
 
 -- | Parser for query commands.
@@ -111,6 +122,7 @@ parseQueryCommand =
     <> addressCommand
     <> appCommand
     <> historyCommand
+    <> outputCommand
     <> payoutCommand
     <> transactionCommand
 
@@ -181,6 +193,25 @@ addressOptions :: O.Parser QueryCommand
 addressOptions =
   Address
     <$> O.option parseUrl                  (O.long "index-url" <> O.metavar "URL"         <> O.help "URL for the Plutus chain index."           )
+    <*> O.switch                           (O.long "spent"                                <> O.help "Whether to also report spent transactions.")
+    <*> (O.optional . O.strOption)         (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for address data."        )
+    <*> O.some (O.argument parseAddressAny $                      O.metavar "ADDRESS"     <> O.help "The address."                              )
+
+
+-- | Parser for the "output" command.
+outputCommand :: O.Mod O.CommandFields QueryCommand
+outputCommand =
+  O.command "output"
+    $ O.info outputOptions
+    $ O.progDesc "Query output details."
+
+
+-- | Parser for the "output" options.
+outputOptions :: O.Parser QueryCommand
+outputOptions =
+  Output
+    <$> O.option parseUrl                  (O.long "index-url" <> O.metavar "URL"         <> O.help "URL for the Plutus chain index."           )
+    <*> parseOutputQuery
     <*> O.switch                           (O.long "spent"                                <> O.help "Whether to also report spent transactions.")
     <*> (O.optional . O.strOption)         (O.long "out-file"  <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for address data."        )
     <*> O.some (O.argument parseAddressAny $                      O.metavar "ADDRESS"     <> O.help "The address."                              )
