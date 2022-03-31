@@ -6,7 +6,15 @@ import Control.Monad.Base (class MonadBase)
 import Control.Monad.Cont (class MonadTrans)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow)
 import Control.Monad.Except (ExceptT)
-import Control.Monad.Fork.Class (class MonadFork, class MonadKill, kill)
+import Control.Monad.Fork.Class
+  ( class MonadBracket
+  , class MonadFork
+  , class MonadKill
+  , bracket
+  , kill
+  , never
+  , uninterruptible
+  )
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
@@ -85,15 +93,23 @@ derive newtype instance MonadThrow e m => MonadThrow e (MockUuidM m)
 derive newtype instance MonadError e m => MonadError e (MockUuidM m)
 derive newtype instance MonadRec m => MonadRec (MockUuidM m)
 derive newtype instance MonadFork f m => MonadFork f (MockUuidM m)
+instance MonadKill e f m => MonadKill e f (MockUuidM m) where
+  kill e = lift <<< kill e
+
+instance MonadBracket e f m => MonadBracket e f (MockUuidM m) where
+  bracket (MockUuidM acquire) release run = MockUuidM $ bracket
+    acquire
+    (\c a -> case release c a of MockUuidM r -> r)
+    (\a -> case run a of MockUuidM r -> r)
+  uninterruptible (MockUuidM r) = MockUuidM $ uninterruptible r
+  never = lift never
+
 derive newtype instance MonadTest m => MonadTest (MockUuidM m)
 derive newtype instance MonadMockHTTP m => MonadMockHTTP (MockUuidM m)
 derive newtype instance MonadTime m => MonadTime (MockUuidM m)
 
 instance MonadTrans (MockUuidM) where
   lift m = MockUuidM $ lift m
-
-instance MonadKill e f m => MonadKill e f (MockUuidM m) where
-  kill e = lift <<< kill e
 
 derive newtype instance
   MonadHalogenTest q i o m =>

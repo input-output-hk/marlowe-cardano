@@ -15,15 +15,16 @@ import Control.Concurrent.EventBus as EventBus
 import Control.Monad.Cont (lift)
 import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Except (ExceptT(..), runExceptT, withExceptT)
+import Control.Monad.Fork.Class (class MonadBracket, bracket)
 import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut (encodeJson)
 import Data.Lens (view, (^.))
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
+import Data.Set as Set
 import Data.Traversable (for_)
 import Effect.Aff (Error)
-import Effect.Aff.AVar as AVar
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Env (Env, _followerAVarMap, _followerBus)
 import Errors.Debuggable (class Debuggable, debuggable)
@@ -74,40 +75,51 @@ instance
   ( MonadAff m
   , MonadRec m
   , MonadError Error m
+  , MonadBracket Error f m
   , MonadAjax PAB.Api m
   ) =>
   FollowerApp (AppM m) where
-  followContract wallet marloweParams = do
-    contracts <- _.contracts <$> getStore
-    case getFollowerContract marloweParams contracts of
-      -- If we already have a follower contract, we don't need to do anything
-      Just plutusAppId -> do
-        pure $ Right plutusAppId
-      -- If we don't, activate and follow one
-      Nothing -> do
-        -- Check if this marlowe params is already in the follower avar map
-        followerAVarMap <- asks $ view _followerAVarMap
-        newAVar <- liftAff AVar.empty
-        avarWasPut <- liftAff $ AVarMap.tryPut marloweParams newAVar
-          followerAVarMap
-        runExceptT
-          if avarWasPut then do
+  followContract wallet marloweParams =
+    -- After we retreive the contract store to check if a follower exists, and
+    -- before the the follower is added to the store, we are vulnerable to a
+    -- race condition in which multiple followers may be created for the same
+    -- set of marlowe params. To mitigate this risk, we create a critical
+    -- section around the call for the specific marlowe commands. Simultaneous
+    -- attempts to activate a follower will be forced to run in sequence. After
+    -- the first succeeds, subsequent attempts will instead find a cached
+    -- instance ID for that marlowe params in the store.
+    bracket lockFollowerActivation unlockFollowerActivation \_ ->
+      do
+        contracts <- _.contracts <$> getStore
+        case getFollowerContract marloweParams contracts of
+          -- If we already have a follower contract, we don't need to do anything
+          Just plutusAppId -> do
+            pure $ Right plutusAppId
+          -- If we don't, activate and follow one
+          Nothing -> runExceptT do
             let walletId = wallet ^. _walletId
             -- Create a new instance of a MarloweFollower plutus contract
             followAppId <- withExceptT ActivateContractError
               $ ExceptT
               $ PAB.activateContract MarloweFollower walletId
+            -- Add it to the store's index
+            updateStore
+              $ Store.FollowerAppsActivated
+              $ Set.singleton
+              $ Tuple marloweParams followAppId
             -- Subscribe to notifications
             lift $ subscribeToPlutusApp followAppId
             -- Tell it to follow the Marlowe contract via its MarloweParams
             withExceptT FollowContractError
               $ ExceptT
               $ PAB.invokeEndpoint followAppId "follow" marloweParams
-            liftAff $ AVar.put followAppId newAVar
             pure followAppId
-          else do
-            avar <- AVarMap.read marloweParams followerAVarMap
-            liftAff $ AVar.read avar
+    where
+    lockFollowerActivation = do
+      followerAVarMap <- asks $ view _followerAVarMap
+      AVarMap.put marloweParams unit followerAVarMap
+      pure followerAVarMap
+    unlockFollowerActivation _ = AVarMap.take marloweParams
 
 instance FollowerApp m => FollowerApp (HalogenM state action slots msg m) where
   followContract wallet marloweParams = lift $ followContract

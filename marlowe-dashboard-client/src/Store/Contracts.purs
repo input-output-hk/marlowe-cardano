@@ -12,7 +12,7 @@ module Store.Contracts
   , getNewContracts
   , getRunningContracts
   , historyUpdated
-  , initialFollowersReceived
+  , followerAppsActivated
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
@@ -27,13 +27,13 @@ import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
+import Data.Foldable (foldr)
 import Data.Lens
   ( Lens'
   , filtered
   , iso
   , over
   , preview
-  , set
   , to
   , toArrayOf
   , traverseOf
@@ -52,6 +52,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.NewContract (NewContract(..))
 import Data.Set (Set)
+import Data.Tuple (uncurry)
 import Data.UUID.Argonaut (UUID)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getMarloweParams)
@@ -117,9 +118,10 @@ mkContractStore nicknames = ContractStore
   , contractNicknames: nicknames
   }
 
-initialFollowersReceived
+followerAppsActivated
   :: Set (Tuple MarloweParams PlutusAppId) -> ContractStore -> ContractStore
-initialFollowersReceived = set _contractIndex <<< Bimap.fromFoldable
+followerAppsActivated apps = over _contractIndex \index ->
+  foldr (uncurry Bimap.insert) index apps
 
 contractCreated :: NewContract -> ContractStore -> ContractStore
 contractCreated newContract@(NewContract reqId _ _) =

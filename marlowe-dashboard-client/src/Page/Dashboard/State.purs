@@ -144,7 +144,7 @@ subscribeToPlutusApps = do
   let initialFollowers = wallet ^. _initialFollowers
   -- Register initial follower contracts before subscribing to companion so
   -- existing follower instances never get duplicated by companion updates.
-  updateStore $ Store.InitialFollowersReceived initialFollowers
+  updateStore $ Store.FollowerAppsActivated initialFollowers
 
   -- TODO: SCP-3543 Encapsultate subscribe/unsubscribe logic into a capability
   -- Get notified of new contracts

@@ -53,7 +53,7 @@ newtype Env = Env
   , createBus :: EventBus UUID (Either MarloweError MarloweParams)
   , applyInputBus :: EventBus UUID (Either MarloweError Unit)
   , redeemBus :: EventBus UUID (Either MarloweError Unit)
-  , followerAVarMap :: AVarMap MarloweParams (AVar PlutusAppId)
+  , followerAVarMap :: AVarMap MarloweParams Unit
   , followerBus :: EventBus PlutusAppId ContractHistory
   -- | All the outbound communication channels to the outside world
   , sinks :: Sinks
@@ -72,7 +72,7 @@ _applyInputBus = _Newtype <<< prop (Proxy :: _ "applyInputBus")
 _redeemBus :: Lens' Env (EventBus UUID (Either MarloweError Unit))
 _redeemBus = _Newtype <<< prop (Proxy :: _ "redeemBus")
 
-_followerAVarMap :: Lens' Env (AVarMap MarloweParams (AVar PlutusAppId))
+_followerAVarMap :: Lens' Env (AVarMap MarloweParams Unit)
 _followerAVarMap = _Newtype <<< prop (Proxy :: _ "followerAVarMap")
 
 _followerBus :: Lens' Env (EventBus PlutusAppId ContractHistory)

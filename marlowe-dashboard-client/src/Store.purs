@@ -20,8 +20,8 @@ import Store.Contracts
   ( ContractStore
   , contractCreated
   , contractStarted
+  , followerAppsActivated
   , historyUpdated
-  , initialFollowersReceived
   , mkContractStore
   , modifyContract
   , modifyContractNicknames
@@ -77,7 +77,7 @@ data Action
   -- Time
   = Tick Instant
   -- Contract
-  | InitialFollowersReceived (Set (Tuple MarloweParams PlutusAppId))
+  | FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
   | ContractCreated NewContract
   | ContractHistoryUpdated PlutusAppId MetaData ContractHistory
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
@@ -107,8 +107,8 @@ reduce store = case _ of
       , contracts = contracts
       }
   -- Contract
-  InitialFollowersReceived followers -> store
-    { contracts = initialFollowersReceived followers store.contracts
+  FollowerAppsActivated followers -> store
+    { contracts = followerAppsActivated followers store.contracts
     }
   ContractCreated startingContractInfo -> store
     { contracts = contractCreated startingContractInfo store.contracts
