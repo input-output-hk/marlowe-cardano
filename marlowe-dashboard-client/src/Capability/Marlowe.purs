@@ -34,7 +34,8 @@ import Data.PABConnectedWallet (PABConnectedWallet, _address, _marloweAppId)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant.Generic (class Constructors, mkConstructors')
-import Effect.Aff (Aff, Error, error)
+import Effect.Aff (Aff, Error, error, forkAff, joinFiber)
+import Effect.Aff.Class (liftAff)
 import Effect.Aff.Unlift (class MonadUnliftAff, askUnliftAff, unliftAff)
 import Errors.Debuggable (class Debuggable)
 import Errors.Explain (class Explain)
@@ -124,7 +125,9 @@ instance
       let newContract = NewContract reqId nickname template.metaData
       lift $ updateStore $ Store.ContractCreated newContract
 
-      pure $ newContract /\ do
+      -- Already fork and await the pending result here, so we don't have to
+      -- wait for the caller to run it to update the store.
+      resultFiber <- liftAff $ forkAff do
         mParams <- awaitContractCreation
         case mParams of
           Left contractError -> do
@@ -136,6 +139,8 @@ instance
               $ updateStore
               $ Store.ContractStarted newContract marloweParams
             pure $ Right marloweParams
+
+      pure $ newContract /\ joinFiber resultFiber
 
   -- "apply-inputs" to a Marlowe contract on the blockchain
   applyTransactionInput wallet marloweParams transactionInput = do

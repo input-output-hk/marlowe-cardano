@@ -42,7 +42,6 @@ import Test.Marlowe.Run.Action.Flows
   )
 import Test.Marlowe.Run.Commands
   ( clickButtonRegex
-  , clickConfirm
   , handlePostActivate
   , handlePostFollow
   , recvInstanceSubscribe
@@ -54,7 +53,7 @@ import Test.Marlowe.Run.Commands
 import Test.Network.HTTP (class MonadMockHTTP)
 import Test.Spec (Spec)
 import Test.Spec.Assertions (expectError)
-import Test.Web.DOM.Query (findBy, getBy, nameRegexi, role, text)
+import Test.Web.DOM.Query (getBy, nameRegexi, role, text)
 import Test.Web.Monad (class MonadTest, withContainer)
 import Web.ARIA (ARIARole(..))
 
@@ -86,9 +85,10 @@ loanContract = loanContractTest
       nameRegexi "Test loan"
       pure Listitem
     withContainer card $ clickButtonRegex "deposit"
-    confirmDialog <- findBy role $ pure Dialog
-    withContainer confirmDialog clickConfirm
-    pure unit
+
+-- confirmDialog <- findBy role $ pure Dialog
+-- withContainer confirmDialog clickConfirm
+-- pure unit
 
 -- reqId <- getNextUUID
 -- let
@@ -115,8 +115,6 @@ startContractCompanionBeforeMarloweApp = loanContractTest
       lenderNickname
       1000
       100
-    -- TODO remove this when race condition for awaitMarloweParams is fixed
-    liftAff $ delay $ Milliseconds 1000.0
     assertStartingContractShown
     sendWalletCompanionUpdate lenderApps.walletCompanionId
       [ Tuple marloweParams $ marloweData contract contractState
@@ -140,8 +138,9 @@ startContractCompanionBeforeMarloweApp = loanContractTest
       , chInitialData: marloweData contract contractState
       , chHistory: []
       }
-    -- Delay is, unfortunately, necessary to give the UI time to update.
-    liftAff $ delay $ Milliseconds 100.0
+    -- Very slight delay is, unfortunately, necessary to give the UI time to
+    -- update.
+    liftAff $ delay $ Milliseconds 10.0
     expectError assertStartingContractShown
     canFindStartedContractCard
   where
@@ -180,8 +179,6 @@ startContractMarloweAppBeforeCompanion = loanContractTest
       lenderNickname
       1000
       100
-    -- TODO remove this when race condition for awaitMarloweParams is fixed
-    liftAff $ delay $ Milliseconds 1000.0
     assertStartingContractShown
     sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
     assertStartingContractShown

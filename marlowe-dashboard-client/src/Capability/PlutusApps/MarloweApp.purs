@@ -28,8 +28,8 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID.Argonaut (UUID)
-import Effect.Aff (Aff, Error)
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff (Aff, Error, forkAff, joinFiber)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Env (_applyInputBus, _createBus, _redeemBus)
 import Language.Marlowe.Client (MarloweError)
 import Marlowe.PAB (PlutusAppId)
@@ -76,6 +76,12 @@ instance
   MarloweApp (AppM m) where
   createContract plutusAppId roles contract = runExceptT do
     reqId <- lift generateUUID
+    bus <- asks $ view _createBus
+    -- Run and fork this aff now so we are already listening before we even send
+    -- the request. Eliminates the risk that the response will come in before we
+    -- can even subscribe to the event bus.
+    responseFiber <-
+      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
     let
       backRoles :: Map Back.TokenName Address
       backRoles = Map.fromFoldable
@@ -84,14 +90,19 @@ instance
 
       payload = [ encodeJson reqId, encodeJson backRoles, encodeJson contract ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "create" payload
-    bus <- asks $ view _createBus
-    pure $ Tuple reqId $ EventBus.subscribeOnce bus.emitter reqId
+    pure $ Tuple reqId $ joinFiber responseFiber
 
   applyInputs plutusAppId marloweContractId input = runExceptT do
     let
       TransactionInput { interval: TimeInterval slotStart slotEnd, inputs } =
         input
     reqId <- lift generateUUID
+    bus <- asks $ view _applyInputBus
+    -- Run and fork this aff now so we are already listening before we even send
+    -- the request. Removes the risk that the response will come in before we
+    -- can even subscribe to the event bus.
+    responseFiber <-
+      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
     let
       backTimeInterval :: POSIXTime /\ POSIXTime
       backTimeInterval = (slotStart) /\ (slotEnd)
@@ -104,11 +115,16 @@ instance
         ]
     ExceptT
       $ PAB.invokeEndpoint plutusAppId "apply-inputs-nonmerkleized" payload
-    bus <- asks $ view _applyInputBus
-    pure $ EventBus.subscribeOnce bus.emitter reqId
+    pure $ joinFiber responseFiber
 
   redeem plutusAppId marloweContractId tokenName address = runExceptT do
     reqId <- lift generateUUID
+    bus <- asks $ view _redeemBus
+    -- Run and fork this aff now so we are already listening before we even send
+    -- the request. Removes the risk that the response will come in before we
+    -- can even subscribe to the event bus.
+    responseFiber <-
+      liftAff $ forkAff $ EventBus.subscribeOnce bus.emitter reqId
     let
       payload =
         [ encodeJson reqId
@@ -117,5 +133,4 @@ instance
         , encodeJson address
         ]
     ExceptT $ PAB.invokeEndpoint plutusAppId "redeem" payload
-    bus <- asks $ view _redeemBus
-    pure $ EventBus.subscribeOnce bus.emitter reqId
+    pure $ joinFiber responseFiber

@@ -178,9 +178,9 @@ awaitNextRequest = do
         case result of
           Just a -> pure $ Just a
           Nothing -> do
-            delay $ Milliseconds 10.0
+            delay $ Milliseconds 30.0
             pure Nothing
-    , Nothing <$ delay (Milliseconds 100.0)
+    , Nothing <$ delay (Milliseconds 120.0)
     ]
 
 instance (MonadThrow Error m, MonadAff m) => MonadMockHTTP (MockHttpM m) where
