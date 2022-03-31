@@ -9,7 +9,9 @@ export const getElementLocator = (
 ): ElementLocator => {
 
   const currentPage = getCurrentPageId(page, globalConfig);
-  const { pageElementMappings, applicationId } = globalConfig;
+  const { applicationPageElementMappings, applicationId } = globalConfig;
+
+  const pageElementMappings = applicationPageElementMappings[applicationId];
 
   return pageElementMappings[currentPage]?.[elementKey] || pageElementMappings.common?.[elementKey]
 }

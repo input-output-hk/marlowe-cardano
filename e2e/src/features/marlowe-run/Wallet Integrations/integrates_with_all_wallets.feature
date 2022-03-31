@@ -20,3 +20,5 @@ Feature: Integrates with All Wallets
   @dev
   Scenario: Creating a new wallet on the homepage
     Given I am on the "home" page of the "marlowe run" application
+
+    When I click the "Generate testnet wallet" button
