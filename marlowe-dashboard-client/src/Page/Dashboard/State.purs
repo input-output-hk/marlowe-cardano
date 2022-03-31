@@ -17,7 +17,7 @@ import Capability.PAB
 import Capability.PAB (activateContract, getWalletContractInstances) as PAB
 import Capability.PlutusApps.FollowerApp
   ( class FollowerApp
-  , ensureFollowerContract
+  , followContract
   )
 import Capability.PlutusApps.FollowerApp as FollowerApp
 import Capability.Toast (class Toast, addToast)
@@ -388,7 +388,7 @@ handleAction (TemplateAction templateAction) = do
               assign _selectedContractIndex
                 $ Just
                 $ Started marloweParams
-          ajaxFollow <- ensureFollowerContract wallet marloweParams
+          ajaxFollow <- followContract wallet marloweParams
           case ajaxFollow of
             Left err -> globalError "Can't follow the contract" err
             Right _ -> do
@@ -443,7 +443,7 @@ handleAction (CompanionAppStateUpdated companionAppState) = do
     _walletCompanionStatus
     WalletCompanionSynced
   flip parTraverse_ newContractsArray \(marloweParams /\ _) ->
-    ensureFollowerContract wallet marloweParams
+    followContract wallet marloweParams
 
 handleAction (ContractHistoryUpdated plutusAppId contractHistory) = do
   {- [UC-CONTRACT-1][3] Start a contract -}

@@ -1,7 +1,7 @@
 module Capability.PlutusApps.FollowerApp
   ( class FollowerApp
   , FollowContractError
-  , ensureFollowerContract
+  , followContract
   , onNewObservableState
   ) where
 
@@ -66,7 +66,7 @@ class Monad m <= FollowerApp m where
   -- This function makes sure that there is a follower contract for the specified
   -- marloweParams. It tries to see if we are already following, and if not, it creates
   -- a new one.
-  ensureFollowerContract
+  followContract
     :: PABConnectedWallet
     -> MarloweParams
     -> m (Either FollowContractError PlutusAppId)
@@ -78,7 +78,7 @@ instance
   , MonadAjax PAB.Api m
   ) =>
   FollowerApp (AppM m) where
-  ensureFollowerContract wallet marloweParams = do
+  followContract wallet marloweParams = do
     contracts <- _.contracts <$> getStore
     case getFollowerContract marloweParams contracts of
       -- If we already have a follower contract, we don't need to do anything
@@ -115,12 +115,12 @@ instance
             liftAff $ subscribeOnce emitter
 
 instance FollowerApp m => FollowerApp (HalogenM state action slots msg m) where
-  ensureFollowerContract wallet marloweParams = lift $ ensureFollowerContract
+  followContract wallet marloweParams = lift $ followContract
     wallet
     marloweParams
 
 instance FollowerApp m => FollowerApp (ReaderT r m) where
-  ensureFollowerContract wallet marloweParams = lift $ ensureFollowerContract
+  followContract wallet marloweParams = lift $ followContract
     wallet
     marloweParams
 
