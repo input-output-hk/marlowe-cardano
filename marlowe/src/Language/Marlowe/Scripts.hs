@@ -20,8 +20,8 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
-{-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
-{-# OPTIONS_GHC -fno-specialise #-}
+-- {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
+
 
 module Language.Marlowe.Scripts where
 import GHC.Generics
@@ -30,11 +30,10 @@ import Language.Marlowe.Semantics
 import Language.Marlowe.SemanticsTypes
 import Ledger
 import Ledger.Ada (adaSymbol)
-import Ledger.Constraints.OnChain
-import Ledger.Constraints.TxConstraints
 import qualified Ledger.Interval as Interval
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Ledger.Value as Val
+import Plutus.V1.Ledger.Credential (Credential (..))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
@@ -95,9 +94,6 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
     marloweTxInputs
     ctx@ScriptContext{scriptContextTxInfo} = do
 
-    let ownInput = case findOwnInput ctx of
-            Just i -> i
-            _      -> traceError "I0" {-"Can't find validation input"-}
     let scriptInValue = txOutValue $ txInInfoResolved ownInput
     let interval =
             case txInfoValidRange scriptContextTxInfo of
@@ -147,11 +143,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
                         totalIncome = foldMap (collectDeposits . getInputContent) inputs
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        outConstrs = ScriptOutputConstraint
-                                    { ocDatum = marloweData
-                                    , ocValue = finalBalance
-                                    }
-                        in checkOwnOutputConstraint ctx outConstrs
+                        in checkOwnOutputConstraint marloweData finalBalance
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousTimeIntervalError -> traceError "E1"
         Error TEApplyNoMatchError -> traceError "E2"
@@ -161,6 +153,41 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         Error TEHashMismatch -> traceError "E6"
 
   where
+    findOwnInput :: ScriptContext -> Maybe TxInInfo
+    findOwnInput ScriptContext{scriptContextTxInfo=TxInfo{txInfoInputs}, scriptContextPurpose=Spending txOutRef} =
+        find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs
+    findOwnInput _ = Nothing
+
+    ownInput :: TxInInfo
+    ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} =
+        case findOwnInput ctx of
+            Just ownTxInInfo ->
+                case filter (sameValidatorHash ownTxInInfo) (txInfoInputs scriptContextTxInfo) of
+                    [i] -> i
+                    _   -> traceError "I1" -- multiple Marlowe contract inputs with the same address, it's forbidden
+            _ -> traceError "I0" {-"Can't find validation input"-}
+
+    sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
+    sameValidatorHash
+        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential vh1) _}}
+        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential vh2) _}} = vh1 == vh2
+    sameValidatorHash _ _ = False
+
+
+    findDatumHash' :: PlutusTx.ToData o => o -> Maybe DatumHash
+    findDatumHash' datum = findDatumHash (Datum $ PlutusTx.toBuiltinData datum) scriptContextTxInfo
+
+    checkOwnOutputConstraint :: MarloweData -> Val.Value -> Bool
+    checkOwnOutputConstraint ocDatum ocValue =
+        let hsh = findDatumHash' ocDatum
+        in traceIfFalse "L1" -- "Output constraint"
+        $ checkScriptOutput ownAddress hsh ocValue getContinuingOutput
+
+    getContinuingOutput :: TxOut
+    getContinuingOutput = case filter (\TxOut{txOutAddress} -> ownAddress == txOutAddress) allOutputs of
+        [out] -> out
+        _     -> traceError "O0" -- no continuation or multiple Marlowe contract outputs, it's forbidden
+
     checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatumHash=Just svh} =
                     txOutValue == value && hsh == Just svh && txOutAddress == addr
     checkScriptOutput _ _ _ _ = False
@@ -205,8 +232,7 @@ smallMarloweValidator MarloweParams{rolesCurrency, rolePayoutValidatorHash}
         payoutToTxOut (party, value) = case party of
             PK pk  -> traceIfFalse "P" $ value `Val.leq` valuePaidTo scriptContextTxInfo pk
             Role role -> let
-                dataValue = Datum $ PlutusTx.toBuiltinData role
-                hsh = findDatumHash dataValue scriptContextTxInfo
+                hsh = findDatumHash' role
                 addr = Ledger.scriptHashAddress rolePayoutValidatorHash
                 in traceIfFalse "R" $ any (checkScriptOutput addr hsh value) allOutputs
 
