@@ -1,6 +1,7 @@
 module Store.Contracts
   ( ContractStore
   , contractCreated
+  , contractStartFailed
   , contractStarted
   , followerContractExists
   , getClosedContracts
@@ -34,6 +35,7 @@ import Data.Lens
   , iso
   , over
   , preview
+  , set
   , to
   , toArrayOf
   , traverseOf
@@ -50,11 +52,11 @@ import Data.LocalContractNicknames
 import Data.LocalContractNicknames as LocalContractNicknames
 import Data.Map (Map)
 import Data.Map as Map
-import Data.NewContract (NewContract(..))
+import Data.NewContract (NewContract(..), _newContractError)
 import Data.Set (Set)
 import Data.Tuple (uncurry)
 import Data.UUID.Argonaut (UUID)
-import Language.Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Client (getMarloweParams)
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
@@ -124,7 +126,7 @@ followerAppsActivated apps = over _contractIndex \index ->
   foldr (uncurry Bimap.insert) index apps
 
 contractCreated :: NewContract -> ContractStore -> ContractStore
-contractCreated newContract@(NewContract reqId _ _) =
+contractCreated newContract@(NewContract reqId _ _ _) =
   over _newContracts $ Map.insert reqId newContract
 
 -- Called upon receipt of a ContractHistory record from the follower app.
@@ -179,7 +181,7 @@ contractStarted
   -> MarloweParams
   -> ContractStore
   -> ContractStore
-contractStarted (NewContract reqId nickname _) marloweParams =
+contractStarted (NewContract reqId nickname _ _) marloweParams =
   removeNewContractIfNoLongerNeeded
     <<< modifyContractNicknames (insertContractNickname marloweParams nickname)
   where
@@ -202,6 +204,14 @@ contractStarted (NewContract reqId nickname _) marloweParams =
             (contract { contractNickname = Just nickname })
             store.startedContracts
         }
+
+contractStartFailed
+  :: NewContract
+  -> MarloweError
+  -> ContractStore
+  -> ContractStore
+contractStartFailed (NewContract reqId _ _ _) =
+  set (_newContracts <<< ix reqId <<< _newContractError) <<< Just
 
 modifyContractNicknames
   :: (LocalContractNicknames -> LocalContractNicknames)

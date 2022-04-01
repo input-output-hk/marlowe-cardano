@@ -114,7 +114,7 @@ component =
 
 dummyState :: ContractState
 dummyState = Starting $
-  NewContract emptyUUID ContractNickname.unknown emptyContractMetadata
+  NewContract emptyUUID ContractNickname.unknown emptyContractMetadata Nothing
 
 deriveState :: Connected Slice Input -> State
 deriveState

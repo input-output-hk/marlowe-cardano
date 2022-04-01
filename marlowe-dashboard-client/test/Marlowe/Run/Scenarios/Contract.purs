@@ -7,14 +7,20 @@ import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Now (class MonadTime)
 import Control.Monad.Reader (class MonadReader)
 import Control.Monad.UUID (class MonadUUID, generateUUID)
+import Data.Address (Address)
 import Data.AddressBook (AddressBook(..))
 import Data.Bimap as Bimap
-import Data.Time.Duration (Milliseconds(..))
+import Data.Map (Map)
+import Data.MnemonicPhrase (MnemonicPhrase)
+import Data.PubKeyHash (PubKeyHash)
+import Data.UUID.Argonaut (UUID)
+import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
-import Effect.Aff (Error, delay)
-import Effect.Aff.Class (liftAff)
-import Language.Marlowe.Client (ContractHistory(..))
+import Effect.Aff (Error)
+import Language.Marlowe.Client (ContractHistory(..), MarloweError(..))
 import MainFrame.Types as MF
+import Marlowe.Semantics (Assets, Contract, MarloweParams)
+import Marlowe.Semantics as Semantics
 import MarloweContract (MarloweContract(..))
 import Plutus.V1.Ledger.Address as PAB
 import Plutus.V1.Ledger.Credential (Credential(..))
@@ -45,6 +51,7 @@ import Test.Marlowe.Run.Commands
   , handlePostActivate
   , handlePostFollow
   , recvInstanceSubscribe
+  , sendCreateException
   , sendCreateSuccess
   , sendFollowerUpdate
   , sendNewActiveEndpoints
@@ -53,7 +60,8 @@ import Test.Marlowe.Run.Commands
 import Test.Network.HTTP (class MonadMockHTTP)
 import Test.Spec (Spec)
 import Test.Spec.Assertions (expectError)
-import Test.Web.DOM.Query (getBy, nameRegexi, role, text)
+import Test.Web.DOM.Query (findBy, getBy, nameRegexi, role, text)
+import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
 import Web.ARIA (ARIARole(..))
 
@@ -62,6 +70,7 @@ contractScenarios = do
   loanContract
   startContractCompanionBeforeMarloweApp
   startContractMarloweAppBeforeCompanion
+  startContractMarloweAppFails
 
 loanContract :: Spec Unit
 loanContract = loanContractTest
@@ -101,20 +110,9 @@ startContractCompanionBeforeMarloweApp = loanContractTest
   "The wallet companion responds before the marlowe app"
   \lenderNickname borrowerNickname -> do
     -- Arrange
-    lenderApps <- restoreWallet lenderNickname []
-    lenderWallet <- getWallet lenderNickname
-    marloweParams <- newMarloweParams
-    contractNickname <- makeTestContractNickname "Test loan"
+    { contract, contractState, reqId, lenderApps, marloweParams, lenderWallet } <-
+      setupLoanWithoutNotifications lenderNickname borrowerNickname
     -- Act
-    { contract, contractState, reqId } <- createLoanWithoutUpdates
-      lenderWallet
-      lenderApps
-      marloweParams
-      contractNickname
-      borrowerNickname
-      lenderNickname
-      1000
-      100
     assertStartingContractShown
     sendWalletCompanionUpdate lenderApps.walletCompanionId
       [ Tuple marloweParams $ marloweData contract contractState
@@ -138,47 +136,19 @@ startContractCompanionBeforeMarloweApp = loanContractTest
       , chInitialData: marloweData contract contractState
       , chHistory: []
       }
-    -- Very slight delay is, unfortunately, necessary to give the UI time to
-    -- update.
-    liftAff $ delay $ Milliseconds 10.0
+    assertStartedContractShown
     expectError assertStartingContractShown
-    canFindStartedContractCard
-  where
-  assertStartingContractShown
-    :: forall m. MonadTest m => MonadError Error m => m Unit
-  assertStartingContractShown = do
-    card <- getBy role do
-      nameRegexi "Test loan"
-      pure Listitem
-    withContainer card $ void $ getBy text $ pure "Starting contract…"
-
-  canFindStartedContractCard
-    :: forall m. MonadTest m => MonadError Error m => m Unit
-  canFindStartedContractCard = do
-    card <- getBy role do
-      nameRegexi "Test loan"
-      pure Listitem
-    withContainer card $ void $ getBy text $ pure "Current step:1"
 
 startContractMarloweAppBeforeCompanion :: Spec Unit
 startContractMarloweAppBeforeCompanion = loanContractTest
   "The marlowe app responds before the wallet companion"
   \lenderNickname borrowerNickname -> do
     -- Arrange
-    lenderApps <- restoreWallet lenderNickname []
-    lenderWallet <- getWallet lenderNickname
-    marloweParams <- newMarloweParams
-    contractNickname <- makeTestContractNickname "Test loan"
+    { contract, contractState, reqId, lenderApps, marloweParams, lenderWallet } <-
+      setupLoanWithoutNotifications
+        lenderNickname
+        borrowerNickname
     -- Act
-    { contract, contractState, reqId } <- createLoanWithoutUpdates
-      lenderWallet
-      lenderApps
-      marloweParams
-      contractNickname
-      borrowerNickname
-      lenderNickname
-      1000
-      100
     assertStartingContractShown
     sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
     assertStartingContractShown
@@ -202,24 +172,98 @@ startContractMarloweAppBeforeCompanion = loanContractTest
       , chInitialData: marloweData contract contractState
       , chHistory: []
       }
+    assertStartedContractShown
     expectError assertStartingContractShown
-    canFindStartedContractCard
-  where
-  assertStartingContractShown
-    :: forall m. MonadTest m => MonadError Error m => m Unit
-  assertStartingContractShown = do
-    card <- getBy role do
-      nameRegexi "Test loan"
-      pure Listitem
-    withContainer card $ void $ getBy text $ pure "Starting contract…"
 
-  canFindStartedContractCard
-    :: forall m. MonadTest m => MonadError Error m => m Unit
-  canFindStartedContractCard = do
-    card <- getBy role do
-      nameRegexi "Test loan"
-      pure Listitem
-    withContainer card $ void $ getBy text $ pure "Current step:1"
+startContractMarloweAppFails :: Spec Unit
+startContractMarloweAppFails = loanContractTest
+  "The marlowe app sends a creation failure response"
+  \lenderNickname borrowerNickname -> do
+    -- Arrange
+    { reqId, lenderApps } <-
+      setupLoanWithoutNotifications
+        lenderNickname
+        borrowerNickname
+    -- Act
+    assertStartingContractShown
+    sendCreateException lenderApps.marloweAppId reqId TransitionError
+    assertFailedContractShown
+    expectError assertStartingContractShown
+
+assertStartingContractShown
+  :: forall m. MonadTest m => MonadError Error m => m Unit
+assertStartingContractShown = do
+  card <- findBy role do
+    nameRegexi "Test loan"
+    pure Listitem
+  withContainer card $ void $ findBy text $ pure "Starting contract…"
+
+assertFailedContractShown
+  :: forall m. MonadTest m => MonadError Error m => m Unit
+assertFailedContractShown = do
+  card <- findBy role do
+    nameRegexi "Test loan"
+    pure Alert
+  withContainer card $ void $ findBy text $ pure "Failed to start contract"
+
+assertStartedContractShown
+  :: forall m. MonadTest m => MonadError Error m => m Unit
+assertStartedContractShown = do
+  card <- findBy role do
+    nameRegexi "Test loan"
+    pure Listitem
+  withContainer card $ void $ findBy text $ pure "Current step:1"
+
+setupLoanWithoutNotifications
+  :: forall m
+   . MonadTest m
+  => MonadUser m
+  => MonadUUID m
+  => MonadLogger String m
+  => MonadMockHTTP m
+  => MonadError Error m
+  => MonadReader Coenv m
+  => MonadTime m
+  => MonadMockUUID m
+  => WalletNickname
+  -> WalletNickname
+  -> m
+       { contract :: Contract
+       , contractState :: Semantics.State
+       , lenderApps ::
+           { followerAppIds :: Map MarloweParams UUID
+           , marloweAppId :: UUID
+           , walletCompanionId :: UUID
+           }
+       , lenderWallet ::
+           { address :: Address
+           , assets :: Assets
+           , mnemonic :: MnemonicPhrase
+           , nickname :: WalletNickname
+           , pubKeyHash :: PubKeyHash
+           , walletId :: WalletId
+           }
+       , marloweParams :: MarloweParams
+       , reqId :: UUID
+       }
+setupLoanWithoutNotifications lenderNickname borrowerNickname = do
+  -- Arrange
+  lenderApps <- restoreWallet lenderNickname []
+  lenderWallet <- getWallet lenderNickname
+  marloweParams <- newMarloweParams
+  contractNickname <- makeTestContractNickname "Test loan"
+  -- Act
+  { contract, contractState, reqId } <- createLoanWithoutUpdates
+    lenderWallet
+    lenderApps
+    marloweParams
+    contractNickname
+    borrowerNickname
+    lenderNickname
+    1000
+    100
+  pure
+    { contract, contractState, reqId, lenderApps, lenderWallet, marloweParams }
 
 loanContractTest
   :: String

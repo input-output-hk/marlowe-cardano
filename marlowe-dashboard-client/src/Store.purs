@@ -11,7 +11,7 @@ import Data.Maybe (maybe)
 import Data.NewContract (NewContract)
 import Data.Set (Set)
 import Data.Wallet (WalletDetails)
-import Language.Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
@@ -19,6 +19,7 @@ import Marlowe.Semantics (MarloweParams)
 import Store.Contracts
   ( ContractStore
   , contractCreated
+  , contractStartFailed
   , contractStarted
   , followerAppsActivated
   , historyUpdated
@@ -83,6 +84,7 @@ data Action
   | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   | ContractStarted NewContract MarloweParams
+  | ContractStartFailed NewContract MarloweError
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -137,6 +139,10 @@ reduce store = case _ of
   ContractStarted newContract marloweParams ->
     store
       { contracts = contractStarted newContract marloweParams store.contracts
+      }
+  ContractStartFailed newContract marloweError ->
+    store
+      { contracts = contractStartFailed newContract marloweError store.contracts
       }
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }

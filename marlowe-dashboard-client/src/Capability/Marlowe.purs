@@ -1,6 +1,6 @@
 module Capability.Marlowe
   ( ApplyInputError
-  , CreateError
+  , CreateError(..)
   , applyTransactionInput
   , class ManageMarlowe
   , initializeContract
@@ -122,22 +122,21 @@ instance
 
       -- We save in the store the request of a created contract with
       -- the information relevant to show a placeholder of a starting contract.
-      let newContract = NewContract reqId nickname template.metaData
+      let newContract = NewContract reqId nickname template.metaData Nothing
       lift $ updateStore $ Store.ContractCreated newContract
 
       -- Already fork and await the pending result here, so we don't have to
       -- wait for the caller to run it to update the store.
       resultFiber <- liftAff $ forkAff do
         mParams <- awaitContractCreation
-        case mParams of
+        -- Update the contract's representation in the store to use its
+        -- MarloweParams if successful, or show an error otherwise.
+        unliftAff u case mParams of
           Left contractError -> do
+            updateStore $ Store.ContractStartFailed newContract contractError
             pure $ Left $ CreateError contractError
           Right marloweParams -> do
-            -- Update the contract's representation in the store to use its
-            -- MarloweParams instead of the temporary UUID
-            unliftAff u
-              $ updateStore
-              $ Store.ContractStarted newContract marloweParams
+            updateStore $ Store.ContractStarted newContract marloweParams
             pure $ Right marloweParams
 
       pure $ newContract /\ joinFiber resultFiber

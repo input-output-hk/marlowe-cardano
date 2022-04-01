@@ -382,7 +382,7 @@ handleAction (TemplateAction templateAction) = do
             Right marloweParams -> do
               -- If the UI is showing the Starting contract we change the index to
               -- show the newly Started contract
-              let NewContract newContractUUID _ _ = newContract
+              let NewContract newContractUUID _ _ _ = newContract
               mSelectedContract <- use _selectedContractIndex
               when (mSelectedContract == (Just $ Starting newContractUUID))
                 do

@@ -34,7 +34,7 @@ import Effect.Aff (Error, delay, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Halogen.Subscription (notify)
-import Language.Marlowe.Client (ContractHistory)
+import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.PAB (PlutusAppId(..))
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
 import Marlowe.Semantics
@@ -54,6 +54,7 @@ import Test.Data.Marlowe
   , applyInputsEndpoint
   , createContent
   , createEndpoint
+  , createExceptionMessage
   , createSuccessMessage
   , createWalletRequest
   , createWalletResponse
@@ -522,6 +523,19 @@ sendCreateSuccess
   -> m Unit
 sendCreateSuccess appId reqId =
   sendWebsocketMessage "Create success" <<< createSuccessMessage appId reqId
+
+sendCreateException
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadLogger String m
+  => UUID
+  -> UUID
+  -> MarloweError
+  -> m Unit
+sendCreateException appId reqId =
+  sendWebsocketMessage "Create exception"
+    <<< createExceptionMessage appId reqId
 
 sendWalletCompanionUpdate
   :: forall f m
