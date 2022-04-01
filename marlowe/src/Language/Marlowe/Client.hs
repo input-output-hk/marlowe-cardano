@@ -680,6 +680,7 @@ applyInputs :: AsMarloweError e
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
     -- TODO: Move to debug log.
+    logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
     logInfo $ "[DEBUG:applyInputs] params = " <> show params
     logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
     timeRange <- case timeInterval of
