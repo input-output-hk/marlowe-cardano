@@ -152,6 +152,14 @@ interpret access CreateWallet{..} =
     liftIO . putStrLn $ "[CreateWallet] Created wallet identified as " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
     psWallets %= M.insert poOwner wi
 
+interpret access UseWallet{..} =
+  do
+    let
+      passphrase = Passphrase . BA.pack $ toEnum . fromEnum <$> poPassphrase
+    wi <- lift $ useWallet access poWalletId passphrase
+    liftIO . putStrLn $ "[UseWallet] Using wallet identified as " <> show (W.getWalletId $ wiWalletId wi) <> " for role " <> show poOwner <> "."
+    psWallets %= M.insert poOwner wi
+
 interpret PabAccess{..} FundWallet{..} =
   do
     WalletInfo{..} <- findOwner poOwner
@@ -168,7 +176,6 @@ interpret PabAccess{..} FundWallet{..} =
 interpret PabAccess{..} ReturnFunds{..} =
   do
     WalletInfo{..} <- findOwner poOwner
-    passphrase <- use psPassphrase
     faucetAddress <- use psFaucetAddress
     faucetAddress' <-
       case faucetAddress of
@@ -182,7 +189,7 @@ interpret PabAccess{..} ReturnFunds{..} =
       . runWallet
       $ migrate
           (ApiT wiWalletId)
-          (ApiWalletMigrationPostData (ApiT passphrase) ((ApiT faucetAddress', Proxy) :| []))
+          (ApiWalletMigrationPostData (ApiT wiPassphrase) ((ApiT faucetAddress', Proxy) :| []))
     let
       go =
         do
@@ -536,7 +543,7 @@ createWallet :: MonadError CliError m
              -> RoleName          -- ^ The name of the owner.
              -> Passphrase "raw"  -- ^ The passphrase for the wallet.
              -> m WalletInfo      -- ^ Action returning the new wallet information.
-createWallet PabAccess{..} owner passphrase' =
+createWallet PabAccess{..} owner wiPassphrase =
   do
     mnemonicSentence' <- liftIO . generate $ genMnemonic @24
     let
@@ -544,7 +551,7 @@ createWallet PabAccess{..} owner passphrase' =
       addressPoolGap = Nothing
       mnemonicSecondFactor = Nothing
       name = ApiT . WalletName . T.pack $ show owner
-      passphrase = ApiT passphrase'
+      passphrase = ApiT wiPassphrase
     wallet <-
       liftCliIO
         . runWallet
@@ -574,6 +581,39 @@ createWallet PabAccess{..} owner passphrase' =
         do
           liftIO $ threadDelay 5_000_000
           s <- W.state <$> liftCliIO (runWallet (getWallet walletClient $ W.id wallet))
+          unless (s == ApiT Ready) go
+    go
+    pure WalletInfo{..}
+
+
+-- | Create a new, random wallet.
+useWallet :: MonadError CliError m
+             => MonadIO m
+             => PabAccess         -- ^ Access to the PAB API.
+             -> WalletId          -- ^ The wallet ID.
+             -> Passphrase "raw"  -- ^ The passphrase for the wallet.
+             -> m WalletInfo      -- ^ Action returning the new wallet information.
+useWallet PabAccess{..} wiWalletId'@(WalletId wiWalletId) wiPassphrase =
+  do
+    addresses <- liftCliIO . runWallet $ listAddresses addressClient (ApiT wiWalletId) Nothing
+    (wiAddress, wiPubKeyHash) <-
+      case addresses of
+        Object o : _ -> liftCliMaybe "[useWallet] Failed to deserialise wallet address."
+                          $ do
+                            address <-
+                              case H.lookup "id" o of
+                                Just (String a) -> deserialiseAddress (AsAddress AsShelleyAddr) a
+                                _               -> Nothing
+                            pkh <- shelleyPayAddrToPlutusPubKHash address
+                            pure (toAddressAny address, pkh)
+        _            -> throwError $ CliError "[useWallet] No addresses found in wallet."
+    liftIO . putStrLn $ "[useWallet] First wallet address is " <> T.unpack (serialiseAddress wiAddress) <> "."
+    liftIO . putStrLn $ "[useWallet] First public key hash is " <> show wiPubKeyHash <> "."
+    let
+      go =
+        do
+          liftIO $ threadDelay 5_000_000
+          s <- W.state <$> liftCliIO (runWallet (getWallet walletClient $ ApiT wiWalletId))
           unless (s == ApiT Ready) go
     go
     pure WalletInfo{..}
