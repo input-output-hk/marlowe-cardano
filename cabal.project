@@ -48,8 +48,8 @@ package cardano-wallet-core-integration
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus-apps
-  tag: 89dcbaeae7fd928d6a014b0dcf73403f91de62a8
-  --sha256: 01kk9apig8zd9cxz9ldlbw3l8xv9cwjlsq6rpn5h77lavk0ka27s
+  tag: 8b61d1b050d55b8d7c7b9509981d002faf0d1b61
+  --sha256: 1nb74a02kvhyhcgw1sm7jbbfid3vr4knjjjln8vl46ipirzchnp5
   subdir:
     freer-extras
     playground-common

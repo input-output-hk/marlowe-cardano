@@ -60,7 +60,7 @@ import Ledger.Constraints
 import qualified Ledger.Constraints as Constraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
-import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange)
+import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange, slotToPOSIXTimeRange)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
@@ -680,6 +680,12 @@ applyInputs :: AsMarloweError e
     -> Contract MarloweContractState MarloweSchema e MarloweData
 applyInputs params typedValidator timeInterval inputs = mapError (review _MarloweError) $ do
     -- TODO: Move to debug log.
+    do
+      nowSlot <- currentSlot
+      logInfo $ "[DEBUG:applyInputs] current slot = " <> show nowSlot
+      logInfo $ "[DEBUG:applyInputs] time range for slot = " <> show (slotToPOSIXTimeRange unsafeGetSlotConfig nowSlot)
+      nowTime <- currentTime
+      logInfo $ "[DEBUG:applyInputs] current time = " <> show nowTime
     logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
     logInfo $ "[DEBUG:applyInputs] params = " <> show params
     logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
@@ -688,6 +694,7 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
             Nothing -> do
                 time <- currentTime
                 pure (time, time + defaultTxValidationRange)
+    -- TODO: Move to debug log.
     logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
     mkStep params typedValidator timeRange inputs
 
