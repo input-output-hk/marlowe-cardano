@@ -9,6 +9,7 @@ import Control.Monad.Reader (class MonadReader)
 import Control.Monad.UUID (class MonadUUID, generateUUID)
 import Data.Address (Address)
 import Data.AddressBook (AddressBook(..))
+import Data.Array.NonEmpty as AN
 import Data.Bimap as Bimap
 import Data.Map (Map)
 import Data.MnemonicPhrase (MnemonicPhrase)
@@ -16,6 +17,7 @@ import Data.PubKeyHash (PubKeyHash)
 import Data.String.Regex.Flags (ignoreCase)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Time.Duration (Minutes(..), Seconds(..))
+import Data.Traversable (traverse)
 import Data.UUID.Argonaut (UUID)
 import Data.WalletId (WalletId)
 import Data.WalletNickname (WalletNickname)
@@ -74,8 +76,8 @@ import Test.Web.DOM.Assertions
   , shouldHaveText
   , shouldNotBeDisabled
   )
-import Test.Web.DOM.Query (findBy, getBy, nameRegexi, role, text)
-import Test.Web.Event.User (click)
+import Test.Web.DOM.Query (findBy, getAllBy, getBy, nameRegexi, role, text)
+import Test.Web.Event.User (click, clickM)
 import Test.Web.Event.User.Monad (class MonadUser)
 import Test.Web.Monad (class MonadTest, withContainer)
 import Web.ARIA (ARIARole(..))
@@ -86,6 +88,79 @@ contractScenarios = do
   startContractCompanionBeforeMarloweApp
   startContractMarloweAppBeforeCompanion
   startContractMarloweAppFails
+  loanContractTimeout
+
+loanContractTimeout :: Spec Unit
+loanContractTimeout = loanContractTest
+  "Time a loan contract out"
+  \lenderNickname borrowerNickname -> do
+    -- Arrange
+    lenderApps <- restoreWallet lenderNickname []
+    lenderWallet <- getWallet lenderNickname
+    marloweParams <- newMarloweParams
+    contractNickname <- makeTestContractNickname "Test loan"
+    startTime <- now
+    { followerId, marloweData: datum } <- createLoan
+      lenderWallet
+      lenderApps
+      marloweParams
+      contractNickname
+      borrowerNickname
+      lenderNickname
+      1000
+      100
+    advanceTime $ Minutes 10.0
+    card <- getBy role do
+      nameRegexi "Test loan"
+      pure Listitem
+    withContainer card do
+      void $ findBy text $ pure "Timed out"
+      void $ findBy text $ pure "Lender (you)"
+      void $ findBy text $ pure "Borrower"
+      closeButtons <- traverse shouldCast =<< getAllBy role do
+        nameRegexi "close contract"
+        pure Button
+      let lenderButton = AN.head closeButtons
+      let borrowerButton = AN.last closeButtons
+      lenderButton `shouldHaveText` "Close contract"
+      borrowerButton `shouldHaveText` "Close contract"
+      shouldNotBeDisabled lenderButton
+      shouldBeDisabled borrowerButton
+      click lenderButton
+
+    confirmDialog <- findBy role $ pure Dialog
+    withContainer confirmDialog clickConfirm
+    pure unit
+
+    intervalMin <- adjustInstant (Minutes (10.0)) startTime
+    let intervalMax = top
+    reqId <- getLastUUID
+    let input = transactionInput (timeInterval intervalMin intervalMax) []
+    handlePostApplyInputs lenderApps.marloweAppId reqId marloweParams input
+    sendApplyInputsSuccess lenderApps.marloweAppId reqId
+    sendFollowerUpdate followerId
+      $ contractHistory marloweParams datum [ input ]
+
+    clickM $ getBy role do
+      nameRegexi "completed contracts"
+      pure Link
+
+    completedCard <- findBy role do
+      nameRegexi "Test loan"
+      pure Listitem
+
+    void
+      $ withContainer completedCard
+      $ findBy text
+      $ pure "This contract is now closed"
+
+    clickM $ getBy role do
+      nameRegexi "running contracts"
+      pure Link
+
+    expectError $ getBy role do
+      nameRegexi "Test loan"
+      pure Listitem
 
 loanContract :: Spec Unit
 loanContract = loanContractTest

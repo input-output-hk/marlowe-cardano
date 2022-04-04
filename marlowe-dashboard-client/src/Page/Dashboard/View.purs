@@ -587,6 +587,8 @@ contractNavigation contractFilter =
                   [ classNames $ navItemClasses $ contractFilter == Running
                   , onClick_ $ SetContractFilter Running
                   , id "runningContractsFilter"
+                  , href "#"
+                  , ARIA.label "Running contracts"
                   ]
                   [ icon_ Icon.Running ]
               , tooltip "Running contracts" (RefId "runningContractsFilter")
@@ -595,6 +597,8 @@ contractNavigation contractFilter =
                   [ classNames $ navItemClasses $ contractFilter == Completed
                   , onClick_ $ SetContractFilter Completed
                   , id "completedContractsFilter"
+                  , href "#"
+                  , ARIA.label "Completed contracts"
                   ]
                   [ icon_ Icon.History ]
               , tooltip "Completed contracts" (RefId "completedContractsFilter")
@@ -605,6 +609,7 @@ contractNavigation contractFilter =
                   , href "#"
                   , ARIA.label "Create a new contract"
                   , id "newContractButton"
+                  , href "#"
                   ]
                   [ icon Icon.AddBox [ "text-purple" ] ]
               , tooltip "Create a new contract" (RefId "newContractButton")
