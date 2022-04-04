@@ -35,7 +35,7 @@ instance Explain JsonDecodeError where
 
 instance Explain TransactionError where
   explain TEAmbiguousTimeIntervalError = text
-    "A transaction time interval includes a timeout, so the interpretation is ambiguos"
+    "The transaction was submitted with a time interval which contains a timeout of the contract. This means that the interpretation of the contract is ambiguos, and this transaction should not be accepted on chain."
   explain TEApplyNoMatchError = text
     "The transaction is not allowed by the contract"
   explain (TEIntervalError err) = text $ show err

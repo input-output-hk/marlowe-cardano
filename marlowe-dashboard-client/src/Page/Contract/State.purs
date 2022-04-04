@@ -109,6 +109,7 @@ component =
           { handleAction = handleAction
           , receive = Just <<< Receive
           , initialize = Just Init
+          , finalize = Just Finalize
           }
       }
 
@@ -189,6 +190,9 @@ handleAction Init = do
     -- in the center without any animation
     liftEffect $ scrollStepToCenter Auto step elm
     subscribeToSelectCenteredStep
+
+handleAction Finalize = unsubscribeFromSelectCenteredStep
+
 handleAction (Receive { input, context }) = do
   modify_ _ { currentTime = context.currentTime }
   case input.contractIndex of
@@ -221,8 +225,6 @@ handleAction (ToggleExpandPayment stepNumber) = modifying
   not
 
 handleAction (OnActionSelected action num) = raise $ AskConfirmation action num
-
-handleAction CancelConfirmation = pure unit -- Managed by Dashboard.State
 
 handleAction (SelectStep stepNumber) = assign
   (_contract <<< _Started <<< _selectedStep)

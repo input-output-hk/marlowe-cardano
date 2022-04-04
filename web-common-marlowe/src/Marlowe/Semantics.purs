@@ -1281,7 +1281,7 @@ derive instance eqTransactionError :: Eq TransactionError
 derive instance ordTransactionError :: Ord TransactionError
 
 instance showTransactionError :: Show TransactionError where
-  show TEAmbiguousTimeIntervalError = "Abiguous time interval"
+  show TEAmbiguousTimeIntervalError = "Ambiguous time interval"
   show TEApplyNoMatchError =
     "At least one of the inputs in the transaction is not allowed by the contract"
   show (TEIntervalError err) = show err

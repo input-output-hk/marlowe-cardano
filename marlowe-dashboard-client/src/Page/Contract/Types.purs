@@ -121,12 +121,12 @@ data Msg = AskConfirmation NamedAction (Maybe ChosenNum)
 
 data Action
   = Init
+  | Finalize
   | Receive (Connected Slice Input)
   | SetNickname ContractNickname
   | SelectTab Int Tab
   | ToggleExpandPayment Int
   | OnActionSelected NamedAction (Maybe ChosenNum)
-  | CancelConfirmation
   -- The SelectStep action is what changes the model and causes the card to seem bigger.
   | SelectStep Int
   -- The MoveToStep action scrolls the step carousel so that the indicated step is at the center (without changing the model).
@@ -151,12 +151,12 @@ type Slot m = H.Slot Query Msg m
 
 instance actionIsEvent :: IsEvent Action where
   toEvent Init = Nothing
+  toEvent Finalize = Nothing
   toEvent (Receive _) = Nothing
   toEvent (SetNickname _) = Just $ defaultEvent "SetNickname"
   toEvent (SelectTab _ _) = Just $ defaultEvent "SelectTab"
   toEvent (ToggleExpandPayment _) = Just $ defaultEvent "ToggleExpandPayment"
   toEvent (OnActionSelected _ _) = Nothing
-  toEvent CancelConfirmation = Just $ defaultEvent "CancelConfirmation"
   toEvent (SelectStep _) = Just $ defaultEvent "SelectStep"
   toEvent (MoveToStep _) = Nothing
 
