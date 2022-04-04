@@ -11,6 +11,7 @@ import Data.Maybe (maybe)
 import Data.NewContract (NewContract)
 import Data.Set (Set)
 import Data.Wallet (WalletDetails)
+import Errors.Explain (explainString)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
@@ -103,7 +104,7 @@ reduce store = case _ of
     Left error -> reduce store
       $ ShowToast
       $ errorToast "Error updating contract state with new time"
-      $ Just error
+      $ Just (explainString error)
     Right contracts -> store
       { currentTime = currentTime
       , contracts = contracts
@@ -128,7 +129,7 @@ reduce store = case _ of
         Left error -> reduce store
           $ ShowToast
           $ errorToast "Error adding follower contract"
-          $ Just error
+          $ Just (explainString error)
         Right contracts -> store { contracts = contracts }
   ModifyContractNicknames f -> store
     { contracts = modifyContractNicknames f store.contracts

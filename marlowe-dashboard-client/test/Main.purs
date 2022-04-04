@@ -1,4 +1,6 @@
-module Test.Main where
+module Test.Main
+  ( main
+  ) where
 
 import Prologue
 
@@ -21,6 +23,7 @@ import Test.Data.Address.Bech32.HRP as Bech32HRP
 import Test.Data.Address.Bech32.HRP.CodePoint as HRPCodePoint
 import Test.Halogen (expectMessages, runUITest)
 import Test.Halogen as TH
+import Test.Marlowe.Execution as Execution
 import Test.Marlowe.Run.Action.Scenarios.Contract (contractScenarios)
 import Test.Marlowe.Run.Action.Scenarios.Wallet
   ( createAndRestoreWallet
@@ -49,6 +52,7 @@ main = launchAff_ $ runSpec'
       Bech32HRP.spec
       DataPartCodePoint.spec
       HRPCodePoint.spec
+      Execution.spec
     testingLibrarySpec
     halogenTestingLibrarySpec
     testScripts

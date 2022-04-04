@@ -12,6 +12,7 @@ import Data.Argonaut (JsonDecodeError)
 import Data.List as L
 import Data.Variant (Variant)
 import Data.Variant.Internal as V
+import Marlowe.Semantics (TransactionError(..))
 import Prim.RowList as RL
 import Servant.PureScript (AjaxError)
 import Text.Pretty (Doc, text)
@@ -31,6 +32,14 @@ instance Explain (AjaxError a b) where
 
 instance Explain JsonDecodeError where
   explain _ = text "We received some information that we couldn't recognize."
+
+instance Explain TransactionError where
+  explain TEAmbiguousTimeIntervalError = text
+    "A transaction time interval includes a timeout, so the interpretation is ambiguos"
+  explain TEApplyNoMatchError = text
+    "The transaction is not allowed by the contract"
+  explain (TEIntervalError err) = text $ show err
+  explain TEUselessTransaction = text "The transaction is useless"
 
 class VariantExplain :: RL.RowList Type -> Constraint
 class VariantExplain rl where

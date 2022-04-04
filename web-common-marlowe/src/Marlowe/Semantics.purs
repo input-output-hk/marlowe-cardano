@@ -1538,6 +1538,9 @@ evalObservation env state obs =
 asset :: CurrencySymbol -> TokenName -> BigInt -> Assets
 asset cur tok balance = Assets (Map.singleton cur (Map.singleton tok balance))
 
+ada :: BigInt -> Assets
+ada = asset "" ""
+
 -- | Pick the first account with money in it
 refundOne :: Accounts -> Maybe (Tuple (Tuple Party Money) Accounts)
 refundOne accounts = case Map.toUnfoldable accounts of

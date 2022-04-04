@@ -68,7 +68,7 @@ import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams)
+import Marlowe.Semantics (MarloweParams, TransactionError)
 import Type.Proxy (Proxy(..))
 
 newtype ContractStore = ContractStore ContractStoreFields
@@ -143,8 +143,7 @@ historyUpdated
   -> MetaData
   -> ContractHistory
   -> ContractStore
-  -- TODO: change String for a proper error type
-  -> Either String ContractStore
+  -> Either TransactionError ContractStore
 historyUpdated currentTime followerId metadata history store =
   let
     marloweParams = getMarloweParams history
@@ -241,7 +240,7 @@ modifyContract
   -> ContractStore
 modifyContract marloweParams = over (_startedContracts <<< ix marloweParams)
 
-tick :: Instant -> ContractStore -> Either String ContractStore
+tick :: Instant -> ContractStore -> Either TransactionError ContractStore
 tick currentTime =
   traverseOf
     ( _startedContracts
