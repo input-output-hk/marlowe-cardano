@@ -21,6 +21,8 @@ library
         Marlowe.Run.API
         Marlowe.Run.Env
         Marlowe.Run.Server
+        Marlowe.Run.Contract.V1.API
+        Marlowe.Run.Contract.V1.Types
         Marlowe.Run.Wallet.V1.API
         Marlowe.Run.Wallet.V1.CentralizedTestnet.API
         Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
@@ -29,6 +31,8 @@ library
         Marlowe.Run.WebSocket
     other-modules:
         Marlowe.Run
+        Marlowe.Run.Contract.V1
+        Marlowe.Run.Contract.V1.Server
         Marlowe.Run.Wallet.V1
         Marlowe.Run.Wallet.V1.CentralizedTestnet
         Marlowe.Run.Wallet.V1.CentralizedTestnet.Server
@@ -44,6 +48,7 @@ library
         bytestring -any,
         containers -any,
         unordered-containers,
+        cardano-api -any,
         cardano-addresses -any,
         cardano-wallet-core -any,
         cardano-prelude -any,
@@ -52,6 +57,8 @@ library
         errors,
         http-client -any,
         http-client-tls -any,
+        lens,
+        marlowe-cli,
         monad-logger -any,
         mtl -any,
         playground-common -any,
@@ -87,6 +94,7 @@ executable marlowe-dashboard-server
     build-depends:
         aeson,
         base,
+        cardano-api -any,
         co-log-core,
         co-log >= 0.4.0,
         errors,

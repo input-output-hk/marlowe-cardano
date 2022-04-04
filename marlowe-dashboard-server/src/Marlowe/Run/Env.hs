@@ -6,13 +6,16 @@
 
 module Marlowe.Run.Env where
 
+import Cardano.Api (NetworkId)
 import Colog (HasLog, LogAction, Message, getLogAction, setLogAction)
 import Control.Monad.Reader (MonadReader)
 import Servant.Client (ClientEnv)
 
 data Env m = Env
-  { envClientEnv :: ClientEnv
-  , envLogAction :: !(LogAction m Message)
+  { envClientEnv           :: ClientEnv
+  , envChainIndexClientEnv :: ClientEnv
+  , envNetworkId           :: NetworkId
+  , envLogAction           :: !(LogAction m Message)
   }
 
 instance HasLog (Env m) Message m where

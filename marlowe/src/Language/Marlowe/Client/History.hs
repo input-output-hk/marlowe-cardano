@@ -1,5 +1,3 @@
-
-
 -- | Extraction of Marlowe contracts and history from transaction data.
 
 
@@ -198,7 +196,6 @@ historyFrom address citxs consumed =
       -- The output of the previous step hasn't been consumed, so the contract is still in progress.
       _      -> Nothing
 
-
 -- | Retrieve the states in UTxOs at the validator address.
 marloweUtxoStatesAt :: AsContractError e
                     => SmallTypedValidator                                                 -- ^ The Marlowe validator.
@@ -274,7 +271,6 @@ marloweStatesFrom validator citx =
 toMarloweState :: MarloweTxOutRef  -- ^ The Marlowe-specific output.
                -> MarloweData      -- ^ The Marlowe data.
 toMarloweState = tyTxOutData . tyTxOutRefOut
-
 
 -- | Test whether a transaction created a Marlowe contract.
 creationTxOut :: MarloweParams          -- ^ The Marlowe validator parameters.

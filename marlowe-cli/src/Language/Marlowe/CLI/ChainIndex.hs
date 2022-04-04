@@ -26,6 +26,7 @@ module Language.Marlowe.CLI.ChainIndex (
 , queryAddress
 , queryTransaction
 , queryOutput
+, queryAssetClassUtxos
 ) where
 
 
@@ -42,17 +43,20 @@ import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..))
 import Language.Marlowe.Client.History (histories)
 import Language.Marlowe.Scripts (smallUntypedValidator)
 import Language.Marlowe.Semantics (MarloweData (..), MarloweParams (..))
-import Ledger (ciTxOutDatum, ciTxOutValue)
+import Ledger (ciTxOutDatum, ciTxOutValue, toTxOut)
 import Ledger.Scripts (validatorHash)
 import Ledger.Tx.CardanoAPI (fromCardanoAddress, fromCardanoTxId, fromCardanoValue)
 import Ledger.Typed.Scripts (validatorAddress, validatorScript)
 import Plutus.ChainIndex (Page (..))
-import Plutus.ChainIndex.Api (TxoAtAddressRequest (..), UtxoAtAddressRequest (..), page, paget)
-import Plutus.ChainIndex.Client (getTx, getTxOut, getTxoSetAtAddress, getUtxoSetAtAddress)
+import Plutus.ChainIndex.Api (TxoAtAddressRequest (..), UtxoAtAddressRequest (..),
+                              UtxoWithCurrencyRequest (UtxoWithCurrencyRequest), page, paget)
+import Plutus.ChainIndex.Client (getTx, getTxOut, getTxoSetAtAddress, getUtxoSetAtAddress, getUtxoSetWithCurrency)
 import Plutus.V1.Ledger.Api (Address (..), Credential (..), CurrencySymbol, Datum (..), FromData, TxOutRef, Value,
                              fromBuiltinData, txOutRefId)
 import Servant.Client (ClientM)
 
+import Ledger.Tx (TxOut)
+import Plutus.V1.Ledger.Value (AssetClass)
 import qualified Plutus.V1.Ledger.Value as V (flattenValue, geq)
 
 
@@ -103,6 +107,24 @@ queryCredential f spent credential =
   in
     go Nothing
 
+-- | Query transactions for an asset class.
+queryAssetClass :: (TxOutRef -> ClientM a)  -- ^ Query relevant information from transaction output.
+                -> AssetClass               -- ^ The asset class to query.
+                -> ClientM [a]              -- ^ Action to query the asset class.
+queryAssetClass f assetClass =
+  let
+    getSet query =
+      fmap page . getUtxoSetWithCurrency  $ UtxoWithCurrencyRequest query assetClass
+    go thisPageQuery =
+      do
+        Page{..} <- getSet thisPageQuery
+        items <- mapM f pageItems
+        (items <>) <$> maybe (pure []) (go . Just) nextPageQuery
+  in
+    go Nothing
+
+queryAssetClassUtxos :: AssetClass -> ClientM [TxOut]
+queryAssetClassUtxos = queryAssetClass $ fmap toTxOut <$> getTxOut
 
 -- | Query Marlowe output of a script.
 queryScript :: FromData a

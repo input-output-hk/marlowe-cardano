@@ -10,6 +10,7 @@ import Cardano.Prelude hiding (Handler)
 import Colog.Core.Action (hoistLogAction)
 import Marlowe.Run (getVersion)
 import Marlowe.Run.API (API)
+import qualified Marlowe.Run.Contract.V1.Server as Contract
 import Marlowe.Run.Env (Env, envLogAction)
 import qualified Marlowe.Run.Wallet.V1.Server as Wallet
 import qualified Marlowe.Run.WebSocket as WS
@@ -25,6 +26,7 @@ handlers env =
         :<|>
           ( getVersion
           :<|> Wallet.handlers
+          :<|> Contract.handlers
           )
         )
     where
