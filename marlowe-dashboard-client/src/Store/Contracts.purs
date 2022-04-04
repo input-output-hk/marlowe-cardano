@@ -23,12 +23,14 @@ module Store.Contracts
 
 import Prologue
 
+import Control.Alt ((<|>))
 import Control.Apply (lift2)
 import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
-import Data.Foldable (foldr)
+import Data.Foldable (find, foldr)
+import Data.FoldableWithIndex (findWithIndex)
 import Data.Lens
   ( Lens'
   , filtered
@@ -52,12 +54,15 @@ import Data.LocalContractNicknames
 import Data.LocalContractNicknames as LocalContractNicknames
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Maybe (maybe)
 import Data.NewContract (NewContract(..), _newContractError)
+import Data.NewContract as NC
 import Data.Set (Set)
 import Data.Tuple (uncurry)
-import Data.UUID.Argonaut (UUID)
+import Data.UUID.Argonaut (UUID, emptyUUID)
 import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Client (getMarloweParams)
+import Marlowe.Client as Client
 import Marlowe.Execution.State (isClosed, restoreState) as Execution
 import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
@@ -126,7 +131,7 @@ followerAppsActivated apps = over _contractIndex \index ->
   foldr (uncurry Bimap.insert) index apps
 
 contractCreated :: NewContract -> ContractStore -> ContractStore
-contractCreated newContract@(NewContract reqId _ _ _) =
+contractCreated newContract@(NewContract reqId _ _ _ _) =
   over _newContracts $ Map.insert reqId newContract
 
 -- Called upon receipt of a ContractHistory record from the follower app.
@@ -143,7 +148,10 @@ historyUpdated
 historyUpdated currentTime followerId metadata history store =
   let
     marloweParams = getMarloweParams history
+    mNewContract =
+      newContractById marloweParams store <|> newContractByMatch store
     mContractNickname = getContractNickname marloweParams store
+      <|> NC.getContractNickname <$> mNewContract
     updateIndexes = over _contractIndex $ Bimap.insert marloweParams
       followerId
     updateSyncedContracts = traverseOf _startedContracts
@@ -159,19 +167,26 @@ historyUpdated currentTime followerId metadata history store =
           )
           <<< pure
   in
-    removeNewContractIfNoLongerNeeded marloweParams <<< updateIndexes
-      <$> updateSyncedContracts store
+    map
+      ( maybe identity (removeNewContract marloweParams) mNewContract
+          <<< updateIndexes
+      )
+      (updateSyncedContracts store)
   where
-  removeNewContractIfNoLongerNeeded marloweParams (ContractStore s) =
-    -- Was this called before or after `contractStarted`?
-    ContractStore case Map.lookup marloweParams s.newMarloweParams of
-      -- If not, we don't need to do anything here.
-      Nothing -> s
-      -- If so, we need to delete the newContract and the request ID mapping.
-      Just reqId -> s
-        { newContracts = Map.delete reqId s.newContracts
-        , newMarloweParams = Map.delete marloweParams s.newMarloweParams
-        }
+  newContractById marloweParams (ContractStore s) =
+    flip Map.lookup s.newContracts
+      =<< Map.lookup marloweParams s.newMarloweParams
+  newContractByMatch (ContractStore s) =
+    find (matchingContract emptyUUID) s.newContracts
+  matchingContract _ (NewContract _ _ _ _ contract) =
+    contract == Client.getContract history
+  removeNewContract
+    marloweParams
+    (NewContract reqId _ _ _ _)
+    (ContractStore s) = ContractStore s
+    { newContracts = Map.delete reqId s.newContracts
+    , newMarloweParams = Map.delete marloweParams s.newMarloweParams
+    }
 
 -- Called upon receipt of the MarloweParams when creating a contract.
 -- May be called before or after the first call to `historyUpdate`, and we have
@@ -181,7 +196,7 @@ contractStarted
   -> MarloweParams
   -> ContractStore
   -> ContractStore
-contractStarted (NewContract reqId nickname _ _) marloweParams =
+contractStarted (NewContract reqId nickname _ _ _) marloweParams =
   removeNewContractIfNoLongerNeeded
     <<< modifyContractNicknames (insertContractNickname marloweParams nickname)
   where
@@ -210,7 +225,7 @@ contractStartFailed
   -> MarloweError
   -> ContractStore
   -> ContractStore
-contractStartFailed (NewContract reqId _ _ _) =
+contractStartFailed (NewContract reqId _ _ _ _) =
   set (_newContracts <<< ix reqId <<< _newContractError) <<< Just
 
 modifyContractNicknames

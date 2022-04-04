@@ -87,6 +87,7 @@ contractScenarios = do
   loanContract
   startContractCompanionBeforeMarloweApp
   startContractMarloweAppBeforeCompanion
+  startContractMarloweAppHangs
   startContractMarloweAppFails
   loanContractTimeout
 
@@ -249,6 +250,32 @@ startContractCompanionBeforeMarloweApp = loanContractTest
     handlePostFollow followerId marloweParams
     assertStartingContractShown
     sendCreateSuccess lenderApps.marloweAppId reqId marloweParams
+    assertStartingContractShown
+    sendFollowerUpdate followerId
+      $ contractHistory marloweParams (marloweData contract contractState) []
+    assertStartedContractShown
+    expectError assertStartingContractShown
+
+startContractMarloweAppHangs :: Spec Unit
+startContractMarloweAppHangs = loanContractTest
+  "The MarloweApp hangs"
+  \lenderNickname borrowerNickname -> do
+    -- Arrange
+    { contract, contractState, lenderApps, marloweParams, lenderWallet } <-
+      setupLoanWithoutNotifications lenderNickname borrowerNickname
+    -- Act
+    assertStartingContractShown
+    sendWalletCompanionUpdate lenderApps.walletCompanionId
+      [ Tuple marloweParams $ marloweData contract contractState
+      ]
+    assertStartingContractShown
+    followerId <- generateUUID
+    handlePostActivate lenderWallet.walletId MarloweFollower followerId
+    assertStartingContractShown
+    recvInstanceSubscribe followerId
+    sendNewActiveEndpoints followerId followerEndpoints
+    handlePostFollow followerId marloweParams
+    assertStartingContractShown
     assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []

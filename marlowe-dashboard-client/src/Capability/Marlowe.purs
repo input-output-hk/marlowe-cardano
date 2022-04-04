@@ -122,7 +122,9 @@ instance
 
       -- We save in the store the request of a created contract with
       -- the information relevant to show a placeholder of a starting contract.
-      let newContract = NewContract reqId nickname template.metaData Nothing
+      let
+        newContract =
+          NewContract reqId nickname template.metaData Nothing contract
       lift $ updateStore $ Store.ContractCreated newContract
 
       -- Already fork and await the pending result here, so we don't have to

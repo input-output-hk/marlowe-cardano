@@ -52,7 +52,7 @@ import Marlowe.Execution.State (expandBalances, extractNamedActions)
 import Marlowe.Execution.Types (PastAction(..))
 import Marlowe.Execution.Types (PastState, State, TimeoutInfo) as Execution
 import Marlowe.Extended.Metadata (emptyContractMetadata)
-import Marlowe.Semantics (_accounts)
+import Marlowe.Semantics (Contract(..), _accounts)
 import Page.Contract.Lenses
   ( _Started
   , _contract
@@ -113,8 +113,12 @@ component =
       }
 
 dummyState :: ContractState
-dummyState = Starting $
-  NewContract emptyUUID ContractNickname.unknown emptyContractMetadata Nothing
+dummyState = Starting $ NewContract
+  emptyUUID
+  ContractNickname.unknown
+  emptyContractMetadata
+  Nothing
+  Close
 
 deriveState :: Connected Slice Input -> State
 deriveState

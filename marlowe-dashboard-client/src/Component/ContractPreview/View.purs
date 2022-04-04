@@ -127,7 +127,7 @@ contractPreviewCard
 contractStartingPreviewCard
   :: forall m. MonadAff m => NewContract -> ComponentHTML Action ChildSlots m
 contractStartingPreviewCard
-  (NewContract reqId contractNickname metadata mError) =
+  (NewContract reqId contractNickname metadata mError _) =
   let
     nickname = ContractNickname.toString contractNickname
 
