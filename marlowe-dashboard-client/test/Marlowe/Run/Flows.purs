@@ -33,24 +33,24 @@ import Data.UUID.Argonaut (UUID)
 import Data.WalletNickname (WalletNickname)
 import Data.WalletNickname as WN
 import Effect.Aff (Error)
-import Language.Marlowe.Client (ContractHistory(..))
+import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (_chInitialData, _chParams, getMarloweParams)
 import Marlowe.Run.Wallet.V1.Types (WalletInfo(..))
 import Marlowe.Semantics
   ( Assets(..)
   , Contract
+  , MarloweData
   , MarloweParams
   , Party(..)
   , _rolesCurrency
   )
 import Marlowe.Semantics as Semantics
 import MarloweContract (MarloweContract(..))
-import Plutus.V1.Ledger.Address as PAB
-import Plutus.V1.Ledger.Credential (Credential(..))
 import Test.Control.Monad.UUID (class MonadMockUUID, getNextUUID)
 import Test.Data.Marlowe
   ( adaToken
   , companionEndpoints
+  , contractHistory
   , followerEndpoints
   , fromNow
   , loan
@@ -266,7 +266,7 @@ createLoan
   -> WalletNickname
   -> Int
   -> Int
-  -> m UUID
+  -> m { followerId :: UUID, marloweData :: MarloweData }
 createLoan
   wallet
   { marloweAppId, walletCompanionId }
@@ -295,16 +295,9 @@ createLoan
   recvInstanceSubscribe followerId
   sendNewActiveEndpoints followerId followerEndpoints
   handlePostFollow followerId params
-  sendFollowerUpdate followerId $ ContractHistory
-    { chAddress: PAB.Address
-        { addressCredential: ScriptCredential ""
-        , addressStakingCredential: Nothing
-        }
-    , chParams: params
-    , chInitialData: marloweData contract contractState
-    , chHistory: []
-    }
-  pure followerId
+  sendFollowerUpdate followerId
+    $ contractHistory params (marloweData contract contractState) []
+  pure { followerId, marloweData: marloweData contract contractState }
 
 createLoanWithoutUpdates
   :: forall m r

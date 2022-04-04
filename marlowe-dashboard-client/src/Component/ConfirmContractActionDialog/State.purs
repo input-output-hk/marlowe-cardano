@@ -133,13 +133,13 @@ handleAction (ConfirmAction) = do
       addToast $ successToast "Transaction submitted, awating confirmation."
       H.raise DialogClosed
       mResult <- liftAff awaitResult
+      updateStore $ Store.ModifySyncedContract
+        marloweParams
+        removePendingTransaction
       case mResult of
         Right _ -> do
           addToast $ successToast "Contract update applied."
         Left error -> do
-          updateStore $ Store.ModifySyncedContract
-            marloweParams
-            removePendingTransaction
           globalError "Failed to update contract" error
 
 toInput :: NamedAction -> Maybe ChosenNum -> Maybe Semantic.Input

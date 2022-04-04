@@ -22,7 +22,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.UUID (class MonadUUID)
 import Control.Monad.Unlift (class MonadUnlift)
 import Control.Monad.Writer (WriterT)
-import Data.Enum (succ)
+import Data.Enum (pred, succ)
 import Data.Maybe (fromMaybe)
 import Data.UUID.Argonaut (UUID)
 import Data.UniqueIdentifier (UniqueIdentifier, toUUID)
@@ -71,7 +71,7 @@ instance MonadEffect m => MonadMockUUID (MockUuidM m) where
   getLastUUID = do
     uuidRef <- MockUuidM ask
     uuid <- liftEffect $ Ref.read uuidRef
-    pure $ toUUID $ fromMaybe bottom $ succ uuid
+    pure $ toUUID $ fromMaybe top $ pred uuid
 
 newtype MockUuidM (m :: Type -> Type) a =
   MockUuidM (ReaderT (Ref UniqueIdentifier) m a)

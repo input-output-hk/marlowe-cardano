@@ -52,6 +52,8 @@ import Test.Assertions (shouldEqualJson)
 import Test.Data.Marlowe
   ( applyInputsContent
   , applyInputsEndpoint
+  , applyInputsExceptionMessage
+  , applyInputsSuccessMessage
   , createContent
   , createEndpoint
   , createExceptionMessage
@@ -536,6 +538,30 @@ sendCreateException
 sendCreateException appId reqId =
   sendWebsocketMessage "Create exception"
     <<< createExceptionMessage appId reqId
+
+sendApplyInputsSuccess
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadLogger String m
+  => UUID
+  -> UUID
+  -> m Unit
+sendApplyInputsSuccess appId =
+  sendWebsocketMessage "ApplyInputs success" <<< applyInputsSuccessMessage appId
+
+sendApplyInputsException
+  :: forall m
+   . MonadAsk Coenv m
+  => MonadEffect m
+  => MonadLogger String m
+  => UUID
+  -> UUID
+  -> MarloweError
+  -> m Unit
+sendApplyInputsException appId reqId =
+  sendWebsocketMessage "ApplyInputs exception"
+    <<< applyInputsExceptionMessage appId reqId
 
 sendWalletCompanionUpdate
   :: forall f m

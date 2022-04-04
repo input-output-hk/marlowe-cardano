@@ -27,7 +27,9 @@ import Data.DateTime.Instant (Instant, instant, unInstant)
 import Data.Either (either)
 import Data.Enum (class BoundedEnum, Cardinality(..), cardinality, toEnum)
 import Data.Foldable (class Foldable, fold)
+import Data.Function (on)
 import Data.Int (hexadecimal, toStringAs)
+import Data.List as L
 import Data.List.Lazy (replicateM)
 import Data.Map (Map)
 import Data.Map as Map
@@ -52,7 +54,7 @@ import Effect.Aff (Error, error)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Random (randomInt)
 import Language.Marlowe.Client
-  ( ContractHistory
+  ( ContractHistory(..)
   , EndpointResponse(..)
   , MarloweEndpointResult(..)
   , MarloweError
@@ -70,6 +72,7 @@ import Marlowe.Semantics
   , ChoiceId
   , Contract(..)
   , CurrencySymbol
+  , Input(..)
   , MarloweData(..)
   , MarloweParams(..)
   , Party(..)
@@ -84,6 +87,8 @@ import Marlowe.Semantics
   , ValueId
   )
 import Plutus.PAB.Webserver.Types (CombinedWSStreamToClient)
+import Plutus.V1.Ledger.Address as PAB
+import Plutus.V1.Ledger.Credential (Credential(..))
 import Plutus.V1.Ledger.Time (POSIXTime(..))
 import Plutus.V1.Ledger.Value as PV
 import Safe.Coerce (coerce)
@@ -316,11 +321,38 @@ constant = Constant <<< BigInt.fromInt
 addConstant :: Int -> Int -> Value
 addConstant a b = AddValue (constant a) (constant b)
 
-depositAda :: AccountId -> Party -> Value -> Contract -> Case
-depositAda account party = Case <<< Deposit account party adaToken
+depositsAda :: AccountId -> Party -> Value -> Contract -> Case
+depositsAda account party = Case <<< Deposit account party adaToken
 
 payPartyAda :: AccountId -> Party -> Value -> Contract -> Contract
 payPartyAda account party value = Pay account (Party party) adaToken value
+
+iDepositRoleAda :: TokenName -> TokenName -> Int -> Input
+iDepositRoleAda account party = IDeposit (Role account) (Role party) adaToken
+  <<< BigInt.fromInt
+  <<< (_ * 1000000)
+
+timeInterval :: Instant -> Instant -> TimeInterval
+timeInterval = on TimeInterval POSIXTime
+
+transactionInput
+  :: forall f. Foldable f => TimeInterval -> f Input -> TransactionInput
+transactionInput interval inputs = TransactionInput
+  { interval
+  , inputs: L.fromFoldable inputs
+  }
+
+contractHistory
+  :: MarloweParams -> MarloweData -> Array TransactionInput -> ContractHistory
+contractHistory chParams chInitialData chHistory = ContractHistory
+  { chAddress: PAB.Address
+      { addressCredential: ScriptCredential ""
+      , addressStakingCredential: Nothing
+      }
+  , chParams
+  , chInitialData
+  , chHistory
+  }
 
 -------------------------------------------------------------------------------
 -- Loan Contract
@@ -351,10 +383,10 @@ loan loanDeadline repaymentDeadline amount interest =
     repaymentValue = (interest * 1000000) `addConstant` (amount * 1000000)
   in
     mkWhenClose loanDeadline
-      [ depositAda lender lender loanValue do
+      [ depositsAda lender lender loanValue do
           payPartyAda lender borrower loanValue do
             mkWhenClose repaymentDeadline do
-              [ depositAda borrower borrower repaymentValue do
+              [ depositsAda borrower borrower repaymentValue do
                   payPartyAda borrower lender repaymentValue Close
               ]
       ]
