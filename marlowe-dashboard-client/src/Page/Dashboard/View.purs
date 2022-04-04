@@ -256,7 +256,7 @@ dashboardCard state = case view _card state of
                   ContractActionConfirmationCard input ->
                     slot
                       _confirmActionDialog
-                      input.executionState.marloweParams
+                      unit
                       ConfirmContractActionDialog.component
                       input
                       (\DialogClosed -> CloseCard)

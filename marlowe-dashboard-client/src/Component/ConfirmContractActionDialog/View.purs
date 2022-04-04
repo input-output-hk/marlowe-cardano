@@ -15,6 +15,12 @@ import Component.ConfirmContractActionDialog.Types
   ( Action(..)
   , ComponentHTML
   , State
+  , _action
+  , _contractUserParties
+  , _executionState
+  , _transactionFeeQuote
+  , _txInput
+  , _wallet
   )
 import Component.Contacts.State (getAda)
 import Component.Expand as Expand
@@ -47,8 +53,10 @@ import Marlowe.Semantics (ChoiceId(..), Contract(..), TransactionOutput(..)) as 
 import Marlowe.Semantics (Token(..), computeTransaction)
 
 render :: forall m. MonadAff m => State -> ComponentHTML m
-render state@{ action, executionState } =
+render state =
   let
+    action = state ^. _action
+    executionState = state ^. _executionState
     stepNumber = currentStep executionState + 1
   in
     column Column.Divided [ "h-full", "grid", "grid-rows-auto-1fr-auto" ]
@@ -69,7 +77,9 @@ render state@{ action, executionState } =
       ]
 
 summary :: forall m. Monad m => State -> ComponentHTML m
-summary state@{ action, contractUserParties } =
+summary state = do
+  let action = state ^. _action
+  let contractUserParties = state ^. _contractUserParties
   sectionBox [ "overflow-y-scroll" ]
     $ column Column.Divided [ "space-y-4" ]
         [ column default []
@@ -120,7 +130,7 @@ results
   => State
   -> Expand.State
   -> Expand.ComponentHTML ChildSlots Void m
-results { action, contractUserParties, executionState, txInput } = case _ of
+results state = case _ of
   Expand.Opened ->
     layout Icon.ExpandLess
       $ box Box.Card []
@@ -141,6 +151,10 @@ results { action, contractUserParties, executionState, txInput } = case _ of
                   []
   Expand.Closed -> layout Icon.ExpandMore []
   where
+  action = state ^. _action
+  contractUserParties = state ^. _contractUserParties
+  executionState = state ^. _executionState
+  txInput = state ^. _txInput
   layout icon children =
     column Column.Snug []
       $
@@ -155,25 +169,22 @@ results { action, contractUserParties, executionState, txInput } = case _ of
 
   semanticState = executionState.semanticState
 
-  txOutput = computeTransaction
-    <$> txInput
-    <*> pure semanticState
-    <*> pure contract
+  txOutput = computeTransaction txInput semanticState contract
 
   payments = case txOutput of
-    Just (Semantics.TransactionOutput { txOutPayments }) ->
+    Semantics.TransactionOutput { txOutPayments } ->
       fromFoldable txOutPayments
     _ -> []
 
   willClose = case txOutput of
-    Just (Semantics.TransactionOutput { txOutContract }) ->
+    Semantics.TransactionOutput { txOutContract } ->
       txOutContract == Semantics.Close
     _ -> action == CloseContract
 
   count = length payments + if willClose then 1 else 0
 
 confirmation :: forall m. MonadAff m => State -> ComponentHTML m
-confirmation { action, transactionFeeQuote, wallet } =
+confirmation state =
   column Column.Divided []
     [ sectionBox [ "bg-lightgray" ]
         $ row Row.Between []
@@ -205,7 +216,7 @@ confirmation { action, transactionFeeQuote, wallet } =
                     , caption: "Confirm"
                     , styles: [ "flex-1" ]
                     , enabled: true
-                    , handler: ConfirmAction action
+                    , handler: ConfirmAction
                     }
                 ]
             ]
@@ -221,6 +232,9 @@ confirmation { action, transactionFeeQuote, wallet } =
             ]
     ]
   where
+  action = state ^. _action
+  transactionFeeQuote = state ^. _transactionFeeQuote
+  wallet = state ^. _wallet
   walletBalance = getAda $ wallet ^. _assets
 
   total =

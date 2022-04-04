@@ -9,19 +9,25 @@ import Capability.Toast (class Toast, addToast)
 import Component.ConfirmContractActionDialog.Types
   ( Action(..)
   , DSL
+  , Derived
   , Input
+  , Input'
   , Msg(..)
-  , State
+  , _executionState
+  , _pendingFiber
+  , _txInput
+  , _wallet
   )
+import Component.ConfirmContractActionDialog.Types as CCAD
 import Component.ConfirmContractActionDialog.View (render)
 import Component.LoadingSubmitButton.Types (Query(..), _submitButtonSlot)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Logger.Structured (StructuredLog)
 import Control.Monad.Fork.Class (class MonadKill, fork, kill)
 import Control.Monad.Fork.Class as MF
-import Control.Monad.Now (class MonadTime, now)
-import Control.Monad.State (get)
+import Control.Monad.Now (class MonadTime)
 import Data.ContractUserParties (contractUserParties)
+import Data.Lens (assign, use)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Unfoldable as Unfoldable
 import Effect.Aff (Error, Fiber, error)
@@ -29,7 +35,10 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Exception.Unsafe (unsafeThrow)
 import Errors (globalError)
 import Halogen as H
+import Halogen.Component.Reactive as HR
+import Halogen.Store.Connect (connect)
 import Halogen.Store.Monad (class MonadStore, updateStore)
+import Halogen.Store.Select (selectEq)
 import Marlowe.Execution.State
   ( mkTx
   , removePendingTransaction
@@ -44,7 +53,7 @@ import Toast.Types (successToast)
 
 --
 component
-  :: forall query m
+  :: forall m
    . MonadAff m
   => MonadKill Error Fiber m
   => ManageMarlowe m
@@ -52,34 +61,28 @@ component
   => MonadStore Store.Action Store.Store m
   => MonadTime m
   => Toast m
-  => H.Component query Input Msg m
-component =
-  H.mkComponent
-    { initialState: mkInitialState
-    , render
-    , eval: H.mkEval H.defaultEval
-        { handleAction = handleAction
+  => H.Component CCAD.Query Input Msg m
+component = connect (selectEq _.currentTime) $
+  HR.mkReactiveComponent
+    { deriveState
+    , initialTransient:
+        { pendingFiber: Nothing
         }
+    , render
+    , eval: HR.fromHandleAction handleAction
     }
 
-mkInitialState :: Input -> State
-mkInitialState
-  { action
-  , executionState
-  , wallet
-  , chosenNum
-  } =
+deriveState :: Input' -> Derived
+deriveState { context, input } =
   let
+    { action, executionState, wallet, chosenNum } = input
+    currentTime = context
     { marloweParams, contract } = executionState
+    contractInput = toInput action chosenNum
   in
-    { action
-    , executionState
-    , contractUserParties: contractUserParties wallet marloweParams contract
+    { contractUserParties: contractUserParties wallet marloweParams contract
     , transactionFeeQuote: transactionFee
-    , txInput: Nothing
-    , wallet
-    , chosenNum
-    , pendingFiber: Nothing
+    , txInput: mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
     }
 
 handleAction
@@ -94,29 +97,27 @@ handleAction
   => Action
   -> DSL m Unit
 handleAction CancelConfirmation = do
-  mPendingFiber <- H.gets _.pendingFiber
+  mPendingFiber <- use _pendingFiber
   case mPendingFiber of
     Nothing -> H.raise DialogClosed
     Just pendingFiber -> do
-      H.modify_ _ { pendingFiber = Nothing }
+      assign _pendingFiber Nothing
       H.lift $ kill (error "killed") pendingFiber
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
         (Milliseconds 600.0)
         (Left "Cancelled")
 
 {- [UC-CONTRACT-3][0] Apply an input to a contract -}
-handleAction (ConfirmAction namedAction) = do
-  { wallet, executionState, chosenNum } <- get
-  currentTime <- now
-  let
-    { marloweParams, contract } = executionState
-    contractInput = toInput namedAction chosenNum
-    txInput = mkTx currentTime contract $ Unfoldable.fromMaybe contractInput
+handleAction (ConfirmAction) = do
+  wallet <- use _wallet
+  executionState <- use _executionState
+  txInput <- use _txInput
+  let { marloweParams } = executionState
   ajaxApplyInputsF <-
     H.lift $ fork $ applyTransactionInput wallet marloweParams txInput
-  H.modify_ _ { pendingFiber = Just $ void ajaxApplyInputsF }
+  assign _pendingFiber $ Just $ void ajaxApplyInputsF
   ajaxApplyInputs <- H.lift $ MF.join ajaxApplyInputsF
-  H.modify_ _ { pendingFiber = Nothing }
+  assign _pendingFiber Nothing
   case ajaxApplyInputs of
     Left ajaxError -> do
       void $ H.tell _submitButtonSlot "action-confirm-button" $ SubmitResult
