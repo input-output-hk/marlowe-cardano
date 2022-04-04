@@ -15,7 +15,6 @@ import Capability.PlutusApps.FollowerApp (class FollowerApp)
 import Capability.Toast (class Toast)
 import Capability.Wallet (class ManageWallet)
 import Clipboard (class MonadClipboard)
-import Control.Bind (bindFlipped)
 import Control.Logger.Capability (class MonadLogger)
 import Control.Monad.Base (class MonadBase)
 import Control.Monad.Cont (class MonadCont, class MonadTrans, ContT)
@@ -155,7 +154,7 @@ instance (MonadEffect m, MonadThrow Error m) => MonadMockTime (MockTimeM m) wher
         { state: snd <$> clockTableSplit
         , value: sortWith fst
             $ L.toUnfoldable
-            $ bindFlipped (LL.toUnfoldable <<< fst)
+            $ L.mapMaybe (LL.last <<< fst)
             $ Map.values clockTableSplit
         }
 
