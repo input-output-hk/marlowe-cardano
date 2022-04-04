@@ -276,7 +276,6 @@ startContractMarloweAppHangs = loanContractTest
     sendNewActiveEndpoints followerId followerEndpoints
     handlePostFollow followerId marloweParams
     assertStartingContractShown
-    assertStartingContractShown
     sendFollowerUpdate followerId
       $ contractHistory marloweParams (marloweData contract contractState) []
     assertStartedContractShown
