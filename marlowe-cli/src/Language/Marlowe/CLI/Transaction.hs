@@ -40,6 +40,7 @@ module Language.Marlowe.CLI.Transaction (
 , hashSigningKey
 , queryAlonzo
 , queryUtxos
+, selectUtxos
 , submitBody
 ) where
 
@@ -67,9 +68,10 @@ import Cardano.Api (AddressAny, AddressInEra (..), AlonzoEra, AsType (..), Asset
                     ValidityUpperBoundSupportedInEra (..), Value, WitCtxTxIn, Witness (..), anyAddressInEra,
                     castVerificationKey, getTxId, getVerificationKey, hashScript, hashScriptData, lovelaceToValue,
                     makeShelleyAddressInEra, makeTransactionBodyAutoBalance, metadataFromJson, negateValue,
-                    queryNodeLocalState, readFileTextEnvelope, selectLovelace, serialiseToCBOR, serialiseToRawBytesHex,
-                    signShelleyTransaction, submitTxToNodeLocal, toAddressAny, txOutValueToValue, valueFromList,
-                    valueToList, valueToLovelace, verificationKeyHash, writeFileTextEnvelope)
+                    queryNodeLocalState, readFileTextEnvelope, selectAsset, selectLovelace, serialiseToCBOR,
+                    serialiseToRawBytesHex, signShelleyTransaction, submitTxToNodeLocal, toAddressAny,
+                    txOutValueToValue, valueFromList, valueToList, valueToLovelace, verificationKeyHash,
+                    writeFileTextEnvelope)
 import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolParamMaxBlockExUnits,
                             protocolParamMaxTxExUnits, protocolParamMaxTxSize)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
@@ -79,7 +81,8 @@ import Control.Monad (forM_, when, (<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (isNothing, maybeToList)
 import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, readSigningKey)
-import Language.Marlowe.CLI.Types (CliError (..), PayFromScript (..), PayToScript (..), SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (CliError (..), OutputQuery (..), PayFromScript (..), PayToScript (..),
+                                   SomePaymentSigningKey)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import Plutus.V1.Ledger.Api (Datum (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import System.IO (hPutStrLn, stderr)
@@ -873,3 +876,29 @@ queryUtxos connection =
     . QueryUTxO
     . QueryUTxOByAddress
     . S.singleton
+
+
+-- | Select a UTxOs at an address.
+selectUtxos :: MonadError CliError m
+            => MonadIO m
+            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+            -> AddressAny                        -- ^ The address.
+            -> OutputQuery                       -- ^ Filter for the results.
+            -> m ()                              -- ^ Action query the UTxOs.
+selectUtxos connection address query =
+  do
+    UTxO candidates <- queryUtxos connection address
+    let
+      query' (_, TxOut _ value' _) =
+        let
+          value = txOutValueToValue value'
+          count = length $ valueToList value
+        in
+          case query of
+            AllOutput        -> True
+            LovelaceOnly{..} -> count == 1 && selectLovelace value    >= lovelace
+            AssetOnly{..}    -> count == 2 && selectAsset value asset >= 1
+    liftIO
+      . mapM_ (\(TxIn txId (TxIx txIx), _) -> putStrLn $ init (tail $ show txId) <> "#" <> show txIx)
+      . filter query'
+      $ M.toList candidates

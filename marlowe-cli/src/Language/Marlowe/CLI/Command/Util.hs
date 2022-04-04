@@ -29,9 +29,10 @@ import Cardano.Api (AddressAny, ConsensusModeParams (CardanoModeParams), EpochSl
                     lovelaceToValue)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseSlotNo, parseTokenName)
-import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting)
-import Language.Marlowe.CLI.Types (CliError)
+import Language.Marlowe.CLI.Command.Parse (parseAddressAny, parseNetworkId, parseOutputQuery, parseSlotNo,
+                                           parseTokenName)
+import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet', buildMinting, selectUtxos)
+import Language.Marlowe.CLI.Types (CliError, OutputQuery)
 import Plutus.V1.Ledger.Api (TokenName)
 
 import qualified Options.Applicative as O
@@ -74,6 +75,14 @@ data UtilCommand =
     , bodyFile      :: FilePath         -- ^ The output file for the transaction body.
     , submitTimeout :: Maybe Int        -- ^ Whether to submit the transaction, and its confirmation timeout in secontds.
     , addresses     :: [AddressAny]     -- ^ The addresses.
+    }
+    -- | Select UTxO by asset.
+  | Output
+    {
+      network    :: Maybe NetworkId  -- ^ The network ID, if any.
+    , socketPath :: FilePath         -- ^ The path to the node socket.
+    , query      :: OutputQuery      -- ^ Filter the query results.
+    , address    :: AddressAny       -- ^ The addresses.
     }
 
 
@@ -125,6 +134,10 @@ runUtilCommand command =
                       bodyFile
                       submitTimeout
                       >>= printTxId
+      Output{..} -> selectUtxos
+                      connection
+                      address
+                      query
 
 
 -- | Parser for miscellaneous commands.
@@ -135,6 +148,7 @@ parseUtilCommand =
     <> cleanCommand
     <> faucetCommand
     <> mintCommand
+    <> selectCommand
 
 
 -- | Parser for the "clean" command.
@@ -201,3 +215,21 @@ faucetOptions =
     <*> O.strOption                            (O.long "out-file"                               <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
     <*> (O.optional . O.option O.auto)         (O.long "submit"                                 <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
     <*> O.some (O.argument parseAddressAny     $                                                   O.metavar "ADDRESS"       <> O.help "The addresses to receive the funds."                        )
+
+
+-- | Parser for the "select" command.
+selectCommand :: O.Mod O.CommandFields UtilCommand
+selectCommand =
+  O.command "select"
+    $ O.info selectOptions
+    $ O.progDesc "Select UTxO by asset."
+
+
+-- | Parser for the "select" options.
+selectOptions :: O.Parser UtilCommand
+selectOptions =
+  Output
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic" <> O.metavar "INTEGER"     <> O.help "Network magic, or omit for mainnet."       )
+    <*> O.strOption                            (O.long "socket-path"   <> O.metavar "SOCKET_FILE" <> O.help "Location of the cardano-node socket file." )
+    <*> parseOutputQuery
+    <*> O.argument parseAddressAny             (                          O.metavar "ADDRESS"     <> O.help "The address."                              )
