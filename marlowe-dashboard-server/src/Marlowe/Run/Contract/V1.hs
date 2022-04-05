@@ -12,7 +12,7 @@ import Plutus.V1.Ledger.Value (AssetClass (AssetClass))
 import Prelude
 
 getRoleToken :: Monad m
-             => (AssetClass -> m [TxOut ])
+             => (AssetClass -> m [TxOut])
              -> NetworkId
              -> CurrencySymbol
              -> TokenName

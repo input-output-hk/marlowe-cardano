@@ -16,6 +16,7 @@ import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple)
 import Data.WalletId (WalletId)
+import Marlowe.Run.Contract.V1.Types (RoleToken)
 import Marlowe.Run.Wallet.V1 (GetTotalFundsResponse)
 import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   ( CreatePostData
@@ -23,6 +24,7 @@ import Marlowe.Run.Wallet.V1.CentralizedTestnet.Types
   , RestorePostData
   )
 import Marlowe.Run.Wallet.V1.Types (WalletInfo)
+import Marlowe.Semantics (CurrencySymbol, TokenName)
 import Servant.PureScript
   ( class MonadAjax
   , AjaxError
@@ -142,5 +144,37 @@ postApiWalletV1CentralizedtestnetCreate reqBody =
     , "v1"
     , "centralized-testnet"
     , "create"
+    ]
+  query = Nothing
+
+getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+  :: forall m
+   . MonadAjax Api m
+  => CurrencySymbol
+  -> TokenName
+  -> m (Either (AjaxError JsonDecodeError Json) RoleToken)
+getApiContractsV1ByCurrencysymbolRoletokensByTokenname
+  currency_symbol
+  token_name =
+  request Api req
+  where
+  req = { method, uri, headers, content, encode, decode }
+  method = Left GET
+  uri = RelativeRef relativePart query Nothing
+  headers = catMaybes
+    [
+    ]
+  content = Nothing
+  encode = E.encode encoder
+  decode = D.decode decoder
+  encoder = E.null
+  decoder = D.value
+  relativePart = RelativePartNoAuth $ Just
+    [ "api"
+    , "contracts"
+    , "v1"
+    , toPathSegment currency_symbol
+    , "role-tokens"
+    , toPathSegment token_name
     ]
   query = Nothing

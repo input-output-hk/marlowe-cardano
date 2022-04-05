@@ -55,6 +55,7 @@ webserverCommandParser =
               <> showDefault
               <> value "127.0.0.1"
           )
+
       _port <-
         option
           auto
@@ -62,6 +63,7 @@ webserverCommandParser =
               <> showDefault
               <> value 8080
           )
+
       _verbosity <-
         option
           ( do

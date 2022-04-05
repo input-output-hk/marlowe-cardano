@@ -30,7 +30,6 @@ import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
 import Data.Foldable (find, foldr)
-import Data.FoldableWithIndex (findWithIndex)
 import Data.Lens
   ( Lens'
   , filtered

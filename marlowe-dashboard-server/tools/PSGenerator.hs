@@ -14,8 +14,8 @@ module Main
   )
 where
 
-import Control.Applicative ((<|>))
-import Control.Lens (set, (&))
+import Control.Applicative (Alternative (empty), (<|>))
+import Control.Lens (ix, set, view, (&))
 import Data.Functor (($>))
 import Data.Monoid ()
 import Data.Proxy (Proxy (Proxy))
@@ -23,10 +23,11 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as T ()
 import qualified Data.Text.IO as T ()
 import Language.Marlowe.Client (ContractHistory, EndpointResponse, MarloweEndpointResult, MarloweError)
-import Language.PureScript.Bridge (BridgePart, Language (Haskell, PureScript), SumType (SumType), TypeInfo (..),
-                                   argonaut, buildBridge, typeModule, typeName, (^==))
+import Language.PureScript.Bridge (BridgePart, HasHaskType (haskType), Language (Haskell, PureScript),
+                                   SumType (SumType), TypeInfo (..), argonaut, buildBridge, typeModule, typeName, (^==))
 import Language.PureScript.Bridge.PSTypes (psNumber, psString)
 import Language.PureScript.Bridge.SumType (Instance (..), equal, genericShow, mkSumType, order)
+import Language.PureScript.Bridge.TypeInfo (typeParameters)
 import Language.PureScript.Bridge.TypeParameters (A, E)
 import Marlowe.Run.API (HTTPAPI)
 import Marlowe.Run.Wallet.V1.API (GetTotalFundsResponse)
@@ -60,6 +61,26 @@ walletIdBridge = (typeName ^== "WalletId") $> psWalletId
 
 walletNameBridge :: BridgePart
 walletNameBridge = (typeName ^== "WalletName") $> psWalletName
+
+psCurrencySymbol :: TypeInfo 'PureScript
+psCurrencySymbol = TypeInfo "" "Marlowe.Semantics" "CurrencySymbol" []
+
+psTokenName :: TypeInfo 'PureScript
+psTokenName = TypeInfo "" "Marlowe.Semantics" "TokenName" []
+
+psRoleToken :: TypeInfo 'PureScript
+psRoleToken = TypeInfo "" "Marlowe.Run.Contract.V1.Types" "RoleToken" []
+
+contractsV1Bridge :: BridgePart
+contractsV1Bridge = do
+  typeModule ^== "Marlowe.Run.Contract.V1.API"
+  typeName ^== "ApiT"
+  mTypeName <- view $ haskType . typeParameters . ix 0 . typeName
+  case mTypeName of
+    "CurrencySymbol" -> pure psCurrencySymbol
+    "TokenName"      -> pure psTokenName
+    "RoleToken"      -> pure psRoleToken
+    _                -> empty
 
 walletV1Bridge :: BridgePart
 walletV1Bridge = do
@@ -157,6 +178,7 @@ myBridge =
     <|> jsonBridge
     <|> dayBridge
     <|> defaultBridge
+    <|> contractsV1Bridge
     <|> walletBridge
     <|> transactionErrorBridge
     <|> marloweParamsBridge
