@@ -126,7 +126,6 @@ runUtilCommand command =
                       change
                       bodyFile
                       submitTimeout
-                      >>= printTxId
       Faucet{..} -> buildFaucet'
                       connection
                       (lovelaceToValue lovelace)

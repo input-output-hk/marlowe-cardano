@@ -77,7 +77,7 @@ import Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromPlutusData, protocolPara
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Control.Concurrent (threadDelay)
-import Control.Monad (forM_, when, (<=<))
+import Control.Monad (forM_, void, when, (<=<))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, throwError)
 import Data.Maybe (isNothing, maybeToList)
 import Language.Marlowe.CLI.IO (decodeFileBuiltinData, decodeFileStrict, liftCli, liftCliIO, readSigningKey)
@@ -310,7 +310,7 @@ buildMinting :: MonadError CliError m
              -> AddressAny                        -- ^ The change address.
              -> FilePath                          -- ^ The output file for the transaction body.
              -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-             -> m TxId                            -- ^ Action to build the transaction body.
+             -> m ()                              -- ^ Action to build the transaction body.
 buildMinting connection signingKeyFile tokenNames metadataFile count expires lovelace changeAddress bodyFile timeout =
   do
     metadata <- sequence $ decodeFileStrict <$> metadataFile
@@ -349,16 +349,18 @@ buildMinting connection signingKeyFile tokenNames metadataFile count expires lov
                                         . H.singleton (T.pack . BS8.unpack $ serialiseToRawBytesHex policy)
                                         $ A.Object metadata''
         _                          -> pure TxMetadataNone
-    buildClean
-      connection
-      [signingKeyFile]
-      lovelace
-      changeAddress
-      ((0, ) <$> expires)
-      mintValue
-      metadata'
-      bodyFile
-      timeout
+    void
+      $ buildClean
+          connection
+          [signingKeyFile]
+          lovelace
+          changeAddress
+          ((0, ) <$> expires)
+          mintValue
+          metadata'
+          bodyFile
+          timeout
+    liftIO . putStrLn $ "PolicyID " <> show policy
 
 
 -- | Create a minting script.
@@ -899,6 +901,6 @@ selectUtxos connection address query =
             LovelaceOnly{..} -> count == 1 && selectLovelace value    >= lovelace
             AssetOnly{..}    -> count == 2 && selectAsset value asset >= 1
     liftIO
-      . mapM_ (\(TxIn txId (TxIx txIx), _) -> putStrLn $ init (tail $ show txId) <> "#" <> show txIx)
+      . mapM_ (print . fst)
       . filter query'
       $ M.toList candidates
