@@ -217,9 +217,9 @@ _choiceInfo = prop (Proxy :: _ "choiceInfo")
 emptyContractMetadata :: MetaData
 emptyContractMetadata =
   { contractType: Other
-  , contractName: ""
-  , contractShortDescription: ""
-  , contractLongDescription: ""
+  , contractName: "Unknown"
+  , contractShortDescription: "Unknown"
+  , contractLongDescription: "We couldn't find information about this contract"
   , roleDescriptions: Map.empty
   , timeParameterDescriptions: mempty
   , valueParameterInfo: mempty

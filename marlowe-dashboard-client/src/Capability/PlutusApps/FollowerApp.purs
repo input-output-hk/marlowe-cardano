@@ -20,9 +20,9 @@ import Control.Monad.Reader (class MonadAsk, ReaderT, asks)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut (encodeJson)
 import Data.Lens (view, (^.))
+import Data.Maybe (maybe)
 import Data.PABConnectedWallet (PABConnectedWallet, _walletId)
 import Data.Set as Set
-import Data.Traversable (for_)
 import Effect.Aff (Error)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -34,6 +34,7 @@ import Halogen.Store.Monad (class MonadStore, getStore, updateStore)
 import Language.Marlowe.Client (ContractHistory)
 import Marlowe.Client (getContract)
 import Marlowe.Deinstantiate (findTemplate)
+import Marlowe.Extended.Metadata (emptyContractMetadata)
 import Marlowe.PAB (PlutusAppId)
 import Marlowe.Semantics (MarloweParams)
 import MarloweContract (MarloweContract(..))
@@ -152,12 +153,10 @@ onNewObservableState followerAppId contractHistory = do
   liftEffect $ EventBus.notify bus.listener followerAppId contractHistory
 
   let
-    mMetadata = _.metaData <$> (findTemplate $ getContract contractHistory)
-  -- FIXME-3208 I don't like that this step requires to find the metadata again
-  --            but I wanted to reutilize the logic of always regenerating the Execution
-  --            state from the contract history. I may need to move back the metadata to a
-  --            "parent view state".
-  --            If I continue to reutilize AddFollowerContract then I might rename it to
-  --            UpdateFollowerContract, RestoreContract or similar
-  for_ mMetadata \metadata -> updateStore
+    metadata = maybe
+      emptyContractMetadata
+      _.metaData
+      (findTemplate $ getContract contractHistory)
+
+  updateStore
     $ Store.ContractHistoryUpdated followerAppId metadata contractHistory
