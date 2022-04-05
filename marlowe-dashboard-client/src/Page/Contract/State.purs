@@ -145,16 +145,15 @@ mkInitialState
   :: Instant -> PABConnectedWallet -> Execution.State -> ContractState
 mkInitialState currentTime wallet executionState =
   let
-    { marloweParams, contract } = executionState
+    { marloweParams, initialContract } = executionState
     initialState =
       { tabs: Map.empty
       , expandPayments: Map.empty
       , executionState
       , previousSteps: mempty
       , selectedStep: 0
-      -- FIXME-3208: Check, because I think the contract in the executionState is the current
-      --             continuation and not the initial contract, so getParticipants might be wrong
-      , contractUserParties: contractUserParties wallet marloweParams contract
+      , contractUserParties: contractUserParties wallet marloweParams
+          initialContract
       , namedActions: UserNamedActions.empty
       }
   in
