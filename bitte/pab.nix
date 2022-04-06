@@ -105,6 +105,8 @@ writeShellScriptBin "entrypoint" ''
 
   export SYSTEM_CERTIFICATE_PATH=${cacert}/etc/ssl/certs/ca-bundle.crt
 
+  mkdir -p "$PAB_STATE_DIR"
+
   sed -e "s|@PAB_STATE_DIR@|$PAB_STATE_DIR|g" \
       -e "s|@NOMAD_PORT_pab@|$NOMAD_PORT_pab|g" \
       -e "s|@NOMAD_ADDR_wbe@|$NOMAD_ADDR_wbe|g" \
