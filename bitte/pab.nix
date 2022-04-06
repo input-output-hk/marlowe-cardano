@@ -1,9 +1,8 @@
 { writeShellScriptBin, writeText, pabExe, staticPkg, cacert, coreutils, lib, gnused, utillinux }:
 let
-  dbFile = "/var/lib/pab/pab-core.db";
+  dbFile = "$PAB_STATE_DIR/pab-core.db";
 
-  # /var/lib isn't right but whatever
-  pabYaml = "/var/lib/pab/pab.yaml";
+  pabYaml = "$PAB_STATE_DIR/pab.yaml";
 
   slotZeroTime = 1596059091000; # POSIX time of slot zeron is milliseconds. See note [Datetime to slot] in Marlowe.Slot
   slotLengthMillis = 1000;
@@ -13,7 +12,7 @@ let
 
   pabYamlIn = writeText "pab.yaml.in" (builtins.toJSON {
     dbConfig = {
-      dbConfigFile = dbFile;
+      dbConfigFile = "@dbFile@";
       dbConfigPoolSize = 20;
     };
 
@@ -92,11 +91,14 @@ writeShellScriptBin "entrypoint" ''
 
   export SYSTEM_CERTIFICATE_PATH=${cacert}/etc/ssl/certs/ca-bundle.crt
 
+  mkdir -p "$PAB_STATE_DIR"
+
   sed -e "s|@WEBSERVER_PORT@|$((PORT_RANGE_BASE))|g" \
       -e "s|@NODE_PORT@|$((PORT_RANGE_BASE + 1))|g" \
       -e "s|@CHAIN_INDEX_PORT@|$((PORT_RANGE_BASE + 2))|g" \
       -e "s|@SIGNING_PROCESS_PORT@|$((PORT_RANGE_BASE + 3))|g" \
       -e "s|@WALLET_PORT@|$((PORT_RANGE_BASE + 4))|g" \
+      -e "s|@dbFile@|${dbFile}|g" \
       ${pabYamlIn} > ${pabYaml}
 
 
