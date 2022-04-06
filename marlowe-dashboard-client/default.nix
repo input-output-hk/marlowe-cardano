@@ -38,16 +38,18 @@ let
   start-backend = pkgs.writeShellScriptBin "marlowe-run-server" ''
     echo "marlowe-pab-server: for development use only"
     export NOMAD_PORT_wbe="''${NOMAD_PORT_wbe:-8090}"
+    export NOMAD_PORT_index="''${NOMAD_PORT_index:-9083}"
     cat > marlowe-run.json <<EOF
     {
       "wbeConfig": { "host": "localhost", "port": $NOMAD_PORT_wbe },
+      "chainIndexConfig": { "host": "localhost", "port": $MONAD_PORT_index },
       "staticPath": "/var/empty",
       "verbosity": 3
     }
     EOF
     (trap 'kill 0' SIGINT;
       $(nix-build ../default.nix --quiet --no-build-output -A marlowe-dashboard.marlowe-invoker)/bin/marlowe-pab --config plutus-pab.yaml webserver &
-      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./marlowe-run.json
+      $(nix-build ../default.nix -A marlowe-dashboard.marlowe-run-backend-invoker)/bin/marlowe-dashboard-server webserver -c ./marlowe-run.json -n 1564
     )
   '';
 

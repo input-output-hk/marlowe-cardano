@@ -8,7 +8,8 @@ let
   node-port = "3001";
   wallet-port-int = 8090;
   wallet-port = toString wallet-port-int;
-  chain-index-port = "9083";
+  chain-index-port-int = 9083;
+  chain-index-port = toString chain-index-port-int;
   pab-port = "9080";
   run-port = "8080";
   socket-path = "/ipc/node.socket";
@@ -20,7 +21,7 @@ let
     inherit socket-path network-id;
     protocol-parameters = "./testnet.protocol";
   };
-  run-params = { wallet-port = wallet-port-int; };
+  run-params = { wallet-port = wallet-port-int; chain-index-port = chain-index-port-int; };
   config = pkgs.runCommand "config"
     { }
     ''
@@ -110,6 +111,7 @@ let
   chain-index = {
     service = {
       useHostStore = true;
+      ports = [ "${chain-index-port}:${chain-index-port}" ];
       volumes = [
         "cardano-ipc:/ipc"
         "chain-index-data:/data"
@@ -193,6 +195,10 @@ let
         "0.0.0.0"
         "--port"
         run-port
+        "--network-id"
+        network-id
+        "--verbosity"
+        "2"
       ];
     };
   };

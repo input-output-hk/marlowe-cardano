@@ -35,6 +35,7 @@
         depends = [
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."unordered-containers" or (errorHandler.buildDepError "unordered-containers"))
@@ -116,6 +117,7 @@
             (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
+            (hsPkgs."wai-logger" or (errorHandler.buildDepError "wai-logger"))
             (hsPkgs."warp" or (errorHandler.buildDepError "warp"))
             ];
           buildable = true;

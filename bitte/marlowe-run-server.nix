@@ -2,6 +2,8 @@
 #   NOMAD_PORT_run
 #   NOMAD_IP_wbe
 #   NOMAD_PORT_wbe
+#   NOMAD_ADDR_index
+#   NOMAD_PORT_index
 { writeShellScriptBin, marlowe-dashboard-server, coreutils, lib }:
 writeShellScriptBin "entrypoint" ''
   set -eEuo pipefail
@@ -11,6 +13,7 @@ writeShellScriptBin "entrypoint" ''
   cat > marlowe-run.json <<EOF
   {
     "wbeConfig": { "host": "$NOMAD_IP_wbe", "port": $NOMAD_PORT_wbe },
+    "wbeConfig": { "host": "$NOMAD_ADDR_index", "port": $NOMAD_PORT_index },
     "staticPath": "/var/empty",
     "verbosity": 3
   }

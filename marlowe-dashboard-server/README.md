@@ -3,7 +3,7 @@
 There are 3 services that conform the backend for the Marlowe Run Dapp.
 
 - The [Marlowe PAB](../marlowe/pab)
-- An instance of the [Wallet-BackEnd](https://github.com/input-output-hk/cardano-wallet) (WBE)
+- An instance of the [Wallet-BackEnd](https://github.com/input-output-hk/cardano-wallet) ()
 - This application
 
 This application is both a web-server for the frontend in production (in development is served via webpack) and an API to simplify access to the Wallet BackEnd (WBE) and eventually the Metadata (not developed yet).
@@ -33,6 +33,7 @@ This application is configured via a JSON file with the following structure (whe
 ```json
 {
   "wbeConfig": { "host": "localhost", "port": 8090 },
+  "chainIndexConfig": { "host": "localhost", "port": 9083 },
   "staticPath": "../marlowe-dashboard-client/static",
   "verbosity": 3
 }

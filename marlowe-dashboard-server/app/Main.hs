@@ -22,6 +22,7 @@ import Options.Applicative (CommandFields, Mod, Parser, ReadM, auto, command, cu
                             showHelpOnEmpty, showHelpOnError, strOption, subparser, value)
 import qualified Prelude as P
 import Prelude.SafeEnum as SafeEnum
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Verbosity (Verbosity (..))
 import qualified Webserver
 
@@ -102,5 +103,7 @@ main = do
       (prefs $ disambiguate <> showHelpOnEmpty <> showHelpOnError)
       (info (helper <*> commandParser) idm)
   runStderrLoggingT $ do
+    liftIO $ hSetBuffering stdout LineBuffering
+    liftIO $ hSetBuffering stderr LineBuffering
     logInfoN $ "Running: " <> Text.pack (show options)
     runCommand options

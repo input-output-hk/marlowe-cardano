@@ -45,6 +45,7 @@ library
     build-depends:
         aeson -any,
         base >=4.7 && <5,
+        base16,
         bytestring -any,
         containers -any,
         unordered-containers,
@@ -109,6 +110,7 @@ executable marlowe-dashboard-server
         servant-server,
         text,
         wai,
+        wai-logger,
         warp
 
 executable psgenerator
