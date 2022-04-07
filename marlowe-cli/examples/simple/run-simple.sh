@@ -5,7 +5,7 @@ set -e
 
 echo "# Test of a Simple Contract"
 
-echo "[This simple contract](../../src/Language/Marlowe/CLI/Examples/Trivial.hs) takes as deposit, waits for a notification, makes a payment, waits for another notification, and then closes the contract:"
+echo "[This simple contract](../../../marlowe-contracts/src/Marlowe/Contracts/Trivial.hs) takes as deposit, waits for a notification, makes a payment, waits for another notification, and then closes the contract:"
 echo
 echo '```'
 echo 'When'
@@ -48,7 +48,7 @@ echo '* [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/maste
 echo '* [jq](https://stedolan.github.io/jq/manual/)'
 echo '* sed'
 echo
-echo "Signing and verification keys must be provided below for the bystander and party roles: to do this, set the environment variables "'`'"BYSTANDER_PREFIX"'`'" and "'`'"PARTY_PREFIX"'`'" where they appear below."
+echo "Signing and verification keys must be provided below for the bystander and party roles, or they will be created automatically: to do this, set the environment variables "'`'"BYSTANDER_PREFIX"'`'" and "'`'"PARTY_PREFIX"'`'" where they appear below."
 
 echo "## Preliminaries"
 
@@ -72,9 +72,17 @@ echo "#### The Bystander"
 echo "The bystander simply provides the minimum ada to be held in the contract while it is active."
 
 BYSTANDER_PREFIX="$TREASURY/christopher-marlowe"
+BYSTANDER_PREFIX="$TREASURY/christopher-marlowe"
 BYSTANDER_NAME="Christopher Marlowe"
 BYSTANDER_PAYMENT_SKEY="$BYSTANDER_PREFIX".skey
 BYSTANDER_PAYMENT_VKEY="$BYSTANDER_PREFIX".vkey
+
+if [[ ! -e "$BYSTANDER_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$BYSTANDER_PAYMENT_SKEY"      \
+                              --verification-key-file "$BYSTANDER_PAYMENT_VKEY"
+fi
+
 BYSTANDER_ADDRESS=$(
   cardano-cli address build "${MAGIC[@]}"                                             \
                             --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY" \
@@ -82,6 +90,13 @@ BYSTANDER_ADDRESS=$(
 BYSTANDER_PUBKEYHASH=$(
   cardano-cli address key-hash --payment-verification-key-file "$BYSTANDER_PAYMENT_VKEY"
 )
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$BYSTANDER_ADDRESS"
 
 echo "The bystander $BYSTANDER_NAME is the minimum-ADA provider and has the address "'`'"$BYSTANDER_ADDRESS"'`'" and public-key hash "'`'"$BYSTANDER_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
@@ -94,14 +109,14 @@ marlowe-cli util clean "${MAGIC[@]}"                               \
 > /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BYSTANDER_ADDRESS"
 
-echo "We select the UTxO with the most funds to use in executing the contract."
+echo "We select a UTxO with sufficient funds to use in executing the contract."
 
 TX_0_BYSTANDER=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$BYSTANDER_ADDRESS"                                                           \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1                                                                                                     \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 50000000                  \
+                        "$BYSTANDER_ADDRESS"                      \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'
 )
 
 echo "$BYSTANDER_NAME will spend the UTxO "'`'"$TX_0_BYSTANDER"'`.'
@@ -114,6 +129,13 @@ PARTY_PREFIX="$TREASURY/francis-beaumont"
 PARTY_NAME="Francis Beaumont"
 PARTY_PAYMENT_SKEY="$PARTY_PREFIX".skey
 PARTY_PAYMENT_VKEY="$PARTY_PREFIX".vkey
+
+if [[ ! -e "$PARTY_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$PARTY_PAYMENT_SKEY"      \
+                              --verification-key-file "$PARTY_PAYMENT_VKEY"
+fi
+
 PARTY_ADDRESS=$(
   cardano-cli address build "${MAGIC[@]}"                                         \
                             --payment-verification-key-file "$PARTY_PAYMENT_VKEY" \
@@ -121,6 +143,13 @@ PARTY_ADDRESS=$(
 PARTY_PUBKEYHASH=$(
   cardano-cli address key-hash --payment-verification-key-file "$PARTY_PAYMENT_VKEY"
 )
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 100000000                      \
+                        "$PARTY_ADDRESS"
 
 echo "The party $PARTY_NAME has the address "'`'"$PARTY_ADDRESS"'`'" and the public-key hash "'`'"$PARTY_PUBKEYHASH"'`'". They have the following UTxOs in their wallet:"
 
@@ -136,11 +165,11 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$PARTY_ADDRESS"
 echo "We select the UTxO with the most funds to use in executing the contract."
 
 TX_0_PARTY=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$PARTY_ADDRESS"                                                               \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1                                                                                                     \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 50000000                  \
+                        "$PARTY_ADDRESS"                          \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'
 )
 
 echo "$PARTY_NAME will spend the UTxO "'`'"$TX_0_PARTY"'`.'

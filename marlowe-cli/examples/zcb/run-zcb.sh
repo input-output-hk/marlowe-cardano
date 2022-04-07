@@ -19,7 +19,7 @@ echo '* sed'
 echo '* basenc'
 echo '* tr'
 echo
-echo "Signing and verification keys must be provided below for the two parties: to do this, set the environment variables "'`'"LENDER_PREFIX"'`'" and "'`'"BORROWER_PREFIX"'`'" where they appear below."
+echo "Signing and verification keys must be provided below for the two parties, or they will be created automatically: to do this, set the environment variables "'`'"LENDER_PREFIX"'`'" and "'`'"BORROWER_PREFIX"'`'" where they appear below."
 echo
 echo "The two parties' wallets must have exactly one UTxO with their role token. The currency symbol for the role tokens must be set below in "'`'"ROLE_CURRENCY"'`'"."
 
@@ -38,25 +38,111 @@ else # Use the private testnet.
   SLOT_OFFSET=1644929640000
 fi
 
-echo "### Role Currency"
+echo "### Tip of the Blockchain"
 
-echo "Set the role currency for the validator."
+TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
+NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
+HOUR="$((3600*1000))"
 
-ROLE_CURRENCY=8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d
+echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
+
+echo "### Participants"
 
 echo "#### The Lender"
 
 LENDER_PREFIX="$TREASURY/john-fletcher"
 LENDER_NAME="John Fletcher"
 LENDER_ROLE=JF
-LENDER_ROLE_HEX=$(echo -n "$LENDER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-LENDER_TOKEN="$ROLE_CURRENCY.$LENDER_ROLE"
 LENDER_PAYMENT_SKEY="$LENDER_PREFIX".skey
 LENDER_PAYMENT_VKEY="$LENDER_PREFIX".vkey
-LENDER_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                          \
-                            --payment-verification-key-file "$LENDER_PAYMENT_VKEY" \
+
+echo "Create the lender's keys, if necessary."
+
+if [[ ! -e "$LENDER_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$LENDER_PAYMENT_SKEY"      \
+                              --verification-key-file "$LENDER_PAYMENT_VKEY"
+fi
+LENDER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$LENDER_PAYMENT_VKEY")
+
+echo "Fund the lender's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 150000000                      \
+                        "$LENDER_ADDRESS"
+
+echo "### The Borrower"
+
+BORROWER_PREFIX="$TREASURY/thomas-middleton"
+BORROWER_NAME="Thomas Middleton"
+BORROWER_ROLE=TM
+BORROWER_PAYMENT_SKEY="$BORROWER_PREFIX".skey
+BORROWER_PAYMENT_VKEY="$BORROWER_PREFIX".vkey
+
+echo "Create the borrower's keys, if necessary."
+
+if [[ ! -e "$BORROWER_PAYMENT_SKEY" ]]
+then
+  cardano-cli address key-gen --signing-key-file "$BORROWER_PAYMENT_SKEY"      \
+                              --verification-key-file "$BORROWER_PAYMENT_VKEY"
+fi
+BORROWER_ADDRESS=$(cardano-cli address build "${MAGIC[@]}" --payment-verification-key-file "$BORROWER_PAYMENT_VKEY")
+
+echo "Fund the borrower's address."
+
+marlowe-cli util faucet "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --out-file /dev/null                      \
+                        --submit 600                              \
+                        --lovelace 50000000                       \
+                        "$BORROWER_ADDRESS"
+
+echo "### Role Tokens"
+
+echo "The lender mints the role tokens."
+
+MINT_EXPIRES=$((TIP + 1000000))
+
+ROLE_CURRENCY=$(
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$LENDER_PAYMENT_SKEY"  \
+                      --change-address  "$LENDER_ADDRESS"       \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      "$LENDER_ROLE" "$BORROWER_ROLE"           \
+| sed -e 's/^PolicyID "\(.*\)"$/\1/'                            \
 )
+
+LENDER_TOKEN="$ROLE_CURRENCY.$LENDER_ROLE"
+BORROWER_TOKEN="$ROLE_CURRENCY.$BORROWER_ROLE"
+
+echo "Find the transaction output with the borrower's role token."
+
+TX_MINT_BORROWER=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$BORROWER_TOKEN"            \
+                        "$LENDER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+echo "Send the borrower their role token."
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                          \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"              \
+                               --tx-in "$TX_MINT_BORROWER"                            \
+                               --tx-out "$BORROWER_ADDRESS+2000000+1 $BORROWER_TOKEN" \
+                               --required-signer "$LENDER_PAYMENT_SKEY"               \
+                               --change-address "$LENDER_ADDRESS"                     \
+                               --out-file /dev/null                                   \
+                               --submit 600
+
+echo "### Available UTxOs"
 
 echo "The lender $LENDER_NAME is the minimum-ADA provider and has the address "'`'"$LENDER_ADDRESS"'`'" and role token named "'`'"$LENDER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
@@ -72,34 +158,21 @@ cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS"
 echo "We select the UTxO with the lender $LENDER_NAME's role token."
 
 TX_0_LENDER_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$LENDER_ADDRESS"                                                              \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 120000000                 \
+                        "$LENDER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_LENDER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                          \
-                       --address "$LENDER_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                 \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$LENDER_ROLE_HEX"'" == 1) | .key' \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$LENDER_TOKEN"              \
+                        "$LENDER_ADDRESS"                         \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
 echo "$LENDER_NAME will spend the UTxOs "'`'"$TX_0_LENDER_ADA"'`'" and "'`'"$TX_0_LENDER_TOKEN"'`.'
-
-echo "### The Borrower"
-
-BORROWER_PREFIX="$TREASURY/thomas-middleton"
-BORROWER_NAME="Thomas Middleton"
-BORROWER_ROLE=TM
-BORROWER_ROLE_HEX=$(echo -n "$BORROWER_ROLE" | basenc --base16 | tr '[:upper:]' '[:lower:]')
-BORROWER_TOKEN="$ROLE_CURRENCY.$BORROWER_ROLE"
-BORROWER_PAYMENT_SKEY="$BORROWER_PREFIX".skey
-BORROWER_PAYMENT_VKEY="$BORROWER_PREFIX".vkey
-BORROWER_ADDRESS=$(
-  cardano-cli address build "${MAGIC[@]}"                                            \
-                            --payment-verification-key-file "$BORROWER_PAYMENT_VKEY" \
-)
 
 echo "The borrower $BORROWER_NAME has the address "'`'"$BORROWER_ADDRESS"'`'" and role token named "'`'"$BORROWER_ROLE"'`'". They have the following UTxOs in their wallet:"
 
@@ -112,31 +185,24 @@ marlowe-cli util clean "${MAGIC[@]}"                              \
 > /dev/null
 cardano-cli query utxo "${MAGIC[@]}" --address "$BORROWER_ADDRESS"
 
-echo "We select the UTxO with the borrower $BORROWER_NAME's role token."
+echo "We select the UTxO with the lender $BORROWER_NAME's role token."
 
 TX_0_BORROWER_ADA=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$BORROWER_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | sort_by(- .value.value.lovelace) | .[] | select((.value.value | length) == 1) | .key' \
-| head -n 1
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --lovelace-only 20000000                  \
+                        "$BORROWER_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 TX_0_BORROWER_TOKEN=$(
-cardano-cli query utxo "${MAGIC[@]}"                                                                            \
-                       --address "$BORROWER_ADDRESS"                                                            \
-                       --out-file /dev/stdout                                                                   \
-| jq -r '. | to_entries | .[] | select(.value.value."'"$ROLE_CURRENCY"'"."'"$BORROWER_ROLE_HEX"'" == 1) | .key' \
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$BORROWER_TOKEN"            \
+                        "$BORROWER_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
 )
 
 echo "$BORROWER_NAME will spend the UTxOs "'`'"$TX_0_BORROWER_ADA"'`'" and "'`'"$TX_0_BORROWER_TOKEN"'`.'
-
-echo "### Tip of the Blockchain"
-
-TIP=$(cardano-cli query tip "${MAGIC[@]}" | jq '.slot')
-NOW="$((TIP*SLOT_LENGTH+SLOT_OFFSET))"
-HOUR="$((3600*1000))"
-
-echo "The tip is at slot $TIP. The current POSIX time implies that the tip of the blockchain should be slightly before slot $(($(date -u +%s) - SLOT_OFFSET / SLOT_LENGTH)). Tests may fail if this is not the case."
 
 echo "## The Contract"
 
@@ -358,3 +424,33 @@ echo "Here are the UTxOs at the lender $LENDER_NAME's address:"
 
 cardano-cli query utxo "${MAGIC[@]}" --address "$LENDER_ADDRESS" | sed -n -e "1p;2p;/$TX_5/p"
 
+echo "## Clean Up"
+
+TX_RETURN_BORROWER=$(
+marlowe-cli util select "${MAGIC[@]}"                             \
+                        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                        --asset-only "$BORROWER_TOKEN"            \
+                        "$BORROWER_ADDRESS"                       \
+| sed -n -e '1{s/^TxIn "\(.*\)" (TxIx \(.*\))$/\1#\2/;p}'         \
+)
+
+marlowe-cli transaction simple "${MAGIC[@]}"                                        \
+                               --socket-path "$CARDANO_NODE_SOCKET_PATH"            \
+                               --tx-in "$TX_RETURN_BORROWER"                        \
+                               --tx-out "$LENDER_ADDRESS+1400000+1 $BORROWER_TOKEN" \
+                               --required-signer "$BORROWER_PAYMENT_SKEY"           \
+                               --change-address "$BORROWER_ADDRESS"                 \
+                               --out-file /dev/null                                 \
+                               --submit 600                                         \
+> /dev/null
+
+marlowe-cli util mint "${MAGIC[@]}" \
+                      --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                      --required-signer "$LENDER_PAYMENT_SKEY"  \
+                      --change-address  "$LENDER_ADDRESS"       \
+                      --expires "$MINT_EXPIRES"                 \
+                      --out-file /dev/null                      \
+                      --submit=600                              \
+                      --count -1                                \
+                      "$LENDER_ROLE" "$BORROWER_ROLE"           \
+> /dev/null

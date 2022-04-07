@@ -183,17 +183,17 @@ mintCommand =
 mintOptions :: O.Parser UtilCommand
 mintOptions =
   Mint
-    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"                        <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."                        )
-    <*> O.strOption                            (O.long "socket-path"                          <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."                  )
-    <*> O.strOption                            (O.long "required-signer"                      <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                    )
-    <*> (O.optional . O.strOption)             (O.long "metadata-file"                        <> O.metavar "JSON_FILE"     <> O.help "The CIP-25 metadata, with keys for each token name."        )
-    <*> O.option O.auto                        (O.long "count"           <> O.value 1         <> O.metavar "INTEGER"       <> O.help "The number of each token to mint."                          )
-    <*> (O.optional . O.option parseSlotNo)    (O.long "expires"                              <> O.metavar "SLOT_NO"       <> O.help "The slot number after which miniting is no longer possible.")
-    <*> (O.option $ Lovelace <$> O.auto)       (O.long "lovelace"        <> O.value 2_000_000 <> O.metavar "LOVELACE"      <> O.help "The lovelace to send with each bundle of tokens."           )
-    <*> O.option parseAddressAny               (O.long "change-address"                       <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                   )
-    <*> O.strOption                            (O.long "out-file"                             <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
-    <*> (O.optional . O.option O.auto)         (O.long "submit"                               <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
-    <*> O.some (O.argument parseTokenName      $                                                 O.metavar "TOKEN_NAME"    <> O.help "The name of the token."                                     )
+    <$> (O.optional . O.option parseNetworkId) (O.long "testnet-magic"                         <> O.metavar "INTEGER"       <> O.help "Network magic, or omit for mainnet."                        )
+    <*> O.strOption                            (O.long "socket-path"                           <> O.metavar "SOCKET_FILE"   <> O.help "Location of the cardano-node socket file."                  )
+    <*> O.strOption                            (O.long "required-signer"                       <> O.metavar "SIGNING_FILE"  <> O.help "File containing a required signing key."                    )
+    <*> (O.optional . O.strOption)             (O.long "metadata-file"                         <> O.metavar "JSON_FILE"     <> O.help "The CIP-25 metadata, with keys for each token name."        )
+    <*> O.option O.auto                        (O.long "count"           <> O.value 1          <> O.metavar "INTEGER"       <> O.help "The number of each token to mint."                          )
+    <*> (O.optional . O.option parseSlotNo)    (O.long "expires"                               <> O.metavar "SLOT_NO"       <> O.help "The slot number after which miniting is no longer possible.")
+    <*> (O.option $ Lovelace <$> O.auto)       (O.long "lovelace"        <> O.value 10_000_000 <> O.metavar "LOVELACE"      <> O.help "The lovelace to send with each bundle of tokens."           )
+    <*> O.option parseAddressAny               (O.long "change-address"                        <> O.metavar "ADDRESS"       <> O.help "Address to receive ADA in excess of fee."                   )
+    <*> O.strOption                            (O.long "out-file"                              <> O.metavar "FILE"          <> O.help "Output file for transaction body."                          )
+    <*> (O.optional . O.option O.auto)         (O.long "submit"                                <> O.metavar "SECONDS"       <> O.help "Also submit the transaction, and wait for confirmation."    )
+    <*> O.some (O.argument parseTokenName      $                                                  O.metavar "TOKEN_NAME"    <> O.help "The name of the token."                                     )
 
 
 -- | Parser for the "faucet" command.
