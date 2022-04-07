@@ -4,11 +4,13 @@ import Prologue
 
 import Data.AddressBook (AddressBook)
 import Data.DateTime.Instant (Instant)
-import Data.Lens (Lens')
+import Data.Lens (Lens', (^?))
 import Data.Lens.Record (prop)
 import Data.LocalContractNicknames (LocalContractNicknames)
-import Data.Maybe (maybe)
+import Data.Map as Map
+import Data.Maybe (fromMaybe, maybe)
 import Data.NewContract (NewContract)
+import Data.PABConnectedWallet (_assets)
 import Data.Set (Set)
 import Data.Wallet (WalletDetails)
 import Errors.Explain (explainString)
@@ -16,24 +18,15 @@ import Language.Marlowe.Client (ContractHistory, MarloweError)
 import Marlowe.Execution.Types as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams)
-import Store.Contracts
-  ( ContractStore
-  , contractCreated
-  , contractStartFailed
-  , contractStarted
-  , followerAppsActivated
-  , historyUpdated
-  , mkContractStore
-  , modifyContract
-  , modifyContractNicknames
-  , resetContractStore
-  , tick
-  )
-import Store.Wallet (WalletAction, WalletStore)
+import Marlowe.Run.Contract.V1.Types (RoleToken)
+import Marlowe.Semantics (Assets(..), MarloweParams, Token)
+import Store.Contracts (ContractStore, mkContractStore, tick)
+import Store.Contracts as Contracts
+import Store.Wallet (WalletAction, WalletStore, _connectedWallet)
 import Store.Wallet as Wallet
 import Toast.Types (ToastMessage, errorToast)
 import Type.Proxy (Proxy(..))
+import Types (JsonAjaxError)
 
 type Store =
   { addressBook :: AddressBook
@@ -86,6 +79,9 @@ data Action
   | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
   | ContractStarted NewContract MarloweParams
   | ContractStartFailed NewContract MarloweError
+  | LoadRoleTokens (Set Token)
+  | LoadRoleTokenFailed Token JsonAjaxError
+  | RoleTokenLoaded RoleToken
   -- Address book
   | ModifyAddressBook (AddressBook -> AddressBook)
   -- Wallet
@@ -110,52 +106,58 @@ reduce store = case _ of
       , contracts = contracts
       }
   -- Contract
-  FollowerAppsActivated followers -> store
-    { contracts = followerAppsActivated followers store.contracts
-    }
-  ContractCreated startingContractInfo -> store
-    { contracts = contractCreated startingContractInfo store.contracts
-    }
+  FollowerAppsActivated followers ->
+    updateContractStore $ Contracts.FollowerAppsActivated followers
+  ContractCreated startingContractInfo ->
+    updateContractStore $ Contracts.ContractCreated startingContractInfo
   ContractHistoryUpdated followerId metadata history ->
-    let
-      mContracts = historyUpdated
-        store.currentTime
-        followerId
-        metadata
-        history
-        store.contracts
-    in
-      case mContracts of
-        Left error -> reduce store
-          $ ShowToast
-          $ errorToast "Error adding follower contract"
-          $ Just (explainString error)
-        Right contracts -> store { contracts = contracts }
-  ModifyContractNicknames f -> store
-    { contracts = modifyContractNicknames f store.contracts
-    }
-  ModifySyncedContract marloweParams f -> store
-    { contracts = modifyContract marloweParams f store.contracts
-    }
+    updateContractStore $ Contracts.ContractHistoryUpdated
+      store.currentTime
+      followerId
+      metadata
+      history
+  ModifyContractNicknames f ->
+    updateContractStore $ Contracts.ModifyContractNicknames f
+  ModifySyncedContract marloweParams f ->
+    updateContractStore $ Contracts.ModifySyncedContract marloweParams f
   ContractStarted newContract marloweParams ->
-    store
-      { contracts = contractStarted newContract marloweParams store.contracts
-      }
+    updateContractStore $ Contracts.ContractStarted newContract marloweParams
   ContractStartFailed newContract marloweError ->
-    store
-      { contracts = contractStartFailed newContract marloweError store.contracts
-      }
+    updateContractStore $ Contracts.ContractStartFailed newContract marloweError
+  LoadRoleTokens tokens ->
+    updateContractStore $ Contracts.LoadRoleTokens tokens
+  LoadRoleTokenFailed token ajaxError ->
+    updateContractStore $ Contracts.LoadRoleTokenFailed token ajaxError
+  RoleTokenLoaded roleToken ->
+    updateContractStore $ Contracts.RoleTokenLoaded roleToken
   -- Address book
   ModifyAddressBook f -> store { addressBook = f store.addressBook }
   -- Wallet
-  Wallet action -> store { wallet = Wallet.reduce store.wallet action }
+  Wallet action -> store
+    { wallet = Wallet.reduce store.wallet action
+    , contracts =
+        let
+          oldAssets = fromMaybe
+            (Assets Map.empty)
+            (store.wallet ^? _connectedWallet <<< _assets)
+        in
+          case action of
+            Wallet.OnAssetsChanged newAssets
+              | newAssets /= oldAssets ->
+                  Contracts.reduce store.contracts
+                    $ Contracts.AssetsChanged newAssets
+            _ -> store.contracts
+    }
   -- Toast
   ShowToast msg -> store { toast = Just msg }
   ClearToast -> store { toast = Nothing }
   -- Dropdown
   DropdownOpened dropdown -> store { openDropdown = Just dropdown }
   DropdownClosed -> store { openDropdown = Nothing }
-  Disconnect -> store
+  Disconnect -> (updateContractStore Contracts.Reset)
     { wallet = Wallet.Disconnected
-    , contracts = resetContractStore store.contracts
+    }
+  where
+  updateContractStore action = store
+    { contracts = Contracts.reduce store.contracts action
     }

@@ -1,8 +1,7 @@
 module Store.Contracts
-  ( ContractStore
-  , contractCreated
-  , contractStartFailed
-  , contractStarted
+  ( Action(..)
+  , ContractStore
+  , reduce
   , followerContractExists
   , getClosedContracts
   , getContract
@@ -12,12 +11,7 @@ module Store.Contracts
   , getNewContract
   , getNewContracts
   , getRunningContracts
-  , historyUpdated
-  , followerAppsActivated
   , mkContractStore
-  , modifyContract
-  , modifyContractNicknames
-  , resetContractStore
   , tick
   ) where
 
@@ -29,6 +23,7 @@ import Data.Bimap (Bimap)
 import Data.Bimap as Bimap
 import Data.ContractNickname (ContractNickname)
 import Data.DateTime.Instant (Instant)
+import Data.Either (either)
 import Data.Foldable (find, foldr)
 import Data.Lens
   ( Lens'
@@ -42,6 +37,8 @@ import Data.Lens
   , traverseOf
   , traversed
   , view
+  , (%~)
+  , (^.)
   )
 import Data.Lens.At (at)
 import Data.Lens.Index (ix)
@@ -67,10 +64,34 @@ import Marlowe.Execution.State (timeoutState)
 import Marlowe.Execution.Types (State) as Execution
 import Marlowe.Extended.Metadata (MetaData)
 import Marlowe.PAB (PlutusAppId)
-import Marlowe.Semantics (MarloweParams, TransactionError)
+import Marlowe.Run.Contract.V1.Types (RoleToken)
+import Marlowe.Semantics (Assets, MarloweParams, Token, TransactionError)
+import Store.Contracts.RoleTokens
+  ( RoleTokenStore
+  , loadRoleTokenFailed
+  , loadRoleTokens
+  , mkRoleTokenStore
+  , roleTokenLoaded
+  , updateMyRoleTokens
+  )
 import Type.Proxy (Proxy(..))
+import Types (JsonAjaxError)
 
 newtype ContractStore = ContractStore ContractStoreFields
+
+data Action
+  = FollowerAppsActivated (Set (Tuple MarloweParams PlutusAppId))
+  | ContractCreated NewContract
+  | ContractHistoryUpdated Instant PlutusAppId MetaData ContractHistory
+  | ModifyContractNicknames (LocalContractNicknames -> LocalContractNicknames)
+  | ModifySyncedContract MarloweParams (Execution.State -> Execution.State)
+  | ContractStarted NewContract MarloweParams
+  | ContractStartFailed NewContract MarloweError
+  | LoadRoleTokens (Set Token)
+  | LoadRoleTokenFailed Token JsonAjaxError
+  | RoleTokenLoaded RoleToken
+  | AssetsChanged Assets
+  | Reset
 
 type ContractStoreFields =
   {
@@ -89,9 +110,37 @@ type ContractStoreFields =
   -- This bimap help us have one Follower contract per Marlowe contract.
   , contractIndex :: Bimap MarloweParams PlutusAppId
   , contractNicknames :: LocalContractNicknames
+  , roleTokens :: RoleTokenStore
   }
 
 derive instance Eq ContractStore
+
+reduce :: ContractStore -> Action -> ContractStore
+reduce store = case _ of
+  FollowerAppsActivated followers ->
+    followerAppsActivated followers store
+  ContractCreated startingContractInfo ->
+    contractCreated startingContractInfo store
+  ContractHistoryUpdated currentTime followerId metadata history ->
+    historyUpdated currentTime followerId metadata history store
+  ModifyContractNicknames f ->
+    modifyContractNicknames f store
+  ModifySyncedContract marloweParams f ->
+    modifyContract marloweParams f store
+  ContractStarted newContract marloweParams ->
+    contractStarted newContract marloweParams store
+  ContractStartFailed newContract marloweError ->
+    contractStartFailed newContract marloweError store
+  Reset ->
+    mkContractStore $ store ^. _contractNicknames
+  LoadRoleTokens tokens ->
+    store # _roleTokens %~ loadRoleTokens tokens
+  LoadRoleTokenFailed token ajaxError ->
+    store # _roleTokens %~ loadRoleTokenFailed token ajaxError
+  RoleTokenLoaded roleToken ->
+    store # _roleTokens %~ roleTokenLoaded roleToken
+  AssetsChanged assets ->
+    store # _roleTokens %~ updateMyRoleTokens assets
 
 ------------------------------------------------------------
 _ContractStore :: Lens' ContractStore ContractStoreFields
@@ -108,12 +157,11 @@ _newContracts = _ContractStore <<< prop (Proxy :: _ "newContracts")
 _contractIndex :: Lens' ContractStore (Bimap MarloweParams PlutusAppId)
 _contractIndex = _ContractStore <<< prop (Proxy :: _ "contractIndex")
 
+_roleTokens :: Lens' ContractStore RoleTokenStore
+_roleTokens = _ContractStore <<< prop (Proxy :: _ "roleTokens")
+
 _contractNicknames :: Lens' ContractStore LocalContractNicknames
 _contractNicknames = _ContractStore <<< prop (Proxy :: _ "contractNicknames")
-
-resetContractStore :: ContractStore -> ContractStore
-resetContractStore (ContractStore { contractNicknames }) =
-  mkContractStore contractNicknames
 
 mkContractStore :: LocalContractNicknames -> ContractStore
 mkContractStore nicknames = ContractStore
@@ -122,6 +170,7 @@ mkContractStore nicknames = ContractStore
   , newMarloweParams: Map.empty
   , contractIndex: Bimap.empty
   , contractNicknames: nicknames
+  , roleTokens: mkRoleTokenStore
   }
 
 followerAppsActivated
@@ -142,7 +191,7 @@ historyUpdated
   -> MetaData
   -> ContractHistory
   -> ContractStore
-  -> Either TransactionError ContractStore
+  -> ContractStore
 historyUpdated currentTime followerId metadata history store =
   let
     marloweParams = getMarloweParams history
@@ -165,7 +214,8 @@ historyUpdated currentTime followerId metadata history store =
           )
           <<< pure
   in
-    map
+    either
+      (const store)
       ( maybe identity (removeNewContract marloweParams) mNewContract
           <<< updateIndexes
       )
