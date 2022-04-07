@@ -176,6 +176,9 @@ contractStartingPreviewCard
           _ -> "alert"
       , classNames
           [ "shadow", "bg-white", "rounded", "divide-y", "divide-gray" ]
+      , attr (AttrName "data-request-id")
+          $ UUID.toString
+          $ reqId
       ]
       [ div
           [ classNames [ "flex", "gap-2", "px-4", "py-2" ] ]
