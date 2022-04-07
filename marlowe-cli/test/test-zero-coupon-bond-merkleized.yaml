@@ -114,6 +114,12 @@ ptPabOperations:
     - from_account:
         role_token: Lender
       pay: 50000000
+      to:
+        party:
+          role_token: Borrower
+      token:
+        currency_symbol: ''
+        token_name: ''
       then:
         timeout: 1961123625000
         timeout_continuation: close
@@ -128,12 +134,6 @@ ptPabOperations:
               party:
                 role_token: Borrower
             merkleized_then: "923918e403bf43c34b4ef6b48eb2ee04babed17320d8d1b9ff9ad086e86f44ec"
-      to:
-        party:
-          role_token: Borrower
-      token:
-        currency_symbol: ''
-        token_name: ''
   poTimes:
   - 1645590825000
   - 1898051625000
