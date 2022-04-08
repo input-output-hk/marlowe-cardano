@@ -54,9 +54,9 @@ import Control.Exception (SomeException, catch, displayException)
 import Control.Lens (use, (%=))
 import Control.Monad (unless, void, when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO, catchError, liftIO, runExceptT, throwError)
-import Control.Monad.Extra (whenJust)
+import Control.Monad.Extra (untilJustM, whenJust)
 import Control.Monad.State.Strict (MonadState, StateT, execStateT, get, lift, put)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value (Object, String))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (Null, Object, String))
 import Data.Aeson.OneLine (renderValue)
 import Data.Aeson.Types (parseEither)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -411,18 +411,24 @@ interpret _ AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
     liftIO . putStrLn $ "[AwaitFollow] fetching channel messages."
-    -- We expect a `null` which preceeds any actual response
-    _ <- liftIO $ readChan fiChannel
-    contractHistoryJSON <- liftIO $ readChan fiChannel
-    let
-      extractJSON (Parts json) = json
-      extractJSON (Exact json) = json
+    -- ^ Skipp all preceeding `null`s
+    contractHistoryJSON <- untilJustM $ do
+      res <- liftIO $ readChan fiChannel
+      if res == Null
+        then do
+          liftIO . putStrLn $ "[AwaitFollow] Skipping `null` response."
+          pure Nothing
+        else pure $ Just res
 
-    if matchJSON poResponse contractHistoryJSON
+    let
+      extractPatternJSON (Parts json) = json
+      extractPatternJSON (Exact json) = json
+
+    if matchJSON poResponsePattern contractHistoryJSON
       then liftIO . putStrLn $ "[AwaitFollow] Follow confirmed."
       else throwError $ CliError $ T.unpack $
         "[AwaitFollow] Received response does not match expected pattern. Expected: "
-        <> renderValue (extractJSON poResponse)
+        <> renderValue (extractPatternJSON poResponsePattern)
         <> ". Received: "
         <> renderValue contractHistoryJSON
         <> "."
@@ -551,9 +557,9 @@ findOwner owner =
 
 -- | Find MarloweApp contract instance corresponding to an instance nickname.
 findAppInstance :: MonadError CliError m
-             => MonadState PabState m
-             => InstanceNickname   -- ^ The nickname.
-             -> m AppInstanceInfo  -- ^ Action returning the instance.
+                => MonadState PabState m
+                => InstanceNickname   -- ^ The nickname.
+                -> m AppInstanceInfo  -- ^ Action returning the instance.
 findAppInstance nickname =
   liftCliMaybe ("[findAppInstance] App instance not found for nickname " <> show nickname <> ".")
     . M.lookup nickname
