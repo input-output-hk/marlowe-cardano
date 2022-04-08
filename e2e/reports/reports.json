@@ -1,197 +1,5 @@
 [
   {
-    "description": "  As a user, I would like to create a contract template using javascript,\n  so that I can write contracts in my preferred language",
-    "elements": [
-      {
-        "description": "",
-        "id": "creating-a-new-contract-with-javascript;creating-a-new-javascript-contract-template",
-        "keyword": "Scenario",
-        "line": 7,
-        "name": "Creating a new Javascript contract template",
-        "steps": [
-          {
-            "keyword": "Before",
-            "hidden": true,
-            "result": {
-              "status": "passed",
-              "duration": 1138000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "Given ",
-            "line": 8,
-            "name": "I am on the \"home\" page of the \"marlowe playground\" application",
-            "match": {
-              "location": "src/step-definitions/navigation.ts:10"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 3421000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "When ",
-            "line": 10,
-            "name": "I click the \"Start in Javascript\" link",
-            "match": {
-              "location": "src/step-definitions/click.ts:11"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 658000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "Then ",
-            "line": 12,
-            "name": "I am directed to the \"marlowe-playground-js\" page",
-            "match": {
-              "location": "src/step-definitions/navigation.ts:27"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 0
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 13,
-            "name": "the \"editor header\" should contain \"New Project\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 203000000
-            }
-          },
-          {
-            "keyword": "After",
-            "hidden": true,
-            "result": {
-              "status": "passed",
-              "duration": 43000000
-            }
-          }
-        ],
-        "tags": [
-          {
-            "name": "@dev",
-            "line": 5
-          }
-        ],
-        "type": "scenario"
-      },
-      {
-        "description": "",
-        "id": "creating-a-new-contract-with-javascript;using-an-existing-javascript-contract-template",
-        "keyword": "Scenario",
-        "line": 22,
-        "name": "Using an existing Javascript contract template",
-        "steps": [
-          {
-            "keyword": "Before",
-            "hidden": true,
-            "result": {
-              "status": "passed",
-              "duration": 579000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "Given ",
-            "line": 23,
-            "name": "I am on the \"home\" page of the \"marlowe playground\" application",
-            "match": {
-              "location": "src/step-definitions/navigation.ts:10"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 3139000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "When ",
-            "line": 25,
-            "name": "I click the \"Open an example\" button",
-            "match": {
-              "location": "src/step-definitions/click.ts:11"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 352000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 26,
-            "name": "I click the \"Escrow Javascript\" button",
-            "match": {
-              "location": "src/step-definitions/click.ts:11"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 633000000
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "Then ",
-            "line": 28,
-            "name": "I am directed to the \"marlowe-playground-js\" page",
-            "match": {
-              "location": "src/step-definitions/navigation.ts:27"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 0
-            }
-          },
-          {
-            "arguments": [],
-            "keyword": "And ",
-            "line": 29,
-            "name": "the \"editor header\" should contain \"Purchase\" text",
-            "match": {
-              "location": "src/step-definitions/assertions/verify-element-value.ts:28"
-            },
-            "result": {
-              "status": "passed",
-              "duration": 159000000
-            }
-          },
-          {
-            "keyword": "After",
-            "hidden": true,
-            "result": {
-              "status": "passed",
-              "duration": 42000000
-            }
-          }
-        ],
-        "tags": [
-          {
-            "name": "@dev",
-            "line": 21
-          }
-        ],
-        "type": "scenario"
-      }
-    ],
-    "id": "creating-a-new-contract-with-javascript",
-    "line": 1,
-    "keyword": "Feature",
-    "name": "Creating a new contract with Javascript",
-    "tags": [],
-    "uri": "src/features/marlowe-playground/Contract Template Management/JavaScript/creating_new_contracts.feature"
-  },
-  {
     "description": "  As a user, I would like to use a light wallet to create transactions on Marlowe Run,\n  so that I can use the wallet of my preference",
     "elements": [
       {
@@ -206,7 +14,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 598000000
+              "duration": 1073000000
             }
           },
           {
@@ -219,7 +27,7 @@
             },
             "result": {
               "status": "passed",
-              "duration": 1869000000
+              "duration": 1847000000
             }
           },
           {
@@ -232,7 +40,111 @@
             },
             "result": {
               "status": "passed",
-              "duration": 337000000
+              "duration": 382000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 25,
+            "name": "I fill in the \"Wallet nickname\" input with \"main\"",
+            "match": {
+              "location": "src/step-definitions/form.ts:13"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 276000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 26,
+            "name": "I click the \"Create wallet\" button",
+            "match": {
+              "location": "src/step-definitions/click.ts:11"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 203000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 28,
+            "name": "I should see the \"mnemonic phrase\"",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-element-value.ts:76"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2282000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 29,
+            "name": "I copy the \"mnemonic phrase\" text",
+            "match": {
+              "location": "src/step-definitions/form.ts:99"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 117000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 30,
+            "name": "I click the \"Ok\" button",
+            "match": {
+              "location": "src/step-definitions/click.ts:11"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 155000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 32,
+            "name": "I fill in the \"mnemonic phrase textbox\" input with \"mnemonic phrase\" from the clipboard",
+            "match": {
+              "location": "src/step-definitions/form.ts:124"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 149000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 33,
+            "name": "I click the \"Ok\" button",
+            "match": {
+              "location": "src/step-definitions/click.ts:11"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 247000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 35,
+            "name": "I should see a button with \"Choose a template\" text",
+            "match": {
+              "location": "src/step-definitions/assertions/verify-element-value.ts:9"
+            },
+            "result": {
+              "status": "passed",
+              "duration": 2308000000
             }
           },
           {
@@ -240,7 +152,7 @@
             "hidden": true,
             "result": {
               "status": "passed",
-              "duration": 40000000
+              "duration": 54000000
             }
           }
         ],

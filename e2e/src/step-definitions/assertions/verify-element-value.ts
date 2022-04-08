@@ -18,9 +18,13 @@ Then(
     const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
     const { role, name } = elementIdentifier;
     await waitFor(async() => {
-      const locator = await queries.getByRole(document, role, { name })
-      const isElementVisible = await locator.isVisible();
-      return isElementVisible;
+      try {
+        const locator = await queries.getByRole(document, role, { name })
+        const isElementVisible = await locator.isVisible();
+        return isElementVisible;
+      } catch {
+        return false;
+      }
     })
   }
 );
@@ -69,3 +73,25 @@ Then(
   }
 );
 
+Then(
+  /^I should see the "([^"]*)"$/,
+  async function(this: ScenarioWorld, elementKey: ElementKey) {
+    const {
+      screen: { page },
+      globalConfig
+    } = this;
+
+    const document = await getDocument(page);
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
+    await waitFor(async() => {
+      try {
+        const locator = await queries.getByRole(document, role, { name })
+        const isElementVisible = await locator.isVisible();
+        return isElementVisible;
+      } catch {
+        return false;
+      }
+    })
+  }
+)
