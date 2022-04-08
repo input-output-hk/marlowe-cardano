@@ -60,7 +60,7 @@ import Ledger.Constraints
 import qualified Ledger.Constraints as Constraints
 import qualified Ledger.Interval as Interval
 import Ledger.Scripts (datumHash, unitRedeemer)
-import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange, slotToPOSIXTimeRange)
+import Ledger.TimeSlot (posixTimeRangeToContainedSlotRange, scSlotLength, slotToPOSIXTimeRange)
 import qualified Ledger.Tx as Tx
 import Ledger.Typed.Scripts
 import qualified Ledger.Typed.Scripts as Typed
@@ -689,11 +689,14 @@ applyInputs params typedValidator timeInterval inputs = mapError (review _Marlow
     logInfo $ "[DEBUG:applyInputs] inputs = " <> show inputs
     logInfo $ "[DEBUG:applyInputs] params = " <> show params
     logInfo $ "[DEBUG:applyInputs] timeInterval = " <> show timeInterval
+    let resolution = scSlotLength unsafeGetSlotConfig
+    let floor'   (POSIXTime i) = POSIXTime $ resolution * (i `div` resolution)
+    let ceiling' (POSIXTime i) = POSIXTime $ resolution * ((i + resolution - 1) `div` resolution)
     timeRange <- case timeInterval of
-            Just si -> pure si
+            Just (l, h) -> pure (ceiling' l, floor' h)
             Nothing -> do
                 time <- currentTime
-                pure (time, time + defaultTxValidationRange)
+                pure (ceiling' time, floor' $ time + defaultTxValidationRange)
     -- TODO: Move to debug log.
     logInfo $ "[DEBUG:applyInputs] timeRange = " <> show timeRange
     mkStep params typedValidator timeRange inputs

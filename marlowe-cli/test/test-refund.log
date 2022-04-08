@@ -1,19 +1,21 @@
 
 ***** Test "Returning Funds" *****
-[CreateWallet] Created wallet a6c4e67dd6caddb8731f03c67e70436298d53801 for role "PAB".
-[FundWallet] Funded wallet a6c4e67dd6caddb8731f03c67e70436298d53801 for role "PAB" with valueFromList [(AdaAssetId,80000000)].
-[ActivateApp] Activated MarloweApp instance 7e0c306e-1758-465d-badf-47b041c7c028 for role "PAB".
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received NewObservableState Null.
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received NewYieldedExportTxs [].
-[CallCreate] Endpoint "create" called on instance 7e0c306e-1758-465d-badf-47b041c7c028 for owners [("PAB",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "9859fd10f8750346f0c67f8c8d5ba3b5f95adf74a485fb5c4ffc4872")) (StakeRefBase (KeyHashObj (KeyHash "b6a293f0e5936e01f9bd62c7f299726f689f1d18b0cb9b57ad078996")))))].
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received NewActiveEndpoints [].
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received NewObservableState (Object (fromList [("contents",Array [String "5b968cfa-1832-4013-ab64-37df2357cf2a",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "2ff1a496d81e6b537dbcc03ace371dfddd7901f504cb2ca4a27dce6e"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "fffc7518b2ddadb6cc862d2f6f2ac745120ef75a94ba982d06c51387")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
-[AwaitCreate] Creation confirmed with MarloweParams {rolePayoutValidatorHash = 2ff1a496d81e6b537dbcc03ace371dfddd7901f504cb2ca4a27dce6e, rolesCurrency = fffc7518b2ddadb6cc862d2f6f2ac745120ef75a94ba982d06c51387}.
-[PrintWallet] Wallet for role "PAB" contains valueFromList [(AdaAssetId,77594203),(AssetId "fffc7518b2ddadb6cc862d2f6f2ac745120ef75a94ba982d06c51387" "PAB",1)].
-[ReturnFunds] Returned funds from wallet a6c4e67dd6caddb8731f03c67e70436298d53801.
+[createWallet] Mnemonic sentence is "trumpet calm glare submit shiver chase wild afford detect flock upgrade shrug discover because approve actor employ program cheap rare method mechanic where patrol".
+[createWallet] First wallet address is addr_test1qqtujjplej94d945csskyvw5czgy6nzwkefnlhlpw5g7xuz47fdu60sxy90lalym939juzu3ug884qxy4zh6ul284znqtfeq2u.
+[createWallet] First public key hash is 17c9483fcc8b5696b4c4216231d4c0904d4c4eb6533fdfe17511e370.
+[CreateWallet] Created wallet identified as 126bbf64c43d80cd6f353a820d8a8b4cc30d81e6 for role "PAB".
+[FundWallet] Funded wallet for role "PAB" with valueFromList [(AdaAssetId,80000000)].
+[ActivateApp] Activated MarloweApp instance "App" with identifier 888341b9-9d05-4e0b-a542-0502eb2a9fe1 for role "PAB".
+[CallCreate] Endpoint "create" called on instance "App" for owners [("PAB",AddressInEra (ShelleyAddressInEra ShelleyBasedEraShelley) (ShelleyAddress Testnet (KeyHashObj (KeyHash "17c9483fcc8b5696b4c4216231d4c0904d4c4eb6533fdfe17511e370")) (StakeRefBase (KeyHashObj (KeyHash "55f25bcd3e06215ffefc9b2c4b2e0b91e20e7a80c4a8afae7d47a8a6")))))].
+[runContract] Instance 888341b9-9d05-4e0b-a542-0502eb2a9fe1 received NewObservableState Null.
+[runContract] Instance 888341b9-9d05-4e0b-a542-0502eb2a9fe1 received NewActiveEndpoints [].
+[runContract] Instance 888341b9-9d05-4e0b-a542-0502eb2a9fe1 received NewYieldedExportTxs [].
+[runContract] Instance 888341b9-9d05-4e0b-a542-0502eb2a9fe1 received NewObservableState (Object (fromList [("contents",Array [String "5c0cb302-6864-45c8-9dcf-d4d44937c74e",Object (fromList [("contents",Object (fromList [("rolePayoutValidatorHash",String "075c5ef32597c2362f3b798624238e137329a17bb00cd318e9905315"),("rolesCurrency",Object (fromList [("unCurrencySymbol",String "5f094398e18dc8f1a58d63c454bddfcdbd791b01cc118795fc9ed357")]))])),("tag",String "CreateResponse")])]),("tag",String "EndpointSuccess")])).
+[runContract] Instance 888341b9-9d05-4e0b-a542-0502eb2a9fe1 received NewActiveEndpoints [ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "close"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "redeem"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "auto"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs-nonmerkleized"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "apply-inputs"}, aeMetadata = Nothing},ActiveEndpoint {aeDescription = EndpointDescription {getEndpointDescription = "create"}, aeMetadata = Nothing}].
+[AwaitCreate] Creation confirmed for app address addr_test1wrz7xr43gj4d95m6gejyq8jzuq0trj0qnwqmt5h69486tugf6sx3q and role address addr_test1wqr4chhnyktuyd308ducvfpr3cfhx2dp0wcqe5ccaxg9x9g7krn86 with MarloweParams {rolePayoutValidatorHash = 075c5ef32597c2362f3b798624238e137329a17bb00cd318e9905315, rolesCurrency = 5f094398e18dc8f1a58d63c454bddfcdbd791b01cc118795fc9ed357}.
+[PrintWallet] Wallet for role "PAB" contains valueFromList [(AdaAssetId,77594203),(AssetId "5f094398e18dc8f1a58d63c454bddfcdbd791b01cc118795fc9ed357" "PAB",1)].
+[ReturnFunds] Returned funds from wallet for role "PAB".
 [CheckFunds] Wallet for role "PAB" contains valueFromList [].
-[runContract] Instance 7e0c306e-1758-465d-badf-47b041c7c028 received ContractFinished Nothing.
-[Stop] Instance 7e0c306e-1758-465d-badf-47b041c7c028 stopped.
-***** SUCCEEDED *****
+[runContract] Instance 888341b9-9d05-4e0b-a542-0502eb2a9fe1 received ContractFinished Nothing.
+[Stop] Instance "App" stopped.
+***** PASSED *****
