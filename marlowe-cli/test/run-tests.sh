@@ -32,7 +32,7 @@ fi
 for t in $TEST_CASES
 do
   f=test-"$t".yaml
-  marlowe-cli test contracts "${MAGIC[@]}"                             \
+  cabal run marlowe-cli -- test contracts "${MAGIC[@]}"                \
                              --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                              --wallet-url "$WALLET_API"                \
                              --pab-url "$PAB_API"                      \
