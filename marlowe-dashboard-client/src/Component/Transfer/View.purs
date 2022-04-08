@@ -1,6 +1,6 @@
 module Component.Transfer.View (transfer) where
 
-import Prologue
+import Prologue hiding (div)
 
 import Component.Amount (amount)
 import Component.Avatar.Types (Size(..)) as Avatar
@@ -17,7 +17,7 @@ import Data.String (Pattern(..))
 import Data.String.Extra (capitalize, endsWith)
 import Data.WalletNickname as WN
 import Halogen.Css (classNames)
-import Halogen.HTML (HTML, span, text)
+import Halogen.HTML (HTML, div, span, text)
 import Marlowe.Semantics (Party(..))
 
 transfer :: forall w i. Transfer -> HTML w i
@@ -46,16 +46,26 @@ account party { nickname, isCurrentUser } accountTypeLabel =
         , background: [ "bg-gradient-to-r", "from-purple", "to-lightpurple" ]
         , size: Avatar.Small
         }
-    , span [ classNames [ "text-xs" ] ]
-        [ text
-            $ capitalize
-            $
-              ( case party of
-                  PK pk -> accountTypeLabel <> " of " <> pk
-                  Role role -> posessive role <> " " <> accountTypeLabel
-              )
-                <> if isCurrentUser then " (you)" else ""
+    , div
+        [ classNames
+            [ "text-xs", "whitespace-nowrap", "overflow-hidden", "flex" ]
         ]
+        [ span [ classNames [ "whitespace-pre" ] ]
+            [ text
+                $ capitalize
+                $ case party of
+                    PK _ -> accountTypeLabel <> " of "
+                    Role role -> posessive role <> " "
+            ]
+        , span [ classNames [ "overflow-ellipsis", "overflow-hidden" ] ]
+            [ text $ case party of
+                PK pk -> pk
+                Role _ -> accountTypeLabel
+            ]
+        , span [ classNames [ "whitespace-pre" ] ]
+            [ text $ if isCurrentUser then " (you)" else "" ]
+        ]
+
     ]
   where
   defaultName = case party of
