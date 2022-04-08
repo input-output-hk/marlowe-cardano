@@ -69,6 +69,7 @@ When(
     });
   }
 )
+
 When(
   /^I select the "([^"]*)" option from the "([^"]*)"$/,
   async function(this: ScenarioWorld, option: string, elementKey: ElementKey) {
@@ -92,5 +93,59 @@ When(
         return result;
       }
     })
+  }
+)
+
+When(
+  /^I copy the "([^"]*)" text$/,
+  async function(this: ScenarioWorld, elementKey: ElementKey) {
+    const {
+      screen: { page },
+      globalConfig
+    } = this;
+
+    const document = await getDocument(page);
+
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
+
+    await waitFor(async() => {
+      const locator = await queries.getByRole(document, role, { name })
+      const result = await locator.isVisible();
+
+      if (result) {
+        this[elementKey] = await locator.innerText()
+        return result;
+      }
+    })
+  }
+)
+
+When(
+  /^I fill in the "([^"]*)" input with "([^"]*)" from the clipboard$/,
+  async function(this: ScenarioWorld, elementKey: ElementKey, clipboardInput: string) {
+    const {
+      screen: { page },
+      globalConfig
+    } = this;
+
+
+    console.log(`I fill in the ${elementKey} input with ${clipboardInput} from the clipboard`);
+
+    const elementIdentifier = getElementLocator(page, elementKey, globalConfig);
+    const { role, name } = elementIdentifier;
+    const document = await getDocument(page);
+
+    const input = this[clipboardInput]
+
+    await waitFor(async() => {
+      const locator = await queries.getByRole(document, role, { name })
+      const result = await locator.isVisible();
+
+      if (result) {
+        await inputValue(locator, input)
+        return result;
+      }
+    });
   }
 )

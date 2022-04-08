@@ -1,3 +1,10 @@
 {
-  "Generate testnet wallet":  { "role": "button", "name": "Generate testnet wallet"}
+  "Generate testnet wallet":  { "role": "button", "name": "Generate testnet wallet" },
+  "Create testnet wallet": { "role": "heading", "name": "Create testnet wallet" },
+  "Wallet nickname": { "role": "textbox", "name": "Wallet nickname" },
+  "Create wallet": { "role": "button", "name": "Create wallet" },
+  "mnemonic phrase": { "role": "mark", "name": "mnemonic phrase" },
+  "mnemonic phrase textbox": { "role": "textbox", "name": "Mnemonic phrase" },
+  "Ok": { "role": "button", "name": "Ok" },
+  "Choose a template": { "role": "button", "name": "Choose a template" }
 }
