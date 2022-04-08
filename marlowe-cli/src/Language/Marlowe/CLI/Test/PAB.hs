@@ -68,9 +68,10 @@ import Language.Marlowe.CLI.Export (buildAddress, buildRoleAddress)
 import Language.Marlowe.CLI.IO (liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.PAB (receiveStatus)
 import Language.Marlowe.CLI.Test.Types (AppInstanceInfo (..), FollowerInstanceInfo (..), InstanceNickname,
-                                        PabAccess (..), PabOperation (..), PabState (..), PabTest (..), RoleName,
-                                        WalletInfo (..), psAppInstances, psBurnAddress, psFaucetAddress, psFaucetKey,
-                                        psFollowerInstances, psPassphrase, psWallets)
+                                        PabAccess (..), PabOperation (..), PabState (..), PabTest (..),
+                                        PatternJSON (Exact, Parts), RoleName, WalletInfo (..), psAppInstances,
+                                        psBurnAddress, psFaucetAddress, psFaucetKey, psFollowerInstances, psPassphrase,
+                                        psWallets)
 import Language.Marlowe.CLI.Transaction (buildFaucet, queryUtxos)
 import Language.Marlowe.CLI.Types (CliError (..), SomePaymentSigningKey)
 import Language.Marlowe.Client (ApplyInputsEndpointSchema, AutoEndpointSchema, CreateEndpointSchema,
@@ -374,7 +375,7 @@ interpret PabAccess{..} Stop{..} =
 
 interpret _ Follow{..} =
   do
-    aiOther <- findInstance poOtherInstance
+    aiOther <- findAppInstance poOtherInstance
     psAppInstances %=
       M.adjust
         (\ai -> ai {aiParams = aiParams aiOther})
@@ -410,7 +411,7 @@ interpret _ AwaitFollow{..} =
   do
     FollowerInstanceInfo{..} <- findFollowerInstance poInstance
     liftIO . putStrLn $ "[AwaitFollow] fetching channel messages."
-    -- ^ We expect a `null` preceeds any actual response
+    -- We expect a `null` which preceeds any actual response
     _ <- liftIO $ readChan fiChannel
     contractHistoryJSON <- liftIO $ readChan fiChannel
     let
@@ -439,7 +440,7 @@ interpret access PrintWallet{..} =
 
 interpret PabAccess{..} PrintAppUTxOs{..} =
   do
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     params <- maybe (throwError $ CliError "[PrintAppUTxOs] Contract parameters are not known.") pure aiParams
     let
       toAddressAny' (AddressInEra _ address') = toAddressAny address'
@@ -450,7 +451,7 @@ interpret PabAccess{..} PrintAppUTxOs{..} =
 
 interpret PabAccess{..} PrintRoleUTxOs{..} =
   do
-    AppInstanceInfo{..} <- findInstance poInstance
+    AppInstanceInfo{..} <- findAppInstance poInstance
     params <- maybe (throwError $ CliError "[PrintRoleUTxOs] Contract parameters are not known.") pure aiParams
     let
       toAddressAny' (AddressInEra _ address') = toAddressAny address'
