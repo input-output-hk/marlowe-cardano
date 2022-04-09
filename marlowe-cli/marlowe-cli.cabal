@@ -46,6 +46,7 @@ library
   hs-source-dirs: src
   exposed-modules:
     Language.Marlowe.CLI.ChainIndex
+    Language.Marlowe.CLI.Codec
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
     Language.Marlowe.CLI.Command.Input
@@ -77,6 +78,7 @@ library
     aeson,
     aeson-pretty,
     base16-bytestring,
+    bech32,
     bytestring,
     cardano-addresses,
     cardano-api,
